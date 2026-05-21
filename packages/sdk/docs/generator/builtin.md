@@ -183,10 +183,41 @@ Generates seed data configuration files for database initialization.
 ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "admin" }];
 ```
 
-| Option            | Type     | Description                                              |
-| ----------------- | -------- | -------------------------------------------------------- |
-| `distPath`        | `string` | Output directory path (required)                         |
-| `machineUserName` | `string` | Default machine user name (can be overridden at runtime) |
+| Option               | Type                                           | Description                                                                                                                                                       |
+| -------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `distPath`           | `string`                                       | Output directory path (required)                                                                                                                                  |
+| `machineUserName`    | `string`                                       | Default machine user name (can be overridden at runtime)                                                                                                          |
+| `disableIdpUserSync` | `{ userToIdp?: boolean; idpToUser?: boolean }` | Skip emitting individual `_User <-> userProfile` foreign keys. Both directions are emitted by default. See [IdP user synchronization](#idp-user-synchronization). |
+
+### IdP user synchronization
+
+When `auth.userProfile` is configured, the seed plugin treats the userProfile
+type (e.g. `User`) and the IdP-managed `_User` table as a pair. By default it
+emits foreign keys in both directions so that `validate` rejects any row in
+either table that does not have a matching counterpart:
+
+| Direction   | Foreign key                                    | Catches                                        |
+| ----------- | ---------------------------------------------- | ---------------------------------------------- |
+| `idpToUser` | `_User.name` → `<userProfile>.<usernameField>` | Creating an IdP credential with no profile row |
+| `userToIdp` | `<userProfile>.<usernameField>` → `_User.name` | Creating a profile row with no IdP credential  |
+
+Neither direction is enforced by the runtime. In production it is normal for
+one side to exist without the other — for example a userProfile row exists
+the moment a user is invited, but the corresponding `_User` row appears only
+after the user finishes signing up. To seed such states, set the relevant
+direction in `disableIdpUserSync` to `true`:
+
+```typescript
+// Allow seeding invited-but-not-registered userProfile rows.
+// Still rejects _User rows without a matching userProfile row.
+["@tailor-platform/seed", { distPath: "./seed", disableIdpUserSync: { userToIdp: true } }];
+
+// Allow seeding _User rows whose userProfile does not exist yet.
+// Still rejects userProfile rows without a matching _User row.
+["@tailor-platform/seed", { distPath: "./seed", disableIdpUserSync: { idpToUser: true } }];
+```
+
+Omitted directions default to `false` (FK emitted).
 
 ### Output
 

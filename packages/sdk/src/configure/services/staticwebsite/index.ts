@@ -8,6 +8,7 @@ export type { StaticWebsiteConfig } from "@/types/staticwebsite-config";
  * @param config - Static website configuration
  * @returns Defined static website
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function defineStaticWebSite(name: string, config: Omit<StaticWebsiteInput, "name">) {
   const result = {
     ...config,

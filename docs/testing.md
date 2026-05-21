@@ -35,7 +35,7 @@ Located in `packages/sdk/e2e/`. CI runs these in the `deploy.yml` workflow on Li
 - `toMatchObjectType` — Structural match
 - `toExtend` — Subtype check
 
-This is enforced by ESLint (see `eslint.config.js`).
+This is enforced by oxlint's local plugin (see `packages/sdk/oxlint-plugins/index.js` and `.oxlintrc.json`).
 
 ## Documentation Tests
 

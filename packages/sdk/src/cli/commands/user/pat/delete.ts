@@ -4,6 +4,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import ml from "@/utils/multiline";
 
 export const deleteCommand = defineAppCommand({
@@ -18,6 +19,7 @@ export const deleteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable();
     const config = await readPlatformConfig();
 
     if (!config.current_user) {

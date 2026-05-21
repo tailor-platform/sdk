@@ -133,6 +133,7 @@ type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointDef<Payl
  *
  * await approval.wait({ message: "Please approve" });
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function defineWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointDef<Payload, Result> {
@@ -162,6 +163,7 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
  *
  * // For 2-level access, use destructured export with JSDoc attached to the export itself.
  */
+/* @__NO_SIDE_EFFECTS__ */
 // oxlint-disable-next-line no-explicit-any
 export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
   builder: (define: DefineFn) => T,

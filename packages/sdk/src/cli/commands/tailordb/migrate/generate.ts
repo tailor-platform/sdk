@@ -24,6 +24,7 @@ import {
   formatMigrationDiff,
   formatBreakingChanges,
   formatDiffSummary,
+  formatWarnings,
   hasChanges,
 } from "./diff-calculator";
 import {
@@ -275,6 +276,12 @@ async function generateDiffFromSnapshot(
     }
   }
 
+  // Warn about non-breaking but data-loss-possible changes (e.g. field/type removal)
+  if (diff.hasWarnings) {
+    logger.newline();
+    logger.warn(formatWarnings(diff.warnings));
+  }
+
   // Get next migration number
   const migrationNumber = getNextMigrationNumber(migrationsDir);
 
@@ -320,6 +327,14 @@ async function generateDiffFromSnapshot(
     } catch {
       return;
     }
+  } else if (diff.hasWarnings) {
+    logger.newline();
+    logger.log(
+      `Data loss is possible for this migration but no script was generated. To add a custom migrate.ts, run:`,
+    );
+    logger.log(
+      `  ${styles.bold(`tailor-sdk tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
+    );
   }
 }
 

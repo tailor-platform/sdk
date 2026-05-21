@@ -3,10 +3,12 @@ import {
   hasChanges,
   formatMigrationDiff,
   formatBreakingChanges,
+  formatWarnings,
   formatDiffSummary,
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
   type BreakingChangeInfo,
+  type WarningChangeInfo,
 } from "./diff-calculator";
 
 // Helper to create a MigrationDiff
@@ -21,6 +23,8 @@ function createDiff(
     changes,
     hasBreakingChanges: breakingChanges.length > 0,
     breakingChanges,
+    hasWarnings: false,
+    warnings: [],
     requiresMigrationScript: breakingChanges.length > 0,
   };
 }
@@ -214,6 +218,52 @@ describe("diff-calculator", () => {
       const result = formatBreakingChanges(breakingChanges);
       expect(result).toContain("User.email: Field removed");
       expect(result).toContain("Product.price: Type changed");
+    });
+  });
+
+  describe("formatWarnings", () => {
+    it("should return empty string for no warnings", () => {
+      const result = formatWarnings([]);
+      expect(result).toBe("");
+    });
+
+    it("should format warnings with field", () => {
+      const warnings: WarningChangeInfo[] = [
+        {
+          typeName: "User",
+          fieldName: "legacyId",
+          reason: "Field removed (existing data will be dropped in the post-migration phase)",
+        },
+      ];
+      const result = formatWarnings(warnings);
+      expect(result).toContain("Warning: data loss possible:");
+      expect(result).toContain(
+        "User.legacyId: Field removed (existing data will be dropped in the post-migration phase)",
+      );
+    });
+
+    it("should format warnings without field (type-level)", () => {
+      const warnings: WarningChangeInfo[] = [
+        {
+          typeName: "OldType",
+          reason:
+            "Type removed (all records of this type will be dropped in the post-migration phase)",
+        },
+      ];
+      const result = formatWarnings(warnings);
+      expect(result).toContain(
+        "OldType: Type removed (all records of this type will be dropped in the post-migration phase)",
+      );
+    });
+
+    it("should format multiple warnings", () => {
+      const warnings: WarningChangeInfo[] = [
+        { typeName: "User", fieldName: "legacyId", reason: "Field removed" },
+        { typeName: "OldType", reason: "Type removed" },
+      ];
+      const result = formatWarnings(warnings);
+      expect(result).toContain("User.legacyId: Field removed");
+      expect(result).toContain("OldType: Type removed");
     });
   });
 

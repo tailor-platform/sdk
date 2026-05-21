@@ -16,15 +16,14 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
-          include: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
+          include: ["**/?(*.)+(spec|test).ts"],
           exclude: [
             "**/node_modules/**",
             "**/dist/**",
             "e2e/**",
             "**/__test_fixtures__/**",
-            "**/__tests__/fixtures/**",
             "src/plugin/compat.test.ts",
-            "src/vitest/__tests__/integration/**",
+            "src/vitest/integration/**",
           ],
         },
       },

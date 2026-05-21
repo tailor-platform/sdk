@@ -2,7 +2,11 @@ import { defineHttpAdapter } from "@tailor-platform/sdk";
 
 function escapeXml(value: unknown): string {
   if (value === null || value === undefined) return "";
-  return String(value)
+  const str =
+    typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+      ? String(value)
+      : JSON.stringify(value);
+  return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

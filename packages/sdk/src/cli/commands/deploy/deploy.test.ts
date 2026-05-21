@@ -47,6 +47,8 @@ function emptyResults(): PlanResults {
       context: {
         workspaceId: "ws",
         application: {} as PlanResults["tailorDB"]["context"]["application"],
+        tailorDBInputs: [],
+        executorUsedTypes: new Set<string>(),
         config: {} as PlanResults["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
       },
@@ -106,6 +108,7 @@ function emptyResults(): PlanResults {
       unmanaged: [],
       resourceOwners: new Set<string>(),
       appName: "my-app",
+      appId: undefined,
     },
     secretManager: {
       vaultChangeSet: createChangeSet("Vaults"),
