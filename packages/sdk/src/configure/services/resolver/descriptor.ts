@@ -118,14 +118,10 @@ function isPassthroughField(entry: ResolverFieldEntry): entry is TailorAnyField 
   return !("kind" in entry);
 }
 
-export function isResolverFieldDescriptor(
-  entry: ResolverFieldEntry,
-): entry is ResolverFieldDescriptor {
-  return (
-    "kind" in entry &&
-    typeof (entry as { kind: unknown }).kind === "string" &&
-    (entry as { kind: string }).kind in kindToFieldType
-  );
+export function isResolverFieldDescriptor(entry: unknown): entry is ResolverFieldDescriptor {
+  if (entry === null || typeof entry !== "object" || !("kind" in entry)) return false;
+  const kind = (entry as { kind: unknown }).kind;
+  return typeof kind === "string" && kind in kindToFieldType;
 }
 
 function isValidateConfig(v: unknown): v is ValidateConfig<unknown> {
@@ -142,7 +138,7 @@ export function resolveResolverField(entry: ResolverFieldEntry): TailorAnyField 
     }
     return entry;
   }
-  return buildResolverField(entry as ResolverFieldDescriptor);
+  return buildResolverField(entry);
 }
 
 export function resolveResolverFieldMap(

@@ -164,8 +164,8 @@ function isTailorField(obj: unknown): obj is TailorAnyField {
 function resolveOutput(
   output: TailorAnyField | ResolverFieldDescriptor | Record<string, ResolverFieldEntry>,
 ): TailorAnyField {
-  if (isResolverFieldDescriptor(output as ResolverFieldEntry)) {
-    return resolveResolverField(output as ResolverFieldDescriptor);
+  if (isResolverFieldDescriptor(output)) {
+    return resolveResolverField(output);
   }
 
   if (isTailorField(output)) {
