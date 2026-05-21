@@ -3,7 +3,7 @@ import { parseSync } from "oxc-parser";
 import { join, resolve } from "pathe";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
-import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
+import { SCRIPT_ARG_MAPS, stringifyFunction } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { ES_BUILTINS } from "./es-builtins";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
@@ -40,11 +40,11 @@ type ScriptTarget = {
 function scriptInvocationArgs(kind: ScriptKind): string {
   switch (kind) {
     case "record-hooks":
-      return `{ data: _data, user: ${tailorUserMap} }`;
+      return SCRIPT_ARG_MAPS.recordHook;
     case "record-validate":
-      return `{ data: _input, user: ${tailorUserMap} }`;
+      return SCRIPT_ARG_MAPS.recordValidate;
     default:
-      return `{ value: _value, data: _data, user: ${tailorUserMap} }`;
+      return SCRIPT_ARG_MAPS.field;
   }
 }
 

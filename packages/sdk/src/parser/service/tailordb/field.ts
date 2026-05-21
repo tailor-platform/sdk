@@ -40,7 +40,7 @@ export const stringifyFunction = (fn: Function): string => {
  * relevant scope; the property name (e.g. `data`, `value`) is the SDK-side
  * parameter name that callbacks destructure.
  */
-const SCRIPT_ARG_MAPS = {
+export const SCRIPT_ARG_MAPS = {
   /** Field-level scope: `_value`, `_data`, and `user` are bound. */
   field: `{ value: _value, data: _data, user: ${tailorUserMap} }`,
   /** Record-level hook scope: each generated FieldHook binds the record to `_data`. */
@@ -73,15 +73,6 @@ export const compileScriptExpr = (
   const normalized = stringifyFunction(fn as unknown as Function);
   return `(${normalized})(${SCRIPT_ARG_MAPS[argMap]})`;
 };
-
-/**
- * Convert a hook function to a field-level script expression.
- * Thin alias for `compileScriptExpr(fn, "field")` retained for call-site clarity.
- * @param fn - Hook function
- * @returns JavaScript expression calling the hook
- */
-export const convertHookToExpr = (fn: (...args: never[]) => unknown): string =>
-  compileScriptExpr(fn, "field");
 
 /**
  * Parse TailorDBField into OperatorFieldConfig.
@@ -121,7 +112,7 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr: compileScriptExpr(fn as (...args: never[]) => unknown, "field"),
+          expr: compileScriptExpr(fn as (...args: never[]) => unknown),
         },
         errorMessage: message,
       };
@@ -130,12 +121,12 @@ export function parseFieldConfig(
       ? {
           create: metadata.hooks.create
             ? {
-                expr: convertHookToExpr(metadata.hooks.create as (...args: never[]) => unknown),
+                expr: compileScriptExpr(metadata.hooks.create as (...args: never[]) => unknown),
               }
             : undefined,
           update: metadata.hooks.update
             ? {
-                expr: convertHookToExpr(metadata.hooks.update as (...args: never[]) => unknown),
+                expr: compileScriptExpr(metadata.hooks.update as (...args: never[]) => unknown),
               }
             : undefined,
         }
