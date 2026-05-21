@@ -23,6 +23,10 @@ export const createCommand = defineAppCommand({
         alias: "w",
         description: "Workspace ID",
       }),
+      permission: arg(z.enum(["write", "read"]).default("write"), {
+        description:
+          "Profile permission. 'read' blocks all write commands while the profile is active.",
+      }),
     })
     .strict(),
   run: async (args) => {
@@ -55,6 +59,7 @@ export const createCommand = defineAppCommand({
     config.profiles[args.name] = {
       user: args.user,
       workspace_id: args["workspace-id"],
+      ...(args.permission === "read" ? { readonly: true } : {}),
     };
     writePlatformConfig(config);
 
@@ -67,6 +72,7 @@ export const createCommand = defineAppCommand({
       name: args.name,
       user: args.user,
       workspaceId: args["workspace-id"],
+      permission: args.permission,
     };
     logger.out(profileInfo);
   },

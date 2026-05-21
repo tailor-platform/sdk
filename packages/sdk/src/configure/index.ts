@@ -9,7 +9,7 @@ export type output<T> = TailorOutput<T>;
 
 /** TailorDB field type builders. */
 // eslint-disable-next-line import-x/export
-export const t = { ..._t };
+export const t = _t;
 // eslint-disable-next-line @typescript-eslint/no-namespace, import-x/export
 export namespace t {
   export type output<T> = TailorOutput<T>;

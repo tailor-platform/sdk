@@ -7,7 +7,7 @@ import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
@@ -23,6 +23,7 @@ import {
   type HasName,
   type PlanSummary,
 } from "./change-set";
+import { ensureConfigId } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
@@ -166,7 +167,11 @@ async function shouldForceApplyAll(
   functionEntries: ReadonlyArray<{ name: string }>,
 ) {
   const desiredLabels = (
-    await buildMetaRequest(applicationTrn(workspaceId, application.name), application.name)
+    await buildMetaRequest({
+      trn: applicationTrn(workspaceId, application.name),
+      appName: application.name,
+      appId: application.id,
+    })
   ).labels;
   const candidateTrns = new Set<string>();
 
@@ -408,13 +413,23 @@ export async function deploy(options?: DeployOptions) {
     const { config, application, workflowBuildResult, bundledScripts, buildOnly } = await withSpan(
       "build",
       async () => {
-        const { config, plugins } = await withSpan("build.loadConfig", () =>
-          loadConfig(options?.configPath),
-        );
-
         const dryRun = options?.dryRun ?? false;
         const buildOnly =
           options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
+
+        const { config, plugins } = await withSpan("build.loadConfig", async () => {
+          const foundPath = loadConfigPath(options?.configPath);
+          // Skip id injection in dry-run / build-only flows: those modes are
+          // expected to have no on-disk side effects.
+          if (foundPath && !dryRun && !buildOnly) {
+            const resolvedPath = path.resolve(process.cwd(), foundPath);
+            if (fs.existsSync(resolvedPath)) {
+              await ensureConfigId(resolvedPath);
+            }
+          }
+          return loadConfig(options?.configPath);
+        });
+
         const noCache = options?.noCache ?? false;
 
         // Initialize cache manager
@@ -539,7 +554,13 @@ export async function deploy(options?: DeployOptions) {
         idpUserTriggerTargets,
       };
       const functionRegistry = await withSpan("plan.functionRegistry", () =>
-        planFunctionRegistry(client, workspaceId, application.name, functionEntries),
+        planFunctionRegistry(
+          client,
+          workspaceId,
+          application.name,
+          application.id,
+          functionEntries,
+        ),
       );
       const unchangedWorkflowJobs = new Set(
         functionRegistry.changeSet.unchanged
@@ -560,6 +581,7 @@ export async function deploy(options?: DeployOptions) {
               client,
               workspaceId,
               application.name,
+              application.id,
               workflowService?.workflows ?? {},
               workflowBuildResult?.mainJobDeps ?? {},
               unchangedWorkflowJobs,

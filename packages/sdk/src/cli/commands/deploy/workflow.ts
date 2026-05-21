@@ -9,7 +9,13 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -31,13 +37,14 @@ export async function applyWorkflow(
   result: Awaited<ReturnType<typeof planWorkflow>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
-  const { changeSet, appName } = result;
+  const { changeSet, appName, appId } = result;
   if (phase === "create-update") {
     // Register job functions used by any workflow, returns map of job name to version
     const jobFunctionVersions = await registerJobFunctions(
       client,
       changeSet,
       appName,
+      appId,
       result.unchangedWorkflowJobNames,
     );
 
@@ -123,6 +130,7 @@ function filterJobFunctionVersions(
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
  * @param appName - Application name
+ * @param appId
  * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
  * @returns Map of job function names to versions
  */
@@ -130,6 +138,7 @@ async function registerJobFunctions(
   client: OperatorClient,
   changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
   appName: string,
+  appId: string | undefined,
   unchangedWorkflowJobNames: ReadonlySet<string> = new Set(),
 ): Promise<{ [key: string]: bigint }> {
   const jobFunctionVersions: { [key: string]: bigint } = {};
@@ -182,7 +191,11 @@ async function registerJobFunctions(
 
         // Set metadata to mark this JobFunction as owned by this app
         await client.setMetadata(
-          await buildMetaRequest(jobFunctionTrn(workspaceId, jobName), appName),
+          await buildMetaRequest({
+            trn: jobFunctionTrn(workspaceId, jobName),
+            appName,
+            appId,
+          }),
         );
 
         return { jobName, version: response.jobFunction?.version };
@@ -205,10 +218,9 @@ async function registerJobFunctions(
       const { metadata } = await client.getMetadata({
         trn: jobFunctionTrn(workspaceId, jobName),
       });
-      const label = metadata?.labels?.[sdkNameLabelKey];
 
       // Only remove metadata if owned by this app
-      if (label === appName) {
+      if (isOwnedByApp(metadata?.labels, appName, appId)) {
         await client.setMetadata({
           trn: jobFunctionTrn(workspaceId, jobName),
           labels: { [sdkNameLabelKey]: "" }, // Remove ownership
@@ -280,6 +292,7 @@ function jobFunctionTrn(workspaceId: string, name: string) {
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param appName - Application name
+ * @param appId
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
@@ -289,6 +302,7 @@ export async function planWorkflow(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
+  appId: string | undefined,
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
@@ -324,7 +338,11 @@ export async function planWorkflow(
 
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
-    const metaRequest = await buildMetaRequest(workflowTrn(workspaceId, workflow.name), appName);
+    const metaRequest = await buildMetaRequest({
+      trn: workflowTrn(workspaceId, workflow.name),
+      appName,
+      appId,
+    });
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
     if (!usedJobNames) {
@@ -339,21 +357,24 @@ export async function planWorkflow(
     }
 
     if (existing) {
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "Workflow",
-          resourceName: workflow.name,
-        });
-      } else if (existing.label !== appName) {
-        conflicts.push({
-          resourceType: "Workflow",
-          resourceName: workflow.name,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, appName, appId);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "Workflow",
+            resourceName: workflow.name,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "Workflow",
+            resourceName: workflow.name,
+            currentOwner: existing.label,
+          });
+        }
       }
 
       if (
-        existing.label === appName &&
+        owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         canTreatWorkflowAsUnchanged(
           existing.resource,
@@ -392,11 +413,11 @@ export async function planWorkflow(
       return;
     }
     const label = existing.label;
-    if (label && label !== appName) {
+    const owned = isOwnedByApp(existing.allLabels, appName, appId);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete workflows managed by this application
-    if (label === appName) {
+    if (owned) {
       changeSet.deletes.push({
         name: existing.resource.name,
         workspaceId,
@@ -412,6 +433,7 @@ export async function planWorkflow(
     unmanaged,
     resourceOwners,
     appName,
+    appId,
     unchangedWorkflowJobNames,
   };
 }

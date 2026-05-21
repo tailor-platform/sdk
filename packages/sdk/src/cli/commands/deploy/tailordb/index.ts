@@ -66,6 +66,7 @@ import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "..
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
+  isOwnedByApp,
   sdkNameLabelKey,
   trnPrefix,
   type WithLabel,
@@ -897,7 +898,7 @@ export async function planTailorDB(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, tailordbs);
+  } = await planServices(client, workspaceId, application.name, application.id, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const [typeChangeSet, gqlPermissionChangeSet] = await Promise.all([
     planTypes(client, workspaceId, tailordbs, executors, deletedServices, undefined, forceApplyAll),
@@ -1050,6 +1051,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
+  appId: string | undefined,
   tailordbs: ReadonlyArray<TailorDBService>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
@@ -1093,27 +1095,31 @@ async function planServices(
 
   for (const tailordb of tailordbs) {
     const existing = existingServices[tailordb.namespace];
-    const metaRequest = await buildMetaRequest(
-      trn(workspaceId, tailordb.namespace),
+    const metaRequest = await buildMetaRequest({
+      trn: trn(workspaceId, tailordb.namespace),
       appName,
-      existing?.allLabels,
-    );
+      appId,
+      existingLabels: existing?.allLabels,
+    });
     if (existing) {
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "TailorDB service",
-          resourceName: tailordb.namespace,
-        });
-      } else if (existing.label !== appName) {
-        conflicts.push({
-          resourceType: "TailorDB service",
-          resourceName: tailordb.namespace,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, appName, appId);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "TailorDB service",
+            resourceName: tailordb.namespace,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "TailorDB service",
+            resourceName: tailordb.namespace,
+            currentOwner: existing.label,
+          });
+        }
       }
 
       if (
-        existing.label === appName &&
+        owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areTailorDBServicesEqual(existing.resource, tailordb)
       ) {
@@ -1139,12 +1145,13 @@ async function planServices(
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
-    const label = existingServices[namespaceName]?.label;
-    if (label && label !== appName) {
+    const entry = existingServices[namespaceName];
+    const label = entry?.label;
+    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete services managed by this application
-    if (label === appName) {
+    if (owned) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {

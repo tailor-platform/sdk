@@ -39,6 +39,11 @@ describe("E2E: Service deletion order", () => {
   let client: OperatorClient;
   let tempDir: string;
   let configCounter = 0;
+  // Share a single auto-generated app id across all configs created in this
+  // suite so resources keep being recognized as owned across re-applies, even
+  // though each apply targets a different config file (a workaround for
+  // Node.js module caching).
+  const sharedTestAppId = crypto.randomUUID();
 
   beforeAll(async () => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
@@ -86,7 +91,13 @@ describe("E2E: Service deletion order", () => {
   function createTestConfig(config: string): string {
     configCounter++;
     const configPath = path.join(tempDir, `config-${configCounter}.ts`);
-    fs.writeFileSync(configPath, config);
+    // Inject the shared id at the top of every defineConfig({...}) call so
+    // that follow-up applies in the same test still recognize prior resources
+    // as owned (see sharedTestAppId comment above).
+    const configWithId = config.includes("id:")
+      ? config
+      : config.replace(/defineConfig\(\{/, `defineConfig({\n  id: "${sharedTestAppId}",`);
+    fs.writeFileSync(configPath, configWithId);
     return configPath;
   }
 
