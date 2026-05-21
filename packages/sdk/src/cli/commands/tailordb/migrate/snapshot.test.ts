@@ -970,6 +970,59 @@ describe("snapshot", () => {
       expect(loaded.changes.length).toBe(1);
       expect(loaded.changes[0].kind).toBe("type_added");
     });
+
+    it("backfills warnings fields for legacy diff.json", () => {
+      // Legacy diff.json written before warning-tier support shipped. The file
+      // has no warnings/hasWarnings keys at all.
+      const legacyDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [{ kind: "type_added", typeName: "NewType" }],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "legacy_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.warnings).toEqual([]);
+      expect(loaded.hasWarnings).toBe(false);
+      expect(loaded.changes.length).toBe(1);
+    });
+
+    it("derives hasWarnings from warnings array regardless of stored flag", () => {
+      // A hand-edited diff.json could end up with mismatched warnings and
+      // hasWarnings; the loader must reconcile to the array.
+      const inconsistentDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [
+          {
+            kind: "field_removed",
+            typeName: "Product",
+            fieldName: "legacyCode",
+          },
+        ],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "inconsistent_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(inconsistentDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.warnings.length).toBe(1);
+      expect(loaded.hasWarnings).toBe(true);
+    });
   });
 
   describe("writeSnapshot", () => {

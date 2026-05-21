@@ -52,7 +52,7 @@ async function script(options: ScriptOptions): Promise<void> {
   } else if (/^[1-9]\d*$/.test(options.number)) {
     migrationNumber = parseInt(options.number, 10);
     if (migrationNumber > 9999) {
-      throw new Error(`Migration number ${options.number} is out of range. Expected 0-9999.`);
+      throw new Error(`Migration number ${options.number} is out of range. Expected 1-9999.`);
     }
   } else {
     throw new Error(

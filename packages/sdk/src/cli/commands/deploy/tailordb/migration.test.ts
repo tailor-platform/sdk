@@ -16,8 +16,11 @@ import {
   updateMigrationLabel,
   getMigrationMachineUser,
   groupMigrationsByNamespace,
+  executeMigrations,
+  type MigrationContext,
 } from "./migration";
 import type { NamespaceWithMigrations } from "@/cli/commands/tailordb/migrate/config";
+import type { PendingMigration } from "@/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "@/cli/shared/client";
 
 // Mock label.ts for trnPrefix
@@ -34,10 +37,32 @@ vi.mock("@/cli/shared/logger", () => ({
     success: vi.fn(),
     debug: vi.fn(),
     newline: vi.fn(),
+    log: vi.fn(),
   },
   styles: {
     bold: (s: string) => s,
   },
+}));
+
+// Mock spinner so tests don't render TTY frames
+vi.mock("@/cli/shared/spinner", () => ({
+  spinner: () => ({
+    start: () => ({
+      succeed: vi.fn(),
+      fail: vi.fn(),
+    }),
+  }),
+}));
+
+// Mock bundler and script executor so executeMigrations can run without
+// touching the network or building real bundles.
+const bundleMigrationScriptMock = vi.fn();
+const executeScriptMock = vi.fn();
+vi.mock("@/cli/commands/tailordb/migrate/bundler", () => ({
+  bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
+}));
+vi.mock("@/cli/shared/script-executor", () => ({
+  executeScript: (...args: unknown[]) => executeScriptMock(...args),
 }));
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations_service__");
@@ -456,6 +481,123 @@ describe("migration", () => {
           [MIGRATION_LABEL_KEY]: "m0001",
         },
       });
+    });
+  });
+
+  // ==========================================================================
+  // executeMigrations
+  // ==========================================================================
+  describe("executeMigrations", () => {
+    const workspaceId = "test-workspace";
+
+    function createMockContext(): MigrationContext {
+      return {
+        client: {} as unknown as OperatorClient,
+        workspaceId,
+        authNamespace: "auth",
+        machineUsers: ["test-machine-user"],
+        dbConfig: {},
+      };
+    }
+
+    function createMockMigration(overrides: Partial<PendingMigration>): PendingMigration {
+      return {
+        number: 1,
+        scriptPath: "/path/0001/migrate.ts",
+        hasScript: true,
+        diffPath: "/path/0001/diff.json",
+        namespace: "tailordb",
+        migrationsDir: "/path",
+        diff: createMockDiff(),
+        ...overrides,
+      };
+    }
+
+    beforeEach(() => {
+      bundleMigrationScriptMock.mockReset();
+      executeScriptMock.mockReset();
+      bundleMigrationScriptMock.mockResolvedValue({
+        bundledCode: "// bundled",
+        warnings: [],
+      });
+      executeScriptMock.mockResolvedValue({
+        success: true,
+        logs: "",
+        result: "",
+      });
+    });
+
+    it("skips migrations without a script file on disk", async () => {
+      const migrations = [
+        createMockMigration({ number: 1, hasScript: false }),
+        createMockMigration({ number: 2, hasScript: false }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(bundleMigrationScriptMock).not.toHaveBeenCalled();
+      expect(executeScriptMock).not.toHaveBeenCalled();
+    });
+
+    it("executes warning-tier migrations whose script exists even when not required", async () => {
+      // requiresMigrationScript=false but hasScript=true represents the
+      // warning-tier case (e.g. field_removed) where the user opted in by
+      // running `tailordb migration script`. The optional script must still
+      // run during deploy.
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockDiff({
+            hasWarnings: true,
+            requiresMigrationScript: false,
+          }),
+        }),
+        createMockMigration({
+          number: 2,
+          hasScript: false,
+          diff: createMockDiff({
+            hasWarnings: true,
+            requiresMigrationScript: false,
+          }),
+        }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(bundleMigrationScriptMock).toHaveBeenCalledTimes(1);
+      expect(executeScriptMock).toHaveBeenCalledTimes(1);
+      expect(executeScriptMock.mock.calls[0][0]).toMatchObject({
+        name: "migration-tailordb-0001.js",
+      });
+    });
+
+    it("executes only the subset with hasScript=true when mixed with breaking changes", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+        }),
+        createMockMigration({
+          number: 2,
+          hasScript: false,
+          diff: createMockDiff({ hasWarnings: true, requiresMigrationScript: false }),
+        }),
+        createMockMigration({
+          number: 3,
+          hasScript: true,
+          diff: createMockDiff({ hasWarnings: true, requiresMigrationScript: false }),
+        }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(executeScriptMock).toHaveBeenCalledTimes(2);
+      const executedNames = executeScriptMock.mock.calls.map(
+        (call) => (call[0] as { name: string }).name,
+      );
+      expect(executedNames).toEqual(["migration-tailordb-0001.js", "migration-tailordb-0003.js"]);
     });
   });
 });
