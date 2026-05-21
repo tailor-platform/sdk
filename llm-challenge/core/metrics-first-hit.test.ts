@@ -11,6 +11,7 @@ import {
   extractGrepArgs,
   extractPatternFromArgs,
   matchAnyCanonical,
+  matchAnyCanonicalWithStrictness,
   tokenize,
   unwrapBashLc,
 } from "./metrics-first-hit";
@@ -65,6 +66,28 @@ describe("unwrapBashLc", () => {
   it("returns the command unchanged when there is no wrapper", () => {
     expect(unwrapBashLc("rg foo bar")).toBe("rg foo bar");
   });
+
+  it("unescapes one layer of double-quote escapes inside the outer wrapper", () => {
+    // Codex models commonly emit `bash -lc "rg \"pat\" file"`. Without the
+    // unescape step the tokenizer thinks the inner double quote is still
+    // open and slurps -n / paths into the pattern.
+    expect(unwrapBashLc('/bin/bash -lc "rg \\"definePlugins\\" -n ."')).toBe(
+      'rg "definePlugins" -n .',
+    );
+    expect(unwrapBashLc('/bin/bash -lc "grep \\"a\\|b\\" file"')).toBe('grep "a\\|b" file');
+  });
+
+  it("leaves regex assertions like \\b intact inside the outer wrapper", () => {
+    // `b` is not in bash's `"..."` escape set, so `\b` must survive the
+    // unwrap and reach the matcher untouched.
+    expect(unwrapBashLc('/bin/bash -lc "rg \\"\\bdefineIdp\\b\\" ."')).toBe(
+      'rg "\\bdefineIdp\\b" .',
+    );
+  });
+
+  it("does not unescape inside a single-quoted wrapper (bash literal)", () => {
+    expect(unwrapBashLc("/bin/bash -lc 'rg \\\"foo\\\" .'")).toBe('rg \\"foo\\" .');
+  });
 });
 
 describe("extractGrepArgs", () => {
@@ -91,6 +114,30 @@ describe("extractGrepArgs", () => {
 
   it("stops at && so chained shell still parses", () => {
     expect(extractGrepArgs("rg foo && echo ok")).toEqual(["foo"]);
+  });
+
+  it("preserves alternation `\\|` inside quoted patterns (not a shell pipe)", () => {
+    // Pre-fix, this would split at the first `|`, dropping every alternative
+    // after the first. The agent intends a single regex argument.
+    expect(extractGrepArgs('grep -R "oauth2Clients\\|defineAuth" -n .')).toEqual([
+      "-R",
+      "oauth2Clients|defineAuth",
+      "-n",
+      ".",
+    ]);
+  });
+
+  it("stops at `|` even when there is no whitespace around it", () => {
+    // Real-world agent commands often jam pipes against arguments. Pre-fix,
+    // tokenize emitted `definePlugins|head` as a single token and the
+    // operator check never fired, so `head -1` leaked into the pattern.
+    expect(extractGrepArgs("rg definePlugins|head -1")).toEqual(["definePlugins"]);
+  });
+
+  it("stops at `||` (logical-or) outside quotes", () => {
+    // `rg missing || true` is a common fallback idiom. The empty alternation
+    // (`||`) collapses to a regex that matches anything, so we must split.
+    expect(extractGrepArgs("rg missing||true")).toEqual(["missing"]);
   });
 });
 
@@ -148,6 +195,75 @@ describe("matchAnyCanonical", () => {
 
   it("returns null when nothing matches", () => {
     expect(matchAnyCanonical("composePlugins", symbols)).toBeNull();
+  });
+
+  it("strips \\b zero-width assertions so word-boundary probes still hit", () => {
+    // The agent commonly types `\bdefineIdp\b`. The bare-symbol comparison
+    // would otherwise reject this even though it's a clean hit.
+    expect(matchAnyCanonical("\\bdefinePlugins\\b", symbols)).toBe("definePlugins");
+    expect(matchAnyCanonical("\\BdefinePlugins\\B", symbols)).toBe("definePlugins");
+  });
+
+  it("strips ^ / $ anchors before matching", () => {
+    expect(matchAnyCanonical("^definePlugins$", symbols)).toBe("definePlugins");
+  });
+});
+
+describe("matchAnyCanonicalWithStrictness", () => {
+  const symbols = ["kyselyTypePlugin", "definePlugins", "getDB", "defineStaticWebSite"];
+
+  it("returns `strict` when the canonical full name is a substring of the pattern", () => {
+    // Word-boundary probe — full name embedded.
+    expect(matchAnyCanonicalWithStrictness("\\bdefinePlugins\\b", symbols)).toEqual({
+      symbol: "definePlugins",
+      strictness: "strict",
+    });
+    // Alternation containing the full name.
+    expect(
+      matchAnyCanonicalWithStrictness("oauth2Clients|defineStaticWebSite|cors", symbols),
+    ).toEqual({ symbol: "defineStaticWebSite", strictness: "strict" });
+  });
+
+  it("returns `prefix` when the regex matches but the full name isn't a substring", () => {
+    // A bare `defineStatic` matches `defineStaticWebSite` via regex `test`
+    // but it isn't a substring of the pattern (the pattern is shorter).
+    expect(matchAnyCanonicalWithStrictness("defineStatic", symbols)).toEqual({
+      symbol: "defineStaticWebSite",
+      strictness: "prefix",
+    });
+    // Symbol-includes-pattern direction (substring fallback).
+    expect(matchAnyCanonicalWithStrictness("kysely", symbols)).toEqual({
+      symbol: "kyselyTypePlugin",
+      strictness: "prefix",
+    });
+  });
+
+  it("prefers strict over prefix when both symbols could match", () => {
+    // `defineStatic` is a prefix probe for `defineStaticWebSite`. If the
+    // canonical list happened to include both, the strict match must win.
+    const both = ["defineStaticWebSite", "defineStatic"] as const;
+    expect(matchAnyCanonicalWithStrictness("defineStatic", both)).toEqual({
+      symbol: "defineStatic",
+      strictness: "strict",
+    });
+  });
+
+  it("rejects longer-identifier overlaps as strict (getDBClient vs getDB)", () => {
+    // The agent is searching for `getDBClient` — a completely different
+    // symbol that happens to contain `getDB`. Plain substring match would
+    // misclassify this as a strict hit on `getDB`. Identifier-boundary
+    // anchoring still catches the regex match (`/getDBClient/.test("getDB")`
+    // is false), so the result is `null` — no hit.
+    expect(matchAnyCanonicalWithStrictness("getDBClient", ["getDB"])).toBeNull();
+  });
+
+  it("treats symbols starting with a non-word char (.method) at the boundary", () => {
+    // `.method` shouldn't require a word boundary on the leading `.`; the
+    // `.method` must appear as a method-position substring in the pattern.
+    expect(matchAnyCanonicalWithStrictness("foo.method", [".method"])).toEqual({
+      symbol: ".method",
+      strictness: "strict",
+    });
   });
 });
 
