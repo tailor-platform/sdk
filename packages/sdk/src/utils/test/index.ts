@@ -72,6 +72,23 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           if (hooked[key] instanceof Date) {
             hooked[key] = hooked[key].toISOString();
           }
+        } else if (
+          field.metadata.generated &&
+          field.type === "datetime" &&
+          field.metadata.required !== false
+        ) {
+          // Mirror the platform's synthesized create hook for required generated
+          // datetime fields (e.g. `createdAt` from `db.fields.timestamps()` /
+          // `timestampFields()`). The platform applies `new Date()` server-side
+          // via `metadata.generated`, but no `metadata.hooks.create` is set on
+          // the field — without this branch, seed/test records would leave the
+          // field empty and drift from deployed behavior.
+          const supplied =
+            data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
+          hooked[key] =
+            supplied instanceof Date
+              ? supplied.toISOString()
+              : (supplied ?? new Date().toISOString());
         } else if (data && typeof data === "object") {
           hooked[key] = (data as Record<string, unknown>)[key];
         }

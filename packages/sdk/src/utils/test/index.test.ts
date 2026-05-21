@@ -148,6 +148,53 @@ describe("createTailorDBHook", () => {
       expect(result.lines).toBe(bogus);
     });
   });
+
+  describe("generated timestamp fields", () => {
+    it("fills required generated datetime (createdAt) with new Date when not supplied", () => {
+      const type = db.type("Test", {
+        name: db.string(),
+        ...db.fields.timestamps(),
+      });
+      const result = createTailorDBHook(type)({ name: "alice" });
+      expect(typeof result.createdAt).toBe("string");
+      expect(() => new Date(result.createdAt as string).toISOString()).not.toThrow();
+    });
+
+    it("preserves supplied createdAt value (lets tests pin timestamps deterministically)", () => {
+      const type = db.type("Test", {
+        name: db.string(),
+        ...db.fields.timestamps(),
+      });
+      const result = createTailorDBHook(type)({
+        name: "alice",
+        createdAt: "2024-01-01T00:00:00.000Z",
+      });
+      expect(result.createdAt).toBe("2024-01-01T00:00:00.000Z");
+    });
+
+    it("converts supplied Date instance to ISO string", () => {
+      const type = db.type("Test", {
+        name: db.string(),
+        ...db.fields.timestamps(),
+      });
+      const result = createTailorDBHook(type)({
+        name: "alice",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      expect(result.createdAt).toBe("2024-01-01T00:00:00.000Z");
+    });
+
+    it("does not fill optional generated datetime (updatedAt) on create", () => {
+      const type = db.type("Test", {
+        name: db.string(),
+        ...db.fields.timestamps(),
+      });
+      const result = createTailorDBHook(type)({ name: "alice" });
+      // updatedAt's synthesized hook is on `update`, not `create` — the platform
+      // leaves it as the supplied value on create. Same here: undefined when omitted.
+      expect(result.updatedAt).toBeUndefined();
+    });
+  });
 });
 
 describe("createStandardSchema", () => {
