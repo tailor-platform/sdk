@@ -116,6 +116,8 @@ jobs:
             ### Recommended Actions
             - ...
 
+            > Re-run this check by adding the `docs-check` label to the PR.
+
             ---
             <!-- docs-consistency-check -->
             ```
@@ -129,6 +131,8 @@ jobs:
 
             **Checked areas:**
             - (list what was checked)
+
+            > Re-run this check by adding the `docs-check` label to the PR.
 
             ---
             <!-- docs-consistency-check -->

@@ -1,5 +1,33 @@
 # @tailor-platform/sdk
 
+## 1.50.0
+
+### Minor Changes
+
+- [#1223](https://github.com/tailor-platform/sdk/pull/1223) [`c2f078d`](https://github.com/tailor-platform/sdk/commit/c2f078d6fb82d42bcc8c040e020b34072a2d2eb6) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve `tailordb migration` handling of data-loss-possible changes:
+
+  - Removed fields (`field_removed`) and removed types (`type_removed`) are now reported as **warnings** during `tailordb migration generate`, not silent changes. They are no longer dropped before `migrate.ts` runs: the field/type stays available during the Pre-migration phase so that scripts can read it (e.g. `innerJoin` through a foreign key that is being dropped in the same migration), then the physical drop happens in the Post-migration phase.
+  - Add `tailordb migration script <number>` subcommand to add a `migrate.ts` (and `db.ts`) template to an existing migration directory. Useful for warning-tier changes where you want a custom data migration even though one was not generated automatically.
+  - `migrate.ts` is now executed whenever the file exists on disk for a pending migration, regardless of whether the diff originally required a script. Breaking changes still hard-require a script as before.
+
+### Patch Changes
+
+- [#1194](https://github.com/tailor-platform/sdk/pull/1194) [`4c227cc`](https://github.com/tailor-platform/sdk/commit/4c227cc404e51331c0514b0aaa07d96d8940c347) Thanks [@toiroakr](https://github.com/toiroakr)! - Colocate `src/vitest/` tests next to their sources (drop the
+  `src/vitest/__tests__/` directory). Vitest discovers the test files
+  via the existing `**/?(*.)+(spec|test).ts` include pattern, so the
+  `**/__tests__/**/*.ts` entry has been removed from `vitest.config.ts`.
+  The nested integration runner moves from
+  `src/vitest/__tests__/integration/` to `src/vitest/integration/`. Pure
+  refactor: no public API or behavior changes.
+
+- [#1207](https://github.com/tailor-platform/sdk/pull/1207) [`c0b392d`](https://github.com/tailor-platform/sdk/commit/c0b392d95f81bcb2a4bfd9e856183222da87ef06) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor deploy` so an intermediate migration's data script can still read fields that a later migration removes. Each migration's pre/post phase now submits the schema state reconstructed up to that migration (initial baseline + diffs through N), instead of the FINAL post-all-migrations schema. Previously, removals declared in later migrations leaked into earlier migrations' pre-phase and caused `field 'X' not found` failures at script execution time.
+
+- [#1208](https://github.com/tailor-platform/sdk/pull/1208) [`59d7e0e`](https://github.com/tailor-platform/sdk/commit/59d7e0e7c1b42dcd1571365780114d596e44350c) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(skills): rename bundled skill directory to `agent-skills/` so `gh skill install tailor-platform/sdk` resolves a single skill. `gh skill` uses a recursive `**/skills/*/SKILL.md` match and was picking up both `skills/tailor-sdk/` (the public mirror) and `packages/sdk/skills/tailor-sdk/` (the npm bundle), erroring with conflicting names. The bundled copy is now under `packages/sdk/agent-skills/` (excluded from gh's match), while the repo-root `skills/` mirror remains the single discovery target for `gh skill install` and `npx skills add <repo>`. `npx tailor-sdk skills install` continues to work via the bundled `agent-skills/` path inside the published package.
+
+- [#1217](https://github.com/tailor-platform/sdk/pull/1217) [`b827cf9`](https://github.com/tailor-platform/sdk/commit/b827cf95c0c048959c269f7ed9a31fdc81a5eb13) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/read-multiline to v0.4.1
+
+- [#1184](https://github.com/tailor-platform/sdk/pull/1184) [`dee2ad7`](https://github.com/tailor-platform/sdk/commit/dee2ad7199b2da238b7e9edea2d9bb9605033456) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor deploy` so decimal fields without an explicit `scale` no longer show spurious drift against the platform (which materializes the default `6`). Deploy now plans and applies through the same snapshot pipeline as `tailordb migrate`.
+
 ## 1.49.0
 
 ### Minor Changes
