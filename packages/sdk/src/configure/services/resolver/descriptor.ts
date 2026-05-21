@@ -115,15 +115,7 @@ export type ResolvedResolverFieldMap<M extends Record<string, ResolverFieldEntry
 // --- Runtime conversion ---
 
 function isPassthroughField(entry: ResolverFieldEntry): entry is TailorAnyField {
-  if ("kind" in entry) {
-    if (!isResolverFieldDescriptor(entry)) {
-      throw new Error(
-        `Unknown resolver field descriptor kind: "${String((entry as { kind: unknown }).kind)}"`,
-      );
-    }
-    return false;
-  }
-  return true;
+  return !("kind" in entry);
 }
 
 export function isResolverFieldDescriptor(
@@ -150,7 +142,7 @@ export function resolveResolverField(entry: ResolverFieldEntry): TailorAnyField 
     }
     return entry;
   }
-  return buildResolverField(entry);
+  return buildResolverField(entry as ResolverFieldDescriptor);
 }
 
 export function resolveResolverFieldMap(
@@ -159,24 +151,34 @@ export function resolveResolverFieldMap(
   let hasDescriptor = false;
   const resolved: Record<string, TailorAnyField> = {};
   for (const [key, entry] of Object.entries(entries)) {
+    // `"kind" in entry` cheaply distinguishes descriptors from passthrough fields
+    // without re-running the full kind-validity check inside `resolveResolverField`.
+    if ("kind" in entry) hasDescriptor = true;
     resolved[key] = resolveResolverField(entry);
-    if (!hasDescriptor && isResolverFieldDescriptor(entry)) {
-      hasDescriptor = true;
-    }
   }
   return hasDescriptor ? resolved : (entries as Record<string, TailorAnyField>);
 }
 
 function buildResolverField(descriptor: ResolverFieldDescriptor): TailorAnyField {
+  if (!(descriptor.kind in kindToFieldType)) {
+    throw new Error(
+      `Unknown resolver field descriptor kind: "${String((descriptor as { kind: unknown }).kind)}"`,
+    );
+  }
   const fieldType = kindToFieldType[descriptor.kind];
   const options: FieldOptions = {
     ...(descriptor.optional === true && { optional: true as const }),
     ...(descriptor.array === true && { array: true as const }),
   };
-  const values = descriptor.kind === "enum" ? descriptor.values : undefined;
-  if (descriptor.kind === "enum" && (!Array.isArray(values) || values.length === 0)) {
-    throw new Error('Enum field descriptor requires a non-empty "values" array');
+
+  let values: AllowedValues | undefined;
+  if (descriptor.kind === "enum") {
+    if (!Array.isArray(descriptor.values) || descriptor.values.length === 0) {
+      throw new Error('Enum field descriptor requires a non-empty "values" array');
+    }
+    values = descriptor.values;
   }
+
   const nestedFields =
     descriptor.kind === "object" ? resolveResolverFieldMap(descriptor.fields) : undefined;
 
