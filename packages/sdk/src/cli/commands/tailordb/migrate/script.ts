@@ -42,17 +42,21 @@ export interface ScriptOptions {
 async function script(options: ScriptOptions): Promise<void> {
   logBetaWarning("tailordb migration");
 
-  // Accept either the canonical 4-digit form ("0001") or a bare non-negative
-  // integer ("1"). Reject anything containing non-digit characters so that
-  // inputs like "1abc" don't silently parse to migration 1.
+  // Accept either the canonical 4-digit form ("0001") or a bare integer
+  // ("1"–"9999"). Reject inputs containing non-digit characters, integer
+  // forms with leading zeros ("00001"), and anything outside the
+  // 0000-9999 directory range that the migrations system supports.
   let migrationNumber: number;
   if (isValidMigrationNumber(options.number)) {
     migrationNumber = parseInt(options.number, 10);
-  } else if (/^\d+$/.test(options.number)) {
+  } else if (/^[1-9]\d*$/.test(options.number)) {
     migrationNumber = parseInt(options.number, 10);
+    if (migrationNumber > 9999) {
+      throw new Error(`Migration number ${options.number} is out of range. Expected 0-9999.`);
+    }
   } else {
     throw new Error(
-      `Invalid migration number format: ${options.number}. Expected 4-digit format (e.g., 0001) or integer (e.g., 1).`,
+      `Invalid migration number format: ${options.number}. Expected 4-digit format (e.g., 0001) or integer 1-9999 (e.g., 1).`,
     );
   }
 
