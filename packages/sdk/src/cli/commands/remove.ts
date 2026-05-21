@@ -21,6 +21,7 @@ import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import ml from "@/utils/multiline";
 
 export interface RemoveOptions {
@@ -172,6 +173,7 @@ export const removeCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const { client, workspaceId, application, config } = await loadOptions({
       workspaceId: args["workspace-id"],
       profile: args.profile,
