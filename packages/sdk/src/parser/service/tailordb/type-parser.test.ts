@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTable } from "@/configure/services/tailordb/createTable";
 import { db } from "@/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "@/utils/test/internal";
+import { setPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {
@@ -766,6 +767,35 @@ describe("parseTypes", () => {
       const t = db.type("ValNone", { name: db.string() });
       const result = parseTypes(toSchemaOutputs({ ValNone: t }), "test-namespace");
       expect(result.ValNone.validate).toBeUndefined();
+    });
+  });
+
+  describe("precompiled script expressions for record-level scopes", () => {
+    it("uses precompiled expression for record-level hooks when attached", () => {
+      const createHook = ({ data }: { data: { name: string } }) => ({ name: data.name });
+      setPrecompiledScriptExpr(createHook, "PRECOMPILED_RECORD_HOOK_EXPR");
+
+      const type = db.type("HookPrecomp", { name: db.string() }).hooks({ create: createHook });
+
+      const result = parseTypes(toSchemaOutputs({ HookPrecomp: type }), "test-namespace");
+      // The emitted field-level hook wraps the precompiled invocation and indexes out the key.
+      expect(result.HookPrecomp.fields.name.config.hooks?.create?.expr).toBe(
+        '(PRECOMPILED_RECORD_HOOK_EXPR)["name"]',
+      );
+    });
+
+    it("uses precompiled expression for record-level validators when attached", () => {
+      const validator = ({ data }: { data: { name: string } }) => data.name.length > 0;
+      setPrecompiledScriptExpr(validator, "PRECOMPILED_RECORD_VALIDATE_EXPR");
+
+      const type = db
+        .type("ValPrecomp", { name: db.string() })
+        .validate([validator, "Name required"]);
+
+      const result = parseTypes(toSchemaOutputs({ ValPrecomp: type }), "test-namespace");
+      const [first] = result.ValPrecomp.validate ?? [];
+      expect(first?.script.expr).toContain("PRECOMPILED_RECORD_VALIDATE_EXPR");
+      expect(first?.script.expr).toContain('"_record_0"');
     });
   });
 
