@@ -12,6 +12,10 @@ vi.mock("@/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
+vi.mock("@/cli/shared/readonly-guard", () => ({
+  assertWritable: vi.fn(),
+}));
+
 describe("triggerExecutor runtime overload", () => {
   let triggerExecutorMock: ReturnType<typeof vi.fn>;
 
