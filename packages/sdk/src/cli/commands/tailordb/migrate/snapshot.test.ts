@@ -2154,6 +2154,112 @@ describe("snapshot", () => {
       expect(drifts.length).toBe(1);
       expect(drifts[0].kind).toBe("type_missing_local");
     });
+
+    describe("type_validate drift", () => {
+      const snapshotWithValidator: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            validate: [
+              { script: { expr: "(data.age >= 0)" }, errorMessage: "age must be non-negative" },
+            ],
+          },
+        },
+      };
+      const expectedCombined = `Object.assign({}, (data.age >= 0))`;
+
+      function withTypeValidate(
+        baseType: ProtoTailorDBType,
+        create: string | null,
+        update: string | null,
+      ): ProtoTailorDBType {
+        return {
+          ...baseType,
+          schema: {
+            ...(baseType.schema ?? { fields: {} }),
+            typeValidate: {
+              create: create === null ? undefined : { expr: create },
+              update: update === null ? undefined : { expr: update },
+            },
+          },
+        } as unknown as ProtoTailorDBType;
+      }
+
+      it("returns no drift when remote type_validate matches snapshot", () => {
+        const remoteTypes = [
+          withTypeValidate(
+            createMockRemoteType("User", { id: { type: "uuid", required: true } }),
+            expectedCombined,
+            expectedCombined,
+          ),
+        ];
+        const drifts = compareRemoteWithSnapshot(remoteTypes, snapshotWithValidator);
+        expect(drifts).toEqual([]);
+      });
+
+      it("detects drift when remote type_validate is missing", () => {
+        const remoteTypes = [
+          createMockRemoteType("User", { id: { type: "uuid", required: true } }),
+        ];
+        const drifts = compareRemoteWithSnapshot(remoteTypes, snapshotWithValidator);
+        expect(drifts.length).toBe(1);
+        expect(drifts[0].kind).toBe("type_validate_mismatch");
+        expect(drifts[0].typeName).toBe("User");
+      });
+
+      it("detects drift when remote type_validate expr differs", () => {
+        const remoteTypes = [
+          withTypeValidate(
+            createMockRemoteType("User", { id: { type: "uuid", required: true } }),
+            "Object.assign({}, (data.age >= 18))",
+            "Object.assign({}, (data.age >= 18))",
+          ),
+        ];
+        const drifts = compareRemoteWithSnapshot(remoteTypes, snapshotWithValidator);
+        expect(drifts.length).toBe(1);
+        expect(drifts[0].kind).toBe("type_validate_mismatch");
+      });
+
+      it("detects drift when remote create and update exprs disagree with snapshot", () => {
+        const remoteTypes = [
+          withTypeValidate(
+            createMockRemoteType("User", { id: { type: "uuid", required: true } }),
+            expectedCombined,
+            null,
+          ),
+        ];
+        const drifts = compareRemoteWithSnapshot(remoteTypes, snapshotWithValidator);
+        expect(drifts.length).toBe(1);
+        expect(drifts[0].kind).toBe("type_validate_mismatch");
+      });
+
+      it("detects drift when remote has validators but snapshot does not", () => {
+        const snapshotNoValidator: SchemaSnapshot = {
+          ...snapshotWithValidator,
+          types: {
+            User: {
+              ...snapshotWithValidator.types.User,
+              validate: undefined,
+            },
+          },
+        };
+        const remoteTypes = [
+          withTypeValidate(
+            createMockRemoteType("User", { id: { type: "uuid", required: true } }),
+            expectedCombined,
+            expectedCombined,
+          ),
+        ];
+        const drifts = compareRemoteWithSnapshot(remoteTypes, snapshotNoValidator);
+        expect(drifts.length).toBe(1);
+        expect(drifts[0].kind).toBe("type_validate_mismatch");
+      });
+    });
   });
 
   // ==========================================================================

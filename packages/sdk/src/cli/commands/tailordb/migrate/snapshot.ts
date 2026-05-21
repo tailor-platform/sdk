@@ -1393,6 +1393,24 @@ function compareTypeHooksValidate(
   });
 }
 
+/**
+ * Build the combined `type_validate` script expression for a snapshot type.
+ * Mirrors `toProtoTypeValidate` in deploy/tailordb so both wire format and
+ * remote drift comparisons agree on the canonical local expression.
+ * @param validators - The snapshot type's `validate` array (or undefined)
+ * @returns The combined expr string, or null if no validators
+ */
+export function buildCombinedTypeValidateExpr(
+  validators: TailorDBSnapshotType["validate"],
+): string | null {
+  if (!validators || validators.length === 0) return null;
+  // Each parsed validator script evaluates to a map (`{}` on success,
+  // `{ _record_<i>: msg }` on failure); merge them so all per-predicate
+  // messages reach the platform.
+  const exprs = validators.map((v) => v.script.expr || "({})");
+  return `Object.assign({}, ${exprs.join(", ")})`;
+}
+
 function areValidationsEqual(
   a: TailorDBSnapshotType["validate"],
   b: TailorDBSnapshotType["validate"],
@@ -2233,9 +2251,58 @@ export function compareRemoteWithSnapshot(
         drifts.push(drift);
       }
     }
+
+    const validateDrift = compareTypeValidators(typeName, remoteType, snapshotType);
+    if (validateDrift) drifts.push(validateDrift);
   }
 
   return drifts;
+}
+
+/**
+ * Compare type-level (record-level) validators between remote and snapshot.
+ * Local snapshots store validators as `{script, errorMessage}[]` but emit a
+ * single combined expression via `buildCombinedTypeValidateExpr`. Detect drift
+ * when the remote's `type_validate.create`/`.update` script no longer matches
+ * the expression the snapshot would produce (e.g. validators changed in remote
+ * out-of-band while the migration label still matches).
+ * @param typeName - Name of the type
+ * @param remoteType - Remote type from the platform
+ * @param snapshotType - Local snapshot type
+ * @returns Drift info or null if validators match
+ */
+function compareTypeValidators(
+  typeName: string,
+  remoteType: ProtoTailorDBType,
+  snapshotType: TailorDBSnapshotType,
+): SchemaDrift | null {
+  const localExpr = buildCombinedTypeValidateExpr(snapshotType.validate);
+  const remoteCreate = remoteType.schema?.typeValidate?.create?.expr ?? null;
+  const remoteUpdate = remoteType.schema?.typeValidate?.update?.expr ?? null;
+
+  if (localExpr === null && remoteCreate === null && remoteUpdate === null) return null;
+
+  if (localExpr === null) {
+    return {
+      typeName,
+      kind: "type_validate_mismatch",
+      details: `Snapshot has no record-level validators but remote has type_validate (create=${formatExpr(remoteCreate)}, update=${formatExpr(remoteUpdate)})`,
+    };
+  }
+
+  if (remoteCreate !== localExpr || remoteUpdate !== localExpr) {
+    return {
+      typeName,
+      kind: "type_validate_mismatch",
+      details: `Remote type_validate does not match snapshot. local=${formatExpr(localExpr)} remote.create=${formatExpr(remoteCreate)} remote.update=${formatExpr(remoteUpdate)}`,
+    };
+  }
+
+  return null;
+}
+
+function formatExpr(expr: string | null): string {
+  return expr === null ? "(none)" : JSON.stringify(expr);
 }
 
 /**

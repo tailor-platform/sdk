@@ -118,7 +118,8 @@ export type SchemaDriftKind =
   | "type_missing_local"
   | "field_missing_remote"
   | "field_missing_local"
-  | "field_mismatch";
+  | "field_mismatch"
+  | "type_validate_mismatch";
 
 /**
  * Single schema drift item

@@ -24,7 +24,7 @@ import {
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as inflection from "inflection";
-import { isSnapshotFieldRefOperand } from "./snapshot";
+import { buildCombinedTypeValidateExpr, isSnapshotFieldRefOperand } from "./snapshot";
 import type {
   SchemaSnapshot,
   SnapshotEnumValue,
@@ -177,11 +177,8 @@ export function generateTailorDBTypeManifestFromSnapshot(
 function toProtoSnapshotTypeValidate(
   snapshotType: TailorDBSnapshotType,
 ): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
-  if (!snapshotType.validate || snapshotType.validate.length === 0) return undefined;
-  // Each snapshot validator script already evaluates to a map; merge them so
-  // the resulting type_validate script returns a single combined object.
-  const exprs = snapshotType.validate.map((v) => v.script.expr || "({})");
-  const combined = `Object.assign({}, ${exprs.join(", ")})`;
+  const combined = buildCombinedTypeValidateExpr(snapshotType.validate);
+  if (combined === null) return undefined;
   const script = { expr: combined };
   return {
     create: script,

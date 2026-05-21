@@ -57,6 +57,7 @@ import {
   compareLocalTypesWithSnapshot,
   assertValidMigrationFiles,
   formatMigrationNumber,
+  buildCombinedTypeValidateExpr,
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
   createSnapshotType,
@@ -1717,13 +1718,8 @@ function generateTailorDBTypeManifest(
 function toProtoTypeValidate(
   type: TailorDBSnapshotType,
 ): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
-  const validators = type.validate;
-  if (!validators || validators.length === 0) return undefined;
-  // Each parsed validator script already evaluates to a map (`{}` on success,
-  // `{ _record_<i>: msg }` on failure); merge them so all per-predicate
-  // messages reach the platform.
-  const exprs = validators.map((v) => v.script.expr || "({})");
-  const combined = `Object.assign({}, ${exprs.join(", ")})`;
+  const combined = buildCombinedTypeValidateExpr(type.validate);
+  if (combined === null) return undefined;
   const script = { expr: combined };
   return {
     create: script,
