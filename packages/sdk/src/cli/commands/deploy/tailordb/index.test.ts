@@ -908,6 +908,7 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
           name: "test-app",
           tailorDBServices: [mockTailorDBService],
         } as unknown as Application,
+        tailorDBInputs: [],
         config,
         noSchemaCheck: true,
       },
