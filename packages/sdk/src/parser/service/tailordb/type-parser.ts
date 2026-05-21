@@ -1,6 +1,11 @@
 import * as inflection from "inflection";
 import { isPluginGeneratedType } from "@/types/tailordb";
-import { compileScriptExpr, parseFieldConfig, stringifyFunction } from "./field";
+import {
+  compileScriptExpr,
+  normalizeValidatorEntry,
+  parseFieldConfig,
+  stringifyFunction,
+} from "./field";
 import { parsePermissions } from "./permission";
 import { extractRecordHookOverrideKeys } from "./record-hook-keys";
 import {
@@ -233,11 +238,8 @@ function convertRecordValidators(
   validators: NonNullable<TailorDBTypeSchemaOutput["metadata"]["validate"]>,
 ): OperatorValidateConfig[] {
   return validators.map((v, index) => {
-    const { fn, message } =
-      typeof v === "function"
-        ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
-        : { fn: v[0], message: v[1] as string };
-    const predicate = compileScriptExpr(fn as (...args: never[]) => unknown, "recordValidate");
+    const { fn, message } = normalizeValidatorEntry(v);
+    const predicate = compileScriptExpr(fn, "recordValidate");
     const key = `_record_${index}`;
     const errorLiteral = JSON.stringify(message);
     return {

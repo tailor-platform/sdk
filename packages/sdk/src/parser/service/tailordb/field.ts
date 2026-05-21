@@ -75,6 +75,28 @@ export const compileScriptExpr = (
 };
 
 /**
+ * Normalize a validator entry into a `{ fn, message }` pair. Accepts either a
+ * bare predicate function or a `[fn, message]` tuple. When only a function is
+ * supplied, synthesizes a default message from the function source so the
+ * surfaced error still references the offending predicate.
+ * @param v - Validator entry (function or `[function, message]` tuple)
+ * @returns Predicate function and the resolved error message
+ */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+export function normalizeValidatorEntry(v: Function | [Function, string]): {
+  fn: (...args: never[]) => unknown;
+  message: string;
+} {
+  if (typeof v === "function") {
+    return {
+      fn: v as (...args: never[]) => unknown,
+      message: `failed by \`${v.toString().trim()}\``,
+    };
+  }
+  return { fn: v[0] as (...args: never[]) => unknown, message: v[1] };
+}
+
+/**
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
  * @param field - TailorDB field definition
@@ -105,14 +127,10 @@ export function parseFieldConfig(
         }
       : {}),
     validate: metadata.validate?.map((v) => {
-      const { fn, message } =
-        typeof v === "function"
-          ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
-          : { fn: v[0], message: v[1] };
-
+      const { fn, message } = normalizeValidatorEntry(v);
       return {
         script: {
-          expr: compileScriptExpr(fn as (...args: never[]) => unknown),
+          expr: compileScriptExpr(fn),
         },
         errorMessage: message,
       };
