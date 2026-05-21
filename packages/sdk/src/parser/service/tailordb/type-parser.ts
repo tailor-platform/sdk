@@ -199,6 +199,12 @@ function applyRecordHooksToFields(
     const fnSource = stringifyFunction(typedFn as unknown as Function);
     const keys = extractRecordHookOverrideKeys(fnSource);
     for (const key of keys) {
+      if (key === "id") {
+        throw new Error(
+          `Record-level ${op} hook on type "${typeName}" cannot override the synthetic "id" field. ` +
+            "TailorDB owns id generation, and the deploy manifest strips id from field-level hooks.",
+        );
+      }
       const field = fields[key];
       if (!field) {
         throw new Error(

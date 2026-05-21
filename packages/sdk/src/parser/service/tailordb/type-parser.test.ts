@@ -608,6 +608,21 @@ describe("parseTypes", () => {
       );
     });
 
+    it("throws when a record-level hook overrides the synthetic id field", () => {
+      const bad = db
+        .type(["Bad", "AllBad"], {
+          name: db.string(),
+        })
+        .hooks({
+          // @ts-expect-error - id is excluded from record-hook overrides
+          create: () => ({ id: "fixed-id" }),
+        });
+
+      expect(() => parseTypes(toSchemaOutputs({ Bad: bad }), "test-namespace")).toThrow(
+        /cannot override the synthetic "id" field/,
+      );
+    });
+
     it("throws when a record-level hook return value is not a static object literal", () => {
       // Branched return: not a single static object literal — the AST extractor must reject this.
       const bad = db

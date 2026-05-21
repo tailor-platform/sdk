@@ -17,8 +17,11 @@ type RecordHookFnArgs<TData> = {
  * Record-level hook function.
  * Receives the entire record `data` and must return an object containing
  * only the fields to override on the record. Unchanged fields can be omitted.
+ * `id` cannot be overridden — TailorDB owns the synthetic UUID and the deploy
+ * manifest strips it from the field set, so any local override would silently
+ * desync from production.
  */
-type RecordHookFn<TData> = (args: RecordHookFnArgs<TData>) => Partial<TData>;
+type RecordHookFn<TData> = (args: RecordHookFnArgs<TData>) => Partial<Omit<TData, "id">>;
 
 /**
  * Record-level hooks for create/update operations.
