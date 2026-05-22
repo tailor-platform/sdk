@@ -8,8 +8,10 @@
  *   tsx llm-challenge/scripts/affordance-gap.ts
  *   tsx llm-challenge/scripts/affordance-gap.ts --csv rows.csv
  *
- * Profile names are normalized so legacy `types-only` collapses into
- * `code-only` and `full-package` into `code-and-docs`.
+ * Reports use the `full` (unfiltered) and `no-docs` (JSDoc + README/docs/skills
+ * stripped) profile labels. Legacy profile names (`code-only`, `code-and-docs`,
+ * `bare-types`, `types-only`, `full-package`) are quarantined under
+ * `results/_quarantine-legacy-profiles/` and not aggregated.
  */
 
 import fs from "node:fs";
@@ -66,12 +68,6 @@ function loadAllMeta(): Map<string, Meta> {
   return out;
 }
 
-function normalizeProfile(p: string): string {
-  if (p === "types-only") return "code-only";
-  if (p === "full-package") return "code-and-docs";
-  return p;
-}
-
 function readTrace(file: string): TraceEvent[] {
   if (!fs.existsSync(file)) return [];
   const out: TraceEvent[] = [];
@@ -115,7 +111,7 @@ function buildRowsForReport(reportFile: string, metaIdx: Map<string, Meta>): Row
       iterations?: { count?: number; passedByIteration?: boolean[] };
     }>;
   };
-  const profile = normalizeProfile(report.contextProfile ?? "?");
+  const profile = report.contextProfile ?? "?";
   const sessionDir = path.basename(path.dirname(reportFile));
   const sdkBranch = report.sdkBranch;
   const rows: Row[] = [];
@@ -180,6 +176,9 @@ function walkReports(): string[] {
   for (const entry of fs.readdirSync(RESULTS_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     if (entry.name === "artifacts" || entry.name === "experiments") continue;
+    // Underscore-prefixed dirs (`_quarantine-*`) are operator-curated archives
+    // of legacy / stale reports that must not contaminate aggregations.
+    if (entry.name.startsWith("_")) continue;
     const sessionDir = path.join(RESULTS_DIR, entry.name);
     for (const f of fs.readdirSync(sessionDir)) {
       if (f.startsWith("report-") && f.endsWith(".json")) {
@@ -203,7 +202,7 @@ function formatPerProblem(rows: Row[], metaIdx: Map<string, Meta>): string {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
-  const profileOrder = ["code-only", "code-and-docs"];
+  const profileOrder = ["no-docs", "full"];
   const profiles = [...new Set(rows.map((r) => r.profile))].sort(
     (a, b) => profileOrder.indexOf(a) - profileOrder.indexOf(b),
   );
@@ -228,7 +227,13 @@ function formatPerProblem(rows: Row[], metaIdx: Map<string, Meta>): string {
         const ng = list.filter((x) => x.firstHit.outcome === "no_grep").length;
         const bias = list.filter((x) => x.biasMiss.isBiasMiss).length;
         lines.push(
-          `| ${pid} | ${br} | ${prof} | ${list.length} | ${pct(passes, list.length)} (${passes}/${list.length}) | ${pct(hits, list.length)} | ${pct(misses, list.length)} | ${pct(ng, list.length)} | ${pct(bias, list.length)} | ${meta?.designNote ?? "-"} |`,
+          `| ${pid} | ${br} | ${prof} | ${list.length} | ${pct(
+            passes,
+            list.length,
+          )} (${passes}/${list.length}) | ${pct(hits, list.length)} | ${pct(
+            misses,
+            list.length,
+          )} | ${pct(ng, list.length)} | ${pct(bias, list.length)} | ${meta?.designNote ?? "-"} |`,
         );
       }
     }
@@ -260,7 +265,13 @@ function formatPerDesignNote(rows: Row[], metaIdx: Map<string, Meta>): string {
     const ng = list.filter((x) => x.firstHit.outcome === "no_grep").length;
     const bias = list.filter((x) => x.biasMiss.isBiasMiss).length;
     lines.push(
-      `| ${note} | ${profile} | ${list.length} | ${pct(passes, list.length)} | ${pct(hits, list.length)} | ${pct(misses, list.length)} | ${pct(ng, list.length)} | ${pct(bias, list.length)} |`,
+      `| ${note} | ${profile} | ${list.length} | ${pct(
+        passes,
+        list.length,
+      )} | ${pct(hits, list.length)} | ${pct(misses, list.length)} | ${pct(
+        ng,
+        list.length,
+      )} | ${pct(bias, list.length)} |`,
     );
   }
   return lines.join("\n");
@@ -273,7 +284,12 @@ function formatBiasAttractorHits(rows: Row[]): string {
   // matches both the canonical and the attractor and so doesn't tell us
   // which one the agent had in mind.
   type Key = string; // `${problemId}|${sdkBranch}`
-  type Stats = { strict: number; prefix: number; strictPassed: number; prefixPassed: number };
+  type Stats = {
+    strict: number;
+    prefix: number;
+    strictPassed: number;
+    prefixPassed: number;
+  };
   const map = new Map<Key, Map<string, Stats>>();
   const totals = new Map<Key, number>();
   for (const r of rows) {
@@ -283,7 +299,12 @@ function formatBiasAttractorHits(rows: Row[]): string {
     const a = r.biasMiss.matchedAttractor ?? "?";
     if (!map.has(k)) map.set(k, new Map());
     const inner = map.get(k)!;
-    const cur = inner.get(a) ?? { strict: 0, prefix: 0, strictPassed: 0, prefixPassed: 0 };
+    const cur = inner.get(a) ?? {
+      strict: 0,
+      prefix: 0,
+      strictPassed: 0,
+      prefixPassed: 0,
+    };
     if (r.biasMiss.strictness === "strict") {
       cur.strict += 1;
       if (r.passed === true) cur.strictPassed += 1;
@@ -315,7 +336,11 @@ function formatBiasAttractorHits(rows: Row[]): string {
     for (const [att, s] of items) {
       const totalHits = s.strict + s.prefix;
       lines.push(
-        `| ${pid} | ${br} | ${total} | \`${att}\` | ${s.strict} | ${s.strictPassed}/${s.strict || 0} | ${s.prefix} | ${s.prefixPassed}/${s.prefix || 0} | ${pct(totalHits, total)} |`,
+        `| ${pid} | ${br} | ${total} | \`${att}\` | ${s.strict} | ${
+          s.strictPassed
+        }/${s.strict || 0} | ${s.prefix} | ${s.prefixPassed}/${
+          s.prefix || 0
+        } | ${pct(totalHits, total)} |`,
       );
     }
   }

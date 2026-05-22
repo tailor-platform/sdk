@@ -3,7 +3,7 @@
   "title": "Share an audit helper between record-trigger and resolver-trigger executors",
   "designNote": "consolidation_candidate",
   "sdkSurface": "executor + helper",
-  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["createExecutor", "recordTrigger", "resolverExecutedTrigger"],
   "biasAttractors": [
     "composeTriggers",

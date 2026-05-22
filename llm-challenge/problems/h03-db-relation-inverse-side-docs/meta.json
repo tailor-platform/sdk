@@ -3,5 +3,5 @@
   "title": "Name both sides of a many-to-one relation via toward.as and backward",
   "designNote": "naming_bias",
   "sdkSurface": "db-type",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

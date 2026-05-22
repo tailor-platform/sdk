@@ -3,28 +3,25 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export type ContextProfile = "code-only" | "code-and-docs" | "bare-types";
+export type ContextProfile = "full" | "no-docs";
 
 export const contextProfileValues = [
-  "code-only",
-  "code-and-docs",
-  "bare-types",
+  "full",
+  "no-docs",
 ] as const satisfies readonly ContextProfile[];
 
 export function isContextProfile(value: unknown): value is ContextProfile {
   return typeof value === "string" && (contextProfileValues as readonly string[]).includes(value);
 }
 
-// `code-only` strips README/CHANGELOG/docs/skills from the installed SDK so
-// the agent must rely solely on the TypeScript surface.
-// `bare-types` is `code-only` plus JSDoc removal from `.d.{ts,mts,cts}` so the
-// agent must rely on the type *shape* alone — used to measure whether the API
-// design is self-evident independent of documentation effort.
-// `code-and-docs` is unfiltered.
+// `full` is unfiltered — README, docs, skills, JSDoc, types all present.
+// `no-docs` strips README/CHANGELOG/docs/skills from the installed SDK AND
+// removes JSDoc block comments from `.d.{ts,mts,cts}` so the agent must rely
+// on the type *shape* alone — used to measure whether the API design is
+// self-evident independent of documentation effort.
 const removableEntriesByProfile: Record<ContextProfile, readonly string[]> = {
-  "code-only": ["README.md", "CHANGELOG.md", "docs", "skills"],
-  "bare-types": ["README.md", "CHANGELOG.md", "docs", "skills"],
-  "code-and-docs": [],
+  "no-docs": ["README.md", "CHANGELOG.md", "docs", "skills"],
+  full: [],
 };
 
 function getInstalledSdkDir(workDir: string): string {
@@ -43,7 +40,7 @@ function isLocalInstalledPackage(workDir: string, sdkDir: string): boolean {
 
 export function applyContextProfile(workDir: string, profile: ContextProfile): void {
   const entries = removableEntriesByProfile[profile];
-  const needsJsdocStrip = profile === "bare-types";
+  const needsJsdocStrip = profile === "no-docs";
   if (entries.length === 0 && !needsJsdocStrip) {
     return;
   }
@@ -64,7 +61,7 @@ export function applyContextProfile(workDir: string, profile: ContextProfile): v
  * TypeScript declaration file under `pkgDir`. Line comments (`//`, `///`
  * triple-slash references, `//#region` markers) are preserved.
  *
- * Used by the `bare-types` profile to force the agent to read raw type
+ * Used by the `no-docs` profile to force the agent to read raw type
  * signatures without the JSDoc cushion.
  */
 export function stripJsdocFromDeclarationFiles(pkgDir: string): void {
@@ -117,7 +114,8 @@ export function stripBlockComments(source: string): string {
 
 /**
  * Rewrite the SDK tarball at `tarballPath` so its content matches the context
- * profile: code-only strips README/CHANGELOG/docs/skills before re-packing.
+ * profile: `no-docs` strips README/CHANGELOG/docs/skills and JSDoc before
+ * re-packing.
  *
  * Necessary because the harness leaves `.sdk/sdk.tgz` in the workspace so the
  * `package.json` `file:` reference stays consistent if the solver re-runs
@@ -125,7 +123,7 @@ export function stripBlockComments(source: string): string {
  */
 export function filterSdkTarballForProfile(tarballPath: string, profile: ContextProfile): void {
   const entries = removableEntriesByProfile[profile];
-  const needsJsdocStrip = profile === "bare-types";
+  const needsJsdocStrip = profile === "no-docs";
   if ((entries.length === 0 && !needsJsdocStrip) || !fs.existsSync(tarballPath)) {
     return;
   }
@@ -139,7 +137,9 @@ export function filterSdkTarballForProfile(tarballPath: string, profile: Context
     if (needsJsdocStrip) {
       stripJsdocFromDeclarationFiles(pkgDir);
     }
-    execFileSync("tar", ["-czf", tarballPath, "-C", tmpDir, "package"], { stdio: "pipe" });
+    execFileSync("tar", ["-czf", tarballPath, "-C", tmpDir, "package"], {
+      stdio: "pipe",
+    });
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -147,21 +147,15 @@ export function filterSdkTarballForProfile(tarballPath: string, profile: Context
 
 export function buildContextProfileInstructions(_workDir: string, profile: ContextProfile): string {
   switch (profile) {
-    case "code-only":
+    case "no-docs":
       return [
-        "Context profile: code-only.",
-        "Evaluate the SDK from its TypeScript package API, declaration files, and JSDoc only.",
-        "Do not rely on README, docs, skills, or external Tailor documentation.",
-      ].join("\n");
-    case "bare-types":
-      return [
-        "Context profile: bare-types.",
+        "Context profile: no-docs.",
         "Solve from TypeScript type signatures alone. The installed SDK package has no JSDoc, no README, no docs, no skills, and no examples.",
         "If the API shape is not self-evident from the signatures, infer the intended usage from import paths and surrounding type structure.",
       ].join("\n");
-    case "code-and-docs":
+    case "full":
       return [
-        "Context profile: code-and-docs.",
+        "Context profile: full.",
         "You may inspect the installed SDK package, including README, docs, skills, types, and examples.",
       ].join("\n");
   }

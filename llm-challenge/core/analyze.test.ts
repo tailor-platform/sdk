@@ -105,7 +105,12 @@ function makeIterResult(
       passedCount,
       passRate,
       passedByIteration: Array.from({ length: count }, (_, i) => i < passedCount),
-      metricsMedian: mkIterMetrics({ turns: 10, readSdkDts: 3, readDocs: 1, bashRetries: 1 }),
+      metricsMedian: mkIterMetrics({
+        turns: 10,
+        readSdkDts: 3,
+        readDocs: 1,
+        bashRetries: 1,
+      }),
       metricsStdev: mkIterMetrics({}),
     },
     ...extra,
@@ -206,8 +211,8 @@ describe("computeReportDiff", () => {
   });
 
   it("surfaces a warning when context profile differs between reports", () => {
-    const reportA = makeReport({ contextProfile: "code-only" });
-    const reportB = makeReport({ contextProfile: "code-and-docs" });
+    const reportA = makeReport({ contextProfile: "no-docs" });
+    const reportB = makeReport({ contextProfile: "full" });
     const diff = computeReportDiff(reportA, reportB);
     expect(diff.warnings.some((w) => w.startsWith("contextProfile differs"))).toBe(true);
   });
@@ -229,7 +234,10 @@ describe("computeReportDiff", () => {
       sdkBranch: "feat/exec-description-required",
       results: [makeIterResult("m01", 1)],
     });
-    const diff = computeReportDiff(reportA, reportB, { a: "/tmp/a.json", b: "/tmp/b.json" });
+    const diff = computeReportDiff(reportA, reportB, {
+      a: "/tmp/a.json",
+      b: "/tmp/b.json",
+    });
 
     expect(diff.reportA.path).toBe("/tmp/a.json");
     expect(diff.reportA.iterationCount).toBe(3);
@@ -249,7 +257,12 @@ describe("computeReportDiff", () => {
             passedCount: 3,
             passRate: 1,
             passedByIteration: [true, true, true],
-            metricsMedian: mkIterMetrics({ turns: 15, readSdkDts: 5, readDocs: 2, bashRetries: 3 }),
+            metricsMedian: mkIterMetrics({
+              turns: 15,
+              readSdkDts: 5,
+              readDocs: 2,
+              bashRetries: 3,
+            }),
             metricsStdev: mkIterMetrics({}),
           },
         }),
@@ -264,7 +277,12 @@ describe("computeReportDiff", () => {
             passedCount: 3,
             passRate: 1,
             passedByIteration: [true, true, true],
-            metricsMedian: mkIterMetrics({ turns: 10, readSdkDts: 3, readDocs: 2, bashRetries: 1 }),
+            metricsMedian: mkIterMetrics({
+              turns: 10,
+              readSdkDts: 3,
+              readDocs: 2,
+              bashRetries: 1,
+            }),
             metricsStdev: mkIterMetrics({}),
           },
         }),
@@ -282,14 +300,24 @@ describe("computeReportDiff", () => {
     const reportA = makeReport({
       results: [
         makeResult("m01", true, {
-          metrics: mkMetrics({ turns: 20, readSdkDts: 5, readDocs: 2, bashRetries: 3 }),
+          metrics: mkMetrics({
+            turns: 20,
+            readSdkDts: 5,
+            readDocs: 2,
+            bashRetries: 3,
+          }),
         }),
       ],
     });
     const reportB = makeReport({
       results: [
         makeResult("m01", true, {
-          metrics: mkMetrics({ turns: 10, readSdkDts: 2, readDocs: 1, bashRetries: 1 }),
+          metrics: mkMetrics({
+            turns: 10,
+            readSdkDts: 2,
+            readDocs: 1,
+            bashRetries: 1,
+          }),
         }),
       ],
     });
@@ -319,7 +347,7 @@ describe("computeReportDiff", () => {
             passedCount: 3,
             passRate: 1,
             passedByIteration: [true, true, true],
-            // code-only: read sdk-docs once, no sdk-dts.
+            // no-docs: read sdk-docs once, no sdk-dts.
             metricsMedian: mkIterMetrics({
               turns: 21,
               readSdkDts: 0,
@@ -342,7 +370,7 @@ describe("computeReportDiff", () => {
             passedCount: 1,
             passRate: 1 / 3,
             passedByIteration: [true, false, false],
-            // code-and-docs: agent now reads sdk-docs and pokes around problem-files.
+            // full: agent now reads sdk-docs and pokes around problem-files.
             metricsMedian: mkIterMetrics({
               turns: 10,
               readSdkDts: 0,
@@ -468,7 +496,7 @@ describe("computeReportDiff", () => {
 
 describe("resolveActiveProfilePair", () => {
   function makeProfileReport(
-    profile: "code-only" | "code-and-docs",
+    profile: "no-docs" | "full",
     timestamp: string,
     overrides: Partial<ChallengeReport> = {},
   ): ChallengeReport {
@@ -489,14 +517,14 @@ describe("resolveActiveProfilePair", () => {
   }
 
   it("returns the latest report per profile within the most-recent complete group", () => {
-    const typesOnlyOld = makeProfileReport("code-only", "2026-05-13T06:00:00Z");
-    const typesOnlyNew = makeProfileReport("code-only", "2026-05-13T07:00:00Z");
-    const fullPackage = makeProfileReport("code-and-docs", "2026-05-13T07:30:00Z");
+    const typesOnlyOld = makeProfileReport("no-docs", "2026-05-13T06:00:00Z");
+    const typesOnlyNew = makeProfileReport("no-docs", "2026-05-13T07:00:00Z");
+    const fullPackage = makeProfileReport("full", "2026-05-13T07:30:00Z");
     const result = resolveActiveProfilePair([typesOnlyOld, typesOnlyNew, fullPackage]);
     expect(result.kind).toBe("ok");
     if (result.kind === "ok") {
-      expect(result.typesOnly.report.timestamp).toBe("2026-05-13T07:00:00Z");
-      expect(result.fullPackage.report.timestamp).toBe("2026-05-13T07:30:00Z");
+      expect(result.noDocs.report.timestamp).toBe("2026-05-13T07:00:00Z");
+      expect(result.full.report.timestamp).toBe("2026-05-13T07:30:00Z");
     }
   });
 
@@ -504,7 +532,7 @@ describe("resolveActiveProfilePair", () => {
     // Single-problem reruns should not displace the full sweep that happened
     // earlier — the diff is more meaningful when both sides cover the same
     // problem set.
-    const fullSweep = makeProfileReport("code-and-docs", "2026-05-13T07:30:00Z", {
+    const fullSweep = makeProfileReport("full", "2026-05-13T07:30:00Z", {
       results: Array.from({ length: 25 }, (_, i) => ({
         problemId: `m${String(i + 1).padStart(2, "0")}`,
         problemName: `m${String(i + 1).padStart(2, "0")}`,
@@ -513,7 +541,7 @@ describe("resolveActiveProfilePair", () => {
         passed: true,
       })),
     });
-    const singleProblem = makeProfileReport("code-and-docs", "2026-05-13T14:00:00Z", {
+    const singleProblem = makeProfileReport("full", "2026-05-13T14:00:00Z", {
       results: [
         {
           problemId: "m18",
@@ -524,35 +552,35 @@ describe("resolveActiveProfilePair", () => {
         },
       ],
     });
-    const typesOnly = makeProfileReport("code-only", "2026-05-13T07:00:00Z");
+    const typesOnly = makeProfileReport("no-docs", "2026-05-13T07:00:00Z");
     const result = resolveActiveProfilePair([fullSweep, singleProblem, typesOnly]);
     expect(result.kind).toBe("ok");
     if (result.kind === "ok") {
-      expect(result.fullPackage.report.timestamp).toBe("2026-05-13T07:30:00Z");
-      expect(result.fullPackage.report.results.length).toBe(25);
+      expect(result.full.report.timestamp).toBe("2026-05-13T07:30:00Z");
+      expect(result.full.report.results.length).toBe(25);
     }
   });
 
   it("returns missing when only one profile has reports for the active group", () => {
-    const typesOnly = makeProfileReport("code-only", "2026-05-13T06:00:00Z");
+    const typesOnly = makeProfileReport("no-docs", "2026-05-13T06:00:00Z");
     const result = resolveActiveProfilePair([typesOnly]);
     expect(result.kind).toBe("missing");
     if (result.kind === "missing") {
-      expect(result.reason).toMatch(/code-and-docs/);
+      expect(result.reason).toMatch(/full/);
     }
   });
 
   it("excludes reports with sdkBranch set (those are A/B candidate runs)", () => {
-    const typesOnly = makeProfileReport("code-only", "2026-05-13T07:00:00Z");
-    const fullPackage = makeProfileReport("code-and-docs", "2026-05-13T07:30:00Z");
+    const typesOnly = makeProfileReport("no-docs", "2026-05-13T07:00:00Z");
+    const fullPackage = makeProfileReport("full", "2026-05-13T07:30:00Z");
     // Newer report but with sdkBranch — should be filtered out.
-    const candidate = makeProfileReport("code-and-docs", "2026-05-13T14:00:00Z", {
+    const candidate = makeProfileReport("full", "2026-05-13T14:00:00Z", {
       sdkBranch: "feat/some-experiment",
     });
     const result = resolveActiveProfilePair([typesOnly, fullPackage, candidate]);
     expect(result.kind).toBe("ok");
     if (result.kind === "ok") {
-      expect(result.fullPackage.report.timestamp).toBe("2026-05-13T07:30:00Z");
+      expect(result.full.report.timestamp).toBe("2026-05-13T07:30:00Z");
     }
   });
 
@@ -582,7 +610,10 @@ describe("buildAliasMap / canonicalProblemId", () => {
 
   it("maps each alias to the canonical id of the problem that owns it", () => {
     writeProblem("m22-new", { id: "m22-new", aliases: ["m22-old"] });
-    writeProblem("h13-renamed", { id: "h13-renamed", aliases: ["h13-shadow", "h13-shadowed"] });
+    writeProblem("h13-renamed", {
+      id: "h13-renamed",
+      aliases: ["h13-shadow", "h13-shadowed"],
+    });
     const map = buildAliasMap(tempRoot);
     expect(map.get("m22-old")).toBe("m22-new");
     expect(map.get("h13-shadow")).toBe("h13-renamed");
@@ -591,7 +622,9 @@ describe("buildAliasMap / canonicalProblemId", () => {
 
   it("skips problem dirs without meta.json or with malformed JSON", () => {
     writeProblem("m01", { id: "m01" });
-    fs.mkdirSync(path.join(tempRoot, "problems", "no-meta"), { recursive: true });
+    fs.mkdirSync(path.join(tempRoot, "problems", "no-meta"), {
+      recursive: true,
+    });
     const badDir = path.join(tempRoot, "problems", "bad-meta");
     fs.mkdirSync(badDir, { recursive: true });
     fs.writeFileSync(path.join(badDir, "meta.json"), "{not json");

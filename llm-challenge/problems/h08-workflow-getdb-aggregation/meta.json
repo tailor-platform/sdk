@@ -3,7 +3,7 @@
   "title": "Aggregate TailorDB rows from a workflow job via the generated getDB helper",
   "designNote": "implicit_assumption",
   "sdkSurface": "workflow",
-  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": [
     "kyselyTypePlugin",
     "definePlugins",

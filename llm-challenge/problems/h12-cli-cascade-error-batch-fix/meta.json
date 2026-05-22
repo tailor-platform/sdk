@@ -3,5 +3,5 @@
   "title": "Fix the same archaic db.text() call across three sibling tailordb files in one pass",
   "designNote": "redundant_call_pattern",
   "sdkSurface": "cli",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

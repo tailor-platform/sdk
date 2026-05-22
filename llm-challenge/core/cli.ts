@@ -202,7 +202,7 @@ function parseArgs(): ParsedArgs {
   // process. Override via `--concurrency <n>` when running on a higher tier
   // or against an independent account.
   let concurrency = 1;
-  let contextProfile: ContextProfile = "code-and-docs";
+  let contextProfile: ContextProfile = "full";
   let iterations: number | undefined;
   let sdkBranch: string | undefined;
   let resume: string | undefined;
@@ -252,7 +252,9 @@ function parseArgs(): ParsedArgs {
         const value = requireArg(args, i, "--context-profile");
         if (!isContextProfile(value)) {
           console.error(
-            `Error: --context-profile must be one of ${contextProfileValues.map((v) => `"${v}"`).join(", ")}`,
+            `Error: --context-profile must be one of ${contextProfileValues
+              .map((v) => `"${v}"`)
+              .join(", ")}`,
           );
           process.exit(1);
         }
@@ -484,7 +486,9 @@ export function packSdkFromRef(ref: string): PackedSdkTarball {
   const refCheck = checkRefExists(repoRoot, ref);
   if (!refCheck.ok) {
     throw new Error(
-      `[sdk-branch] Ref "${ref}" not found in repository (${refCheck.reason.split("\n")[0] ?? "unknown"})`,
+      `[sdk-branch] Ref "${ref}" not found in repository (${
+        refCheck.reason.split("\n")[0] ?? "unknown"
+      })`,
     );
   }
 
@@ -521,7 +525,9 @@ export function packSdkFromRef(ref: string): PackedSdkTarball {
     } catch (retryErr) {
       const message = retryErr instanceof Error ? retryErr.message : String(retryErr);
       throw new Error(
-        `[sdk-branch] git worktree add failed for ref "${ref}": ${message.split("\n")[0] ?? "unknown"}`,
+        `[sdk-branch] git worktree add failed for ref "${ref}": ${
+          message.split("\n")[0] ?? "unknown"
+        }`,
       );
     }
   }
@@ -842,7 +848,10 @@ async function runProblem(
       // Ratio of 1.0 = every import is canonical; lower = invented or internal
       // sub-paths. Cheap regex scan, no AST.
       const canon = computeCanonicalnessStats(workDir);
-      metrics = { ...metrics, canonicalImportRatio: canon.canonicalImportRatio };
+      metrics = {
+        ...metrics,
+        canonicalImportRatio: canon.canonicalImportRatio,
+      };
     }
     if (options.verbose) {
       let icon = "FAIL";
@@ -1078,7 +1087,10 @@ export function emitIterDiff(options: EmitIterDiffOptions): EmitIterDiffResult {
   const passingWork = getIterationWorkSnapshot(passing);
   const failingWork = getIterationWorkSnapshot(failing);
   if (!passingWork || !failingWork) {
-    return { kind: "skipped", reason: "missing work snapshot for at least one iteration" };
+    return {
+      kind: "skipped",
+      reason: "missing work snapshot for at least one iteration",
+    };
   }
 
   const diff = runner(failingWork, passingWork);
@@ -1089,7 +1101,9 @@ export function emitIterDiff(options: EmitIterDiffOptions): EmitIterDiffResult {
   if (diff.status !== 1) {
     return {
       kind: "skipped",
-      reason: `git diff exited with status ${diff.status ?? "<null>"}${diff.stderr ? `: ${diff.stderr.trim().split("\n")[0]}` : ""}`,
+      reason: `git diff exited with status ${diff.status ?? "<null>"}${
+        diff.stderr ? `: ${diff.stderr.trim().split("\n")[0]}` : ""
+      }`,
     };
   }
 
@@ -1161,7 +1175,10 @@ export function emitFailVsSolutionDiff(
   // Only stable-fail (every iteration failed verification) qualifies.
   const passedCount = perIteration.filter((r) => r.passed).length;
   if (passedCount > 0) {
-    return { kind: "skipped", reason: "not stable-fail (at least one iteration passed)" };
+    return {
+      kind: "skipped",
+      reason: "not stable-fail (at least one iteration passed)",
+    };
   }
   // Skip infra failures: there is no SDK affordance signal in auth / Podman
   // failures, and the solver never produced a useful work tree to diff.
@@ -1176,11 +1193,17 @@ export function emitFailVsSolutionDiff(
   }
   const failingWork = getIterationWorkSnapshot(firstUsable);
   if (!failingWork) {
-    return { kind: "skipped", reason: "missing work snapshot for first iteration" };
+    return {
+      kind: "skipped",
+      reason: "missing work snapshot for first iteration",
+    };
   }
   const solutionDir = path.join(problemDir, "solution");
   if (!fs.existsSync(solutionDir)) {
-    return { kind: "skipped", reason: `solution dir not found: ${solutionDir}` };
+    return {
+      kind: "skipped",
+      reason: `solution dir not found: ${solutionDir}`,
+    };
   }
 
   // Build the diff base in a tmpdir by overlaying scaffold layers + the
@@ -1203,7 +1226,9 @@ export function emitFailVsSolutionDiff(
     if (diff.status !== 1) {
       return {
         kind: "skipped",
-        reason: `git diff exited with status ${diff.status ?? "<null>"}${diff.stderr ? `: ${diff.stderr.trim().split("\n")[0]}` : ""}`,
+        reason: `git diff exited with status ${diff.status ?? "<null>"}${
+          diff.stderr ? `: ${diff.stderr.trim().split("\n")[0]}` : ""
+        }`,
       };
     }
 
@@ -1311,13 +1336,13 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile code-only] [--iterations 5] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile no-docs] [--iterations 3] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
     );
     console.error(
       "  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>] [--include-archived]",
     );
     console.error(
-      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile code-only] [--iterations 5] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
+      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile no-docs] [--iterations 3] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error(
@@ -1591,7 +1616,9 @@ async function main(): Promise<void> {
               status = "FAIL";
             }
             console.log(
-              `[${completed}/${total}] ${task.problemName}: ${status} [${formatDuration(result.totalDurationMs ?? 0)}]`,
+              `[${completed}/${total}] ${
+                task.problemName
+              }: ${status} [${formatDuration(result.totalDurationMs ?? 0)}]`,
             );
           }
         } catch (err) {
@@ -1629,12 +1656,12 @@ async function main(): Promise<void> {
 
   writeReport(resultsDir, report, modelLabelRaw, sdkVersion, runId);
 
-  // Auto-graduate: when this run is a solver run on the code-only profile
+  // Auto-graduate: when this run is a solver run on the no-docs profile
   // (the stricter signal) and not an A/B candidate, move any problem that
   // hits 5 consecutive passRate=1.0 with stable turns variance into
   // `problems/archived/`. Concurrent runs racing on the same problem are
   // safe: the second mv finds the destination present and no-ops.
-  if (solve && contextProfile === "code-only" && !sdkBranch) {
+  if (solve && contextProfile === "no-docs" && !sdkBranch) {
     const groupResultsDir = getRunResultsDir(resultsDir, modelLabelRaw);
     const outcome = graduateProblems({
       runResultsDir: groupResultsDir,
@@ -1642,7 +1669,7 @@ async function main(): Promise<void> {
       latestReport: report,
     });
     for (const dirName of outcome.graduated) {
-      console.log(`Graduated to archived/: ${dirName} (5 consecutive passRate=1.0 on code-only)`);
+      console.log(`Graduated to archived/: ${dirName} (5 consecutive passRate=1.0 on no-docs)`);
     }
   }
 

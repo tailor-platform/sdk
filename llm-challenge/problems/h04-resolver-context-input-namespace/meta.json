@@ -3,7 +3,7 @@
   "title": "Destructure input + user from the resolver body's single context arg",
   "designNote": "missing_namespace",
   "sdkSurface": "resolver",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["createResolver"],
   "biasAttractors": ["defineResolver", "resolver(", "defineQuery", "createQuery", "queryResolver"],
   "expectedCallShapes": {

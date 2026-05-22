@@ -3,7 +3,7 @@
   "title": "Reuse a static website's deployment URL across CORS and OAuth2 redirect URIs",
   "designNote": "implicit_assumption",
   "sdkSurface": "config",
-  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["defineStaticWebSite", "defineAuth", "defineConfig"],
   "biasAttractors": [
     "defineStaticWebsite",

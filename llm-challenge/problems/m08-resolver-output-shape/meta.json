@@ -3,7 +3,7 @@
   "title": "Write a query resolver whose output is t.object({ ok: t.bool() })",
   "designNote": "naming_bias",
   "sdkSurface": "resolver",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["createResolver"],
   "biasAttractors": ["defineResolver", "resolver(", "defineQuery", "createQuery"],
   "expectedCallShapes": {

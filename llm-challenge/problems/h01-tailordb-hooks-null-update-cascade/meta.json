@@ -3,5 +3,5 @@
   "title": "Handle nullable inputs in update hooks across multiple fields",
   "designNote": "implicit_assumption",
   "sdkSurface": "db-type",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

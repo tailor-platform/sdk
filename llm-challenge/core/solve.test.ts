@@ -11,7 +11,11 @@ describe("buildPrompt", () => {
     problem: string;
     scaffoldFiles: Record<string, string>;
     implement: string[];
-  }): { problemDir: string; workDir: string; meta: Parameters<typeof buildPrompt>[1] } {
+  }): {
+    problemDir: string;
+    workDir: string;
+    meta: Parameters<typeof buildPrompt>[1];
+  } {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "llm-buildprompt-"));
     tmpDirs.push(root);
     const problemDir = path.join(root, "problem");
@@ -51,7 +55,7 @@ describe("buildPrompt", () => {
       implement: ["resolvers/a.ts"],
     });
 
-    const prompt = buildPrompt(problemDir, meta, workDir, "code-and-docs");
+    const prompt = buildPrompt(problemDir, meta, workDir, "full");
 
     // System block describes "create" mode.
     expect(prompt).toContain(
@@ -75,7 +79,7 @@ describe("buildPrompt", () => {
       implement: ["resolvers/a.ts"],
     });
 
-    const prompt = buildPrompt(problemDir, meta, workDir, "code-and-docs");
+    const prompt = buildPrompt(problemDir, meta, workDir, "full");
 
     // System block describes "fix" mode.
     expect(prompt).toContain(
@@ -97,7 +101,7 @@ describe("buildPrompt", () => {
       implement: ["resolvers/a.ts", "resolvers/b.ts"],
     });
 
-    const prompt = buildPrompt(problemDir, meta, workDir, "code-and-docs");
+    const prompt = buildPrompt(problemDir, meta, workDir, "full");
 
     // System block describes hybrid mode.
     expect(prompt).toContain(

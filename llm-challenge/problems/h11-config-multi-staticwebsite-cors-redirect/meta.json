@@ -3,7 +3,7 @@
   "title": "Wire CORS and OAuth2 redirect URIs across two static websites without cross-mixing origins",
   "designNote": "implicit_assumption",
   "sdkSurface": "config",
-  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["defineStaticWebSite", "defineAuth", "defineConfig"],
   "biasAttractors": [
     "defineStaticWebsites",

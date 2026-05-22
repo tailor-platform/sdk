@@ -58,7 +58,9 @@ export function buildArchivedIdSet(root: string = challengeRoot): Set<string> {
     const metaPath = path.join(archivedDir, ent.name, "meta.json");
     if (!fs.existsSync(metaPath)) continue;
     try {
-      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as { id?: string };
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as {
+        id?: string;
+      };
       if (meta.id) out.add(meta.id);
     } catch {
       // tolerate malformed meta.json
@@ -109,7 +111,7 @@ type ParsedArgs = Filters & {
   trend: boolean;
   groups: boolean;
   /**
-   * When true, locate the most-recent code-only and code-and-docs reports
+   * When true, locate the most-recent no-docs and full reports
    * for the active model group and emit the diff between them. Surfaces the
    * docs-vs-types-gap signal automatically.
    */
@@ -251,7 +253,12 @@ function listReportFiles(dir: string): string[] {
   for (const ent of entries) {
     const full = path.join(dir, ent.name);
     if (ent.isDirectory()) {
+      // Skip the `artifacts/` cache and any `_quarantine-*` subtree that
+      // operators have intentionally moved out of the active aggregation
+      // path. Underscore-prefixed dirs are reserved for quarantines and
+      // never carry first-class reports.
       if (ent.name === "artifacts") continue;
+      if (ent.name.startsWith("_")) continue;
       out.push(...listReportFiles(full));
     } else if (ent.isFile() && ent.name.startsWith("report-") && ent.name.endsWith(".json")) {
       out.push(full);
@@ -671,7 +678,7 @@ export function computeReportDiff(
 }
 
 /**
- * Resolve the active `code-only` vs `code-and-docs` report pair for the
+ * Resolve the active `no-docs` vs `full` report pair for the
  * profile-diff mode. Implementation strategy:
  *
  * 1. Load every report and group by `model` (the contextProfile is
@@ -688,8 +695,8 @@ export function computeReportDiff(
 type ProfilePairResult =
   | {
       kind: "ok";
-      typesOnly: { report: ChallengeReport; path: string };
-      fullPackage: { report: ChallengeReport; path: string };
+      noDocs: { report: ChallengeReport; path: string };
+      full: { report: ChallengeReport; path: string };
     }
   | { kind: "missing"; reason: string };
 
@@ -707,7 +714,7 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
       reason: "no main-line reports (every report has --sdk-branch set)",
     };
   }
-  type Bucket = { typesOnly?: ChallengeReport; fullPackage?: ChallengeReport };
+  type Bucket = { noDocs?: ChallengeReport; full?: ChallengeReport };
   const buckets = new Map<string, Bucket>();
   // Per-profile selection: prefer the report with the largest result set
   // (i.e. a full sweep over the problem list rather than a single-problem
@@ -725,9 +732,9 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
     const { model } = getGroupKey(r);
     const id = model;
     const profile = r.contextProfile;
-    if (profile !== "code-only" && profile !== "code-and-docs") continue;
+    if (profile !== "no-docs" && profile !== "full") continue;
     const bucket = buckets.get(id) ?? {};
-    const slot = profile === "code-only" ? "typesOnly" : "fullPackage";
+    const slot = profile === "no-docs" ? "noDocs" : "full";
     if (isBetter(r, bucket[slot])) {
       bucket[slot] = r;
     }
@@ -736,20 +743,20 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
   if (buckets.size === 0) {
     return {
       kind: "missing",
-      reason: "no reports with contextProfile code-only or code-and-docs",
+      reason: "no reports with contextProfile no-docs or full",
     };
   }
   // Active group: bucket with the most-recent timestamp across either slot,
   // restricted to buckets where BOTH profiles are present. We deliberately
   // skip half-populated buckets (e.g. `solution:verify` runs that only emit
-  // code-and-docs reports) so we never report "active group has X but missing
+  // full reports) so we never report "active group has X but missing
   // Y" for a group whose intent isn't even cross-profile.
   const complete: { id: string; bucket: Bucket; latest: number }[] = [];
   for (const [id, bucket] of buckets) {
-    if (!bucket.typesOnly || !bucket.fullPackage) continue;
+    if (!bucket.noDocs || !bucket.full) continue;
     const ts = Math.max(
-      new Date(bucket.typesOnly.timestamp).getTime(),
-      new Date(bucket.fullPackage.timestamp).getTime(),
+      new Date(bucket.noDocs.timestamp).getTime(),
+      new Date(bucket.full.timestamp).getTime(),
     );
     complete.push({ id, bucket, latest: ts });
   }
@@ -760,16 +767,16 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
     let halfActive: { id: string; bucket: Bucket; latest: number } | undefined;
     for (const [id, bucket] of buckets) {
       const ts = Math.max(
-        bucket.typesOnly ? new Date(bucket.typesOnly.timestamp).getTime() : 0,
-        bucket.fullPackage ? new Date(bucket.fullPackage.timestamp).getTime() : 0,
+        bucket.noDocs ? new Date(bucket.noDocs.timestamp).getTime() : 0,
+        bucket.full ? new Date(bucket.full.timestamp).getTime() : 0,
       );
       if (!halfActive || ts > halfActive.latest) {
         halfActive = { id, bucket, latest: ts };
       }
     }
     const bucket = halfActive!.bucket;
-    const present = bucket.typesOnly ? "code-only" : "code-and-docs";
-    const missing = bucket.typesOnly ? "code-and-docs" : "code-only";
+    const present = bucket.noDocs ? "no-docs" : "full";
+    const missing = bucket.noDocs ? "full" : "no-docs";
     return {
       kind: "missing",
       reason: `active group has ${present} reports but no ${missing} reports`,
@@ -779,12 +786,12 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
   // `complete` is filtered to only buckets with both slots present, so the
   // non-null assertions here are safe.
   const bucket = complete[0]!.bucket;
-  const typesOnly = bucket.typesOnly!;
-  const fullPackage = bucket.fullPackage!;
+  const noDocs = bucket.noDocs!;
+  const full = bucket.full!;
   return {
     kind: "ok",
-    typesOnly: { report: typesOnly, path: deriveReportPath(typesOnly) },
-    fullPackage: { report: fullPackage, path: deriveReportPath(fullPackage) },
+    noDocs: { report: noDocs, path: deriveReportPath(noDocs) },
+    full: { report: full, path: deriveReportPath(full) },
   };
 }
 
@@ -879,7 +886,9 @@ function showDiff(diff: DiffReport, json: boolean): void {
   }
   if (diff.reportA.iterationCount !== undefined || diff.reportB.iterationCount !== undefined) {
     console.log(
-      `  iterations: A=${diff.reportA.iterationCount ?? "-"}  B=${diff.reportB.iterationCount ?? "-"}`,
+      `  iterations: A=${diff.reportA.iterationCount ?? "-"}  B=${
+        diff.reportB.iterationCount ?? "-"
+      }`,
     );
   }
   for (const w of diff.warnings) {
@@ -927,7 +936,7 @@ function showDiff(diff: DiffReport, json: boolean): void {
 }
 
 /**
- * Run the profile-diff path: code-only vs code-and-docs for the active group.
+ * Run the profile-diff path: no-docs vs full for the active group.
  * Emits the diff via `showDiff`, or prints a single-line warning when one of
  * the two profiles has no reports yet.
  *
@@ -957,13 +966,13 @@ function runProfileDiff(
     const width = 110;
     console.log("");
     console.log("=".repeat(width));
-    console.log("Profile Diff (code-only -> code-and-docs)");
+    console.log("Profile Diff (no-docs -> full)");
     console.log("=".repeat(width));
   }
   const diff = computeReportDiff(
-    pair.typesOnly.report,
-    pair.fullPackage.report,
-    { a: pair.typesOnly.path, b: pair.fullPackage.path },
+    pair.noDocs.report,
+    pair.full.report,
+    { a: pair.noDocs.path, b: pair.full.path },
     aliasMap ? { aliasMap } : {},
   );
   showDiff(diff, json);

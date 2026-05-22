@@ -53,7 +53,7 @@ function makeProblem(
     sdkSurface: "micro",
     stages: [],
     passed: options.passed ?? true,
-    contextProfile: "code-only",
+    contextProfile: "no-docs",
     ...(options.iterations ? { iterations: options.iterations } : {}),
   };
 }
@@ -65,7 +65,7 @@ function makeReport(
   return {
     timestamp: new Date().toISOString(),
     model: "codex-gpt-5.5-xhigh",
-    contextProfile: "code-only",
+    contextProfile: "no-docs",
     results,
     problemsPassed: results.filter((r) => r.passed).length,
     problemsTotal: results.length,
@@ -165,7 +165,7 @@ describe("archiveProblemDir + loadRecentReports + graduateProblems", () => {
   beforeEach(() => {
     tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llm-graduation-test-"));
     challengeRoot = path.join(tempRoot, "challenge");
-    runResultsDir = path.join(challengeRoot, "results", "model-code-only");
+    runResultsDir = path.join(challengeRoot, "results", "model-no-docs");
     fs.mkdirSync(path.join(challengeRoot, "problems"), { recursive: true });
     fs.mkdirSync(runResultsDir, { recursive: true });
   });
@@ -217,23 +217,25 @@ describe("archiveProblemDir + loadRecentReports + graduateProblems", () => {
 
   it("archiveProblemDir returns false when the destination already exists", () => {
     writeProblem("m01-foo", { id: "m01-foo" });
-    fs.mkdirSync(path.join(challengeRoot, "problems", "archived", "m01-foo"), { recursive: true });
+    fs.mkdirSync(path.join(challengeRoot, "problems", "archived", "m01-foo"), {
+      recursive: true,
+    });
     expect(archiveProblemDir(challengeRoot, "m01-foo")).toBe(false);
   });
 
-  it("graduateProblems no-ops outside the code-only profile", () => {
+  it("graduateProblems no-ops outside the no-docs profile", () => {
     writeProblem("m01-foo", { id: "m01-foo" });
     for (let i = 0; i < 5; i++) {
       writeHistoricalReport(
         `2026-05-${10 + i}T00-00-00`,
         makeReport([makeProblem("m01-foo", { iterations: makeIterations(1, 10, 0.4) })], {
-          contextProfile: "code-and-docs",
+          contextProfile: "full",
         }),
       );
     }
     const latest = makeReport(
       [makeProblem("m01-foo", { iterations: makeIterations(1, 10, 0.4) })],
-      { contextProfile: "code-and-docs" },
+      { contextProfile: "full" },
     );
     expect(
       graduateProblems({ runResultsDir, challengeRoot, latestReport: latest }).graduated,
@@ -277,7 +279,11 @@ describe("archiveProblemDir + loadRecentReports + graduateProblems", () => {
     ]);
     // The latest report itself must be visible to loadRecentReports.
     writeHistoricalReport("2026-05-14T00-00-00", latest);
-    const outcome = graduateProblems({ runResultsDir, challengeRoot, latestReport: latest });
+    const outcome = graduateProblems({
+      runResultsDir,
+      challengeRoot,
+      latestReport: latest,
+    });
     expect(outcome.graduated).toEqual(["m01-foo"]);
     expect(fs.existsSync(path.join(challengeRoot, "problems", "m01-foo"))).toBe(false);
     expect(fs.existsSync(path.join(challengeRoot, "problems", "archived", "m01-foo"))).toBe(true);

@@ -3,5 +3,5 @@
   "title": "Fix an implicit any on the resolver context by completing the resolver schema",
   "designNote": "type_too_loose",
   "sdkSurface": "cli-runtime",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

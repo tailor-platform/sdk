@@ -3,6 +3,6 @@
   "title": "Recover a tailor-sdk generate run that fails because of a mismatched files glob",
   "designNote": "context_bloat",
   "sdkSurface": "cli-runtime",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "aliases": ["m22-cli-error-stdout-buffering"]
 }

@@ -3,5 +3,5 @@
   "title": "Normalize slug to lowercase via a type-level create hook",
   "designNote": "naming_bias",
   "sdkSurface": "db-type",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

@@ -3,7 +3,7 @@
   "title": "Register two SDK plugins via definePlugins(...) rest arguments",
   "designNote": "consolidation_candidate",
   "sdkSurface": "plugin",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["definePlugins", "kyselyTypePlugin", "seedPlugin"],
   "biasAttractors": [
     "composePlugins",

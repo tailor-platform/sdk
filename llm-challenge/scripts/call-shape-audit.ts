@@ -69,12 +69,6 @@ function loadAllMeta(): Map<string, Meta> {
   return out;
 }
 
-function normalizeProfile(p: string): string {
-  if (p === "types-only") return "code-only";
-  if (p === "full-package") return "code-and-docs";
-  return p;
-}
-
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
@@ -245,6 +239,9 @@ function walkReports(): string[] {
   for (const entry of fs.readdirSync(RESULTS_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     if (entry.name === "artifacts" || entry.name === "experiments") continue;
+    // Underscore-prefixed dirs (`_quarantine-*`) are operator-curated archives
+    // of legacy / stale reports that must not contaminate aggregations.
+    if (entry.name.startsWith("_")) continue;
     const sessionDir = path.join(RESULTS_DIR, entry.name);
     for (const f of fs.readdirSync(sessionDir)) {
       if (f.startsWith("report-") && f.endsWith(".json")) {
@@ -272,7 +269,7 @@ function collectObservations(metaIdx: Map<string, Meta>): CallObservation[] {
     } catch {
       continue;
     }
-    const profile = normalizeProfile(report.contextProfile ?? "?");
+    const profile = report.contextProfile ?? "?";
     const sessionDir = path.basename(path.dirname(reportFile));
     const sdkBranch = report.sdkBranch;
     for (const r of report.results ?? []) {
@@ -364,7 +361,12 @@ function formatPerSymbol(rows: CallObservation[], metaIdx: Map<string, Meta>): s
       .map(([k, n]) => `${k} (${n})`)
       .join(", ");
     lines.push(
-      `| ${pid} | ${prof} | ${br} | ${sym} | ${list.length} | ${pct(arityOk, list.length)} (${arityOk}/${list.length}) | ${hasConfigKeys ? `${pct(configOk, list.length)} (${configOk}/${list.length})` : "n/a"} | ${topMissing || "-"} |`,
+      `| ${pid} | ${prof} | ${br} | ${sym} | ${list.length} | ${pct(
+        arityOk,
+        list.length,
+      )} (${arityOk}/${list.length}) | ${
+        hasConfigKeys ? `${pct(configOk, list.length)} (${configOk}/${list.length})` : "n/a"
+      } | ${topMissing || "-"} |`,
     );
   }
   return lines.join("\n");

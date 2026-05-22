@@ -16,7 +16,7 @@ const makeResult = (problemId: string, passed: boolean, infra = false): ProblemR
   problemId,
   problemName: problemId,
   sdkSurface: "micro",
-  contextProfile: "code-and-docs",
+  contextProfile: "full",
   stages: [],
   passed,
   solveResult: {
@@ -41,8 +41,16 @@ describe("checkpoint", () => {
 
   it("appendCheckpoint + readCheckpoint round-trip", () => {
     const file = checkpointPath(tempDir, "run-1");
-    appendCheckpoint(file, { problemName: "m01", iter: 0, result: makeResult("m01", true) });
-    appendCheckpoint(file, { problemName: "m01", iter: 1, result: makeResult("m01", false) });
+    appendCheckpoint(file, {
+      problemName: "m01",
+      iter: 0,
+      result: makeResult("m01", true),
+    });
+    appendCheckpoint(file, {
+      problemName: "m01",
+      iter: 1,
+      result: makeResult("m01", false),
+    });
     const entries = readCheckpoint(file);
     expect(entries).toHaveLength(2);
     expect(entries[0]?.problemName).toBe("m01");
@@ -56,7 +64,11 @@ describe("checkpoint", () => {
 
   it("readCheckpoint tolerates a malformed final line (interrupted write)", () => {
     const file = checkpointPath(tempDir, "run-2");
-    appendCheckpoint(file, { problemName: "m01", iter: 0, result: makeResult("m01", true) });
+    appendCheckpoint(file, {
+      problemName: "m01",
+      iter: 0,
+      result: makeResult("m01", true),
+    });
     // Append a malformed trailing line that an interrupted process might leave.
     fs.appendFileSync(file, "{not valid json\n");
     const entries = readCheckpoint(file);
@@ -66,9 +78,21 @@ describe("checkpoint", () => {
 
   it("groupCheckpoint indexes by (problemName, iter), later entries win", () => {
     const file = checkpointPath(tempDir, "run-3");
-    appendCheckpoint(file, { problemName: "m01", iter: 0, result: makeResult("m01", false, true) });
-    appendCheckpoint(file, { problemName: "m01", iter: 0, result: makeResult("m01", true) });
-    appendCheckpoint(file, { problemName: "m02", iter: 0, result: makeResult("m02", true) });
+    appendCheckpoint(file, {
+      problemName: "m01",
+      iter: 0,
+      result: makeResult("m01", false, true),
+    });
+    appendCheckpoint(file, {
+      problemName: "m01",
+      iter: 0,
+      result: makeResult("m01", true),
+    });
+    appendCheckpoint(file, {
+      problemName: "m02",
+      iter: 0,
+      result: makeResult("m02", true),
+    });
     const grouped = groupCheckpoint(readCheckpoint(file));
     expect(grouped.get("m01")?.get(0)?.passed).toBe(true); // later entry wins
     expect(grouped.get("m02")?.get(0)?.passed).toBe(true);
@@ -83,7 +107,11 @@ describe("checkpoint", () => {
   it("deleteCheckpoint removes the file silently when absent", () => {
     const file = checkpointPath(tempDir, "absent");
     expect(() => deleteCheckpoint(file)).not.toThrow();
-    appendCheckpoint(file, { problemName: "m01", iter: 0, result: makeResult("m01", true) });
+    appendCheckpoint(file, {
+      problemName: "m01",
+      iter: 0,
+      result: makeResult("m01", true),
+    });
     expect(fs.existsSync(file)).toBe(true);
     deleteCheckpoint(file);
     expect(fs.existsSync(file)).toBe(false);

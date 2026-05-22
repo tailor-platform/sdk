@@ -15,7 +15,7 @@ This iteration of the harness is built around three ideas:
 
 1. **Micro-problems** (5-15 turns each) that isolate one affordance per problem, so failures are diagnostic.
 2. **Behaviour trace** — every agent run streams `tool_use` events to `trace.jsonl` so we measure what the agent actually did, not just whether it succeeded.
-3. **Profile diff + iteration variance** — comparing code-only vs code-and-docs pass rates across N≥3 iterations is the primary docs-vs-types-gap detector.
+3. **Profile diff + iteration variance** — comparing no-docs vs full pass rates across N≥3 iterations is the primary docs-vs-types-gap detector.
 
 Inference runs against `api.openai.com` through the codex CLI, authenticated with a ChatGPT subscription. The codex process itself executes inside an ephemeral Podman container — the host filesystem is unreachable except for the work tree and a read-only mount of `~/.codex/auth.json`, so global agent instructions, skills, and dotfiles cannot leak into the prompt. Reproducibility relies on the model's own sampling stability rather than on explicit seeds: gpt-5 reasoning models accept neither a useful seed nor an adjustable temperature, so we sample `N=5` iterations per `(problem, effort)` pair and report the variance directly.
 
@@ -76,14 +76,14 @@ pnpm challenge --all --impl-dir ./path/to/outputs
 # Inspect history of past runs.
 pnpm challenge:analyze            # latest group trend
 pnpm challenge:analyze --groups   # list every (model, context-profile) group
-pnpm challenge:analyze --trend --context-profile code-only
+pnpm challenge:analyze --trend --context-profile no-docs
 ```
 
 **Flags accepted by `--solve`:**
 
 - `--effort <minimal|low|medium|high|xhigh>` — codex reasoning effort, forwarded as `-c model_reasoning_effort=<effort>`. Default: `xhigh`. Use lower values when smoke-testing changes to the harness itself; the affordance signal lives at the upper end.
 - `--max-seconds <n>` — per-problem wall-clock cap in seconds (default `3600`). Replaces the legacy `--max-budget` flag.
-- `--context-profile <code-only|code-and-docs>` — what slice of the SDK is exposed inside the work tree. `code-only` is the API-design baseline; `code-and-docs` ships the whole tarball.
+- `--context-profile <full|no-docs>` — what slice of the SDK is exposed inside the work tree. `full` (default) ships the whole tarball including README/docs/skills and JSDoc on type declarations. `no-docs` strips README/CHANGELOG/docs/skills AND removes JSDoc block comments from `.d.{ts,mts,cts}` files, forcing the agent to rely on the raw type surface alone.
 - `--concurrency <n>` — parallel problems (default `1`). The ChatGPT subscription enforces a per-user rate budget, so raising this above 1 is only useful when running against a higher tier or an independent account.
 - `--iterations <n>` — repeat each `(problem, effort, profile)` task N times for variance bounds (default: `3` in solve mode, `1` in verify mode). When N > 1 the report's `results[].iterations` block carries pass rate and median±stdev for the behavioural metrics.
 - `--sdk-branch <ref>` — pack the SDK from a git ref instead of the current working tree. Spawns a detached `git worktree`, builds the SDK there, and `pnpm pack`s the result. Requires `--solve`.
@@ -136,11 +136,11 @@ The terminal table summarises per-problem stage status and the trace line (`turn
 ```bash
 # Pack tarballs from the current tree and the candidate branch, run both.
 pnpm challenge:experiment --sdk-branch feat/exec-description-required \
-  --all --context-profile code-only
+  --all --context-profile no-docs
 
 # Narrow to specific problems (forwarded as multiple --problem flags).
 pnpm challenge:experiment --sdk-branch feat/exec-description-required \
-  --problems m05,m18 --context-profile code-only
+  --problems m05,m18 --context-profile no-docs
 ```
 
 This:
@@ -180,7 +180,7 @@ problems/
   "title": "Add a required + unique string field to a TailorDB type",
   "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "hint": "db.string() is required by default; chain .unique()."
 }
 ```
@@ -196,7 +196,7 @@ Scaffold resolution is a four-layer overlay (later layers shadow earlier ones at
 
 ### Archived problems
 
-Problems that hit **5 consecutive `passRate=1.0`** runs with low turns variance (`metricsStdev.turns / metricsMedian.turns < 0.1`) on the **code-only** profile are auto-moved to `problems/archived/<id>/` at the end of the qualifying solve. They are skipped by `--all` by default. The move is reversible: drop the directory back into `problems/<id>/` to re-activate it. To re-run an archived problem without un-archiving, pass `--include-archived` (`challenge:solve` or `challenge:analyze`).
+Problems that hit **5 consecutive `passRate=1.0`** runs with low turns variance (`metricsStdev.turns / metricsMedian.turns < 0.1`) on the **no-docs** profile are auto-moved to `problems/archived/<id>/` at the end of the qualifying solve. They are skipped by `--all` by default. The move is reversible: drop the directory back into `problems/<id>/` to re-activate it. To re-run an archived problem without un-archiving, pass `--include-archived` (`challenge:solve` or `challenge:analyze`).
 
 ## Solve Artifacts
 
@@ -215,7 +215,7 @@ When `--iterations N` is set (default `N = 3`), per-iteration artifacts live und
 Reports and per-run work trees are isolated per `(model, context-profile)`, so multiple `pnpm challenge:solve` invocations can run in parallel from separate shells without clobbering each other:
 
 ```bash
-for profile in code-only code-and-docs; do
+for profile in full no-docs; do
   pnpm -C llm-challenge challenge:solve \
     --context-profile "$profile" \
     > ".agent/tmp/llm-challenge-logs/$profile.log" 2>&1 &
@@ -227,7 +227,7 @@ Caveats:
 
 - Pre-build the SDK once (`pnpm -C packages/sdk build`) before launching parallel runs; concurrent builds race.
 - The container image (`llm-challenge-runner`) auto-builds on first use — kick off one solve and let it finish that build, then fan out, or pre-build manually.
-- The ChatGPT subscription serialises requests through a per-user rate budget; running N parallel solves divides effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `code-only` vs `code-and-docs`) so the parallel work is genuinely independent.
+- The ChatGPT subscription serialises requests through a per-user rate budget; running N parallel solves divides effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `full` vs `no-docs`) so the parallel work is genuinely independent.
 
 After parallel runs finish, use `pnpm challenge:analyze --groups` to list per-config groups and `--trend --context-profile <profile>` to inspect a single config's history.
 
@@ -238,7 +238,7 @@ After parallel runs finish, use `pnpm challenge:analyze --groups` to list per-co
 `pnpm challenge:analyze` with no flags is the recommended starting point. It chains two views:
 
 1. **Trend** within the most recently active `(model, context-profile)` group — the time series of pass rate across reports in that group.
-2. **Profile diff** — the latest representative reports from the `code-only` and `code-and-docs` profiles for the same model are diffed against each other. This surfaces docs-vs-types affordance gaps automatically; if one profile has no reports yet the section is skipped with a single warning.
+2. **Profile diff** — the latest representative reports from the `no-docs` and `full` profiles for the same model are diffed against each other. This surfaces docs-vs-types affordance gaps automatically; if one profile has no reports yet the section is skipped with a single warning.
 
 ```bash
 # Default: trend + profile diff for the active group.
@@ -251,7 +251,7 @@ pnpm challenge:analyze --profile-diff
 pnpm challenge:analyze --diff path/to/baseline.json path/to/candidate.json [--json]
 
 # Time-series trend within a specific group.
-pnpm challenge:analyze --trend --model codex-gpt-5.5-xhigh --context-profile code-only
+pnpm challenge:analyze --trend --model codex-gpt-5.5-xhigh --context-profile no-docs
 
 # List every (model, context-profile) group with its latest pass rate.
 pnpm challenge:analyze --groups

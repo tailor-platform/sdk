@@ -3,5 +3,5 @@
   "title": "Define a typed wait point and use it to gate a workflow job",
   "designNote": "missing_action_verb",
   "sdkSurface": "workflow",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

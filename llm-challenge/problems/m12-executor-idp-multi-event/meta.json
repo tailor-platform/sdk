@@ -3,7 +3,7 @@
   "title": "Handle IdP user created+deleted events with a single idpUserTrigger({events})",
   "designNote": "consolidation_candidate",
   "sdkSurface": "executor-non-record-trigger",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["createExecutor", "idpUserTrigger"],
   "biasAttractors": [
     "idpUserCreatedTrigger",

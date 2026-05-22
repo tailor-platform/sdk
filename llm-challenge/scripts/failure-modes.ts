@@ -50,18 +50,15 @@ type Failure = {
   detail: string;
 };
 
-function normalizeProfile(p: string): string {
-  if (p === "types-only") return "code-only";
-  if (p === "full-package") return "code-and-docs";
-  return p;
-}
-
 function walkReports(): string[] {
   const out: string[] = [];
   if (!fs.existsSync(RESULTS_DIR)) return out;
   for (const entry of fs.readdirSync(RESULTS_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     if (entry.name === "artifacts" || entry.name === "experiments") continue;
+    // Underscore-prefixed dirs (`_quarantine-*`) are operator-curated archives
+    // of legacy / stale reports that must not contaminate aggregations.
+    if (entry.name.startsWith("_")) continue;
     const sessionDir = path.join(RESULTS_DIR, entry.name);
     for (const f of fs.readdirSync(sessionDir)) {
       if (f.startsWith("report-") && f.endsWith(".json")) {
@@ -77,10 +74,16 @@ const TSC_FILE_LOCATION = /([^\s(]+\.tsx?)\((\d+),(\d+)\):/;
 
 function classifyTypecheck(output: string): { bucket: string; detail: string } {
   if (/^Skipped \(generate failed\)/.test(output.trim())) {
-    return { bucket: "typecheck:upstream_skip", detail: "skipped because generate failed" };
+    return {
+      bucket: "typecheck:upstream_skip",
+      detail: "skipped because generate failed",
+    };
   }
   if (/^Skipped/.test(output.trim())) {
-    return { bucket: "typecheck:skipped_other", detail: output.trim().slice(0, 200) };
+    return {
+      bucket: "typecheck:skipped_other",
+      detail: output.trim().slice(0, 200),
+    };
   }
   const match = output.match(TS_ERROR_REGEX);
   if (match) {
@@ -92,18 +95,30 @@ function classifyTypecheck(output: string): { bucket: string; detail: string } {
   if (fileMatch) {
     return { bucket: "typecheck:other", detail: `at ${fileMatch[0]}` };
   }
-  return { bucket: "typecheck:other", detail: firstSignalLine(output).slice(0, 200) };
+  return {
+    bucket: "typecheck:other",
+    detail: firstSignalLine(output).slice(0, 200),
+  };
 }
 
 function classifyTests(output: string): { bucket: string; detail: string } {
   if (/^Skipped \(generate failed\)/.test(output.trim())) {
-    return { bucket: "tests:upstream_skip", detail: "skipped because generate failed" };
+    return {
+      bucket: "tests:upstream_skip",
+      detail: "skipped because generate failed",
+    };
   }
   if (/^Skipped \(typecheck failed\)/.test(output.trim())) {
-    return { bucket: "tests:upstream_skip", detail: "skipped because typecheck failed" };
+    return {
+      bucket: "tests:upstream_skip",
+      detail: "skipped because typecheck failed",
+    };
   }
   if (/^Skipped/.test(output.trim())) {
-    return { bucket: "tests:skipped_other", detail: output.trim().slice(0, 200) };
+    return {
+      bucket: "tests:skipped_other",
+      detail: output.trim().slice(0, 200),
+    };
   }
   let parsed: {
     testResults?: Array<{
@@ -133,7 +148,10 @@ function classifyTests(output: string): { bucket: string; detail: string } {
     }
   }
   if (failedNames.length === 0) {
-    return { bucket: "tests:unknown", detail: "no failed assertions extracted" };
+    return {
+      bucket: "tests:unknown",
+      detail: "no failed assertions extracted",
+    };
   }
   const first = failedNames[0]!;
   const bucket = `tests:${first.split(/\s+/).slice(0, 8).join(" ")}`.slice(0, 90);
@@ -142,7 +160,10 @@ function classifyTests(output: string): { bucket: string; detail: string } {
 }
 
 const GENERATE_KNOWN_PATTERNS: Array<{ pattern: RegExp; bucket: string }> = [
-  { pattern: /^Skipped \(infrastructure failure\)/, bucket: "generate:infra_failure" },
+  {
+    pattern: /^Skipped \(infrastructure failure\)/,
+    bucket: "generate:infra_failure",
+  },
   { pattern: /^Skipped \(runner error/, bucket: "generate:runner_error" },
   { pattern: /^Skipped \(generate failed\)/, bucket: "generate:upstream_skip" },
   { pattern: /^Skipped /, bucket: "generate:skipped_other" },
@@ -153,9 +174,18 @@ const GENERATE_KNOWN_PATTERNS: Array<{ pattern: RegExp; bucket: string }> = [
   },
   { pattern: /Failed to load type from /, bucket: "generate:type_load_fail" },
   { pattern: /unknown export/i, bucket: "generate:unknown_export" },
-  { pattern: /plugin.+(?:missing|not found|cannot resolve)/i, bucket: "generate:plugin_missing" },
-  { pattern: /codegen.+(?:crashed|panic|error)/i, bucket: "generate:codegen_crash" },
-  { pattern: /An unexpected error occurred/i, bucket: "generate:unexpected_error" },
+  {
+    pattern: /plugin.+(?:missing|not found|cannot resolve)/i,
+    bucket: "generate:plugin_missing",
+  },
+  {
+    pattern: /codegen.+(?:crashed|panic|error)/i,
+    bucket: "generate:codegen_crash",
+  },
+  {
+    pattern: /An unexpected error occurred/i,
+    bucket: "generate:unexpected_error",
+  },
   { pattern: /timeout/i, bucket: "generate:timeout" },
 ];
 
@@ -213,7 +243,7 @@ function collectFailures(): { failures: Failure[]; mixedPassSkipped: number } {
     } catch {
       continue;
     }
-    const profile = normalizeProfile(report.contextProfile ?? "?");
+    const profile = report.contextProfile ?? "?";
     const sessionDir = path.basename(path.dirname(file));
     const sdkBranch = report.sdkBranch;
     for (const r of report.results ?? []) {

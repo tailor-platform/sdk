@@ -3,5 +3,5 @@
   "title": "Write an optional string array field using db.string options",
   "designNote": "naming_bias",
   "sdkSurface": "db-field",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

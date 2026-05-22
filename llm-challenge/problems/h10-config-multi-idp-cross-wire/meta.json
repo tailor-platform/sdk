@@ -3,7 +3,7 @@
   "title": "Wire defineAuth.idProvider to the correct IdP across two defineIdp definitions",
   "designNote": "missing_namespace",
   "sdkSurface": "config",
-  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["defineIdp", "defineAuth", ".provider"],
   "biasAttractors": ["defineIdProvider", "defineProvider", "selectIdp", "useIdp", "idpProvider"],
   "expectedCallShapes": {

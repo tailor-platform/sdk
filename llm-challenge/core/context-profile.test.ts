@@ -30,7 +30,7 @@ function makeSdkPackage(): string {
       '/// <reference types="@tailor-platform/function-types" />',
       "//#region src/foo.d.ts",
       "/**",
-      " * Doc that should disappear under bare-types.",
+      " * Doc that should disappear under no-docs.",
       " * @example doSomething()",
       " */",
       "declare function doSomething(): void;",
@@ -49,29 +49,12 @@ afterEach(() => {
 });
 
 describe("applyContextProfile", () => {
-  it("removes docs and skills for code-only tarball installs", () => {
+  it("strips docs/skills AND JSDoc from .d.mts (keeping triple-slash + #region) under no-docs", () => {
     const workDir = makeSdkPackage();
 
-    applyContextProfile(workDir, "code-only");
+    applyContextProfile(workDir, "no-docs");
 
     const sdkDir = path.join(workDir, "node_modules", "@tailor-platform", "sdk");
-    expect(fs.existsSync(path.join(sdkDir, "docs"))).toBe(false);
-    expect(fs.existsSync(path.join(sdkDir, "skills"))).toBe(false);
-    expect(fs.existsSync(path.join(sdkDir, "README.md"))).toBe(false);
-    expect(fs.existsSync(path.join(sdkDir, "CHANGELOG.md"))).toBe(false);
-    // code-only must keep JSDoc inside .d.mts intact — it's the whole point
-    // of separating code-only from bare-types.
-    const dts = fs.readFileSync(path.join(sdkDir, "dist", "index.d.mts"), "utf-8");
-    expect(dts).toContain("Doc that should disappear under bare-types");
-  });
-
-  it("strips JSDoc from .d.mts (and keeps triple-slash + #region) under bare-types", () => {
-    const workDir = makeSdkPackage();
-
-    applyContextProfile(workDir, "bare-types");
-
-    const sdkDir = path.join(workDir, "node_modules", "@tailor-platform", "sdk");
-    // Same deletion set as code-only.
     expect(fs.existsSync(path.join(sdkDir, "docs"))).toBe(false);
     expect(fs.existsSync(path.join(sdkDir, "skills"))).toBe(false);
     expect(fs.existsSync(path.join(sdkDir, "README.md"))).toBe(false);
@@ -86,16 +69,18 @@ describe("applyContextProfile", () => {
     expect(dts).toContain("declare function doSomething(): void;");
   });
 
-  it("leaves the SDK package untouched for code-and-docs", () => {
+  it("leaves the SDK package untouched for full", () => {
     const workDir = makeSdkPackage();
 
-    applyContextProfile(workDir, "code-and-docs");
+    applyContextProfile(workDir, "full");
 
     const sdkDir = path.join(workDir, "node_modules", "@tailor-platform", "sdk");
     expect(fs.existsSync(path.join(sdkDir, "docs", "configuration.md"))).toBe(true);
     expect(fs.existsSync(path.join(sdkDir, "README.md"))).toBe(true);
     expect(fs.existsSync(path.join(sdkDir, "CHANGELOG.md"))).toBe(true);
     expect(fs.existsSync(path.join(sdkDir, "skills", "tailor-sdk", "SKILL.md"))).toBe(true);
+    const dts = fs.readFileSync(path.join(sdkDir, "dist", "index.d.mts"), "utf-8");
+    expect(dts).toContain("Doc that should disappear under no-docs");
   });
 
   it("no-ops when the SDK package is not installed locally under workDir", () => {
@@ -103,7 +88,7 @@ describe("applyContextProfile", () => {
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-context-profile-empty-"));
     tmpDirs.push(workDir);
 
-    expect(() => applyContextProfile(workDir, "code-only")).not.toThrow();
+    expect(() => applyContextProfile(workDir, "no-docs")).not.toThrow();
   });
 
   it("leaves the SDK intact when node_modules/.../sdk symlinks outside workDir", () => {
@@ -113,7 +98,9 @@ describe("applyContextProfile", () => {
     tmpDirs.push(externalRoot);
     const externalSdkDir = path.join(externalRoot, "sdk");
     fs.mkdirSync(path.join(externalSdkDir, "docs"), { recursive: true });
-    fs.mkdirSync(path.join(externalSdkDir, "skills", "tailor-sdk"), { recursive: true });
+    fs.mkdirSync(path.join(externalSdkDir, "skills", "tailor-sdk"), {
+      recursive: true,
+    });
     fs.writeFileSync(path.join(externalSdkDir, "README.md"), "# SDK\n");
     fs.writeFileSync(path.join(externalSdkDir, "CHANGELOG.md"), "# Changelog\n");
     fs.writeFileSync(path.join(externalSdkDir, "docs", "configuration.md"), "# Config\n");
@@ -126,7 +113,7 @@ describe("applyContextProfile", () => {
     const symlinkedSdk = path.join(sdkParent, "sdk");
     fs.symlinkSync(externalSdkDir, symlinkedSdk, "dir");
 
-    applyContextProfile(workDir, "code-only");
+    applyContextProfile(workDir, "no-docs");
 
     // Files behind the symlink (outside workDir) must remain intact: the
     // isLocalInstalledPackage guard returns false for non-descendant targets.
@@ -155,7 +142,7 @@ function makeSdkTarball(): string {
     [
       '/// <reference types="@tailor-platform/function-types" />',
       "/**",
-      " * JSDoc to strip under bare-types.",
+      " * JSDoc to strip under no-docs.",
       " */",
       "declare const x: number;",
       "export { x };",
@@ -166,7 +153,9 @@ function makeSdkTarball(): string {
   const tarballHost = fs.mkdtempSync(path.join(os.tmpdir(), "llm-tarball-out-"));
   tmpDirs.push(tarballHost);
   const tarballPath = path.join(tarballHost, "sdk.tgz");
-  execFileSync("tar", ["-czf", tarballPath, "-C", stagingDir, "package"], { stdio: "pipe" });
+  execFileSync("tar", ["-czf", tarballPath, "-C", stagingDir, "package"], {
+    stdio: "pipe",
+  });
   return tarballPath;
 }
 
@@ -179,10 +168,22 @@ function listTarballEntries(tarballPath: string): string[] {
 }
 
 describe("filterSdkTarballForProfile", () => {
-  it("strips README/CHANGELOG/docs/skills from a code-only tarball but keeps dist", () => {
+  it("strips README/CHANGELOG/docs/skills and JSDoc from a no-docs tarball but keeps dist", () => {
     const tarballPath = makeSdkTarball();
 
-    filterSdkTarballForProfile(tarballPath, "code-only");
+    filterSdkTarballForProfile(tarballPath, "no-docs");
+
+    // Re-extract the rewritten tarball and read the .d.mts to confirm the
+    // JSDoc payload was actually stripped (not just the docs deleted).
+    const reextract = fs.mkdtempSync(path.join(os.tmpdir(), "llm-tarball-reextract-"));
+    tmpDirs.push(reextract);
+    execFileSync("tar", ["-xzf", tarballPath, "-C", reextract], {
+      stdio: "pipe",
+    });
+    const dts = fs.readFileSync(path.join(reextract, "package", "dist", "index.d.mts"), "utf-8");
+    expect(dts).not.toContain("JSDoc to strip under no-docs");
+    expect(dts).toContain('/// <reference types="@tailor-platform/function-types" />');
+    expect(dts).toContain("declare const x: number;");
 
     const entries = listTarballEntries(tarballPath);
     expect(entries.some((e) => e.endsWith("package/dist/index.mjs"))).toBe(true);
@@ -193,39 +194,19 @@ describe("filterSdkTarballForProfile", () => {
     expect(entries.some((e) => e.includes("package/skills/"))).toBe(false);
   });
 
-  it("leaves a code-and-docs tarball untouched", () => {
+  it("leaves a full tarball untouched", () => {
     const tarballPath = makeSdkTarball();
     const before = listTarballEntries(tarballPath).sort();
 
-    filterSdkTarballForProfile(tarballPath, "code-and-docs");
+    filterSdkTarballForProfile(tarballPath, "full");
 
     const after = listTarballEntries(tarballPath).sort();
     expect(after).toEqual(before);
   });
 
-  it("strips JSDoc inside .d.mts when re-packing a bare-types tarball", () => {
-    const tarballPath = makeSdkTarball();
-
-    filterSdkTarballForProfile(tarballPath, "bare-types");
-
-    // Re-extract the rewritten tarball and read the .d.mts to confirm the
-    // JSDoc payload was actually stripped (not just the docs deleted).
-    const reextract = fs.mkdtempSync(path.join(os.tmpdir(), "llm-tarball-reextract-"));
-    tmpDirs.push(reextract);
-    execFileSync("tar", ["-xzf", tarballPath, "-C", reextract], { stdio: "pipe" });
-    const dts = fs.readFileSync(path.join(reextract, "package", "dist", "index.d.mts"), "utf-8");
-    expect(dts).not.toContain("JSDoc to strip under bare-types");
-    expect(dts).toContain('/// <reference types="@tailor-platform/function-types" />');
-    expect(dts).toContain("declare const x: number;");
-    // README/CHANGELOG/docs/skills are stripped just like code-only.
-    const entries = listTarballEntries(tarballPath);
-    expect(entries.some((e) => e.includes("package/README.md"))).toBe(false);
-    expect(entries.some((e) => e.includes("package/docs/"))).toBe(false);
-  });
-
   it("is a no-op when the tarball is missing", () => {
     const missing = path.join(os.tmpdir(), `llm-missing-${Date.now()}.tgz`);
-    expect(() => filterSdkTarballForProfile(missing, "code-only")).not.toThrow();
+    expect(() => filterSdkTarballForProfile(missing, "no-docs")).not.toThrow();
   });
 });
 
@@ -268,10 +249,7 @@ describe("stripJsdocFromDeclarationFiles", () => {
   it("only touches .d.ts/.d.mts/.d.cts files", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-strip-walk-"));
     tmpDirs.push(dir);
-    fs.writeFileSync(
-      path.join(dir, "a.d.ts"),
-      "/** keep code-only, drop bare */\nexport const a = 1;\n",
-    );
+    fs.writeFileSync(path.join(dir, "a.d.ts"), "/** drop under no-docs */\nexport const a = 1;\n");
     fs.writeFileSync(path.join(dir, "b.d.mts"), "/** drop */\nexport const b = 1;\n");
     fs.writeFileSync(path.join(dir, "c.d.cts"), "/** drop */\nexport const c = 1;\n");
     fs.writeFileSync(path.join(dir, "d.mjs"), "/** keep — runtime file */\nexport const d = 1;\n");
@@ -282,7 +260,7 @@ describe("stripJsdocFromDeclarationFiles", () => {
 
     stripJsdocFromDeclarationFiles(dir);
 
-    expect(fs.readFileSync(path.join(dir, "a.d.ts"), "utf-8")).not.toContain("drop bare");
+    expect(fs.readFileSync(path.join(dir, "a.d.ts"), "utf-8")).not.toContain("drop under no-docs");
     expect(fs.readFileSync(path.join(dir, "b.d.mts"), "utf-8")).not.toContain("drop");
     expect(fs.readFileSync(path.join(dir, "c.d.cts"), "utf-8")).not.toContain("drop");
     expect(fs.readFileSync(path.join(dir, "d.mjs"), "utf-8")).toContain("keep");
@@ -292,7 +270,9 @@ describe("stripJsdocFromDeclarationFiles", () => {
   it("recurses into nested dist/ trees", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-strip-nested-"));
     tmpDirs.push(dir);
-    fs.mkdirSync(path.join(dir, "dist", "plugin", "kysely-type"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "dist", "plugin", "kysely-type"), {
+      recursive: true,
+    });
     fs.writeFileSync(
       path.join(dir, "dist", "plugin", "kysely-type", "index.d.mts"),
       "/** doc */\nexport declare function f(): void;\n",
@@ -309,43 +289,29 @@ describe("stripJsdocFromDeclarationFiles", () => {
 });
 
 describe("buildContextProfileInstructions", () => {
-  it("describes the code-only profile without referencing docs or skills", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "code-only");
+  it("describes the no-docs profile and steers the agent toward signatures", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "no-docs");
 
-    expect(instructions).toContain("code-only");
-    expect(instructions).toContain("TypeScript package API");
-  });
-
-  it("describes the bare-types profile and steers the agent toward signatures", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "bare-types");
-
-    expect(instructions).toContain("bare-types");
+    expect(instructions).toContain("no-docs");
     expect(instructions).toContain("type signatures");
     expect(instructions).toContain("no JSDoc");
   });
 
-  it("describes the code-and-docs profile", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "code-and-docs");
+  it("describes the full profile", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "full");
 
-    expect(instructions).toContain("code-and-docs");
-  });
-
-  // Profile-swap guard: the code-only payload must not include the
-  // code-and-docs opt-in phrasing, and vice versa. If the case bodies are
-  // swapped, both negative assertions fail loudly.
-  it("does not leak code-and-docs opt-in phrasing into code-only", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "code-only");
-
-    expect(instructions).not.toContain("You may inspect");
-    expect(instructions).not.toContain("examples");
-    expect(instructions).toContain("Do not rely on");
-  });
-
-  it("invites README and docs inspection for code-and-docs", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "code-and-docs");
-
+    expect(instructions).toContain("full");
     expect(instructions).toContain("README");
     expect(instructions).toContain("docs");
     expect(instructions).toContain("You may inspect");
+  });
+
+  // Profile-swap guard: the no-docs payload must not include the full opt-in
+  // phrasing. If the case bodies are swapped, the assertions fail loudly.
+  it("does not leak full opt-in phrasing into no-docs", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "no-docs");
+
+    expect(instructions).not.toContain("You may inspect");
+    expect(instructions).not.toContain("including README");
   });
 });

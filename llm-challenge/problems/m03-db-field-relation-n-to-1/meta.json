@@ -3,5 +3,5 @@
   "title": "Define a many-to-one relation field from Membership to Organization",
   "designNote": "docs_only",
   "sdkSurface": "db-field",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

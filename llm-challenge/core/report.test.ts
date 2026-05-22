@@ -74,16 +74,20 @@ describe("finalizeStages", () => {
 describe("createReport", () => {
   it("aggregates problemsPassed and percentage", () => {
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
-    const failing: StageResult = { stage: "tests", passed: false, output: "fail" };
+    const failing: StageResult = {
+      stage: "tests",
+      passed: false,
+      output: "fail",
+    };
 
     const results: ProblemResult[] = [
       makeProblemResult({ stages: [passing], passed: true }),
       makeProblemResult({ problemId: "002", stages: [failing], passed: false }),
     ];
 
-    const report = createReport(results, { contextProfile: "code-only" });
+    const report = createReport(results, { contextProfile: "no-docs" });
 
-    expect(report.contextProfile).toBe("code-only");
+    expect(report.contextProfile).toBe("no-docs");
     expect(report.problemsPassed).toBe(1);
     expect(report.problemsTotal).toBe(2);
     expect(report.percentage).toBe(50);
@@ -141,8 +145,16 @@ describe("createReport", () => {
 
   it("computes stage pass rates excluding skipped stages", () => {
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
-    const skipped: StageResult = { stage: "tests", passed: false, output: "Skipped (foo)" };
-    const failing: StageResult = { stage: "tests", passed: false, output: "fail" };
+    const skipped: StageResult = {
+      stage: "tests",
+      passed: false,
+      output: "Skipped (foo)",
+    };
+    const failing: StageResult = {
+      stage: "tests",
+      passed: false,
+      output: "fail",
+    };
 
     const results: ProblemResult[] = [
       makeProblemResult({ stages: [passing], passed: true }),
@@ -162,13 +174,33 @@ describe("createReport", () => {
 
   it("treats an all-infra-failure report as 0% valid with infraFailureCount === results.length", () => {
     const infraStages: StageResult[] = [
-      { stage: "generate", passed: false, output: "Skipped (infrastructure failure)" },
-      { stage: "typecheck", passed: false, output: "Skipped (infrastructure failure)" },
-      { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
+      {
+        stage: "generate",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
+      {
+        stage: "typecheck",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
+      {
+        stage: "tests",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
     ];
     const results: ProblemResult[] = [
-      makeProblemResult({ problemId: "001", stages: infraStages, passed: false }),
-      makeProblemResult({ problemId: "002", stages: infraStages, passed: false }),
+      makeProblemResult({
+        problemId: "001",
+        stages: infraStages,
+        passed: false,
+      }),
+      makeProblemResult({
+        problemId: "002",
+        stages: infraStages,
+        passed: false,
+      }),
     ];
 
     const report = createReport(results);
@@ -180,7 +212,11 @@ describe("createReport", () => {
 
   it("rounds percentage to the nearest integer (1 of 3 → 33, 2 of 3 → 67)", () => {
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
-    const failing: StageResult = { stage: "tests", passed: false, output: "fail" };
+    const failing: StageResult = {
+      stage: "tests",
+      passed: false,
+      output: "fail",
+    };
 
     const oneOfThree: ProblemResult[] = [
       makeProblemResult({ problemId: "001", stages: [passing], passed: true }),
@@ -199,9 +235,21 @@ describe("createReport", () => {
 
   it("separates infra failures from valid pass-rate calculations", () => {
     const infraStages: StageResult[] = [
-      { stage: "generate", passed: false, output: "Skipped (infrastructure failure)" },
-      { stage: "typecheck", passed: false, output: "Skipped (infrastructure failure)" },
-      { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
+      {
+        stage: "generate",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
+      {
+        stage: "typecheck",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
+      {
+        stage: "tests",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
     ];
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
 
@@ -216,7 +264,12 @@ describe("createReport", () => {
         problemId: "002",
         stages: infraStages,
         passed: false,
-        solveResult: { success: false, durationMs: 0, output: "", infraFailure: true },
+        solveResult: {
+          success: false,
+          durationMs: 0,
+          output: "",
+          infraFailure: true,
+        },
       }),
     ];
 
@@ -233,9 +286,21 @@ describe("isInfraFailure", () => {
   it("returns true when every stage is the infra-failure sentinel", () => {
     const result = makeProblemResult({
       stages: [
-        { stage: "generate", passed: false, output: "Skipped (infrastructure failure)" },
-        { stage: "typecheck", passed: false, output: "Skipped (infrastructure failure)" },
-        { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
+        {
+          stage: "generate",
+          passed: false,
+          output: "Skipped (infrastructure failure)",
+        },
+        {
+          stage: "typecheck",
+          passed: false,
+          output: "Skipped (infrastructure failure)",
+        },
+        {
+          stage: "tests",
+          passed: false,
+          output: "Skipped (infrastructure failure)",
+        },
       ],
     });
 
@@ -246,7 +311,11 @@ describe("isInfraFailure", () => {
     const result = makeProblemResult({
       stages: [
         { stage: "generate", passed: true, output: "ok" },
-        { stage: "typecheck", passed: false, output: "Skipped (generate failed)" },
+        {
+          stage: "typecheck",
+          passed: false,
+          output: "Skipped (generate failed)",
+        },
         { stage: "tests", passed: false, output: "Skipped (generate failed)" },
       ],
     });
@@ -297,9 +366,21 @@ describe("formatReportTable", () => {
 
   it("renders INFRA status when every stage is the infra-failure sentinel", () => {
     const infraStages: StageResult[] = [
-      { stage: "generate", passed: false, output: "Skipped (infrastructure failure)" },
-      { stage: "typecheck", passed: false, output: "Skipped (infrastructure failure)" },
-      { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
+      {
+        stage: "generate",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
+      {
+        stage: "typecheck",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
+      {
+        stage: "tests",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
     ];
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
     const report = createReport([
@@ -308,7 +389,12 @@ describe("formatReportTable", () => {
         problemId: "002",
         stages: infraStages,
         passed: false,
-        solveResult: { success: false, durationMs: 0, output: "", infraFailure: true },
+        solveResult: {
+          success: false,
+          durationMs: 0,
+          output: "",
+          infraFailure: true,
+        },
       }),
     ]);
 
@@ -339,12 +425,20 @@ describe("formatReportTable", () => {
   it("renders the 'Valid (excl. infra)' line only when there are infra failures", () => {
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
     const infraStages: StageResult[] = [
-      { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
+      {
+        stage: "tests",
+        passed: false,
+        output: "Skipped (infrastructure failure)",
+      },
     ];
 
     const withInfra = createReport([
       makeProblemResult({ problemId: "001", stages: [passing], passed: true }),
-      makeProblemResult({ problemId: "002", stages: infraStages, passed: false }),
+      makeProblemResult({
+        problemId: "002",
+        stages: infraStages,
+        passed: false,
+      }),
     ]);
     expect(formatReportTable(withInfra)).toContain("Valid (excl. infra)");
 
@@ -569,7 +663,11 @@ describe("formatReportTable", () => {
 
 describe("aggregateIterations", () => {
   const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
-  const failing: StageResult = { stage: "tests", passed: false, output: "fail" };
+  const failing: StageResult = {
+    stage: "tests",
+    passed: false,
+    output: "fail",
+  };
 
   it("returns the input unchanged when a single iteration is supplied", () => {
     const single = makeProblemResult({ stages: [passing], passed: true });
@@ -587,21 +685,36 @@ describe("aggregateIterations", () => {
         stages: [passing],
         passed: true,
         solveResult: { success: true, durationMs: 0, output: "" },
-        metrics: mkMetrics({ turns: 10, readSdkDts: 2, readDocs: 1, bashRetries: 0 }),
+        metrics: mkMetrics({
+          turns: 10,
+          readSdkDts: 2,
+          readDocs: 1,
+          bashRetries: 0,
+        }),
       }),
       makeProblemResult({
         problemId: "m01",
         stages: [failing],
         passed: false,
         solveResult: { success: true, durationMs: 0, output: "" },
-        metrics: mkMetrics({ turns: 14, readSdkDts: 3, readDocs: 1, bashRetries: 2 }),
+        metrics: mkMetrics({
+          turns: 14,
+          readSdkDts: 3,
+          readDocs: 1,
+          bashRetries: 2,
+        }),
       }),
       makeProblemResult({
         problemId: "m01",
         stages: [passing],
         passed: true,
         solveResult: { success: true, durationMs: 0, output: "" },
-        metrics: mkMetrics({ turns: 12, readSdkDts: 4, readDocs: 1, bashRetries: 1 }),
+        metrics: mkMetrics({
+          turns: 12,
+          readSdkDts: 4,
+          readDocs: 1,
+          bashRetries: 1,
+        }),
       }),
     ];
 
@@ -740,11 +853,27 @@ describe("formatReportTable (iterations)", () => {
 // them without losing the structured payload.
 describe("persistent failures", () => {
   const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
-  const failing: StageResult = { stage: "tests", passed: false, output: "fail" };
+  const failing: StageResult = {
+    stage: "tests",
+    passed: false,
+    output: "fail",
+  };
   const infraStages: StageResult[] = [
-    { stage: "generate", passed: false, output: "Skipped (infrastructure failure)" },
-    { stage: "typecheck", passed: false, output: "Skipped (infrastructure failure)" },
-    { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
+    {
+      stage: "generate",
+      passed: false,
+      output: "Skipped (infrastructure failure)",
+    },
+    {
+      stage: "typecheck",
+      passed: false,
+      output: "Skipped (infrastructure failure)",
+    },
+    {
+      stage: "tests",
+      passed: false,
+      output: "Skipped (infrastructure failure)",
+    },
   ];
 
   it("collects passRate=0 multi-iteration results as stable_fail (single-iteration falls through to !passed)", () => {
@@ -813,7 +942,12 @@ describe("persistent failures", () => {
         problemName: "cli-retry-loop-detection",
         stages: infraStages,
         passed: false,
-        solveResult: { success: false, durationMs: 0, output: "", infraFailure: true },
+        solveResult: {
+          success: false,
+          durationMs: 0,
+          output: "",
+          infraFailure: true,
+        },
       }),
     ]);
     expect(report.analytics.persistentFailures).toEqual([
@@ -836,7 +970,12 @@ describe("persistent failures", () => {
         problemName: "cli-retry-loop-detection",
         stages: infraStages,
         passed: false,
-        solveResult: { success: false, durationMs: 0, output: "", infraFailure: true },
+        solveResult: {
+          success: false,
+          durationMs: 0,
+          output: "",
+          infraFailure: true,
+        },
       }),
     ]);
 

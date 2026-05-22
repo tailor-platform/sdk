@@ -3,5 +3,5 @@
   "title": "Default-export a tailor.config.ts wrapped in defineConfig()",
   "designNote": "naming_bias",
   "sdkSurface": "config",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

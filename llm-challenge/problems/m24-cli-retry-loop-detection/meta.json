@@ -3,5 +3,5 @@
   "title": "Replace two sibling occurrences of an undefined field builder in one pass",
   "designNote": "redundant_call_pattern",
   "sdkSurface": "cli-runtime",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

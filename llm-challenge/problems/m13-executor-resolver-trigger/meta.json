@@ -3,7 +3,7 @@
   "title": "Trigger an executor when a specific resolver runs",
   "designNote": "missing_namespace",
   "sdkSurface": "executor-non-record-trigger",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["createExecutor", "resolverExecutedTrigger"],
   "biasAttractors": ["onResolverExecuted", "resolverTrigger", "afterResolver", "defineExecutor"],
   "expectedCallShapes": {

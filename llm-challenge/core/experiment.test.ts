@@ -125,12 +125,12 @@ describe("parseArgs", () => {
       "--problems",
       "m05",
       "--context-profile",
-      "code-only",
+      "no-docs",
       "--no-early-stop",
     ]);
     const args = parseArgs();
     expect(args.problems).toEqual(["m05"]);
-    expect(args.forward).toEqual(["--context-profile", "code-only", "--no-early-stop"]);
+    expect(args.forward).toEqual(["--context-profile", "no-docs", "--no-early-stop"]);
     // Must not leak the reserved flag downstream.
     expect(args.forward).not.toContain("--problems");
   });
@@ -138,19 +138,21 @@ describe("parseArgs", () => {
 
 describe("buildChildArgs", () => {
   it("emits --solve --iterations <n> and forwards extra args verbatim", () => {
-    const args = buildChildArgs(5, ["--context-profile", "code-only", "--no-early-stop"]);
+    const args = buildChildArgs(5, ["--context-profile", "no-docs", "--no-early-stop"]);
     expect(args).toEqual([
       "--solve",
       "--iterations",
       "5",
       "--context-profile",
-      "code-only",
+      "no-docs",
       "--no-early-stop",
     ]);
   });
 
   it("appends --sdk-branch <ref> when set", () => {
-    const args = buildChildArgs(3, [], { sdkBranch: "feat/exec-description-required" });
+    const args = buildChildArgs(3, [], {
+      sdkBranch: "feat/exec-description-required",
+    });
     expect(args).toEqual([
       "--solve",
       "--iterations",
@@ -169,7 +171,7 @@ describe("buildChildArgs", () => {
   });
 
   it("supports both --sdk-branch and --problems at once", () => {
-    const args = buildChildArgs(5, ["--context-profile", "code-only"], {
+    const args = buildChildArgs(5, ["--context-profile", "no-docs"], {
       sdkBranch: "feat/foo",
       problems: ["m05", "m18"],
     });
@@ -184,7 +186,7 @@ describe("buildChildArgs", () => {
       "--problem",
       "m18",
       "--context-profile",
-      "code-only",
+      "no-docs",
     ]);
   });
 

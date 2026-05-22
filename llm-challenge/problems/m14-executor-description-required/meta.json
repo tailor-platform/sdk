@@ -3,7 +3,7 @@
   "title": "Author an executor with a non-empty description",
   "designNote": "missing_action_verb",
   "sdkSurface": "executor",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["createExecutor", "recordCreatedTrigger"],
   "biasAttractors": ["defineExecutor", "executor("],
   "expectedCallShapes": {

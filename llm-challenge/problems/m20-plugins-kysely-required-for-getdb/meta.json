@@ -3,7 +3,7 @@
   "title": "Enable Kysely type generation so a workflow can call getDB('tailordb')",
   "designNote": "implicit_assumption",
   "sdkSurface": "plugin",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["definePlugins", "kyselyTypePlugin"],
   "biasAttractors": ["composePlugins", "addPlugins", "registerPlugin", "defineGenerators"],
   "expectedCallShapes": {

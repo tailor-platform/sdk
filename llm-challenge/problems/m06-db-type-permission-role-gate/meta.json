@@ -3,5 +3,5 @@
   "title": "Gate read/create to logged-in users and update/delete to ADMIN role",
   "designNote": "type_too_strict",
   "sdkSurface": "db-type",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

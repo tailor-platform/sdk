@@ -3,7 +3,7 @@
   "title": "Write a mutation resolver with a typed input that flows through body",
   "designNote": "missing_namespace",
   "sdkSurface": "resolver",
-  "contextProfiles": ["code-only", "code-and-docs"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["createResolver"],
   "biasAttractors": ["defineResolver", "resolver(", "defineMutation", "createMutation"],
   "expectedCallShapes": {

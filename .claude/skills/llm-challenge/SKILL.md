@@ -47,7 +47,7 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
   "title": "Add a required + unique string field to a TailorDB type",
   "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["full", "no-docs"],
   "hint": "db.string() is required by default; chain .unique()."
 }
 ```
@@ -55,7 +55,7 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 - `id`: `m<NN>-<slug>` (sequential; next free is `m26+`).
 - `designNote`: free-form author note about the affordance gap the problem exercises. Documentation only; the runner does not read it.
 - `sdkSurface`: closed enum — `db-field`, `db-type`, `resolver`, `executor-record-trigger`, `executor-non-record-trigger`, `executor`, `workflow`, `config`, `plugin`, `auth-idp`, `cli-runtime`.
-- `contextProfiles`: subset of `["types-only", "full-package"]`.
+- `contextProfiles`: subset of `["full", "no-docs"]`. `full` = unfiltered SDK install; `no-docs` strips README/CHANGELOG/docs/skills AND removes JSDoc from `.d.{ts,mts,cts}` so the agent must rely on the raw type surface alone.
 - `hint`: optional one-line author memo. NEVER read by the runner. `PromptSafeMeta` (`solve.ts`) structurally omits it from anything that reaches the agent prompt.
 - `aliases`: optional list of older problem IDs that were renamed to this one. Off-default for trend/diff aggregation; pass `--unify-aliases` to follow.
 
@@ -87,9 +87,9 @@ To prevent the ceiling-effect that comes from keeping uniformly-passing problems
 - **active** — `problems/<id>/` (default). Included in every `challenge:solve` run.
 - **archived** — `problems/archived/<id>/`. Excluded from `challenge:solve` by default. Re-included by `challenge:solve --include-archived` (re-run) and by `challenge:analyze --include-archived` (history). Trend lines stitch across the boundary because alias / archived metadata is still read.
 
-**Automatic graduation.** Solve completion runs `graduateProblems()` (`core/graduation.ts`). For every problem in the just-finished run the runner walks the 5 most recent reports in the same `(model, types-only)` group (including the new one) and moves `problems/<id>` → `problems/archived/<id>` when:
+**Automatic graduation.** Solve completion runs `graduateProblems()` (`core/graduation.ts`). For every problem in the just-finished run the runner walks the 5 most recent reports in the same `(model, no-docs)` group (including the new one) and moves `problems/<id>` → `problems/archived/<id>` when:
 
-- the run's `contextProfile === "types-only"` (the stricter profile drives the rule), AND
+- the run's `contextProfile === "no-docs"` (the stricter profile drives the rule), AND
 - every one of the 5 reports contains the problem with `passRate === 1.0` (uses `iterations.passRate` when present, else the binary `passed` field), AND
 - the **latest** report's `iterations.metricsStdev.turns / iterations.metricsMedian.turns < 0.1` (variance gate on the just-finished N=5 run; degenerate `median.turns === 0` resets the streak).
 
@@ -99,9 +99,9 @@ If a renamed successor exists for an archived problem, add the archived ID to th
 
 ## SDK Improvement Cycle
 
-1. `pnpm -C llm-challenge challenge:solve --context-profile types-only` (and again with `--context-profile full-package`)
-2. `pnpm challenge:analyze --trend --context-profile types-only` and `--context-profile full-package` to see pass-rate history per profile
-3. For problems where `full-package` passes but `types-only` fails (or where iteration pass rate is in `(0, 1)`), open the failing iteration's `trace.jsonl` and the per-attempt `work/` snapshot to identify the root cause manually
+1. `pnpm -C llm-challenge challenge:solve --context-profile no-docs` (and again with `--context-profile full`)
+2. `pnpm challenge:analyze --trend --context-profile no-docs` and `--context-profile full` to see pass-rate history per profile
+3. For problems where `full` passes but `no-docs` fails (or where iteration pass rate is in `(0, 1)`), open the failing iteration's `trace.jsonl` and the per-attempt `work/` snapshot to identify the root cause manually
 4. Propose SDK changes — prefer compile-time/JSDoc/error-message changes over docs-only fixes
 5. `pnpm -C packages/sdk build`, then re-run `challenge:solve` on the same `(model, profile)` to measure delta
 
@@ -112,7 +112,7 @@ A/B experiments via `pnpm challenge:experiment --sdk-branch <ref> --iterations <
 Reports and per-run work trees are isolated per `(model, context-profile)`, so multiple `pnpm challenge:solve` invocations can run concurrently from separate shells:
 
 ```bash
-for profile in types-only full-package; do
+for profile in full no-docs; do
   pnpm -C llm-challenge challenge:solve \
     --context-profile "$profile" \
     > ".agent/tmp/llm-challenge-logs/$profile.log" 2>&1 &
@@ -124,6 +124,6 @@ Caveats:
 
 - Pre-build the SDK once before launching parallel runs; concurrent builds race
 - Let the container image build finish on a single solve before fanning out
-- The ChatGPT subscription serialises requests through a per-user rate budget; N parallel solves divide effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `types-only` vs `full-package`) so the parallel work is genuinely independent.
+- The ChatGPT subscription serialises requests through a per-user rate budget; N parallel solves divide effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `full` vs `no-docs`) so the parallel work is genuinely independent.
 
 After parallel runs finish, use `pnpm -C llm-challenge challenge:analyze --groups` to list per-config groups and `--trend --context-profile <profile>` to inspect a single config's history.

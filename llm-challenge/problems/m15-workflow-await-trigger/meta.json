@@ -3,7 +3,7 @@
   "title": "Await a child job's .trigger() result inside a workflow",
   "designNote": "param_confusion",
   "sdkSurface": "workflow",
-  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": ["createWorkflowJob", "createWorkflow", ".trigger"],
   "biasAttractors": [
     ".execute",

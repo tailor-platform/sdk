@@ -3,7 +3,7 @@
   "title": "Chain three workflow jobs that share TailorDB state through getDB",
   "designNote": "context_bloat",
   "sdkSurface": "workflow + plugin + tailordb",
-  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "contextProfiles": ["full", "no-docs"],
   "canonicalSymbols": [
     "kyselyTypePlugin",
     "definePlugins",

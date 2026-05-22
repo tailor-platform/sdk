@@ -3,5 +3,5 @@
   "title": "Correct a kyselyTypePlugin import path that mimics a legacy package name",
   "designNote": "error_message_opaque",
   "sdkSurface": "cli-runtime",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["full", "no-docs"]
 }

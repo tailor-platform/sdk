@@ -107,7 +107,9 @@ function findActiveProblemDir(challengeRoot: string, problemId: string): string 
     const metaPath = path.join(problemsDir, ent.name, "meta.json");
     if (!fs.existsSync(metaPath)) continue;
     try {
-      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as { id?: string };
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as {
+        id?: string;
+      };
       if (meta.id === problemId) return ent.name;
     } catch {
       // tolerate; a malformed meta.json should not block scanning siblings
@@ -135,13 +137,13 @@ export function archiveProblemDir(challengeRoot: string, dirName: string): boole
 
 /**
  * Apply the graduation rule across every problem in `context.latestReport`.
- * Only solver runs on the `code-only` profile are eligible — the rule is
- * defined for the stricter profile, and verify / non-code-only runs do not
+ * Only solver runs on the `no-docs` profile are eligible — the rule is
+ * defined for the stricter profile, and verify / non-no-docs runs do not
  * carry the right signal.
  */
 export function graduateProblems(context: GraduationContext): GraduationOutcome {
   const report = context.latestReport;
-  if (report.contextProfile !== "code-only") return { graduated: [] };
+  if (report.contextProfile !== "no-docs") return { graduated: [] };
   if (!report.model) return { graduated: [] };
   if (report.sdkBranch) return { graduated: [] };
 
