@@ -426,7 +426,6 @@ export type DiffRow = {
     turns: number | null;
     readSdkDts: number | null;
     readDocs: number | null;
-    bashRetries: number | null;
   };
   readDeltas: Record<ReadTargetClass, number | null>;
 };
@@ -590,7 +589,6 @@ export function computeReportDiff(
       turns: null,
       readSdkDts: null,
       readDocs: null,
-      bashRetries: null,
     };
     if (a && b) {
       for (const k of ITERATION_METRIC_KEYS) {

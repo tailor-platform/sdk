@@ -32,7 +32,7 @@ import {
   isContextProfile,
 } from "./context-profile";
 import { graduateProblems } from "./graduation";
-import { type TraceMetrics, computeLocStats, computeTraceMetrics } from "./metrics";
+import { type TraceMetrics, computeTraceMetrics } from "./metrics";
 import { computeCanonicalnessStats } from "./metrics-canonicalness";
 import {
   type ChallengeReport,
@@ -827,23 +827,7 @@ async function runProblem(
       // then drop the file with workDir.
       metrics = computeTraceMetrics(traceWorkPath);
     }
-    // Measure LoC delta against the scaffold tree (the input the AI saw).
-    // Built lazily in a tmpdir from the same layers setupWorkDir uses so a
-    // raw `problems/<id>/scaffold` (which lacks shared layers) does not skew
-    // the count. Skip on infra failure since workDir may be empty.
     if (metrics && !solveResult.infraFailure) {
-      const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "llm-loc-base-"));
-      try {
-        applyScaffoldLayers(tmpBase, [
-          path.join(challengeRoot, "shared", "scaffold"),
-          path.join(challengeRoot, "problems", "_shared", "scaffold"),
-          path.join(problemDir, "scaffold"),
-        ]);
-        const loc = computeLocStats(tmpBase, workDir);
-        metrics = { ...metrics, ...loc };
-      } finally {
-        fs.rmSync(tmpBase, { recursive: true, force: true });
-      }
       // Canonicalness: walk the work tree, classify @tailor-platform/* imports.
       // Ratio of 1.0 = every import is canonical; lower = invented or internal
       // sub-paths. Cheap regex scan, no AST.

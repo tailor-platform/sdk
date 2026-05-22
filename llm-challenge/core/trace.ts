@@ -128,9 +128,8 @@ function pickString(value: unknown): string | undefined {
  *   double-counting in {@link aggregateTraceMetrics}.
  *
  * Tool names are mapped to Pascal-case (`Bash`, `Edit`, `WebSearch`, …) so
- * the downstream `metrics.ts BASH_RETRY_COMMANDS` matcher (which compares
- * against the literal `"Bash"`) and per-tool counts stay stable across
- * agent rewrites.
+ * the downstream per-tool counts in `metrics.ts` stay stable across agent
+ * rewrites.
  */
 export function parseCodexStreamLine(line: string): TraceEvent | null {
   const trimmed = line.trim();

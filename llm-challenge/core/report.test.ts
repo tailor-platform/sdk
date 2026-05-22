@@ -28,7 +28,6 @@ function mkMetrics(partial: Partial<TraceMetrics>): TraceMetrics {
     readTargets: emptyReadTargets(),
     readSdkDts: 0,
     readDocs: 0,
-    bashRetries: 0,
     ...partial,
   };
 }
@@ -571,7 +570,6 @@ describe("formatReportTable", () => {
           toolCallCounts: { Read: 5, Bash: 3, Edit: 4 },
           readSdkDts: 4,
           readDocs: 2,
-          bashRetries: 3,
         }),
       }),
     ]);
@@ -581,7 +579,6 @@ describe("formatReportTable", () => {
     expect(table).toContain("turns=12");
     expect(table).toContain("read_sdk=4");
     expect(table).toContain("read_docs=2");
-    expect(table).toContain("bash_retries=3");
   });
 
   it("suppresses the trace line when all metric counters are zero", () => {
@@ -609,7 +606,6 @@ describe("formatReportTable", () => {
           toolCallCounts: { Read: 4, Bash: 2, Edit: 2 },
           readSdkDts: 2,
           readDocs: 1,
-          bashRetries: 1,
         }),
       }),
       makeProblemResult({
@@ -621,7 +617,6 @@ describe("formatReportTable", () => {
           toolCallCounts: { Read: 8, Bash: 4, Edit: 2 },
           readSdkDts: 4,
           readDocs: 0,
-          bashRetries: 3,
         }),
       }),
     ]);
@@ -689,7 +684,6 @@ describe("aggregateIterations", () => {
           turns: 10,
           readSdkDts: 2,
           readDocs: 1,
-          bashRetries: 0,
         }),
       }),
       makeProblemResult({
@@ -701,7 +695,6 @@ describe("aggregateIterations", () => {
           turns: 14,
           readSdkDts: 3,
           readDocs: 1,
-          bashRetries: 2,
         }),
       }),
       makeProblemResult({
@@ -713,7 +706,6 @@ describe("aggregateIterations", () => {
           turns: 12,
           readSdkDts: 4,
           readDocs: 1,
-          bashRetries: 1,
         }),
       }),
     ];
@@ -804,7 +796,6 @@ describe("formatReportTable (iterations)", () => {
           turns: 12,
           readSdkDts: 3,
           readDocs: 2,
-          bashRetries: 4,
           "sdk-dts": 3,
           "sdk-package-src": 0,
           "sdk-docs": 2,
@@ -815,7 +806,6 @@ describe("formatReportTable (iterations)", () => {
           turns: 1.8,
           readSdkDts: 0.5,
           readDocs: 0,
-          bashRetries: 2.1,
           "sdk-dts": 0.5,
           "sdk-package-src": 0,
           "sdk-docs": 0,
@@ -829,7 +819,7 @@ describe("formatReportTable (iterations)", () => {
     expect(table).toContain("iter pass=2/3 (67%)");
     expect(table).not.toContain("cost_median");
     expect(table).toContain("turns=12.0±1.8");
-    expect(table).toContain("bash_retries=4.0±2.1");
+    expect(table).toContain("read_sdk=3.0±0.5");
   });
 
   it("omits the iteration aggregate line for single-iteration results", () => {
@@ -893,7 +883,6 @@ describe("persistent failures", () => {
             turns: 0,
             readSdkDts: 0,
             readDocs: 0,
-            bashRetries: 0,
             "sdk-dts": 0,
             "sdk-package-src": 0,
             "sdk-docs": 0,
@@ -904,7 +893,6 @@ describe("persistent failures", () => {
             turns: 0,
             readSdkDts: 0,
             readDocs: 0,
-            bashRetries: 0,
             "sdk-dts": 0,
             "sdk-package-src": 0,
             "sdk-docs": 0,

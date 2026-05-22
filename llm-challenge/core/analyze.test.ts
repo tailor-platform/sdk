@@ -28,7 +28,6 @@ function mkMetrics(partial: Partial<TraceMetrics>): TraceMetrics {
     readTargets: emptyReadTargets(),
     readSdkDts: 0,
     readDocs: 0,
-    bashRetries: 0,
     ...partial,
   };
 }
@@ -45,7 +44,6 @@ function mkIterMetrics(
     turns: 0,
     readSdkDts: 0,
     readDocs: 0,
-    bashRetries: 0,
     "sdk-dts": 0,
     "sdk-package-src": 0,
     "sdk-docs": 0,
@@ -109,7 +107,6 @@ function makeIterResult(
         turns: 10,
         readSdkDts: 3,
         readDocs: 1,
-        bashRetries: 1,
       }),
       metricsStdev: mkIterMetrics({}),
     },
@@ -261,7 +258,6 @@ describe("computeReportDiff", () => {
               turns: 15,
               readSdkDts: 5,
               readDocs: 2,
-              bashRetries: 3,
             }),
             metricsStdev: mkIterMetrics({}),
           },
@@ -281,7 +277,6 @@ describe("computeReportDiff", () => {
               turns: 10,
               readSdkDts: 3,
               readDocs: 2,
-              bashRetries: 1,
             }),
             metricsStdev: mkIterMetrics({}),
           },
@@ -292,7 +287,6 @@ describe("computeReportDiff", () => {
     const diff = computeReportDiff(reportA, reportB);
     expect(diff.rows[0]!.metricsDelta.turns).toBe(-5);
     expect(diff.rows[0]!.metricsDelta.readSdkDts).toBe(-2);
-    expect(diff.rows[0]!.metricsDelta.bashRetries).toBe(-2);
     expect(diff.rows[0]!.metricsDelta.readDocs).toBe(0);
   });
 
@@ -304,7 +298,6 @@ describe("computeReportDiff", () => {
             turns: 20,
             readSdkDts: 5,
             readDocs: 2,
-            bashRetries: 3,
           }),
         }),
       ],
@@ -316,7 +309,6 @@ describe("computeReportDiff", () => {
             turns: 10,
             readSdkDts: 2,
             readDocs: 1,
-            bashRetries: 1,
           }),
         }),
       ],
@@ -334,7 +326,6 @@ describe("computeReportDiff", () => {
     expect(diff.rows[0]!.metricsDelta.turns).toBeNull();
     expect(diff.rows[0]!.metricsDelta.readSdkDts).toBeNull();
     expect(diff.rows[0]!.metricsDelta.readDocs).toBeNull();
-    expect(diff.rows[0]!.metricsDelta.bashRetries).toBeNull();
   });
 
   it("computes per-bucket readTargets deltas when iteration medians have per-class fields", () => {
@@ -412,7 +403,6 @@ describe("computeReportDiff", () => {
             },
             readSdkDts: 0,
             readDocs: 0,
-            bashRetries: 2,
           },
         }),
       ],
@@ -432,7 +422,6 @@ describe("computeReportDiff", () => {
             },
             readSdkDts: 0,
             readDocs: 3,
-            bashRetries: 4,
           },
         }),
       ],
@@ -459,7 +448,6 @@ describe("computeReportDiff", () => {
             readTargets: undefined as unknown as TraceMetrics["readTargets"],
             readSdkDts: 0,
             readDocs: 3,
-            bashRetries: 4,
           },
         }),
       ],

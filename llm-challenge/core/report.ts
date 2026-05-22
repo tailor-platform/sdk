@@ -36,8 +36,8 @@ export type ProblemArtifacts = {
  *
  * `passRate` is the fraction of iterations that passed (passedCount / count).
  * `metricsMedian` / `metricsStdev` summarise the behavioural counters
- * (`turns`, `readSdkDts`, `readDocs`, `bashRetries`) AND the five per-class
- * `readTargets` buckets ({@link ReadTargetClass}).
+ * (`turns`, `readSdkDts`, `readDocs`) AND the five per-class `readTargets`
+ * buckets ({@link ReadTargetClass}).
  */
 export type IterationAggregate = {
   count: number;
@@ -48,13 +48,11 @@ export type IterationAggregate = {
     turns: number;
     readSdkDts: number;
     readDocs: number;
-    bashRetries: number;
   } & Record<ReadTargetClass, number>;
   metricsStdev: {
     turns: number;
     readSdkDts: number;
     readDocs: number;
-    bashRetries: number;
   } & Record<ReadTargetClass, number>;
 };
 
@@ -215,7 +213,7 @@ function stdev(values: number[]): number {
  * sdkSurface, etc.) is preserved for table rendering; the multi-iteration
  * payload lives under the new `iterations` field.
  */
-export const ITERATION_METRIC_KEYS = ["turns", "readSdkDts", "readDocs", "bashRetries"] as const;
+export const ITERATION_METRIC_KEYS = ["turns", "readSdkDts", "readDocs"] as const;
 export type IterationMetricKey = (typeof ITERATION_METRIC_KEYS)[number];
 
 export function aggregateIterations(perIteration: ProblemResult[]): ProblemResult {
@@ -235,7 +233,6 @@ export function aggregateIterations(perIteration: ProblemResult[]): ProblemResul
     turns: [],
     readSdkDts: [],
     readDocs: [],
-    bashRetries: [],
   };
   const readTargetValues: Record<ReadTargetClass, number[]> = {
     "sdk-dts": [],
@@ -261,7 +258,6 @@ export function aggregateIterations(perIteration: ProblemResult[]): ProblemResul
     turns: fn(metricsValues.turns),
     readSdkDts: fn(metricsValues.readSdkDts),
     readDocs: fn(metricsValues.readDocs),
-    bashRetries: fn(metricsValues.bashRetries),
     "sdk-dts": fn(readTargetValues["sdk-dts"]),
     "sdk-package-src": fn(readTargetValues["sdk-package-src"]),
     "sdk-docs": fn(readTargetValues["sdk-docs"]),
@@ -608,7 +604,6 @@ export function formatReportTable(report: ChallengeReport): string {
     lines.push(fmt("turns", analytics.metricsSummary.turns));
     lines.push(fmt("readSdkDts", analytics.metricsSummary.readSdkDts));
     lines.push(fmt("readDocs", analytics.metricsSummary.readDocs));
-    lines.push(fmt("bashRetries", analytics.metricsSummary.bashRetries));
   }
 
   return lines.join("\n");
@@ -618,15 +613,15 @@ export function formatReportTable(report: ChallengeReport): string {
  * Format an iteration aggregate as 1-2 short lines suitable for inclusion in
  * the per-problem table. Returns undefined when no iterations data exists.
  *
- *   iter pass=2/3 (67%) cost_median=$0.0234 cost_stdev=$0.0012
- *   iter turns=12±1.8 read_sdk=3±0.5 read_docs=2±0.0 bash_retries=4±2.1
+ *   iter pass=2/3 (67%)
+ *   iter turns=12±1.8 read_sdk=3±0.5 read_docs=2±0.0
  */
 function formatIterationSummary(iterations?: IterationAggregate): string[] | undefined {
   if (!iterations || iterations.count <= 1) return undefined;
   const passPct = Math.round(iterations.passRate * 100);
   const lines: string[] = [];
   lines.push(`iter pass=${iterations.passedCount}/${iterations.count} (${passPct}%)`);
-  const fmt = (key: "turns" | "readSdkDts" | "readDocs" | "bashRetries", label: string): string => {
+  const fmt = (key: "turns" | "readSdkDts" | "readDocs", label: string): string => {
     const med = iterations.metricsMedian[key];
     const sd = iterations.metricsStdev[key];
     // turns is the only integer-y value; we still show one decimal for stdev so
@@ -634,33 +629,27 @@ function formatIterationSummary(iterations?: IterationAggregate): string[] | und
     return `${label}=${med.toFixed(1)}±${sd.toFixed(1)}`;
   };
   lines.push(
-    `iter ${fmt("turns", "turns")} ${fmt("readSdkDts", "read_sdk")} ${fmt("readDocs", "read_docs")} ${fmt("bashRetries", "bash_retries")}`,
+    `iter ${fmt("turns", "turns")} ${fmt("readSdkDts", "read_sdk")} ${fmt("readDocs", "read_docs")}`,
   );
   return lines;
 }
 
 /**
  * Format a problem's metrics as a single space-separated line, e.g.
- *   turns=12 read_sdk=4 read_docs=2 bash_retries=3
+ *   turns=12 read_sdk=4 read_docs=2
  * Returns undefined when there are no metrics to surface.
  */
 function formatProblemMetrics(metrics?: TraceMetrics): string | undefined {
   if (!metrics) return undefined;
   // Suppress when every counter is zero — for `--use-solution` runs the trace
   // file may exist but contain no events.
-  if (
-    metrics.turns === 0 &&
-    metrics.readSdkDts === 0 &&
-    metrics.readDocs === 0 &&
-    metrics.bashRetries === 0
-  ) {
+  if (metrics.turns === 0 && metrics.readSdkDts === 0 && metrics.readDocs === 0) {
     return undefined;
   }
   const parts = [
     `turns=${metrics.turns}`,
     `read_sdk=${metrics.readSdkDts}`,
     `read_docs=${metrics.readDocs}`,
-    `bash_retries=${metrics.bashRetries}`,
   ];
   return parts.join(" ");
 }

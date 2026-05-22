@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import type { TraceEvent } from "./trace";
 
@@ -125,8 +124,6 @@ export function classifyReadTarget(filePath: string): ReadTargetClass {
  *   so older analysers and report renderers still work.
  * - `readDocs`: derived; equals `readTargets["sdk-docs"]`. Same back-compat
  *   rationale.
- * - `bashRetries`: how many `Bash` calls re-ran `tsc` / `vitest` /
- *   `tailor-sdk generate` / `pnpm test`. Proxy for compile/test loops.
  * - `totalDurationMs`: sum of per-event durations when the adapter surfaces
  *   them (not currently populated by the Claude or Codex parsers; reserved
  *   for future extension).
@@ -150,19 +147,7 @@ export type TraceMetrics = {
   readTargets: Record<ReadTargetClass, number>;
   readSdkDts: number;
   readDocs: number;
-  bashRetries: number;
   totalDurationMs?: number;
-  /**
-   * `git diff --no-index --shortstat <scaffold> <workDir>` after solve.
-   * Surfaces the size of the AI's edit relative to the input scaffold so
-   * "passing but verbose" solutions can be told apart from minimal ones.
-   * All three default to 0 when the diff cannot be computed (e.g. work
-   * tree missing on infra failure). Optional on the wire so older reports
-   * remain backwards-compatible.
-   */
-  linesAdded?: number;
-  linesRemoved?: number;
-  filesChanged?: number;
   /**
    * Ratio of canonical `@tailor-platform/sdk` (incl. canonical sub-paths)
    * imports over all `@tailor-platform/...` imports in the AI's work tree.
@@ -172,14 +157,6 @@ export type TraceMetrics = {
    */
   canonicalImportRatio?: number;
 };
-
-const BASH_RETRY_COMMANDS = [
-  /\btsc\b/,
-  /\bvitest\b/,
-  /\btailor-sdk\s+generate\b/,
-  /\bpnpm\s+test\b/,
-  /\bpnpm\s+typecheck\b/,
-];
 
 function emptyReadTargets(): Record<ReadTargetClass, number> {
   return {
@@ -199,11 +176,6 @@ function emptyMetrics(): TraceMetrics {
     readTargets: emptyReadTargets(),
     readSdkDts: 0,
     readDocs: 0,
-    bashRetries: 0,
-    // linesAdded/Removed/filesChanged left undefined here; populated by the
-    // caller after `computeLocStats`. Leaving them undefined keeps the
-    // computeTraceMetrics output shape backwards-compatible (older reports
-    // never carried these fields).
   };
 }
 
@@ -230,13 +202,6 @@ export function aggregateTraceMetrics(events: Iterable<TraceEvent>): TraceMetric
         metrics.readTargets[bucket] += 1;
       }
     }
-
-    if (event.name === "Bash") {
-      const command = pickString(event.input["command"]) ?? "";
-      if (BASH_RETRY_COMMANDS.some((p) => p.test(command))) {
-        metrics.bashRetries += 1;
-      }
-    }
   }
   // Derive legacy buckets from the new fine-grained map so back-compat
   // readers (older report renderers, analyse tool) keep working.
@@ -247,46 +212,6 @@ export function aggregateTraceMetrics(events: Iterable<TraceEvent>): TraceMetric
   // analyzers comparing across agents should use this name.
   metrics.toolUseCount = metrics.turns;
   return metrics;
-}
-
-export type LocStats = { linesAdded: number; linesRemoved: number; filesChanged: number };
-
-/**
- * Parse a `git diff --shortstat` summary line into a structured count.
- * Exposed for unit testing; production callers should prefer
- * {@link computeLocStats}.
- */
-export function parseShortstat(stdout: string): LocStats {
-  const match = stdout.match(
-    /(\d+)\s+files?\s+changed(?:,\s+(\d+)\s+insertion[^,]*)?(?:,\s+(\d+)\s+deletion)?/,
-  );
-  if (!match) return { linesAdded: 0, linesRemoved: 0, filesChanged: 0 };
-  return {
-    filesChanged: Number.parseInt(match[1] ?? "0", 10),
-    linesAdded: Number.parseInt(match[2] ?? "0", 10),
-    linesRemoved: Number.parseInt(match[3] ?? "0", 10),
-  };
-}
-
-/**
- * Run `git diff --no-index --shortstat <baseDir> <workDir>` to measure the
- * size of the AI's edit relative to a baseline tree. Silent fallback to
- * zeros when either side is missing or git is unavailable.
- */
-export function computeLocStats(baseDir: string, workDir: string): LocStats {
-  if (!fs.existsSync(baseDir) || !fs.existsSync(workDir)) {
-    return { linesAdded: 0, linesRemoved: 0, filesChanged: 0 };
-  }
-  const r = spawnSync("git", ["diff", "--no-index", "--shortstat", "--", baseDir, workDir], {
-    encoding: "utf-8",
-    maxBuffer: 10 * 1024 * 1024,
-  });
-  // git diff exits 0 (no diff) or 1 (diff) for normal operation; >=2 is an
-  // error we want to surface as zeros rather than crashing the run.
-  if (r.status !== 0 && r.status !== 1) {
-    return { linesAdded: 0, linesRemoved: 0, filesChanged: 0 };
-  }
-  return parseShortstat(r.stdout ?? "");
 }
 
 /**
@@ -328,10 +253,6 @@ export type MetricsSummary = {
   toolUseCount: MetricsAggregate;
   readSdkDts: MetricsAggregate;
   readDocs: MetricsAggregate;
-  bashRetries: MetricsAggregate;
-  linesAdded: MetricsAggregate;
-  linesRemoved: MetricsAggregate;
-  filesChanged: MetricsAggregate;
   canonicalImportRatio: MetricsAggregate;
   /** Per-tool call counts aggregated as min/max/median across runs. */
   toolCalls: Record<string, MetricsAggregate>;
@@ -373,10 +294,6 @@ export function summarizeMetrics(metricsList: TraceMetrics[]): MetricsSummary | 
     toolUseCount: aggregate(metricsList.map((m) => m.toolUseCount ?? m.turns)),
     readSdkDts: aggregate(metricsList.map((m) => m.readSdkDts)),
     readDocs: aggregate(metricsList.map((m) => m.readDocs)),
-    bashRetries: aggregate(metricsList.map((m) => m.bashRetries)),
-    linesAdded: aggregate(metricsList.map((m) => m.linesAdded ?? 0)),
-    linesRemoved: aggregate(metricsList.map((m) => m.linesRemoved ?? 0)),
-    filesChanged: aggregate(metricsList.map((m) => m.filesChanged ?? 0)),
     canonicalImportRatio: aggregate(metricsList.map((m) => m.canonicalImportRatio ?? 1.0)),
     toolCalls,
   };

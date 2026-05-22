@@ -29,7 +29,7 @@ describe("parseCodexStreamLine", () => {
     ).toBeNull();
   });
 
-  it("maps command_execution onto a Bash tool_use so BASH_RETRY_COMMANDS still match", () => {
+  it("maps command_execution onto a Bash tool_use", () => {
     const line = JSON.stringify({
       type: "item.completed",
       item: {

@@ -114,7 +114,6 @@ When `--solve` runs, codex is invoked with `exec --json` and every `item.complet
 - `toolCallCounts` — per-tool frequencies (`Read`, `Bash`, `Edit`, …).
 - `readSdkDts` — `Read` hits on `node_modules/@tailor-platform/sdk/**/*.d.ts`.
 - `readDocs` — `Read` hits on `docs/` or `README*`.
-- `bashRetries` — `Bash` invocations of `tsc` / `vitest` / `tailor-sdk generate` / `pnpm test` (loop detector).
 - `canonicalImportRatio` — fraction of `@tailor-platform/*` imports in the final work tree that use the canonical sub-path. Computed by [`core/metrics-canonicalness.ts`](core/metrics-canonicalness.ts) by scanning all `.ts`/`.tsx` files. Counts paths under `@tailor-platform/sdk/` (excluding `dist/`/`src/` internal reaches) as canonical, and flags invented peer packages (e.g. `@tailor-platform/kysely-types`) or deep-path leaks as non-canonical. `1.0` means every SDK import goes through the public surface; lower values surface hallucinated paths.
 
 Aggregated min/median/max/mean across the run land in `analytics.metricsSummary` of the report.
@@ -125,11 +124,11 @@ Each run writes `results/<model-context-profile>/report-<sdkVersion>-<runId>.jso
 
 - `results[]` — per-problem result (`problemId`, `passed`, `stages[]`, `metrics?`, `solveResult?`).
 - `analytics.stagePassRates` — pass rate per stage across the run.
-- `analytics.metricsSummary` — min/median/max/mean of `turns`, `readSdkDts`, `readDocs`, `bashRetries` across problems with traces.
+- `analytics.metricsSummary` — min/median/max/mean of `turns`, `readSdkDts`, `readDocs` across problems with traces.
 - `usageSummary` — aggregate `inputTokens` / `outputTokens` / `cacheReadTokens` / `numTurns` (context-bloat sensor).
 - `model`, `contextProfile`, `sdkVersion`, `timestamp` — one-liner metadata for trend grouping.
 
-The terminal table summarises per-problem stage status and the trace line (`turns=… read_sdk=… read_docs=… bash_retries=…`).
+The terminal table summarises per-problem stage status and the trace line (`turns=… read_sdk=… read_docs=…`).
 
 ## A/B Experiments
 
