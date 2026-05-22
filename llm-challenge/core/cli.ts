@@ -152,7 +152,7 @@ type ParsedArgs = {
   /**
    * Number of repeat solve attempts per (problem, effort, profile).
    * Number of iterations to run per (problem, effort, profile). Defaults to
-   * 5 in solve mode and 1 in verify mode. Every iteration runs unconditionally
+   * 3 in solve mode and 1 in verify mode. Every iteration runs unconditionally
    * — there is no early-stop or auto-extend.
    */
   iterations: number;
@@ -286,9 +286,9 @@ function parseArgs(): ParsedArgs {
     console.error("Error: --concurrency must be a positive integer");
     process.exit(1);
   }
-  // --iterations: default to 5 in solve mode, 1 in verify modes.
+  // --iterations: default to 3 in solve mode, 1 in verify modes.
   if (iterations === undefined) {
-    iterations = solve ? 5 : 1;
+    iterations = solve ? 3 : 1;
   }
   if (!Number.isInteger(iterations) || iterations < 1) {
     console.error("Error: --iterations must be a positive integer");

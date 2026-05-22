@@ -85,7 +85,7 @@ pnpm challenge:analyze --trend --context-profile code-only
 - `--max-seconds <n>` — per-problem wall-clock cap in seconds (default `3600`). Replaces the legacy `--max-budget` flag.
 - `--context-profile <code-only|code-and-docs>` — what slice of the SDK is exposed inside the work tree. `code-only` is the API-design baseline; `code-and-docs` ships the whole tarball.
 - `--concurrency <n>` — parallel problems (default `1`). The ChatGPT subscription enforces a per-user rate budget, so raising this above 1 is only useful when running against a higher tier or an independent account.
-- `--iterations <n>` — repeat each `(problem, effort, profile)` task N times for variance bounds (default: `5` in solve mode, `1` in verify mode). When N > 1 the report's `results[].iterations` block carries pass rate and median±stdev for the behavioural metrics.
+- `--iterations <n>` — repeat each `(problem, effort, profile)` task N times for variance bounds (default: `3` in solve mode, `1` in verify mode). When N > 1 the report's `results[].iterations` block carries pass rate and median±stdev for the behavioural metrics.
 - `--sdk-branch <ref>` — pack the SDK from a git ref instead of the current working tree. Spawns a detached `git worktree`, builds the SDK there, and `pnpm pack`s the result. Requires `--solve`.
 - `--clean` — remove work directories after the run.
 - `--include-archived` — include problems under `problems/archived/` in the run. Off by default; use when re-evaluating a graduated problem after an SDK change.
@@ -145,7 +145,7 @@ pnpm challenge:experiment --sdk-branch feat/exec-description-required \
 
 This:
 
-1. Runs the full problem set against the **current working tree** (baseline) with N iterations per problem. Default `N = 5`.
+1. Runs the full problem set against the **current working tree** (baseline) with N iterations per problem. Default `N = 3`.
 2. `git worktree add`s the `--sdk-branch` ref into `.agent/tmp/sdk-branch-<ref>-XXXXXX/`, builds the SDK there, `pnpm pack`s it, then runs the same problem set against that tarball.
 3. Writes `results/experiments/<exp-id>/{baseline,candidate,delta}.json` where `delta.json` is the structured A/B diff (per-problem `passRateDelta`, `metricsDelta`, `readDeltas`).
 
@@ -208,7 +208,7 @@ Solve runs persist per-problem evidence under `results/artifacts/<run>/<problem>
 - `attempt-0/trace.jsonl` — the behaviour trace stream.
 - `attempt-0/work/` — final work tree snapshot (excludes `node_modules/`, `.sdk/`, `.git/`).
 
-When `--iterations N` is set (default `N = 5`), per-iteration artifacts live under `iter-0/`, `iter-1/`, … each carrying the same `attempt-0/` shape.
+When `--iterations N` is set (default `N = 3`), per-iteration artifacts live under `iter-0/`, `iter-1/`, … each carrying the same `attempt-0/` shape.
 
 ## Parallel Runs
 
