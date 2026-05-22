@@ -3,5 +3,17 @@
   "title": "Default-export a tailor.config.ts wrapped in defineConfig()",
   "designNote": "naming_bias",
   "sdkSurface": "config",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": ["defineConfig"],
+  "biasAttractors": [
+    "createConfig",
+    "defineApp",
+    "defineTailor",
+    "defineProject",
+    "tailorConfig",
+    "configure"
+  ],
+  "expectedCallShapes": {
+    "defineConfig": { "positionalArity": 1, "configKeys": ["name", "db"] }
+  }
 }

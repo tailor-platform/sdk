@@ -3,5 +3,19 @@
   "title": "Define a composite [status, createdAt] index on the Order model",
   "designNote": "docs_only",
   "sdkSurface": "db-type",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".indexes"],
+  "biasAttractors": [
+    "defineIndex",
+    "defineIndexes",
+    "createIndex",
+    ".index",
+    ".compositeIndex",
+    ".multiIndex",
+    ".unique"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".indexes": { "positionalArity": 1, "configKeys": ["fields", "unique"] }
+  }
 }

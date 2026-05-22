@@ -3,5 +3,21 @@
   "title": "Write an optional string array field using db.string options",
   "designNote": "naming_bias",
   "sdkSurface": "db-field",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".string"],
+  "biasAttractors": [
+    "defineType",
+    "defineModel",
+    "createType",
+    "db.list",
+    "db.text",
+    "db.strings",
+    ".array",
+    ".optional",
+    ".nullable"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".string": { "positionalArity": 1, "configKeys": ["array", "optional"] }
+  }
 }

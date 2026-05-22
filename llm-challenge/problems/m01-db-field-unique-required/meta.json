@@ -3,5 +3,21 @@
   "title": "Add a required + unique string field to a TailorDB model",
   "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".string", ".unique"],
+  "biasAttractors": [
+    "defineType",
+    "defineModel",
+    "createType",
+    ".required",
+    ".notNull",
+    ".primary",
+    "db.text",
+    "db.varchar"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".string": { "positionalArity": 0 },
+    ".unique": { "positionalArity": 0 }
+  }
 }

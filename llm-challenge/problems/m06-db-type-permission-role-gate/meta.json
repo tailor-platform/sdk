@@ -3,5 +3,22 @@
   "title": "Gate read/create to logged-in users and update/delete to ADMIN role",
   "designNote": "type_too_strict",
   "sdkSurface": "db-type",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".string", ".permission"],
+  "biasAttractors": [
+    "definePermission",
+    "createPermission",
+    ".policy",
+    ".access",
+    ".acl",
+    ".rbac",
+    ".can",
+    ".allow",
+    "defineRole"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".string": { "positionalArity": 0 },
+    ".permission": { "positionalArity": 1 }
+  }
 }

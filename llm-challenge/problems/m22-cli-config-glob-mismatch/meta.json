@@ -4,5 +4,10 @@
   "designNote": "context_bloat",
   "sdkSurface": "cli-runtime",
   "contextProfiles": ["full", "no-docs"],
-  "aliases": ["m22-cli-error-stdout-buffering"]
+  "aliases": ["m22-cli-error-stdout-buffering"],
+  "canonicalSymbols": ["defineConfig"],
+  "biasAttractors": ["createConfig", "defineApp", "defineTailor", "defineProject"],
+  "expectedCallShapes": {
+    "defineConfig": { "positionalArity": 1, "configKeys": ["name", "db"] }
+  }
 }

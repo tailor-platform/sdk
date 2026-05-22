@@ -3,5 +3,19 @@
   "title": "Name both sides of a many-to-one relation via toward.as and backward",
   "designNote": "naming_bias",
   "sdkSurface": "db-type",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".uuid", ".relation"],
+  "biasAttractors": [
+    "defineRelation",
+    ".references",
+    ".belongsTo",
+    ".hasMany",
+    ".hasOne",
+    ".inverse"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".uuid": { "positionalArity": 0 },
+    ".relation": { "positionalArity": 1, "configKeys": ["type", "toward", "backward"] }
+  }
 }

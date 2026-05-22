@@ -3,5 +3,26 @@
   "title": "Compose a resolver mutation that runs TailorDB field validators before reporting structured results",
   "designNote": "param_confusion",
   "sdkSurface": "resolver + db-type",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": ["createResolver", ".type", ".validate", ".parse"],
+  "biasAttractors": [
+    "defineResolver",
+    "defineQuery",
+    "createQuery",
+    "resolver(",
+    "createMutation",
+    "defineMutation",
+    ".check",
+    ".refine",
+    ".verify"
+  ],
+  "expectedCallShapes": {
+    "createResolver": {
+      "positionalArity": 1,
+      "configKeys": ["name", "operation", "input", "output", "body"]
+    },
+    ".type": { "positionalArity": 2 },
+    ".validate": { "positionalArity": 1 },
+    ".parse": { "positionalArity": 1 }
+  }
 }

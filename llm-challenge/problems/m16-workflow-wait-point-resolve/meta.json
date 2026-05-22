@@ -3,5 +3,24 @@
   "title": "Define a typed wait point and use it to gate a workflow job",
   "designNote": "missing_action_verb",
   "sdkSurface": "workflow",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": ["createWorkflowJob", "createWorkflow", ".wait"],
+  "biasAttractors": [
+    "defineWorkflow",
+    "defineApproval",
+    "createWaitPoint",
+    "useWaitPoint",
+    "approvalGate",
+    "createJob",
+    "defineJob",
+    ".suspend",
+    ".pause",
+    ".await",
+    ".block"
+  ],
+  "expectedCallShapes": {
+    "createWorkflowJob": { "positionalArity": 1, "configKeys": ["name", "body"] },
+    "createWorkflow": { "positionalArity": 1, "configKeys": ["name", "mainJob"] },
+    ".wait": { "positionalArity": 1 }
+  }
 }

@@ -3,5 +3,20 @@
   "title": "Fix an implicit any on the resolver context by completing the resolver schema",
   "designNote": "type_too_loose",
   "sdkSurface": "cli-runtime",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": ["createResolver"],
+  "biasAttractors": [
+    "defineResolver",
+    "defineQuery",
+    "createQuery",
+    "resolver(",
+    "queryResolver",
+    "createHandler"
+  ],
+  "expectedCallShapes": {
+    "createResolver": {
+      "positionalArity": 1,
+      "configKeys": ["name", "operation", "input", "output", "body"]
+    }
+  }
 }

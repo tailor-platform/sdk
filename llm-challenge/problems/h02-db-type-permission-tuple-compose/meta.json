@@ -3,5 +3,20 @@
   "title": "Compose two AND-ed conditions in a single update permission policy",
   "designNote": "type_too_strict",
   "sdkSurface": "db-type",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".permission"],
+  "biasAttractors": [
+    "definePermission",
+    "createPermission",
+    ".policy",
+    ".access",
+    ".acl",
+    "defineRole",
+    ".guard",
+    ".rule"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".permission": { "positionalArity": 1 }
+  }
 }

@@ -3,5 +3,21 @@
   "title": "Attach a type-level validate rule with a custom error message",
   "designNote": "param_confusion",
   "sdkSurface": "db-field",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".float", ".validate"],
+  "biasAttractors": [
+    "defineType",
+    "defineValidator",
+    "createValidator",
+    ".rule",
+    ".check",
+    ".refine",
+    ".assert",
+    ".validates"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".float": { "positionalArity": 0 },
+    ".validate": { "positionalArity": 1 }
+  }
 }

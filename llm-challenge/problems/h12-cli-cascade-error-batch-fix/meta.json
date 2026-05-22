@@ -3,5 +3,11 @@
   "title": "Fix the same archaic db.text() call across three sibling tailordb files in one pass",
   "designNote": "redundant_call_pattern",
   "sdkSurface": "cli",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".string"],
+  "biasAttractors": ["db.text", "db.varchar", "db.char", "db.str", "db.longText"],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".string": { "positionalArity": 0 }
+  }
 }

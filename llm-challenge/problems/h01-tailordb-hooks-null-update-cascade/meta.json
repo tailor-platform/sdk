@@ -3,5 +3,20 @@
   "title": "Handle nullable inputs in update hooks across multiple fields",
   "designNote": "implicit_assumption",
   "sdkSurface": "db-type",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".hooks"],
+  "biasAttractors": [
+    "defineHook",
+    "defineHooks",
+    "createHook",
+    ".onUpdate",
+    ".beforeUpdate",
+    ".afterUpdate",
+    ".transform",
+    ".mutate"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".hooks": { "positionalArity": 1 }
+  }
 }

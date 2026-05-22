@@ -3,5 +3,21 @@
   "title": "Normalize slug to lowercase via a type-level create hook",
   "designNote": "naming_bias",
   "sdkSurface": "db-type",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".string", ".hooks"],
+  "biasAttractors": [
+    "defineHook",
+    "defineHooks",
+    "createHook",
+    ".onCreate",
+    ".beforeCreate",
+    ".afterCreate",
+    ".transform",
+    ".mutate"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".string": { "positionalArity": 0 },
+    ".hooks": { "positionalArity": 1 }
+  }
 }

@@ -3,5 +3,21 @@
   "title": "Define a many-to-one relation field from Membership to Organization",
   "designNote": "docs_only",
   "sdkSurface": "db-field",
-  "contextProfiles": ["full", "no-docs"]
+  "contextProfiles": ["full", "no-docs"],
+  "canonicalSymbols": [".type", ".uuid", ".relation"],
+  "biasAttractors": [
+    "defineType",
+    "defineRelation",
+    ".references",
+    ".belongsTo",
+    ".hasOne",
+    ".hasMany",
+    ".relate",
+    ".foreignKey"
+  ],
+  "expectedCallShapes": {
+    ".type": { "positionalArity": 2 },
+    ".uuid": { "positionalArity": 0 },
+    ".relation": { "positionalArity": 1, "configKeys": ["type", "toward"] }
+  }
 }
