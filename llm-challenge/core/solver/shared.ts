@@ -6,7 +6,10 @@
  * - `401 Unauthorized` / `Authentication failed` / `codex login` — the auth
  *   file mounted from the host is missing, expired, or the subscription is
  *   no longer entitled.
- * - `429 Too Many Requests` / `rate limit` — ChatGPT subscription throttling.
+ * - `429 Too Many Requests` / `rate limit` / `hit your usage limit` — ChatGPT
+ *   subscription throttling. Codex emits the third form for daily/hourly
+ *   quota exhaustion; without it, the codex adapter classifies the failure
+ *   as a regular verification miss and the resume path silently skips it.
  * - `ECONNREFUSED` / `ECONNRESET` / `ETIMEDOUT` / `socket hang up` /
  *   `network error` — transient network failure between the container and the
  *   OpenAI API.
@@ -19,6 +22,7 @@ export const infraFailurePatterns = [
   /codex login/i,
   /429 Too Many Requests/,
   /rate limit/i,
+  /hit your usage limit/i,
   /ECONNREFUSED/,
   /ECONNRESET/,
   /ETIMEDOUT/,

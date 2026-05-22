@@ -9,6 +9,7 @@ describe("detectInfraFailure", () => {
     ["Please run `codex login` to refresh your session"],
     ["429 Too Many Requests"],
     ["rate limit exceeded for organization"],
+    ["You've hit your usage limit. Upgrade to Pro or try again at 1:59 PM."],
     // Network transients between container and api.openai.com
     ["fetch failed: connect ECONNREFUSED api.openai.com:443"],
     ["ECONNRESET while reading response"],
