@@ -35,7 +35,10 @@ const commonSystemLines = [
   "Do NOT read any files outside of the current working directory.",
 ];
 
-function buildSystemPrompt(mode: "implement" | "fix" | "hybrid"): string {
+function buildSystemPrompt(
+  mode: "implement" | "fix" | "hybrid",
+  extraLines: string[] = [],
+): string {
   const sdkVersion = getSdkVersion(challengeRoot);
   const versionLine = sdkVersion ? `SDK version: ${sdkVersion}` : "";
 
@@ -60,7 +63,7 @@ function buildSystemPrompt(mode: "implement" | "fix" | "hybrid"): string {
             "Create ONLY the files listed in the task. Do NOT modify existing files.",
           ];
 
-  return [...modeLines, ...commonSystemLines].filter(Boolean).join("\n");
+  return [...modeLines, ...commonSystemLines, ...extraLines].filter(Boolean).join("\n");
 }
 
 /**
@@ -125,7 +128,7 @@ export function buildPrompt(
   contextProfileName: ContextProfile,
 ): string {
   if (meta.mode === "recall") {
-    return buildRecallPrompt(problemDir, contextProfileName);
+    return buildRecallPrompt(problemDir, contextProfileName, meta);
   }
   const { problemMd, existingFilesList, filesToFix, filesToCreate, mode } = buildPromptSections(
     problemDir,
@@ -133,7 +136,7 @@ export function buildPrompt(
     workDir,
   );
 
-  const systemPrompt = buildSystemPrompt(mode);
+  const systemPrompt = buildSystemPrompt(mode, meta.implementExtraSystem);
   const contextProfile = buildContextProfileInstructions(workDir, contextProfileName);
 
   const filesSection =
@@ -173,7 +176,11 @@ export function buildPrompt(
   return `${systemPrompt}\n\n${userPrompt}`;
 }
 
-function buildRecallPrompt(problemDir: string, contextProfileName: ContextProfile): string {
+function buildRecallPrompt(
+  problemDir: string,
+  contextProfileName: ContextProfile,
+  meta: ProblemMeta,
+): string {
   const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
   const sdkVersion = getSdkVersion(challengeRoot);
   const versionLine = sdkVersion ? `SDK version: ${sdkVersion}` : "";
@@ -181,15 +188,21 @@ function buildRecallPrompt(problemDir: string, contextProfileName: ContextProfil
     contextProfileName === "no-docs"
       ? "Context profile: no-docs (the SDK's docs, skills, and example folders are NOT available in this run)."
       : "Context profile: full.";
-  const systemLines = [
+  // Per-problem override (e.g. `r3-sdk-recall-impl-frame` swaps the
+  // "recall test" framing for "implementation API check" to isolate the
+  // framing effect from anchoring/coherence — see
+  // `api-evaluation-2026-05-23-v4.md` §6 follow-up.
+  const baseLines = meta.recallSystem ?? [
     "You are answering an SDK API recall test for @tailor-platform/sdk.",
-    versionLine,
-    profileLine,
+    "{{VERSION}}",
+    "{{PROFILE}}",
     "Do NOT explore the SDK package. Do NOT open files under node_modules/.",
     "Do NOT create, modify, or delete any file in the current working directory.",
     "Do NOT run any shell command.",
     "Answer with a single fenced JSON block in one turn, then stop.",
-  ]
+  ];
+  const systemLines = baseLines
+    .map((line) => line.replace("{{VERSION}}", versionLine).replace("{{PROFILE}}", profileLine))
     .filter(Boolean)
     .join("\n");
   return `${systemLines}\n\n## Task\n\n${problemMd}`;

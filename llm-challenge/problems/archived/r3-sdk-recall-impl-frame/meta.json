@@ -1,0 +1,323 @@
+{
+  "id": "r3-sdk-recall-impl-frame",
+  "title": "Single-shot SDK API recall sheet under implementation framing",
+  "designNote": "framing_isolation",
+  "sdkSurface": "*",
+  "contextProfiles": ["full", "no-docs"],
+  "mode": "recall",
+  "recallSystem": [
+    "You are implementing an @tailor-platform/sdk project. For each surface listed below, write the one-line `firstImport` and `firstCall` you would put at the top of an implementation file that must compile against the SDK.",
+    "{{VERSION}}",
+    "{{PROFILE}}",
+    "Do NOT explore the SDK package. Do NOT open files under node_modules/.",
+    "Do NOT create, modify, or delete any file in the current working directory.",
+    "Do NOT run any shell command.",
+    "Answer with a single fenced JSON block in one turn, then stop."
+  ],
+  "surfaces": [
+    {
+      "key": "tailordb-type",
+      "intent": "Define a TailorDB type/model named 'Foo' with no fields.",
+      "canonical": [".type"],
+      "attractors": [
+        "defineType",
+        "createType",
+        "db.model",
+        "defineModel",
+        "db.entity",
+        "defineEntity"
+      ]
+    },
+    {
+      "key": "field-uuid",
+      "intent": "Add a UUID field named 'id' to a TailorDB type.",
+      "canonical": ["db.uuid"],
+      "attractors": ["db.id", "createId", "db.guid", "db.identifier", "uuid("]
+    },
+    {
+      "key": "field-array",
+      "intent": "Add an array (multi-value) string field named 'tags'.",
+      "canonical": [".array"],
+      "attractors": ["db.array", "db.list", ".list", ".many", "db.strings", "db.tags", "[].string"]
+    },
+    {
+      "key": "field-required-unique",
+      "intent": "Add a required+unique string field named 'email'.",
+      "canonical": [".required", ".unique"],
+      "attractors": ["{ required: true }", "{ unique: true }", ".notNull", ".uniq", ".mandatory"]
+    },
+    {
+      "key": "field-validate",
+      "intent": "Attach a custom validation rule (with error message) to a string field 'slug'.",
+      "canonical": [".validate"],
+      "attractors": [".rule", ".check", ".assert", ".constraint", "defineValidator"]
+    },
+    {
+      "key": "relation-n-1",
+      "intent": "Add a UUID field 'organizationId' as many-to-one relation to an 'organization' model.",
+      "canonical": [".relation"],
+      "attractors": [
+        "db.relation",
+        "db.belongsTo",
+        "db.ref",
+        ".belongsTo",
+        ".manyToOne",
+        ".foreignKey",
+        "db.foreignKey"
+      ]
+    },
+    {
+      "key": "hooks-update-type",
+      "intent": "Attach a type-level update hook that mutates a field value before write.",
+      "canonical": [".hooks"],
+      "attractors": [
+        "defineHook",
+        "defineHooks",
+        "createHook",
+        ".onUpdate",
+        ".beforeUpdate",
+        ".afterUpdate",
+        ".transform",
+        ".mutate"
+      ]
+    },
+    {
+      "key": "permission-role",
+      "intent": "Define a role-gated permission rule on a TailorDB type.",
+      "canonical": [".permission"],
+      "attractors": ["definePermission", "createPermission", ".policy", ".acl", ".allow", ".rule"]
+    },
+    {
+      "key": "index-composite",
+      "intent": "Declare a composite index on (organizationId, createdAt) on a TailorDB type.",
+      "canonical": [".indexes"],
+      "attractors": ["defineIndex", "createIndex", ".index", ".compositeIndex", ".keys"]
+    },
+    {
+      "key": "resolver-create",
+      "intent": "Create a custom resolver.",
+      "canonical": ["createResolver"],
+      "attractors": [
+        "defineResolver",
+        "resolver(",
+        ".handler",
+        "registerResolver",
+        "createQuery",
+        "resolver.create",
+        "resolvers.create"
+      ]
+    },
+    {
+      "key": "executor-create",
+      "intent": "Create an executor (server-side hook handler).",
+      "canonical": ["createExecutor"],
+      "attractors": [
+        "defineExecutor",
+        "createTrigger",
+        "defineTrigger",
+        "createHandler",
+        "registerExecutor",
+        "executor.create",
+        "executors.create",
+        "executor.factory"
+      ]
+    },
+    {
+      "key": "trigger-record-created",
+      "intent": "Single-event executor trigger for record-created on a TailorDB type.",
+      "canonical": ["recordCreatedTrigger"],
+      "attractors": [
+        "onRecordCreated",
+        "recordCreated",
+        ".created",
+        "createRecordTrigger",
+        "tailordb.created",
+        "executor.trigger.recordCreated",
+        "trigger.recordCreated",
+        ".trigger.recordCreated"
+      ]
+    },
+    {
+      "key": "trigger-multi-record",
+      "intent": "Single executor trigger covering both record-created and record-updated events.",
+      "canonical": ["recordTrigger"],
+      "attractors": [
+        "recordEventsTrigger",
+        "multiRecordTrigger",
+        "recordChangedTrigger",
+        "recordMultiTrigger",
+        "executor.trigger.record",
+        ".trigger.record(",
+        "trigger.record("
+      ]
+    },
+    {
+      "key": "trigger-idp-user-multi",
+      "intent": "Executor trigger covering multiple IdP user events at once.",
+      "canonical": ["idpUserTrigger"],
+      "attractors": [
+        "idpUserCreatedTrigger",
+        "userTrigger",
+        ".idpUser",
+        "idpUserMultiTrigger",
+        "onIdpUser",
+        "executor.trigger.idpUser",
+        "trigger.idpUser"
+      ]
+    },
+    {
+      "key": "trigger-schedule",
+      "intent": "CRON-scheduled executor trigger.",
+      "canonical": ["scheduleTrigger"],
+      "attractors": [
+        "cronTrigger",
+        "cron(",
+        "defineSchedule",
+        "createSchedule",
+        "scheduledTrigger",
+        "executor.trigger.schedule",
+        "trigger.schedule",
+        ".schedule("
+      ]
+    },
+    {
+      "key": "trigger-webhook",
+      "intent": "Incoming webhook executor trigger.",
+      "canonical": ["incomingWebhookTrigger"],
+      "attractors": [
+        "webhookTrigger",
+        "onWebhook",
+        "defineWebhook",
+        "createWebhook",
+        "httpTrigger",
+        "executor.trigger.webhook",
+        "trigger.webhook"
+      ]
+    },
+    {
+      "key": "workflow-create",
+      "intent": "Create a workflow.",
+      "canonical": ["createWorkflow"],
+      "attractors": [
+        "defineWorkflow",
+        "workflow(",
+        "createOrchestration",
+        "registerWorkflow",
+        "workflow.create",
+        "workflows.create"
+      ]
+    },
+    {
+      "key": "workflow-job",
+      "intent": "Create a job that belongs to a workflow.",
+      "canonical": ["createWorkflowJob"],
+      "attractors": [
+        "createJob",
+        "defineJob",
+        "defineWorkflowJob",
+        "registerJob",
+        "job(",
+        "workflow.job",
+        "workflow.createJob",
+        "workflow.addJob"
+      ]
+    },
+    {
+      "key": "workflow-wait-points",
+      "intent": "Declare typed wait/resolve points used by a job.",
+      "canonical": ["defineWaitPoints"],
+      "attractors": [
+        "createWaitPoint",
+        "awaitPoint",
+        "registerWaitPoint",
+        "defineSignals",
+        "workflow.waitPoints",
+        ".waitPoints<",
+        "waitPoints("
+      ]
+    },
+    {
+      "key": "workflow-getdb",
+      "intent": "Obtain a Kysely DB handle inside a job to query TailorDB.",
+      "canonical": ["getDB"],
+      "attractors": ["getDb", "db()", "useDB", "getKysely", "kysely()", "ctx.db"]
+    },
+    {
+      "key": "config-define",
+      "intent": "Top-level project config.",
+      "canonical": ["defineConfig"],
+      "attractors": ["createConfig", "config(", "tailorConfig", "defineProject"]
+    },
+    {
+      "key": "config-auth",
+      "intent": "Auth config.",
+      "canonical": ["defineAuth"],
+      "attractors": [
+        "createAuth",
+        "auth(",
+        "authConfig",
+        "configureAuth",
+        "auth.config",
+        "auth.define"
+      ]
+    },
+    {
+      "key": "config-idp",
+      "intent": "Single IdP config.",
+      "canonical": ["defineIdp"],
+      "attractors": [
+        "createIdp",
+        "defineIDP",
+        "idp(",
+        "configureIdp",
+        "defineProvider",
+        "idp.config",
+        "idp.define"
+      ]
+    },
+    {
+      "key": "config-static-website",
+      "intent": "Static website config.",
+      "canonical": ["defineStaticWebSite"],
+      "attractors": [
+        "defineStaticWebsite",
+        "defineWebsite",
+        "createStaticWebSite",
+        "defineSite",
+        "staticWebsite(",
+        "staticWebsite.config",
+        "site.config",
+        "staticWebSite.config"
+      ]
+    },
+    {
+      "key": "config-plugins",
+      "intent": "Register plugins.",
+      "canonical": ["definePlugins"],
+      "attractors": [
+        "defineGenerators",
+        "createPlugins",
+        "plugins(",
+        "registerPlugins",
+        "definePlugin",
+        "plugins.register",
+        "plugins.use",
+        "plugins.add"
+      ]
+    },
+    {
+      "key": "plugin-kysely",
+      "intent": "Kysely-type plugin required for getDB().",
+      "canonical": ["kyselyTypePlugin"],
+      "attractors": [
+        "kyselyPlugin",
+        "createKyselyPlugin",
+        "kysely(",
+        "useKysely",
+        "kyselyType(",
+        "plugin.kysely",
+        "kysely.plugin"
+      ]
+    }
+  ]
+}

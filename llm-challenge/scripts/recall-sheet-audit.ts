@@ -24,7 +24,8 @@ import path from "node:path";
 const LLM_CHALLENGE_ROOT = path.resolve(import.meta.dirname, "..");
 const RESULTS_DIR = path.join(LLM_CHALLENGE_ROOT, "results");
 const PROBLEMS_DIR = path.join(LLM_CHALLENGE_ROOT, "problems");
-const PROBLEM_ID = "r1-sdk-recall-sheet";
+const DEFAULT_PROBLEM_ID = "r1-sdk-recall-sheet";
+let PROBLEM_ID = DEFAULT_PROBLEM_ID;
 
 type Surface = {
   key: string;
@@ -475,6 +476,14 @@ function main(): void {
     if (args[i] === "--csv") {
       csvPath = args[i + 1];
       i++;
+    } else if (args[i] === "--problem-id") {
+      const id = args[i + 1];
+      if (!id) {
+        console.error("Error: --problem-id requires a value");
+        process.exit(1);
+      }
+      PROBLEM_ID = id;
+      i++;
     }
   }
 
@@ -486,7 +495,7 @@ function main(): void {
 
   const rows = collectRows(meta);
   if (rows.length === 0) {
-    console.error("No recall-sheet artifacts found under results/artifacts/.");
+    console.error(`No ${PROBLEM_ID} artifacts found under results/artifacts/.`);
     process.exit(0);
   }
 

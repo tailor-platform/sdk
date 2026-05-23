@@ -110,6 +110,21 @@ export type ProblemMeta = {
    * agent's output and grades canonical vs. attractor hits per surface.
    */
   surfaces?: RecallSurface[];
+  /**
+   * Optional override for the recall-mode system prompt. Used by the framing-
+   * variant experiments (e.g. `r3-sdk-recall-impl-frame`) to compare how the
+   * agent's first-call choice shifts when "recall test" is reframed as
+   * "implementation". When absent, `buildRecallPrompt` uses its built-in
+   * recall-test framing.
+   */
+  recallSystem?: string[];
+  /**
+   * Optional extra system-prompt lines appended after the common implement-
+   * mode lines. Used by tool-access-isolation experiments
+   * (e.g. `r5-grand-app-no-sdk-read`) to additionally forbid SDK exploration
+   * during a grand-app solve without changing the rest of the prompt.
+   */
+  implementExtraSystem?: string[];
 };
 
 export type RecallSurface = {
