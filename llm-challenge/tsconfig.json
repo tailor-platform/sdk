@@ -9,9 +9,10 @@
   "exclude": [
     "node_modules",
     "dist",
-    "problems/*/work",
-    "problems/*/solution",
-    "problems/*/scaffold",
+    "problems/**/work",
+    "problems/**/solution",
+    "problems/**/scaffold",
+    "problems/archived/**",
     "results/artifacts/**"
   ]
 }
