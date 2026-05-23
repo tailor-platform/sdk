@@ -96,6 +96,31 @@ export type ProblemMeta = {
    * — only bare-identifier callees are graded.
    */
   expectedCallShapes?: Record<string, ExpectedCallShape>;
+  /**
+   * When set to `"recall"`, the problem is a single-turn SDK API recall test
+   * rather than a code-modification task. The solver runs codex in the
+   * isolated container as usual (preserving user-scope bias isolation), but
+   * verify (generate/typecheck/tests) is skipped — the agent's stdout JSON
+   * is the only artifact, scored later by `scripts/recall-sheet-audit.ts`.
+   */
+  mode?: "recall";
+  /**
+   * For `mode === "recall"`: the list of SDK surfaces the agent is asked to
+   * answer in one JSON payload. The recall audit zips each entry against the
+   * agent's output and grades canonical vs. attractor hits per surface.
+   */
+  surfaces?: RecallSurface[];
+};
+
+export type RecallSurface = {
+  /** Stable key the agent echoes back in its JSON response. */
+  key: string;
+  /** Short human-readable intent shown in the prompt for context. */
+  intent: string;
+  /** Canonical substrings — any one match in the agent's firstCall counts as a hit. */
+  canonical: string[];
+  /** Plausible-but-wrong substrings; any match counts as an attractor hit. */
+  attractors: string[];
 };
 
 export type ExpectedCallShape = {
@@ -662,6 +687,11 @@ function makeSkippedStages(reason: string): StageResult[] {
   return allStages.map((stage) => ({ stage, passed: false, output: skipped }));
 }
 
+function makeRecallStages(): StageResult[] {
+  const note = "recall mode (no verify)";
+  return allStages.map((stage) => ({ stage, passed: true, output: note }));
+}
+
 function createLimiter(concurrency: number) {
   let active = 0;
   const queue: Array<() => void> = [];
@@ -882,6 +912,33 @@ async function runProblem(
   if (scaffoldChanges.length > 0 && options.verbose) {
     const files = scaffoldChanges.map((c) => c.file).join(", ");
     console.log(`  WARNING: Scaffold files modified during solve: ${files} (restored)`);
+  }
+
+  // Recall-mode problems skip verify entirely — the agent's JSON output is
+  // the artifact, audited later by scripts/recall-sheet-audit.ts.
+  if (meta.mode === "recall") {
+    const stages = makeRecallStages();
+    if (options.verbose) {
+      for (const s of stages) {
+        console.log(`  ${s.stage}: skipped (recall)`);
+      }
+    }
+    if (isSolveMode || options.clean) {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
+    return {
+      problemId: meta.id,
+      problemName: resolvedName,
+      sdkSurface: resolvedSurface,
+      contextProfile: options.contextProfile,
+      stages,
+      passed: true,
+      ...(solveResult ? { solveResult } : {}),
+      totalDurationMs: Date.now() - problemStartTime,
+      ...(scaffoldChanges.length > 0 ? { scaffoldChanges } : {}),
+      ...(problemArtifactRoot ? { artifacts: { directory: problemArtifactRoot } } : {}),
+      ...(metrics ? { metrics } : {}),
+    };
   }
 
   // Run verification stages.

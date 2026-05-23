@@ -22,7 +22,7 @@ export function listProblems(
   if (!fs.existsSync(problemsDir)) {
     return [];
   }
-  const idRegex = /^(m\d+|h\d+)-/;
+  const idRegex = /^(m\d+|h\d+|r\d+)-/;
   const active = fs
     .readdirSync(problemsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory() && !d.name.startsWith("_") && idRegex.test(d.name))

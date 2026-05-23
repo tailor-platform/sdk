@@ -124,6 +124,9 @@ export function buildPrompt(
   workDir: string,
   contextProfileName: ContextProfile,
 ): string {
+  if (meta.mode === "recall") {
+    return buildRecallPrompt(problemDir, contextProfileName);
+  }
   const { problemMd, existingFilesList, filesToFix, filesToCreate, mode } = buildPromptSections(
     problemDir,
     meta,
@@ -168,6 +171,28 @@ export function buildPrompt(
   ].join("\n");
 
   return `${systemPrompt}\n\n${userPrompt}`;
+}
+
+function buildRecallPrompt(problemDir: string, contextProfileName: ContextProfile): string {
+  const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
+  const sdkVersion = getSdkVersion(challengeRoot);
+  const versionLine = sdkVersion ? `SDK version: ${sdkVersion}` : "";
+  const profileLine =
+    contextProfileName === "no-docs"
+      ? "Context profile: no-docs (the SDK's docs, skills, and example folders are NOT available in this run)."
+      : "Context profile: full.";
+  const systemLines = [
+    "You are answering an SDK API recall test for @tailor-platform/sdk.",
+    versionLine,
+    profileLine,
+    "Do NOT explore the SDK package. Do NOT open files under node_modules/.",
+    "Do NOT create, modify, or delete any file in the current working directory.",
+    "Do NOT run any shell command.",
+    "Answer with a single fenced JSON block in one turn, then stop.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return `${systemLines}\n\n## Task\n\n${problemMd}`;
 }
 
 export function solveProblem(options: {
