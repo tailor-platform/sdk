@@ -38,8 +38,8 @@ Supported options:
 --effort <effort>      Codex reasoning effort. Default: xhigh.
 --runs <n>             Independent runs per problem. Default: 3.
 --concurrency <n>      Parallel task count. Default: 1.
---problem <id>         Repeatable problem filter.
---problems <ids>       Comma-separated problem filter.
+--problem <key>        Repeatable problem filter. Accepts <group>/<id> or a unique bare id.
+--problems <keys>      Comma-separated problem filter.
 --output <dir>         Output directory. Default: results/<run-id>.
 --max-seconds <n>      Per-run Codex timeout. Default: 1800.
 ```
@@ -86,19 +86,27 @@ Network, web access, shell commands, `pnpm install`, and edits inside the worksp
 Each problem contains only:
 
 ```text
-llm-challenge/problems/<id>/
-  meta.json
-  prompt.md
-  scaffold/
+llm-challenge/problems/
+  sdk-api/
+    <id>/
+      meta.json
+      prompt.md
+      scaffold/
+  cli/
+    <id>/
+      meta.json
+      prompt.md
+      scaffold/
 ```
+
+The directory under `problems/` is the source of truth for the problem group. Do not duplicate the group in `meta.json`. Problem IDs should be unique across both groups so filters, report rows, and artifact paths stay easy to read.
 
 `meta.json`:
 
 ```json
 {
-  "id": "plugin-01-registration",
-  "title": "Register plugins in the SDK config",
-  "group": "sdk-api"
+  "id": "plugin-registration",
+  "title": "Register plugins in the SDK config"
 }
 ```
 
@@ -109,34 +117,34 @@ llm-challenge/problems/<id>/
 Create these 19 problems:
 
 ```text
-tailordb-01-field-options
-tailordb-02-relation-naming
-tailordb-03-type-hooks
+llm-challenge/problems/sdk-api/
+  tailordb-field-options
+  tailordb-relation-naming
+  tailordb-type-hooks
 
-resolver-01-context
-resolver-02-structured-result
+  resolver-context
+  resolver-structured-result
 
-executor-01-record-multi-event
-executor-02-resolver-executed-trigger
-executor-03-idp-user-multi-event
+  executor-record-multi-event
+  executor-resolver-executed-trigger
+  executor-idp-user-multi-event
 
-workflow-01-job-chaining
-workflow-02-wait-point
+  workflow-job-chaining
+  workflow-wait-point
 
-config-01-define-config-wiring
-config-02-static-website-url
-config-03-idp-provider-wiring
+  config-define-config-wiring
+  config-static-website-url
+  config-idp-provider-wiring
 
-plugin-01-registration
-plugin-02-generated-getdb
+  plugin-registration
+  plugin-generated-getdb
 
-cli-01-generate
-cli-02-tailordb-migrate-generate
-cli-03-tailordb-migrate-script
-cli-04-help-error-recovery
+llm-challenge/problems/cli/
+  generate
+  tailordb-migrate-generate
+  tailordb-migrate-script
+  help-error-recovery
 ```
-
-Use `group: "cli"` for the four `cli-*` problems. Use `group: "sdk-api"` for all others.
 
 ## Artifact Layout
 
@@ -145,13 +153,14 @@ Write artifacts under the chosen output directory:
 ```text
 results/<run-id>/
   report.json
-  <problem-id>/
-    run-0/
-      prompt.md
-      solver.stdout.log
-      solver.stderr.log
-      trace.jsonl
-      work/
+  <group>/
+    <problem-id>/
+      run-0/
+        prompt.md
+        solver.stdout.log
+        solver.stderr.log
+        trace.jsonl
+        work/
 ```
 
 `work/` is the final workspace snapshot immediately after Codex exits. Do not run `generate`, `typecheck`, or any other stage after the solver. A human should inspect `work/`, logs, and trace directly.
@@ -175,6 +184,7 @@ type ChallengeReport = {
     id: string;
     title: string;
     group: "sdk-api" | "cli";
+    sourcePath: string;
   }>;
   runs: Array<{
     problemId: string;
@@ -204,14 +214,14 @@ Example:
 
 ```text
 Problem                         Run   Artifact                                      Solver
-plugin-01-registration          0     results/.../plugin-01-registration/run-0      exit=0
-cli-02-tailordb-migrate-generate 0    results/.../cli-02.../run-0                   timeout
+sdk-api/plugin-registration     0     results/.../sdk-api/plugin-registration/...   exit=0
+cli/tailordb-migrate-generate   0     results/.../cli/tailordb-migrate-generate/... timeout
 ```
 
 ## Implementation Order
 
 1. Create the `llm-challenge` package with `package.json`, `tsconfig.json`, and `src/cli.ts`.
-2. Implement problem discovery and filtering.
+2. Implement problem discovery from `problems/sdk-api/*` and `problems/cli/*`, deriving each problem group from its directory.
 3. Implement SDK packing from `--sdk-ref`.
 4. Implement profile filtering for `no-docs`.
 5. Implement workspace creation from `scaffold/`.
