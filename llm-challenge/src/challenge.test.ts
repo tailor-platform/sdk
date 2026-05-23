@@ -210,6 +210,9 @@ describe("workspace preparation", () => {
     await expect(
       fs.readFile(path.join(paths.worktreePath, ".challenge/tailor-platform-sdk.tgz"), "utf8"),
     ).resolves.toBe("tarball");
+    await expect(
+      fs.readFile(path.join(paths.worktreePath, "pnpm-workspace.yaml"), "utf8"),
+    ).resolves.toContain('"@tailor-platform/sdk": true');
     const packageJson = JSON.parse(
       await fs.readFile(path.join(paths.worktreePath, "package.json"), "utf8"),
     ) as {

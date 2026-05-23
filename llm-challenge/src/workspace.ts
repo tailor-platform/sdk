@@ -4,6 +4,13 @@ import { buildRunArtifactPaths, type RunArtifactPaths } from "./report";
 import type { Problem, SdkProfile } from "./types";
 
 const WORKSPACE_SDK_TARBALL = ".challenge/tailor-platform-sdk.tgz";
+const PNPM_WORKSPACE_YAML = `allowBuilds:
+  "@prisma/engines": true
+  "@swc/core": true
+  "@tailor-platform/sdk": true
+  esbuild: true
+  protobufjs: true
+`;
 
 export async function prepareWorkspace(options: {
   outputDir: string;
@@ -23,6 +30,7 @@ export async function prepareWorkspace(options: {
   await fs.mkdir(path.dirname(sdkTarballDest), { recursive: true });
   await fs.copyFile(options.sdkTarballPath, sdkTarballDest);
   await ensureWorkspacePackage(paths.worktreePath);
+  await ensurePnpmWorkspace(paths.worktreePath);
   await ensureTsconfig(paths.worktreePath);
   return paths;
 }
@@ -88,6 +96,10 @@ async function ensureTsconfig(worktreePath: string): Promise<void> {
       )}\n`,
     );
   }
+}
+
+async function ensurePnpmWorkspace(worktreePath: string): Promise<void> {
+  await fs.writeFile(path.join(worktreePath, "pnpm-workspace.yaml"), PNPM_WORKSPACE_YAML);
 }
 
 async function readJsonObject(filePath: string): Promise<Record<string, unknown>> {
