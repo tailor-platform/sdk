@@ -51,3 +51,7 @@ tailor.d.ts
 CLAUDE.local.md
 
 .claude/tmp/
+
+# llm-challenge artifacts
+llm-challenge/results/
+llm-challenge/.tmp/

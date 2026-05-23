@@ -1,0 +1,20 @@
+{
+  "name": "llm-challenge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "challenge": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "oxlint": "1.61.0",
+    "oxlint-tsgolint": "0.22.1",
+    "tsx": "4.21.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.6"
+  }
+}
