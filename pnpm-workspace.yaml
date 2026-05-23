@@ -20,10 +20,10 @@ trustPolicyExclude:
   - "@swc/core@1.12.11"
 
 packages:
-  - llm-challenge
   - packages/*
   - packages/create-sdk/templates/*
   - example
+  - llm-challenge
 
 allowBuilds:
   "@swc/core": true
