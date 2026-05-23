@@ -58,6 +58,15 @@ describe("argument parsing", () => {
       problemFilters: ["plugin-registration", "cli/generate", "resolver-context"],
     });
   });
+
+  it("rejects an empty comma-separated problem filter", () => {
+    expect(() => parseRunArgs(["--problems", ""])).toThrow(
+      "--problems must contain at least one problem",
+    );
+    expect(() => parseRunArgs(["--problems=, ,"])).toThrow(
+      "--problems must contain at least one problem",
+    );
+  });
 });
 
 describe("problem discovery", () => {

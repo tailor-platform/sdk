@@ -73,14 +73,17 @@ export function parseRunArgs(argv: string[]): RunOptions {
       case "--problem":
         options.problemFilters.push(value);
         break;
-      case "--problems":
-        options.problemFilters.push(
-          ...value
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
-        );
+      case "--problems": {
+        const problemFilters = value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        if (problemFilters.length === 0) {
+          throw new Error("--problems must contain at least one problem");
+        }
+        options.problemFilters.push(...problemFilters);
         break;
+      }
       case "--output":
         options.output = value;
         break;
