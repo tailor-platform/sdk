@@ -58,6 +58,8 @@ export async function runCodexInPodman(options: {
     "run",
     "--rm",
     "-i",
+    "--entrypoint",
+    "/bin/sh",
     "-v",
     `${options.worktreePath}:/workspace:rw`,
     "-v",
@@ -65,7 +67,6 @@ export async function runCodexInPodman(options: {
     "-w",
     "/workspace",
     image,
-    "sh",
     "-lc",
     script,
   ];

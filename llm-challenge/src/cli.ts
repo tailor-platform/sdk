@@ -108,6 +108,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       await writeReport(reportFilePath, report);
       printRun(task, reportPath(packageRoot, paths.artifactDir), result);
     });
+    // Concurrent run writes can complete out of order; finish with the complete in-memory report.
+    await writeReport(reportFilePath, report);
   } finally {
     await packedSdk.cleanup();
   }
