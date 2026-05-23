@@ -10,14 +10,5 @@
     "skipLibCheck": true
   },
   "include": ["**/*.ts", "**/*.js"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "packages",
-    "example",
-    // Scaffold/solution/work dirs contain intentionally broken code or unresolvable imports for challenge fixtures
-    "llm-challenge/problems/*/scaffold",
-    "llm-challenge/problems/*/solution",
-    "llm-challenge/problems/*/work"
-  ]
+  "exclude": ["node_modules", "dist", "packages", "example"]
 }
