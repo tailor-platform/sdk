@@ -10,5 +10,12 @@
     "skipLibCheck": true
   },
   "include": ["**/*.ts", "**/*.js"],
-  "exclude": ["node_modules", "dist", "packages", "example", "llm-challenge/results"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "packages",
+    "example",
+    "llm-challenge/results",
+    "llm-challenge/.tmp"
+  ]
 }

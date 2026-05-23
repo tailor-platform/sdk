@@ -32,7 +32,9 @@ export async function applyNoDocsProfile(packageDir: string): Promise<void> {
   }
 
   for await (const filePath of walkFiles(packageDir)) {
-    if (filePath.endsWith(".d.ts") || filePath.endsWith(".d.mts")) {
+    if (filePath.endsWith(".map")) {
+      await fs.rm(filePath);
+    } else if (filePath.endsWith(".d.ts") || filePath.endsWith(".d.mts")) {
       const original = await fs.readFile(filePath, "utf8");
       const stripped = stripDeclarationJsDoc(original);
       if (stripped !== original) {

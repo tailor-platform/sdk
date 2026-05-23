@@ -94,6 +94,10 @@ describe("profile filtering", () => {
     await fs.writeFile(path.join(dir, "docs/reference.md"), "reference");
     await fs.writeFile(path.join(dir, "dist/index.js"), "/** runtime comment */\nexport {};\n");
     await fs.writeFile(
+      path.join(dir, "dist/index.mjs.map"),
+      JSON.stringify({ sourcesContent: ["/** hidden docs */\nexport {};\n"] }),
+    );
+    await fs.writeFile(
       path.join(dir, "dist/index.d.ts"),
       "/** public docs */\nexport declare const value: string;\n/* keep */\nexport declare const other: string;\n",
     );
@@ -103,6 +107,7 @@ describe("profile filtering", () => {
     await expect(fs.access(path.join(dir, "README.md"))).rejects.toThrow();
     await expect(fs.access(path.join(dir, "CHANGELOG.md"))).rejects.toThrow();
     await expect(fs.access(path.join(dir, "docs"))).rejects.toThrow();
+    await expect(fs.access(path.join(dir, "dist/index.mjs.map"))).rejects.toThrow();
     await expect(fs.readFile(path.join(dir, "dist/index.js"), "utf8")).resolves.toContain(
       "/** runtime comment */",
     );
