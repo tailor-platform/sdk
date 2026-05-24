@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { runCommand } from "./process";
 import { buildRunArtifactPaths, type RunArtifactPaths } from "./report";
 import type { Problem, SdkProfile } from "./types";
 
@@ -11,6 +12,13 @@ const PNPM_WORKSPACE_YAML = `allowBuilds:
   esbuild: true
   protobufjs: true
 `;
+const GITIGNORE_PATTERNS = [
+  ".challenge/",
+  "node_modules/",
+  ".pnpm-store/",
+  ".cache/",
+  ".tailor-sdk/cache/",
+];
 
 export async function prepareWorkspace(options: {
   outputDir: string;
@@ -32,6 +40,8 @@ export async function prepareWorkspace(options: {
   await ensureWorkspacePackage(paths.worktreePath);
   await ensurePnpmWorkspace(paths.worktreePath);
   await ensureTsconfig(paths.worktreePath);
+  await ensureGitignore(paths.worktreePath);
+  await initializeWorkspaceGit(paths.worktreePath);
   return paths;
 }
 
@@ -40,6 +50,14 @@ export function profileForProblem(
   requestedProfile: SdkProfile,
 ): SdkProfile | null {
   return problem.group === "sdk-api" ? requestedProfile : null;
+}
+
+export async function pruneWorkspaceDeps(worktreePath: string): Promise<void> {
+  await Promise.all(
+    ["node_modules", ".pnpm-store", ".cache", ".turbo"].map((name) =>
+      fs.rm(path.join(worktreePath, name), { recursive: true, force: true }),
+    ),
+  );
 }
 
 async function copyScaffold(scaffoldPath: string, worktreePath: string): Promise<void> {
@@ -100,6 +118,41 @@ async function ensureTsconfig(worktreePath: string): Promise<void> {
 
 async function ensurePnpmWorkspace(worktreePath: string): Promise<void> {
   await fs.writeFile(path.join(worktreePath, "pnpm-workspace.yaml"), PNPM_WORKSPACE_YAML);
+}
+
+async function ensureGitignore(worktreePath: string): Promise<void> {
+  const gitignorePath = path.join(worktreePath, ".gitignore");
+  let current = "";
+  try {
+    current = await fs.readFile(gitignorePath, "utf8");
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+      throw error;
+    }
+  }
+  const lines = new Set(current.split(/\r?\n/).filter(Boolean));
+  const additions = GITIGNORE_PATTERNS.filter((pattern) => !lines.has(pattern));
+  if (additions.length === 0) {
+    return;
+  }
+  const prefix = current.length > 0 && !current.endsWith("\n") ? "\n" : "";
+  await fs.writeFile(gitignorePath, `${current}${prefix}${additions.join("\n")}\n`);
+}
+
+async function initializeWorkspaceGit(worktreePath: string): Promise<void> {
+  await runCommand("git", ["init"], { cwd: worktreePath });
+  await runCommand("git", ["config", "user.name", "llm-challenge"], { cwd: worktreePath });
+  await runCommand("git", ["config", "user.email", "llm-challenge@example.invalid"], {
+    cwd: worktreePath,
+  });
+  await runCommand("git", ["add", "."], { cwd: worktreePath });
+  const status = await runCommand("git", ["status", "--short"], { cwd: worktreePath });
+  if (status.stdout.trim().length === 0) {
+    return;
+  }
+  await runCommand("git", ["commit", "-m", "chore: initialize challenge workspace"], {
+    cwd: worktreePath,
+  });
 }
 
 async function readJsonObject(filePath: string): Promise<Record<string, unknown>> {

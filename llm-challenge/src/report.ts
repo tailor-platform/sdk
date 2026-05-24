@@ -9,6 +9,7 @@ export type RunArtifactPaths = {
   solverStderrPath: string;
   tracePath: string;
   worktreePath: string;
+  artifactSummaryPath: string;
 };
 
 export function buildRunArtifactPaths(
@@ -24,6 +25,7 @@ export function buildRunArtifactPaths(
     solverStderrPath: path.join(artifactDir, "solver.stderr.log"),
     tracePath: path.join(artifactDir, "trace.jsonl"),
     worktreePath: path.join(artifactDir, "work"),
+    artifactSummaryPath: path.join(artifactDir, "artifact-summary.json"),
   };
 }
 
@@ -36,6 +38,8 @@ export function createRunReport(options: {
   solverExitCode?: number;
   durationMs?: number;
   timedOut?: boolean;
+  failureKind?: ChallengeRunReport["failureKind"];
+  replaces?: ChallengeRunReport["replaces"];
 }): ChallengeRunReport {
   return {
     problemId: options.problem.id,
@@ -48,9 +52,12 @@ export function createRunReport(options: {
     solverStderrPath: reportPath(options.packageRoot, options.paths.solverStderrPath),
     tracePath: reportPath(options.packageRoot, options.paths.tracePath),
     worktreePath: reportPath(options.packageRoot, options.paths.worktreePath),
+    artifactSummaryPath: reportPath(options.packageRoot, options.paths.artifactSummaryPath),
     solverExitCode: options.solverExitCode,
     durationMs: options.durationMs,
     timedOut: options.timedOut,
+    failureKind: options.failureKind,
+    replaces: options.replaces,
   };
 }
 

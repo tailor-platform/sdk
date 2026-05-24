@@ -9,8 +9,62 @@ export type SolverResult = {
   timedOut: boolean;
 };
 
-export const DEFAULT_CODEX_IMAGE = "ghcr.io/openai/codex-universal:latest";
+export type CodexRuntimeConfig = {
+  image: string;
+  codexPackage: string;
+  authFile: string;
+};
+
+export type CodexPreflightResult = {
+  skipped: boolean;
+  exitCode?: number;
+  durationMs?: number;
+  stdout?: string;
+  stderr?: string;
+  codexVersion?: string;
+};
+
+export const DEFAULT_CODEX_IMAGE =
+  "ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304";
 export const DEFAULT_CODEX_NPM_PACKAGE = "@openai/codex@0.133.0";
+
+export function getCodexRuntimeConfig(): CodexRuntimeConfig {
+  return {
+    image: process.env.LLM_CHALLENGE_CODEX_IMAGE ?? DEFAULT_CODEX_IMAGE,
+    codexPackage: process.env.LLM_CHALLENGE_CODEX_NPM_PACKAGE ?? DEFAULT_CODEX_NPM_PACKAGE,
+    authFile:
+      process.env.LLM_CHALLENGE_CODEX_AUTH_FILE ?? path.join(os.homedir(), ".codex", "auth.json"),
+  };
+}
+
+export async function preflightCodexRunner(
+  runtime = getCodexRuntimeConfig(),
+): Promise<CodexPreflightResult> {
+  await fs.access(runtime.authFile);
+  const startedAt = Date.now();
+  const script = buildCodexPreflightScript(runtime.codexPackage);
+  const podmanArgs = [
+    "run",
+    "--rm",
+    "--entrypoint",
+    "/bin/bash",
+    "-v",
+    `${runtime.authFile}:/tmp/codex-auth.json:ro,Z`,
+    runtime.image,
+    "-lc",
+    script,
+  ];
+  const result = await runProcess("podman", podmanArgs);
+  const codexVersion = firstCodexVersionLine(result.stdout);
+  return {
+    skipped: false,
+    exitCode: result.exitCode ?? undefined,
+    durationMs: Date.now() - startedAt,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    codexVersion,
+  };
+}
 
 export async function runCodexInPodman(options: {
   worktreePath: string;
@@ -21,18 +75,16 @@ export async function runCodexInPodman(options: {
   model: string;
   effort: string;
   maxSeconds: number;
+  runtime?: CodexRuntimeConfig;
 }): Promise<SolverResult> {
-  const authFile =
-    process.env.LLM_CHALLENGE_CODEX_AUTH_FILE ?? path.join(os.homedir(), ".codex", "auth.json");
-  await fs.access(authFile);
+  const runtime = options.runtime ?? getCodexRuntimeConfig();
+  await fs.access(runtime.authFile);
   await Promise.all([
     fs.writeFile(options.solverStdoutPath, ""),
     fs.writeFile(options.solverStderrPath, ""),
     fs.writeFile(options.tracePath, ""),
   ]);
 
-  const image = process.env.LLM_CHALLENGE_CODEX_IMAGE ?? DEFAULT_CODEX_IMAGE;
-  const codexPackage = process.env.LLM_CHALLENGE_CODEX_NPM_PACKAGE ?? DEFAULT_CODEX_NPM_PACKAGE;
   const codexArgs = [
     "--search",
     "exec",
@@ -50,7 +102,7 @@ export async function runCodexInPodman(options: {
     "/workspace",
     "-",
   ];
-  const script = buildCodexBootstrapScript(codexArgs, codexPackage);
+  const script = buildCodexBootstrapScript(codexArgs, runtime.codexPackage);
   const prompt = await fs.readFile(options.promptPath, "utf8");
   const podmanArgs = [
     "run",
@@ -61,10 +113,10 @@ export async function runCodexInPodman(options: {
     "-v",
     `${options.worktreePath}:/workspace:rw,Z`,
     "-v",
-    `${authFile}:/tmp/codex-auth.json:ro,Z`,
+    `${runtime.authFile}:/tmp/codex-auth.json:ro,Z`,
     "-w",
     "/workspace",
-    image,
+    runtime.image,
     "-lc",
     script,
   ];
@@ -140,6 +192,23 @@ export function buildCodexBootstrapScript(codexArgs: string[], codexPackage: str
   ].join("\n");
 }
 
+export function buildCodexPreflightScript(codexPackage: string): string {
+  return [
+    "set -eu",
+    "mkdir -p /tmp/codex-home",
+    "cp /tmp/codex-auth.json /tmp/codex-home/auth.json",
+    "export CODEX_HOME=/tmp/codex-home",
+    "if command -v codex >/dev/null 2>&1; then",
+    "  exec codex --version",
+    "fi",
+    "if ! command -v npm >/dev/null 2>&1; then",
+    '  echo "codex CLI is not installed and npm is unavailable to install it" >&2',
+    "  exit 127",
+    "fi",
+    `exec npm exec --yes --no-update-notifier --loglevel error --package ${shellQuote(codexPackage)} -- codex --version`,
+  ].join("\n");
+}
+
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
@@ -159,4 +228,34 @@ async function closeStreams(...streams: NodeJS.WritableStream[]): Promise<void> 
         }),
     ),
   );
+}
+
+async function runProcess(
+  command: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (exitCode) => {
+      resolve({
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8"),
+        exitCode,
+      });
+    });
+  });
+}
+
+function firstCodexVersionLine(stdout: string): string | undefined {
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("codex-cli "));
 }

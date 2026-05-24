@@ -27,6 +27,9 @@ export type RunOptions = {
   problemFilters: string[];
   output?: string;
   maxSeconds: number;
+  preflight: boolean;
+  pruneWorkspaceDeps: boolean;
+  rerunNonzeroFrom?: string;
 };
 
 export type ChallengeReport = {
@@ -39,6 +42,29 @@ export type ChallengeReport = {
   model: string;
   effort: string;
   runsPerProblem: number;
+  runner?: {
+    image: string;
+    codexPackage: string;
+    codexVersion?: string;
+    preflight: {
+      skipped: boolean;
+      exitCode?: number;
+      durationMs?: number;
+      stderr?: string;
+    };
+  };
+  rerunOf?: {
+    sourceReportPath: string;
+    sourceRunId?: string;
+    runs: Array<{
+      problemId: string;
+      group: ProblemGroup;
+      runIndex: number;
+      artifactDir?: string;
+      solverExitCode?: number;
+      timedOut?: boolean;
+    }>;
+  };
   problems: Array<{
     id: string;
     title: string;
@@ -59,7 +85,24 @@ export type ChallengeRunReport = {
   solverStderrPath: string;
   tracePath: string;
   worktreePath: string;
+  artifactSummaryPath?: string;
   solverExitCode?: number;
   durationMs?: number;
   timedOut?: boolean;
+  failureKind?: SolverFailureKind;
+  replaces?: {
+    sourceReportPath: string;
+    sourceRunId?: string;
+    artifactDir?: string;
+    solverExitCode?: number;
+    timedOut?: boolean;
+  };
 };
+
+export type SolverFailureKind =
+  | "none"
+  | "timeout"
+  | "usage-limit"
+  | "runner-startup"
+  | "solver-nonzero"
+  | "unknown";

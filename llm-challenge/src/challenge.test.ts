@@ -4,10 +4,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseRunArgs, parseRunCommand } from "./args";
+import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { discoverProblems, selectProblems } from "./problems";
+import { runCommand } from "./process";
 import { applyNoDocsProfile, stripDeclarationJsDoc } from "./profile";
 import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from "./report";
-import { DEFAULT_CODEX_NPM_PACKAGE, buildCodexBootstrapScript } from "./runner";
+import {
+  DEFAULT_CODEX_IMAGE,
+  DEFAULT_CODEX_NPM_PACKAGE,
+  buildCodexBootstrapScript,
+  buildCodexPreflightScript,
+} from "./runner";
 import { prepareWorkspace, profileForProblem } from "./workspace";
 import type { Problem } from "./types";
 
@@ -30,6 +37,8 @@ describe("argument parsing", () => {
       runs: 3,
       concurrency: 1,
       maxSeconds: 1800,
+      preflight: true,
+      pruneWorkspaceDeps: false,
       problemFilters: [],
     });
   });
@@ -58,6 +67,24 @@ describe("argument parsing", () => {
       profileExplicit: true,
       problemFilters: ["plugin-registration", "cli/generate", "resolver-context"],
     });
+  });
+
+  it("parses runner workflow options", () => {
+    expect(
+      parseRunArgs([
+        "--no-preflight",
+        "--prune-workspace-deps",
+        "--rerun-nonzero-from",
+        "results/run/report.json",
+      ]),
+    ).toMatchObject({
+      preflight: false,
+      pruneWorkspaceDeps: true,
+      rerunNonzeroFrom: "results/run/report.json",
+    });
+    expect(() => parseRunArgs(["--no-preflight=true"])).toThrow(
+      "--no-preflight does not accept a value",
+    );
   });
 
   it("rejects an empty comma-separated problem filter", () => {
@@ -148,6 +175,7 @@ describe("report and artifact paths", () => {
       solverStderrPath: "/tmp/out/sdk-api/plugin-registration/run-2/solver.stderr.log",
       tracePath: "/tmp/out/sdk-api/plugin-registration/run-2/trace.jsonl",
       worktreePath: "/tmp/out/sdk-api/plugin-registration/run-2/work",
+      artifactSummaryPath: "/tmp/out/sdk-api/plugin-registration/run-2/artifact-summary.json",
     });
   });
 
@@ -181,12 +209,143 @@ describe("report and artifact paths", () => {
     });
 
     const written = JSON.parse(await fs.readFile(reportFile, "utf8")) as {
-      runs: Array<{ artifactDir: string }>;
+      runs: Array<{ artifactDir: string; artifactSummaryPath: string }>;
     };
     expect(written.runs[0].artifactDir).toBe("results/run/sdk-api/example/run-0");
+    expect(written.runs[0].artifactSummaryPath).toBe(
+      "results/run/sdk-api/example/run-0/artifact-summary.json",
+    );
     expect(reportPath(packageRoot, path.join(packageRoot, "results/run/report.json"))).toBe(
       "results/run/report.json",
     );
+  });
+});
+
+describe("artifact summary", () => {
+  it("indexes useful solver artifacts without cache-heavy directories", async () => {
+    const dir = await makeTempDir();
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, "node_modules/pkg"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, ".tailor-sdk/cache"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, ".turbo/cache"), { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "src/app.ts"), "export {};\n");
+    await fs.writeFile(path.join(worktreePath, "node_modules/pkg/index.js"), "");
+    await fs.writeFile(path.join(worktreePath, ".tailor-sdk/cache/generated.json"), "{}");
+    await fs.writeFile(path.join(worktreePath, ".turbo/cache/state.json"), "{}");
+    await runCommand("git", ["init"], { cwd: worktreePath });
+
+    const tracePath = path.join(dir, "trace.jsonl");
+    const solverStdoutPath = path.join(dir, "solver.stdout.log");
+    const solverStderrPath = path.join(dir, "solver.stderr.log");
+    const artifactSummaryPath = path.join(dir, "artifact-summary.json");
+    await fs.writeFile(
+      tracePath,
+      [
+        JSON.stringify({
+          item: {
+            type: "command_execution",
+            command: "pnpm test",
+            exit_code: 0,
+            status: "completed",
+          },
+        }),
+        JSON.stringify({
+          item: {
+            type: "command_execution",
+            command: "pnpm build",
+            exit_code: 1,
+            status: "failed",
+            aggregated_output: "x".repeat(1_200),
+          },
+        }),
+        JSON.stringify({ type: "error", message: "solver error" }),
+      ].join("\n"),
+    );
+    await fs.writeFile(solverStdoutPath, "");
+    await fs.writeFile(solverStderrPath, "");
+
+    await writeArtifactSummary({
+      problem: makeProblem(),
+      runIndex: 0,
+      worktreePath,
+      tracePath,
+      solverStdoutPath,
+      solverStderrPath,
+      artifactSummaryPath,
+      solverExitCode: 1,
+      timedOut: false,
+      failureKind: "solver-nonzero",
+    });
+
+    const summary = JSON.parse(await fs.readFile(artifactSummaryPath, "utf8")) as {
+      files: string[];
+      gitStatus: string[];
+      commands: Array<{ command: string }>;
+      failedCommands: Array<{ command: string; outputTail: string }>;
+      errors: string[];
+    };
+    expect(summary.files).toContain("src/app.ts");
+    expect(summary.files).not.toContain("node_modules/pkg/index.js");
+    expect(summary.files).not.toContain(".tailor-sdk/cache/generated.json");
+    expect(summary.files).not.toContain(".turbo/cache/state.json");
+    expect(summary.gitStatus).toContain("?? src/app.ts");
+    expect(summary.commands.map((command) => command.command)).toEqual(["pnpm test", "pnpm build"]);
+    expect(summary.failedCommands).toHaveLength(1);
+    expect(summary.failedCommands[0].command).toBe("pnpm build");
+    expect(summary.failedCommands[0].outputTail).toHaveLength(1_000);
+    expect(summary.errors).toEqual(["solver error"]);
+  });
+
+  it("classifies timeout, successful, usage-limit, and runner-startup failures", async () => {
+    const dir = await makeTempDir();
+    const tracePath = path.join(dir, "trace.jsonl");
+    const solverStdoutPath = path.join(dir, "solver.stdout.log");
+    const solverStderrPath = path.join(dir, "solver.stderr.log");
+    await fs.writeFile(tracePath, "");
+    await fs.writeFile(solverStdoutPath, "");
+    await fs.writeFile(solverStderrPath, "");
+
+    await expect(
+      classifySolverFailure({
+        timedOut: true,
+        solverExitCode: undefined,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      }),
+    ).resolves.toBe("timeout");
+    await expect(
+      classifySolverFailure({
+        timedOut: false,
+        solverExitCode: 0,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      }),
+    ).resolves.toBe("none");
+
+    await fs.writeFile(solverStderrPath, "Usage limit reached. Try again at 10:00.\n");
+    await expect(
+      classifySolverFailure({
+        timedOut: false,
+        solverExitCode: 1,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      }),
+    ).resolves.toBe("usage-limit");
+
+    await fs.writeFile(solverStderrPath, "codex CLI is not installed\n");
+    await expect(
+      classifySolverFailure({
+        timedOut: false,
+        solverExitCode: 127,
+        tracePath,
+        solverStdoutPath,
+        solverStderrPath,
+      }),
+    ).resolves.toBe("runner-startup");
   });
 });
 
@@ -223,6 +382,13 @@ describe("workspace preparation", () => {
     await expect(
       fs.readFile(path.join(paths.worktreePath, "pnpm-workspace.yaml"), "utf8"),
     ).resolves.toContain('"@tailor-platform/sdk": true');
+    await expect(fs.readFile(path.join(paths.worktreePath, ".gitignore"), "utf8")).resolves.toMatch(
+      /node_modules\//,
+    );
+    await expect(fs.access(path.join(paths.worktreePath, ".git"))).resolves.toBeUndefined();
+    await expect(
+      fs.readFile(path.join(paths.worktreePath, ".git", "config"), "utf8"),
+    ).resolves.toContain("llm-challenge@example.invalid");
     const packageJson = JSON.parse(
       await fs.readFile(path.join(paths.worktreePath, "package.json"), "utf8"),
     ) as {
@@ -240,6 +406,10 @@ describe("workspace preparation", () => {
 });
 
 describe("codex runner", () => {
+  it("uses a digest-pinned default image", () => {
+    expect(DEFAULT_CODEX_IMAGE).toMatch(/^ghcr\.io\/openai\/codex-universal@sha256:/);
+  });
+
   it("falls back to installing codex inside the container", () => {
     const script = buildCodexBootstrapScript(
       ["exec", "--model", "gpt-5.5", "-"],
@@ -250,6 +420,15 @@ describe("codex runner", () => {
     expect(script).toContain("exec codex 'exec' '--model' 'gpt-5.5' '-'");
     expect(script).toContain(
       "exec npm exec --yes --no-update-notifier --loglevel error --package '@openai/codex@0.133.0' -- codex 'exec' '--model' 'gpt-5.5' '-'",
+    );
+  });
+
+  it("builds a non-model preflight script", () => {
+    const script = buildCodexPreflightScript(DEFAULT_CODEX_NPM_PACKAGE);
+
+    expect(script).toContain("exec codex --version");
+    expect(script).toContain(
+      "exec npm exec --yes --no-update-notifier --loglevel error --package '@openai/codex@0.133.0' -- codex --version",
     );
   });
 });

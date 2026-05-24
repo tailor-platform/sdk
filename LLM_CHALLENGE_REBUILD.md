@@ -42,6 +42,10 @@ Supported options:
 --problems <keys>      Comma-separated problem filter.
 --output <dir>         Output directory. Default: results/<run-id>.
 --max-seconds <n>      Per-run Codex timeout. Default: 1800.
+--rerun-nonzero-from <report.json>
+                       Rerun only non-zero or timed-out runs from an earlier report.
+--prune-workspace-deps Remove dependency/cache directories from each finished workspace.
+--no-preflight         Skip the Codex container preflight check.
 ```
 
 If `--group cli` is combined with an explicitly provided `--profile`, exit with an error because CLI problems do not use profiles. The implicit default profile must not make `--group cli` fail. If `--group all --profile full` is used, run `sdk-api` with `full` and `cli` with no profile.
@@ -80,6 +84,8 @@ Do not mount:
 - Dotfiles.
 
 Network, web access, shell commands, `pnpm install`, and edits inside the workspace are allowed. The tool records what happened; it does not restrict or judge it.
+
+The default Podman image must be digest-pinned and the Codex CLI package version must be fixed. Operators may override them with `LLM_CHALLENGE_CODEX_IMAGE` and `LLM_CHALLENGE_CODEX_NPM_PACKAGE`; the resolved values are recorded in `report.json`.
 
 ## Problem Structure
 
@@ -156,6 +162,7 @@ results/<run-id>/
   <group>/
     <problem-id>/
       run-0/
+        artifact-summary.json
         prompt.md
         solver.stdout.log
         solver.stderr.log
@@ -164,6 +171,10 @@ results/<run-id>/
 ```
 
 `work/` is the final workspace snapshot immediately after Codex exits. Do not run `generate`, `typecheck`, or any other stage after the solver. A human should inspect `work/`, logs, and trace directly.
+
+Each `work/` directory is initialized as a local Git repository before Codex runs, with the prepared scaffold committed. The repository must not point at the host project; it is only for local diff/status inspection inside the artifact.
+
+`artifact-summary.json` is a non-grading index for the run. It may include the final file list, Git status, command list, failed command snippets, trace errors, and a coarse infrastructure/solver failure kind. It must not include pass/fail judgment.
 
 ## Report Schema
 
@@ -180,6 +191,29 @@ type ChallengeReport = {
   model: string;
   effort: string;
   runsPerProblem: number;
+  runner?: {
+    image: string;
+    codexPackage: string;
+    codexVersion?: string;
+    preflight: {
+      skipped: boolean;
+      exitCode?: number;
+      durationMs?: number;
+      stderr?: string;
+    };
+  };
+  rerunOf?: {
+    sourceReportPath: string;
+    sourceRunId?: string;
+    runs: Array<{
+      problemId: string;
+      group: "sdk-api" | "cli";
+      runIndex: number;
+      artifactDir?: string;
+      solverExitCode?: number;
+      timedOut?: boolean;
+    }>;
+  };
   problems: Array<{
     id: string;
     title: string;
@@ -197,9 +231,24 @@ type ChallengeReport = {
     solverStderrPath: string;
     tracePath: string;
     worktreePath: string;
+    artifactSummaryPath?: string;
     solverExitCode?: number;
     durationMs?: number;
     timedOut?: boolean;
+    failureKind?:
+      | "none"
+      | "timeout"
+      | "usage-limit"
+      | "runner-startup"
+      | "solver-nonzero"
+      | "unknown";
+    replaces?: {
+      sourceReportPath: string;
+      sourceRunId?: string;
+      artifactDir?: string;
+      solverExitCode?: number;
+      timedOut?: boolean;
+    };
   }>;
 };
 ```
@@ -229,5 +278,6 @@ cli/tailordb-migrate-generate   0     results/.../cli/tailordb-migrate-generate/
 7. Persist artifacts and `report.json`.
 8. Add the 19 problem directories and prompts.
 9. Add narrow unit tests for argument parsing, profile filtering, report writing, and artifact paths.
+10. Add runner preflight, rerun selection, workspace Git initialization, artifact summaries, and optional dependency pruning.
 
 Keep the first implementation small. Add analysis, grading, and comparison only if a later workflow proves they are needed.

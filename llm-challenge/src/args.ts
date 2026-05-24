@@ -15,6 +15,8 @@ const DEFAULTS: Omit<RunOptions, "output" | "problemFilters" | "profileExplicit"
   runs: 3,
   concurrency: 1,
   maxSeconds: 1800,
+  preflight: true,
+  pruneWorkspaceDeps: false,
 };
 
 export function parseRunCommand(argv: string[]): RunOptions {
@@ -37,6 +39,19 @@ export function parseRunArgs(argv: string[]): RunOptions {
     const [name, inlineValue] = splitOption(token);
     if (!name.startsWith("--")) {
       throw new Error(`Unexpected argument: ${token}`);
+    }
+
+    switch (name) {
+      case "--no-preflight":
+        rejectInlineValue(name, inlineValue);
+        options.preflight = false;
+        continue;
+      case "--prune-workspace-deps":
+        rejectInlineValue(name, inlineValue);
+        options.pruneWorkspaceDeps = true;
+        continue;
+      default:
+        break;
     }
 
     const value = inlineValue ?? argv[index + 1];
@@ -90,6 +105,9 @@ export function parseRunArgs(argv: string[]): RunOptions {
       case "--max-seconds":
         options.maxSeconds = parsePositiveInteger(name, value);
         break;
+      case "--rerun-nonzero-from":
+        options.rerunNonzeroFrom = value;
+        break;
       default:
         throw new Error(`Unknown option: ${name}`);
     }
@@ -130,4 +148,10 @@ function parsePositiveInteger(name: string, value: string): number {
     throw new Error(`${name} must be a positive integer`);
   }
   return parsed;
+}
+
+function rejectInlineValue(name: string, inlineValue: string | undefined): void {
+  if (inlineValue !== undefined) {
+    throw new Error(`${name} does not accept a value`);
+  }
 }
