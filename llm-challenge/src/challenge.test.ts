@@ -7,6 +7,7 @@ import { parseRunArgs, parseRunCommand } from "./args";
 import { discoverProblems, selectProblems } from "./problems";
 import { applyNoDocsProfile, stripDeclarationJsDoc } from "./profile";
 import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from "./report";
+import { DEFAULT_CODEX_NPM_PACKAGE, buildCodexBootstrapScript } from "./runner";
 import { prepareWorkspace, profileForProblem } from "./workspace";
 import type { Problem } from "./types";
 
@@ -235,6 +236,21 @@ describe("workspace preparation", () => {
   it("uses null profile for cli problems", () => {
     expect(profileForProblem({ group: "cli" }, "full")).toBeNull();
     expect(profileForProblem({ group: "sdk-api" }, "full")).toBe("full");
+  });
+});
+
+describe("codex runner", () => {
+  it("falls back to installing codex inside the container", () => {
+    const script = buildCodexBootstrapScript(
+      ["exec", "--model", "gpt-5.5", "-"],
+      DEFAULT_CODEX_NPM_PACKAGE,
+    );
+
+    expect(script).toContain("if command -v codex >/dev/null 2>&1; then");
+    expect(script).toContain("exec codex 'exec' '--model' 'gpt-5.5' '-'");
+    expect(script).toContain(
+      "exec npm exec --yes --no-update-notifier --loglevel error --package '@openai/codex@0.133.0' -- codex 'exec' '--model' 'gpt-5.5' '-'",
+    );
   });
 });
 

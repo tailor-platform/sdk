@@ -9,6 +9,9 @@ export type SolverResult = {
   timedOut: boolean;
 };
 
+export const DEFAULT_CODEX_IMAGE = "ghcr.io/openai/codex-universal:latest";
+export const DEFAULT_CODEX_NPM_PACKAGE = "@openai/codex@0.133.0";
+
 export async function runCodexInPodman(options: {
   worktreePath: string;
   promptPath: string;
@@ -28,7 +31,8 @@ export async function runCodexInPodman(options: {
     fs.writeFile(options.tracePath, ""),
   ]);
 
-  const image = process.env.LLM_CHALLENGE_CODEX_IMAGE ?? "ghcr.io/openai/codex-universal:latest";
+  const image = process.env.LLM_CHALLENGE_CODEX_IMAGE ?? DEFAULT_CODEX_IMAGE;
+  const codexPackage = process.env.LLM_CHALLENGE_CODEX_NPM_PACKAGE ?? DEFAULT_CODEX_NPM_PACKAGE;
   const codexArgs = [
     "--search",
     "exec",
@@ -46,13 +50,7 @@ export async function runCodexInPodman(options: {
     "/workspace",
     "-",
   ];
-  const script = [
-    "set -eu",
-    "mkdir -p /tmp/codex-home",
-    "cp /tmp/codex-auth.json /tmp/codex-home/auth.json",
-    "export CODEX_HOME=/tmp/codex-home",
-    `exec codex ${codexArgs.map(shellQuote).join(" ")}`,
-  ].join("\n");
+  const script = buildCodexBootstrapScript(codexArgs, codexPackage);
   const prompt = await fs.readFile(options.promptPath, "utf8");
   const podmanArgs = [
     "run",
@@ -122,6 +120,24 @@ export async function runCodexInPodman(options: {
     });
     child.stdin.end(prompt);
   });
+}
+
+export function buildCodexBootstrapScript(codexArgs: string[], codexPackage: string): string {
+  const quotedArgs = codexArgs.map(shellQuote).join(" ");
+  return [
+    "set -eu",
+    "mkdir -p /tmp/codex-home",
+    "cp /tmp/codex-auth.json /tmp/codex-home/auth.json",
+    "export CODEX_HOME=/tmp/codex-home",
+    "if command -v codex >/dev/null 2>&1; then",
+    `  exec codex ${quotedArgs}`,
+    "fi",
+    "if ! command -v npm >/dev/null 2>&1; then",
+    '  echo "codex CLI is not installed and npm is unavailable to install it" >&2',
+    "  exit 127",
+    "fi",
+    `exec npm exec --yes --no-update-notifier --loglevel error --package ${shellQuote(codexPackage)} -- codex ${quotedArgs}`,
+  ].join("\n");
 }
 
 function shellQuote(value: string): string {
