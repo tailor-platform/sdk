@@ -171,6 +171,9 @@ function extractCommands(events: unknown[]): ArtifactSummary["commands"] {
     if (item?.type !== "command_execution" || typeof item.command !== "string") {
       return [];
     }
+    if (!isTerminalCommandEvent(item)) {
+      return [];
+    }
     return [
       {
         command: item.command,
@@ -179,6 +182,12 @@ function extractCommands(events: unknown[]): ArtifactSummary["commands"] {
       },
     ];
   });
+}
+
+function isTerminalCommandEvent(item: Record<string, unknown>): boolean {
+  const exitCode = typeof item.exit_code === "number" ? item.exit_code : undefined;
+  const status = typeof item.status === "string" ? item.status : undefined;
+  return exitCode !== undefined || status === "completed" || status === "failed";
 }
 
 function extractFailedCommands(events: unknown[]): ArtifactSummary["failedCommands"] {

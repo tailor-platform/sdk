@@ -311,6 +311,13 @@ describe("artifact summary", () => {
           item: {
             type: "command_execution",
             command: "pnpm test",
+            status: "in_progress",
+          },
+        }),
+        JSON.stringify({
+          item: {
+            type: "command_execution",
+            command: "pnpm test",
             exit_code: 0,
             status: "completed",
           },
