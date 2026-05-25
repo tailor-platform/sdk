@@ -167,47 +167,85 @@ async function readTraceEvents(tracePath: string): Promise<unknown[]> {
 
 function extractCommands(events: unknown[]): ArtifactSummary["commands"] {
   return events.flatMap((event) => {
-    const item = getItem(event);
-    if (item?.type !== "command_execution" || typeof item.command !== "string") {
-      return [];
-    }
-    if (!isTerminalCommandEvent(item)) {
+    const commandEvent = getCommandEvent(event);
+    if (commandEvent === undefined || !commandEvent.terminal) {
       return [];
     }
     return [
       {
-        command: item.command,
-        exitCode: typeof item.exit_code === "number" ? item.exit_code : undefined,
-        status: typeof item.status === "string" ? item.status : undefined,
+        command: commandEvent.command,
+        exitCode: commandEvent.exitCode,
+        status: commandEvent.status,
       },
     ];
   });
 }
 
-function isTerminalCommandEvent(item: Record<string, unknown>): boolean {
+type CommandEvent = {
+  command: string;
+  exitCode?: number;
+  status?: string;
+  output?: string;
+  terminal: boolean;
+};
+
+function getCommandEvent(event: unknown): CommandEvent | undefined {
+  if (isObject(event) && event.type === "exec_command_end") {
+    const command = commandText(event);
+    if (command === undefined) {
+      return undefined;
+    }
+    const exitCode = typeof event.exit_code === "number" ? event.exit_code : undefined;
+    return {
+      command,
+      exitCode,
+      status: typeof event.status === "string" ? event.status : undefined,
+      output: typeof event.aggregated_output === "string" ? event.aggregated_output : undefined,
+      terminal: true,
+    };
+  }
+
+  const item = getItem(event);
+  if (item?.type !== "command_execution" || typeof item.command !== "string") {
+    return undefined;
+  }
   const exitCode = typeof item.exit_code === "number" ? item.exit_code : undefined;
   const status = typeof item.status === "string" ? item.status : undefined;
-  return exitCode !== undefined || status === "completed" || status === "failed";
+  return {
+    command: item.command,
+    exitCode,
+    status,
+    output: typeof item.aggregated_output === "string" ? item.aggregated_output : undefined,
+    terminal: exitCode !== undefined || status === "completed" || status === "failed",
+  };
+}
+
+function commandText(event: Record<string, unknown>): string | undefined {
+  if (typeof event.command === "string") {
+    return event.command;
+  }
+  if (typeof event.cmd === "string") {
+    return event.cmd;
+  }
+  return undefined;
 }
 
 function extractFailedCommands(events: unknown[]): ArtifactSummary["failedCommands"] {
   return events.flatMap((event) => {
-    const item = getItem(event);
-    if (item?.type !== "command_execution" || typeof item.command !== "string") {
+    const commandEvent = getCommandEvent(event);
+    if (commandEvent === undefined || !commandEvent.terminal) {
       return [];
     }
-    const exitCode = typeof item.exit_code === "number" ? item.exit_code : undefined;
-    const status = typeof item.status === "string" ? item.status : undefined;
+    const { exitCode, status } = commandEvent;
     if (status !== "failed" && (exitCode === undefined || exitCode === 0)) {
       return [];
     }
     return [
       {
-        command: item.command,
+        command: commandEvent.command,
         exitCode,
         status,
-        outputTail:
-          typeof item.aggregated_output === "string" ? tailText(item.aggregated_output) : undefined,
+        outputTail: commandEvent.output === undefined ? undefined : tailText(commandEvent.output),
       },
     ];
   });

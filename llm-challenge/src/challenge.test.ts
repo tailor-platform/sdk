@@ -332,6 +332,12 @@ describe("artifact summary", () => {
             aggregated_output: "x".repeat(1_200),
           },
         }),
+        JSON.stringify({
+          type: "exec_command_end",
+          command: "pnpm lint",
+          exit_code: 2,
+          aggregated_output: "y".repeat(1_200),
+        }),
         JSON.stringify({ type: "error", message: "solver error" }),
       ].join("\n"),
     );
@@ -364,10 +370,16 @@ describe("artifact summary", () => {
     expect(summary.files).not.toContain(".tailor-sdk/cache/generated.json");
     expect(summary.files).not.toContain(".turbo/cache/state.json");
     expect(summary.gitStatus).toContain("?? src/app.ts");
-    expect(summary.commands.map((command) => command.command)).toEqual(["pnpm test", "pnpm build"]);
-    expect(summary.failedCommands).toHaveLength(1);
+    expect(summary.commands.map((command) => command.command)).toEqual([
+      "pnpm test",
+      "pnpm build",
+      "pnpm lint",
+    ]);
+    expect(summary.failedCommands).toHaveLength(2);
     expect(summary.failedCommands[0].command).toBe("pnpm build");
     expect(summary.failedCommands[0].outputTail).toHaveLength(1_000);
+    expect(summary.failedCommands[1].command).toBe("pnpm lint");
+    expect(summary.failedCommands[1].outputTail).toHaveLength(1_000);
     expect(summary.errors).toEqual(["solver error"]);
   });
 
