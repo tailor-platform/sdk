@@ -40,7 +40,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const runId = createRunId();
   const outputDir = path.resolve(packageRoot, options.output ?? path.join("results", runId));
   await fs.mkdir(outputDir, { recursive: true });
-  const sharedPnpmStorePath = path.join(outputDir, ".shared", "pnpm-store");
+  // Persist the pnpm store outside the per-run output dir so packages are
+  // hardlinked across runs instead of being re-downloaded into every results/<runId>.
+  const sharedPnpmStorePath = path.resolve(packageRoot, ".cache", "pnpm-store");
   await fs.mkdir(sharedPnpmStorePath, { recursive: true });
 
   const runtime = getCodexRuntimeConfig();
@@ -128,63 +130,75 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         runIndex: task.runIndex,
         sdkTarballPath,
       });
-      const result = await runCodexInPodman({
-        worktreePath: paths.worktreePath,
-        promptPath: paths.promptPath,
-        solverStdoutPath: paths.solverStdoutPath,
-        solverStderrPath: paths.solverStderrPath,
-        tracePath: paths.tracePath,
-        model: options.model,
-        effort: options.effort,
-        maxSeconds: options.maxSeconds,
-        sharedPnpmStorePath,
-        runtime,
-      });
-      const failureKind = await classifySolverFailure({
-        timedOut: result.timedOut,
-        solverExitCode: result.exitCode,
-        tracePath: paths.tracePath,
-        solverStdoutPath: paths.solverStdoutPath,
-        solverStderrPath: paths.solverStderrPath,
-      });
-      await writeArtifactSummary({
-        problem: task.problem,
-        runIndex: task.runIndex,
-        worktreePath: paths.worktreePath,
-        tracePath: paths.tracePath,
-        solverStdoutPath: paths.solverStdoutPath,
-        solverStderrPath: paths.solverStderrPath,
-        artifactSummaryPath: paths.artifactSummaryPath,
-        solverExitCode: result.exitCode,
-        timedOut: result.timedOut,
-        failureKind,
-      });
-      await writeVerificationSummary({
-        problem: task.problem,
-        runIndex: task.runIndex,
-        worktreePath: paths.worktreePath,
-        verificationSummaryPath: paths.verificationSummaryPath,
-        verificationStdoutPath: paths.verificationStdoutPath,
-        verificationStderrPath: paths.verificationStderrPath,
-      });
-      if (options.pruneWorkspaceDeps) {
-        await pruneWorkspaceDeps(paths.worktreePath);
+      try {
+        const result = await runCodexInPodman({
+          worktreePath: paths.worktreePath,
+          promptPath: paths.promptPath,
+          solverStdoutPath: paths.solverStdoutPath,
+          solverStderrPath: paths.solverStderrPath,
+          tracePath: paths.tracePath,
+          model: options.model,
+          effort: options.effort,
+          maxSeconds: options.maxSeconds,
+          sharedPnpmStorePath,
+          runtime,
+        });
+        const failureKind = await classifySolverFailure({
+          timedOut: result.timedOut,
+          solverExitCode: result.exitCode,
+          tracePath: paths.tracePath,
+          solverStdoutPath: paths.solverStdoutPath,
+          solverStderrPath: paths.solverStderrPath,
+        });
+        await writeArtifactSummary({
+          problem: task.problem,
+          runIndex: task.runIndex,
+          worktreePath: paths.worktreePath,
+          tracePath: paths.tracePath,
+          solverStdoutPath: paths.solverStdoutPath,
+          solverStderrPath: paths.solverStderrPath,
+          artifactSummaryPath: paths.artifactSummaryPath,
+          solverExitCode: result.exitCode,
+          timedOut: result.timedOut,
+          failureKind,
+        });
+        await writeVerificationSummary({
+          problem: task.problem,
+          runIndex: task.runIndex,
+          worktreePath: paths.worktreePath,
+          verificationSummaryPath: paths.verificationSummaryPath,
+          verificationStdoutPath: paths.verificationStdoutPath,
+          verificationStderrPath: paths.verificationStderrPath,
+        });
+        const runReport = createRunReport({
+          packageRoot,
+          problem: task.problem,
+          profile,
+          runIndex: task.runIndex,
+          paths,
+          solverExitCode: result.exitCode,
+          durationMs: result.durationMs,
+          timedOut: result.timedOut,
+          failureKind,
+          replaces: task.replaces,
+        });
+        report.runs.push(runReport);
+        await writeReport(reportFilePath, report);
+        printRun(task, reportPath(packageRoot, paths.artifactDir), result);
+      } finally {
+        // Always reclaim the per-problem node_modules/.pnpm-store so a failure or
+        // interrupt mid-run doesn't leave hundreds of MB per worktree behind.
+        // Swallow prune errors so they can't mask the original solver failure.
+        if (options.pruneWorkspaceDeps) {
+          try {
+            await pruneWorkspaceDeps(paths.worktreePath);
+          } catch (pruneError) {
+            console.warn(
+              `Failed to prune ${paths.worktreePath}: ${pruneError instanceof Error ? pruneError.message : String(pruneError)}`,
+            );
+          }
+        }
       }
-      const runReport = createRunReport({
-        packageRoot,
-        problem: task.problem,
-        profile,
-        runIndex: task.runIndex,
-        paths,
-        solverExitCode: result.exitCode,
-        durationMs: result.durationMs,
-        timedOut: result.timedOut,
-        failureKind,
-        replaces: task.replaces,
-      });
-      report.runs.push(runReport);
-      await writeReport(reportFilePath, report);
-      printRun(task, reportPath(packageRoot, paths.artifactDir), result);
     });
     // Concurrent run writes can complete out of order; finish with the complete in-memory report.
     await writeReport(reportFilePath, report);

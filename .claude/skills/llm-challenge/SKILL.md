@@ -33,7 +33,7 @@ Recommended defaults:
 - `max-seconds`: implementation default - per-run timeout.
 - `rerun-nonzero-from`: empty - rerun only non-zero or timed-out runs from a prior report.
 - `preflight`: enabled - checks the Podman/Codex runner before running.
-- `prune-workspace-deps`: disabled - optionally remove dependency/cache directories from finished workspaces.
+- `prune-workspace-deps`: enabled - removes per-workspace dependency/cache directories after each run. Pass `--no-prune-workspace-deps` to retain them for debugging.
 
 After confirmation, build the command from the confirmed values:
 

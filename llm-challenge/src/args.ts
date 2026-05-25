@@ -16,7 +16,7 @@ const DEFAULTS: Omit<RunOptions, "output" | "problemFilters" | "profileExplicit"
   concurrency: 1,
   maxSeconds: 1800,
   preflight: true,
-  pruneWorkspaceDeps: false,
+  pruneWorkspaceDeps: true,
 };
 
 export function parseRunCommand(argv: string[]): RunOptions {
@@ -46,9 +46,9 @@ export function parseRunArgs(argv: string[]): RunOptions {
         rejectInlineValue(name, inlineValue);
         options.preflight = false;
         continue;
-      case "--prune-workspace-deps":
+      case "--no-prune-workspace-deps":
         rejectInlineValue(name, inlineValue);
-        options.pruneWorkspaceDeps = true;
+        options.pruneWorkspaceDeps = false;
         continue;
       default:
         break;

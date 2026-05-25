@@ -55,4 +55,5 @@ CLAUDE.local.md
 
 # llm-challenge artifacts
 llm-challenge/results/
+llm-challenge/.cache/
 llm-challenge/.tmp/

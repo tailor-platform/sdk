@@ -39,7 +39,7 @@ describe("argument parsing", () => {
       concurrency: 1,
       maxSeconds: 1800,
       preflight: true,
-      pruneWorkspaceDeps: false,
+      pruneWorkspaceDeps: true,
       problemFilters: [],
     });
   });
@@ -74,13 +74,13 @@ describe("argument parsing", () => {
     expect(
       parseRunArgs([
         "--no-preflight",
-        "--prune-workspace-deps",
+        "--no-prune-workspace-deps",
         "--rerun-nonzero-from",
         "results/run/report.json",
       ]),
     ).toMatchObject({
       preflight: false,
-      pruneWorkspaceDeps: true,
+      pruneWorkspaceDeps: false,
       rerunNonzeroFrom: "results/run/report.json",
     });
     expect(() => parseRunArgs(["--no-preflight=true"])).toThrow(
