@@ -162,6 +162,25 @@ describe("profile filtering", () => {
   });
 });
 
+describe("process command", () => {
+  it("merges explicit environment values with the parent environment", async () => {
+    expect(process.env.PATH).toBeDefined();
+    const script = [
+      "const pathStatus = process.env.PATH === process.env.PARENT_PATH ? 'inherited' : 'missing';",
+      "process.stdout.write(`${process.env.LLM_CHALLENGE_TEST_ENV}\\n${pathStatus}`);",
+    ].join("\n");
+
+    const result = await runCommand(process.execPath, ["-e", script], {
+      env: {
+        LLM_CHALLENGE_TEST_ENV: "ok",
+        PARENT_PATH: process.env.PATH,
+      },
+    });
+
+    expect(result.stdout).toBe("ok\ninherited");
+  });
+});
+
 describe("report and artifact paths", () => {
   it("builds the required run artifact layout", () => {
     const paths = buildRunArtifactPaths(

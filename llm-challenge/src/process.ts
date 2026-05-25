@@ -18,7 +18,7 @@ export async function runCommand(
   return await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
-      env: options.env,
+      env: options.env === undefined ? undefined : { ...process.env, ...options.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];

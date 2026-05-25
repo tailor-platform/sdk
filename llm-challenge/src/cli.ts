@@ -72,52 +72,52 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     sdkRef: options.sdkRef,
     needNoDocs: needsNoDocs,
   });
-  console.log(`SDK ${packedSdk.sdkRef.slice(0, 12)} packaged`);
-
-  const report: ChallengeReport = {
-    schemaVersion: 1,
-    runId,
-    timestamp: new Date().toISOString(),
-    sdkRef: packedSdk.sdkRef,
-    sdkVersion: packedSdk.sdkVersion,
-    requestedProfile: options.profile,
-    model: options.model,
-    effort: options.effort,
-    runsPerProblem: rerunPlan?.sourceReport.runsPerProblem ?? options.runs,
-    runner: {
-      image: runtime.image,
-      codexPackage: runtime.codexPackage,
-      codexVersion: preflight.skipped ? undefined : preflight.codexVersion,
-      preflight: {
-        skipped: preflight.skipped,
-        exitCode: preflight.skipped ? undefined : (preflight.exitCode ?? undefined),
-        durationMs: preflight.skipped ? undefined : preflight.durationMs,
-        stderr: preflight.skipped ? undefined : trimReportText(preflight.stderr),
-      },
-    },
-    rerunOf: rerunPlan?.reportRerunOf,
-    problems: problems.map((problem) => ({
-      id: problem.id,
-      title: problem.title,
-      group: problem.group,
-      sourcePath: problem.sourcePath,
-    })),
-    runs: [],
-  };
-  const reportFilePath = path.join(outputDir, "report.json");
-  await writeReport(reportFilePath, report);
-
-  const tasks: RunTask[] =
-    rerunPlan?.tasks ??
-    problems.flatMap((problem) =>
-      Array.from({ length: options.runs }, (_, runIndex) => ({
-        problem,
-        runIndex,
-      })),
-    );
-
-  printHeader();
   try {
+    console.log(`SDK ${packedSdk.sdkRef.slice(0, 12)} packaged`);
+
+    const report: ChallengeReport = {
+      schemaVersion: 1,
+      runId,
+      timestamp: new Date().toISOString(),
+      sdkRef: packedSdk.sdkRef,
+      sdkVersion: packedSdk.sdkVersion,
+      requestedProfile: options.profile,
+      model: options.model,
+      effort: options.effort,
+      runsPerProblem: rerunPlan?.sourceReport.runsPerProblem ?? options.runs,
+      runner: {
+        image: runtime.image,
+        codexPackage: runtime.codexPackage,
+        codexVersion: preflight.skipped ? undefined : preflight.codexVersion,
+        preflight: {
+          skipped: preflight.skipped,
+          exitCode: preflight.skipped ? undefined : (preflight.exitCode ?? undefined),
+          durationMs: preflight.skipped ? undefined : preflight.durationMs,
+          stderr: preflight.skipped ? undefined : trimReportText(preflight.stderr),
+        },
+      },
+      rerunOf: rerunPlan?.reportRerunOf,
+      problems: problems.map((problem) => ({
+        id: problem.id,
+        title: problem.title,
+        group: problem.group,
+        sourcePath: problem.sourcePath,
+      })),
+      runs: [],
+    };
+    const reportFilePath = path.join(outputDir, "report.json");
+    await writeReport(reportFilePath, report);
+
+    const tasks: RunTask[] =
+      rerunPlan?.tasks ??
+      problems.flatMap((problem) =>
+        Array.from({ length: options.runs }, (_, runIndex) => ({
+          problem,
+          runIndex,
+        })),
+      );
+
+    printHeader();
     await runWithConcurrency(tasks, options.concurrency, async (task) => {
       const profile = profileForProblem(task.problem, options.profile);
       const sdkTarballPath =
@@ -202,11 +202,10 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     });
     // Concurrent run writes can complete out of order; finish with the complete in-memory report.
     await writeReport(reportFilePath, report);
+    console.log(`Report ${reportPath(packageRoot, reportFilePath)}`);
   } finally {
     await packedSdk.cleanup();
   }
-
-  console.log(`Report ${reportPath(packageRoot, reportFilePath)}`);
 }
 
 type SourceRun = {
