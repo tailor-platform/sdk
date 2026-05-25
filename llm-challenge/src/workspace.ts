@@ -113,8 +113,8 @@ async function ensureTsconfig(worktreePath: string): Promise<void> {
         {
           compilerOptions: {
             target: "ES2022",
-            module: "NodeNext",
-            moduleResolution: "NodeNext",
+            module: "ESNext",
+            moduleResolution: "bundler",
             strict: true,
             skipLibCheck: true,
           },

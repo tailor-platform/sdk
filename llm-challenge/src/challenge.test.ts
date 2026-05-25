@@ -666,6 +666,15 @@ describe("workspace preparation", () => {
     expect(packageJson.dependencies["@tailor-platform/sdk"]).toBe(
       "file:.challenge/tailor-platform-sdk.tgz",
     );
+    const tsconfig = JSON.parse(
+      await fs.readFile(path.join(paths.worktreePath, "tsconfig.json"), "utf8"),
+    ) as {
+      compilerOptions: Record<string, string>;
+    };
+    expect(tsconfig.compilerOptions).toMatchObject({
+      module: "ESNext",
+      moduleResolution: "bundler",
+    });
   });
 
   it("uses null profile for cli problems", () => {
