@@ -66,6 +66,7 @@ const EXCLUDED_DIRS = new Set([
   ".turbo",
   "node_modules",
 ]);
+const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
 const TYPECHECK_TIMEOUT_MS = 120_000;
 
 export async function writeVerificationSummary(options: {
@@ -141,7 +142,7 @@ function commonChecks(
       kind: "command",
       description: "TypeScript sources compile without emitting files",
       outcome: "skipped",
-      command: "pnpm exec tsc --noEmit --pretty false",
+      command: TYPESCRIPT_NO_EMIT_COMMAND,
     });
   } else {
     checks.push({

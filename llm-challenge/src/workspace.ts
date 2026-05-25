@@ -201,6 +201,7 @@ async function initializeWorkspaceGit(worktreePath: string): Promise<void> {
   await runCommand("git", ["config", "user.email", "llm-challenge@example.invalid"], {
     cwd: worktreePath,
   });
+  await runCommand("git", ["config", "commit.gpgSign", "false"], { cwd: worktreePath });
   await runCommand("git", ["add", "."], { cwd: worktreePath });
   const status = await runCommand("git", ["status", "--short"], { cwd: worktreePath });
   if (status.stdout.trim().length === 0) {

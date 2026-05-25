@@ -507,6 +507,33 @@ describe("verification summary", () => {
       fs.readFile(path.join(dir, "verification-summary.json"), "utf8"),
     ).resolves.toContain('"problemId": "example"');
   });
+
+  it("runs TypeScript verification through the installed compiler directly", async () => {
+    const dir = await makeTempDir();
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, "node_modules/typescript/bin"), { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    await fs.writeFile(path.join(worktreePath, "src/app.ts"), "export {};\n");
+    await fs.writeFile(
+      path.join(worktreePath, "node_modules/typescript/bin/tsc"),
+      "process.exit(0);\n",
+    );
+
+    const summary = await writeVerificationSummary({
+      problem: makeProblem({ group: "cli" }),
+      runIndex: 0,
+      worktreePath,
+      verificationSummaryPath: path.join(dir, "verification-summary.json"),
+      verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+      verificationStderrPath: path.join(dir, "verification.stderr.log"),
+    });
+
+    expect(summary.checks.find((check) => check.id === "typescript-no-emit")).toMatchObject({
+      command: "node node_modules/typescript/bin/tsc --noEmit --pretty false",
+      outcome: "satisfied",
+    });
+  });
 });
 
 describe("workspace preparation", () => {
@@ -556,6 +583,9 @@ describe("workspace preparation", () => {
     await expect(
       fs.readFile(path.join(paths.worktreePath, ".git", "config"), "utf8"),
     ).resolves.toContain("llm-challenge@example.invalid");
+    await expect(
+      runCommand("git", ["config", "--get", "commit.gpgSign"], { cwd: paths.worktreePath }),
+    ).resolves.toMatchObject({ stdout: "false\n" });
     const packageJson = JSON.parse(
       await fs.readFile(path.join(paths.worktreePath, "package.json"), "utf8"),
     ) as {
