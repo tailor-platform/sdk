@@ -12,7 +12,7 @@
     {
       "id": "plugin-output-created",
       "kind": "file-glob",
-      "glob": "generated/**/*",
+      "glob": "**/generated/**/*",
       "minCount": 1,
       "description": "workspace includes a generated artifact or plugin output"
     }

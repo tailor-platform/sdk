@@ -12,9 +12,9 @@
       "id": "public-url-configured",
       "kind": "content-match",
       "glob": "**/*.ts",
-      "pattern": "https?://",
+      "pattern": "https?://|defineStaticWebSite[\\s\\S]*\\.url\\b",
       "flags": "i",
-      "description": "configuration contains a public website URL"
+      "description": "configuration contains a public website URL or SDK URL reference"
     }
   ]
 }

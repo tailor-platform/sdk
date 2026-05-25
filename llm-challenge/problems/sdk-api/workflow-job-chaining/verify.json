@@ -21,7 +21,7 @@
       "id": "job-ordering-present",
       "kind": "content-match",
       "glob": "**/*.ts",
-      "pattern": "depends|after|next|waitFor|needs",
+      "pattern": "validate\\w*\\.trigger\\s*\\([\\s\\S]*reserve\\w*\\.trigger\\s*\\([\\s\\S]*(send\\w*\\.trigger\\s*\\(|confirm\\w*\\.trigger\\s*\\(|mainJob\\s*:\\s*(send|confirm)\\w*)",
       "flags": "i",
       "description": "workflow source represents job ordering or dependencies"
     }
