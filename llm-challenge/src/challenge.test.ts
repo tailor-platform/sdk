@@ -12,6 +12,7 @@ import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from 
 import {
   DEFAULT_CODEX_IMAGE,
   DEFAULT_CODEX_NPM_PACKAGE,
+  PNPM_STORE_ENV,
   buildCodexBootstrapScript,
   buildCodexPreflightScript,
 } from "./runner";
@@ -662,6 +663,16 @@ describe("workspace preparation", () => {
 describe("codex runner", () => {
   it("uses a digest-pinned default image", () => {
     expect(DEFAULT_CODEX_IMAGE).toMatch(/^ghcr\.io\/openai\/codex-universal@sha256:/);
+  });
+
+  it("uses a pnpm 11-compatible store environment variable", async () => {
+    const dir = await makeTempDir();
+    const storePath = path.join(dir, "pnpm-store");
+    const result = await runCommand("pnpm", ["store", "path"], {
+      env: { [PNPM_STORE_ENV]: storePath },
+    });
+
+    expect(result.stdout.trim()).toBe(path.join(storePath, "v11"));
   });
 
   it("falls back to installing codex inside the container", () => {
