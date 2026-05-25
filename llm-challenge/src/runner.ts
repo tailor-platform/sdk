@@ -27,7 +27,7 @@ export type CodexPreflightResult = {
 export const DEFAULT_CODEX_IMAGE =
   "ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304";
 export const DEFAULT_CODEX_NPM_PACKAGE = "@openai/codex@0.133.0";
-export const CONTAINER_PNPM_STORE = "/workspace/.pnpm-store";
+export const CONTAINER_PNPM_STORE = "/pnpm-store";
 export const PNPM_STORE_ENV = "PNPM_CONFIG_STORE_DIR";
 
 export function getCodexRuntimeConfig(): CodexRuntimeConfig {
@@ -88,23 +88,10 @@ export async function runCodexInPodman(options: {
     fs.writeFile(options.tracePath, ""),
   ]);
 
-  const codexArgs = [
-    "--search",
-    "exec",
-    "--json",
-    "--model",
-    options.model,
-    "-c",
-    `model_reasoning_effort="${options.effort}"`,
-    "--skip-git-repo-check",
-    "--ephemeral",
-    "--ignore-user-config",
-    "--ignore-rules",
-    "--dangerously-bypass-approvals-and-sandbox",
-    "-C",
-    "/workspace",
-    "-",
-  ];
+  const codexArgs = buildCodexExecArgs({
+    model: options.model,
+    effort: options.effort,
+  });
   const script = buildCodexBootstrapScript(codexArgs, runtime.codexPackage);
   const prompt = await fs.readFile(options.promptPath, "utf8");
   const podmanArgs = [
@@ -183,6 +170,25 @@ export async function runCodexInPodman(options: {
     });
     child.stdin.end(prompt);
   });
+}
+
+export function buildCodexExecArgs(options: { model: string; effort: string }): string[] {
+  return [
+    "exec",
+    "--json",
+    "--model",
+    options.model,
+    "-c",
+    `model_reasoning_effort="${options.effort}"`,
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "-C",
+    "/workspace",
+    "-",
+  ];
 }
 
 export function buildCodexBootstrapScript(codexArgs: string[], codexPackage: string): string {

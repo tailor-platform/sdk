@@ -10,10 +10,12 @@ import { runCommand } from "./process";
 import { applyNoDocsProfile, stripDeclarationJsDoc, stripJsDocBlocks } from "./profile";
 import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from "./report";
 import {
+  CONTAINER_PNPM_STORE,
   DEFAULT_CODEX_IMAGE,
   DEFAULT_CODEX_NPM_PACKAGE,
   PNPM_STORE_ENV,
   buildCodexBootstrapScript,
+  buildCodexExecArgs,
   buildCodexPreflightScript,
 } from "./runner";
 import { writeVerificationSummary } from "./verification";
@@ -677,6 +679,10 @@ describe("codex runner", () => {
     expect(DEFAULT_CODEX_IMAGE).toMatch(/^ghcr\.io\/openai\/codex-universal@sha256:/);
   });
 
+  it("keeps the shared pnpm store outside the solver workspace", () => {
+    expect(CONTAINER_PNPM_STORE).not.toMatch(/^\/workspace(?:\/|$)/);
+  });
+
   it("uses a pnpm 11-compatible store environment variable", async () => {
     const dir = await makeTempDir();
     const storePath = path.join(dir, "pnpm-store");
@@ -685,6 +691,13 @@ describe("codex runner", () => {
     });
 
     expect(result.stdout.trim()).toBe(path.join(storePath, "v11"));
+  });
+
+  it("does not enable web search for challenge solves", () => {
+    const args = buildCodexExecArgs({ model: "gpt-5.5", effort: "xhigh" });
+
+    expect(args[0]).toBe("exec");
+    expect(args).not.toContain("--search");
   });
 
   it("falls back to installing codex inside the container", () => {

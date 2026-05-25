@@ -42,8 +42,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   await fs.mkdir(outputDir, { recursive: true });
   // Persist the pnpm store outside the per-run output dir so packages are
   // hardlinked across runs instead of being re-downloaded into every results/<runId>.
-  const sharedPnpmStorePath = path.resolve(packageRoot, ".cache", "pnpm-store");
-  await fs.mkdir(sharedPnpmStorePath, { recursive: true });
+  const sharedPnpmStoreRoot = path.resolve(packageRoot, ".cache", "pnpm-store");
+  await fs.mkdir(sharedPnpmStoreRoot, { recursive: true });
 
   const runtime = getCodexRuntimeConfig();
   console.log(`Preflight ${runtime.image}`);
@@ -124,6 +124,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         profile === "no-docs"
           ? requiredNoDocsTarball(packedSdk.noDocsTarballPath)
           : packedSdk.fullTarballPath;
+      const sharedPnpmStorePath = path.join(sharedPnpmStoreRoot, profile ?? "cli");
+      await fs.mkdir(sharedPnpmStorePath, { recursive: true });
       const paths = await prepareWorkspace({
         outputDir,
         problem: task.problem,
