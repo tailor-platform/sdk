@@ -59,6 +59,9 @@ results/<run-id>/
   report.json
   <group>/<problem-id>/run-<n>/
     artifact-summary.json
+    verification-summary.json
+    verification.stdout.log
+    verification.stderr.log
     prompt.md
     solver.stdout.log
     solver.stderr.log
@@ -68,7 +71,9 @@ results/<run-id>/
 
 After a run, report the `report.json` path and key artifact paths. Ask whether the user wants artifact analysis.
 
-For analysis, read `report.json` and `artifact-summary.json` first. Use summaries to find candidate areas, then inspect `work/`, logs, and `trace.jsonl` before stating conclusions. `artifact-summary.json` includes final file lists, Git status, command history, failed command tails, trace errors, solver exit status, timeout status, and a coarse infrastructure/solver failure kind.
+For analysis, read `report.json`, `artifact-summary.json`, and `verification-summary.json` first. Use summaries to find candidate areas, then inspect `work/`, logs, and `trace.jsonl` before stating conclusions. `artifact-summary.json` includes final file lists, Git status, command history, failed command tails, trace errors, solver exit status, timeout status, and a coarse infrastructure/solver failure kind.
+
+`verification-summary.json` records common and problem-specific minimum correctness checks. Treat these as evidence only: an unsatisfied check means the artifact is missing a required minimum, but satisfied checks do not prove full correctness. Do not report scores, rankings, or `PASS`/`FAIL` labels from verification data.
 
 ## Creating Problems
 
@@ -78,6 +83,7 @@ Create only prompt/scaffold problems:
 llm-challenge/problems/<group>/<id>/
   meta.json
   prompt.md
+  verify.json       # optional visible minimum-correctness checks
   scaffold/
 ```
 
@@ -86,6 +92,7 @@ Rules:
 - `group` is `sdk-api` or `cli` and comes from the directory, not `meta.json`.
 - `id` is short kebab-case. If the user does not provide it, propose one and verify it is unique across all groups.
 - `meta.json` contains only `id` and `title`; `id` must match the directory name.
+- `verify.json`, when present, contains visible minimum-correctness checks only. Checks should encode conditions where missing evidence is definitely wrong, similar to type checking; do not put ideal implementations, hidden answers, scores, or broad quality judgments there.
 - Write `prompt.md` in English.
 - For `sdk-api`, do not include SDK API names, imports, code examples, or direct solution hints.
 - For `cli`, the prompt may name the `tailor-sdk` binary, but must not name the target subcommand or exact arguments.

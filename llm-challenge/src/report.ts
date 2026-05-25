@@ -10,6 +10,9 @@ export type RunArtifactPaths = {
   tracePath: string;
   worktreePath: string;
   artifactSummaryPath: string;
+  verificationSummaryPath: string;
+  verificationStdoutPath: string;
+  verificationStderrPath: string;
 };
 
 export function buildRunArtifactPaths(
@@ -26,6 +29,9 @@ export function buildRunArtifactPaths(
     tracePath: path.join(artifactDir, "trace.jsonl"),
     worktreePath: path.join(artifactDir, "work"),
     artifactSummaryPath: path.join(artifactDir, "artifact-summary.json"),
+    verificationSummaryPath: path.join(artifactDir, "verification-summary.json"),
+    verificationStdoutPath: path.join(artifactDir, "verification.stdout.log"),
+    verificationStderrPath: path.join(artifactDir, "verification.stderr.log"),
   };
 }
 
@@ -53,6 +59,9 @@ export function createRunReport(options: {
     tracePath: reportPath(options.packageRoot, options.paths.tracePath),
     worktreePath: reportPath(options.packageRoot, options.paths.worktreePath),
     artifactSummaryPath: reportPath(options.packageRoot, options.paths.artifactSummaryPath),
+    verificationSummaryPath: reportPath(options.packageRoot, options.paths.verificationSummaryPath),
+    verificationStdoutPath: reportPath(options.packageRoot, options.paths.verificationStdoutPath),
+    verificationStderrPath: reportPath(options.packageRoot, options.paths.verificationStderrPath),
     solverExitCode: options.solverExitCode,
     durationMs: options.durationMs,
     timedOut: options.timedOut,

@@ -15,6 +15,7 @@ import {
   buildCodexBootstrapScript,
   buildCodexPreflightScript,
 } from "./runner";
+import { writeVerificationSummary } from "./verification";
 import { prepareWorkspace, profileForProblem } from "./workspace";
 import type { Problem } from "./types";
 
@@ -105,6 +106,7 @@ describe("problem discovery", () => {
     expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(15);
     expect(problems.filter((problem) => problem.group === "cli")).toHaveLength(4);
     expect(problems.map((problem) => problem.id)).toContain("plugin-registration");
+    expect(problems.every((problem) => problem.verifyPath !== undefined)).toBe(true);
     expect(
       problems.every((problem) => problem.sourcePath === `problems/${problem.group}/${problem.id}`),
     ).toBe(true);
@@ -176,6 +178,10 @@ describe("report and artifact paths", () => {
       tracePath: "/tmp/out/sdk-api/plugin-registration/run-2/trace.jsonl",
       worktreePath: "/tmp/out/sdk-api/plugin-registration/run-2/work",
       artifactSummaryPath: "/tmp/out/sdk-api/plugin-registration/run-2/artifact-summary.json",
+      verificationSummaryPath:
+        "/tmp/out/sdk-api/plugin-registration/run-2/verification-summary.json",
+      verificationStdoutPath: "/tmp/out/sdk-api/plugin-registration/run-2/verification.stdout.log",
+      verificationStderrPath: "/tmp/out/sdk-api/plugin-registration/run-2/verification.stderr.log",
     });
   });
 
@@ -209,11 +215,18 @@ describe("report and artifact paths", () => {
     });
 
     const written = JSON.parse(await fs.readFile(reportFile, "utf8")) as {
-      runs: Array<{ artifactDir: string; artifactSummaryPath: string }>;
+      runs: Array<{
+        artifactDir: string;
+        artifactSummaryPath: string;
+        verificationSummaryPath: string;
+      }>;
     };
     expect(written.runs[0].artifactDir).toBe("results/run/sdk-api/example/run-0");
     expect(written.runs[0].artifactSummaryPath).toBe(
       "results/run/sdk-api/example/run-0/artifact-summary.json",
+    );
+    expect(written.runs[0].verificationSummaryPath).toBe(
+      "results/run/sdk-api/example/run-0/verification-summary.json",
     );
     expect(reportPath(packageRoot, path.join(packageRoot, "results/run/report.json"))).toBe(
       "results/run/report.json",
@@ -349,6 +362,100 @@ describe("artifact summary", () => {
         solverStderrPath,
       }),
     ).resolves.toBe("runner-startup");
+  });
+});
+
+describe("verification summary", () => {
+  it("loads every problem verification spec without definition errors", async () => {
+    const dir = await makeTempDir();
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(worktreePath, { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    const problems = await discoverProblems(packageRoot);
+
+    for (const problem of problems) {
+      const summary = await writeVerificationSummary({
+        problem,
+        runIndex: 0,
+        worktreePath,
+        verificationSummaryPath: path.join(dir, `${problem.group}-${problem.id}.json`),
+        verificationStdoutPath: path.join(dir, `${problem.group}-${problem.id}.stdout.log`),
+        verificationStderrPath: path.join(dir, `${problem.group}-${problem.id}.stderr.log`),
+      });
+
+      expect(summary.checks.filter((check) => check.outcome === "error")).toEqual([]);
+    }
+  });
+
+  it("records common and problem-level minimum correctness checks", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, "docs"), { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    await fs.writeFile(path.join(worktreePath, "src/note.txt"), "customer directory\n");
+    await fs.writeFile(path.join(worktreePath, "docs/readme.md"), "notes\n");
+    const verifyPath = path.join(problemRoot, "verify.json");
+    await fs.writeFile(
+      verifyPath,
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          checks: [
+            { id: "note-file", kind: "file-exists", path: "src/note.txt" },
+            { id: "docs-file", kind: "file-glob", glob: "docs/*.md", minCount: 1 },
+            {
+              id: "customer-text",
+              kind: "content-match",
+              glob: "src/*.txt",
+              pattern: "customer",
+            },
+            { id: "missing-file", kind: "file-exists", path: "missing.txt" },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const summary = await writeVerificationSummary({
+      problem: makeProblem({
+        group: "cli",
+        absolutePath: problemRoot,
+        scaffoldPath: path.join(problemRoot, "scaffold"),
+        verifyPath,
+      }),
+      runIndex: 0,
+      worktreePath,
+      verificationSummaryPath: path.join(dir, "verification-summary.json"),
+      verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+      verificationStderrPath: path.join(dir, "verification.stderr.log"),
+    });
+
+    expect(summary.checks.find((check) => check.id === "workspace-package-json")).toMatchObject({
+      outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "typescript-no-emit")).toMatchObject({
+      outcome: "skipped",
+    });
+    expect(summary.checks.find((check) => check.id === "note-file")).toMatchObject({
+      scope: "problem",
+      outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "docs-file")).toMatchObject({
+      outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "customer-text")).toMatchObject({
+      outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "missing-file")).toMatchObject({
+      outcome: "unsatisfied",
+    });
+    await expect(
+      fs.readFile(path.join(dir, "verification-summary.json"), "utf8"),
+    ).resolves.toContain('"problemId": "example"');
   });
 });
 

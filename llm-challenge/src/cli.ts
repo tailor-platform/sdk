@@ -7,6 +7,7 @@ import { discoverProblems, selectProblems } from "./problems";
 import { createRunReport, reportPath, writeReport } from "./report";
 import { getCodexRuntimeConfig, preflightCodexRunner, runCodexInPodman } from "./runner";
 import { packSdk } from "./sdk-pack";
+import { writeVerificationSummary } from "./verification";
 import { prepareWorkspace, profileForProblem, pruneWorkspaceDeps } from "./workspace";
 import type { ChallengeReport, ChallengeRunReport, Problem, ProblemGroup } from "./types";
 
@@ -157,6 +158,14 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         solverExitCode: result.exitCode,
         timedOut: result.timedOut,
         failureKind,
+      });
+      await writeVerificationSummary({
+        problem: task.problem,
+        runIndex: task.runIndex,
+        worktreePath: paths.worktreePath,
+        verificationSummaryPath: paths.verificationSummaryPath,
+        verificationStdoutPath: paths.verificationStdoutPath,
+        verificationStderrPath: paths.verificationStderrPath,
       });
       if (options.pruneWorkspaceDeps) {
         await pruneWorkspaceDeps(paths.worktreePath);

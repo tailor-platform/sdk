@@ -13,6 +13,7 @@ export type Problem = {
   absolutePath: string;
   promptPath: string;
   scaffoldPath: string;
+  verifyPath?: string;
 };
 
 export type RunOptions = {
@@ -86,6 +87,9 @@ export type ChallengeRunReport = {
   tracePath: string;
   worktreePath: string;
   artifactSummaryPath?: string;
+  verificationSummaryPath?: string;
+  verificationStdoutPath?: string;
+  verificationStderrPath?: string;
   solverExitCode?: number;
   durationMs?: number;
   timedOut?: boolean;

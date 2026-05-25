@@ -22,6 +22,7 @@ export async function discoverProblems(packageRoot: string): Promise<Problem[]> 
       const metaPath = path.join(problemRoot, "meta.json");
       const promptPath = path.join(problemRoot, "prompt.md");
       const scaffoldPath = path.join(problemRoot, "scaffold");
+      const verifyPath = path.join(problemRoot, "verify.json");
       const meta = JSON.parse(await fs.readFile(metaPath, "utf8")) as ProblemMeta;
       validateMeta(meta, metaPath);
       if (meta.id !== entry.name) {
@@ -39,6 +40,7 @@ export async function discoverProblems(packageRoot: string): Promise<Problem[]> 
         absolutePath: problemRoot,
         promptPath,
         scaffoldPath,
+        verifyPath: (await pathExists(verifyPath)) ? verifyPath : undefined,
       });
     }
   }
@@ -111,4 +113,13 @@ function resolveProblemFilter(problems: Problem[], filter: string): Problem {
 
 function toPosix(value: string): string {
   return value.split(path.sep).join(path.posix.sep);
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }

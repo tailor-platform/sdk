@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "workflow-source-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "workflow",
+      "flags": "i",
+      "description": "source includes a workflow definition"
+    },
+    {
+      "id": "order-fulfillment-steps-present",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "validate|reserve|confirmation|confirm",
+      "flags": "i",
+      "description": "workflow source includes the requested order fulfillment steps"
+    },
+    {
+      "id": "job-ordering-present",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "depends|after|next|waitFor|needs",
+      "flags": "i",
+      "description": "workflow source represents job ordering or dependencies"
+    }
+  ]
+}
