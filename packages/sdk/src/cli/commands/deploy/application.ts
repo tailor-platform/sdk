@@ -437,9 +437,16 @@ function buildGatewayFilters(
         `HTTP adapter "${loaded.adapter.name}" was loaded but no bundled input script is available`,
       );
     }
-    const outputScript = loaded.hasOutput
-      ? (httpAdapterBuildResult?.bundledOutputs.get(loaded.adapter.name) ?? "")
-      : "";
+    let outputScript = "";
+    if (loaded.hasOutput) {
+      const bundled = httpAdapterBuildResult?.bundledOutputs.get(loaded.adapter.name);
+      if (!bundled) {
+        throw new Error(
+          `HTTP adapter "${loaded.adapter.name}" declares an output handler but no bundled output script is available`,
+        );
+      }
+      outputScript = bundled;
+    }
     return {
       name: loaded.adapter.name,
       pathPattern: loaded.adapter.pathPattern,

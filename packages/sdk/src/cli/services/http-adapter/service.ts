@@ -1,6 +1,9 @@
+import * as fs from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
+import { findHttpAdaptersInFile } from "@/cli/services/http-adapter/detector";
 import { logger, styles } from "@/cli/shared/logger";
 import { HttpAdapterConfigSchema } from "@/parser/service/http-adapter";
 import { isSdkBranded } from "@/utils/brand";
@@ -73,6 +76,11 @@ async function loadAdapterFiles(
   }
 
   const files = loadFilesWithIgnores(config);
+
+  // Validate AST-level constraints up front so we don't execute (dynamically
+  // import) any adapter module unless its file structure is valid.
+  await Promise.all(files.map(validateAdapterFile));
+
   const loadResults = await Promise.all(files.map(loadAdapterFromFile));
 
   const adapters: LoadedHttpAdapter[] = [];
@@ -93,6 +101,16 @@ async function loadAdapterFiles(
   }
 
   return { adapters, fileCount: files.length };
+}
+
+async function validateAdapterFile(filePath: string): Promise<void> {
+  const source = await fs.readFile(filePath, "utf8");
+  const { program } = parseSync(filePath, source);
+  const { errors } = findHttpAdaptersInFile(program, filePath);
+  if (errors.length === 0) return;
+  const relativePath = path.relative(process.cwd(), filePath);
+  const messages = errors.map((e) => `  - ${e.message}`).join("\n");
+  throw new Error(`Invalid HTTP adapter file ${relativePath}:\n${messages}`);
 }
 
 async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter | null> {

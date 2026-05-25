@@ -9,7 +9,7 @@ export type {
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
 
 export type HttpAdapterRequest = {
-  method: string;
+  method: HttpMethod;
   path: string;
   headers: Record<string, string>;
   query: Record<string, string>;

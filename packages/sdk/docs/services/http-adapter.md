@@ -21,14 +21,14 @@ At deploy time the SDK bundles each `input` and `output` function into a standal
 
 ## Runtime Constraints
 
-The gateway runs adapter scripts in a sandboxed Sobek runtime (an ES5.1 + partial ES2015 subset). The following are **not** available:
+Adapter scripts are bundled to an ES2017 IIFE and executed in the gateway's sandboxed Sobek runtime. The following are **not** available:
 
-- Node built-in modules (`fs`, `path`, `crypto`, `http`, etc.)
-- `fetch`, `setTimeout`, `setInterval`, and other browser globals
-- `async`/`await` and Promises
+- Node built-in modules (`fs`, `path`, `crypto`, `http`, etc.) — rejected at build time
+- `async`/`await` and top-level `await` — rejected at build time
+- `fetch`, `setTimeout`, `setInterval`, and other browser/host globals
 - Any third-party libraries that depend on the above
 
-The bundler will fail the build if a Node built-in is imported. Each bundled script is capped at 256 KB (with a warning at 64 KB).
+Each bundled script is capped at 256 KB (with a warning at 64 KB).
 
 ## Activation
 
@@ -85,8 +85,10 @@ If `output` is omitted, the raw GraphQL response is returned as JSON.
 ## Type Reference
 
 ```typescript
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
+
 type HttpAdapterRequest = {
-  method: string;
+  method: HttpMethod;
   path: string;
   headers: Record<string, string>;
   query: Record<string, string>;
