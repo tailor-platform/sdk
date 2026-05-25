@@ -541,6 +541,56 @@ describe("verification summary", () => {
       outcome: "satisfied",
     });
   });
+
+  it("excludes SDK cache files from problem verification evidence", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, ".tailor-sdk/cache"), { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    await fs.writeFile(path.join(worktreePath, ".tailor-sdk/cache/generated.ts"), "cacheOnly\n");
+    const verifyPath = path.join(problemRoot, "verify.json");
+    await fs.writeFile(
+      verifyPath,
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          checks: [
+            {
+              id: "cache-only-text",
+              kind: "content-match",
+              glob: "**/*.ts",
+              pattern: "cacheOnly",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const summary = await writeVerificationSummary({
+      problem: makeProblem({
+        group: "cli",
+        absolutePath: problemRoot,
+        scaffoldPath: path.join(problemRoot, "scaffold"),
+        verifyPath,
+      }),
+      runIndex: 0,
+      worktreePath,
+      verificationSummaryPath: path.join(dir, "verification-summary.json"),
+      verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+      verificationStderrPath: path.join(dir, "verification.stderr.log"),
+    });
+
+    expect(summary.checks.find((check) => check.id === "cache-only-text")).toMatchObject({
+      outcome: "unsatisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "typescript-no-emit")).toMatchObject({
+      outcome: "skipped",
+    });
+  });
 });
 
 describe("workspace preparation", () => {

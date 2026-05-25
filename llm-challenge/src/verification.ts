@@ -66,6 +66,7 @@ const EXCLUDED_DIRS = new Set([
   ".turbo",
   "node_modules",
 ]);
+const EXCLUDED_PATHS = new Set([".tailor-sdk/cache"]);
 const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
 const TYPECHECK_TIMEOUT_MS = 120_000;
 
@@ -387,6 +388,9 @@ async function listWorkspaceFiles(worktreePath: string): Promise<string[]> {
       const absolutePath = path.join(directory, entry.name);
       const relativePath = toPosix(path.relative(worktreePath, absolutePath));
       if (entry.isDirectory()) {
+        if (shouldExcludeDirectory(relativePath, entry.name)) {
+          continue;
+        }
         await walk(absolutePath);
       } else {
         files.push(relativePath);
@@ -395,6 +399,10 @@ async function listWorkspaceFiles(worktreePath: string): Promise<string[]> {
   }
   await walk(worktreePath);
   return files.sort();
+}
+
+function shouldExcludeDirectory(relativePath: string, name: string): boolean {
+  return EXCLUDED_DIRS.has(name) || EXCLUDED_PATHS.has(relativePath);
 }
 
 function matchesGlob(value: string, glob: string): boolean {

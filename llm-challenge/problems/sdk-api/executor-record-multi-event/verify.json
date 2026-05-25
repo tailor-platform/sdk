@@ -13,9 +13,9 @@
       "id": "record-change-events-mentioned",
       "kind": "content-match",
       "glob": "**/*.ts",
-      "pattern": "create|created|update|updated",
+      "pattern": "\\b(create|created|creation)\\b[\\s\\S]*\\b(update|updated)\\b|\\b(update|updated)\\b[\\s\\S]*\\b(create|created|creation)\\b",
       "flags": "i",
-      "description": "source references record creation or update activity"
+      "description": "source references both record creation and update activity"
     }
   ]
 }
