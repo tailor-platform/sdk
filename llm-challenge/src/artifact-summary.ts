@@ -32,6 +32,7 @@ const EXCLUDED_DIRS = new Set([
   ".challenge",
   ".git",
   ".pnpm-store",
+  ".pnpm-home",
   ".cache",
   ".turbo",
   "node_modules",

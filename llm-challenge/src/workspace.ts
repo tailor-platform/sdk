@@ -5,6 +5,7 @@ import { buildRunArtifactPaths, type RunArtifactPaths } from "./report";
 import type { Problem, SdkProfile } from "./types";
 
 const WORKSPACE_SDK_TARBALL = ".challenge/tailor-platform-sdk.tgz";
+const WORKSPACE_PNPM_STORE = ".pnpm-store";
 const PNPM_WORKSPACE_YAML = `allowBuilds:
   "@prisma/engines": true
   "@swc/core": true
@@ -12,10 +13,18 @@ const PNPM_WORKSPACE_YAML = `allowBuilds:
   esbuild: true
   protobufjs: true
 `;
+const NPMRC_SETTINGS = new Map([
+  ["store-dir", WORKSPACE_PNPM_STORE],
+  ["prefer-offline", "true"],
+  ["fetch-retries", "3"],
+  ["fetch-retry-mintimeout", "10000"],
+  ["fetch-retry-maxtimeout", "60000"],
+]);
 const GITIGNORE_PATTERNS = [
   ".challenge/",
   "node_modules/",
   ".pnpm-store/",
+  ".pnpm-home/",
   ".cache/",
   ".tailor-sdk/cache/",
 ];
@@ -39,6 +48,8 @@ export async function prepareWorkspace(options: {
   await fs.copyFile(options.sdkTarballPath, sdkTarballDest);
   await ensureWorkspacePackage(paths.worktreePath);
   await ensurePnpmWorkspace(paths.worktreePath);
+  await ensureNpmrc(paths.worktreePath);
+  await fs.mkdir(path.join(paths.worktreePath, WORKSPACE_PNPM_STORE), { recursive: true });
   await ensureTsconfig(paths.worktreePath);
   await ensureGitignore(paths.worktreePath);
   await initializeWorkspaceGit(paths.worktreePath);
@@ -54,7 +65,7 @@ export function profileForProblem(
 
 export async function pruneWorkspaceDeps(worktreePath: string): Promise<void> {
   await Promise.all(
-    ["node_modules", ".pnpm-store", ".cache", ".turbo"].map((name) =>
+    ["node_modules", ".pnpm-store", ".pnpm-home", ".cache", ".turbo"].map((name) =>
       fs.rm(path.join(worktreePath, name), { recursive: true, force: true }),
     ),
   );
@@ -120,6 +131,42 @@ async function ensurePnpmWorkspace(worktreePath: string): Promise<void> {
   await fs.writeFile(path.join(worktreePath, "pnpm-workspace.yaml"), PNPM_WORKSPACE_YAML);
 }
 
+async function ensureNpmrc(worktreePath: string): Promise<void> {
+  const npmrcPath = path.join(worktreePath, ".npmrc");
+  let current = "";
+  try {
+    current = await fs.readFile(npmrcPath, "utf8");
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+      throw error;
+    }
+  }
+
+  const seen = new Set<string>();
+  const lines = current
+    .split(/\r?\n/)
+    .filter((line) => line.length > 0)
+    .flatMap((line) => {
+      const key = npmrcKey(line);
+      if (key === undefined || !NPMRC_SETTINGS.has(key)) {
+        return [line];
+      }
+      if (seen.has(key)) {
+        return [];
+      }
+      seen.add(key);
+      return [`${key}=${NPMRC_SETTINGS.get(key)}`];
+    });
+
+  for (const [key, value] of NPMRC_SETTINGS) {
+    if (!seen.has(key)) {
+      lines.push(`${key}=${value}`);
+    }
+  }
+
+  await fs.writeFile(npmrcPath, `${lines.join("\n")}\n`);
+}
+
 async function ensureGitignore(worktreePath: string): Promise<void> {
   const gitignorePath = path.join(worktreePath, ".gitignore");
   let current = "";
@@ -137,6 +184,15 @@ async function ensureGitignore(worktreePath: string): Promise<void> {
   }
   const prefix = current.length > 0 && !current.endsWith("\n") ? "\n" : "";
   await fs.writeFile(gitignorePath, `${current}${prefix}${additions.join("\n")}\n`);
+}
+
+function npmrcKey(line: string): string | undefined {
+  const trimmed = line.trim();
+  if (trimmed.length === 0 || trimmed.startsWith("#") || trimmed.startsWith(";")) {
+    return undefined;
+  }
+  const equalsIndex = trimmed.indexOf("=");
+  return equalsIndex === -1 ? undefined : trimmed.slice(0, equalsIndex).trim();
 }
 
 async function initializeWorkspaceGit(worktreePath: string): Promise<void> {

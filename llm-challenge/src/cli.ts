@@ -39,6 +39,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const runId = createRunId();
   const outputDir = path.resolve(packageRoot, options.output ?? path.join("results", runId));
   await fs.mkdir(outputDir, { recursive: true });
+  const sharedPnpmStorePath = path.join(outputDir, ".shared", "pnpm-store");
+  await fs.mkdir(sharedPnpmStorePath, { recursive: true });
 
   const runtime = getCodexRuntimeConfig();
   console.log(`Preflight ${runtime.image}`);
@@ -134,6 +136,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         model: options.model,
         effort: options.effort,
         maxSeconds: options.maxSeconds,
+        sharedPnpmStorePath,
         runtime,
       });
       const failureKind = await classifySolverFailure({

@@ -27,6 +27,7 @@ export type CodexPreflightResult = {
 export const DEFAULT_CODEX_IMAGE =
   "ghcr.io/openai/codex-universal@sha256:905e512f36460e1be4cfedb30928a8a28299edb0fcd5de7998ceaa72d27fe304";
 export const DEFAULT_CODEX_NPM_PACKAGE = "@openai/codex@0.133.0";
+export const CONTAINER_PNPM_STORE = "/workspace/.pnpm-store";
 
 export function getCodexRuntimeConfig(): CodexRuntimeConfig {
   return {
@@ -75,6 +76,7 @@ export async function runCodexInPodman(options: {
   model: string;
   effort: string;
   maxSeconds: number;
+  sharedPnpmStorePath?: string;
   runtime?: CodexRuntimeConfig;
 }): Promise<SolverResult> {
   const runtime = options.runtime ?? getCodexRuntimeConfig();
@@ -112,6 +114,14 @@ export async function runCodexInPodman(options: {
     "/bin/bash",
     "-v",
     `${options.worktreePath}:/workspace:rw,Z`,
+    ...(options.sharedPnpmStorePath === undefined
+      ? []
+      : [
+          "-v",
+          `${options.sharedPnpmStorePath}:${CONTAINER_PNPM_STORE}:rw,z`,
+          "-e",
+          `NPM_CONFIG_STORE_DIR=${CONTAINER_PNPM_STORE}`,
+        ]),
     "-v",
     `${runtime.authFile}:/tmp/codex-auth.json:ro,Z`,
     "-w",

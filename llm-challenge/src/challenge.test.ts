@@ -227,10 +227,12 @@ describe("artifact summary", () => {
     const worktreePath = path.join(dir, "work");
     await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, "node_modules/pkg"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, ".pnpm-home/store"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, ".tailor-sdk/cache"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, ".turbo/cache"), { recursive: true });
     await fs.writeFile(path.join(worktreePath, "src/app.ts"), "export {};\n");
     await fs.writeFile(path.join(worktreePath, "node_modules/pkg/index.js"), "");
+    await fs.writeFile(path.join(worktreePath, ".pnpm-home/store/index.db"), "");
     await fs.writeFile(path.join(worktreePath, ".tailor-sdk/cache/generated.json"), "{}");
     await fs.writeFile(path.join(worktreePath, ".turbo/cache/state.json"), "{}");
     await runCommand("git", ["init"], { cwd: worktreePath });
@@ -287,6 +289,7 @@ describe("artifact summary", () => {
     };
     expect(summary.files).toContain("src/app.ts");
     expect(summary.files).not.toContain("node_modules/pkg/index.js");
+    expect(summary.files).not.toContain(".pnpm-home/store/index.db");
     expect(summary.files).not.toContain(".tailor-sdk/cache/generated.json");
     expect(summary.files).not.toContain(".turbo/cache/state.json");
     expect(summary.gitStatus).toContain("?? src/app.ts");
@@ -382,8 +385,15 @@ describe("workspace preparation", () => {
     await expect(
       fs.readFile(path.join(paths.worktreePath, "pnpm-workspace.yaml"), "utf8"),
     ).resolves.toContain('"@tailor-platform/sdk": true');
+    await expect(fs.readFile(path.join(paths.worktreePath, ".npmrc"), "utf8")).resolves.toContain(
+      "store-dir=.pnpm-store",
+    );
+    await expect(fs.access(path.join(paths.worktreePath, ".pnpm-store"))).resolves.toBeUndefined();
     await expect(fs.readFile(path.join(paths.worktreePath, ".gitignore"), "utf8")).resolves.toMatch(
       /node_modules\//,
+    );
+    await expect(fs.readFile(path.join(paths.worktreePath, ".gitignore"), "utf8")).resolves.toMatch(
+      /\.pnpm-home\//,
     );
     await expect(fs.access(path.join(paths.worktreePath, ".git"))).resolves.toBeUndefined();
     await expect(
