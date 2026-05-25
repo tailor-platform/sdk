@@ -19,7 +19,7 @@ import {
   buildCodexPreflightScript,
 } from "./runner";
 import { writeVerificationSummary } from "./verification";
-import { prepareWorkspace, profileForProblem } from "./workspace";
+import { prepareWorkspace, profileForProblem, pruneWorkspaceDeps } from "./workspace";
 import type { Problem } from "./types";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -671,6 +671,29 @@ describe("workspace preparation", () => {
   it("uses null profile for cli problems", () => {
     expect(profileForProblem({ group: "cli" }, "full")).toBeNull();
     expect(profileForProblem({ group: "sdk-api" }, "full")).toBe("full");
+  });
+
+  it("prunes dependency and SDK cache directories", async () => {
+    const dir = await makeTempDir();
+    const worktreePath = path.join(dir, "work");
+    await Promise.all(
+      ["node_modules", ".pnpm-store", ".pnpm-home", ".cache", ".turbo", ".tailor-sdk/cache"].map(
+        (name) => fs.mkdir(path.join(worktreePath, name), { recursive: true }),
+      ),
+    );
+
+    await pruneWorkspaceDeps(worktreePath);
+
+    for (const name of [
+      "node_modules",
+      ".pnpm-store",
+      ".pnpm-home",
+      ".cache",
+      ".turbo",
+      ".tailor-sdk/cache",
+    ]) {
+      await expect(fs.access(path.join(worktreePath, name))).rejects.toThrow();
+    }
   });
 });
 
