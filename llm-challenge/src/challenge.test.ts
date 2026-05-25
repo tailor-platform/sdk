@@ -7,7 +7,7 @@ import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { discoverProblems, selectProblems } from "./problems";
 import { runCommand } from "./process";
-import { applyNoDocsProfile, stripDeclarationJsDoc } from "./profile";
+import { applyNoDocsProfile, stripDeclarationJsDoc, stripJsDocBlocks } from "./profile";
 import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from "./report";
 import {
   DEFAULT_CODEX_IMAGE,
@@ -131,7 +131,10 @@ describe("profile filtering", () => {
     await fs.writeFile(path.join(dir, "README.md"), "docs");
     await fs.writeFile(path.join(dir, "CHANGELOG.md"), "changes");
     await fs.writeFile(path.join(dir, "docs/reference.md"), "reference");
-    await fs.writeFile(path.join(dir, "dist/index.js"), "/** runtime comment */\nexport {};\n");
+    await fs.writeFile(
+      path.join(dir, "dist/index.mjs"),
+      "/** runtime docs */\nexport const value = '/** keep string */';\n/* keep regular block */\n",
+    );
     await fs.writeFile(
       path.join(dir, "dist/index.mjs.map"),
       JSON.stringify({ sourcesContent: ["/** hidden docs */\nexport {};\n"] }),
@@ -147,8 +150,14 @@ describe("profile filtering", () => {
     await expect(fs.access(path.join(dir, "CHANGELOG.md"))).rejects.toThrow();
     await expect(fs.access(path.join(dir, "docs"))).rejects.toThrow();
     await expect(fs.access(path.join(dir, "dist/index.mjs.map"))).rejects.toThrow();
-    await expect(fs.readFile(path.join(dir, "dist/index.js"), "utf8")).resolves.toContain(
-      "/** runtime comment */",
+    await expect(fs.readFile(path.join(dir, "dist/index.mjs"), "utf8")).resolves.not.toContain(
+      "runtime docs",
+    );
+    await expect(fs.readFile(path.join(dir, "dist/index.mjs"), "utf8")).resolves.toContain(
+      "'/** keep string */'",
+    );
+    await expect(fs.readFile(path.join(dir, "dist/index.mjs"), "utf8")).resolves.toContain(
+      "/* keep regular block */",
     );
     await expect(fs.readFile(path.join(dir, "dist/index.d.ts"), "utf8")).resolves.toBe(
       "\nexport declare const value: string;\n/* keep */\nexport declare const other: string;\n",
@@ -158,6 +167,28 @@ describe("profile filtering", () => {
   it("strips only JSDoc blocks from declaration text", () => {
     expect(stripDeclarationJsDoc("/** remove */\nexport type A = string;\n/* keep */\n")).toBe(
       "\nexport type A = string;\n/* keep */\n",
+    );
+  });
+
+  it("strips JSDoc blocks without corrupting string literals", () => {
+    expect(
+      stripJsDocBlocks(
+        [
+          "const quoted = '/** keep quoted */';",
+          "const templated = `/** keep templated */`;",
+          "// /** keep line comment */",
+          "/** remove docs */",
+          "export const value = 1;",
+        ].join("\n"),
+      ),
+    ).toBe(
+      [
+        "const quoted = '/** keep quoted */';",
+        "const templated = `/** keep templated */`;",
+        "// /** keep line comment */",
+        "",
+        "export const value = 1;",
+      ].join("\n"),
     );
   });
 });

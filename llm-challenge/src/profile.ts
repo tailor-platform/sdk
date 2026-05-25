@@ -10,6 +10,7 @@ const NO_DOCS_REMOVE_ENTRIES = [
   "agent-skills",
   "skills",
 ];
+const JS_DOC_STRIP_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts", ".js", ".mjs", ".cjs"];
 
 export async function createNoDocsTarball(
   fullTarballPath: string,
@@ -34,7 +35,7 @@ export async function applyNoDocsProfile(packageDir: string): Promise<void> {
   for await (const filePath of walkFiles(packageDir)) {
     if (filePath.endsWith(".map")) {
       await fs.rm(filePath);
-    } else if (filePath.endsWith(".d.ts") || filePath.endsWith(".d.mts")) {
+    } else if (shouldStripJsDoc(filePath)) {
       const original = await fs.readFile(filePath, "utf8");
       const stripped = stripDeclarationJsDoc(original);
       if (stripped !== original) {
@@ -45,7 +46,73 @@ export async function applyNoDocsProfile(packageDir: string): Promise<void> {
 }
 
 export function stripDeclarationJsDoc(contents: string): string {
-  return contents.replace(/\/\*\*[\s\S]*?\*\//g, "");
+  return stripJsDocBlocks(contents);
+}
+
+export function stripJsDocBlocks(contents: string): string {
+  let stripped = "";
+  let index = 0;
+
+  while (index < contents.length) {
+    const char = contents[index];
+    const next = contents[index + 1];
+    const third = contents[index + 2];
+
+    if (char === "/" && next === "/") {
+      const end = contents.indexOf("\n", index + 2);
+      const lineEnd = end === -1 ? contents.length : end + 1;
+      stripped += contents.slice(index, lineEnd);
+      index = lineEnd;
+      continue;
+    }
+    if (char === "/" && next === "*" && third === "*") {
+      const end = contents.indexOf("*/", index + 3);
+      index = end === -1 ? contents.length : end + 2;
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      const end = contents.indexOf("*/", index + 2);
+      const commentEnd = end === -1 ? contents.length : end + 2;
+      stripped += contents.slice(index, commentEnd);
+      index = commentEnd;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === "`") {
+      const result = readQuoted(contents, index, char);
+      stripped += result.value;
+      index = result.end;
+      continue;
+    }
+
+    stripped += char;
+    index += 1;
+  }
+
+  return stripped;
+}
+
+function shouldStripJsDoc(filePath: string): boolean {
+  return JS_DOC_STRIP_EXTENSIONS.some((extension) => filePath.endsWith(extension));
+}
+
+function readQuoted(
+  contents: string,
+  start: number,
+  quote: "'" | '"' | "`",
+): { value: string; end: number } {
+  let index = start + 1;
+  while (index < contents.length) {
+    const char = contents[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    index += 1;
+    if (char === quote) {
+      break;
+    }
+  }
+  return { value: contents.slice(start, index), end: index };
 }
 
 async function* walkFiles(dir: string): AsyncGenerator<string> {
