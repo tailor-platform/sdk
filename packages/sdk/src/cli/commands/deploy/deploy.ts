@@ -226,6 +226,28 @@ async function shouldForceApplyAll(
   return false;
 }
 
+/**
+ * Decide which renamed-away applications should be deleted. Excludes the
+ * target itself: id regeneration alone keeps the name unchanged, so deleting
+ * by name would destroy the live app.
+ * @param params - Inputs for the computation
+ * @param params.conflicts - Detected owner conflicts across all services
+ * @param params.resourceOwners - App names that still own resources we don't manage
+ * @param params.targetAppName - The application currently being deployed
+ * @returns Names of empty old applications that should be deleted
+ */
+export function computeRenamedAppDeletions(params: {
+  conflicts: ReadonlyArray<Pick<OwnerConflict, "currentOwner">>;
+  resourceOwners: ReadonlySet<string>;
+  targetAppName: string;
+}): string[] {
+  const { conflicts, resourceOwners, targetAppName } = params;
+  const conflictOwners = new Set(conflicts.map((c) => c.currentOwner));
+  return [...conflictOwners].filter(
+    (owner) => !resourceOwners.has(owner) && owner !== targetAppName,
+  );
+}
+
 type PlanResults = {
   functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
@@ -670,7 +692,6 @@ export async function deploy(options?: DeployOptions) {
       }
       await confirmImportantResourceDeletion(importantDeletions, yes);
 
-      // Delete renamed applications
       const resourceOwners = new Set([
         ...functionRegistry.resourceOwners,
         ...tailorDB.resourceOwners,
@@ -682,8 +703,11 @@ export async function deploy(options?: DeployOptions) {
         ...workflow.resourceOwners,
         ...secretManager.resourceOwners,
       ]);
-      const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
-      const emptyApps = [...conflictOwners].filter((owner) => !resourceOwners.has(owner));
+      const emptyApps = computeRenamedAppDeletions({
+        conflicts: allConflicts,
+        resourceOwners,
+        targetAppName: application.name,
+      });
       for (const emptyApp of emptyApps) {
         app.deletes.push({
           name: emptyApp,
