@@ -692,6 +692,7 @@ export async function deploy(options?: DeployOptions) {
       }
       await confirmImportantResourceDeletion(importantDeletions, yes);
 
+      // Delete renamed applications
       const resourceOwners = new Set([
         ...functionRegistry.resourceOwners,
         ...tailorDB.resourceOwners,
