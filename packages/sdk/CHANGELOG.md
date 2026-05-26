@@ -1,5 +1,12 @@
 # @tailor-platform/sdk
 
+## 1.50.1
+
+### Patch Changes
+
+- [#1226](https://github.com/tailor-platform/sdk/pull/1226) [`d900ddc`](https://github.com/tailor-platform/sdk/commit/d900ddcba170a5effe2119fb37e3e038d5cd5935) Thanks [@remiposo](https://github.com/remiposo)! - Fix `deploy` to no longer delete the application when its `id` is regenerated
+  (e.g. CI working tree without a committed `id` in `tailor.config.ts`).
+
 ## 1.50.0
 
 ### Minor Changes
