@@ -17,6 +17,7 @@ Use these files as the single source of truth:
 - `node_modules/@tailor-platform/sdk/docs/cli-reference.md`
 - `node_modules/@tailor-platform/sdk/docs/cli/*.md`
 - `node_modules/@tailor-platform/sdk/docs/testing.md`
+- `node_modules/@tailor-platform/sdk/docs/runtime.md`
 
 ## Working Rules
 
@@ -32,3 +33,4 @@ Use these files as the single source of truth:
 - Service details: `docs/services/*.md`
 - CLI commands: `docs/cli-reference.md` and `docs/cli/*.md`
 - Testing patterns: `docs/testing.md`
+- Runtime API wrappers (`tailor.iconv`, `tailor.secretmanager`, `tailor.idp`, `tailor.workflow`, `tailor.context`, `tailor.authconnection`, `tailordb.file`): `docs/runtime.md`

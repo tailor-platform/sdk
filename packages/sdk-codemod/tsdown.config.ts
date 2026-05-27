@@ -25,6 +25,8 @@ export default defineConfig([
       "v2/cli-rename/scripts/transform": "codemods/v2/cli-rename/scripts/transform.ts",
       "v2/auth-invoker-unwrap/scripts/transform":
         "codemods/v2/auth-invoker-unwrap/scripts/transform.ts",
+      "v2/tailordb-namespace/scripts/transform":
+        "codemods/v2/tailordb-namespace/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node18",

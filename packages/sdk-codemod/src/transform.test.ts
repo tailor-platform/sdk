@@ -90,4 +90,8 @@ describe("codemod transforms", () => {
   it("v2/auth-invoker-unwrap transforms correctly", async () => {
     await runFixtureCases("v2/auth-invoker-unwrap");
   });
+
+  it("v2/tailordb-namespace transforms correctly", async () => {
+    await runFixtureCases("v2/tailordb-namespace");
+  });
 });
