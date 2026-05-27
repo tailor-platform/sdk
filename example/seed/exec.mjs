@@ -376,14 +376,12 @@ if (values.truncate) {
       } else {
         console.log(styleText("dim", "No TailorDB types to truncate (only _User was specified)."));
       }
-    } else if (Object.keys(namespaceEntities).length > 0) {
+    } else {
       await truncate({
         configPath,
         profile: values.profile,
         all: true,
       });
-    } else {
-      console.log(styleText("dim", "No owned TailorDB namespaces to truncate."));
     }
   } catch (error) {
     console.error(styleText("red", `Truncate failed: ${error.message}`));

@@ -223,4 +223,4 @@ The `--machine-user` option is required at runtime if `machineUserName` is not c
 
 The generated files are compatible with gql-ingest for bulk data import.
 
-The `exec.mjs` is fully regenerated on every `sdk generate` and starts with an `@generated` header — do not hand-edit it. Its `--truncate` path reuses the `tailordb truncate` command, so namespaces declared with `{ external: true }` are skipped automatically. If the app owns zero TailorDB namespaces (e.g. a shell app that only references shared DBs via `external: true`), the truncate step is skipped entirely so it cannot wipe a sibling app's data.
+The `exec.mjs` is fully regenerated on every `sdk generate` and starts with an `@generated` header — do not hand-edit it. Its `--truncate` path reuses the `tailordb truncate` command, so namespaces declared with `{ external: true }` are skipped automatically and a shell app cannot wipe a sibling app's data via `seed:reset`.
