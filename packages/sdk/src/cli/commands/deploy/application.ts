@@ -17,7 +17,7 @@ import type {
   CreateApplicationRequestSchema,
   UpdateApplicationRequestSchema,
 } from "@tailor-proto/tailor/v1/application_pb";
-import type { GatewayFilterSchema } from "@tailor-proto/tailor/v1/gateway_filter_resource_pb";
+import type { HttpAdapterSchema } from "@tailor-proto/tailor/v1/http_adapter_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 /**
@@ -84,12 +84,12 @@ type DeleteApplication = {
   request: MessageInitShape<typeof DeleteApplicationRequestSchema>;
 };
 
-type ComparableFilter = {
+type ComparableHttpAdapter = {
   name: string;
   pathPattern: string;
   methods: string[];
-  inputFilterScript: string;
-  outputFilterScript: string;
+  inputScript: string;
+  outputScript: string;
   enabled: boolean;
   priority: number;
 };
@@ -105,7 +105,7 @@ type ComparableApplication = {
   allowedIpAddresses: string[];
   disableIntrospection: boolean;
   disabled: boolean;
-  filters: ComparableFilter[];
+  httpAdapters: ComparableHttpAdapter[];
 };
 
 function trn(workspaceId: string, name: string) {
@@ -132,28 +132,28 @@ function normalizeSubgraphs(
     });
 }
 
-function normalizeFilters(
-  filters:
+function normalizeHttpAdapters(
+  httpAdapters:
     | ReadonlyArray<{
         name?: string;
         pathPattern?: string;
         methods?: string[];
-        inputFilterScript?: string;
-        outputFilterScript?: string;
+        inputScript?: string;
+        outputScript?: string;
         enabled?: boolean;
         priority?: number;
       }>
     | undefined,
-): ComparableFilter[] {
-  return [...(filters ?? [])]
-    .map((filter) => ({
-      name: filter.name ?? "",
-      pathPattern: filter.pathPattern ?? "",
-      methods: sortStrings(filter.methods),
-      inputFilterScript: filter.inputFilterScript ?? "",
-      outputFilterScript: filter.outputFilterScript ?? "",
-      enabled: filter.enabled ?? false,
-      priority: filter.priority ?? 0,
+): ComparableHttpAdapter[] {
+  return [...(httpAdapters ?? [])]
+    .map((adapter) => ({
+      name: adapter.name ?? "",
+      pathPattern: adapter.pathPattern ?? "",
+      methods: sortStrings(adapter.methods),
+      inputScript: adapter.inputScript ?? "",
+      outputScript: adapter.outputScript ?? "",
+      enabled: adapter.enabled ?? false,
+      priority: adapter.priority ?? 0,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -168,7 +168,7 @@ function toComparableApplication(
     | "allowedIpAddresses"
     | "disableIntrospection"
     | "disabled"
-    | "filters"
+    | "httpAdapters"
   >,
 ): ComparableApplication {
   return {
@@ -179,7 +179,7 @@ function toComparableApplication(
     allowedIpAddresses: sortStrings(input.allowedIpAddresses),
     disableIntrospection: input.disableIntrospection,
     disabled: input.disabled,
-    filters: [...input.filters],
+    httpAdapters: [...input.httpAdapters],
   };
 }
 
@@ -188,7 +188,7 @@ function normalizeComparableApplication(
   authNamespace: string | undefined,
   authIdpConfigName: string | undefined,
   cors: string[],
-  filters: ReadonlyArray<MessageInitShape<typeof GatewayFilterSchema>>,
+  httpAdapters: ReadonlyArray<MessageInitShape<typeof HttpAdapterSchema>>,
 ): ComparableApplication {
   return toComparableApplication({
     authNamespace: authNamespace ?? "",
@@ -198,7 +198,7 @@ function normalizeComparableApplication(
     allowedIpAddresses: application.config.allowedIpAddresses ?? [],
     disableIntrospection: application.config.disableIntrospection ?? false,
     disabled: false,
-    filters: normalizeFilters(filters),
+    httpAdapters: normalizeHttpAdapters(httpAdapters),
   });
 }
 
@@ -211,7 +211,7 @@ function normalizeComparableExistingApplication(app: ProtoApplication): Comparab
     allowedIpAddresses: app.allowedIpAddresses,
     disableIntrospection: app.disableIntrospection,
     disabled: app.disabled,
-    filters: normalizeFilters(app.filters),
+    httpAdapters: normalizeHttpAdapters(app.httpAdapters),
   });
 }
 
@@ -332,13 +332,13 @@ export async function planApplication(
     "CORS",
     { expectedLocalNames: expectedLocalWebsites },
   );
-  const filters = buildGatewayFilters(application, httpAdapterBuildResult);
+  const httpAdapters = buildHttpAdapters(application, httpAdapterBuildResult);
   const desired = normalizeComparableApplication(
     application,
     authNamespace,
     authIdpConfigName,
     resolvedCors,
-    filters,
+    httpAdapters,
   );
   const request = {
     workspaceId,
@@ -349,7 +349,7 @@ export async function planApplication(
     subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
     allowedIpAddresses: application.config.allowedIpAddresses,
     disableIntrospection: application.config.disableIntrospection,
-    filters,
+    httpAdapters,
   };
   const existing = existingApplications.find((app) => app.name === application.name);
 
@@ -422,10 +422,10 @@ async function fetchAppLabels(
   }
 }
 
-function buildGatewayFilters(
+function buildHttpAdapters(
   application: Readonly<Application>,
   httpAdapterBuildResult: HttpAdapterBundleResult | undefined,
-): MessageInitShape<typeof GatewayFilterSchema>[] {
+): MessageInitShape<typeof HttpAdapterSchema>[] {
   const adapters = application.httpAdapterService?.adapters ?? [];
   if (adapters.length === 0) {
     return [];
@@ -451,8 +451,8 @@ function buildGatewayFilters(
       name: loaded.adapter.name,
       pathPattern: loaded.adapter.pathPattern,
       methods: loaded.adapter.methods,
-      inputFilterScript: inputScript,
-      outputFilterScript: outputScript,
+      inputScript,
+      outputScript,
       enabled: loaded.adapter.enabled ?? true,
       priority: loaded.adapter.priority ?? 0,
     };
