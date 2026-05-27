@@ -7,6 +7,10 @@ vi.mock("@/cli/shared/context", () => ({
   loadWorkspaceId: vi.fn().mockResolvedValue("mock-workspace-id"),
 }));
 
+vi.mock("@/cli/shared/readonly-guard", () => ({
+  assertWritable: vi.fn(),
+}));
+
 vi.mock("@/cli/shared/client", () => ({
   initOperatorClient: vi.fn().mockResolvedValue({
     truncateTailorDBType: vi.fn().mockResolvedValue(undefined),

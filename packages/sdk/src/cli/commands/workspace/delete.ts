@@ -6,6 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 
 const deleteWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
@@ -57,6 +58,7 @@ export const deleteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable();
     // Load and validate options
     const { client, workspaceId } = await loadOptions({
       workspaceId: args["workspace-id"],

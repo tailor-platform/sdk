@@ -70,6 +70,10 @@ export interface MigrationDiff {
   hasBreakingChanges: boolean;
   /** List of breaking changes */
   breakingChanges: BreakingChangeInfo[];
+  /** Whether there are non-breaking changes that may cause data loss (e.g. field/type removal) */
+  hasWarnings: boolean;
+  /** List of non-breaking warnings */
+  warnings: WarningChangeInfo[];
   /** Whether a migration script is required to handle data migration */
   requiresMigrationScript: boolean;
 }
@@ -85,6 +89,20 @@ export interface BreakingChangeInfo {
   unsupported?: boolean;
   /** If true, show 3-step migration instructions for this unsupported change */
   showThreeStepHint?: boolean;
+}
+
+/**
+ * Warning change information in migration diff.
+ *
+ * Warnings are non-breaking changes that may still cause data loss
+ * (e.g. removing a field or type). Unlike breaking changes, a migration
+ * script is not required, but writing one is recommended if you need to
+ * preserve or transform data before the change applies.
+ */
+export interface WarningChangeInfo {
+  typeName: string;
+  fieldName?: string;
+  reason: string;
 }
 
 /**
@@ -271,6 +289,26 @@ export function formatBreakingChanges(breakingChanges: BreakingChangeInfo[]): st
   for (const bc of breakingChanges) {
     const location = bc.fieldName ? `${bc.typeName}.${bc.fieldName}` : bc.typeName;
     lines.push(`  - ${location}: ${bc.reason}`);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Format warning changes for display
+ * @param {WarningChangeInfo[]} warnings - Warning changes to format
+ * @returns {string} Formatted warning changes string
+ */
+export function formatWarnings(warnings: WarningChangeInfo[]): string {
+  if (warnings.length === 0) {
+    return "";
+  }
+
+  const lines: string[] = ["Warning: data loss possible:", ""];
+
+  for (const w of warnings) {
+    const location = w.fieldName ? `${w.typeName}.${w.fieldName}` : w.typeName;
+    lines.push(`  - ${location}: ${w.reason}`);
   }
 
   return lines.join("\n");

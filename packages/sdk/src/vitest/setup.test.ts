@@ -8,7 +8,7 @@ import {
   loadSecretsFromConfig,
   removeBlockedGlobals,
   restoreBlockedGlobals,
-} from "../setup";
+} from "./setup";
 
 describe("extractVaultStore", () => {
   test("unwraps a defineSecretManager() shape via the .vaults field", () => {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { generateCommand, migrationCommand, setCommand, statusCommand } from "./index";
+import {
+  generateCommand,
+  migrationCommand,
+  scriptCommand,
+  setCommand,
+  statusCommand,
+} from "./index";
 
 describe("migration CLI commands", () => {
   describe("migrationCommand", () => {
@@ -10,6 +16,10 @@ describe("migration CLI commands", () => {
 
     it("should have generate subcommand", () => {
       expect(migrationCommand.subCommands).toHaveProperty("generate");
+    });
+
+    it("should have script subcommand", () => {
+      expect(migrationCommand.subCommands).toHaveProperty("script");
     });
 
     it("should have set subcommand", () => {
@@ -45,6 +55,19 @@ describe("migration CLI commands", () => {
       expect(shape).toHaveProperty("number");
       expect(shape).toHaveProperty("namespace");
       expect(shape).toHaveProperty("yes");
+    });
+  });
+
+  describe("scriptCommand", () => {
+    it("should have correct meta information", () => {
+      expect(scriptCommand.name).toBe("script");
+      expect(scriptCommand.description).toContain("script");
+    });
+
+    it("should have required args schema", () => {
+      const shape = scriptCommand.args.shape;
+      expect(shape).toHaveProperty("number");
+      expect(shape).toHaveProperty("namespace");
     });
   });
 
