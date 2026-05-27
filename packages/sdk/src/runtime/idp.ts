@@ -86,10 +86,7 @@ export interface SendPasswordResetEmailInput {
   subject?: string;
 }
 
-/**
- * Instance methods exposed by `tailor.idp.Client`.
- * @internal
- */
+/** Instance methods exposed by `tailor.idp.Client`. */
 export interface IdpClientInstance {
   users(options?: ListUsersOptions): Promise<ListUsersResponse>;
   user(userId: string): Promise<User>;

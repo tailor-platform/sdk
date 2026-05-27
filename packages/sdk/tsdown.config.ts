@@ -10,7 +10,7 @@ import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 // Strip it from every other `.d.mts` so subpath imports
 // (`@tailor-platform/sdk/runtime`, `/vitest`, /plugin`, etc.) stay self-contained.
 function stripBannerExceptConfigureEntry(outDir: string): void {
-  const pattern = /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\n/;
+  const pattern = /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\r?\n/;
   const root = path.resolve(outDir);
   const keep = path.join(root, "configure", "index.d.mts");
   const walk = (dir: string): void => {

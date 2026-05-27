@@ -34,9 +34,11 @@ import type {
 } from ".";
 import type { ContextInvoker } from "./context";
 import type { TailorDBFileErrorCode } from "./file";
+import type { IconvInstance } from "./iconv";
 import type {
   ClientConfig as IdpClientConfig,
   CreateUserInput as IdpCreateUserInput,
+  IdpClientInstance,
   ListUsersOptions as IdpListUsersOptions,
   ListUsersResponse as IdpListUsersResponse,
   SendPasswordResetEmailInput as IdpSendPasswordResetEmailInput,
@@ -94,7 +96,12 @@ declare global {
   }
 
   namespace tailor {
+    namespace iconv {
+      type Iconv = IconvInstance;
+    }
+
     namespace idp {
+      type Client = IdpClientInstance;
       type ClientConfig = IdpClientConfig;
       type User = IdpUser;
       type UserQuery = IdpUserQuery;
