@@ -129,13 +129,13 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     // Validate namespace exists in config and is not external
     if (!namespaces.includes(namespace)) {
       const dbConfig = config.db?.[namespace];
-      if (dbConfig && (dbConfig as { external?: boolean }).external) {
+      if (dbConfig && "external" in dbConfig && dbConfig.external === true) {
         throw new Error(
           `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here. Run truncate from the app that owns it.`,
         );
       }
       throw new Error(
-        `Namespace "${namespace}" not found in config. Available namespaces: ${namespaces.join(", ")}`,
+        `Namespace "${namespace}" not found in config. Available owned namespaces (external namespaces are excluded): ${namespaces.join(", ")}`,
       );
     }
 

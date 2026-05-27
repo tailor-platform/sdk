@@ -174,7 +174,7 @@ describe("truncate command", () => {
 
     test("throws error when namespace not found in config", async () => {
       await expect(truncate({ namespace: "nonexistent" })).rejects.toThrow(
-        'Namespace "nonexistent" not found in config. Available namespaces: tailordb, anotherdb',
+        'Namespace "nonexistent" not found in config. Available owned namespaces (external namespaces are excluded): tailordb, anotherdb',
       );
     });
 
