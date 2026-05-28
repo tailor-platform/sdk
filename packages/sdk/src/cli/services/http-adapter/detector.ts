@@ -8,6 +8,7 @@ import {
   collectSdkBindings,
   isSdkFunctionCall,
 } from "@/cli/services/workflow/sdk-binding-collector";
+import type { HttpMethodKey } from "@/types/http-adapter";
 import type {
   Program,
   CallExpression,
@@ -16,9 +17,25 @@ import type {
   Function as FunctionExpression,
 } from "@oxc-project/types";
 
+// `satisfies` keeps the runtime tuple type-narrow while ensuring every element
+// is a valid `HttpMethodKey`. The exhaustiveness check below catches the case
+// where `HttpMethodKey` grows but this tuple isn't updated.
+export const HTTP_METHOD_KEYS = [
+  "get",
+  "post",
+  "put",
+  "patch",
+  "delete",
+] as const satisfies readonly HttpMethodKey[];
+
+type _AssertMethodKeysExhaustive = Exclude<HttpMethodKey, (typeof HTTP_METHOD_KEYS)[number]>;
+const _methodKeysExhaustive: [_AssertMethodKeysExhaustive] extends [never] ? true : never = true;
+void _methodKeysExhaustive;
+
 export interface HttpAdapterLocation {
   name: string;
   sourceFile: string;
+  methods: HttpMethodKey[];
   hasOutput: boolean;
 }
 
@@ -38,7 +55,9 @@ export interface HttpAdapterDetectionResult {
  * By convention, an HTTP adapter file contains exactly one default export of
  * `createHttpAdapter({...})`. Multiple calls within one file produce an error.
  * The `name` property must be a string literal so it can be statically resolved.
- * `input` (required) and `output` (optional) must be non-async function expressions.
+ * `input` must be an object literal with at least one method key
+ * (`get`/`post`/`put`/`patch`/`delete`) bound to a non-async function expression.
+ * `output` is optional; when present it must also be a non-async function expression.
  * @param program - Parsed TypeScript program
  * @param sourceFile - Absolute path of the source file
  * @returns Detection result for the file
@@ -77,21 +96,47 @@ export function findHttpAdaptersInFile(
         return;
       }
 
-      if (!inputProp || !isFunctionExpression(inputProp.value)) {
+      if (!inputProp || inputProp.value.type !== "ObjectExpression") {
         errors.push({
           sourceFile,
           message:
-            "createHttpAdapter requires `input` to be a function expression in the same file",
+            "createHttpAdapter `input` must be an object literal keyed by HTTP method (get/post/put/patch/delete)",
         });
         return;
       }
 
-      const inputFn = inputProp.value as ArrowFunctionExpression | FunctionExpression;
-      if (inputFn.async) {
+      const inputObj = inputProp.value as ObjectExpression;
+      const methods: HttpMethodKey[] = [];
+      let methodValidationError = false;
+      for (const key of HTTP_METHOD_KEYS) {
+        const handlerProp = findProperty(inputObj.properties, key);
+        if (!handlerProp) continue;
+        if (!isFunctionExpression(handlerProp.value)) {
+          errors.push({
+            sourceFile,
+            message: `createHttpAdapter \`input.${key}\` must be a function expression in the same file`,
+          });
+          methodValidationError = true;
+          break;
+        }
+        const fn = handlerProp.value as ArrowFunctionExpression | FunctionExpression;
+        if (fn.async) {
+          errors.push({
+            sourceFile,
+            message: `createHttpAdapter \`input.${key}\` must be synchronous (the runtime does not support async/await)`,
+          });
+          methodValidationError = true;
+          break;
+        }
+        methods.push(key);
+      }
+      if (methodValidationError) return;
+
+      if (methods.length === 0) {
         errors.push({
           sourceFile,
           message:
-            "createHttpAdapter `input` must be synchronous (the runtime does not support async/await)",
+            "createHttpAdapter `input` must declare at least one HTTP method handler (get/post/put/patch/delete)",
         });
         return;
       }
@@ -120,6 +165,7 @@ export function findHttpAdaptersInFile(
       adapters.push({
         name: nameProp.value.value,
         sourceFile,
+        methods,
         hasOutput,
       });
       // The call's arguments have already been validated above; don't descend

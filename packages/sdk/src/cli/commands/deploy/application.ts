@@ -450,7 +450,7 @@ function buildHttpAdapters(
     return {
       name: loaded.adapter.name,
       pathPattern: loaded.adapter.pathPattern,
-      methods: loaded.adapter.methods,
+      methods: loaded.methods.map((m) => m.toUpperCase()),
       inputScript,
       outputScript,
       enabled: loaded.adapter.enabled ?? true,

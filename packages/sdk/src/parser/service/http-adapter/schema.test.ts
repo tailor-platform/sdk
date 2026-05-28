@@ -4,8 +4,9 @@ import { HttpAdapterConfigSchema, HttpAdapterServiceInputSchema } from "./schema
 const baseConfig = {
   name: "get-user",
   pathPattern: "/users/*",
-  methods: ["GET"],
-  input: (req: unknown) => ({ query: "{ me { id } }", variables: { req } }),
+  input: {
+    get: (req: unknown) => ({ query: "{ me { id } }", variables: { req } }),
+  },
 };
 
 describe("HttpAdapterConfigSchema", () => {
@@ -26,6 +27,18 @@ describe("HttpAdapterConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts multiple method handlers", () => {
+    const result = HttpAdapterConfigSchema.safeParse({
+      ...baseConfig,
+      input: {
+        get: () => ({ query: "{}" }),
+        post: () => ({ query: "{}" }),
+        delete: () => ({ query: "{}" }),
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects a name that doesn't match the pattern", () => {
     const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, name: "Invalid Name" });
     expect(result.success).toBe(false);
@@ -41,13 +54,16 @@ describe("HttpAdapterConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects an empty methods array", () => {
-    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, methods: [] });
+  it("rejects an empty input object", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, input: {} });
     expect(result.success).toBe(false);
   });
 
-  it("rejects an unknown HTTP method", () => {
-    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, methods: ["WHATEVER"] });
+  it("rejects an unknown HTTP method key", () => {
+    const result = HttpAdapterConfigSchema.safeParse({
+      ...baseConfig,
+      input: { options: () => ({ query: "{}" }) },
+    });
     expect(result.success).toBe(false);
   });
 
@@ -61,15 +77,18 @@ describe("HttpAdapterConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects a missing input function", () => {
+  it("rejects a missing input object", () => {
     const { input: _omit, ...without } = baseConfig;
     void _omit;
     const result = HttpAdapterConfigSchema.safeParse(without);
     expect(result.success).toBe(false);
   });
 
-  it("rejects a non-function input", () => {
-    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, input: "not a function" });
+  it("rejects a non-function handler", () => {
+    const result = HttpAdapterConfigSchema.safeParse({
+      ...baseConfig,
+      input: { get: "not a function" },
+    });
     expect(result.success).toBe(false);
   });
 });

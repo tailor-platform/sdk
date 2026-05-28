@@ -5,10 +5,14 @@ export type HttpAdapterConfigInput = {
   name: string;
   /** Path pattern with segment wildcards (trailing or single-segment) */
   pathPattern: string;
-  /** HTTP methods this adapter handles */
-  methods: ("GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD")[];
-  /** Function that transforms HTTP request to GraphQL request */
-  input: Function;
+  /** Per-method functions that transform HTTP requests to GraphQL requests */
+  input: {
+    get?: Function | undefined;
+    post?: Function | undefined;
+    put?: Function | undefined;
+    patch?: Function | undefined;
+    delete?: Function | undefined;
+  };
   /** Whether the adapter is active */
   enabled?: boolean | undefined;
   /** Matching priority */
@@ -22,14 +26,18 @@ export type HttpAdapterConfig = {
   name: string;
   /** Path pattern with segment wildcards (trailing or single-segment) */
   pathPattern: string;
-  /** HTTP methods this adapter handles */
-  methods: ("GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD")[];
   /** Whether the adapter is active */
   enabled: boolean;
   /** Matching priority */
   priority: number;
-  /** Function that transforms HTTP request to GraphQL request */
-  input: Function;
+  /** Per-method functions that transform HTTP requests to GraphQL requests */
+  input: {
+    get?: Function | undefined;
+    post?: Function | undefined;
+    put?: Function | undefined;
+    patch?: Function | undefined;
+    delete?: Function | undefined;
+  };
   /** Function that transforms GraphQL response to HTTP response */
   output?: Function | undefined;
 };

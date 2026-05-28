@@ -17,22 +17,23 @@ function escapeXml(value: unknown): string {
 export default createHttpAdapter({
   name: "get-user",
   pathPattern: "/users/*",
-  methods: ["GET"],
-  input: (req) => {
-    const segments = req.path.split("/").filter(Boolean);
-    const id = segments[segments.length - 1] ?? "";
-    return {
-      query: `query GetUser($id: ID!) {
-        user(id: $id) {
-          id
-          name
-          email
-          role
-          status
-        }
-      }`,
-      variables: { id },
-    };
+  input: {
+    get: (req) => {
+      const segments = req.path.split("/").filter(Boolean);
+      const id = segments[segments.length - 1] ?? "";
+      return {
+        query: `query GetUser($id: ID!) {
+          user(id: $id) {
+            id
+            name
+            email
+            role
+            status
+          }
+        }`,
+        variables: { id },
+      };
+    },
   },
   output: (resp) => {
     const data = resp.data as { user: Record<string, unknown> | null } | null | undefined;

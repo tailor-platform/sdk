@@ -28,23 +28,24 @@ function actorXml(tag: string, actor: Record<string, unknown> | undefined): stri
 export default createHttpAdapter({
   name: "whoami",
   pathPattern: "/whoami",
-  methods: ["GET"],
-  input: () => ({
-    query: `query Whoami {
-      showUserInfo {
-        user {
-          id
-          type
-          role
+  input: {
+    get: () => ({
+      query: `query Whoami {
+        showUserInfo {
+          user {
+            id
+            type
+            role
+          }
+          invoker {
+            id
+            type
+            role
+          }
         }
-        invoker {
-          id
-          type
-          role
-        }
-      }
-    }`,
-  }),
+      }`,
+    }),
+  },
   output: (resp) => {
     const data = resp.data as
       | {

@@ -3,17 +3,22 @@ import { pathToFileURL } from "node:url";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { findHttpAdaptersInFile } from "@/cli/services/http-adapter/detector";
+import { findHttpAdaptersInFile, HTTP_METHOD_KEYS } from "@/cli/services/http-adapter/detector";
 import { logger, styles } from "@/cli/shared/logger";
 import { HttpAdapterConfigSchema } from "@/parser/service/http-adapter";
 import { isSdkBranded } from "@/utils/brand";
-import type { HttpAdapterConfig, HttpAdapterServiceInput } from "@/types/http-adapter";
+import type {
+  HttpAdapterConfig,
+  HttpAdapterServiceInput,
+  HttpMethodKey,
+} from "@/types/http-adapter";
 
 export type HttpAdapterServiceConfig = HttpAdapterServiceInput;
 
 export type LoadedHttpAdapter = {
   adapter: HttpAdapterConfig;
   sourceFile: string;
+  methods: HttpMethodKey[];
   hasOutput: boolean;
 };
 
@@ -130,11 +135,13 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
     }
 
     const adapter = parsed.data as unknown as HttpAdapterConfig;
-    rejectAsyncHandlers(adapter, filePath);
+    const methods = collectMethodKeys(adapter);
+    rejectAsyncHandlers(adapter, methods, filePath);
 
     return {
       adapter,
       sourceFile: filePath,
+      methods,
       hasOutput: adapter.output !== undefined,
     };
   } catch (error) {
@@ -147,12 +154,24 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
   }
 }
 
-function rejectAsyncHandlers(adapter: HttpAdapterConfig, sourceFile: string): void {
-  if (isAsyncFunction(adapter.input)) {
-    throw new Error(
-      `HTTP adapter "${adapter.name}" in ${sourceFile} has an async \`input\` function. ` +
-        `The gateway runtime does not support async/await.`,
-    );
+function collectMethodKeys(adapter: HttpAdapterConfig): HttpMethodKey[] {
+  const input = adapter.input as Partial<Record<HttpMethodKey, unknown>>;
+  return HTTP_METHOD_KEYS.filter((key) => typeof input[key] === "function");
+}
+
+function rejectAsyncHandlers(
+  adapter: HttpAdapterConfig,
+  methods: HttpMethodKey[],
+  sourceFile: string,
+): void {
+  const input = adapter.input as Partial<Record<HttpMethodKey, unknown>>;
+  for (const method of methods) {
+    if (isAsyncFunction(input[method])) {
+      throw new Error(
+        `HTTP adapter "${adapter.name}" in ${sourceFile} has an async \`input.${method}\` function. ` +
+          `The gateway runtime does not support async/await.`,
+      );
+    }
   }
   if (adapter.output !== undefined && isAsyncFunction(adapter.output)) {
     throw new Error(

@@ -6,7 +6,7 @@ import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
-import ml from "@/utils/multiline";
+import type { HttpMethodKey } from "@/types/http-adapter";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
@@ -25,6 +25,7 @@ function isNodeBuiltinImport(source: string): boolean {
 export interface HttpAdapterBundleInput {
   name: string;
   sourceFile: string;
+  methods: HttpMethodKey[];
   hasOutput: boolean;
 }
 
@@ -38,6 +39,11 @@ export interface HttpAdapterBundleResult {
 /**
  * Bundle each HTTP adapter's `input` (and `output`, if present) function into a
  * single JS string that defines a global `transform(input)` entry point.
+ *
+ * For `input`, the SDK generates a method dispatcher: at runtime the gateway
+ * passes the HTTP request (with `method` in uppercase) and the wrapper routes
+ * it to the user's per-method handler. For `output`, the user's function is
+ * used directly.
  *
  * The output targets the gateway's Sobek runtime: ES2017 IIFE, no Node imports,
  * no async/await, single file (no code splitting). Each function is bundled
@@ -105,7 +111,7 @@ async function bundleAdapterScript(
 ): Promise<[string, "input" | "output", string]> {
   const contextHash = computeBundlerContextHash({
     sourceFile: adapter.sourceFile,
-    serializedTriggerContext: "",
+    serializedTriggerContext: kind === "input" ? adapter.methods.join(",") : "",
     tsconfig,
     inlineSourcemap: false,
     prefix: kind,
@@ -121,10 +127,10 @@ async function bundleAdapterScript(
       const entryPath = path.join(outputDir, `${adapter.name}.${kind}.entry.js`);
       const absoluteSourcePath = path.resolve(adapter.sourceFile);
 
-      const entryContent = ml /* js */ `
-        import __adapter from "${absoluteSourcePath}";
-        globalThis.transform = __adapter.${kind};
-      `;
+      const entryContent =
+        kind === "input"
+          ? buildInputEntry(absoluteSourcePath, adapter.methods)
+          : buildOutputEntry(absoluteSourcePath);
       fs.writeFileSync(entryPath, entryContent);
 
       const rejectNodeImports: rolldown.Plugin = {
@@ -139,7 +145,27 @@ async function bundleAdapterScript(
         },
       };
 
-      const plugins: rolldown.Plugin[] = [rejectNodeImports, ...cachePlugins];
+      // The SDK only contributes the `createHttpAdapter` brand at build time;
+      // at gateway runtime we just need the user's handler bodies. Replace any
+      // `@tailor-platform/sdk` import with a tiny stub so the IIFE output has
+      // no external global dependency.
+      const stubSdkImports: rolldown.Plugin = {
+        name: "http-adapter-stub-sdk",
+        resolveId(source) {
+          if (source === "@tailor-platform/sdk" || source.startsWith("@tailor-platform/sdk/")) {
+            return { id: "\0http-adapter-sdk-stub", moduleSideEffects: false };
+          }
+          return null;
+        },
+        load(id) {
+          if (id === "\0http-adapter-sdk-stub") {
+            return "export const createHttpAdapter = (cfg) => cfg;\nexport default { createHttpAdapter };\n";
+          }
+          return null;
+        },
+      };
+
+      const plugins: rolldown.Plugin[] = [rejectNodeImports, stubSdkImports, ...cachePlugins];
 
       let bundled: string;
       try {
@@ -188,4 +214,25 @@ async function bundleAdapterScript(
   });
 
   return [adapter.name, kind, code];
+}
+
+function buildInputEntry(absoluteSourcePath: string, methods: HttpMethodKey[]): string {
+  const cases = methods
+    .map((method) => `    case "${method.toUpperCase()}": return __adapter.input.${method}(req);`)
+    .join("\n");
+  const supported = methods.map((m) => m.toUpperCase()).join(", ");
+  return `import __adapter from ${JSON.stringify(absoluteSourcePath)};
+globalThis.transform = function(req) {
+  switch (req.method) {
+${cases}
+    default: throw new Error("HTTP adapter received unsupported method: " + req.method + " (supported: ${supported})");
+  }
+};
+`;
+}
+
+function buildOutputEntry(absoluteSourcePath: string): string {
+  return `import __adapter from ${JSON.stringify(absoluteSourcePath)};
+globalThis.transform = __adapter.output;
+`;
 }

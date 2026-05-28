@@ -6,11 +6,11 @@ HTTP adapters expose REST-style HTTP endpoints on your application's gateway by 
 
 Each HTTP adapter is a single file that declares:
 
-- The HTTP `pathPattern` and `methods` it handles
-- An `input` function that converts an incoming HTTP request into a GraphQL request (`query`, `variables`, `operationName`)
-- An optional `output` function that converts the GraphQL response into an HTTP response (`statusCode`, `headers`, `body`)
+- A `pathPattern` (which methods it handles is derived from the `input` keys)
+- An `input` object keyed by lowercase HTTP method (`get`, `post`, `put`, `patch`, `delete`) — each value is a function that converts an incoming HTTP request into a GraphQL request (`query`, `variables`, `operationName`)
+- An optional `output` function — **shared across all methods** — that converts the GraphQL response into an HTTP response (`statusCode`, `headers`, `body`)
 
-At deploy time the SDK bundles each `input` and `output` function into a standalone JS script that runs in the gateway's sandboxed runtime when a matching request reaches the application gateway under the `/api/` prefix.
+At deploy time the SDK bundles `input` (with a generated method dispatcher) and `output` into standalone JS scripts that run in the gateway's sandboxed runtime when a matching request reaches the application gateway under the `/api/` prefix.
 
 For the official Tailor Platform documentation — including the exact URL routing, request/response body limits, execution timeouts, CORS handling, and other gateway-runtime behavior — see https://docs.tailor.tech/.
 
@@ -18,8 +18,9 @@ For the official Tailor Platform documentation — including the exact URL routi
 
 - Each adapter file must call `createHttpAdapter` exactly once and `export default` the result
 - `name` must be a string literal that matches `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and be unique across all adapters
-- `input` and `output` must be inline arrow or `function` expressions (not references to functions defined elsewhere)
-- `input` and `output` **must be synchronous** — the SDK rejects `async`/`await` at build time because the gateway runtime does not support it
+- `input` must be an object literal with at least one method handler
+- Each method handler and `output` must be inline arrow or `function` expressions (not references to functions defined elsewhere)
+- All handlers **must be synchronous** — the SDK rejects `async`/`await` at build time because the gateway runtime does not support it
 
 ## Build-time Limits
 
@@ -46,28 +47,37 @@ export default defineConfig({
 ## Defining an Adapter
 
 ```typescript
-// adapters/get-user.ts
+// adapters/user.ts
 import { createHttpAdapter } from "@tailor-platform/sdk";
 
 export default createHttpAdapter({
-  name: "get-user",
+  name: "user",
   pathPattern: "/users/*",
-  methods: ["GET"],
-  input: (req) => ({
-    query: `query GetUser($id: ID!) { user(id: $id) { id name email } }`,
-    variables: { id: req.path.split("/")[2] },
-  }),
+  input: {
+    get: (req) => ({
+      query: `query GetUser($id: ID!) { user(id: $id) { id name email } }`,
+      variables: { id: req.path.split("/")[2] },
+    }),
+    post: (req) => ({
+      query: `mutation CreateUser($input: CreateUserInput!) { createUser(input: $input) { id } }`,
+      variables: { input: JSON.parse(req.body) },
+    }),
+  },
   output: (resp) => ({
     statusCode: 200,
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(resp.data?.user ?? null),
+    body: JSON.stringify(resp.data ?? null),
   }),
 });
 ```
 
-A request to `GET /api/users/abc-123` will invoke `input(req)`, execute the resulting GraphQL query against your application's GraphQL endpoint (with the caller's auth context preserved), then invoke `output(resp)` to produce the HTTP response.
+A request to `GET /api/users/abc-123` invokes the `get` handler, runs the resulting GraphQL query against your application's GraphQL endpoint (with the caller's auth context preserved), then invokes `output(resp)` to produce the HTTP response. A `POST /api/users/...` would instead invoke the `post` handler with the same shared `output`.
 
 If `output` is omitted, the raw GraphQL response is returned as JSON.
+
+### Why is `output` shared instead of per-method?
+
+The gateway runs `input` and `output` in **separate JavaScript VMs** with no shared globals, and the `output` callback only receives the GraphQL response (not the original request or method). For per-method response shaping, discriminate inside `output` based on the response data shape.
 
 ## Path Pattern
 
@@ -82,7 +92,8 @@ Exact matching semantics (trailing-slash handling, percent-encoding, etc.) are d
 ## Type Reference
 
 ```typescript
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+type HttpMethodKey = "get" | "post" | "put" | "patch" | "delete";
 
 type HttpAdapterRequest = {
   method: HttpMethod;
@@ -97,6 +108,10 @@ type HttpAdapterInputResult = {
   variables?: Record<string, unknown>;
   operationName?: string;
 };
+
+type HttpAdapterInputFn = (req: HttpAdapterRequest) => HttpAdapterInputResult;
+
+type HttpAdapterInput = Partial<Record<HttpMethodKey, HttpAdapterInputFn>>;
 
 type HttpAdapterGraphQLResponse = {
   data?: unknown;

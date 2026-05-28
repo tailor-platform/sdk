@@ -36,15 +36,13 @@ fs.readFileSync("/etc/passwd");
 export const a = createHttpAdapter({
   name: "one",
   pathPattern: "/a",
-  methods: ["GET"],
-  input: () => ({ query: "{}" }),
+  input: { get: () => ({ query: "{}" }) },
 });
 
 export default createHttpAdapter({
   name: "two",
   pathPattern: "/b",
-  methods: ["GET"],
-  input: () => ({ query: "{}" }),
+  input: { get: () => ({ query: "{}" }) },
 });
 `,
     );
@@ -64,8 +62,7 @@ const dynamicName = "x";
 export default createHttpAdapter({
   name: dynamicName,
   pathPattern: "/x",
-  methods: ["GET"],
-  input: () => ({ query: "{}" }),
+  input: { get: () => ({ query: "{}" }) },
 });
 `,
     );
@@ -82,13 +79,12 @@ import { createHttpAdapter } from "@tailor-platform/sdk";
 export default createHttpAdapter({
   name: "async-input",
   pathPattern: "/x",
-  methods: ["GET"],
-  input: async () => ({ query: "{}" }),
+  input: { get: async () => ({ query: "{}" }) },
 });
 `,
     );
 
     const service = createHttpAdapterService({ config: { files: [file] } });
-    await expect(service.loadAdapters()).rejects.toThrow(/`input` must be synchronous/);
+    await expect(service.loadAdapters()).rejects.toThrow(/`input\.get` must be synchronous/);
   });
 });
