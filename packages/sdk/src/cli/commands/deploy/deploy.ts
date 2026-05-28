@@ -739,10 +739,7 @@ export async function deploy(options?: DeployOptions) {
       return;
     }
 
-    // Capture a health snapshot before apply so the post-deploy wait can
-    // distinguish "new attempt from this deploy" from any attempt that
-    // happened to complete during apply. Skipped for deploys with no
-    // subgraphs to compose (static-only / delete-only).
+    // Capture before apply so the post-deploy wait can detect a fresh attempt.
     const willWaitForHealthy = application.subgraphs.length > 0;
     const preDeployHealth = willWaitForHealthy
       ? await captureHealthSnapshot({ client, workspaceId, name: application.name })
