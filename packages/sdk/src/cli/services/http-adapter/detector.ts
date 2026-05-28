@@ -122,6 +122,10 @@ export function findHttpAdaptersInFile(
         sourceFile,
         hasOutput,
       });
+      // The call's arguments have already been validated above; don't descend
+      // into them again, which would double-count any nested defineHttpAdapter
+      // call (e.g. when arguments themselves contain expressions).
+      return;
     }
 
     for (const key of Object.keys(node)) {
