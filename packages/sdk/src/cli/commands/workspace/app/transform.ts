@@ -14,22 +14,18 @@ export interface AppInfo {
   updatedAt: Date | null;
 }
 
-export type SchemaHealthStatus = "ok" | "composition_error" | "unknown";
-
-export type SchemaAttemptStatus = "success" | "failure" | "unknown" | "N/A";
-
 export interface AppHealthInfo {
   name: string;
-  status: SchemaHealthStatus;
+  status: string;
   currentServingSchemaUpdatedAt: Date | null;
-  lastAttemptStatus: SchemaAttemptStatus;
+  lastAttemptStatus: string;
   lastAttemptAt: Date | null;
   lastAttemptError: string;
 }
 
-const toSchemaHealthStatus = (
+const statusToString = (
   status: GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus,
-): SchemaHealthStatus => {
+): string => {
   switch (status) {
     case GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus.OK:
       return "ok";
@@ -40,9 +36,7 @@ const toSchemaHealthStatus = (
   }
 };
 
-const toSchemaAttemptStatus = (
-  status: ApplicationSchemaUpdateAttemptStatus,
-): SchemaAttemptStatus => {
+const attemptStatusToString = (status: ApplicationSchemaUpdateAttemptStatus): string => {
   switch (status) {
     case ApplicationSchemaUpdateAttemptStatus.SUCCEEDED:
       return "success";
@@ -70,9 +64,9 @@ export const appHealthInfo = (
   const attempt = health.lastSchemaUpdateAttempt;
   return {
     name,
-    status: toSchemaHealthStatus(health.status),
+    status: statusToString(health.status),
     currentServingSchemaUpdatedAt: formatTimestamp(health.currentServingSchemaUpdateTime),
-    lastAttemptStatus: attempt ? toSchemaAttemptStatus(attempt.status) : "N/A",
+    lastAttemptStatus: attempt ? attemptStatusToString(attempt.status) : "N/A",
     lastAttemptAt: formatTimestamp(attempt?.attemptTime),
     lastAttemptError: attempt?.error ?? "",
   };
