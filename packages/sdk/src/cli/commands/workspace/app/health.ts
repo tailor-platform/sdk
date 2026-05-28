@@ -1,7 +1,7 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
+import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
@@ -36,6 +36,28 @@ async function loadOptions(options: HealthOptions) {
   };
 }
 
+export interface GetAppHealthWithParams {
+  client: OperatorClient;
+  workspaceId: string;
+  name: string;
+}
+
+/**
+ * Get application schema health status using a pre-initialized client.
+ * Suitable for callers that already hold a client (e.g., polling loops in `deploy`)
+ * to avoid repeated access-token loading.
+ * @param params - Pre-initialized client, workspace ID, and application name
+ * @returns Application health information
+ */
+export async function getAppHealthWith(params: GetAppHealthWithParams): Promise<AppHealthInfo> {
+  const { client, workspaceId, name } = params;
+  const response = await client.getApplicationSchemaHealth({
+    workspaceId,
+    applicationName: name,
+  });
+  return appHealthInfo(name, response);
+}
+
 /**
  * Get application schema health status.
  * @param options - Health check options
@@ -43,13 +65,7 @@ async function loadOptions(options: HealthOptions) {
  */
 export async function getAppHealth(options: HealthOptions): Promise<AppHealthInfo> {
   const { client, workspaceId, name } = await loadOptions(options);
-
-  const response = await client.getApplicationSchemaHealth({
-    workspaceId,
-    applicationName: name,
-  });
-
-  return appHealthInfo(name, response);
+  return getAppHealthWith({ client, workspaceId, name });
 }
 
 export const healthCommand = defineAppCommand({

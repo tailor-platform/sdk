@@ -5,6 +5,7 @@ import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
+import { parseDuration } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
@@ -59,6 +60,7 @@ import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./reso
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
+import { captureHealthSnapshot, waitForHealthy } from "./wait-for-healthy";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
@@ -72,6 +74,9 @@ export interface DeployOptions {
   noSchemaCheck?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
+  // Duration string (e.g., "5m") accepted by parseDuration.
+  waitTimeout?: string;
+  noWait?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
@@ -738,6 +743,14 @@ export async function deploy(options?: DeployOptions) {
       return;
     }
 
+    // Capture a health snapshot before apply so the post-deploy wait can
+    // distinguish "new attempt from this deploy" from any attempt that
+    // happened to complete during apply. Skipped when we won't wait.
+    const willWaitForHealthy = !options?.noWait && application.subgraphs.length > 0;
+    const preDeployHealth = willWaitForHealthy
+      ? await captureHealthSnapshot({ client, workspaceId, name: application.name })
+      : null;
+
     // Phase 2: Create/Update services that Application depends on
     await withSpan("apply.createUpdateServices", async () => {
       await applySecretManager(client, secretManager, "create-update", application);
@@ -792,5 +805,20 @@ export async function deploy(options?: DeployOptions) {
     );
 
     logger.success("Successfully applied changes.");
+
+    // Wait until the platform's schema composition converges. Skipped for
+    // static-only / delete-only deploys (no subgraphs to compose) and when
+    // --no-wait is set.
+    if (willWaitForHealthy) {
+      await withSpan("apply.waitForHealthy", () =>
+        waitForHealthy({
+          client,
+          workspaceId,
+          applicationName: application.name,
+          previous: preDeployHealth,
+          timeoutMs: parseDuration(options?.waitTimeout ?? "5m"),
+        }),
+      );
+    }
   });
 }
