@@ -10,29 +10,22 @@ Each HTTP adapter is a single file that declares:
 - An `input` function that converts an incoming HTTP request into a GraphQL request (`query`, `variables`, `operationName`)
 - An optional `output` function that converts the GraphQL response into an HTTP response (`statusCode`, `headers`, `body`)
 
-At deploy time the SDK bundles each `input` and `output` function into a standalone JS script that runs in the gateway's sandboxed runtime when a matching request hits `/f/<pathPattern>`.
+At deploy time the SDK bundles each `input` and `output` function into a standalone JS script that runs in the gateway's sandboxed runtime when a matching request reaches the application gateway under the `/api/` prefix.
+
+For the official Tailor Platform documentation — including the exact URL routing, request/response body limits, execution timeouts, CORS handling, and other gateway-runtime behavior — see https://docs.tailor.tech/.
 
 ## Requirements
 
 - Each adapter file must call `defineHttpAdapter` exactly once and `export default` the result
 - `name` must be a string literal that matches `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and be unique across all adapters
 - `input` and `output` must be inline arrow or `function` expressions (not references to functions defined elsewhere)
-- `input` and `output` **must be synchronous** — `async`/`await` and top-level `await` are not supported by the gateway runtime
+- `input` and `output` **must be synchronous** — the SDK rejects `async`/`await` at build time because the gateway runtime does not support it
 
-## Runtime Constraints
+## Build-time Limits
 
-Adapter scripts are bundled to an ES2017 IIFE and executed in the gateway's sandboxed Sobek runtime. The following are **not** available:
+The SDK bundles each adapter function into a standalone ES2017 IIFE for the gateway runtime. The bundle is rejected if it imports Node built-in modules (`fs`, `path`, `crypto`, etc.) or exceeds 256 KB; a warning is emitted above 64 KB.
 
-- Node built-in modules (`fs`, `path`, `crypto`, `http`, etc.) — rejected at build time
-- `async`/`await` and top-level `await` — rejected at build time
-- `fetch`, `setTimeout`, `setInterval`, and other browser/host globals
-- Any third-party libraries that depend on the above
-
-Each bundled script is capped at 256 KB (with a warning at 64 KB).
-
-## Activation
-
-HTTP adapters are gated by a per-workspace feature flag (`20260413_platform_filter_router`). Until the flag is enabled for a workspace, requests to `/f/<path>` return `404`. Contact your platform admin to enable adapters in your environment.
+Gateway-side runtime limits (request/response body size, execution timeout, available globals) are enforced separately by the platform — see the platform documentation linked above.
 
 ## Configuration
 
@@ -72,15 +65,19 @@ export default defineHttpAdapter({
 });
 ```
 
-A request to `GET /f/users/abc-123` will invoke `input(req)`, execute the resulting GraphQL query against your application's GraphQL endpoint (with the caller's auth context preserved), then invoke `output(resp)` to produce the HTTP response.
+A request to `GET /api/users/abc-123` will invoke `input(req)`, execute the resulting GraphQL query against your application's GraphQL endpoint (with the caller's auth context preserved), then invoke `output(resp)` to produce the HTTP response.
 
 If `output` is omitted, the raw GraphQL response is returned as JSON.
 
 ## Path Pattern
 
-- Literal segments must match exactly: `/users/list` matches only `/users/list`
-- A `*` in the middle matches exactly one segment: `/api/*/users` matches `/api/v1/users`
-- A trailing `*` matches all remaining segments: `/api/*` matches `/api/v1/users/123`
+`pathPattern` is matched against the request path **after** the platform-side `/api/` prefix.
+
+- Literal segments must match exactly
+- A `*` in the middle of the pattern matches exactly one path segment (`/users/*/items`)
+- A trailing `*` matches the remaining path (`/users/*`)
+
+Exact matching semantics (trailing-slash handling, percent-encoding, etc.) are defined by the platform — refer to the platform documentation for details.
 
 ## Type Reference
 
