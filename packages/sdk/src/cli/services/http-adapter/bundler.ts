@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { builtinModules } from "node:module";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -10,27 +11,16 @@ import ml from "@/utils/multiline";
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
 
-const BLOCKED_NODE_MODULES = new Set([
-  "fs",
-  "path",
-  "os",
-  "child_process",
-  "http",
-  "https",
-  "net",
-  "crypto",
-  "stream",
-  "url",
-  "process",
-  "buffer",
-  "events",
-  "util",
-  "zlib",
-  "worker_threads",
-  "perf_hooks",
-  "dns",
-  "tls",
-]);
+// Sobek does not implement Node's host APIs. Reject every Node built-in
+// (including subpath imports like `fs/promises`) and the `node:` prefix.
+// Internal `_*` modules are excluded since they are never valid user imports.
+const NODE_BUILTINS = new Set(builtinModules.filter((m) => !m.startsWith("_")));
+
+function isNodeBuiltinImport(source: string): boolean {
+  if (source.startsWith("node:")) return true;
+  const root = source.includes("/") ? source.slice(0, source.indexOf("/")) : source;
+  return NODE_BUILTINS.has(root);
+}
 
 export interface HttpAdapterBundleInput {
   name: string;
@@ -71,15 +61,6 @@ export async function bundleHttpAdapters(
 
   const outputDir = path.resolve(getDistDir(), "http-adapters");
   fs.mkdirSync(outputDir, { recursive: true });
-
-  // Remove stale output files.
-  const currentNames = new Set(adapters.map((a) => a.name));
-  for (const file of fs.readdirSync(outputDir)) {
-    const base = path.basename(file).replace(/\.(input|output)\.js(\.map)?$/, "");
-    if (!currentNames.has(base) && (file.endsWith(".js") || file.endsWith(".js.map"))) {
-      fs.rmSync(path.join(outputDir, file), { force: true });
-    }
-  }
 
   let tsconfig: string | undefined;
   try {
@@ -149,12 +130,7 @@ async function bundleAdapterScript(
       const rejectNodeImports: rolldown.Plugin = {
         name: "http-adapter-reject-node-imports",
         resolveId(source) {
-          if (source.startsWith("node:")) {
-            throw new Error(
-              `HTTP adapter "${adapter.name}" imports Node module "${source}", which is unavailable in the gateway runtime`,
-            );
-          }
-          if (BLOCKED_NODE_MODULES.has(source)) {
+          if (isNodeBuiltinImport(source)) {
             throw new Error(
               `HTTP adapter "${adapter.name}" imports Node module "${source}", which is unavailable in the gateway runtime`,
             );
@@ -165,32 +141,34 @@ async function bundleAdapterScript(
 
       const plugins: rolldown.Plugin[] = [rejectNodeImports, ...cachePlugins];
 
-      const result = await rolldown.build({
-        input: entryPath,
-        write: false,
-        output: {
-          format: "iife",
-          sourcemap: false,
-          minify: true,
-          codeSplitting: false,
-        },
-        tsconfig,
-        plugins,
-        treeshake: {
-          moduleSideEffects: false,
-          annotations: true,
-          unknownGlobalSideEffects: false,
-        },
-        logLevel: "silent",
-      } as rolldown.BuildOptions);
-
-      const bundled = result.output[0].code;
-
-      // Clean up the temporary entry file.
+      let bundled: string;
       try {
-        fs.rmSync(entryPath, { force: true });
-      } catch {
-        // best-effort cleanup
+        const result = await rolldown.build({
+          input: entryPath,
+          write: false,
+          output: {
+            format: "iife",
+            sourcemap: false,
+            minify: true,
+            codeSplitting: false,
+          },
+          tsconfig,
+          plugins,
+          transform: { target: "es2017" },
+          treeshake: {
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+          },
+          logLevel: "silent",
+        } as rolldown.BuildOptions);
+        bundled = result.output[0].code;
+      } finally {
+        try {
+          fs.rmSync(entryPath, { force: true });
+        } catch {
+          // best-effort cleanup
+        }
       }
 
       const byteLength = Buffer.byteLength(bundled, "utf8");
