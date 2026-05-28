@@ -27,7 +27,7 @@ export interface AppHealthInfo {
   lastAttemptError: string;
 }
 
-const statusToString = (
+const toSchemaHealthStatus = (
   status: GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus,
 ): SchemaHealthStatus => {
   switch (status) {
@@ -40,7 +40,7 @@ const statusToString = (
   }
 };
 
-const attemptStatusToString = (
+const toSchemaAttemptStatus = (
   status: ApplicationSchemaUpdateAttemptStatus,
 ): SchemaAttemptStatus => {
   switch (status) {
@@ -70,9 +70,9 @@ export const appHealthInfo = (
   const attempt = health.lastSchemaUpdateAttempt;
   return {
     name,
-    status: statusToString(health.status),
+    status: toSchemaHealthStatus(health.status),
     currentServingSchemaUpdatedAt: formatTimestamp(health.currentServingSchemaUpdateTime),
-    lastAttemptStatus: attempt ? attemptStatusToString(attempt.status) : "N/A",
+    lastAttemptStatus: attempt ? toSchemaAttemptStatus(attempt.status) : "N/A",
     lastAttemptAt: formatTimestamp(attempt?.attemptTime),
     lastAttemptError: attempt?.error ?? "",
   };
