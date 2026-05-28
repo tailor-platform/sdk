@@ -12,7 +12,6 @@ describe("@tailor-platform/sdk/runtime/context", () => {
 
   afterEach(() => {
     cleanupMocks(globalThis);
-    vi.restoreAllMocks();
   });
 
   test("getInvoker returns null for anonymous invocations", () => {
@@ -23,7 +22,7 @@ describe("@tailor-platform/sdk/runtime/context", () => {
   });
 
   test("getInvoker exposes SDK shape (attributes map + attributeList array)", () => {
-    vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
+    using _invokerSpy = vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
       id: "u-1",
       type: "machine_user",
       workspaceId: "ws-1",

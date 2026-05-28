@@ -4,6 +4,7 @@ import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
+import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "@/cli/shared/token-store";
 import { createCommand } from "./create";
 
@@ -70,15 +71,11 @@ afterAll(() => {
 });
 
 describe("workspace create --permission", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");
-    const { logger } = await import("@/cli/shared/logger");
-    vi.spyOn(logger, "out").mockImplementation(() => {});
-    vi.spyOn(logger, "success").mockImplementation(() => {});
-    vi.spyOn(logger, "warn").mockImplementation(() => {});
     seedConfig();
     stubClient();
   });
@@ -91,6 +88,7 @@ describe("workspace create --permission", () => {
   });
 
   it("persists readonly: true when --permission read is combined with --profile-name", async () => {
+    using _logger = silenceLogger("out", "success", "warn");
     await runCommand(createCommand, [
       "--name",
       "test-ws",
@@ -109,6 +107,7 @@ describe("workspace create --permission", () => {
   });
 
   it("omits the readonly key when --profile-name is given without --permission read", async () => {
+    using _logger = silenceLogger("out", "success", "warn");
     await runCommand(createCommand, [
       "--name",
       "test-ws",
@@ -128,6 +127,7 @@ describe("workspace create --permission", () => {
   });
 
   it("creates no profile when --permission read is passed without --profile-name", async () => {
+    using _logger = silenceLogger("out", "success", "warn");
     // Matches the existing --profile-user behavior: profile-only flags are
     // silently inert when --profile-name is absent. We don't store the flag
     // anywhere because no profile was created to attach it to.
