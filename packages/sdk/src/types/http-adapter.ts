@@ -6,13 +6,6 @@ export type {
   HttpAdapterServiceInput,
 } from "./http-adapter.generated";
 
-/**
- * Single source of truth for HTTP methods supported by createHttpAdapter.
- * Maps the lowercase config key (`input.get`, `input.post`, ...) to the
- * uppercase wire-format method (`req.method` at runtime). Adding a method
- * here flows automatically to `HttpMethodKey` / `HttpMethod` and to any
- * `Object.keys(HTTP_METHODS)` enumeration.
- */
 export const HTTP_METHODS = {
   get: "GET",
   post: "POST",
