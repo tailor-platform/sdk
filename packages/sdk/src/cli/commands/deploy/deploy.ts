@@ -4,6 +4,7 @@ import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
+import { getAppHealthWith } from "@/cli/commands/workspace/app/health";
 import { loadApplication, type Application } from "@/cli/services/application";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -59,8 +60,9 @@ import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./reso
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
-import { captureHealthSnapshot, waitForHealthy } from "./wait-for-healthy";
+import { waitForHealthy } from "./wait-for-healthy";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
+import type { AppHealthInfo } from "@/cli/commands/workspace/app/transform";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 
@@ -742,11 +744,23 @@ export async function deploy(options?: DeployOptions) {
     // Capture a health snapshot before apply so the post-deploy wait can
     // distinguish "new attempt from this deploy" from any attempt that
     // happened to complete during apply. Skipped for deploys with no
-    // subgraphs to compose (static-only / delete-only).
+    // subgraphs to compose (static-only / delete-only). NotFound means the
+    // app does not exist yet (initial deploy).
     const willWaitForHealthy = application.subgraphs.length > 0;
-    const preDeployHealth = willWaitForHealthy
-      ? await captureHealthSnapshot({ client, workspaceId, name: application.name })
-      : null;
+    let preDeployHealth: AppHealthInfo | null = null;
+    if (willWaitForHealthy) {
+      try {
+        preDeployHealth = await getAppHealthWith({
+          client,
+          workspaceId,
+          name: application.name,
+        });
+      } catch (error) {
+        if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
+          throw error;
+        }
+      }
+    }
 
     // Phase 2: Create/Update services that Application depends on
     await withSpan("apply.createUpdateServices", async () => {

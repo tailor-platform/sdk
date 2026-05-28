@@ -1,5 +1,4 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { Code, ConnectError } from "@connectrpc/connect";
 import { getAppHealthWith } from "@/cli/commands/workspace/app/health";
 import { logger, styles } from "@/cli/shared/logger";
 import type { AppHealthInfo } from "@/cli/commands/workspace/app/transform";
@@ -23,32 +22,6 @@ export interface WaitForHealthyParams {
   pollIntervalMs?: number;
   initialDelayMs?: number;
   now?: () => number;
-}
-
-const isNotFound = (error: unknown): boolean =>
-  error instanceof ConnectError && error.code === Code.NotFound;
-
-export interface CaptureHealthSnapshotParams {
-  client: OperatorClient;
-  workspaceId: string;
-  name: string;
-}
-
-/**
- * Capture an application's health snapshot. Returns `null` when the application
- * does not yet exist (NotFound), e.g., on the initial deploy.
- * @param params - Client, workspace ID, and application name
- * @returns Snapshot, or `null` if the application does not exist yet
- */
-export async function captureHealthSnapshot(
-  params: CaptureHealthSnapshotParams,
-): Promise<AppHealthInfo | null> {
-  try {
-    return await getAppHealthWith(params);
-  } catch (error) {
-    if (isNotFound(error)) return null;
-    throw error;
-  }
 }
 
 const isNewAttempt = (current: AppHealthInfo, previous: AppHealthInfo | null): boolean => {
