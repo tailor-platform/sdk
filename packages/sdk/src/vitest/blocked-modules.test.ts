@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getBlockedMessage, isBlockedModule } from "../blocked-modules";
+import { getBlockedMessage, isBlockedModule } from "./blocked-modules";
 
 describe("isBlockedModule", () => {
   test("recognizes node:-prefixed builtins", () => {

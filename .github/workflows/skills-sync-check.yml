@@ -3,12 +3,12 @@ name: Skills Sync
 on:
   pull_request:
     paths:
-      - "packages/sdk/skills/**"
+      - "packages/sdk/agent-skills/**"
       - ".github/workflows/skills-sync-check.yml"
   push:
     branches: [main]
     paths:
-      - "packages/sdk/skills/**"
+      - "packages/sdk/agent-skills/**"
 
 permissions:
   contents: read
@@ -28,10 +28,13 @@ jobs:
 
       - name: Sync skills to root
         run: |
-          # Copy public skills from packages/sdk/skills/ to skills/
-          # This enables distribution via `gh skill` and `npx skills`
+          # Copy public skills from packages/sdk/agent-skills/ to skills/.
+          # The bundled copy lives under a non-`skills/` directory so that
+          # `gh skill`'s recursive `**/skills/*/SKILL.md` match resolves to a
+          # single entry (the repo-root mirror). Root `skills/` is what both
+          # `gh skill install` and `npx skills add <repo>` actually pick up.
 
-          for skill_dir in packages/sdk/skills/*/; do
+          for skill_dir in packages/sdk/agent-skills/*/; do
             skill_name=$(basename "$skill_dir")
             mkdir -p "skills/$skill_name"
             cp -r "$skill_dir"* "skills/$skill_name/"

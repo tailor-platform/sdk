@@ -23,14 +23,14 @@ migrations/
 │   └── schema.json
 ├── 0001/                    # First change
 │   ├── diff.json            # Field-level diff from 0000
-│   ├── migrate.ts           # Data migration script (only if breaking)
+│   ├── migrate.ts           # Data migration script (auto-generated for breaking changes; can be added manually via `migration script`)
 │   └── db.ts                # Kysely types for the script (pre-migration shape)
 ├── 0002/
 │   └── diff.json            # No script — non-breaking changes only
 └── ...
 ```
 
-`0000` always contains a full snapshot. `0001` and onward contain a diff plus, for breaking changes, a script and its types. **Commit the entire `migrations/` directory to version control.**
+`0000` always contains a full snapshot. `0001` and onward contain a diff plus, optionally, a script and its types (auto-generated for breaking changes, or added manually via `tailordb migration script` for warning-tier changes). **Commit the entire `migrations/` directory to version control.**
 
 ## Initial Setup
 
@@ -113,6 +113,24 @@ A typical change cycle:
    ```
    The pre-migration phase relaxes the new field to optional, the script runs and populates values, then the post-migration phase enforces `required: true`.
 
+### Warnings and optional migration scripts
+
+Some non-breaking changes can still cause data loss — most notably removing a field (`field_removed`) or removing a type (`type_removed`). `migration generate` reports these as **warnings**:
+
+```
+Warning: data loss possible:
+
+  - User.legacyParentId: Field removed (existing data will be dropped in the post-migration phase)
+```
+
+No `migrate.ts` is generated automatically because the schema change itself is non-breaking, but the existing data is dropped during the post-migration phase. If you need to preserve or transform that data first (for example, copy a column into another table before it disappears), add a script with:
+
+```bash
+tailor-sdk tailordb migration script 0002
+```
+
+This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the existing `diff.json`. The removed field stays readable inside `migrate.ts` because the pre-migration phase keeps it on the type until the script finishes (see [Per-migration phases](#per-migration-phases)). The next `tailor-sdk deploy` runs the script automatically — `migrate.ts` is executed whenever the file exists on disk, regardless of whether the diff itself required it.
+
 ## Configuration
 
 ```typescript
@@ -139,12 +157,12 @@ export default defineConfig({
 
 ## Generated Files
 
-| File               | When generated                   | Description                                                                                               |
-| ------------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `0000/schema.json` | First `migration generate`       | Full snapshot of all types in the namespace.                                                              |
-| `XXXX/diff.json`   | Every subsequent migration       | Field-level diff against the previous snapshot.                                                           |
-| `XXXX/migrate.ts`  | Only for breaking changes        | Data transformation script. The `main` export receives a Kysely `Transaction`.                            |
-| `XXXX/db.ts`       | Generated alongside `migrate.ts` | Kysely types reflecting the schema **before** this migration. Re-generated on every `migration generate`. |
+| File               | When generated                                                                                               | Description                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `0000/schema.json` | First `migration generate`                                                                                   | Full snapshot of all types in the namespace.                                   |
+| `XXXX/diff.json`   | Every subsequent migration                                                                                   | Field-level diff against the previous snapshot.                                |
+| `XXXX/migrate.ts`  | Auto-generated for breaking changes; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`. |
+| `XXXX/db.ts`       | Generated once when `migrate.ts` is created                                                                  | Kysely types reflecting the schema **before** this migration.                  |
 
 `db.ts` reflects the pre-migration schema because the script runs after the pre-migration phase has temporarily relaxed breaking constraints (e.g., a new `required` field is added as `optional` first), so the data being read still matches the previous shape.
 
@@ -178,25 +196,25 @@ export async function main(trx: Transaction): Promise<void> {
 
 ## Supported Schema Changes
 
-| Change Type                    | Breaking? | Migration Script? | Notes                                                                                 |
-| ------------------------------ | --------- | ----------------- | ------------------------------------------------------------------------------------- |
-| Add optional field             | No        | No                | Schema change only                                                                    |
-| Add required field             | Yes       | Yes               | Script populates default values                                                       |
-| Remove field                   | No        | No                | Schema change only — data is preserved server-side                                    |
-| Change optional → required     | Yes       | Yes               | Script sets defaults for null values                                                  |
-| Change required → optional     | No        | No                | Schema change only                                                                    |
-| Add index                      | No        | No                | Schema change only                                                                    |
-| Remove index                   | No        | No                | Schema change only                                                                    |
-| Add unique constraint          | Yes       | Yes               | Script must resolve duplicate values                                                  |
-| Remove unique constraint       | No        | No                | Schema change only                                                                    |
-| Add enum value                 | No        | No                | Schema change only                                                                    |
-| Remove enum value              | Yes       | Yes               | Script migrates records with removed values                                           |
-| Add type                       | No        | No                | Schema change only                                                                    |
-| Remove type                    | No        | No                | Schema change only — data is preserved server-side                                    |
-| Change foreign key target type | Yes       | Yes               | Script updates references to the new target                                           |
-| Change field type              | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes) |
-| Change array → single value    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes) |
-| Change single value → array    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes) |
+| Change Type                    | Breaking? | Migration Script? | Notes                                                                                                                                                                                                                                            |
+| ------------------------------ | --------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Add optional field             | No        | No                | Schema change only                                                                                                                                                                                                                               |
+| Add required field             | Yes       | Yes               | Script populates default values                                                                                                                                                                                                                  |
+| Remove field                   | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the field is dropped. The field stays readable from `migrate.ts` during Pre-migration and is dropped in Post-migration. |
+| Change optional → required     | Yes       | Yes               | Script sets defaults for null values                                                                                                                                                                                                             |
+| Change required → optional     | No        | No                | Schema change only                                                                                                                                                                                                                               |
+| Add index                      | No        | No                | Schema change only                                                                                                                                                                                                                               |
+| Remove index                   | No        | No                | Schema change only                                                                                                                                                                                                                               |
+| Add unique constraint          | Yes       | Yes               | Script must resolve duplicate values                                                                                                                                                                                                             |
+| Remove unique constraint       | No        | No                | Schema change only                                                                                                                                                                                                                               |
+| Add enum value                 | No        | No                | Schema change only                                                                                                                                                                                                                               |
+| Remove enum value              | Yes       | Yes               | Script migrates records with removed values                                                                                                                                                                                                      |
+| Add type                       | No        | No                | Schema change only                                                                                                                                                                                                                               |
+| Remove type                    | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the type is dropped. The type stays readable from `migrate.ts` during Pre-migration and is dropped in Post-migration.   |
+| Change foreign key target type | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                                      |
+| Change field type              | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                            |
+| Change array → single value    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                            |
+| Change single value → array    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                            |
 
 ### 3-step migration for unsupported changes
 
@@ -216,11 +234,11 @@ When you run `tailor-sdk deploy`, the SDK detects pending migrations (anything p
 
 For each pending migration:
 
-1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Non-breaking changes that are part of the same migration are also applied here.
-2. **Script execution**: If `diff.requiresMigrationScript` is true, `migrate.ts` is bundled and sent to the platform via the script execution API. It runs as the configured machine user inside a transaction.
-3. **Post-migration**: Required constraints are enforced; field/type deletions are applied; the `sdk-migration` label is bumped to this migration's number.
+1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the type so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). Non-breaking changes that are part of the same migration are also applied here.
+2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and sent to the platform via the script execution API and runs as the configured machine user inside a transaction. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) but is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
+3. **Post-migration**: Required constraints are enforced; field and type deletions are applied (the columns/tables are physically dropped here); the `sdk-migration` label is bumped to this migration's number.
 
-This split is what allows existing rows to be backfilled before the database starts rejecting nulls.
+This split is what allows existing rows to be backfilled before the database starts rejecting nulls, and what lets `migrate.ts` traverse foreign-key fields that the same migration removes.
 
 ### Schema verification
 

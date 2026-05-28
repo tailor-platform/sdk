@@ -150,7 +150,7 @@ export async function generateDiffFiles(
  * @param {MigrationDiff} diff - Migration diff
  * @returns {string} Migration script content
  */
-function generateMigrationScript(diff: MigrationDiff): string {
+export function generateMigrationScript(diff: MigrationDiff): string {
   const updates: string[] = [];
 
   for (const change of diff.changes) {
@@ -168,8 +168,11 @@ function generateMigrationScript(diff: MigrationDiff): string {
   return `/**
  * Migration script for ${diff.namespace}
  *
- * This script handles data migration for breaking schema changes.
- * Edit this file to implement your data migration logic.
+ * This script runs between the Pre-migration and Post-migration phases of
+ * 'tailor-sdk deploy'. Use it to transform existing data so that the schema
+ * change can complete safely (for breaking changes, this is hard-required;
+ * for warning-tier changes it is optional). Edit this file to implement
+ * your data migration logic.
  *
  * The transaction is managed by the deploy command.
  * If any operation fails, all changes will be rolled back.

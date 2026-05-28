@@ -13,6 +13,10 @@ vi.mock("@/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
+vi.mock("@/cli/shared/readonly-guard", () => ({
+  assertWritable: vi.fn(),
+}));
+
 const fetchMock = vi.fn();
 
 describe("api command body auto-injection", () => {

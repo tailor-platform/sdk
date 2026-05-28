@@ -5,6 +5,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { nameArgs } from "./args";
 
 export const createCommand = defineAppCommand({
@@ -17,6 +18,7 @@ export const createCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,

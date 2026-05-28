@@ -5,6 +5,7 @@ import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
+import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
@@ -105,11 +106,10 @@ export async function bundleExecutors(
     tsconfig = undefined;
   }
 
-  // Process each executor
-  const results = await Promise.all(
-    executors.map((executor) =>
-      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
-    ),
+  // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
+  // memory use (each rolldown.build allocates its own module graph).
+  const results = await withBundleConcurrency(executors, (executor) =>
+    bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
   );
 
   for (const [name, code] of results) {

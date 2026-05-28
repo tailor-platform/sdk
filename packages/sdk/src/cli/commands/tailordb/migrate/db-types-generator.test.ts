@@ -38,6 +38,7 @@ function createMockSnapshot(
     }
     snapshotTypes[typeName] = {
       name: typeName,
+      pluralForm: `${typeName}s`,
       fields,
     };
   }
@@ -61,6 +62,8 @@ function createMockDiff(
     changes,
     hasBreakingChanges: options.hasBreakingChanges ?? false,
     breakingChanges: [],
+    hasWarnings: false,
+    warnings: [],
     requiresMigrationScript: options.requiresMigrationScript ?? false,
   };
 }

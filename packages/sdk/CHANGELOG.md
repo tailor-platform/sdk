@@ -1,5 +1,116 @@
 # @tailor-platform/sdk
 
+## 1.51.1
+
+### Patch Changes
+
+- [#1241](https://github.com/tailor-platform/sdk/pull/1241) [`4c40f74`](https://github.com/tailor-platform/sdk/commit/4c40f741318cdbc940a1b7db288751de50e8f680) Thanks [@remiposo](https://github.com/remiposo)! - `tailor-sdk deploy` now waits for the application's GraphQL schema composition to succeed before returning. Composition errors that previously only surfaced via `tailor-sdk workspace app health` are now raised by `deploy` itself.
+
+- [#1216](https://github.com/tailor-platform/sdk/pull/1216) [`7f3aa30`](https://github.com/tailor-platform/sdk/commit/7f3aa308732ac4cac4c8671ce57733a8328d37d9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.4.0
+
+- [#1219](https://github.com/tailor-platform/sdk/pull/1219) [`77bf0b7`](https://github.com/tailor-platform/sdk/commit/77bf0b71a1f92be4987be5ab344cecc9985c88a2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.6.0
+
+- [#1220](https://github.com/tailor-platform/sdk/pull/1220) [`36b3bce`](https://github.com/tailor-platform/sdk/commit/36b3bceca39899c8fb0d57b4c0d467c2f0fe491e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.0
+
+- [#1249](https://github.com/tailor-platform/sdk/pull/1249) [`2e11bc2`](https://github.com/tailor-platform/sdk/commit/2e11bc28e76fca4874b9d35454e86253ca53b920) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.4.3
+
+- [#1246](https://github.com/tailor-platform/sdk/pull/1246) [`4d3f2d4`](https://github.com/tailor-platform/sdk/commit/4d3f2d4eb7d5f1a7bdcd3a078075f89d4b2048ab) Thanks [@toiroakr](https://github.com/toiroakr)! - Cap parallel bundling of resolvers, executors, and workflow jobs to avoid OOM/SIGTERM on CI runners with many resolvers. Concurrency defaults to `os.cpus().length` and can be overridden via the `TAILOR_BUNDLE_CONCURRENCY` env var.
+
+## 1.51.0
+
+### Minor Changes
+
+- [#1131](https://github.com/tailor-platform/sdk/pull/1131) [`c62c3b0`](https://github.com/tailor-platform/sdk/commit/c62c3b0a78761cff859ccac5af23d2e8dd0f996a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `@tailor-platform/sdk/runtime` — typed wrappers for the Tailor Platform Function runtime APIs (`tailor.iconv`, `tailor.secretmanager`, `tailor.authconnection`, `tailor.idp`, `tailor.workflow`, `tailor.context`, and `tailordb.file`). The wrappers and their types are fully self-contained, so you can use them without activating any ambient globals.
+
+  ```ts
+  import {
+    iconv,
+    secretmanager,
+    idp,
+    file,
+  } from "@tailor-platform/sdk/runtime";
+
+  const utf8 = iconv.convert(sjisBuffer, "Shift_JIS", "UTF-8");
+  const apiKey = await secretmanager.getSecret("my-vault", "API_KEY");
+  const client = new idp.Client({ namespace: "my-namespace" });
+  const { metadata } = await file.upload(
+    "ns",
+    "Document",
+    "attachment",
+    recordId,
+    bytes
+  );
+  ```
+
+  The SDK no longer depends on the external `@tailor-platform/function-types` package; its declarations are now vendored inside the SDK. For backwards compatibility the ambient `tailor.*` / `tailordb.*` types are still activated automatically when you import from `@tailor-platform/sdk`, so existing code keeps type-checking with no changes. This implicit activation will be removed in v2.0 — new code is encouraged to use the typed wrappers from `@tailor-platform/sdk/runtime`, or to opt into the globals explicitly via `import "@tailor-platform/sdk/runtime/globals"` (or by listing the entry in `tsconfig.json`'s `compilerOptions.types`).
+
+  The capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`) is preserved as a `@deprecated` alias of the new lowercase `tailordb.*` namespace for source-level compatibility with `@tailor-platform/function-types`. It will be removed in v2.0; run `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` to migrate. The `@tailor-platform/function-types` declarations are vendored inside the SDK and activated automatically, so you can simply remove `@tailor-platform/function-types` from your `package.json` (and from `tsconfig.json` `compilerOptions.types` if listed) once you've upgraded.
+
+  Other test-mock changes from `@tailor-platform/sdk/vitest`:
+
+  - Breaking: when an `openDownloadStream` (or `toFileStream()`) call consumes a queued mock result, raw `Uint8Array` / `ArrayBuffer` payloads are now rejected. Enqueue a structured iterable of `StreamValue` items (`{ type: "metadata" }`, `{ type: "chunk", data, position }`, `{ type: "complete" }`) so test streams stay aligned with the platform's structured stream contract. The shorthand `Uint8Array` enqueue is still accepted by `download` / `downloadAsBase64`.
+
+### Patch Changes
+
+- [#1215](https://github.com/tailor-platform/sdk/pull/1215) [`65ffd8a`](https://github.com/tailor-platform/sdk/commit/65ffd8a84c377fe91f7632784716a6322fab4c33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
+- [#1199](https://github.com/tailor-platform/sdk/pull/1199) [`1b6d0d8`](https://github.com/tailor-platform/sdk/commit/1b6d0d8678d02ed6f6ea79dad48fc3ba23978fbe) Thanks [@toiroakr](https://github.com/toiroakr)! - **Fix**: `tailor-sdk tailordb truncate` and the `exec.mjs` generated by the built-in `seedPlugin` no longer touch namespaces declared with `{ external: true }`.
+
+  - `tailor-sdk tailordb truncate --all` now only truncates namespaces the current app actually owns; namespaces declared with `{ external: true }` are skipped. This also covers the `--truncate` path of `seed/exec.mjs`, so its `seed:reset` no longer wipes a sibling app's data.
+  - `tailor-sdk tailordb truncate --namespace <name>` now rejects an external namespace with a dedicated error pointing the user to the owning app, instead of the generic "not found in config" message.
+  - The generated `seed/exec.mjs` now starts with an `@generated` header to discourage hand-edits, since the entire file is regenerated on every `sdk generate`.
+
+## 1.50.1
+
+### Patch Changes
+
+- [#1226](https://github.com/tailor-platform/sdk/pull/1226) [`d900ddc`](https://github.com/tailor-platform/sdk/commit/d900ddcba170a5effe2119fb37e3e038d5cd5935) Thanks [@remiposo](https://github.com/remiposo)! - Fix `deploy` to no longer delete the application when its `id` is regenerated
+  (e.g. CI working tree without a committed `id` in `tailor.config.ts`).
+
+## 1.50.0
+
+### Minor Changes
+
+- [#1223](https://github.com/tailor-platform/sdk/pull/1223) [`c2f078d`](https://github.com/tailor-platform/sdk/commit/c2f078d6fb82d42bcc8c040e020b34072a2d2eb6) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve `tailordb migration` handling of data-loss-possible changes:
+
+  - Removed fields (`field_removed`) and removed types (`type_removed`) are now reported as **warnings** during `tailordb migration generate`, not silent changes. They are no longer dropped before `migrate.ts` runs: the field/type stays available during the Pre-migration phase so that scripts can read it (e.g. `innerJoin` through a foreign key that is being dropped in the same migration), then the physical drop happens in the Post-migration phase.
+  - Add `tailordb migration script <number>` subcommand to add a `migrate.ts` (and `db.ts`) template to an existing migration directory. Useful for warning-tier changes where you want a custom data migration even though one was not generated automatically.
+  - `migrate.ts` is now executed whenever the file exists on disk for a pending migration, regardless of whether the diff originally required a script. Breaking changes still hard-require a script as before.
+
+### Patch Changes
+
+- [#1194](https://github.com/tailor-platform/sdk/pull/1194) [`4c227cc`](https://github.com/tailor-platform/sdk/commit/4c227cc404e51331c0514b0aaa07d96d8940c347) Thanks [@toiroakr](https://github.com/toiroakr)! - Colocate `src/vitest/` tests next to their sources (drop the
+  `src/vitest/__tests__/` directory). Vitest discovers the test files
+  via the existing `**/?(*.)+(spec|test).ts` include pattern, so the
+  `**/__tests__/**/*.ts` entry has been removed from `vitest.config.ts`.
+  The nested integration runner moves from
+  `src/vitest/__tests__/integration/` to `src/vitest/integration/`. Pure
+  refactor: no public API or behavior changes.
+
+- [#1207](https://github.com/tailor-platform/sdk/pull/1207) [`c0b392d`](https://github.com/tailor-platform/sdk/commit/c0b392d95f81bcb2a4bfd9e856183222da87ef06) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor deploy` so an intermediate migration's data script can still read fields that a later migration removes. Each migration's pre/post phase now submits the schema state reconstructed up to that migration (initial baseline + diffs through N), instead of the FINAL post-all-migrations schema. Previously, removals declared in later migrations leaked into earlier migrations' pre-phase and caused `field 'X' not found` failures at script execution time.
+
+- [#1208](https://github.com/tailor-platform/sdk/pull/1208) [`59d7e0e`](https://github.com/tailor-platform/sdk/commit/59d7e0e7c1b42dcd1571365780114d596e44350c) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(skills): rename bundled skill directory to `agent-skills/` so `gh skill install tailor-platform/sdk` resolves a single skill. `gh skill` uses a recursive `**/skills/*/SKILL.md` match and was picking up both `skills/tailor-sdk/` (the public mirror) and `packages/sdk/skills/tailor-sdk/` (the npm bundle), erroring with conflicting names. The bundled copy is now under `packages/sdk/agent-skills/` (excluded from gh's match), while the repo-root `skills/` mirror remains the single discovery target for `gh skill install` and `npx skills add <repo>`. `npx tailor-sdk skills install` continues to work via the bundled `agent-skills/` path inside the published package.
+
+- [#1217](https://github.com/tailor-platform/sdk/pull/1217) [`b827cf9`](https://github.com/tailor-platform/sdk/commit/b827cf95c0c048959c269f7ed9a31fdc81a5eb13) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/read-multiline to v0.4.1
+
+- [#1184](https://github.com/tailor-platform/sdk/pull/1184) [`dee2ad7`](https://github.com/tailor-platform/sdk/commit/dee2ad7199b2da238b7e9edea2d9bb9605033456) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor deploy` so decimal fields without an explicit `scale` no longer show spurious drift against the platform (which materializes the default `6`). Deploy now plans and applies through the same snapshot pipeline as `tailordb migrate`.
+
+## 1.49.0
+
+### Minor Changes
+
+- [#1147](https://github.com/tailor-platform/sdk/pull/1147) [`f0de80a`](https://github.com/tailor-platform/sdk/commit/f0de80ac83a3e76bcb65be7957cb3d7bd1f80ec1) Thanks [@dqn](https://github.com/dqn)! - Add `--permission <write|read>` flag to `profile create`, `profile update`, and `workspace create` (when `--profile-name` is given) so editor users can use a viewer-style profile by default. Profiles created with `--permission read` block platform-state mutations driven by the operator's bearer token (`apply`, `remove`, `workspace create/delete/restore`, `secret create/update/delete`, `tailordb migrate set`, `tailordb truncate`, `tailordb erd deploy`, `executor trigger`, `staticwebsite deploy`, `authconnection authorize/revoke`, organization / folder / PAT / workspace-user mutations, and direct `api <endpoint>` calls) with a `PROFILE_READONLY` error. Application-data operations executed under a machine user (`query`, `workflow start/resume`, `function test-run`) are not gated because the machine user's own permissions already govern those mutations. Switch profile or run `profile update <name> --permission write` to lift the restriction. Profile management itself stays available so the flag can always be cleared. `profile update` skips remote user / workspace validation when only `--permission` is changing, so the flag can be cleared offline or with an expired token.
+
+  The guard activates only when a profile is in scope: pass `--profile <name>` or set `TAILOR_PLATFORM_PROFILE`. `TAILOR_PLATFORM_TOKEN` and `--workspace-id` direct access bypass the guard by design; they are intended for machine-user / CI flows where the platform token already encodes the permitted scope.
+
+### Patch Changes
+
+- [#1204](https://github.com/tailor-platform/sdk/pull/1204) [`6b1bbcb`](https://github.com/tailor-platform/sdk/commit/6b1bbcbe843340a912a3c75c2ecdb03c5697f967) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.1
+
+- [#1196](https://github.com/tailor-platform/sdk/pull/1196) [`c9b7d1e`](https://github.com/tailor-platform/sdk/commit/c9b7d1eae8a3cccf70191bd8c228cd11db6ed060) Thanks [@dqn](https://github.com/dqn)! - Eliminate the Node.js `DEP0205` `DeprecationWarning` (`` `module.register()` is deprecated. Use `module.registerHooks()` instead. ``) printed by every `tailor-sdk` CLI invocation on Node v26. The CLI now registers `tsx` through its own programmatic API (`tsx/esm/api`) instead of calling `node:module`'s `register("tsx", …)` directly, which on tsx 4.21.1+ routes through `module.registerHooks()` on Node ≥ 24.11.1 / 25.1 / 26 and falls back to `module.register()` on older runtimes. Bumps the bundled `tsx` from 4.21.0 to 4.21.1.
+
+- [#1179](https://github.com/tailor-platform/sdk/pull/1179) [`f72ffe1`](https://github.com/tailor-platform/sdk/commit/f72ffe1aed824eb9af5e7520529c3ebde029b5a6) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk deploy --no-schema-check` to reconcile the TailorDB migration label to the working tree's latest migration number when it completes. Previously, running `deploy --no-schema-check` from a revision whose working tree is older than the remote left the remote migration label stale; the next `deploy` then reconstructed a snapshot at a label that no longer existed in the working tree and aborted with a false "Remote schema drift detected" error.
+
 ## 1.48.0
 
 ### Minor Changes

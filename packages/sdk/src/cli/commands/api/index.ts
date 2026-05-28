@@ -6,6 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { apiCall } from "./api-call";
 import { inspectCommand } from "./inspect";
 import { listCommand } from "./list";
@@ -213,6 +214,10 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
     })
     .strict(),
   run: async (args) => {
+    // Direct API calls can target any OperatorService method, including
+    // Create/Update/Delete. Block all of them under a readonly profile rather
+    // than try to classify endpoints by name.
+    await assertWritable({ profile: args.profile });
     const methodName = extractMethodName(args.endpoint);
     const method = getMethodDescriptor(methodName);
 

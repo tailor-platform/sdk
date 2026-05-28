@@ -11,6 +11,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { createProgress, withTimeout } from "@/cli/shared/progress";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 
@@ -243,6 +244,7 @@ export const deployCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);
     const accessToken = await loadAccessToken({
       useProfile: true,

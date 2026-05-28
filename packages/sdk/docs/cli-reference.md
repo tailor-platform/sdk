@@ -53,22 +53,23 @@ tailor-sdk deploy --env-file .env --env-file .env.production
 
 You can use environment variables to configure workspace and authentication:
 
-| Variable                                     | Description                                                                  |
-| -------------------------------------------- | ---------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                         |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                    |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                |
-| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                |
-| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                          |
-| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                       |
-| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                      |
-| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                 |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                         |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                     |
-| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run` |
-| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)  |
-| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                             |
-| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                   |
+| Variable                                     | Description                                                                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                                              |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                         |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                     |
+| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                     |
+| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                                               |
+| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                            |
+| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                                           |
+| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                                      |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                              |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                          |
+| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`                      |
+| `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count |
+| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                       |
+| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                  |
+| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                        |
 
 ### Authentication Token Priority
 
@@ -114,6 +115,7 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate (delete all records from) TailorDB tables.                                                                       |
 | [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
+| [tailordb migration script](./cli/tailordb.md#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
 | [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
 | [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export Liam ERD dist from applied TailorDB schema.                                                                        |

@@ -1,18 +1,19 @@
 /**
  * Type-level tests verifying that the mock-injected globals expose the
- * concrete signatures declared by `@tailor-platform/function-types`.
+ * concrete signatures declared by `@tailor-platform/sdk/runtime/globals`.
  *
  * Each test asserts a concrete return type (or call shape) — bare
  * `expectTypeOf(x).toEqualTypeOf<typeof x>()` self-comparisons are tautological
  * and are intentionally omitted because they would always pass.
  */
+import "@/runtime/globals";
 import { afterAll, beforeAll, describe, expectTypeOf, test } from "vitest";
-import { injectMocks, cleanupMocks } from "../mock";
+import { injectMocks, cleanupMocks } from "./mock";
 
 beforeAll(() => injectMocks(globalThis));
 afterAll(() => cleanupMocks(globalThis));
 
-describe("mock types match @tailor-platform/function-types", () => {
+describe("mock types match @tailor-platform/sdk/runtime/globals", () => {
   describe("tailor.secretmanager", () => {
     test("getSecrets returns Promise<Partial<Record<T[number], string>>>", () => {
       expectTypeOf(tailor.secretmanager.getSecrets("vault", ["a", "b"] as const)).toEqualTypeOf<
