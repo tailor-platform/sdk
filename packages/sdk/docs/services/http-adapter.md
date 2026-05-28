@@ -16,7 +16,7 @@ For the official Tailor Platform documentation — including the exact URL routi
 
 ## Requirements
 
-- Each adapter file must call `defineHttpAdapter` exactly once and `export default` the result
+- Each adapter file must call `createHttpAdapter` exactly once and `export default` the result
 - `name` must be a string literal that matches `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and be unique across all adapters
 - `input` and `output` must be inline arrow or `function` expressions (not references to functions defined elsewhere)
 - `input` and `output` **must be synchronous** — the SDK rejects `async`/`await` at build time because the gateway runtime does not support it
@@ -47,9 +47,9 @@ export default defineConfig({
 
 ```typescript
 // adapters/get-user.ts
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "get-user",
   pathPattern: "/users/*",
   methods: ["GET"],

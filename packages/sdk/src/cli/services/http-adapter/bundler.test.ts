@@ -26,9 +26,9 @@ describe("bundleHttpAdapters", () => {
     fs.writeFileSync(
       sourceFile,
       `
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "get-user",
   pathPattern: "/users/*",
   methods: ["GET"],
@@ -61,10 +61,10 @@ export default defineHttpAdapter({
     fs.writeFileSync(
       sourceFile,
       `
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 import * as fs from "node:fs";
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "bad",
   pathPattern: "/bad",
   methods: ["GET"],

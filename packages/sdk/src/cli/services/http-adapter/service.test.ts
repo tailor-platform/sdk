@@ -23,24 +23,24 @@ describe("createHttpAdapterService.loadAdapters", () => {
     return file;
   }
 
-  it("rejects files containing multiple defineHttpAdapter calls before importing them", async () => {
+  it("rejects files containing multiple createHttpAdapter calls before importing them", async () => {
     const file = writeAdapter(
       "multi.ts",
       `
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 // Importing a Node built-in would normally execute on dynamic import; the
 // detector should reject this file before that happens.
 import * as fs from "node:fs";
 fs.readFileSync("/etc/passwd");
 
-export const a = defineHttpAdapter({
+export const a = createHttpAdapter({
   name: "one",
   pathPattern: "/a",
   methods: ["GET"],
   input: () => ({ query: "{}" }),
 });
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "two",
   pathPattern: "/b",
   methods: ["GET"],
@@ -51,7 +51,7 @@ export default defineHttpAdapter({
 
     const service = createHttpAdapterService({ config: { files: [file] } });
     await expect(service.loadAdapters()).rejects.toThrow(
-      /Expected exactly one defineHttpAdapter call per file/,
+      /Expected exactly one createHttpAdapter call per file/,
     );
   });
 
@@ -59,9 +59,9 @@ export default defineHttpAdapter({
     const file = writeAdapter(
       "dynamic-name.ts",
       `
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 const dynamicName = "x";
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: dynamicName,
   pathPattern: "/x",
   methods: ["GET"],
@@ -78,8 +78,8 @@ export default defineHttpAdapter({
     const file = writeAdapter(
       "async-input.ts",
       `
-import { defineHttpAdapter } from "@tailor-platform/sdk";
-export default defineHttpAdapter({
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
   name: "async-input",
   pathPattern: "/x",
   methods: ["GET"],

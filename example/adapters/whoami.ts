@@ -1,4 +1,4 @@
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 
 function escapeXml(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -25,7 +25,7 @@ function actorXml(tag: string, actor: Record<string, unknown> | undefined): stri
   );
 }
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "whoami",
   pathPattern: "/whoami",
   methods: ["GET"],

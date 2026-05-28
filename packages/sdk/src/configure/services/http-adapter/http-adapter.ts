@@ -25,7 +25,7 @@ export type {
  * @param config - HTTP adapter configuration
  * @returns Branded HTTP adapter definition
  * @example
- * export default defineHttpAdapter({
+ * export default createHttpAdapter({
  *   name: "get-user",
  *   pathPattern: "/users/*",
  *   methods: ["GET"],
@@ -40,6 +40,6 @@ export type {
  *   }),
  * });
  */
-export function defineHttpAdapter(config: HttpAdapter): HttpAdapter {
+export function createHttpAdapter(config: HttpAdapter): HttpAdapter {
   return brandValue({ ...config }, "http-adapter");
 }

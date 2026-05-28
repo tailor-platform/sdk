@@ -33,10 +33,10 @@ export interface HttpAdapterDetectionResult {
 }
 
 /**
- * Find the single defineHttpAdapter call in a source file.
+ * Find the single createHttpAdapter call in a source file.
  *
  * By convention, an HTTP adapter file contains exactly one default export of
- * `defineHttpAdapter({...})`. Multiple calls within one file produce an error.
+ * `createHttpAdapter({...})`. Multiple calls within one file produce an error.
  * The `name` property must be a string literal so it can be statically resolved.
  * `input` (required) and `output` (optional) must be non-async function expressions.
  * @param program - Parsed TypeScript program
@@ -49,18 +49,18 @@ export function findHttpAdaptersInFile(
 ): HttpAdapterDetectionResult {
   const adapters: HttpAdapterLocation[] = [];
   const errors: HttpAdapterDetectionError[] = [];
-  const bindings = collectSdkBindings(program, "defineHttpAdapter");
+  const bindings = collectSdkBindings(program, "createHttpAdapter");
 
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
 
-    if (isSdkFunctionCall(node, bindings, "defineHttpAdapter")) {
+    if (isSdkFunctionCall(node, bindings, "createHttpAdapter")) {
       const callExpr = node as unknown as CallExpression;
       const args = callExpr.arguments;
       if (!args || args.length < 1 || args[0]?.type !== "ObjectExpression") {
         errors.push({
           sourceFile,
-          message: "defineHttpAdapter requires an object literal as its sole argument",
+          message: "createHttpAdapter requires an object literal as its sole argument",
         });
         return;
       }
@@ -72,7 +72,7 @@ export function findHttpAdaptersInFile(
       if (!nameProp || !isStringLiteral(nameProp.value)) {
         errors.push({
           sourceFile,
-          message: "defineHttpAdapter requires a static string `name` property",
+          message: "createHttpAdapter requires a static string `name` property",
         });
         return;
       }
@@ -81,7 +81,7 @@ export function findHttpAdaptersInFile(
         errors.push({
           sourceFile,
           message:
-            "defineHttpAdapter requires `input` to be a function expression in the same file",
+            "createHttpAdapter requires `input` to be a function expression in the same file",
         });
         return;
       }
@@ -91,7 +91,7 @@ export function findHttpAdaptersInFile(
         errors.push({
           sourceFile,
           message:
-            "defineHttpAdapter `input` must be synchronous (the runtime does not support async/await)",
+            "createHttpAdapter `input` must be synchronous (the runtime does not support async/await)",
         });
         return;
       }
@@ -102,7 +102,7 @@ export function findHttpAdaptersInFile(
           errors.push({
             sourceFile,
             message:
-              "defineHttpAdapter `output` must be a function expression in the same file when present",
+              "createHttpAdapter `output` must be a function expression in the same file when present",
           });
           return;
         }
@@ -111,7 +111,7 @@ export function findHttpAdaptersInFile(
           errors.push({
             sourceFile,
             message:
-              "defineHttpAdapter `output` must be synchronous (the runtime does not support async/await)",
+              "createHttpAdapter `output` must be synchronous (the runtime does not support async/await)",
           });
           return;
         }
@@ -123,7 +123,7 @@ export function findHttpAdaptersInFile(
         hasOutput,
       });
       // The call's arguments have already been validated above; don't descend
-      // into them again, which would double-count any nested defineHttpAdapter
+      // into them again, which would double-count any nested createHttpAdapter
       // call (e.g. when arguments themselves contain expressions).
       return;
     }
@@ -143,7 +143,7 @@ export function findHttpAdaptersInFile(
   if (adapters.length > 1) {
     errors.push({
       sourceFile,
-      message: `Expected exactly one defineHttpAdapter call per file, found ${adapters.length}`,
+      message: `Expected exactly one createHttpAdapter call per file, found ${adapters.length}`,
     });
     return { adapters: [], errors };
   }

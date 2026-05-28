@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { SDK_BRAND, isSdkBranded } from "@/utils/brand";
-import { defineHttpAdapter } from "./http-adapter";
+import { createHttpAdapter } from "./http-adapter";
 
-describe("defineHttpAdapter", () => {
+describe("createHttpAdapter", () => {
   it("returns a branded HTTP adapter object", () => {
-    const adapter = defineHttpAdapter({
+    const adapter = createHttpAdapter({
       name: "get-user",
       pathPattern: "/users/*",
       methods: ["GET"],
@@ -19,7 +19,7 @@ describe("defineHttpAdapter", () => {
   });
 
   it("hides the brand symbol from enumeration", () => {
-    const adapter = defineHttpAdapter({
+    const adapter = createHttpAdapter({
       name: "get-user",
       pathPattern: "/users/*",
       methods: ["GET"],
@@ -31,7 +31,7 @@ describe("defineHttpAdapter", () => {
 
   it("preserves the output function when provided", () => {
     const output = () => ({ body: "" });
-    const adapter = defineHttpAdapter({
+    const adapter = createHttpAdapter({
       name: "get-user",
       pathPattern: "/users/*",
       methods: ["GET"],

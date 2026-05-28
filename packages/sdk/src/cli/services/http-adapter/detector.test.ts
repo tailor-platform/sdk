@@ -8,11 +8,11 @@ function detect(source: string) {
 }
 
 describe("findHttpAdaptersInFile", () => {
-  it("detects a defineHttpAdapter call and extracts the name", () => {
+  it("detects a createHttpAdapter call and extracts the name", () => {
     const result = detect(`
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "get-user",
   pathPattern: "/users/*",
   methods: ["GET"],
@@ -27,9 +27,9 @@ export default defineHttpAdapter({
 
   it("marks adapters that include an output handler", () => {
     const result = detect(`
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "with-output",
   pathPattern: "/x",
   methods: ["POST"],
@@ -43,9 +43,9 @@ export default defineHttpAdapter({
 
   it("errors when the name is not a string literal", () => {
     const result = detect(`
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 const dynamicName = "x";
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: dynamicName,
   pathPattern: "/x",
   methods: ["GET"],
@@ -58,8 +58,8 @@ export default defineHttpAdapter({
 
   it("errors when input is async", () => {
     const result = detect(`
-import { defineHttpAdapter } from "@tailor-platform/sdk";
-export default defineHttpAdapter({
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
   name: "async-input",
   pathPattern: "/x",
   methods: ["GET"],
@@ -72,8 +72,8 @@ export default defineHttpAdapter({
 
   it("errors when output is async", () => {
     const result = detect(`
-import { defineHttpAdapter } from "@tailor-platform/sdk";
-export default defineHttpAdapter({
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
   name: "async-output",
   pathPattern: "/x",
   methods: ["GET"],
@@ -87,9 +87,9 @@ export default defineHttpAdapter({
 
   it("errors when input is not a function expression", () => {
     const result = detect(`
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 const handler = () => ({ query: "{}" });
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "ref-input",
   pathPattern: "/x",
   methods: ["GET"],
@@ -100,18 +100,18 @@ export default defineHttpAdapter({
     expect(result.errors[0].message).toMatch(/`input` to be a function expression/);
   });
 
-  it("errors when multiple defineHttpAdapter calls exist in one file", () => {
+  it("errors when multiple createHttpAdapter calls exist in one file", () => {
     const result = detect(`
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 
-export const a = defineHttpAdapter({
+export const a = createHttpAdapter({
   name: "one",
   pathPattern: "/a",
   methods: ["GET"],
   input: () => ({ query: "{}" }),
 });
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "two",
   pathPattern: "/b",
   methods: ["GET"],
@@ -120,11 +120,11 @@ export default defineHttpAdapter({
 `);
     expect(result.adapters).toEqual([]);
     expect(result.errors[0].message).toMatch(
-      /Expected exactly one defineHttpAdapter call per file/,
+      /Expected exactly one createHttpAdapter call per file/,
     );
   });
 
-  it("ignores files that do not call defineHttpAdapter", () => {
+  it("ignores files that do not call createHttpAdapter", () => {
     const result = detect(`
 import { createWorkflow } from "@tailor-platform/sdk";
 export default createWorkflow({});

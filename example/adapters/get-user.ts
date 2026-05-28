@@ -1,4 +1,4 @@
-import { defineHttpAdapter } from "@tailor-platform/sdk";
+import { createHttpAdapter } from "@tailor-platform/sdk";
 
 function escapeXml(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -14,7 +14,7 @@ function escapeXml(value: unknown): string {
     .replace(/'/g, "&apos;");
 }
 
-export default defineHttpAdapter({
+export default createHttpAdapter({
   name: "get-user",
   pathPattern: "/users/*",
   methods: ["GET"],
