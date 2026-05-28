@@ -5,7 +5,6 @@ import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
-import { parseDuration } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
@@ -74,9 +73,6 @@ export interface DeployOptions {
   noSchemaCheck?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
-  // Duration string (e.g., "5m") accepted by parseDuration.
-  waitTimeout?: string;
-  noWait?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
@@ -745,8 +741,9 @@ export async function deploy(options?: DeployOptions) {
 
     // Capture a health snapshot before apply so the post-deploy wait can
     // distinguish "new attempt from this deploy" from any attempt that
-    // happened to complete during apply. Skipped when we won't wait.
-    const willWaitForHealthy = !options?.noWait && application.subgraphs.length > 0;
+    // happened to complete during apply. Skipped for deploys with no
+    // subgraphs to compose (static-only / delete-only).
+    const willWaitForHealthy = application.subgraphs.length > 0;
     const preDeployHealth = willWaitForHealthy
       ? await captureHealthSnapshot({ client, workspaceId, name: application.name })
       : null;
@@ -806,9 +803,8 @@ export async function deploy(options?: DeployOptions) {
 
     logger.success("Successfully applied changes.");
 
-    // Wait until the platform's schema composition converges. Skipped for
-    // static-only / delete-only deploys (no subgraphs to compose) and when
-    // --no-wait is set.
+    // Wait until the platform's schema composition converges. Skipped only
+    // for deploys with no subgraphs (static-only / delete-only).
     if (willWaitForHealthy) {
       await withSpan("apply.waitForHealthy", () =>
         waitForHealthy({
@@ -816,7 +812,6 @@ export async function deploy(options?: DeployOptions) {
           workspaceId,
           applicationName: application.name,
           previous: preDeployHealth,
-          timeoutMs: parseDuration(options?.waitTimeout ?? "5m"),
         }),
       );
     }

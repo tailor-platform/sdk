@@ -5,6 +5,7 @@ import { logger, styles } from "@/cli/shared/logger";
 import type { AppHealthInfo } from "@/cli/commands/workspace/app/transform";
 import type { OperatorClient } from "@/cli/shared/client";
 
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1_000;
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const INITIAL_DELAY_MS = 2_000;
 
@@ -18,7 +19,7 @@ export interface WaitForHealthyParams {
    * during apply. Pass `null` if no app existed before deploy.
    */
   previous: AppHealthInfo | null;
-  timeoutMs: number;
+  timeoutMs?: number;
   pollIntervalMs?: number;
   initialDelayMs?: number;
   now?: () => number;
@@ -76,7 +77,7 @@ export async function waitForHealthy(params: WaitForHealthyParams): Promise<void
     workspaceId,
     applicationName,
     previous,
-    timeoutMs,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     initialDelayMs = INITIAL_DELAY_MS,
     now = () => Date.now(),

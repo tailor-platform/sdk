@@ -1,7 +1,7 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { deploy } from "@/cli/commands/deploy/deploy";
-import { confirmationArgs, deploymentArgs, durationArg } from "@/cli/shared/args";
+import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 
@@ -26,13 +26,6 @@ export const deployCommand = defineAppCommand({
       "clean-cache": arg(z.boolean().optional(), {
         description: "Clean the bundle cache before building",
       }),
-      wait: arg(durationArg.default("5m"), {
-        description:
-          "Timeout for waiting until the application becomes healthy after deploy (e.g., '5m', '30s')",
-      }),
-      "no-wait": arg(z.boolean().optional(), {
-        description: "Skip waiting for the post-deploy health check (overrides --wait)",
-      }),
     })
     .strict(),
   run: async (args) => {
@@ -48,8 +41,6 @@ export const deployCommand = defineAppCommand({
       noSchemaCheck: args["no-schema-check"],
       noCache: args["no-cache"],
       cleanCache: args["clean-cache"],
-      waitTimeout: args.wait,
-      noWait: args["no-wait"],
     });
   },
 });
