@@ -184,7 +184,7 @@
     "date-fns": "4.1.0",
     "es-toolkit": "1.46.1",
     "find-up-simple": "1.0.1",
-    "globals": "17.5.0",
+    "globals": "17.6.0",
     "graphql": "16.13.2",
     "inflection": "3.0.2",
     "kysely": "0.28.17",
