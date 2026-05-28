@@ -3,15 +3,16 @@ import { pathToFileURL } from "node:url";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { findHttpAdaptersInFile, HTTP_METHOD_KEYS } from "@/cli/services/http-adapter/detector";
+import { findHttpAdaptersInFile } from "@/cli/services/http-adapter/detector";
 import { logger, styles } from "@/cli/shared/logger";
 import { HttpAdapterConfigSchema } from "@/parser/service/http-adapter";
-import { isSdkBranded } from "@/utils/brand";
-import type {
-  HttpAdapterConfig,
-  HttpAdapterServiceInput,
-  HttpMethodKey,
+import {
+  HTTP_METHOD_KEYS,
+  type HttpAdapterConfig,
+  type HttpAdapterServiceInput,
+  type HttpMethodKey,
 } from "@/types/http-adapter";
+import { isSdkBranded } from "@/utils/brand";
 
 export type HttpAdapterServiceConfig = HttpAdapterServiceInput;
 

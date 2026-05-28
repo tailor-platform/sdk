@@ -9,7 +9,7 @@ import {
   collectSdkBindings,
   isSdkFunctionCall,
 } from "@/cli/services/workflow/sdk-binding-collector";
-import type { HttpMethodKey } from "@/types/http-adapter";
+import { HTTP_METHOD_KEYS, type HttpMethodKey } from "@/types/http-adapter";
 import type {
   Program,
   CallExpression,
@@ -18,21 +18,6 @@ import type {
   Function as FunctionExpression,
   ImportDeclaration,
 } from "@oxc-project/types";
-
-// `satisfies` keeps the runtime tuple type-narrow while ensuring every element
-// is a valid `HttpMethodKey`. The exhaustiveness check below catches the case
-// where `HttpMethodKey` grows but this tuple isn't updated.
-export const HTTP_METHOD_KEYS = [
-  "get",
-  "post",
-  "put",
-  "patch",
-  "delete",
-] as const satisfies readonly HttpMethodKey[];
-
-type _AssertMethodKeysExhaustive = Exclude<HttpMethodKey, (typeof HTTP_METHOD_KEYS)[number]>;
-const _methodKeysExhaustive: [_AssertMethodKeysExhaustive] extends [never] ? true : never = true;
-void _methodKeysExhaustive;
 
 export interface HttpAdapterLocation {
   name: string;

@@ -7,21 +7,25 @@ export type {
 } from "./http-adapter.generated";
 
 /**
- * Pair table mapping the lowercase config key (`input.get`, `input.post`, ...)
- * to the uppercase wire-format method (`req.method` at runtime).
- * Adding a method requires updating only this map; both unions follow.
+ * Single source of truth for HTTP methods supported by createHttpAdapter.
+ * Maps the lowercase config key (`input.get`, `input.post`, ...) to the
+ * uppercase wire-format method (`req.method` at runtime). Adding a method
+ * here flows automatically to `HttpMethodKey` / `HttpMethod` and to any
+ * `Object.keys(HTTP_METHODS)` enumeration.
  */
-type HttpMethodPair = {
-  get: "GET";
-  post: "POST";
-  put: "PUT";
-  patch: "PATCH";
-  delete: "DELETE";
-};
+export const HTTP_METHODS = {
+  get: "GET",
+  post: "POST",
+  put: "PUT",
+  patch: "PATCH",
+  delete: "DELETE",
+} as const;
 
-export type HttpMethodKey = keyof HttpMethodPair;
+export type HttpMethodKey = keyof typeof HTTP_METHODS;
 
-export type HttpMethod = HttpMethodPair[HttpMethodKey];
+export type HttpMethod = (typeof HTTP_METHODS)[HttpMethodKey];
+
+export const HTTP_METHOD_KEYS = Object.keys(HTTP_METHODS) as readonly HttpMethodKey[];
 
 export type HttpAdapterRequest = {
   method: HttpMethod;

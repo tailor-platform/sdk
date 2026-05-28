@@ -7,7 +7,7 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/ca
 import { isNodeBuiltinImport } from "@/cli/services/http-adapter/node-builtins";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
-import type { HttpMethodKey } from "@/types/http-adapter";
+import { HTTP_METHODS, type HttpMethodKey } from "@/types/http-adapter";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
@@ -214,9 +214,9 @@ async function bundleAdapterScript(
 
 function buildInputEntry(absoluteSourcePath: string, methods: HttpMethodKey[]): string {
   const cases = methods
-    .map((method) => `    case "${method.toUpperCase()}": return __adapter.input.${method}(req);`)
+    .map((method) => `    case "${HTTP_METHODS[method]}": return __adapter.input.${method}(req);`)
     .join("\n");
-  const supported = methods.map((m) => m.toUpperCase()).join(", ");
+  const supported = methods.map((m) => HTTP_METHODS[m]).join(", ");
   return `import __adapter from ${JSON.stringify(absoluteSourcePath)};
 globalThis.transform = function(req) {
   switch (req.method) {
