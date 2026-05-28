@@ -1,7 +1,8 @@
 import { runCommand } from "politty";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { logger } from "@/cli/shared/logger";
 import { apiCommand } from "./api";
 
 vi.mock("@/cli/shared/context", () => ({
@@ -212,6 +213,60 @@ describe("api command body auto-injection", () => {
       const body = JSON.parse(options.body as string);
       expect(body.namespaceName).toBeUndefined();
       expect(body.workspaceId).toBe("ws-1");
+    });
+  });
+
+  describe("response output stream", () => {
+    let stdoutSpy: ReturnType<typeof vi.spyOn>;
+    let stderrSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    });
+
+    afterEach(() => {
+      stdoutSpy.mockRestore();
+      stderrSpy.mockRestore();
+    });
+
+    test("writes JSON response to stdout, not stderr", async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: "ok", value: 42 }),
+      });
+
+      await runCommand(apiCommand, ["Ping"]);
+
+      const stdoutContent = stdoutSpy.mock.calls.map((c: [unknown]) => String(c[0])).join("");
+      const stderrContent = stderrSpy.mock.calls.map((c: [unknown]) => String(c[0])).join("");
+      expect(stdoutContent).toContain('"result"');
+      expect(stdoutContent).toContain('"ok"');
+      expect(stderrContent).not.toContain('"result"');
+    });
+
+    test("in jsonMode writes JSON response to stdout", async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: "ok", value: 42 }),
+      });
+
+      const original = logger.jsonMode;
+      const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      logger.jsonMode = true;
+      try {
+        await runCommand(apiCommand, ["Ping"]);
+        const stdoutContent = stdoutSpy.mock.calls.map((c: [unknown]) => String(c[0])).join("");
+        const consoleContent = consoleLogSpy.mock.calls.map((c) => String(c[0])).join("");
+        const allStdout = stdoutContent + consoleContent;
+        const stderrContent = stderrSpy.mock.calls.map((c: [unknown]) => String(c[0])).join("");
+        expect(allStdout).toContain('"result"');
+        expect(allStdout).toContain('"ok"');
+        expect(stderrContent).not.toContain('"result"');
+      } finally {
+        consoleLogSpy.mockRestore();
+        logger.jsonMode = original;
+      }
     });
   });
 
