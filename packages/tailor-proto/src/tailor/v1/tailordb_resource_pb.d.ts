@@ -112,6 +112,16 @@ export declare type TailorDBType_TypeConfig = Message<"tailor.v1.TailorDBType.Ty
    * @generated from field: map<string, tailor.v1.TailorDBType.FileConfig> files = 11;
    */
   files: { [key: string]: TailorDBType_FileConfig };
+
+  /**
+   * @generated from field: optional tailor.v1.TailorDBType.TypeHook type_hook = 12;
+   */
+  typeHook?: TailorDBType_TypeHook;
+
+  /**
+   * @generated from field: optional tailor.v1.TailorDBType.TypeValidate type_validate = 13;
+   */
+  typeValidate?: TailorDBType_TypeValidate;
 };
 
 /**
@@ -464,6 +474,48 @@ export declare type TailorDBType_FieldHook = Message<"tailor.v1.TailorDBType.Fie
  * Use `create(TailorDBType_FieldHookSchema)` to create a new message.
  */
 export declare const TailorDBType_FieldHookSchema: GenMessage<TailorDBType_FieldHook>;
+
+/**
+ * @generated from message tailor.v1.TailorDBType.TypeHook
+ */
+export declare type TailorDBType_TypeHook = Message<"tailor.v1.TailorDBType.TypeHook"> & {
+  /**
+   * @generated from field: tailor.v1.Script create = 1;
+   */
+  create?: Script;
+
+  /**
+   * @generated from field: tailor.v1.Script update = 2;
+   */
+  update?: Script;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBType.TypeHook.
+ * Use `create(TailorDBType_TypeHookSchema)` to create a new message.
+ */
+export declare const TailorDBType_TypeHookSchema: GenMessage<TailorDBType_TypeHook>;
+
+/**
+ * @generated from message tailor.v1.TailorDBType.TypeValidate
+ */
+export declare type TailorDBType_TypeValidate = Message<"tailor.v1.TailorDBType.TypeValidate"> & {
+  /**
+   * @generated from field: tailor.v1.Script create = 1;
+   */
+  create?: Script;
+
+  /**
+   * @generated from field: tailor.v1.Script update = 2;
+   */
+  update?: Script;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBType.TypeValidate.
+ * Use `create(TailorDBType_TypeValidateSchema)` to create a new message.
+ */
+export declare const TailorDBType_TypeValidateSchema: GenMessage<TailorDBType_TypeValidate>;
 
 /**
  * @generated from message tailor.v1.TailorDBType.Serial
