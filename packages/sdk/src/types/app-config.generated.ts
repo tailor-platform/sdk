@@ -18,6 +18,7 @@ export type AppConfigParsed = {
   auth?: unknown;
   executor?: unknown;
   workflow?: unknown;
+  httpAdapter?: unknown;
   staticWebsites?: unknown;
   secrets?: unknown;
 };

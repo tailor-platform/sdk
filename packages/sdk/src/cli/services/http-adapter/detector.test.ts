@@ -174,4 +174,63 @@ export default createWorkflow({});
     expect(result.adapters).toEqual([]);
     expect(result.errors).toEqual([]);
   });
+
+  it("errors when input contains an unknown key (e.g. a typo)", () => {
+    const result = detect(`
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "typo",
+  pathPattern: "/x",
+  input: {
+    get: () => ({ query: "{}" }),
+    delte: () => ({ query: "{}" }),
+  },
+});
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors[0].message).toMatch(/unknown key "delte"/);
+  });
+
+  it("errors when input contains a spread element", () => {
+    const result = detect(`
+import { createHttpAdapter } from "@tailor-platform/sdk";
+const extra = { post: () => ({ query: "{}" }) };
+export default createHttpAdapter({
+  name: "spread",
+  pathPattern: "/x",
+  input: {
+    get: () => ({ query: "{}" }),
+    ...extra,
+  },
+});
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors[0].message).toMatch(/spread elements are not allowed/);
+  });
+
+  it("errors when the file imports a Node built-in module", () => {
+    const result = detect(`
+import * as fs from "node:fs";
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "node-import",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}", fs }) },
+});
+`);
+    expect(result.errors.some((e) => /Node module "node:fs"/.test(e.message))).toBe(true);
+  });
+
+  it("errors when the file imports a Node built-in subpath (e.g. fs/promises)", () => {
+    const result = detect(`
+import { readFile } from "fs/promises";
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "node-subpath",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}", readFile }) },
+});
+`);
+    expect(result.errors.some((e) => /Node module "fs\/promises"/.test(e.message))).toBe(true);
+  });
 });

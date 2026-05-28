@@ -1,26 +1,16 @@
 import * as fs from "node:fs";
-import { builtinModules } from "node:module";
+import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
+import { isNodeBuiltinImport } from "@/cli/services/http-adapter/node-builtins";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import type { HttpMethodKey } from "@/types/http-adapter";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
-
-// Sobek does not implement Node's host APIs. Reject every Node built-in
-// (including subpath imports like `fs/promises`) and the `node:` prefix.
-// Internal `_*` modules are excluded since they are never valid user imports.
-const NODE_BUILTINS = new Set(builtinModules.filter((m) => !m.startsWith("_")));
-
-function isNodeBuiltinImport(source: string): boolean {
-  if (source.startsWith("node:")) return true;
-  const root = source.includes("/") ? source.slice(0, source.indexOf("/")) : source;
-  return NODE_BUILTINS.has(root);
-}
 
 export interface HttpAdapterBundleInput {
   name: string;
@@ -209,6 +199,12 @@ async function bundleAdapterScript(
         );
       }
 
+      // Async/await isn't supported by Sobek, and the AST check in detector.ts
+      // only inspects the user's top-level handler. Helpers pulled in through
+      // imports could still introduce `async` / `await`, so verify the final
+      // bundled output is fully synchronous.
+      rejectAsyncInBundle(bundled, adapter.name, kind);
+
       return bundled;
     },
   });
@@ -235,4 +231,51 @@ function buildOutputEntry(absoluteSourcePath: string): string {
   return `import __adapter from ${JSON.stringify(absoluteSourcePath)};
 globalThis.transform = __adapter.output;
 `;
+}
+
+function rejectAsyncInBundle(code: string, adapterName: string, kind: "input" | "output"): void {
+  // Use a fake filename so oxc treats this as a module. The bundle is already
+  // minified IIFE; oxc parses it without complaint.
+  const { program } = parseSync(`${adapterName}.${kind}.bundle.js`, code);
+
+  let asyncFound = false;
+  const stack: unknown[] = [program];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object") continue;
+    const n = node as Record<string, unknown>;
+    const type = typeof n.type === "string" ? (n.type as string) : "";
+    if (type === "AwaitExpression") {
+      asyncFound = true;
+      break;
+    }
+    if (
+      (type === "FunctionDeclaration" ||
+        type === "FunctionExpression" ||
+        type === "ArrowFunctionExpression") &&
+      n.async === true
+    ) {
+      asyncFound = true;
+      break;
+    }
+    if ((type === "ForOfStatement" || type === "ForStatement") && n.await === true) {
+      asyncFound = true;
+      break;
+    }
+    for (const key of Object.keys(n)) {
+      const child = n[key];
+      if (Array.isArray(child)) {
+        for (const c of child) stack.push(c);
+      } else if (child && typeof child === "object") {
+        stack.push(child);
+      }
+    }
+  }
+
+  if (asyncFound) {
+    throw new Error(
+      `HTTP adapter "${adapterName}" ${kind} bundle contains async/await, which is unavailable in the gateway runtime. ` +
+        `Check imported helper modules — even if your handler is synchronous, an async helper will fail at runtime.`,
+    );
+  }
 }

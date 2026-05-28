@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHttpAdapterService } from "./service";
@@ -16,7 +15,13 @@ describe("createHttpAdapterService.loadAdapters", () => {
 
   function writeAdapter(name: string, source: string): string {
     if (!tmpDir) {
-      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-service-")));
+      // Place fixtures inside the SDK package so dynamic `import()` can resolve
+      // `@tailor-platform/sdk` via the workspace node_modules tree. os.tmpdir()
+      // would put them outside the workspace and break module resolution for
+      // tests that exercise the actual import path.
+      tmpDir = fs.realpathSync(
+        fs.mkdtempSync(path.join(import.meta.dirname, ".http-adapter-service-")),
+      );
     }
     const file = path.join(tmpDir, name);
     fs.writeFileSync(file, source);
@@ -86,5 +91,24 @@ export default createHttpAdapter({
 
     const service = createHttpAdapterService({ config: { files: [file] } });
     await expect(service.loadAdapters()).rejects.toThrow(/`input\.get` must be synchronous/);
+  });
+
+  it("rejects files that call createHttpAdapter but forget to default-export it", async () => {
+    const file = writeAdapter(
+      "missing-default.ts",
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+// User forgot to add \`default\` here. Previously this was silently skipped,
+// leaving the adapter unregistered with no diagnostic.
+export const adapter = createHttpAdapter({
+  name: "missing-default",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}" }) },
+});
+`,
+    );
+
+    const service = createHttpAdapterService({ config: { files: [file] } });
+    await expect(service.loadAdapters()).rejects.toThrow(/missing a `default` export/);
   });
 });

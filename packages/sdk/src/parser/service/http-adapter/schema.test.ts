@@ -67,6 +67,20 @@ describe("HttpAdapterConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects a typo alongside a valid handler instead of silently stripping it", () => {
+    // Without `.strictObject()`, `delte` would be silently dropped and the
+    // config would parse successfully — a confusing footgun where the user
+    // thinks they've registered a DELETE handler but actually only have GET.
+    const result = HttpAdapterConfigSchema.safeParse({
+      ...baseConfig,
+      input: {
+        get: () => ({ query: "{}" }),
+        delte: () => ({ query: "{}" }),
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects an empty pathPattern", () => {
     const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, pathPattern: "" });
     expect(result.success).toBe(false);

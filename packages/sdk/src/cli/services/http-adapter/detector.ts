@@ -1,3 +1,4 @@
+import { isNodeBuiltinImport } from "@/cli/services/http-adapter/node-builtins";
 import {
   type ASTNode,
   isStringLiteral,
@@ -15,6 +16,7 @@ import type {
   ObjectExpression,
   ArrowFunctionExpression,
   Function as FunctionExpression,
+  ImportDeclaration,
 } from "@oxc-project/types";
 
 // `satisfies` keeps the runtime tuple type-narrow while ensuring every element
@@ -58,6 +60,8 @@ export interface HttpAdapterDetectionResult {
  * `input` must be an object literal with at least one method key
  * (`get`/`post`/`put`/`patch`/`delete`) bound to a non-async function expression.
  * `output` is optional; when present it must also be a non-async function expression.
+ * Any unknown key on `input` (e.g. a typo like `delte`) is rejected so that
+ * misspelled methods fail loudly rather than being silently ignored.
  * @param program - Parsed TypeScript program
  * @param sourceFile - Absolute path of the source file
  * @returns Detection result for the file
@@ -69,6 +73,23 @@ export function findHttpAdaptersInFile(
   const adapters: HttpAdapterLocation[] = [];
   const errors: HttpAdapterDetectionError[] = [];
   const bindings = collectSdkBindings(program, "createHttpAdapter");
+
+  // Reject any top-level `import` of a Node built-in before the module is
+  // dynamically imported. The Sobek gateway runtime has no Node host APIs;
+  // catching this at parse time gives a much clearer error than a bundle-time
+  // failure on an opaque module ID.
+  for (const stmt of program.body ?? []) {
+    if (stmt.type !== "ImportDeclaration") continue;
+    const importDecl = stmt as ImportDeclaration;
+    const source = importDecl.source;
+    if (!source || typeof source.value !== "string") continue;
+    if (isNodeBuiltinImport(source.value)) {
+      errors.push({
+        sourceFile,
+        message: `HTTP adapter imports Node module "${source.value}", which is unavailable in the gateway runtime`,
+      });
+    }
+  }
 
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
@@ -106,6 +127,37 @@ export function findHttpAdaptersInFile(
       }
 
       const inputObj = inputProp.value as ObjectExpression;
+      const allowedKeys = new Set<string>(HTTP_METHOD_KEYS);
+      let unknownKeyError = false;
+      for (const prop of inputObj.properties) {
+        if (prop.type === "SpreadElement") {
+          errors.push({
+            sourceFile,
+            message:
+              "createHttpAdapter `input` must be a plain object literal; spread elements are not allowed",
+          });
+          unknownKeyError = true;
+          break;
+        }
+        if (prop.type !== "Property") continue;
+        const keyNode = prop.key;
+        const keyName =
+          keyNode.type === "Identifier"
+            ? keyNode.name
+            : keyNode.type === "Literal"
+              ? (keyNode as { value?: unknown }).value
+              : undefined;
+        if (typeof keyName !== "string" || !allowedKeys.has(keyName)) {
+          errors.push({
+            sourceFile,
+            message: `createHttpAdapter \`input\` contains unknown key "${String(keyName)}"; allowed keys are ${HTTP_METHOD_KEYS.join("/")}`,
+          });
+          unknownKeyError = true;
+          break;
+        }
+      }
+      if (unknownKeyError) return;
+
       const methods: HttpMethodKey[] = [];
       let methodValidationError = false;
       for (const key of HTTP_METHOD_KEYS) {

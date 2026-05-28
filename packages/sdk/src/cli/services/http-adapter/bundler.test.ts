@@ -126,4 +126,38 @@ export default createHttpAdapter({
       bundleHttpAdapters([{ name: "bad", sourceFile, methods: ["get"], hasOutput: false }]),
     ).rejects.toThrow(/Node module/);
   });
+
+  it("rejects bundles where an imported helper introduces async/await", async () => {
+    // The handler itself is synchronous, but it calls a helper from a sibling
+    // module which is async. Detector-side checks only see the top-level
+    // handler — without the post-bundle scan, this would slip through.
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
+    const sourceFile = path.join(tmpDir, "adapter.ts");
+    const helperFile = path.join(tmpDir, "helper.ts");
+    fs.writeFileSync(
+      helperFile,
+      `export async function buildQuery() { return "{ me { id } }"; }\n`,
+    );
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+import { buildQuery } from "./helper";
+
+export default createHttpAdapter({
+  name: "async-helper",
+  pathPattern: "/x",
+  input: {
+    get: (req) => ({ query: buildQuery(), variables: { req } }),
+  },
+});
+`,
+    );
+
+    await expect(
+      bundleHttpAdapters([
+        { name: "async-helper", sourceFile, methods: ["get"], hasOutput: false },
+      ]),
+    ).rejects.toThrow(/async\/await, which is unavailable/);
+  });
 });
