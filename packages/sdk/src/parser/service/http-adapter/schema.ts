@@ -23,7 +23,7 @@ export const HttpAdapterConfigSchema = z
       .min(1, "methods must contain at least one HTTP method")
       .describe("HTTP methods this adapter handles"),
     enabled: z.boolean().default(true).describe("Whether the adapter is active"),
-    priority: z.number().int().default(0).describe("Matching priority"),
+    priority: z.number().int().min(0).default(0).describe("Matching priority"),
     input: functionSchema.describe("Function that transforms HTTP request to GraphQL request"),
     output: functionSchema
       .optional()

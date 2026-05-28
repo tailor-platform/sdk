@@ -56,6 +56,11 @@ describe("HttpAdapterConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects a negative priority", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, priority: -1 });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a missing input function", () => {
     const { input: _omit, ...without } = baseConfig;
     void _omit;
