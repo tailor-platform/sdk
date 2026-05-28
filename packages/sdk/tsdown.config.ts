@@ -1,6 +1,32 @@
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
+
+// `banner.dts` injects the triple-slash into every emitted d.mts. Keep it only
+// on `configure/index.d.mts` (the `@tailor-platform/sdk` main entry) so that
+// the legacy ambient globals stay active for that import path through v2.0.
+// Strip it from every other `.d.mts` so subpath imports
+// (`@tailor-platform/sdk/runtime`, `/vitest`, /plugin`, etc.) stay self-contained.
+function stripBannerExceptConfigureEntry(outDir: string): void {
+  const pattern = /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\r?\n/;
+  const root = path.resolve(outDir);
+  const keep = path.join(root, "configure", "index.d.mts");
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile() && entry.name.endsWith(".d.mts") && full !== keep) {
+        const content = readFileSync(full, "utf-8");
+        const cleaned = content.replace(pattern, "");
+        if (cleaned !== content) writeFileSync(full, cleaned, "utf-8");
+      }
+    }
+  };
+  walk(root);
+}
 
 function yamlText() {
   return {
@@ -43,6 +69,15 @@ export default defineConfig({
     "src/vitest/index.ts",
     "src/vitest/environment.ts",
     "src/vitest/setup.ts",
+    "src/runtime/index.ts",
+    "src/runtime/globals.ts",
+    "src/runtime/iconv.ts",
+    "src/runtime/secretmanager.ts",
+    "src/runtime/authconnection.ts",
+    "src/runtime/idp.ts",
+    "src/runtime/workflow.ts",
+    "src/runtime/context.ts",
+    "src/runtime/file.ts",
   ],
   format: ["esm"],
   target: "node22",
@@ -56,11 +91,15 @@ export default defineConfig({
     js: ".mjs",
     dts: ".d.mts",
   }),
+  // Remove in v2.0.
   banner: {
-    dts: '/// <reference types="@tailor-platform/function-types" />',
+    dts: '/// <reference types="@tailor-platform/sdk/runtime/globals" />',
   },
   // peer dependencies: prevent bundling, resolve at runtime
   deps: { neverBundle: ["vite", "vitest"] },
   sourcemap: true,
   plugins,
+  onSuccess: (config) => {
+    stripBannerExceptConfigureEntry(config.outDir);
+  },
 });
