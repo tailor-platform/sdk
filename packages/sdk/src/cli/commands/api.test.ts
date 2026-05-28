@@ -238,25 +238,21 @@ describe("api command body auto-injection", () => {
       using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
       using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
       using consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      using _jsonMode = vi.spyOn(logger, "jsonMode", "get").mockReturnValue(true);
       fetchMock.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ result: "ok", value: 42 }),
       });
 
-      const original = logger.jsonMode;
-      logger.jsonMode = true;
-      try {
-        await runCommand(apiCommand, ["Ping"]);
-        const stdoutContent = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
-        const consoleContent = consoleLogSpy.mock.calls.map((c) => String(c[0])).join("");
-        const allStdout = stdoutContent + consoleContent;
-        const stderrContent = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
-        expect(allStdout).toContain('"result"');
-        expect(allStdout).toContain('"ok"');
-        expect(stderrContent).not.toContain('"result"');
-      } finally {
-        logger.jsonMode = original;
-      }
+      await runCommand(apiCommand, ["Ping"]);
+
+      const stdoutContent = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      const consoleContent = consoleLogSpy.mock.calls.map((c) => String(c[0])).join("");
+      const allStdout = stdoutContent + consoleContent;
+      const stderrContent = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(allStdout).toContain('"result"');
+      expect(allStdout).toContain('"ok"');
+      expect(stderrContent).not.toContain('"result"');
     });
   });
 
