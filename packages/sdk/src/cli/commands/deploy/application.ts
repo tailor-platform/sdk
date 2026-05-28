@@ -31,7 +31,11 @@ export async function applyApplication(
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   if (phase === "create-update") {
-    // Applications
+    // Applications. We apply `updates` and `unchanged` identically — the
+    // platform's UpdateApplication path performs a synchronous gateway
+    // composition, so re-issuing it for unchanged apps guarantees the
+    // returned response only after schema convergence.
+    const updates = [...changeSet.updates, ...changeSet.unchanged];
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
         create.request.cors = await resolveStaticWebsiteUrls(
@@ -43,7 +47,7 @@ export async function applyApplication(
         await client.createApplication(create.request);
         await client.setMetadata(create.metaRequest);
       }),
-      ...changeSet.updates.map(async (update) => {
+      ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
           client,
           update.request.workspaceId!,
@@ -179,9 +183,13 @@ function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApp
  */
 export async function planApplication(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
-  const changeSet = createChangeSet<CreateApplication, UpdateApplication, DeleteApplication>(
-    "Applications",
-  );
+  const changeSet = createChangeSet<
+    CreateApplication,
+    UpdateApplication,
+    DeleteApplication,
+    never,
+    UpdateApplication
+  >("Applications");
 
   const existingApplications = await fetchAll(async (pageToken, maxPageSize) => {
     try {
@@ -324,20 +332,24 @@ export async function planApplication(context: PlanContext) {
 
   if (existing) {
     const labels = await fetchAppLabels(client, workspaceId, application.name);
+    const update: UpdateApplication = {
+      name: application.name,
+      request,
+      metaRequest,
+    };
     if (
       isOwnedByApp(labels, application.name, application.id) &&
       hasMatchingSdkVersion(labels, metaRequest.labels) &&
       areApplicationsEqual(existing, desired)
     ) {
-      changeSet.unchanged.push({
-        name: application.name,
-      });
+      // Push to `unchanged` so plan display reflects "no changes", but carry
+      // the full update payload so apply still calls updateApplication. This
+      // guarantees a synchronous gateway compose on every deploy, which is
+      // what makes deploy actually wait for schema convergence instead of
+      // returning before composition finishes.
+      changeSet.unchanged.push(update);
     } else {
-      changeSet.updates.push({
-        name: application.name,
-        request,
-        metaRequest,
-      });
+      changeSet.updates.push(update);
     }
   } else {
     changeSet.creates.push({

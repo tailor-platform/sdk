@@ -59,7 +59,6 @@ import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./reso
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
-import { captureHealthSnapshot, waitForHealthy } from "./wait-for-healthy";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
@@ -739,12 +738,6 @@ export async function deploy(options?: DeployOptions) {
       return;
     }
 
-    // Capture before apply so the post-deploy wait can detect a fresh attempt.
-    const willWaitForHealthy = application.subgraphs.length > 0;
-    const preDeployHealth = willWaitForHealthy
-      ? await captureHealthSnapshot({ client, workspaceId, name: application.name })
-      : null;
-
     // Phase 2: Create/Update services that Application depends on
     await withSpan("apply.createUpdateServices", async () => {
       await applySecretManager(client, secretManager, "create-update", application);
@@ -799,16 +792,5 @@ export async function deploy(options?: DeployOptions) {
     );
 
     logger.success("Successfully applied changes.");
-
-    if (willWaitForHealthy) {
-      await withSpan("apply.waitForHealthy", () =>
-        waitForHealthy({
-          client,
-          workspaceId,
-          applicationName: application.name,
-          previous: preDeployHealth,
-        }),
-      );
-    }
   });
 }
