@@ -497,7 +497,7 @@ import * as shared from "./shared";
 
 describe("onUserCreated executor", () => {
   test("creates an audit log with the new user's name and email", async () => {
-    const createAuditLog = vi.spyOn(shared, "createAuditLog").mockResolvedValue(undefined);
+    using createAuditLog = vi.spyOn(shared, "createAuditLog").mockResolvedValue(undefined);
 
     if (onUserCreated.operation.kind !== "function") {
       throw new Error("expected function operation");
@@ -556,20 +556,21 @@ describe("validateOrder", () => {
 Spy on each dependent job's `.trigger()` to replace it with a deterministic result:
 
 ```typescript
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { fulfillOrder, processPayment, sendConfirmation, validateOrder } from "./order-fulfillment";
 
 describe("fulfillOrder", () => {
-  afterEach(() => vi.restoreAllMocks());
-
   test("chains validate → pay → confirm", async () => {
-    vi.spyOn(validateOrder, "trigger").mockResolvedValue({ valid: true, orderId: "order-1" });
-    vi.spyOn(processPayment, "trigger").mockResolvedValue({
+    using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+      valid: true,
+      orderId: "order-1",
+    });
+    using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
       transactionId: "txn-order-1",
       amount: 100,
       status: "completed",
     });
-    vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+    using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
       orderId: "order-1",
       transactionId: "txn-order-1",
       confirmed: true,
