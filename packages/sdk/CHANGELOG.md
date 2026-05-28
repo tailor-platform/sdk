@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.51.1
+
+### Patch Changes
+
+- [#1241](https://github.com/tailor-platform/sdk/pull/1241) [`4c40f74`](https://github.com/tailor-platform/sdk/commit/4c40f741318cdbc940a1b7db288751de50e8f680) Thanks [@remiposo](https://github.com/remiposo)! - `tailor-sdk deploy` now waits for the application's GraphQL schema composition to succeed before returning. Composition errors that previously only surfaced via `tailor-sdk workspace app health` are now raised by `deploy` itself.
+
+- [#1216](https://github.com/tailor-platform/sdk/pull/1216) [`7f3aa30`](https://github.com/tailor-platform/sdk/commit/7f3aa308732ac4cac4c8671ce57733a8328d37d9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.4.0
+
+- [#1219](https://github.com/tailor-platform/sdk/pull/1219) [`77bf0b7`](https://github.com/tailor-platform/sdk/commit/77bf0b71a1f92be4987be5ab344cecc9985c88a2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.6.0
+
+- [#1220](https://github.com/tailor-platform/sdk/pull/1220) [`36b3bce`](https://github.com/tailor-platform/sdk/commit/36b3bceca39899c8fb0d57b4c0d467c2f0fe491e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.0
+
+- [#1249](https://github.com/tailor-platform/sdk/pull/1249) [`2e11bc2`](https://github.com/tailor-platform/sdk/commit/2e11bc28e76fca4874b9d35454e86253ca53b920) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.4.3
+
+- [#1246](https://github.com/tailor-platform/sdk/pull/1246) [`4d3f2d4`](https://github.com/tailor-platform/sdk/commit/4d3f2d4eb7d5f1a7bdcd3a078075f89d4b2048ab) Thanks [@toiroakr](https://github.com/toiroakr)! - Cap parallel bundling of resolvers, executors, and workflow jobs to avoid OOM/SIGTERM on CI runners with many resolvers. Concurrency defaults to `os.cpus().length` and can be overridden via the `TAILOR_BUNDLE_CONCURRENCY` env var.
+
 ## 1.51.0
 
 ### Minor Changes

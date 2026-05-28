@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-codemod
 
+## 0.2.2
+
+### Patch Changes
+
+- [#1236](https://github.com/tailor-platform/sdk/pull/1236) [`8b018b8`](https://github.com/tailor-platform/sdk/commit/8b018b8c224e993adc7faf61614242e3f1141f56) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.42.3
+
+- [#1249](https://github.com/tailor-platform/sdk/pull/1249) [`2e11bc2`](https://github.com/tailor-platform/sdk/commit/2e11bc28e76fca4874b9d35454e86253ca53b920) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.4.3
+
 ## 0.2.1
 
 ### Patch Changes
