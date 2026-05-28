@@ -233,4 +233,13 @@ export default createHttpAdapter({
 `);
     expect(result.errors.some((e) => /Node module "fs\/promises"/.test(e.message))).toBe(true);
   });
+
+  it("does not flag Node built-in imports in files without a createHttpAdapter call", () => {
+    const result = detect(`
+import * as fs from "node:fs";
+export const helper = () => fs.readFileSync("x");
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors).toEqual([]);
+  });
 });

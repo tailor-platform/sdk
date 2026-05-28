@@ -3,8 +3,6 @@ import { functionSchema } from "../common";
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
-// `.strict()` so that misspelled keys (e.g. `delte` instead of `delete`) fail
-// validation instead of being silently dropped.
 const inputHandlersSchema = z
   .strictObject({
     get: functionSchema.optional().describe("Handler for GET requests"),

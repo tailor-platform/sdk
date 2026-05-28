@@ -58,28 +58,13 @@ export function findHttpAdaptersInFile(
   const adapters: HttpAdapterLocation[] = [];
   const errors: HttpAdapterDetectionError[] = [];
   const bindings = collectSdkBindings(program, "createHttpAdapter");
-
-  // Reject any top-level `import` of a Node built-in before the module is
-  // dynamically imported. The Sobek gateway runtime has no Node host APIs;
-  // catching this at parse time gives a much clearer error than a bundle-time
-  // failure on an opaque module ID.
-  for (const stmt of program.body ?? []) {
-    if (stmt.type !== "ImportDeclaration") continue;
-    const importDecl = stmt as ImportDeclaration;
-    const source = importDecl.source;
-    if (!source || typeof source.value !== "string") continue;
-    if (isNodeBuiltinImport(source.value)) {
-      errors.push({
-        sourceFile,
-        message: `HTTP adapter imports Node module "${source.value}", which is unavailable in the gateway runtime`,
-      });
-    }
-  }
+  let sawCreateHttpAdapterCall = false;
 
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
 
     if (isSdkFunctionCall(node, bindings, "createHttpAdapter")) {
+      sawCreateHttpAdapterCall = true;
       const callExpr = node as unknown as CallExpression;
       const args = callExpr.arguments;
       if (!args || args.length < 1 || args[0]?.type !== "ObjectExpression") {
@@ -222,6 +207,21 @@ export function findHttpAdaptersInFile(
   }
 
   walk(program as unknown as ASTNode);
+
+  if (sawCreateHttpAdapterCall) {
+    for (const stmt of program.body ?? []) {
+      if (stmt.type !== "ImportDeclaration") continue;
+      const importDecl = stmt as ImportDeclaration;
+      const source = importDecl.source;
+      if (!source || typeof source.value !== "string") continue;
+      if (isNodeBuiltinImport(source.value)) {
+        errors.push({
+          sourceFile,
+          message: `HTTP adapter imports Node module "${source.value}", which is unavailable in the gateway runtime`,
+        });
+      }
+    }
+  }
 
   if (adapters.length > 1) {
     errors.push({
