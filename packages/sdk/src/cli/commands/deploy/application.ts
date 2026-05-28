@@ -31,10 +31,8 @@ export async function applyApplication(
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   if (phase === "create-update") {
-    // Applications. We apply `updates` and `unchanged` identically — the
-    // platform's UpdateApplication path performs a synchronous gateway
-    // composition, so re-issuing it for unchanged apps guarantees the
-    // returned response only after schema convergence.
+    // Re-issue updateApplication for unchanged apps too, so the platform
+    // re-composes the gateway schema synchronously on every deploy.
     const updates = [...changeSet.updates, ...changeSet.unchanged];
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
@@ -342,11 +340,7 @@ export async function planApplication(context: PlanContext) {
       hasMatchingSdkVersion(labels, metaRequest.labels) &&
       areApplicationsEqual(existing, desired)
     ) {
-      // Push to `unchanged` so plan display reflects "no changes", but carry
-      // the full update payload so apply still calls updateApplication. This
-      // guarantees a synchronous gateway compose on every deploy, which is
-      // what makes deploy actually wait for schema convergence instead of
-      // returning before composition finishes.
+      // Plan display shows this as unchanged, but apply still re-issues it.
       changeSet.unchanged.push(update);
     } else {
       changeSet.updates.push(update);
