@@ -31,7 +31,6 @@ const callWaitForHealthy = (overrides: Partial<Parameters<typeof waitForHealthy>
     previous: null,
     timeoutMs: 1_000,
     pollIntervalMs: 1,
-    initialDelayMs: 0,
     ...overrides,
   });
 
@@ -102,22 +101,12 @@ describe("waitForHealthy", () => {
       baseHealth({ status: "ok", lastAttemptStatus: "success", lastAttemptAt: stale }),
     );
 
-    let calls = 0;
-    const now = () => {
-      calls += 1;
-      // First call captures deadline at t=0 → deadline=5000.
-      // Subsequent calls report t=6000 so the first deadline check trips.
-      return calls === 1 ? 0 : 6_000;
-    };
-
     await expect(
       callWaitForHealthy({
         previous: baseHealth({ status: "ok", lastAttemptStatus: "success", lastAttemptAt: stale }),
-        timeoutMs: 5_000,
-        pollIntervalMs: 1,
-        now,
+        timeoutMs: 0,
       }),
-    ).rejects.toThrow(/Timed out waiting/);
+    ).rejects.toThrow(/Timed out waiting.*tailor-sdk workspace app health/);
   });
 
   test("accepts any observed attempt when there was no pre-snapshot (initial deploy)", async () => {
@@ -128,25 +117,6 @@ describe("waitForHealthy", () => {
 
     await expect(callWaitForHealthy({ previous: null })).resolves.toBeUndefined();
     expect(getAppHealthWithMock).toHaveBeenCalledTimes(1);
-  });
-
-  test("error message references the correct CLI binary name", async () => {
-    const t0 = new Date("2026-01-01T00:00:00Z");
-    const t1 = new Date("2026-01-01T00:00:10Z");
-    getAppHealthWithMock.mockResolvedValueOnce(
-      baseHealth({
-        status: "composition_error",
-        lastAttemptStatus: "failure",
-        lastAttemptAt: t1,
-        lastAttemptError: "boom",
-      }),
-    );
-
-    await expect(
-      callWaitForHealthy({
-        previous: baseHealth({ status: "ok", lastAttemptStatus: "success", lastAttemptAt: t0 }),
-      }),
-    ).rejects.toThrow(/tailor-sdk workspace app health/);
   });
 });
 

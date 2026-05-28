@@ -800,8 +800,6 @@ export async function deploy(options?: DeployOptions) {
 
     logger.success("Successfully applied changes.");
 
-    // Wait until the platform's schema composition converges. Skipped only
-    // for deploys with no subgraphs (static-only / delete-only).
     if (willWaitForHealthy) {
       await withSpan("apply.waitForHealthy", () =>
         waitForHealthy({

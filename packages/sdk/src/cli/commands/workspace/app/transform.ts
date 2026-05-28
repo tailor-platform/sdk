@@ -14,18 +14,22 @@ export interface AppInfo {
   updatedAt: Date | null;
 }
 
+export type SchemaHealthStatus = "ok" | "composition_error" | "unknown";
+
+export type SchemaAttemptStatus = "success" | "failure" | "unknown" | "N/A";
+
 export interface AppHealthInfo {
   name: string;
-  status: string;
+  status: SchemaHealthStatus;
   currentServingSchemaUpdatedAt: Date | null;
-  lastAttemptStatus: string;
+  lastAttemptStatus: SchemaAttemptStatus;
   lastAttemptAt: Date | null;
   lastAttemptError: string;
 }
 
 const statusToString = (
   status: GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus,
-): string => {
+): SchemaHealthStatus => {
   switch (status) {
     case GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus.OK:
       return "ok";
@@ -36,7 +40,9 @@ const statusToString = (
   }
 };
 
-const attemptStatusToString = (status: ApplicationSchemaUpdateAttemptStatus): string => {
+const attemptStatusToString = (
+  status: ApplicationSchemaUpdateAttemptStatus,
+): SchemaAttemptStatus => {
   switch (status) {
     case ApplicationSchemaUpdateAttemptStatus.SUCCEEDED:
       return "success";

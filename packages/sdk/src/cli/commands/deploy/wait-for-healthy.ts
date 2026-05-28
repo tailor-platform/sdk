@@ -1,28 +1,20 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { getAppHealthWith, type GetAppHealthWithParams } from "@/cli/commands/workspace/app/health";
-import { logger, styles } from "@/cli/shared/logger";
+import { logger } from "@/cli/shared/logger";
 import type { AppHealthInfo } from "@/cli/commands/workspace/app/transform";
 import type { OperatorClient } from "@/cli/shared/client";
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1_000;
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
-const INITIAL_DELAY_MS = 2_000;
 
 export interface WaitForHealthyParams {
   client: OperatorClient;
   workspaceId: string;
   applicationName: string;
-  /**
-   * Health snapshot captured BEFORE the apply phase. Used as the baseline so
-   * that polls compare against pre-deploy state rather than any state mutated
-   * during apply. Pass `null` if no app existed before deploy.
-   */
   previous: AppHealthInfo | null;
   timeoutMs?: number;
   pollIntervalMs?: number;
-  initialDelayMs?: number;
-  now?: () => number;
 }
 
 /**
@@ -42,18 +34,6 @@ export async function captureHealthSnapshot(
   }
 }
 
-const isNewAttempt = (current: AppHealthInfo, previous: AppHealthInfo | null): boolean => {
-  if (current.lastAttemptAt === null) return false;
-  if (previous === null || previous.lastAttemptAt === null) return true;
-  return current.lastAttemptAt.getTime() > previous.lastAttemptAt.getTime();
-};
-
-const isTerminalSuccess = (h: AppHealthInfo): boolean =>
-  h.status === "ok" && h.lastAttemptStatus === "success";
-
-const isTerminalFailure = (h: AppHealthInfo): boolean =>
-  h.status === "composition_error" || h.lastAttemptStatus === "failure";
-
 /**
  * Wait until the application's GraphQL schema composition converges to a healthy
  * state after deployment. Polls `getApplicationSchemaHealth` and compares against
@@ -70,50 +50,41 @@ export async function waitForHealthy(params: WaitForHealthyParams): Promise<void
     previous,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-    initialDelayMs = INITIAL_DELAY_MS,
-    now = () => Date.now(),
   } = params;
 
   logger.info(`Waiting for application "${applicationName}" to become healthy...`, {
     mode: "stream",
   });
 
-  const deadline = now() + timeoutMs;
-
-  // Composition is queued just after apply; the first poll is almost always
-  // stale, so give it a head start.
-  await sleep(initialDelayMs);
+  const deadline = Date.now() + timeoutMs;
+  const previousAttemptAt = previous?.lastAttemptAt?.getTime() ?? null;
 
   while (true) {
     const current = await getAppHealthWith({ client, workspaceId, name: applicationName });
 
-    if (isNewAttempt(current, previous)) {
-      if (isTerminalSuccess(current)) {
+    const currentAttemptAt = current.lastAttemptAt?.getTime() ?? null;
+    const hasNewAttempt =
+      currentAttemptAt !== null &&
+      (previousAttemptAt === null || currentAttemptAt > previousAttemptAt);
+
+    if (hasNewAttempt) {
+      if (current.lastAttemptStatus === "success") {
         logger.success(`Application "${applicationName}" is healthy.`, { mode: "stream" });
         return;
       }
-      if (isTerminalFailure(current)) {
-        const detail = current.lastAttemptError ? `: ${current.lastAttemptError}` : "";
+      if (current.lastAttemptStatus === "failure") {
         throw new Error(
-          `Application "${applicationName}" failed schema composition${detail}. ` +
-            `Run \`tailor-sdk workspace app health -n ${applicationName}\` for details.`,
+          `Application "${applicationName}" failed schema composition: ${current.lastAttemptError}`,
         );
       }
     }
 
-    if (now() >= deadline) {
+    if (Date.now() >= deadline) {
       throw new Error(
-        `Timed out waiting for application "${applicationName}" to become healthy ` +
-          `(status=${current.status}, lastAttemptStatus=${current.lastAttemptStatus}). ` +
-          `Deploy was applied but schema composition did not converge in time. ` +
+        `Timed out waiting for application "${applicationName}" to become healthy. ` +
           `Run \`tailor-sdk workspace app health -n ${applicationName}\` to inspect.`,
       );
     }
-
-    logger.info(
-      `  ${styles.dim(`status=${current.status}, lastAttempt=${current.lastAttemptStatus}`)}`,
-      { mode: "stream" },
-    );
 
     await sleep(pollIntervalMs);
   }
