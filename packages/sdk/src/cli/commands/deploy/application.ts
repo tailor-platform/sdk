@@ -31,7 +31,9 @@ export async function applyApplication(
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   if (phase === "create-update") {
-    // Applications
+    // Re-issue updateApplication for unchanged apps too, so the platform
+    // re-composes the gateway schema synchronously on every deploy.
+    const updates = [...changeSet.updates, ...changeSet.unchanged];
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
         create.request.cors = await resolveStaticWebsiteUrls(
@@ -43,7 +45,7 @@ export async function applyApplication(
         await client.createApplication(create.request);
         await client.setMetadata(create.metaRequest);
       }),
-      ...changeSet.updates.map(async (update) => {
+      ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
           client,
           update.request.workspaceId!,
@@ -179,9 +181,13 @@ function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApp
  */
 export async function planApplication(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
-  const changeSet = createChangeSet<CreateApplication, UpdateApplication, DeleteApplication>(
-    "Applications",
-  );
+  const changeSet = createChangeSet<
+    CreateApplication,
+    UpdateApplication,
+    DeleteApplication,
+    never,
+    UpdateApplication
+  >("Applications");
 
   const existingApplications = await fetchAll(async (pageToken, maxPageSize) => {
     try {
@@ -324,20 +330,20 @@ export async function planApplication(context: PlanContext) {
 
   if (existing) {
     const labels = await fetchAppLabels(client, workspaceId, application.name);
+    const update: UpdateApplication = {
+      name: application.name,
+      request,
+      metaRequest,
+    };
     if (
       isOwnedByApp(labels, application.name, application.id) &&
       hasMatchingSdkVersion(labels, metaRequest.labels) &&
       areApplicationsEqual(existing, desired)
     ) {
-      changeSet.unchanged.push({
-        name: application.name,
-      });
+      // Plan display shows this as unchanged, but apply still re-issues it.
+      changeSet.unchanged.push(update);
     } else {
-      changeSet.updates.push({
-        name: application.name,
-        request,
-        metaRequest,
-      });
+      changeSet.updates.push(update);
     }
   } else {
     changeSet.creates.push({
