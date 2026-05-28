@@ -34,7 +34,7 @@
     "pkg-types": "2.3.1",
     "politty": "0.4.15",
     "semver": "7.7.4",
-    "zod": "4.3.6"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.12.4",

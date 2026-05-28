@@ -132,10 +132,10 @@ importers:
         version: 2.3.1
       politty:
         specifier: 0.4.15
-        version: 0.4.15(@clack/prompts@1.4.0)(@inquirer/prompts@8.4.3(@types/node@24.12.4))(zod@4.3.6)
+        version: 0.4.15(@clack/prompts@1.4.0)(@inquirer/prompts@8.4.3(@types/node@24.12.4))(zod@4.4.3)
       zod:
-        specifier: 4.3.6
-        version: 4.3.6
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 24.12.4
@@ -484,7 +484,7 @@ importers:
         version: 2.3.1
       politty:
         specifier: 0.4.15
-        version: 0.4.15(@clack/prompts@1.4.0)(@inquirer/prompts@8.4.3(@types/node@24.12.4))(zod@4.3.6)
+        version: 0.4.15(@clack/prompts@1.4.0)(@inquirer/prompts@8.4.3(@types/node@24.12.4))(zod@4.4.3)
       rolldown:
         specifier: 1.0.1
         version: 1.0.1
@@ -522,8 +522,8 @@ importers:
         specifier: 5.1.0
         version: 5.1.0
       zod:
-        specifier: 4.3.6
-        version: 4.3.6
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@opentelemetry/sdk-trace-base':
         specifier: 2.7.1
@@ -569,7 +569,7 @@ importers:
         version: 4.1.6(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(@vitest/coverage-v8@4.1.6)(vite@8.0.10(@types/node@24.12.4)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.1)(yaml@2.9.0))
       zinfer:
         specifier: 0.1.8
-        version: 0.1.8(typescript@5.9.3)(zod@4.3.6)
+        version: 0.1.8(typescript@5.9.3)(zod@4.4.3)
 
   packages/sdk-codemod:
     dependencies:
@@ -593,13 +593,13 @@ importers:
         version: 2.3.1
       politty:
         specifier: 0.4.15
-        version: 0.4.15(@clack/prompts@1.4.0)(@inquirer/prompts@8.4.3(@types/node@24.12.4))(zod@4.3.6)
+        version: 0.4.15(@clack/prompts@1.4.0)(@inquirer/prompts@8.4.3(@types/node@24.12.4))(zod@4.4.3)
       semver:
         specifier: 7.7.4
         version: 7.7.4
       zod:
-        specifier: 4.3.6
-        version: 4.3.6
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 24.12.4
@@ -4824,8 +4824,8 @@ packages:
       typescript: '>=5.0.0'
       zod: '>=3.0.0'
 
-  zod@4.3.6:
-    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -7343,7 +7343,7 @@ snapshots:
       tinyglobby: 0.2.16
       unbash: 3.0.0
       yaml: 2.9.0
-      zod: 4.3.6
+      zod: 4.4.3
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -7831,10 +7831,10 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.4.15(@clack/prompts@1.4.0)(@inquirer/prompts@8.4.3(@types/node@24.12.4))(zod@4.3.6):
+  politty@0.4.15(@clack/prompts@1.4.0)(@inquirer/prompts@8.4.3(@types/node@24.12.4))(zod@4.4.3):
     dependencies:
       string-width: 8.2.0
-      zod: 4.3.6
+      zod: 4.4.3
     optionalDependencies:
       '@clack/prompts': 1.4.0
       '@inquirer/prompts': 8.4.3(@types/node@24.12.4)
@@ -8561,7 +8561,7 @@ snapshots:
 
   yoga-layout@3.2.1: {}
 
-  zinfer@0.1.8(typescript@5.9.3)(zod@4.3.6):
+  zinfer@0.1.8(typescript@5.9.3)(zod@4.4.3):
     dependencies:
       commander: 14.0.3
       glob: 13.0.6
@@ -8569,6 +8569,6 @@ snapshots:
       pathe: 2.0.3
       ts-morph: 27.0.2
       typescript: 5.9.3
-      zod: 4.3.6
+      zod: 4.4.3
 
-  zod@4.3.6: {}
+  zod@4.4.3: {}
