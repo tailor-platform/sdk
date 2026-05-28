@@ -1,5 +1,6 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { waitForHealthy } from "./wait-for-healthy";
+import { captureHealthSnapshot, waitForHealthy } from "./wait-for-healthy";
 import type { AppHealthInfo } from "@/cli/commands/workspace/app/transform";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -146,5 +147,44 @@ describe("waitForHealthy", () => {
         previous: baseHealth({ status: "ok", lastAttemptStatus: "success", lastAttemptAt: t0 }),
       }),
     ).rejects.toThrow(/tailor-sdk workspace app health/);
+  });
+});
+
+describe("captureHealthSnapshot", () => {
+  beforeEach(() => {
+    getAppHealthWithMock.mockReset();
+  });
+
+  test("returns the health info on success", async () => {
+    const snap = baseHealth({ status: "ok" });
+    getAppHealthWithMock.mockResolvedValueOnce(snap);
+
+    const result = await captureHealthSnapshot({
+      client: fakeClient,
+      workspaceId: "ws-1",
+      name: "app",
+    });
+
+    expect(result).toBe(snap);
+  });
+
+  test("returns null when the application does not exist (NotFound)", async () => {
+    getAppHealthWithMock.mockRejectedValueOnce(new ConnectError("not found", Code.NotFound));
+
+    const result = await captureHealthSnapshot({
+      client: fakeClient,
+      workspaceId: "ws-1",
+      name: "app",
+    });
+
+    expect(result).toBeNull();
+  });
+
+  test("propagates non-NotFound errors", async () => {
+    getAppHealthWithMock.mockRejectedValueOnce(new ConnectError("internal error", Code.Internal));
+
+    await expect(
+      captureHealthSnapshot({ client: fakeClient, workspaceId: "ws-1", name: "app" }),
+    ).rejects.toThrow(/internal error/);
   });
 });
