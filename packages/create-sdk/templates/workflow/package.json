@@ -17,7 +17,7 @@
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.12.4",
-    "graphql": "16.13.2",
+    "graphql": "16.14.0",
     "graphql-request": "7.4.0",
     "oxfmt": "0.46.0",
     "oxlint": "1.61.0",
