@@ -113,7 +113,7 @@ Each test creates its own workspace, deploys into it, asserts, and the workspace
 Run with:
 
 ```
-cd packages/sdk && pnpm exec turbo run test -- --project e2e
+cd packages/sdk && pnpm run test -- --project e2e
 ```
 
 `TAILOR_PLATFORM_WORKSPACE_ID` is **not** read here — do not set it expecting reuse.
