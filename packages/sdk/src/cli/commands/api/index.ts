@@ -272,6 +272,6 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
       body: mutated && parsedBody ? JSON.stringify(parsedBody) : args.body,
     });
 
-    logger.log(JSON.stringify(result.data, null, 2));
+    logger.out(JSON.stringify(result.data, null, 2));
   },
 });

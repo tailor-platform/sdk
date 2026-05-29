@@ -4,6 +4,7 @@ import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
+import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "@/cli/shared/token-store";
 import { updateCommand } from "./update";
 
@@ -47,15 +48,10 @@ afterAll(() => {
 });
 
 describe("profile update --permission", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    // Silence logger output during tests so the table renderer doesn't
-    // pollute stdout.
-    const { logger } = await import("@/cli/shared/logger");
-    vi.spyOn(logger, "out").mockImplementation(() => {});
-    vi.spyOn(logger, "success").mockImplementation(() => {});
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -76,6 +72,7 @@ describe("profile update --permission", () => {
   });
 
   it("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
+    using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["rw", "--permission", "read"]);
 
     const config = await readPlatformConfig();
@@ -90,6 +87,7 @@ describe("profile update --permission", () => {
   });
 
   it("clears readonly when --permission write is passed and skips remote validation", async () => {
+    using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["ro", "--permission", "write"]);
 
     const config = await readPlatformConfig();
@@ -101,6 +99,7 @@ describe("profile update --permission", () => {
   });
 
   it("performs remote validation when --user is also passed (permission does not bypass it)", async () => {
+    using _logger = silenceLogger("out", "success");
     vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
     vi.mocked(initOperatorClient).mockResolvedValue({
