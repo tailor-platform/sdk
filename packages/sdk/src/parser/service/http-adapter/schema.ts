@@ -18,7 +18,7 @@ const inputHandlersSchema = z
   .describe("Per-method functions that transform HTTP requests to GraphQL requests");
 
 export const HttpAdapterConfigSchema = z
-  .object({
+  .strictObject({
     name: z
       .string()
       .regex(

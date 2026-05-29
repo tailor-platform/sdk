@@ -81,6 +81,16 @@ describe("HttpAdapterConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects an unknown top-level key instead of silently stripping it", () => {
+    // Without `.strictObject()`, a typo like `outpu` (for `output`) would be
+    // silently dropped, leaving the user puzzled why their handler never runs.
+    const result = HttpAdapterConfigSchema.safeParse({
+      ...baseConfig,
+      outpu: () => ({ body: "" }),
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects an empty pathPattern", () => {
     const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, pathPattern: "" });
     expect(result.success).toBe(false);
