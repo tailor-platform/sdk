@@ -14,6 +14,11 @@ import {
   RUNTIME_FLAG_KEY,
 } from "./mock";
 
+function stubEnvScoped(name: string, value: string): Disposable {
+  vi.stubEnv(name, value);
+  return { [Symbol.dispose]: () => vi.unstubAllEnvs() };
+}
+
 describe("mock", () => {
   beforeEach(() => {
     injectMocks(globalThis);
@@ -113,10 +118,6 @@ describe("mock", () => {
       workflowMock.reset();
     });
 
-    afterEach(() => {
-      vi.unstubAllEnvs();
-    });
-
     test("records triggered jobs", () => {
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
       trigger("my-job", { key: "value" });
@@ -196,7 +197,7 @@ describe("mock", () => {
         body: (_input: undefined, ctx) => ctx.env,
       });
 
-      vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
+      using _envStub = stubEnvScoped(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
       workflowMock.setEnv({ STAGE: "from-setenv" });
 
       expect(await captureEnv.trigger()).toEqual({ STAGE: "from-setenv" });
@@ -210,7 +211,10 @@ describe("mock", () => {
         body: (_input: undefined, ctx) => ctx.env,
       });
 
-      vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
+      using _envStub = stubEnvScoped(
+        WORKFLOW_TEST_ENV_KEY,
+        JSON.stringify({ STAGE: "from-env-var" }),
+      );
 
       expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
     });

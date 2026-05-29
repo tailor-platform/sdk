@@ -114,8 +114,6 @@ describe("order fulfillment workflow", () => {
 
   describe("integration tests with .trigger()", () => {
     test("workflow.mainJob.trigger() executes all jobs", async () => {
-      workflowMock.setEnv({ STAGE: "test" });
-
       const result = await workflow.mainJob.trigger({
         orderId: "order-3",
         amount: 300,
