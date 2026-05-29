@@ -2,7 +2,7 @@
 
 Monorepo for Tailor Platform SDK development.
 
-## Documentation
+## Demo
 
 - [karinto](https://toiroakr.github.io/karinto/)
 
