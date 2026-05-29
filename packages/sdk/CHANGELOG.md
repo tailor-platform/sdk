@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.51.2
+
+### Patch Changes
+
+- [#1252](https://github.com/tailor-platform/sdk/pull/1252) [`631dfe0`](https://github.com/tailor-platform/sdk/commit/631dfe03022574c003918621c5a9395d79e6394f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk api <endpoint>` writing its JSON response to stderr instead of stdout. The response now goes to stdout (matching `api list` / `api inspect`), so `-j` output can be piped to other tools.
+
+- [#1244](https://github.com/tailor-platform/sdk/pull/1244) [`ce749ad`](https://github.com/tailor-platform/sdk/commit/ce749ad02947cacfbfaab2169e9a6522d11abc70) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency date-fns to v4.3.0
+
+- [#1245](https://github.com/tailor-platform/sdk/pull/1245) [`261a49d`](https://github.com/tailor-platform/sdk/commit/261a49de5d30d3a427a8a484956aa10ee6576abf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.1
+
+- [#1248](https://github.com/tailor-platform/sdk/pull/1248) [`a7fc33e`](https://github.com/tailor-platform/sdk/commit/a7fc33e6ce084f6a91210685b29cc9b65b9704c4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.3
+
 ## 1.51.1
 
 ### Patch Changes
