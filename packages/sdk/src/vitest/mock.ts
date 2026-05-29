@@ -11,11 +11,9 @@ import type { TailorDBFileErrorCode } from "../runtime/file";
 import type { User as IdpUser } from "../runtime/idp";
 import type { TailorEnv } from "../types/env";
 
-// Re-declared (not imported) because mock.ts is loaded by the tailor-runtime
-// Vitest environment in nested configs that do not resolve `@/` aliases.
-// `mock.test.ts` asserts this matches `WORKFLOW_ENV_GLOBAL_KEY` exported from
-// `configure/services/workflow/job.ts` so the two declarations cannot drift.
-export const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
+// `workflowMock.setEnv`/`reset` toggle `globalThis.__tailorWorkflowTestEnv`,
+// which `createWorkflowJob().trigger()` reads. Inline casts on both sides
+// keep the slot out of consumer `globalThis` types.
 
 // ---------------------------------------------------------------------------
 // Types
@@ -375,7 +373,9 @@ export const workflowMock = {
    * @param env - Env object to pass to job bodies invoked via `.trigger()`
    */
   setEnv(env: TailorEnv): void {
-    (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY] = env;
+    (globalThis as { __tailorWorkflowTestEnv?: TailorEnv }).__tailorWorkflowTestEnv = {
+      ...env,
+    };
   },
 
   /**
@@ -426,7 +426,7 @@ export const workflowMock = {
     state.waitHandler = null;
     state.resolveHandler = null;
     state.workflowCalls.length = 0;
-    delete (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
+    (globalThis as { __tailorWorkflowTestEnv?: TailorEnv }).__tailorWorkflowTestEnv = undefined;
   },
 };
 
@@ -1242,5 +1242,5 @@ export function cleanupMocks(global: typeof globalThis): void {
   delete g.TailorDBFileError;
   delete g[STATE_KEY];
   delete g[RUNTIME_FLAG_KEY];
-  delete g[WORKFLOW_ENV_GLOBAL_KEY];
+  delete g.__tailorWorkflowTestEnv;
 }

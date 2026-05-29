@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { WORKFLOW_ENV_GLOBAL_KEY as JOB_WORKFLOW_ENV_GLOBAL_KEY } from "../configure/services/workflow/job";
 import {
   tailordbMock,
   workflowMock,
@@ -13,7 +12,6 @@ import {
   cleanupMocks,
   STATE_KEY,
   RUNTIME_FLAG_KEY,
-  WORKFLOW_ENV_GLOBAL_KEY,
 } from "./mock";
 
 describe("mock", () => {
@@ -215,31 +213,6 @@ describe("mock", () => {
       vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
 
       expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
-    });
-
-    test("falls back to env var when globalThis key holds a non-object", async () => {
-      const { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } =
-        await import("../configure/services/workflow/job");
-      const captureEnv = createWorkflowJob({
-        name: "capture-env-non-object",
-        body: (_input: undefined, ctx) => ctx.env,
-      });
-
-      try {
-        (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY] = "not-an-object";
-        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
-
-        expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
-      } finally {
-        delete (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
-      }
-    });
-
-    test("WORKFLOW_ENV_GLOBAL_KEY is the same constant in mock.ts and job.ts", () => {
-      // The constant is declared in both files because mock.ts must remain
-      // import-free of `@/` aliases (it's loaded by nested Vitest configs that
-      // do not resolve them). This test guards against silent drift.
-      expect(WORKFLOW_ENV_GLOBAL_KEY).toBe(JOB_WORKFLOW_ENV_GLOBAL_KEY);
     });
   });
 

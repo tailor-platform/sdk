@@ -4,18 +4,6 @@ import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
 
 /**
- * Well-known `globalThis` key consumed by `createWorkflowJob().trigger()` when
- * the body is invoked locally. Written by `workflowMock.setEnv()` from
- * `@tailor-platform/sdk/vitest`. The same literal is re-declared (not imported)
- * in `src/vitest/mock.ts` because that file is loaded by the `tailor-runtime`
- * Vitest environment in nested configs that do not resolve `@/` aliases. The
- * drift-guard test in `src/vitest/mock.test.ts` asserts both copies
- * stay identical.
- * @internal
- */
-export const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
-
-/**
  * Context object passed as the second argument to workflow job body functions.
  */
 export type WorkflowJobContext = {
@@ -124,21 +112,14 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
     {
       name: config.name,
       trigger: async (args?: unknown) => {
-        // `workflowMock.setEnv()` takes priority. Fall back to the deprecated
-        // `TAILOR_TEST_WORKFLOW_ENV` env var when the global key is unset, null,
-        // or a non-object primitive (string / number / boolean / symbol) so
-        // existing tests using `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` keep
-        // working. Any object value (plain objects, arrays, class instances,
-        // etc.) is shallow-copied and used as-is; the type system constrains
-        // `setEnv()` callers to `TailorEnv`, so non-plain-object cases only
-        // arise from direct `globalThis` misuse. Shallow-copy so job bodies
-        // cannot mutate the source object across triggers, matching the
-        // env-var path which returns a fresh object from `JSON.parse` each
-        // call.
-        const fromGlobal = (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
+        // Test-time only: `workflowMock.setEnv()` writes this slot; env-var
+        // fallback supports legacy `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)`.
+        // Shallow-copy to isolate the value from cross-trigger mutation.
+        const fromGlobal = (globalThis as { __tailorWorkflowTestEnv?: TailorEnv })
+          .__tailorWorkflowTestEnv;
         const env = (
-          typeof fromGlobal === "object" && fromGlobal !== null
-            ? { ...(fromGlobal as Record<string, unknown>) }
+          fromGlobal !== undefined
+            ? { ...fromGlobal }
             : JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}")
         ) as TailorEnv;
         return await body(args as I, { env, invoker: null });
