@@ -2,6 +2,10 @@
 
 Monorepo for Tailor Platform SDK development.
 
+## Documentation
+
+- [karinto](https://toiroakr.github.io/karinto/)
+
 ## Prerequisites
 
 See [package.json](package.json) for required Node.js and pnpm versions.
