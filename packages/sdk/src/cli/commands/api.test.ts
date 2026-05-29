@@ -2,6 +2,7 @@ import { runCommand } from "politty";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { logger } from "@/cli/shared/logger";
 import { apiCommand } from "./api";
 
 vi.mock("@/cli/shared/context", () => ({
@@ -212,6 +213,46 @@ describe("api command body auto-injection", () => {
       const body = JSON.parse(options.body as string);
       expect(body.namespaceName).toBeUndefined();
       expect(body.workspaceId).toBe("ws-1");
+    });
+  });
+
+  describe("response output stream", () => {
+    test("writes JSON response to stdout, not stderr", async () => {
+      using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: "ok", value: 42 }),
+      });
+
+      await runCommand(apiCommand, ["Ping"]);
+
+      const stdoutContent = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      const stderrContent = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(stdoutContent).toContain('"result"');
+      expect(stdoutContent).toContain('"ok"');
+      expect(stderrContent).not.toContain('"result"');
+    });
+
+    test("in jsonMode writes JSON response to stdout", async () => {
+      using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      using consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      using _jsonMode = vi.spyOn(logger, "jsonMode", "get").mockReturnValue(true);
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: "ok", value: 42 }),
+      });
+
+      await runCommand(apiCommand, ["Ping"]);
+
+      const stdoutContent = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      const consoleContent = consoleLogSpy.mock.calls.map((c) => String(c[0])).join("");
+      const allStdout = stdoutContent + consoleContent;
+      const stderrContent = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(allStdout).toContain('"result"');
+      expect(allStdout).toContain('"ok"');
+      expect(stderrContent).not.toContain('"result"');
     });
   });
 
