@@ -40,7 +40,7 @@
     "@types/node": "24.12.4",
     "@types/picomatch": "4.0.3",
     "@types/semver": "7.7.1",
-    "oxlint": "1.61.0",
+    "oxlint": "1.66.0",
     "tsdown": "0.22.0",
     "typescript": "5.9.3",
     "vitest": "4.1.7"
