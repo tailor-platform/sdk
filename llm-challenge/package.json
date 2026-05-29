@@ -17,10 +17,10 @@
     "@tailor-platform/sdk": "workspace:^"
   },
   "devDependencies": {
-    "@types/node": "24.12.3",
-    "tsx": "4.21.0",
+    "@types/node": "24.12.4",
+    "tsx": "4.22.3",
     "typescript": "5.9.3",
-    "vitest": "4.1.5"
+    "vitest": "4.1.7"
   },
   "engines": {
     "node": ">= 22.14.0"

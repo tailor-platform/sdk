@@ -9,13 +9,14 @@ export type ChangeSet<
   U extends HasName,
   D extends HasName,
   R extends HasName = never,
+  Un extends HasName = HasName,
 > = {
   readonly title: string;
   readonly creates: C[];
   readonly updates: U[];
   readonly deletes: D[];
   readonly replaces: R[];
-  readonly unchanged: HasName[];
+  readonly unchanged: Un[];
   isEmpty: () => boolean;
   print: () => void;
 };
@@ -38,12 +39,13 @@ export function createChangeSet<
   U extends HasName,
   D extends HasName,
   R extends HasName = never,
->(title: string): ChangeSet<C, U, D, R> {
+  Un extends HasName = HasName,
+>(title: string): ChangeSet<C, U, D, R, Un> {
   const creates: C[] = [];
   const updates: U[] = [];
   const deletes: D[] = [];
   const replaces: R[] = [];
-  const unchanged: HasName[] = [];
+  const unchanged: Un[] = [];
 
   const isEmpty = (): boolean =>
     creates.length === 0 && updates.length === 0 && deletes.length === 0 && replaces.length === 0;

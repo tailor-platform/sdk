@@ -8,7 +8,7 @@ import {
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
 import type { Application } from "@/cli/services/application";
 import type {
@@ -31,7 +31,9 @@ export async function applyApplication(
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   if (phase === "create-update") {
-    // Applications
+    // Re-issue updateApplication for unchanged apps too, so the platform
+    // re-composes the gateway schema synchronously on every deploy.
+    const updates = [...changeSet.updates, ...changeSet.unchanged];
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
         create.request.cors = await resolveStaticWebsiteUrls(
@@ -43,7 +45,7 @@ export async function applyApplication(
         await client.createApplication(create.request);
         await client.setMetadata(create.metaRequest);
       }),
-      ...changeSet.updates.map(async (update) => {
+      ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
           client,
           update.request.workspaceId!,
@@ -179,9 +181,13 @@ function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApp
  */
 export async function planApplication(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
-  const changeSet = createChangeSet<CreateApplication, UpdateApplication, DeleteApplication>(
-    "Applications",
-  );
+  const changeSet = createChangeSet<
+    CreateApplication,
+    UpdateApplication,
+    DeleteApplication,
+    never,
+    UpdateApplication
+  >("Applications");
 
   const existingApplications = await fetchAll(async (pageToken, maxPageSize) => {
     try {
@@ -200,12 +206,28 @@ export async function planApplication(context: PlanContext) {
   });
 
   if (forRemoval) {
+    const ownedAppNames = new Set<string>();
     if (existingApplications.some((app) => app.name === application.name)) {
+      ownedAppNames.add(application.name);
+    }
+    if (application.id) {
+      const others = existingApplications.filter((app) => !ownedAppNames.has(app.name));
+      const owned = await Promise.all(
+        others.map(async (app) => {
+          const labels = await fetchAppLabels(client, workspaceId, app.name);
+          return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
+        }),
+      );
+      for (const name of owned) {
+        if (name) ownedAppNames.add(name);
+      }
+    }
+    for (const name of ownedAppNames) {
       changeSet.deletes.push({
-        name: application.name,
+        name,
         request: {
           workspaceId,
-          applicationName: application.name,
+          applicationName: name,
         },
       });
     }
@@ -250,7 +272,11 @@ export async function planApplication(context: PlanContext) {
       authIdpConfigName = idpConfigs[0].name;
     }
   }
-  const metaRequest = await buildMetaRequest(trn(workspaceId, application.name), application.name);
+  const metaRequest = await buildMetaRequest({
+    trn: trn(workspaceId, application.name),
+    appName: application.name,
+    appId: application.id,
+  });
   const expectedLocalWebsites = new Set(
     application.staticWebsiteServices.map((website) => website.name),
   );
@@ -279,24 +305,45 @@ export async function planApplication(context: PlanContext) {
   };
   const existing = existingApplications.find((app) => app.name === application.name);
 
+  // Detect renames: other apps owned by our id should be deleted before
+  // creating/updating the current name (so the old name is freed up).
+  if (application.id) {
+    const otherApps = existingApplications.filter((app) => app.name !== application.name);
+    const renamedAway = await Promise.all(
+      otherApps.map(async (app) => {
+        const labels = await fetchAppLabels(client, workspaceId, app.name);
+        return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
+      }),
+    );
+    for (const name of renamedAway) {
+      if (name) {
+        changeSet.deletes.push({
+          name,
+          request: {
+            workspaceId,
+            applicationName: name,
+          },
+        });
+      }
+    }
+  }
+
   if (existing) {
-    const { metadata } = await client.getMetadata({
-      trn: trn(workspaceId, application.name),
-    });
+    const labels = await fetchAppLabels(client, workspaceId, application.name);
+    const update: UpdateApplication = {
+      name: application.name,
+      request,
+      metaRequest,
+    };
     if (
-      metadata?.labels?.[sdkNameLabelKey] === application.name &&
-      hasMatchingSdkVersion(metadata?.labels, metaRequest.labels) &&
+      isOwnedByApp(labels, application.name, application.id) &&
+      hasMatchingSdkVersion(labels, metaRequest.labels) &&
       areApplicationsEqual(existing, desired)
     ) {
-      changeSet.unchanged.push({
-        name: application.name,
-      });
+      // Plan display shows this as unchanged, but apply still re-issues it.
+      changeSet.unchanged.push(update);
     } else {
-      changeSet.updates.push({
-        name: application.name,
-        request,
-        metaRequest,
-      });
+      changeSet.updates.push(update);
     }
   } else {
     changeSet.creates.push({
@@ -307,6 +354,24 @@ export async function planApplication(context: PlanContext) {
   }
 
   return changeSet;
+}
+
+async function fetchAppLabels(
+  client: OperatorClient,
+  workspaceId: string,
+  appName: string,
+): Promise<Record<string, string> | undefined> {
+  try {
+    const { metadata } = await client.getMetadata({
+      trn: trn(workspaceId, appName),
+    });
+    return metadata?.labels;
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.NotFound) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 function protoSubgraph(

@@ -4,6 +4,7 @@ import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 import type { ProfileInfo } from "../profile";
 
@@ -101,9 +102,16 @@ export const createCommand = defineAppCommand({
       "profile-user": arg(z.string().optional(), {
         description: "User email for the profile (defaults to current user)",
       }),
+      permission: arg(z.enum(["write", "read"]).default("write"), {
+        description:
+          "Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.",
+      }),
     })
     .strict(),
   run: async (args) => {
+    // This command does not expose `--profile`, so the guard resolves the
+    // active profile from `TAILOR_PLATFORM_PROFILE` only.
+    await assertWritable();
     // Execute workspace create logic
     const workspace = await createWorkspace({
       name: args.name,
@@ -136,12 +144,14 @@ export const createCommand = defineAppCommand({
       config.profiles[profileName] = {
         user: profileUser,
         workspace_id: workspace.id,
+        ...(args.permission === "read" ? { readonly: true } : {}),
       };
       writePlatformConfig(config);
       profileInfo = {
         name: profileName,
         user: profileUser,
         workspaceId: workspace.id,
+        permission: args.permission,
       };
 
       if (!args.json) {

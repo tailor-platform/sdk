@@ -100,5 +100,5 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 
 ## Environment
 
-- Linting runs oxlint first, then ESLint
+- Linting is oxlint-only (`oxlint --type-aware .` everywhere).
 - Lefthook runs pre-commit checks (lint, format, typecheck) and post-commit signature verification

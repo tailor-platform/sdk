@@ -5,7 +5,7 @@ import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { logger } from "@/cli/shared/logger";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { PlanContext } from "./deploy";
@@ -489,10 +489,6 @@ describe("planAuth", () => {
   });
 
   describe("OAuth2 redirect URI resolution on first deployment (issue #1030)", () => {
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
-
     function createApplicationWithStaticWebsiteRedirectURI(): Application {
       return {
         name: appName,
@@ -517,7 +513,7 @@ describe("planAuth", () => {
     }
 
     test("does not warn when redirect URI references a locally-defined static website that is not yet on the platform", async () => {
-      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const baseClient = createMockClient({});
       const client = {
         ...baseClient,

@@ -1,5 +1,5 @@
 import { workflowMock } from "@tailor-platform/sdk/vitest";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
   processPayment,
@@ -10,10 +10,6 @@ import workflow, {
 describe("order fulfillment workflow", () => {
   beforeEach(() => {
     workflowMock.reset();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   describe("individual job tests with .body()", () => {
@@ -52,16 +48,16 @@ describe("order fulfillment workflow", () => {
 
   describe("orchestration tests with mocked triggers", () => {
     test("fulfillOrder chains all jobs", async () => {
-      vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+      using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
         valid: true,
         orderId: "order-1",
       });
-      vi.spyOn(processPayment, "trigger").mockResolvedValue({
+      using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
         transactionId: "txn-order-1",
         amount: 100,
         status: "completed" as const,
       });
-      vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+      using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
         orderId: "order-1",
         transactionId: "txn-order-1",
         confirmed: true,
@@ -90,16 +86,16 @@ describe("order fulfillment workflow", () => {
     });
 
     test("workflow.mainJob.body() chains all jobs", async () => {
-      vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+      using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
         valid: true,
         orderId: "order-2",
       });
-      vi.spyOn(processPayment, "trigger").mockResolvedValue({
+      using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
         transactionId: "txn-order-2",
         amount: 200,
         status: "completed" as const,
       });
-      vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+      using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
         orderId: "order-2",
         transactionId: "txn-order-2",
         confirmed: true,

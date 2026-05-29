@@ -3,6 +3,7 @@ import { z } from "zod";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import ml from "@/utils/multiline";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 
@@ -22,6 +23,7 @@ export const createCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable();
     const config = await readPlatformConfig();
 
     if (!config.current_user) {

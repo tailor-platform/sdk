@@ -77,14 +77,14 @@ tailor-sdk tailordb truncate [options] [types]
 
 **Options**
 
-| Option                          | Alias | Description                                | Required | Default              | Env                               |
-| ------------------------------- | ----- | ------------------------------------------ | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                    | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                  | No       | `false`              | -                                 |
-| `--all`                         | `-a`  | Truncate all tables in all namespaces      | No       | `false`              | -                                 |
-| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                                | Required | Default              | Env                               |
+| ------------------------------- | ----- | -------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                    | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                  | No       | `false`              | -                                 |
+| `--all`                         | `-a`  | Truncate all tables in all owned namespaces (excludes external namespaces) | No       | `false`              | -                                 |
+| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                 | No       | -                    | -                                 |
 
 <!-- politty:command:tailordb truncate:options:end -->
 
@@ -122,6 +122,7 @@ tailor-sdk tailordb truncate User Post --yes
   - `--namespace`: requires typing `truncate <namespace-name>`
   - Specific types: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
+- Namespaces declared with `{ external: true }` are skipped by `--all` and rejected with a dedicated error when targeted by `--namespace`. Run truncate from the app that owns the namespace.
 
 <!-- politty:command:tailordb migration:heading:start -->
 
@@ -154,6 +155,7 @@ tailor-sdk tailordb migration [command]
 | Command                                                       | Description                                                                                                               |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
+| [`tailordb migration script`](#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
 | [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
 
@@ -204,6 +206,55 @@ tailor-sdk tailordb migration generate [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:tailordb migration generate:global-options-link:end -->
+<!-- politty:command:tailordb migration script:heading:start -->
+
+#### tailordb migration script
+
+<!-- politty:command:tailordb migration script:heading:end -->
+
+<!-- politty:command:tailordb migration script:description:start -->
+
+Add a migration script (migrate.ts) template to an existing migration directory.
+
+<!-- politty:command:tailordb migration script:description:end -->
+
+<!-- politty:command:tailordb migration script:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk tailordb migration script [options] <number>
+```
+
+<!-- politty:command:tailordb migration script:usage:end -->
+
+<!-- politty:command:tailordb migration script:arguments:start -->
+
+**Arguments**
+
+| Argument | Description                                           | Required |
+| -------- | ----------------------------------------------------- | -------- |
+| `number` | Migration number to add a script to (e.g., 0001 or 1) | Yes      |
+
+<!-- politty:command:tailordb migration script:arguments:end -->
+
+<!-- politty:command:tailordb migration script:options:start -->
+
+**Options**
+
+| Option                    | Alias | Description                                                       | Required | Default              | Env                               |
+| ------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
+
+<!-- politty:command:tailordb migration script:options:end -->
+
+<!-- politty:command:tailordb migration script:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb migration script:global-options-link:end -->
+
 <!-- politty:command:tailordb migration set:heading:start -->
 
 #### tailordb migration set

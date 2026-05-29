@@ -9,7 +9,7 @@ import type { TailorInvoker } from "@/types/user";
  * `@tailor-platform/sdk/vitest`. The same literal is re-declared (not imported)
  * in `src/vitest/mock.ts` because that file is loaded by the `tailor-runtime`
  * Vitest environment in nested configs that do not resolve `@/` aliases. The
- * drift-guard test in `src/vitest/__tests__/mock.test.ts` asserts both copies
+ * drift-guard test in `src/vitest/mock.test.ts` asserts both copies
  * stay identical.
  * @internal
  */
@@ -115,9 +115,10 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  *   },
  * });
  */
-export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(
+/* @__NO_SIDE_EFFECTS__ */
+export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
-): WorkflowJob<Name, I, Awaited<O>> => {
+): WorkflowJob<Name, I, Awaited<O>> {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
   return brandValue(
     {
@@ -146,4 +147,4 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
     } as WorkflowJob<Name, I, Awaited<O>>,
     "workflow-job",
   );
-};
+}

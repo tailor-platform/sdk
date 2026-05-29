@@ -5,15 +5,16 @@ import {
   generateAllTypeManifestsFromSnapshot,
   compareSnapshotWithRemote,
 } from "./snapshot-manifest";
-import type { SchemaSnapshot, SnapshotType, SnapshotRecordPermission } from "./snapshot";
+import type { SchemaSnapshot, TailorDBSnapshotType, SnapshotRecordPermission } from "./snapshot";
 
 describe("snapshot-manifest", () => {
   function createTestSnapshotType(
     name: string,
-    overrides: Partial<SnapshotType> = {},
-  ): SnapshotType {
+    overrides: Partial<TailorDBSnapshotType> = {},
+  ): TailorDBSnapshotType {
     return {
       name,
+      pluralForm: `${name}s`,
       fields: {
         id: { type: "uuid", required: true },
         name: { type: "string", required: true },
@@ -23,7 +24,7 @@ describe("snapshot-manifest", () => {
   }
 
   function createTestSnapshot(
-    types: Record<string, SnapshotType>,
+    types: Record<string, TailorDBSnapshotType>,
     namespace = "tailordb",
   ): SchemaSnapshot {
     return {

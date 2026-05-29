@@ -9,8 +9,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@tailor-proto/*": ["../tailor-proto/src/*"]
-    },
-    "types": ["@tailor-platform/function-types"]
+    }
   },
   "include": [
     "./src/**/*.ts",
@@ -21,5 +20,5 @@
     "./vitest.config.ts",
     "./zinfer.config.ts"
   ],
-  "exclude": ["node_modules", "dist", "e2e/fixtures"]
+  "exclude": ["node_modules", "dist", "e2e/fixtures", "**/__test_fixtures__/**"]
 }
