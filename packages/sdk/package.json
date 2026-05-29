@@ -182,7 +182,7 @@
     "chokidar": "5.0.0",
     "confbox": "0.2.4",
     "date-fns": "4.3.0",
-    "es-toolkit": "1.46.1",
+    "es-toolkit": "1.47.0",
     "find-up-simple": "1.0.1",
     "globals": "17.6.0",
     "graphql": "16.14.0",
