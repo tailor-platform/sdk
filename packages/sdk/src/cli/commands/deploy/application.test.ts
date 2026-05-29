@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { logger } from "@/cli/shared/logger";
 import { planApplication } from "./application";
 import type { PlanContext } from "./deploy";
@@ -346,12 +346,8 @@ describe("planApplication", () => {
   });
 
   describe("CORS resolution on first deployment (issue #1030)", () => {
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
-
     test("does not warn when CORS references a locally-defined static website that is not yet on the platform", async () => {
-      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const client = {
         ...createMockClient([]),
         getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
@@ -368,7 +364,7 @@ describe("planApplication", () => {
     });
 
     test("still warns when CORS references a static website that is not defined locally", async () => {
-      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const client = {
         ...createMockClient([]),
         getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),

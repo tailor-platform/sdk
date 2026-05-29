@@ -128,7 +128,6 @@ describe("loadWorkspaceId", () => {
 
   afterEach(() => {
     process.env = originalEnv;
-    vi.restoreAllMocks();
   });
 
   describe("opts.workspaceId", () => {
@@ -281,10 +280,6 @@ describe("loadAccessToken", () => {
     });
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   describe("env.TAILOR_PLATFORM_TOKEN", () => {
     it("returns token from TAILOR_PLATFORM_TOKEN when set", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
@@ -325,7 +320,7 @@ describe("loadAccessToken", () => {
   describe("env.TAILOR_TOKEN (deprecated)", () => {
     it("returns token from TAILOR_TOKEN when TAILOR_PLATFORM_TOKEN not set", async () => {
       vi.stubEnv("TAILOR_TOKEN", validToken);
-      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
       expect(warnSpy).toHaveBeenCalledWith(
