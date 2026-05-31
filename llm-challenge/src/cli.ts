@@ -107,7 +107,16 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       runs: [],
     };
     const reportFilePath = path.join(outputDir, "report.json");
-    await writeReport(reportFilePath, report);
+    // Serialize report writes. `report` only grows (runs are pushed), so chaining
+    // the writes keeps the on-disk file monotonic: a slow older snapshot can never
+    // land after a newer one and drop completed runs if the process is interrupted.
+    let reportWrite: Promise<unknown> = Promise.resolve();
+    const persistReport = (): Promise<void> => {
+      const next = reportWrite.catch(() => {}).then(() => writeReport(reportFilePath, report));
+      reportWrite = next;
+      return next;
+    };
+    await persistReport();
 
     const tasks: RunTask[] =
       rerunPlan?.tasks ??
@@ -186,7 +195,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
           replaces: task.replaces,
         });
         report.runs.push(runReport);
-        await writeReport(reportFilePath, report);
+        await persistReport();
         printRun(task, reportPath(packageRoot, paths.artifactDir), result);
       } finally {
         // Always reclaim the per-problem node_modules/.pnpm-store so a failure or
@@ -203,8 +212,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         }
       }
     });
-    // Concurrent run writes can complete out of order; finish with the complete in-memory report.
-    await writeReport(reportFilePath, report);
+    // Finish with the complete in-memory report once all serialized writes settle.
+    await persistReport();
     console.log(`Report ${reportPath(packageRoot, reportFilePath)}`);
   } finally {
     await packedSdk.cleanup();
