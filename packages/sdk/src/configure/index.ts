@@ -1,4 +1,3 @@
-/// <reference types="@tailor-platform/function-types" />
 import { t as _t } from "@/configure/types";
 import type * as helperTypes from "@/types/helpers";
 

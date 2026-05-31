@@ -150,6 +150,6 @@ Values already present in \`--body\` are never overridden. If a value cannot be 
       body: mutated && parsedBody ? JSON.stringify(parsedBody) : args.body,
     });
 
-    logger.log(JSON.stringify(result.data, null, 2));
+    logger.out(JSON.stringify(result.data, null, 2));
   },
 });

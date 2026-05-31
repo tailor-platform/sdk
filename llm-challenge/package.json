@@ -13,8 +13,11 @@
     "@types/node": "24.12.4",
     "oxlint": "1.61.0",
     "oxlint-tsgolint": "0.22.1",
-    "tsx": "4.21.1",
+    "tsx": "4.22.3",
     "typescript": "5.9.3",
-    "vitest": "4.1.6"
+    "vitest": "4.1.7"
+  },
+  "engines": {
+    "node": ">= 22.14.0"
   }
 }

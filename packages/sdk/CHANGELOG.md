@@ -1,5 +1,77 @@
 # @tailor-platform/sdk
 
+## 1.51.2
+
+### Patch Changes
+
+- [#1252](https://github.com/tailor-platform/sdk/pull/1252) [`631dfe0`](https://github.com/tailor-platform/sdk/commit/631dfe03022574c003918621c5a9395d79e6394f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk api <endpoint>` writing its JSON response to stderr instead of stdout. The response now goes to stdout (matching `api list` / `api inspect`), so `-j` output can be piped to other tools.
+
+- [#1244](https://github.com/tailor-platform/sdk/pull/1244) [`ce749ad`](https://github.com/tailor-platform/sdk/commit/ce749ad02947cacfbfaab2169e9a6522d11abc70) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency date-fns to v4.3.0
+
+- [#1245](https://github.com/tailor-platform/sdk/pull/1245) [`261a49d`](https://github.com/tailor-platform/sdk/commit/261a49de5d30d3a427a8a484956aa10ee6576abf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.1
+
+- [#1248](https://github.com/tailor-platform/sdk/pull/1248) [`a7fc33e`](https://github.com/tailor-platform/sdk/commit/a7fc33e6ce084f6a91210685b29cc9b65b9704c4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.3
+
+## 1.51.1
+
+### Patch Changes
+
+- [#1241](https://github.com/tailor-platform/sdk/pull/1241) [`4c40f74`](https://github.com/tailor-platform/sdk/commit/4c40f741318cdbc940a1b7db288751de50e8f680) Thanks [@remiposo](https://github.com/remiposo)! - `tailor-sdk deploy` now waits for the application's GraphQL schema composition to succeed before returning. Composition errors that previously only surfaced via `tailor-sdk workspace app health` are now raised by `deploy` itself.
+
+- [#1216](https://github.com/tailor-platform/sdk/pull/1216) [`7f3aa30`](https://github.com/tailor-platform/sdk/commit/7f3aa308732ac4cac4c8671ce57733a8328d37d9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.4.0
+
+- [#1219](https://github.com/tailor-platform/sdk/pull/1219) [`77bf0b7`](https://github.com/tailor-platform/sdk/commit/77bf0b71a1f92be4987be5ab344cecc9985c88a2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.6.0
+
+- [#1220](https://github.com/tailor-platform/sdk/pull/1220) [`36b3bce`](https://github.com/tailor-platform/sdk/commit/36b3bceca39899c8fb0d57b4c0d467c2f0fe491e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.0
+
+- [#1249](https://github.com/tailor-platform/sdk/pull/1249) [`2e11bc2`](https://github.com/tailor-platform/sdk/commit/2e11bc28e76fca4874b9d35454e86253ca53b920) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.4.3
+
+- [#1246](https://github.com/tailor-platform/sdk/pull/1246) [`4d3f2d4`](https://github.com/tailor-platform/sdk/commit/4d3f2d4eb7d5f1a7bdcd3a078075f89d4b2048ab) Thanks [@toiroakr](https://github.com/toiroakr)! - Cap parallel bundling of resolvers, executors, and workflow jobs to avoid OOM/SIGTERM on CI runners with many resolvers. Concurrency defaults to `os.cpus().length` and can be overridden via the `TAILOR_BUNDLE_CONCURRENCY` env var.
+
+## 1.51.0
+
+### Minor Changes
+
+- [#1131](https://github.com/tailor-platform/sdk/pull/1131) [`c62c3b0`](https://github.com/tailor-platform/sdk/commit/c62c3b0a78761cff859ccac5af23d2e8dd0f996a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `@tailor-platform/sdk/runtime` — typed wrappers for the Tailor Platform Function runtime APIs (`tailor.iconv`, `tailor.secretmanager`, `tailor.authconnection`, `tailor.idp`, `tailor.workflow`, `tailor.context`, and `tailordb.file`). The wrappers and their types are fully self-contained, so you can use them without activating any ambient globals.
+
+  ```ts
+  import {
+    iconv,
+    secretmanager,
+    idp,
+    file,
+  } from "@tailor-platform/sdk/runtime";
+
+  const utf8 = iconv.convert(sjisBuffer, "Shift_JIS", "UTF-8");
+  const apiKey = await secretmanager.getSecret("my-vault", "API_KEY");
+  const client = new idp.Client({ namespace: "my-namespace" });
+  const { metadata } = await file.upload(
+    "ns",
+    "Document",
+    "attachment",
+    recordId,
+    bytes
+  );
+  ```
+
+  The SDK no longer depends on the external `@tailor-platform/function-types` package; its declarations are now vendored inside the SDK. For backwards compatibility the ambient `tailor.*` / `tailordb.*` types are still activated automatically when you import from `@tailor-platform/sdk`, so existing code keeps type-checking with no changes. This implicit activation will be removed in v2.0 — new code is encouraged to use the typed wrappers from `@tailor-platform/sdk/runtime`, or to opt into the globals explicitly via `import "@tailor-platform/sdk/runtime/globals"` (or by listing the entry in `tsconfig.json`'s `compilerOptions.types`).
+
+  The capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`) is preserved as a `@deprecated` alias of the new lowercase `tailordb.*` namespace for source-level compatibility with `@tailor-platform/function-types`. It will be removed in v2.0; run `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` to migrate. The `@tailor-platform/function-types` declarations are vendored inside the SDK and activated automatically, so you can simply remove `@tailor-platform/function-types` from your `package.json` (and from `tsconfig.json` `compilerOptions.types` if listed) once you've upgraded.
+
+  Other test-mock changes from `@tailor-platform/sdk/vitest`:
+
+  - Breaking: when an `openDownloadStream` (or `toFileStream()`) call consumes a queued mock result, raw `Uint8Array` / `ArrayBuffer` payloads are now rejected. Enqueue a structured iterable of `StreamValue` items (`{ type: "metadata" }`, `{ type: "chunk", data, position }`, `{ type: "complete" }`) so test streams stay aligned with the platform's structured stream contract. The shorthand `Uint8Array` enqueue is still accepted by `download` / `downloadAsBase64`.
+
+### Patch Changes
+
+- [#1215](https://github.com/tailor-platform/sdk/pull/1215) [`65ffd8a`](https://github.com/tailor-platform/sdk/commit/65ffd8a84c377fe91f7632784716a6322fab4c33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
+- [#1199](https://github.com/tailor-platform/sdk/pull/1199) [`1b6d0d8`](https://github.com/tailor-platform/sdk/commit/1b6d0d8678d02ed6f6ea79dad48fc3ba23978fbe) Thanks [@toiroakr](https://github.com/toiroakr)! - **Fix**: `tailor-sdk tailordb truncate` and the `exec.mjs` generated by the built-in `seedPlugin` no longer touch namespaces declared with `{ external: true }`.
+
+  - `tailor-sdk tailordb truncate --all` now only truncates namespaces the current app actually owns; namespaces declared with `{ external: true }` are skipped. This also covers the `--truncate` path of `seed/exec.mjs`, so its `seed:reset` no longer wipes a sibling app's data.
+  - `tailor-sdk tailordb truncate --namespace <name>` now rejects an external namespace with a dedicated error pointing the user to the owning app, instead of the generic "not found in config" message.
+  - The generated `seed/exec.mjs` now starts with an `@generated` header to discourage hand-edits, since the entire file is regenerated on every `sdk generate`.
+
 ## 1.50.1
 
 ### Patch Changes

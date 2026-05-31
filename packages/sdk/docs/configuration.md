@@ -93,6 +93,7 @@ When using external resources:
 - The resource itself is not deployed by this project
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
+- Destructive operations like `tailordb truncate` (and `seedPlugin`'s `seed:reset`) automatically exclude external resources to prevent accidental data loss in shared resources
 
 ### Built-in IdP
 
