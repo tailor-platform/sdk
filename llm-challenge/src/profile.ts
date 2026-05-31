@@ -11,6 +11,9 @@ const NO_DOCS_REMOVE_ENTRIES = [
   "skills",
 ];
 const JS_DOC_STRIP_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts", ".js", ".mjs", ".cjs"];
+// macOS `tar` otherwise stores xattrs/AppleDouble (`._*`, LIBARCHIVE.xattr) into
+// the repacked tarball; COPYFILE_DISABLE suppresses it and is ignored by GNU tar.
+const TAR_ENV = { COPYFILE_DISABLE: "1" };
 
 export async function createNoDocsTarball(
   fullTarballPath: string,
@@ -20,11 +23,13 @@ export async function createNoDocsTarball(
   const unpackRoot = path.join(tempRoot, "no-docs-unpack");
   await fs.rm(unpackRoot, { recursive: true, force: true });
   await fs.mkdir(unpackRoot, { recursive: true });
-  await runCommand("tar", ["-xzf", fullTarballPath, "-C", unpackRoot]);
+  await runCommand("tar", ["-xzf", fullTarballPath, "-C", unpackRoot], { env: TAR_ENV });
   const packageDir = path.join(unpackRoot, "package");
   await applyNoDocsProfile(packageDir);
   await fs.rm(outputTarballPath, { force: true });
-  await runCommand("tar", ["-czf", outputTarballPath, "-C", unpackRoot, "package"]);
+  await runCommand("tar", ["-czf", outputTarballPath, "-C", unpackRoot, "package"], {
+    env: TAR_ENV,
+  });
 }
 
 export async function applyNoDocsProfile(packageDir: string): Promise<void> {
