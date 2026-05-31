@@ -41,6 +41,15 @@ After confirmation, build the command from the confirmed values:
 pnpm -C llm-challenge challenge run [options]
 ```
 
+## A/B Testing SDK/API Affordances
+
+When measuring a proposed SDK/API affordance, follow [AB_TESTING.md](AB_TESTING.md).
+
+- Compare an unchanged baseline SDK ref against a committed after SDK ref with the same problems, profile, runs, model, effort, timeout, and concurrency.
+- Append `success`, `duration`, and `steps` to a temporary JSONL file after every run; append variant and final summaries as separate events.
+- Treat usage-limit and other infrastructure-only zero-step runs as invalid for comparison; record them separately and rerun when the limit clears.
+- Report a compact table with `success`, average `duration`, and average `steps`, plus the temp summary path and artifact paths needed to audit the conclusion.
+
 ## Setup
 
 Check setup before the run and complete only the safe, non-interactive steps yourself.
