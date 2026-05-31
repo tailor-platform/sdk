@@ -90,33 +90,8 @@ If no SDK usage misconception is present, put that in the first table instead of
 
 When the user asks for SDK/API improvement proposals from artifacts, add a separate `SDK/API improvement proposals` section after the misconception and challenge-signal tables. Propose only changes to public SDK APIs, configuration schemas, generated type contracts, CLI commands/options, plugin hooks, or SDK-produced artifact paths; do not propose API changes for package-manager, workspace, install, cache, no-docs package layout, private bundle filenames, test-runner, or other non-SDK issues.
 
-Do not substitute SDK usage misconceptions for SDK/API improvement proposals. An API affordance proposal may come from repeated manual normalization, discoverability searches, verbose correct usage, or generated-artifact friction even when the final solver code is correct. If revising a previous proposal list or PR comment, preserve the proposal identities and count unless the user explicitly asks to merge, remove, or add items; compare against the prior content before editing.
-
-Each SDK/API proposal must be grounded in trace or artifact evidence and distinguish the current correct SDK usage or workaround from the proposed public SDK affordance. If using `Before`/`After` wording, `Before` means the current correct SDK/API usage or workaround, not the mistaken solver code; `After` means the proposed public SDK affordance. Prefer a summary table with columns such as `Area`, `Observed signal`, and `Improvement proposal`; put longer `Before`/`After` snippets after the table when snippets are requested. Keep snippets schematic when the exact API design is not settled. State that proposals are API affordance candidates, not verified implementation plans.
-
-For external-facing summaries such as PR comments, do not include local artifact paths, worktree paths, or run directory names unless the user explicitly asks for them. Use concise trace observations and code snippets as evidence instead.
+Each SDK/API proposal must be grounded in trace or artifact evidence and distinguish the current correct SDK usage from the observed solver mistake. If using `Before`/`After` wording, `Before` means the current correct SDK/API usage or workaround, not the mistaken solver code; `After` means the proposed public SDK affordance. Prefer a table with columns `Area`, `Evidence`, `Current correct usage`, `Observed mistake`, `Proposed API affordance`, and `Expected effect`. Keep snippets schematic when the exact API design is not settled. State that proposals are API affordance candidates, not verified implementation plans.
 
 ## Creating Problems
 
-Create only prompt/scaffold problems:
-
-```text
-llm-challenge/problems/<group>/<id>/
-  meta.json
-  prompt.md
-  verify.json       # optional visible minimum-correctness checks
-  scaffold/
-```
-
-Rules:
-
-- `group` is `sdk-api` or `cli` and comes from the directory, not `meta.json`.
-- `id` is short kebab-case. If the user does not provide it, propose one and verify it is unique across all groups.
-- `meta.json` contains only `id` and `title`; `id` must match the directory name.
-- `verify.json`, when present, contains visible minimum-correctness checks only. Checks should encode conditions where missing evidence is definitely wrong, similar to type checking; do not put ideal implementations, hidden answers, scores, or broad quality judgments there.
-- Write `prompt.md` in English.
-- For `sdk-api`, do not include SDK API names, imports, code examples, or direct solution hints.
-- For `cli`, the prompt may name the `tailor-sdk` binary, but must not name the target subcommand or exact arguments.
-- Keep `scaffold/` minimal and runnable enough for the task. Do not add `solution/`, evaluator tests, scoring metadata, or hidden hints.
-
-Validate discovery and focused behavior with narrow tests or a targeted dry run when practical.
+When creating or revising problems, follow [CREATING_PROBLEMS.md](CREATING_PROBLEMS.md).
