@@ -90,7 +90,7 @@ If no SDK usage misconception is present, put that in the first table instead of
 
 When the user asks for SDK/API improvement proposals from artifacts, add a separate `SDK/API improvement proposals` section after the misconception and challenge-signal tables. Propose only changes to public SDK APIs, configuration schemas, generated type contracts, CLI commands/options, plugin hooks, or SDK-produced artifact paths; do not propose API changes for package-manager, workspace, install, cache, no-docs package layout, private bundle filenames, test-runner, or other non-SDK issues.
 
-Each SDK/API proposal must be grounded in trace or artifact evidence and include concise `Before` and `After` snippets. Use observed solver code or commands as `Before`; use proposed public SDK shape as `After`. Keep snippets schematic when the exact API design is not settled. Prefer a table with columns `Area`, `Evidence`, `Before`, `After`, and `Expected effect`. State that proposals are API affordance candidates, not verified implementation plans.
+Each SDK/API proposal must be grounded in trace or artifact evidence and distinguish the current correct SDK usage from the observed solver mistake. If using `Before`/`After` wording, `Before` means the current correct SDK/API usage or workaround, not the mistaken solver code; `After` means the proposed public SDK affordance. Prefer a table with columns `Area`, `Evidence`, `Current correct usage`, `Observed mistake`, `Proposed API affordance`, and `Expected effect`. Keep snippets schematic when the exact API design is not settled. State that proposals are API affordance candidates, not verified implementation plans.
 
 ## Creating Problems
 
