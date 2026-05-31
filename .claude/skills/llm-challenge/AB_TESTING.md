@@ -58,7 +58,7 @@ After each run completes, append one JSON object to the temp file:
 
 Definitions:
 
-- `success`: the challenge report run result, not a score label.
+- `success`: a derived pass/fail for the run, not a score label. `report.json` has no `success` field — compute it per run: successful when the solver completed (`solverExitCode = 0` and `timedOut = false` in `report.json`) **and** no check in that run's `verification-summary.json` has `outcome` of `unsatisfied` or `error`. This is why a run can have `solverExitCode = 0` yet `success = false`.
 - `duration`: use `durationMs`/`durationSec` from `report.json`.
 - `steps`: count `trace.jsonl` records where `type === "item.completed"`. This is the agent interaction/action count. Command count is narrower and should not replace steps unless the user asks for commands specifically.
 - `usageLimitCount`: count runs that failed before meaningful agent work, usually non-zero solver exit, very short duration, and `steps = 0` with usage-limit evidence in solver logs or trace.
