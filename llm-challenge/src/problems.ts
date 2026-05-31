@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { PROBLEM_GROUPS, type Problem, type ProblemGroup, type RequestedGroup } from "./types";
+import { pathExists, toPosix } from "./utils";
 
 type ProblemMeta = {
   id: string;
@@ -37,7 +38,6 @@ export async function discoverProblems(packageRoot: string): Promise<Problem[]> 
         title: meta.title,
         group,
         sourcePath: toPosix(path.relative(packageRoot, problemRoot)),
-        absolutePath: problemRoot,
         promptPath,
         scaffoldPath,
         verifyPath: (await pathExists(verifyPath)) ? verifyPath : undefined,
@@ -109,17 +109,4 @@ function resolveProblemFilter(problems: Problem[], filter: string): Problem {
     throw new Error(`Ambiguous problem id: ${filter}`);
   }
   return matches[0];
-}
-
-function toPosix(value: string): string {
-  return value.split(path.sep).join(path.posix.sep);
-}
-
-async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
 }

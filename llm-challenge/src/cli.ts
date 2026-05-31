@@ -7,9 +7,10 @@ import { discoverProblems, selectProblems } from "./problems";
 import { createRunReport, reportPath, writeReport } from "./report";
 import { getCodexRuntimeConfig, preflightCodexRunner, runCodexInPodman } from "./runner";
 import { packSdk } from "./sdk-pack";
+import { pathExists, tailText } from "./utils";
 import { writeVerificationSummary } from "./verification";
 import { prepareWorkspace, profileForProblem, pruneWorkspaceDeps } from "./workspace";
-import type { ChallengeReport, ChallengeRunReport, Problem, ProblemGroup } from "./types";
+import type { ChallengeReport, ChallengeRunReport, Problem } from "./types";
 
 type RunTask = {
   problem: Problem;
@@ -210,15 +211,6 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   }
 }
 
-type SourceRun = {
-  problemId: string;
-  group: ProblemGroup;
-  runIndex: number;
-  artifactDir?: string;
-  solverExitCode?: number;
-  timedOut?: boolean;
-};
-
 async function createRerunPlan(options: {
   packageRoot: string;
   reportFilePath: string;
@@ -269,7 +261,7 @@ async function createRerunPlan(options: {
     };
   });
   const problems = uniqueProblems(tasks.map((task) => task.problem));
-  const rerunRuns: SourceRun[] = failedRuns.map((run) => ({
+  const rerunRuns: NonNullable<ChallengeReport["rerunOf"]>["runs"] = failedRuns.map((run) => ({
     problemId: run.problemId,
     group: run.group,
     runIndex: run.runIndex,
@@ -297,11 +289,8 @@ async function resolveExistingReportPath(
     ? [reportFilePath]
     : [path.resolve(packageRoot, reportFilePath), path.resolve(packageRoot, "..", reportFilePath)];
   for (const candidate of candidates) {
-    try {
-      await fs.access(candidate);
+    if (await pathExists(candidate)) {
       return candidate;
-    } catch {
-      // Try the next common invocation style.
     }
   }
   throw new Error(`Report not found: ${reportFilePath}`);
@@ -329,7 +318,7 @@ function trimReportText(value: string | undefined): string | undefined {
   if (trimmed.length === 0) {
     return undefined;
   }
-  return trimmed.length <= 1_000 ? trimmed : trimmed.slice(-1_000);
+  return tailText(trimmed);
 }
 
 function createRunId(): string {

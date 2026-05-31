@@ -13,8 +13,11 @@ export async function runCommand(
     cwd?: string;
     input?: string;
     env?: NodeJS.ProcessEnv;
+    /** Resolve with the captured result on a non-zero exit instead of rejecting. */
+    rejectOnNonZero?: boolean;
   } = {},
 ): Promise<CommandResult> {
+  const rejectOnNonZero = options.rejectOnNonZero ?? true;
   return await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
@@ -33,7 +36,7 @@ export async function runCommand(
         stderr: Buffer.concat(stderr).toString("utf8"),
         exitCode,
       };
-      if (exitCode === 0) {
+      if (exitCode === 0 || !rejectOnNonZero) {
         resolve(result);
         return;
       }

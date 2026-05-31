@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createWriteStream, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { runCommand } from "./process";
 
 export type SolverResult = {
   exitCode?: number;
@@ -56,7 +57,7 @@ export async function preflightCodexRunner(
     "-lc",
     script,
   ];
-  const result = await runProcess("podman", podmanArgs);
+  const result = await runCommand("podman", podmanArgs, { rejectOnNonZero: false });
   const codexVersion = firstCodexVersionLine(result.stdout);
   return {
     skipped: false,
@@ -245,29 +246,6 @@ async function closeStreams(...streams: NodeJS.WritableStream[]): Promise<void> 
         }),
     ),
   );
-}
-
-async function runProcess(
-  command: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return await new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
-    child.on("error", reject);
-    child.on("close", (exitCode) => {
-      resolve({
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
-        exitCode,
-      });
-    });
-  });
 }
 
 function firstCodexVersionLine(stdout: string): string | undefined {

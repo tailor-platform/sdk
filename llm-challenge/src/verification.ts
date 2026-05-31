@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
-import { accessSync, promises as fs, readFileSync } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
+import { isObject, pathExistsSync, tailText } from "./utils";
+import { listWorkspaceFiles } from "./workspace-files";
 import type { Problem } from "./types";
 
 export type VerificationOutcome = "satisfied" | "unsatisfied" | "skipped" | "error";
@@ -57,16 +59,6 @@ type VerifySpecCheck =
       minMatches?: number;
     };
 
-const EXCLUDED_DIRS = new Set([
-  ".challenge",
-  ".git",
-  ".pnpm-store",
-  ".pnpm-home",
-  ".cache",
-  ".turbo",
-  "node_modules",
-]);
-const EXCLUDED_PATHS = new Set([".tailor-sdk/cache"]);
 const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
 const TYPECHECK_TIMEOUT_MS = 120_000;
 
@@ -239,7 +231,7 @@ function fileExistsCheck(
     scope,
     kind: "assertion",
     description,
-    outcome: fileExistsSync(absolutePath) ? "satisfied" : "unsatisfied",
+    outcome: pathExistsSync(absolutePath) ? "satisfied" : "unsatisfied",
     observations: [`path: ${relativePath}`],
   };
 }
@@ -249,7 +241,8 @@ function fileGlobCheck(
   files: string[],
 ): VerificationCheckResult {
   const minCount = check.minCount ?? 1;
-  const matches = files.filter((file) => matchesGlob(file, check.glob));
+  const globRegex = globToRegExp(check.glob);
+  const matches = files.filter((file) => globRegex.test(file));
   return {
     id: check.id,
     scope: "problem",
@@ -267,8 +260,9 @@ function contentMatchCheck(
 ): VerificationCheckResult {
   const minMatches = check.minMatches ?? 1;
   const regex = new RegExp(check.pattern, check.flags ?? "");
+  const globRegex = globToRegExp(check.glob);
   const matchedFiles: string[] = [];
-  for (const file of files.filter((candidate) => matchesGlob(candidate, check.glob))) {
+  for (const file of files.filter((candidate) => globRegex.test(candidate))) {
     const text = readFileSync(path.join(worktreePath, file), "utf8");
     regex.lastIndex = 0;
     if (regex.test(text)) {
@@ -377,38 +371,6 @@ async function appendCommandLog(logPath: string, command: string, output: string
   await fs.appendFile(logPath, `$ ${command}\n${output}${output.endsWith("\n") ? "" : "\n"}`);
 }
 
-async function listWorkspaceFiles(worktreePath: string): Promise<string[]> {
-  const files: string[] = [];
-  async function walk(directory: string): Promise<void> {
-    const entries = await fs.readdir(directory, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && EXCLUDED_DIRS.has(entry.name)) {
-        continue;
-      }
-      const absolutePath = path.join(directory, entry.name);
-      const relativePath = toPosix(path.relative(worktreePath, absolutePath));
-      if (entry.isDirectory()) {
-        if (shouldExcludeDirectory(relativePath, entry.name)) {
-          continue;
-        }
-        await walk(absolutePath);
-      } else {
-        files.push(relativePath);
-      }
-    }
-  }
-  await walk(worktreePath);
-  return files.sort();
-}
-
-function shouldExcludeDirectory(relativePath: string, name: string): boolean {
-  return EXCLUDED_DIRS.has(name) || EXCLUDED_PATHS.has(relativePath);
-}
-
-function matchesGlob(value: string, glob: string): boolean {
-  return globToRegExp(glob).test(value);
-}
-
 function globToRegExp(glob: string): RegExp {
   let pattern = "";
   for (let index = 0; index < glob.length; index += 1) {
@@ -435,25 +397,4 @@ function globToRegExp(glob: string): RegExp {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
-}
-
-function tailText(text: string): string {
-  return text.length > 1_000 ? text.slice(-1_000) : text;
-}
-
-function toPosix(value: string): string {
-  return value.split(path.sep).join(path.posix.sep);
-}
-
-function fileExistsSync(filePath: string): boolean {
-  try {
-    accessSync(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -10,7 +10,6 @@ export type Problem = {
   title: string;
   group: ProblemGroup;
   sourcePath: string;
-  absolutePath: string;
   promptPath: string;
   scaffoldPath: string;
   verifyPath?: string;

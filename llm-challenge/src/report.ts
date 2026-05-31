@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { toPosix } from "./utils";
 import type { ChallengeReport, ChallengeRunReport, Problem, SdkProfile } from "./types";
 
 export type RunArtifactPaths = {
@@ -76,5 +77,5 @@ export async function writeReport(reportPath: string, report: ChallengeReport): 
 }
 
 export function reportPath(packageRoot: string, targetPath: string): string {
-  return path.relative(packageRoot, targetPath).split(path.sep).join(path.posix.sep);
+  return toPosix(path.relative(packageRoot, targetPath));
 }

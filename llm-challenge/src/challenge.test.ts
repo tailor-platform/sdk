@@ -7,7 +7,7 @@ import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { discoverProblems, selectProblems } from "./problems";
 import { runCommand } from "./process";
-import { applyNoDocsProfile, stripDeclarationJsDoc, stripJsDocBlocks } from "./profile";
+import { applyNoDocsProfile, stripJsDocBlocks } from "./profile";
 import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from "./report";
 import {
   CONTAINER_PNPM_STORE,
@@ -168,7 +168,7 @@ describe("profile filtering", () => {
   });
 
   it("strips only JSDoc blocks from declaration text", () => {
-    expect(stripDeclarationJsDoc("/** remove */\nexport type A = string;\n/* keep */\n")).toBe(
+    expect(stripJsDocBlocks("/** remove */\nexport type A = string;\n/* keep */\n")).toBe(
       "\nexport type A = string;\n/* keep */\n",
     );
   });
@@ -495,7 +495,6 @@ describe("verification summary", () => {
     const summary = await writeVerificationSummary({
       problem: makeProblem({
         group: "cli",
-        absolutePath: problemRoot,
         scaffoldPath: path.join(problemRoot, "scaffold"),
         verifyPath,
       }),
@@ -588,7 +587,6 @@ describe("verification summary", () => {
     const summary = await writeVerificationSummary({
       problem: makeProblem({
         group: "cli",
-        absolutePath: problemRoot,
         scaffoldPath: path.join(problemRoot, "scaffold"),
         verifyPath,
       }),
@@ -619,7 +617,6 @@ describe("workspace preparation", () => {
     await fs.writeFile(path.join(scaffoldPath, "note.txt"), "scaffold\n");
     await fs.writeFile(sdkTarballPath, "tarball");
     const problem = makeProblem({
-      absolutePath: problemRoot,
       promptPath: path.join(problemRoot, "prompt.md"),
       scaffoldPath,
     });
@@ -779,7 +776,6 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     title: "Example",
     group: "sdk-api",
     sourcePath: "problems/sdk-api/example",
-    absolutePath: "/problem",
     promptPath: "/problem/prompt.md",
     scaffoldPath: "/problem/scaffold",
     ...overrides,

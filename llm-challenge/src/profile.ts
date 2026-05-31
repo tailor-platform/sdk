@@ -37,16 +37,12 @@ export async function applyNoDocsProfile(packageDir: string): Promise<void> {
       await fs.rm(filePath);
     } else if (shouldStripJsDoc(filePath)) {
       const original = await fs.readFile(filePath, "utf8");
-      const stripped = stripDeclarationJsDoc(original);
+      const stripped = stripJsDocBlocks(original);
       if (stripped !== original) {
         await fs.writeFile(filePath, stripped);
       }
     }
   }
-}
-
-export function stripDeclarationJsDoc(contents: string): string {
-  return stripJsDocBlocks(contents);
 }
 
 export function stripJsDocBlocks(contents: string): string {

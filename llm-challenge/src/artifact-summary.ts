@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import { runCommand } from "./process";
+import { isObject, tailText } from "./utils";
+import { listWorkspaceFiles } from "./workspace-files";
 import type { Problem, SolverFailureKind } from "./types";
 
 export type ArtifactSummary = {
@@ -28,17 +29,6 @@ export type ArtifactSummary = {
   errors: string[];
 };
 
-const EXCLUDED_DIRS = new Set([
-  ".challenge",
-  ".git",
-  ".pnpm-store",
-  ".pnpm-home",
-  ".cache",
-  ".turbo",
-  "node_modules",
-]);
-const EXCLUDED_PATHS = new Set([".tailor-sdk/cache"]);
-
 export async function writeArtifactSummary(options: {
   problem: Problem;
   runIndex: number;
@@ -52,8 +42,20 @@ export async function writeArtifactSummary(options: {
   failureKind: SolverFailureKind;
 }): Promise<void> {
   const traceEvents = await readTraceEvents(options.tracePath);
-  const commands = extractCommands(traceEvents);
-  const failedCommands = extractFailedCommands(traceEvents);
+  const terminalCommands = extractTerminalCommands(traceEvents);
+  const commands = terminalCommands.map((command) => ({
+    command: command.command,
+    exitCode: command.exitCode,
+    status: command.status,
+  }));
+  const failedCommands = terminalCommands
+    .filter((command) => command.status === "failed" || (command.exitCode ?? 0) !== 0)
+    .map((command) => ({
+      command: command.command,
+      exitCode: command.exitCode,
+      status: command.status,
+      outputTail: command.output === undefined ? undefined : tailText(command.output),
+    }));
   const errors = extractErrors(traceEvents);
   const summary: ArtifactSummary = {
     schemaVersion: 1,
@@ -108,34 +110,6 @@ export async function classifySolverFailure(options: {
   return "unknown";
 }
 
-async function listWorkspaceFiles(worktreePath: string): Promise<string[]> {
-  const files: string[] = [];
-  async function walk(directory: string): Promise<void> {
-    const entries = await fs.readdir(directory, { withFileTypes: true });
-    for (const entry of entries) {
-      if (EXCLUDED_DIRS.has(entry.name)) {
-        continue;
-      }
-      const absolutePath = path.join(directory, entry.name);
-      const relativePath = toPosix(path.relative(worktreePath, absolutePath));
-      if (entry.isDirectory()) {
-        if (shouldExcludeDirectory(relativePath, entry.name)) {
-          continue;
-        }
-        await walk(absolutePath);
-      } else {
-        files.push(relativePath);
-      }
-    }
-  }
-  await walk(worktreePath);
-  return files.sort();
-}
-
-function shouldExcludeDirectory(relativePath: string, name: string): boolean {
-  return EXCLUDED_DIRS.has(name) || EXCLUDED_PATHS.has(relativePath);
-}
-
 async function readGitStatus(worktreePath: string): Promise<string[]> {
   try {
     const result = await runCommand("git", ["status", "--short", "--untracked-files=all"], {
@@ -165,19 +139,10 @@ async function readTraceEvents(tracePath: string): Promise<unknown[]> {
   }
 }
 
-function extractCommands(events: unknown[]): ArtifactSummary["commands"] {
+function extractTerminalCommands(events: unknown[]): CommandEvent[] {
   return events.flatMap((event) => {
     const commandEvent = getCommandEvent(event);
-    if (commandEvent === undefined || !commandEvent.terminal) {
-      return [];
-    }
-    return [
-      {
-        command: commandEvent.command,
-        exitCode: commandEvent.exitCode,
-        status: commandEvent.status,
-      },
-    ];
+    return commandEvent !== undefined && commandEvent.terminal ? [commandEvent] : [];
   });
 }
 
@@ -230,27 +195,6 @@ function commandText(event: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-function extractFailedCommands(events: unknown[]): ArtifactSummary["failedCommands"] {
-  return events.flatMap((event) => {
-    const commandEvent = getCommandEvent(event);
-    if (commandEvent === undefined || !commandEvent.terminal) {
-      return [];
-    }
-    const { exitCode, status } = commandEvent;
-    if (status !== "failed" && (exitCode === undefined || exitCode === 0)) {
-      return [];
-    }
-    return [
-      {
-        command: commandEvent.command,
-        exitCode,
-        status,
-        outputTail: commandEvent.output === undefined ? undefined : tailText(commandEvent.output),
-      },
-    ];
-  });
-}
-
 function extractErrors(events: unknown[]): string[] {
   return events.flatMap((event) => {
     if (!isObject(event)) {
@@ -284,16 +228,4 @@ async function readAvailableText(filePaths: string[]): Promise<string> {
     }),
   );
   return chunks.join("\n");
-}
-
-function tailText(value: string): string {
-  return value.length <= 1_000 ? value : value.slice(-1_000);
-}
-
-function toPosix(value: string): string {
-  return value.split(path.sep).join(path.posix.sep);
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

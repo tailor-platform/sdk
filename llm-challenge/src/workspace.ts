@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { runCommand } from "./process";
 import { buildRunArtifactPaths, type RunArtifactPaths } from "./report";
+import { isObject } from "./utils";
 import type { Problem, SdkProfile } from "./types";
 
 const WORKSPACE_SDK_TARBALL = ".challenge/tailor-platform-sdk.tgz";
@@ -155,14 +156,7 @@ async function ensurePnpmWorkspace(worktreePath: string): Promise<void> {
 
 async function ensureNpmrc(worktreePath: string): Promise<void> {
   const npmrcPath = path.join(worktreePath, ".npmrc");
-  let current = "";
-  try {
-    current = await fs.readFile(npmrcPath, "utf8");
-  } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
-      throw error;
-    }
-  }
+  const current = await readFileOrEmpty(npmrcPath);
 
   const seen = new Set<string>();
   const lines = current
@@ -191,14 +185,7 @@ async function ensureNpmrc(worktreePath: string): Promise<void> {
 
 async function ensureGitignore(worktreePath: string): Promise<void> {
   const gitignorePath = path.join(worktreePath, ".gitignore");
-  let current = "";
-  try {
-    current = await fs.readFile(gitignorePath, "utf8");
-  } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
-      throw error;
-    }
-  }
+  const current = await readFileOrEmpty(gitignorePath);
   const lines = new Set(current.split(/\r?\n/).filter(Boolean));
   const additions = GITIGNORE_PATTERNS.filter((pattern) => !lines.has(pattern));
   if (additions.length === 0) {
@@ -246,6 +233,13 @@ async function readJsonObject(filePath: string): Promise<Record<string, unknown>
   }
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+async function readFileOrEmpty(filePath: string): Promise<string> {
+  try {
+    return await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return "";
+    }
+    throw error;
+  }
 }
