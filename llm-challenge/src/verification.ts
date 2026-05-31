@@ -56,6 +56,10 @@ type VerifySpecCheck =
       glob: string;
       pattern: string;
       flags?: string;
+      /**
+       * Minimum number of glob-matching files that must contain the pattern (default 1).
+       * Counts files, not occurrences: a single file with several matches counts once.
+       */
       minMatches?: number;
     };
 
@@ -275,7 +279,7 @@ function contentMatchCheck(
     kind: "assertion",
     description: check.description ?? `${check.glob} content matches ${check.pattern}`,
     outcome: matchedFiles.length >= minMatches ? "satisfied" : "unsatisfied",
-    observations: [`matches: ${matchedFiles.length}`, ...matchedFiles.slice(0, 10)],
+    observations: [`matchedFiles: ${matchedFiles.length}`, ...matchedFiles.slice(0, 10)],
   };
 }
 
