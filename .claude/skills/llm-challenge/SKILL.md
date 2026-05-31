@@ -75,6 +75,19 @@ For analysis, read `report.json`, `artifact-summary.json`, and `verification-sum
 
 `verification-summary.json` records common and problem-specific minimum correctness checks. Treat these as evidence only: an unsatisfied check means the artifact is missing a required minimum, but satisfied checks do not prove full correctness. Do not report scores, rankings, or `PASS`/`FAIL` labels from verification data.
 
+When reporting solver misconceptions from artifacts, separate SDK usage misconceptions from general development prerequisites. Report an item as an SDK usage misconception only when the evidence shows a wrong assumption about a public `@tailor-platform/sdk` API, configuration schema, generated type contract, documented CLI command, CLI option, plugin hook, service behavior, or SDK-produced artifact path.
+
+Do not include package-manager, workspace, install, cache, offline, network, shell, search, filesystem, permission, process-management, TypeScript/Node.js/ESM/test-runner/build-tool basics, no-docs package layout, private SDK bundle filenames, temporary extraction paths, or verifier false positives in SDK usage misconception reports. If those non-SDK issues repeatedly block solvers, summarize them separately as `llm-challenge` improvement signals. If no SDK usage misconception is present, say that explicitly.
+
+For every reported SDK usage misconception, include the supporting trace log or code evidence and explain the incorrect SDK-specific assumption in one sentence.
+
+Default artifact analysis reports should use tables:
+
+- `SDK usage misconceptions`: columns `Problem`, `SDK-specific mistaken assumption`, and `Evidence`.
+- `Non-SDK challenge signals`: columns `Signal`, `Affected problems or evidence`, and `Challenge-side action or status`.
+
+If no SDK usage misconception is present, put that in the first table instead of filling it with non-SDK noise. Include the second table when the user asks about challenge improvements or when non-SDK noise materially affects interpretation.
+
 ## Creating Problems
 
 Create only prompt/scaffold problems:

@@ -631,7 +631,12 @@ describe("workspace preparation", () => {
       sdkTarballPath,
     });
 
-    await expect(fs.readFile(paths.promptPath, "utf8")).resolves.toBe("Do the task.\n");
+    await expect(fs.readFile(paths.promptPath, "utf8")).resolves.toContain(
+      "You are working in an isolated challenge workspace.",
+    );
+    await expect(fs.readFile(paths.promptPath, "utf8")).resolves.toContain(
+      "Task:\n\nDo the task.\n",
+    );
     await expect(fs.readFile(path.join(paths.worktreePath, "note.txt"), "utf8")).resolves.toBe(
       "scaffold\n",
     );
@@ -643,6 +648,9 @@ describe("workspace preparation", () => {
     ).resolves.toContain('"@tailor-platform/sdk": true');
     await expect(fs.readFile(path.join(paths.worktreePath, ".npmrc"), "utf8")).resolves.toContain(
       "store-dir=.pnpm-store",
+    );
+    await expect(fs.readFile(path.join(paths.worktreePath, ".npmrc"), "utf8")).resolves.toContain(
+      "reporter=append-only",
     );
     await expect(fs.access(path.join(paths.worktreePath, ".pnpm-store"))).resolves.toBeUndefined();
     await expect(fs.readFile(path.join(paths.worktreePath, ".gitignore"), "utf8")).resolves.toMatch(
@@ -661,11 +669,15 @@ describe("workspace preparation", () => {
     const packageJson = JSON.parse(
       await fs.readFile(path.join(paths.worktreePath, "package.json"), "utf8"),
     ) as {
+      scripts: Record<string, string>;
       dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
     };
+    expect(packageJson.scripts.typecheck).toBe("tsc --noEmit");
     expect(packageJson.dependencies["@tailor-platform/sdk"]).toBe(
       "file:.challenge/tailor-platform-sdk.tgz",
     );
+    expect(packageJson.devDependencies.tsx).toBe("4.21.1");
     const tsconfig = JSON.parse(
       await fs.readFile(path.join(paths.worktreePath, "tsconfig.json"), "utf8"),
     ) as {

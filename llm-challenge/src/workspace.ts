@@ -6,6 +6,19 @@ import type { Problem, SdkProfile } from "./types";
 
 const WORKSPACE_SDK_TARBALL = ".challenge/tailor-platform-sdk.tgz";
 const WORKSPACE_PNPM_STORE = ".pnpm-store";
+const WORKSPACE_PROMPT_PREAMBLE = `You are working in an isolated challenge workspace.
+
+Workspace facts:
+
+- Stay inside the current working directory; parent directories may contain container or runtime files unrelated to the task.
+- package.json, pnpm workspace settings, TypeScript, tsx, and @tailor-platform/sdk are already wired to this workspace.
+- Run pnpm install if dependencies are not installed yet. Use local commands such as pnpm exec or ./node_modules/.bin instead of global tools.
+- SDK docs and examples may be absent. Use local CLI help, package exports, TypeScript declarations, and files generated in this workspace as evidence.
+- Avoid commands that require Tailor cloud credentials, external services, or npm packages outside this workspace unless the task explicitly asks for them.
+
+Task:
+
+`;
 const PNPM_WORKSPACE_YAML = `allowBuilds:
   "@prisma/engines": true
   "@swc/core": true
@@ -16,6 +29,9 @@ const PNPM_WORKSPACE_YAML = `allowBuilds:
 const NPMRC_SETTINGS = new Map([
   ["store-dir", WORKSPACE_PNPM_STORE],
   ["prefer-offline", "true"],
+  ["reporter", "append-only"],
+  ["network-concurrency", "1"],
+  ["child-concurrency", "1"],
   ["fetch-retries", "3"],
   ["fetch-retry-mintimeout", "10000"],
   ["fetch-retry-maxtimeout", "60000"],
@@ -41,7 +57,7 @@ export async function prepareWorkspace(options: {
   await copyScaffold(options.problem.scaffoldPath, paths.worktreePath);
 
   const prompt = await fs.readFile(options.problem.promptPath, "utf8");
-  await fs.writeFile(paths.promptPath, prompt);
+  await fs.writeFile(paths.promptPath, `${WORKSPACE_PROMPT_PREAMBLE}${prompt}`);
 
   const sdkTarballDest = path.join(paths.worktreePath, WORKSPACE_SDK_TARBALL);
   await fs.mkdir(path.dirname(sdkTarballDest), { recursive: true });
@@ -90,6 +106,11 @@ async function ensureWorkspacePackage(worktreePath: string): Promise<void> {
   packageJson.private ??= true;
   packageJson.type ??= "module";
   packageJson.packageManager ??= "pnpm@11.1.2";
+  const scripts = isObject(packageJson.scripts) ? packageJson.scripts : {};
+  packageJson.scripts = {
+    ...scripts,
+    typecheck: typeof scripts.typecheck === "string" ? scripts.typecheck : "tsc --noEmit",
+  };
   packageJson.dependencies = {
     ...(isObject(packageJson.dependencies) ? packageJson.dependencies : {}),
     "@tailor-platform/sdk": `file:${WORKSPACE_SDK_TARBALL}`,
@@ -97,6 +118,7 @@ async function ensureWorkspacePackage(worktreePath: string): Promise<void> {
   packageJson.devDependencies = {
     ...(isObject(packageJson.devDependencies) ? packageJson.devDependencies : {}),
     "@types/node": "24.12.4",
+    tsx: "4.21.1",
     typescript: "5.9.3",
   };
   await fs.writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
