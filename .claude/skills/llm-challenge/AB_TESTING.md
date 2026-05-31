@@ -4,11 +4,11 @@ Use this workflow when the user asks whether an SDK/API change improves `llm-cha
 
 ## Prepare
 
-- Work in the same branch or worktree as the proposed change. Do not switch the repository root off `main`; use the active PR worktree.
-- A/B-only commits are allowed in the active PR worktree so `--sdk-ref` can pack a stable source. Keep them unpushed unless they are final PR commits, and drop or rewrite them after the test when they are no longer wanted.
+- Do not switch the repository root off `main`; keep normal PR work in the active PR worktree.
+- For A/B-only changes, create a disposable A/B worktree and commit the after variant there so `--sdk-ref` can pack a stable source. Keep the disposable branch unpushed unless it becomes final PR work, and remove the worktree/branch after the test when it is no longer wanted.
 - Choose refs explicitly:
   - `baselineRef`: a clean ref before the affordance, often the parent/base commit.
-  - `afterRef`: a commit in the active PR worktree containing the affordance. Do not use an uncommitted worktree as the after source.
+  - `afterRef`: a commit in the disposable A/B worktree containing the affordance. Do not use an uncommitted worktree as the after source.
 - Choose the problem set from the evidence behind the proposal. If several proposals are being tested, run each affected problem against both refs. Keep problem selection identical for baseline and after.
 - Keep non-tested variables identical: `profile`, `runs`, `concurrency`, `model`, `effort`, `max-seconds`, and solver image.
 - Create a temp JSONL summary file before starting, for example `/tmp/sdk-llm-ab-<stamp>.jsonl`.
