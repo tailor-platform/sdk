@@ -79,10 +79,12 @@ Append a `variant-summary` after each variant and a `final-all-summary` after al
 
 ## Report
 
-Report the temp JSONL path and a table with one row per problem/proposal:
+Report a table with one row per problem/proposal:
 
 ```text
 Problem | Baseline success, avg duration, avg steps | After success, avg duration, avg steps | Delta
 ```
 
-Use deltas for success count, duration seconds, and steps. Mention usage-limit exclusions, partial adoption of the new API, the baseline and after refs, and whether the branch was pushed.
+Use deltas for success count, duration seconds, and steps.
+
+Include A/B-specific context needed to interpret the table: baseline/after refs, the `steps` counting rule, usage-limit exclusions, and partial adoption of the tested API.

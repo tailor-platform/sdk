@@ -48,7 +48,7 @@ When measuring a proposed SDK/API affordance, follow [AB_TESTING.md](AB_TESTING.
 - Compare an unchanged baseline SDK ref against a committed after SDK ref with the same problems, profile, runs, model, effort, timeout, and concurrency.
 - Append `success`, `duration`, and `steps` to a temporary JSONL file after every run; append variant and final summaries as separate events.
 - Treat usage-limit and other infrastructure-only zero-step runs as invalid for comparison; record them separately and rerun when the limit clears.
-- Report a compact table with `success`, average `duration`, and average `steps`, plus the temp summary path and artifact paths needed to audit the conclusion.
+- Report a compact table with `success`, average `duration`, and average `steps`.
 
 ## Setup
 
