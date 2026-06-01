@@ -160,9 +160,12 @@ export async function planAuthConnections(
     }
   });
 
-  // Build existing map with labels
-  // Note: metadata/labels for auth connections may not be supported yet by the platform.
-  // When getMetadata fails with InvalidArgument, we skip label-based ownership tracking.
+  // Build existing map with labels.
+  // Note: the platform does NOT currently expose metadata/labels for auth connections —
+  // the `auth-connection` TRN is unknown to the metadata service, so getMetadata always
+  // fails with InvalidArgument (see platform-core-services pkg/trn + service_metadata.go).
+  // We therefore cannot use label-based ownership tracking for connections today; the
+  // logic below is kept so it lights up automatically if the platform adds support later.
   const existingConnections: WithLabel<AuthConnection> = {};
   let metadataSupported = true;
   await Promise.all(
@@ -254,8 +257,18 @@ export async function planAuthConnections(
       resourceOwners.add(entry.label);
       continue;
     }
-    // Delete if owned by this app, or if metadata is not supported (no ownership tracking)
-    if (owned || !metadataSupported) {
+    // Decide whether to delete:
+    // - Today the platform never supports connection metadata (see note above), so this
+    //   always takes the `!metadataSupported` branch. Labels are unavailable, so ownership
+    //   cannot be derived from them. Deleting "everything not desired" would destroy
+    //   connections created outside the SDK (e.g. Terraform/console). Instead we use the
+    //   local secrets-state as the ownership signal and delete only connections this SDK
+    //   previously created (tracked in state.connections). Externally-managed connections
+    //   are left untouched.
+    // - The `owned` branch is dead today but kept for when the platform adds metadata
+    //   support, at which point label-based ownership becomes authoritative.
+    const shouldDelete = metadataSupported ? owned : state.connections?.[name] !== undefined;
+    if (shouldDelete) {
       changeSet.deletes.push({
         name,
         request: { workspaceId, connectionName: name },
