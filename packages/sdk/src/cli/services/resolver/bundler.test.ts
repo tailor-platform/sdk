@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { tempCwd } from "@/cli/shared/test-helpers/temp-cwd";
 import { bundleResolvers } from "./bundler";
 import type * as rolldown from "rolldown";
 
@@ -30,24 +30,16 @@ vi.mock("rolldown", async (importOriginal) => {
 
 describe("bundleResolvers", () => {
   it("does not throw when no resolver files match", async () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-bundler-"));
-    const originalCwd = process.cwd();
+    using tmp = tempCwd("sdk-bundler-");
+    fs.mkdirSync(path.join(tmp.dir, "src/backend/provisioning/resolver"), {
+      recursive: true,
+    });
 
-    try {
-      fs.mkdirSync(path.join(tempDir, "src/backend/provisioning/resolver"), {
-        recursive: true,
-      });
-      process.chdir(tempDir);
-
-      await expect(
-        bundleResolvers("provisioning", {
-          files: ["./src/backend/provisioning/resolver/*.ts"],
-        }),
-      ).resolves.toEqual(new Map());
-    } finally {
-      process.chdir(originalCwd);
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    await expect(
+      bundleResolvers("provisioning", {
+        files: ["./src/backend/provisioning/resolver/*.ts"],
+      }),
+    ).resolves.toEqual(new Map());
   });
 
   describe("concurrency", () => {
@@ -57,40 +49,32 @@ describe("bundleResolvers", () => {
     });
 
     it("caps concurrent rolldown.build invocations to TAILOR_BUNDLE_CONCURRENCY", async () => {
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-bundler-conc-"));
-      const originalCwd = process.cwd();
-      const resolverDir = path.join(tempDir, "src/backend/concurrency/resolver");
+      using tmp = tempCwd("sdk-bundler-conc-");
+      const resolverDir = path.join(tmp.dir, "src/backend/concurrency/resolver");
+      fs.mkdirSync(resolverDir, { recursive: true });
 
-      try {
-        fs.mkdirSync(resolverDir, { recursive: true });
-
-        const fileCount = 8;
-        for (let i = 0; i < fileCount; i++) {
-          fs.writeFileSync(
-            path.join(resolverDir, `resolver_${i}.ts`),
-            `export default {\n` +
-              `  operation: "query",\n` +
-              `  name: "resolver_${i}",\n` +
-              `  body: async () => ${i},\n` +
-              `  output: { type: "integer", metadata: {}, fields: {} },\n` +
-              `};\n`,
-          );
-        }
-
-        process.chdir(tempDir);
-        vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
-        buildTracker = { active: 0, maxActive: 0 };
-
-        await bundleResolvers("concurrency", {
-          files: ["./src/backend/concurrency/resolver/*.ts"],
-        });
-
-        expect(buildTracker.maxActive).toBeGreaterThan(0);
-        expect(buildTracker.maxActive).toBeLessThanOrEqual(2);
-      } finally {
-        process.chdir(originalCwd);
-        fs.rmSync(tempDir, { recursive: true, force: true });
+      const fileCount = 8;
+      for (let i = 0; i < fileCount; i++) {
+        fs.writeFileSync(
+          path.join(resolverDir, `resolver_${i}.ts`),
+          `export default {\n` +
+            `  operation: "query",\n` +
+            `  name: "resolver_${i}",\n` +
+            `  body: async () => ${i},\n` +
+            `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+            `};\n`,
+        );
       }
+
+      vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
+      buildTracker = { active: 0, maxActive: 0 };
+
+      await bundleResolvers("concurrency", {
+        files: ["./src/backend/concurrency/resolver/*.ts"],
+      });
+
+      expect(buildTracker.maxActive).toBeGreaterThan(0);
+      expect(buildTracker.maxActive).toBeLessThanOrEqual(2);
     });
   });
 });

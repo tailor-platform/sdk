@@ -6,9 +6,14 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
+import {
+  clearWorkflowTestEnv,
+  writeWorkflowTestEnv,
+} from "../configure/services/workflow/test-env-key";
 import type { ContextInvoker } from "../runtime/context";
 import type { TailorDBFileErrorCode } from "../runtime/file";
 import type { User as IdpUser } from "../runtime/idp";
+import type { TailorEnv } from "../types/env";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -359,6 +364,15 @@ export const workflowMock = {
   }) as SetWaitHandler,
 
   /**
+   * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
+   * Cleared by `workflowMock.reset()`.
+   * @param env - Env passed to job bodies.
+   */
+  setEnv(env: TailorEnv): void {
+    writeWorkflowTestEnv({ ...env });
+  },
+
+  /**
    * Configure how `tailor.workflow.resolve` runs the user-supplied callback. The handler
    * receives `(executionId, key, callback)` — invoke `callback(payload)` to drive
    * resolve→wait wiring in tests. Default: callback is not invoked (records the call only).
@@ -406,6 +420,7 @@ export const workflowMock = {
     state.waitHandler = null;
     state.resolveHandler = null;
     state.workflowCalls.length = 0;
+    clearWorkflowTestEnv();
   },
 };
 
@@ -1221,4 +1236,5 @@ export function cleanupMocks(global: typeof globalThis): void {
   delete g.TailorDBFileError;
   delete g[STATE_KEY];
   delete g[RUNTIME_FLAG_KEY];
+  clearWorkflowTestEnv();
 }

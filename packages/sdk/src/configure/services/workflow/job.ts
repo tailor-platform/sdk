@@ -1,4 +1,5 @@
 import { brandValue } from "@/utils/brand";
+import { readWorkflowTestEnv } from "./test-env-key";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
@@ -57,8 +58,9 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
 }
 
 /**
- * Environment variable key for workflow testing.
- * Contains JSON-serialized TailorEnv object.
+ * Env-var fallback read by `.trigger()` when `workflowMock.setEnv()` is unset.
+ * Kept for backward compatibility.
+ * @deprecated Use `workflowMock.setEnv()` from `@tailor-platform/sdk/vitest`.
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
@@ -109,7 +111,14 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
     {
       name: config.name,
       trigger: async (args?: unknown) => {
-        const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
+        // Read env from workflowMock.setEnv() with deprecated env-var fallback.
+        // Shallow-copy to isolate against cross-trigger mutation.
+        const fromGlobal = readWorkflowTestEnv();
+        const env = (
+          fromGlobal !== undefined
+            ? { ...fromGlobal }
+            : JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}")
+        ) as TailorEnv;
         return await body(args as I, { env, invoker: null });
       },
       body,

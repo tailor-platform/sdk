@@ -1,5 +1,52 @@
 # @tailor-platform/sdk
 
+## 1.52.0
+
+### Minor Changes
+
+- [#1195](https://github.com/tailor-platform/sdk/pull/1195) [`e4c3c9a`](https://github.com/tailor-platform/sdk/commit/e4c3c9a03e7711d3478a7399e1eac2c5a633baa1) Thanks [@dqn](https://github.com/dqn)! - Add `--field key=value` (`-f`) to `tailor-sdk api <endpoint>` for setting request-body fields without writing JSON. Dotted keys build nested objects (`-f application.name=foo`), `--field` overrides matching keys in `--body`, and field names tab-complete from the endpoint's proto schema (bash / zsh / fish) — including step-by-step completion of nested message fields.
+
+- [#1186](https://github.com/tailor-platform/sdk/pull/1186) [`57e00d6`](https://github.com/tailor-platform/sdk/commit/57e00d6bfc2f9602af0ac9c0235da6ec0e04b12e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `workflowMock.setEnv()` to control the `env` value passed to job bodies when `createWorkflowJob().trigger()` is invoked locally. Tests using the `tailor-runtime` Vitest environment can now configure the env through the same `workflowMock` helper they use for `setJobHandler` / `setWaitHandler`, without touching `process.env`.
+
+  ```typescript
+  import { workflowMock } from "@tailor-platform/sdk/vitest";
+
+  afterEach(() => workflowMock.reset());
+
+  test("workflow.mainJob.trigger() executes all jobs", async () => {
+    workflowMock.setEnv({ STAGE: "test" });
+    await workflow.mainJob.trigger({ orderId: "order-1", amount: 100 });
+  });
+  ```
+
+  The previous env-var-based pattern is now deprecated. A non-breaking fallback is retained, but `workflowMock.setEnv()` takes priority when both are set.
+
+### Patch Changes
+
+- [#1195](https://github.com/tailor-platform/sdk/pull/1195) [`0646e0a`](https://github.com/tailor-platform/sdk/commit/0646e0ad33142bbe89842ec323a66422d8a6a83e) Thanks [@dqn](https://github.com/dqn)! - Make `tailor-sdk api --field` tab completion faster by pre-enumerating candidates into the generated shell script. Field names, enum values, and `true`/`false` for bool fields are now resolved from a static lookup table at TAB time instead of spawning a Node process per keystroke.
+
+- [#1270](https://github.com/tailor-platform/sdk/pull/1270) [`fb540fa`](https://github.com/tailor-platform/sdk/commit/fb540fab090d8f5909804b9189aa97670c892e7b) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(tailordb): set the migration label to `0000` on the first apply
+
+  The initial schema snapshot (`0000`) is deployed through the normal
+  create-update flow and never reports itself as a pending migration, so the
+  first `tailor-sdk deploy` after `tailordb migration generate` previously left
+  the namespace without an `sdk-migration` label. This forced a redundant
+  apply/generate/apply sequence to establish the baseline. The migration label is
+  now reconciled to the latest local migration after every create-update apply, so
+  a single `migration generate` + `deploy` establishes the baseline as documented.
+
+- [#1222](https://github.com/tailor-platform/sdk/pull/1222) [`b9ac1da`](https://github.com/tailor-platform/sdk/commit/b9ac1da45365c5f16bed4f28df3920d009893f79) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.29.2
+
+- [#1237](https://github.com/tailor-platform/sdk/pull/1237) [`eb362d6`](https://github.com/tailor-platform/sdk/commit/eb362d63cc6c39b2d8d2706b67c5e38cdc5fda37) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.2
+
+- [#1250](https://github.com/tailor-platform/sdk/pull/1250) [`1a6ab51`](https://github.com/tailor-platform/sdk/commit/1a6ab51f85c5eb15fd0e9526029f9ab9e1eac759) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1257](https://github.com/tailor-platform/sdk/pull/1257) [`6b3b48e`](https://github.com/tailor-platform/sdk/commit/6b3b48e11b1b67aff9f9e15ad818f8a2587591bf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1259](https://github.com/tailor-platform/sdk/pull/1259) [`a31c292`](https://github.com/tailor-platform/sdk/commit/a31c292a65e30f150778377ab4f06f003f8eeda7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.47.0
+
+- [#1261](https://github.com/tailor-platform/sdk/pull/1261) [`f6de6cf`](https://github.com/tailor-platform/sdk/commit/f6de6cf7fbc3c9d56c75e297ef2f374b2b83337c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v6.26.0
+
 ## 1.51.2
 
 ### Patch Changes

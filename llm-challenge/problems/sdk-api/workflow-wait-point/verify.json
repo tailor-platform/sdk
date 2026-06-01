@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "workflow-source-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "workflow",
+      "flags": "i",
+      "description": "source includes a workflow definition"
+    },
+    {
+      "id": "approval-wait-point-present",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "approval|approve|wait|pause|resume",
+      "flags": "i",
+      "description": "workflow source represents an approval wait point and continuation"
+    }
+  ]
+}
