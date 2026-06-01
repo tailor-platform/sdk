@@ -686,11 +686,18 @@ function buildJobContext(): { env: TailorEnv; invoker: null } {
   if (fromGlobal !== undefined) {
     return { env: { ...fromGlobal }, invoker: null };
   }
+  const raw = process.env[WORKFLOW_TEST_ENV_KEY];
   let env: TailorEnv = {} as TailorEnv;
-  try {
-    env = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-  } catch {
-    // Malformed env JSON: leave env as the empty object so the test can still run.
+  if (raw) {
+    try {
+      env = JSON.parse(raw);
+    } catch (cause) {
+      // Fail fast rather than masking a malformed env with `{}`.
+      throw new Error(
+        `Invalid JSON in ${WORKFLOW_TEST_ENV_KEY}; provide valid JSON or use workflowMock.setEnv().`,
+        { cause },
+      );
+    }
   }
   return { env, invoker: null };
 }
@@ -702,20 +709,23 @@ function mockTriggerJobFunction(jobName: string, args?: unknown): unknown {
   const serializedArgs = platformSerialize(args);
   state.triggeredJobs.push({ jobName, args: serializedArgs });
 
-  if (state.jobResultQueue.length > 0) return state.jobResultQueue.shift();
-  if (state.jobHandler) return state.jobHandler(jobName, serializedArgs);
+  // Cross the same JSON boundary the platform applies to job results on every
+  // path (queued result, handler, registered body) so invalid values
+  // (NaN/Infinity/BigInt/class instances) are caught consistently. Sync results
+  // return a plain value so synchronous callers (e.g.
+  // `runtime/workflow.triggerJobFunction`) observe them directly; async bodies
+  // surface as a Promise that `.trigger()` (which awaits) resolves.
+  const serializeResult = (output: unknown): unknown =>
+    output instanceof Promise
+      ? output.then((resolved) => platformSerialize(resolved))
+      : platformSerialize(output);
+
+  if (state.jobResultQueue.length > 0) return serializeResult(state.jobResultQueue.shift());
+  if (state.jobHandler) return serializeResult(state.jobHandler(jobName, serializedArgs));
 
   const body = getRegisteredJob(jobName);
   if (body) {
-    // Mirror the platform's synchronous `triggerJobFunction` contract: return
-    // the body's result directly. Enqueue/handler paths above and sync bodies
-    // return a plain value so synchronous callers (e.g.
-    // `runtime/workflow.triggerJobFunction`) observe the result directly; async
-    // bodies surface as a Promise that `.trigger()` (which awaits) resolves.
-    const output = body(serializedArgs, buildJobContext());
-    return output instanceof Promise
-      ? output.then((resolved) => platformSerialize(resolved))
-      : platformSerialize(output);
+    return serializeResult(body(serializedArgs, buildJobContext()));
   }
   return null;
 }

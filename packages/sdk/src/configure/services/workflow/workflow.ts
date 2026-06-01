@@ -60,7 +60,9 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
  *   mainJob: processData,
  * });
  */
-/* @__NO_SIDE_EFFECTS__ */
+// NOTE: intentionally NOT marked `/* @__NO_SIDE_EFFECTS__ */` — this registers
+// the workflow on the global registry (see registerWorkflow below), so treating
+// the call as pure would let bundlers tree-shake the registration away.
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
