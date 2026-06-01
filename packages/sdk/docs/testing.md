@@ -477,6 +477,56 @@ Stage results with `enqueueResults(...)` (FIFO, one array per executed query) or
 
 **Use when:** code accepts a `Transaction<DB>` and chains Kysely calls, and you want to assert query intent and operation counts while staging results — without a database. (`streamQuery` is not supported.)
 
+##### Resolvers/executors that call `getDB()` internally
+
+A resolver usually calls `getDB("main-db")` inside its `body`, so there is no parameter to inject the mock into. Spy on the generated `getDB` and make it return `mock.db` — `getDB` has no injection seam, so this is the way to use `createMockKysely` without refactoring to dependency injection:
+
+```typescript
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { createMockKysely, type MockKysely } from "@tailor-platform/sdk/vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { getDB, type Namespace } from "../generated/db";
+import resolver from "./upsertUsers";
+
+// Keep the real module but spy its exports, then point getDB at the mock.
+vi.mock("../generated/db", { spy: true });
+
+describe("upsertUsers resolver", () => {
+  let mock: MockKysely<Namespace["main-db"]>;
+
+  beforeEach(() => {
+    mock = createMockKysely<Namespace["main-db"]>();
+    vi.mocked(getDB).mockReturnValue(mock.db);
+  });
+
+  test("inserts new users and updates existing ones", async () => {
+    mock.setQueryResolver((query) =>
+      query.sql.startsWith("select") && query.parameters.includes("exists@example.com")
+        ? [{ id: "user-1" }]
+        : [],
+    );
+
+    const result = await resolver.body({
+      input: {
+        users: [
+          { name: "Existing", email: "exists@example.com", age: 41 },
+          { name: "Newcomer", email: "new@example.com", age: 22 },
+        ],
+      },
+      user: unauthenticatedTailorUser,
+      env: { appName: "Resolver Template", version: 1 },
+    });
+
+    expect(result).toEqual({ created: 1, updated: 1 });
+    expect(mock.selects).toHaveLength(2);
+    expect(mock.inserts).toHaveLength(1);
+    expect(mock.updates).toHaveLength(1);
+  });
+});
+```
+
+Compared with [`tailordbMock`](#mocking-the-tailordb-client): you do **not** stage `BEGIN`/`COMMIT` rows (the mock driver makes them no-ops), and you can assert operation counts and SQL parameters. Reach for `tailordbMock` instead when you want to drive the raw query sequence at the `tailordb.Client` level.
+
 #### Resolvers that resume a workflow
 
 Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `workflowMock.setResolveHandler` to drive the user-supplied callback and inspect `workflowMock.resolveCalls`:
