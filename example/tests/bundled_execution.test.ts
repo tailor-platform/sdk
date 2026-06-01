@@ -53,13 +53,15 @@ describe("bundled execution tests", () => {
       "resolvers/showUserInfo.js": 5999 + sizeBuffer,
       "resolvers/stepChain.js": 172428 + sizeBuffer,
       "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
-      // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB)
-      "workflow-jobs/check-inventory.js": 19967 + sizeBuffer,
-      "workflow-jobs/fetch-customer.js": 147682 + sizeBuffer,
-      "workflow-jobs/process-order.js": 1137 + sizeBuffer,
-      "workflow-jobs/process-payment.js": 147576 + sizeBuffer,
-      "workflow-jobs/send-notification.js": 20075 + sizeBuffer,
-      "workflow-jobs/validate-order.js": 893 + sizeBuffer,
+      // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB).
+      // Baselines include the ~230-320B globalThis-registry shim that createWorkflowJob
+      // now bundles (so the vitest mock can look up bodies by name).
+      "workflow-jobs/check-inventory.js": 20256 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 158001 + sizeBuffer,
+      "workflow-jobs/process-order.js": 1453 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 157895 + sizeBuffer,
+      "workflow-jobs/send-notification.js": 20364 + sizeBuffer,
+      "workflow-jobs/validate-order.js": 1209 + sizeBuffer,
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {
