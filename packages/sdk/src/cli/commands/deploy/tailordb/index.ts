@@ -58,6 +58,7 @@ import {
   formatSchemaDrifts,
   createSnapshotType,
   getLatestMigrationNumber,
+  getMigrationFiles,
   isSnapshotFieldRefOperand,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
@@ -350,18 +351,13 @@ async function validateAndDetectMigrations(
 }
 
 /**
- * Reconcile the on-remote migration label with the working tree's latest
- * migration number for each namespace.
+ * Force each namespace's `sdk-migration` label to the working tree's latest
+ * migration number after a create-update apply.
  *
- * Used after a `--no-schema-check` apply: that flag skips the local/remote
- * snapshot drift checks, but if it also leaves the label untouched the remote
- * label can drift past the working tree's latest migration (e.g. when
- * checking out an older revision and re-deploying). A subsequent run would
- * then reconstruct the expected snapshot at a label that no longer exists in
- * the working tree, triggering a false drift error.
- *
- * Always force `label = working_tree_max` regardless of the previous label so
- * the invariant `label <= working_tree_max` is preserved.
+ * This records the initial baseline (`0000`), which is deployed via the normal
+ * flow and never bumps the label itself, and keeps the label `<= working_tree_max`
+ * after a `--no-schema-check` deploy from an older revision. Namespaces without a
+ * baseline are skipped so no phantom label is written.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
@@ -372,15 +368,19 @@ async function reconcileMigrationLabels(
   namespacesWithMigrations: NamespaceWithMigrations[],
 ): Promise<void> {
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+    if (getMigrationFiles(migrationsDir).length === 0) {
+      continue;
+    }
     const targetVersion = getLatestMigrationNumber(migrationsDir);
     const currentVersion = await getRemoteMigrationNumber(client, workspaceId, namespace);
-    await updateMigrationLabel(client, workspaceId, namespace, targetVersion);
-    if (currentVersion !== targetVersion) {
-      const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
-      logger.info(
-        `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
-      );
+    if (currentVersion === targetVersion) {
+      continue;
     }
+    await updateMigrationLabel(client, workspaceId, namespace, targetVersion);
+    const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
+    logger.info(
+      `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
+    );
   }
 }
 
@@ -572,12 +572,13 @@ export async function applyTailorDB(
       );
     }
 
-    // When schema checks are skipped, force-reconcile the migration label so
-    // that the invariant `label <= working_tree_max` always holds. Without
-    // this, a `--no-schema-check` deploy from an older revision can leave a
-    // stale label that breaks the next snapshot reconstruction (see
-    // verifyRemoteSchema).
-    if (migrationContext.noSchemaCheck && namespacesWithMigrations.length > 0) {
+    // Skip when pending migrations ran: each already bumped the label, and
+    // re-pinning to working_tree_max could mask one left intentionally pending
+    // (e.g. a missing script). --no-schema-check always re-pins to repair drift.
+    if (
+      namespacesWithMigrations.length > 0 &&
+      (migrationContext.noSchemaCheck || pendingMigrations.length === 0)
+    ) {
       await reconcileMigrationLabels(
         client,
         migrationContext.workspaceId,
