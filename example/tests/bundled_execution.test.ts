@@ -54,8 +54,7 @@ describe("bundled execution tests", () => {
       "resolvers/stepChain.js": 172428 + sizeBuffer,
       "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB).
-      // Baselines include the ~230-320B globalThis-registry shim that createWorkflowJob
-      // now bundles (so the vitest mock can look up bodies by name).
+      // Baselines include the small globalThis-registry shim createWorkflowJob bundles.
       "workflow-jobs/check-inventory.js": 20256 + sizeBuffer,
       "workflow-jobs/fetch-customer.js": 158001 + sizeBuffer,
       "workflow-jobs/process-order.js": 1453 + sizeBuffer,

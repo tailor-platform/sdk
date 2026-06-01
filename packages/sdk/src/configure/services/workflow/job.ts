@@ -102,9 +102,8 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  *   },
  * });
  */
-// NOTE: intentionally NOT marked `/* @__NO_SIDE_EFFECTS__ */` — this registers
-// the job body on the global registry (see registerJob below), so treating the
-// call as pure would let bundlers tree-shake the registration away.
+// Not `/* @__NO_SIDE_EFFECTS__ */`: registerJob below mutates the global
+// registry, so bundlers must not treat the call as pure and drop it.
 export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> {

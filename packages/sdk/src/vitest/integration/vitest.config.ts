@@ -4,8 +4,7 @@ import { defineConfig } from "vitest/config";
 import { createBlockPlugin } from "../plugin";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// `here` is `src/vitest/integration`; the SDK source root (`@/` target) is two
-// levels up at `src`. Keep in sync with the SDK tsconfig `@/*` mapping.
+// `@/` target = SDK src root, two levels up; keep in sync with tsconfig `@/*`.
 const sdkSrc = resolve(here, "../..");
 
 export default defineConfig({

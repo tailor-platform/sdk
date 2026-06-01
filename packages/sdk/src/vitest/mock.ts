@@ -692,7 +692,6 @@ function buildJobContext(): { env: TailorEnv; invoker: null } {
     try {
       env = JSON.parse(raw);
     } catch (cause) {
-      // Fail fast rather than masking a malformed env with `{}`.
       throw new Error(
         `Invalid JSON in ${WORKFLOW_TEST_ENV_KEY}; provide valid JSON or use workflowMock.setEnv().`,
         { cause },
@@ -709,12 +708,8 @@ function mockTriggerJobFunction(jobName: string, args?: unknown): unknown {
   const serializedArgs = platformSerialize(args);
   state.triggeredJobs.push({ jobName, args: serializedArgs });
 
-  // Cross the same JSON boundary the platform applies to job results on every
-  // path (queued result, handler, registered body) so invalid values
-  // (NaN/Infinity/BigInt/class instances) are caught consistently. Sync results
-  // return a plain value so synchronous callers (e.g.
-  // `runtime/workflow.triggerJobFunction`) observe them directly; async bodies
-  // surface as a Promise that `.trigger()` (which awaits) resolves.
+  // Serialize every result path (queue/handler/body) through the platform's JSON
+  // boundary; sync results stay sync so synchronous callers observe them directly.
   const serializeResult = (output: unknown): unknown =>
     output instanceof Promise
       ? output.then((resolved) => platformSerialize(resolved))
@@ -783,11 +778,8 @@ async function mockResolve(
   callback: (payload: unknown) => unknown | Promise<unknown>,
 ): Promise<void> {
   const state = getState();
-  // Serialize the callback's return value across the JSON boundary while
-  // mirroring the platform's synchronous contract: a sync callback yields a
-  // plain value so handlers that invoke `callback(...)` without `await` (see
-  // docs/testing.md and the workflow template) observe the result directly;
-  // async callbacks surface as a Promise the handler can await.
+  // Keep sync callbacks synchronous so handlers that call callback(...) without
+  // await still observe the value.
   const wrappedCallback = (payload: unknown): unknown => {
     const output = callback(payload);
     return output instanceof Promise
