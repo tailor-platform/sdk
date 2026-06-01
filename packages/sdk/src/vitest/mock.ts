@@ -11,9 +11,8 @@ import type { TailorDBFileErrorCode } from "../runtime/file";
 import type { User as IdpUser } from "../runtime/idp";
 import type { TailorEnv } from "../types/env";
 
-// `workflowMock.setEnv`/`reset` toggle `globalThis.__tailorWorkflowTestEnv`,
-// which `createWorkflowJob().trigger()` reads. Inline casts on both sides
-// keep the slot out of consumer `globalThis` types.
+// `workflowMock.setEnv`/`reset` toggle `globalThis.__tailorWorkflowTestEnv`
+// (read by `.trigger()`). Inline casts keep it off consumer globalThis types.
 
 // ---------------------------------------------------------------------------
 // Types
@@ -364,17 +363,21 @@ export const workflowMock = {
   }) as SetWaitHandler,
 
   /**
-   * Set the `env` value passed to job bodies when `.trigger()` is invoked locally.
-   *
-   * `createWorkflowJob().trigger()` runs the body in-process during tests (in production,
-   * the bundler rewrites it to `tailor.workflow.triggerJobFunction`). This helper provides
-   * the `env` argument that the body receives via its `WorkflowJobContext`. Reset by
+   * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
+   * Returns a `Disposable` so the env can be scoped with `using`. Also cleared by
    * `workflowMock.reset()`.
-   * @param env - Env object to pass to job bodies invoked via `.trigger()`
+   * @param env - Env passed to job bodies.
+   * @returns Disposable that clears the env on dispose.
+   * @example
+   * using _env = workflowMock.setEnv({ STAGE: "test" });
    */
-  setEnv(env: TailorEnv): void {
-    (globalThis as { __tailorWorkflowTestEnv?: TailorEnv }).__tailorWorkflowTestEnv = {
-      ...env,
+  setEnv(env: TailorEnv): Disposable {
+    const slot = globalThis as { __tailorWorkflowTestEnv?: TailorEnv };
+    slot.__tailorWorkflowTestEnv = { ...env };
+    return {
+      [Symbol.dispose]() {
+        slot.__tailorWorkflowTestEnv = undefined;
+      },
     };
   },
 

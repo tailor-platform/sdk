@@ -14,11 +14,6 @@ import {
   RUNTIME_FLAG_KEY,
 } from "./mock";
 
-function stubEnvScoped(name: string, value: string): Disposable {
-  vi.stubEnv(name, value);
-  return { [Symbol.dispose]: () => vi.unstubAllEnvs() };
-}
-
 describe("mock", () => {
   beforeEach(() => {
     injectMocks(globalThis);
@@ -118,6 +113,10 @@ describe("mock", () => {
       workflowMock.reset();
     });
 
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
     test("records triggered jobs", () => {
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
       trigger("my-job", { key: "value" });
@@ -170,10 +169,25 @@ describe("mock", () => {
         body: (_input: undefined, ctx) => ctx.env,
       });
 
-      workflowMock.setEnv({ STAGE: "test", REGION: "asia" });
+      using _env = workflowMock.setEnv({ STAGE: "test", REGION: "asia" });
       const env = await captureEnv.trigger();
 
       expect(env).toEqual({ STAGE: "test", REGION: "asia" });
+    });
+
+    test("setEnv returns a Disposable that clears env on dispose", async () => {
+      const { createWorkflowJob } = await import("../configure/services/workflow/job");
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-dispose",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      {
+        using _env = workflowMock.setEnv({ STAGE: "test" });
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "test" });
+      }
+
+      expect(await captureEnv.trigger()).toEqual({});
     });
 
     test("reset clears env back to {}", async () => {
@@ -189,34 +203,33 @@ describe("mock", () => {
       expect(await captureEnv.trigger()).toEqual({});
     });
 
-    test("setEnv takes priority over WORKFLOW_TEST_ENV_KEY env var", async () => {
-      const { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } =
-        await import("../configure/services/workflow/job");
-      const captureEnv = createWorkflowJob({
-        name: "capture-env-priority",
-        body: (_input: undefined, ctx) => ctx.env,
+    describe("backward-compat: deprecated WORKFLOW_TEST_ENV_KEY env-var", () => {
+      test("setEnv takes priority over the env-var", async () => {
+        const { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } =
+          await import("../configure/services/workflow/job");
+        const captureEnv = createWorkflowJob({
+          name: "capture-env-compat-priority",
+          body: (_input: undefined, ctx) => ctx.env,
+        });
+
+        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
+        using _env = workflowMock.setEnv({ STAGE: "from-setenv" });
+
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "from-setenv" });
       });
 
-      using _envStub = stubEnvScoped(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
-      workflowMock.setEnv({ STAGE: "from-setenv" });
+      test("env-var is used when setEnv has not been called", async () => {
+        const { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } =
+          await import("../configure/services/workflow/job");
+        const captureEnv = createWorkflowJob({
+          name: "capture-env-compat-fallback",
+          body: (_input: undefined, ctx) => ctx.env,
+        });
 
-      expect(await captureEnv.trigger()).toEqual({ STAGE: "from-setenv" });
-    });
+        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
 
-    test("falls back to WORKFLOW_TEST_ENV_KEY env var when setEnv not called", async () => {
-      const { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } =
-        await import("../configure/services/workflow/job");
-      const captureEnv = createWorkflowJob({
-        name: "capture-env-fallback",
-        body: (_input: undefined, ctx) => ctx.env,
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
       });
-
-      using _envStub = stubEnvScoped(
-        WORKFLOW_TEST_ENV_KEY,
-        JSON.stringify({ STAGE: "from-env-var" }),
-      );
-
-      expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
     });
   });
 

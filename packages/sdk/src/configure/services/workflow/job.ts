@@ -57,11 +57,9 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
 }
 
 /**
- * Environment variable key historically consumed by `createWorkflowJob().trigger()`
- * to inject the `env` value passed to job bodies during local execution.
+ * Env-var fallback read by `.trigger()` when `workflowMock.setEnv()` is unset.
+ * Kept for backward compatibility.
  * @deprecated Use `workflowMock.setEnv()` from `@tailor-platform/sdk/vitest`.
- * Retained for backwards compatibility — `.trigger()` still falls back to this env
- * var when `workflowMock.setEnv()` has not been called.
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
@@ -112,9 +110,8 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
     {
       name: config.name,
       trigger: async (args?: unknown) => {
-        // Test-time only: `workflowMock.setEnv()` writes this slot; env-var
-        // fallback supports legacy `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)`.
-        // Shallow-copy to isolate the value from cross-trigger mutation.
+        // Read env from workflowMock.setEnv() with deprecated env-var fallback.
+        // Shallow-copy to isolate against cross-trigger mutation.
         const fromGlobal = (globalThis as { __tailorWorkflowTestEnv?: TailorEnv })
           .__tailorWorkflowTestEnv;
         const env = (
