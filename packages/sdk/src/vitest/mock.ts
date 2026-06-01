@@ -773,8 +773,16 @@ async function mockResolve(
   callback: (payload: unknown) => unknown | Promise<unknown>,
 ): Promise<void> {
   const state = getState();
-  const wrappedCallback = async (payload: unknown): Promise<unknown> => {
-    return platformSerialize(await callback(payload));
+  // Serialize the callback's return value across the JSON boundary while
+  // mirroring the platform's synchronous contract: a sync callback yields a
+  // plain value so handlers that invoke `callback(...)` without `await` (see
+  // docs/testing.md and the workflow template) observe the result directly;
+  // async callbacks surface as a Promise the handler can await.
+  const wrappedCallback = (payload: unknown): unknown => {
+    const output = callback(payload);
+    return output instanceof Promise
+      ? output.then((resolved) => platformSerialize(resolved))
+      : platformSerialize(output);
   };
   state.workflowCalls.push({ method: "resolve", args: [executionId, key, wrappedCallback] });
   if (state.resolveHandler) {
