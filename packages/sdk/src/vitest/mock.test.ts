@@ -190,6 +190,22 @@ describe("mock", () => {
       expect(await captureEnv.trigger()).toEqual({});
     });
 
+    test("nested setEnv scopes restore the outer env on inner dispose", async () => {
+      const { createWorkflowJob } = await import("../configure/services/workflow/job");
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-nested",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      using _outer = workflowMock.setEnv({ STAGE: "outer" });
+      expect(await captureEnv.trigger()).toEqual({ STAGE: "outer" });
+      {
+        using _inner = workflowMock.setEnv({ STAGE: "inner" });
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "inner" });
+      }
+      expect(await captureEnv.trigger()).toEqual({ STAGE: "outer" });
+    });
+
     test("reset clears env back to {}", async () => {
       const { createWorkflowJob } = await import("../configure/services/workflow/job");
       const captureEnv = createWorkflowJob({

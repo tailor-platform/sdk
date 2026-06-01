@@ -373,10 +373,11 @@ export const workflowMock = {
    */
   setEnv(env: TailorEnv): Disposable {
     const slot = globalThis as { __tailorWorkflowTestEnv?: TailorEnv };
+    const prev = slot.__tailorWorkflowTestEnv;
     slot.__tailorWorkflowTestEnv = { ...env };
     return {
       [Symbol.dispose]() {
-        slot.__tailorWorkflowTestEnv = undefined;
+        slot.__tailorWorkflowTestEnv = prev;
       },
     };
   },
