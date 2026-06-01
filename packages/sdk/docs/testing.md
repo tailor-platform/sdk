@@ -59,20 +59,33 @@ export default defineConfig({
 2. **Node.js globals removal** — Only globals available in the platform runtime are kept (whitelist). `Buffer`, `global`, `setImmediate`, `__dirname`, `__filename`, `performance`, and others are removed.
 3. **Platform API mocks** — `globalThis.tailordb`, `globalThis.tailor`, `TailorErrors`, `TailorErrorMessage`, `TailorDBFileError` are auto-injected with mock control objects for response configuration and call recording.
 
-### TailorDB Mock
+### Acquiring mocks with `using`
 
-The environment auto-injects a mock `tailordb.Client`. Use `tailordbMock` to configure responses and assert on executed queries:
+Each mock controller (`tailordbMock`, `workflowMock`, `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
 
 ```typescript
 import { tailordbMock } from "@tailor-platform/sdk/vitest";
 
-beforeEach(() => {
-  tailordbMock.reset();
-});
+test("...", () => {
+  using db = tailordbMock();
+  db.enqueueResult({ age: 30 });
+  // …
+}); // db.reset() runs automatically here
+```
+
+> **Requirements:** `using` requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose` (Node ≥ 20.4 — the SDK already targets Node ≥ 22, and Vitest's transformer downlevels the syntax for you). Acquisition itself does not reset state, so secrets seeded from `tailor.config.ts` survive until the scope is disposed.
+
+### TailorDB Mock
+
+The environment auto-injects a mock `tailordb.Client`. Use `tailordbMock()` to configure responses and assert on executed queries:
+
+```typescript
+import { tailordbMock } from "@tailor-platform/sdk/vitest";
 
 test("resolver queries the database", async () => {
+  using db = tailordbMock();
   // Order-based: stage rows for each upcoming query in one call
-  tailordbMock.enqueueResults(
+  db.enqueueResults(
     [], // BEGIN (empty result)
     [{ age: 30 }], // SELECT (one row)
     [], // COMMIT
@@ -81,8 +94,8 @@ test("resolver queries the database", async () => {
   const result = await resolver.body({ input: { email: "test@example.com" } });
 
   expect(result).toEqual({ oldAge: 30, newAge: 31 });
-  expect(tailordbMock.executedQueries).toHaveLength(3);
-  expect(tailordbMock.createdClients).toMatchObject([{ namespace: "tailordb" }]);
+  expect(db.executedQueries).toHaveLength(3);
+  expect(db.createdClients).toMatchObject([{ namespace: "tailordb" }]);
 });
 ```
 
@@ -94,30 +107,28 @@ Three response modes:
 
 ```typescript
 test("content-based mock", async () => {
-  tailordbMock.setQueryResolver((query) => {
+  using db = tailordbMock();
+  db.setQueryResolver((query) => {
     if (query.includes("SELECT")) return [{ id: "1", name: "test" }];
     return [];
   });
 
   const result = await resolver.body({ input: { userId: "1" } });
 
-  expect(tailordbMock.executedQueries[0].query).toContain("SELECT");
+  expect(db.executedQueries[0].query).toContain("SELECT");
 });
 ```
 
 ### Workflow Mock
 
-The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `workflowMock` to configure job responses:
+The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `workflowMock()` to configure job responses:
 
 ```typescript
 import { workflowMock } from "@tailor-platform/sdk/vitest";
 
-beforeEach(() => {
-  workflowMock.reset();
-});
-
 test("workflow triggers jobs", async () => {
-  workflowMock.setJobHandler((jobName, args) => {
+  using wf = workflowMock();
+  wf.setJobHandler((jobName, args) => {
     if (jobName === "validate-order") return { valid: true };
     if (jobName === "process-payment") return { txnId: "txn-1" };
     return null;
@@ -125,21 +136,23 @@ test("workflow triggers jobs", async () => {
 
   const result = await main({ input: { orderId: "o-1" } });
 
-  expect(workflowMock.triggeredJobs).toEqual([
+  expect(wf.triggeredJobs).toEqual([
     { jobName: "validate-order", args: { orderId: "o-1" } },
     { jobName: "process-payment", args: { orderId: "o-1" } },
   ]);
 });
 ```
 
-`workflowMock` also supports order-based responses:
+`workflowMock()` also supports order-based responses:
 
 ```typescript
+using wf = workflowMock();
+
 // Single response for the next triggerJobFunction call
-workflowMock.enqueueResult({ valid: true });
+wf.enqueueResult({ valid: true });
 
 // Multiple responses for subsequent calls (FIFO)
-workflowMock.enqueueResults({ valid: true }, { txnId: "txn-1" });
+wf.enqueueResults({ valid: true }, { txnId: "txn-1" });
 ```
 
 ### SecretManager Mock
@@ -147,18 +160,15 @@ workflowMock.enqueueResults({ valid: true }, { txnId: "txn-1" });
 ```typescript
 import { secretmanagerMock } from "@tailor-platform/sdk/vitest";
 
-beforeEach(() => secretmanagerMock.reset());
-
 test("reads secrets from vault", async () => {
-  secretmanagerMock.setSecrets({
+  using sm = secretmanagerMock();
+  sm.setSecrets({
     "my-vault": { API_KEY: "sk-123", DB_PASS: "secret" },
   });
 
   const key = await tailor.secretmanager.getSecret("my-vault", "API_KEY");
   expect(key).toBe("sk-123");
-  expect(secretmanagerMock.calls).toEqual([
-    { method: "getSecret", vault: "my-vault", name: "API_KEY" },
-  ]);
+  expect(sm.calls).toEqual([{ method: "getSecret", vault: "my-vault", name: "API_KEY" }]);
 });
 ```
 
@@ -167,10 +177,9 @@ test("reads secrets from vault", async () => {
 ```typescript
 import { authconnectionMock } from "@tailor-platform/sdk/vitest";
 
-beforeEach(() => authconnectionMock.reset());
-
 test("returns configured token", async () => {
-  authconnectionMock.setTokens({
+  using ac = authconnectionMock();
+  ac.setTokens({
     google: { access_token: "ya29.xxx", expires_in: 3600 },
   });
 
@@ -186,10 +195,9 @@ When no token is configured for a connection, it returns `{ access_token: "mock-
 ```typescript
 import { idpMock } from "@tailor-platform/sdk/vitest";
 
-beforeEach(() => idpMock.reset());
-
 test("resolver-based", async () => {
-  idpMock.setResolver((method, args) => {
+  using idp = idpMock();
+  idp.setResolver((method, args) => {
     if (method === "user") return { id: "u-1", name: "alice", disabled: false };
     return null; // falls back to defaults
   });
@@ -200,12 +208,13 @@ test("resolver-based", async () => {
 });
 
 test("queue-based", async () => {
-  idpMock.enqueueResult({ id: "u-1", name: "alice", disabled: false });
+  using idp = idpMock();
+  idp.enqueueResult({ id: "u-1", name: "alice", disabled: false });
 
   const client = new tailor.idp.Client({ namespace: "my-ns" });
   const user = await client.user("u-1");
   expect(user.name).toBe("alice");
-  expect(idpMock.calls).toMatchObject([{ method: "user", namespace: "my-ns" }]);
+  expect(idp.calls).toMatchObject([{ method: "user", namespace: "my-ns" }]);
 });
 ```
 
@@ -214,17 +223,16 @@ test("queue-based", async () => {
 ```typescript
 import { fileMock } from "@tailor-platform/sdk/vitest";
 
-beforeEach(() => fileMock.reset());
-
 test("mock file download", async () => {
-  fileMock.enqueueResult({
+  using file = fileMock();
+  file.enqueueResult({
     data: new Uint8Array([1, 2, 3]),
     metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc", lastUploadedAt: "" },
   });
 
   const result = await tailordb.file.download("ns", "Doc", "attachment", "r-1");
   expect(result.data).toEqual(new Uint8Array([1, 2, 3]));
-  expect(fileMock.calls).toMatchObject([{ method: "download", recordId: "r-1" }]);
+  expect(file.calls).toMatchObject([{ method: "download", recordId: "r-1" }]);
 });
 ```
 
@@ -232,7 +240,8 @@ For `openDownloadStream`, enqueue an iterable of `StreamValue` items — `metada
 
 ```typescript
 test("mock file download stream", async () => {
-  fileMock.enqueueResult([
+  using file = fileMock();
+  file.enqueueResult([
     {
       type: "metadata",
       metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc" },
@@ -254,17 +263,16 @@ test("mock file download stream", async () => {
 ```typescript
 import { iconvMock } from "@tailor-platform/sdk/vitest";
 
-beforeEach(() => iconvMock.reset());
-
 test("mock encoding conversion", () => {
-  iconvMock.setResolver((method, args) => {
+  using iconv = iconvMock();
+  iconv.setResolver((method, args) => {
     if (method === "decode") return "decoded-text";
     return null; // falls back to default empty string
   });
 
   const result = tailor.iconv.decode(new Uint8Array([0x48, 0x69]), "UTF-8");
   expect(result).toBe("decoded-text");
-  expect(iconvMock.calls).toMatchObject([{ method: "decode" }]);
+  expect(iconv.calls).toMatchObject([{ method: "decode" }]);
 });
 ```
 
@@ -279,7 +287,7 @@ export default defineConfig({
 });
 ```
 
-This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `secretmanagerMock.setSecrets()` in individual tests.
+This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `using sm = secretmanagerMock(); sm.setSecrets(...)` in individual tests — and because acquiring a mock does not reset state, the config-loaded secrets stay in place for tests that don't acquire `secretmanagerMock()`.
 
 ### Per-Project Configuration
 
@@ -451,21 +459,18 @@ describe("decrementUserAge", () => {
 
 #### Resolvers that resume a workflow
 
-Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `workflowMock.setResolveHandler` to drive the user-supplied callback and inspect `workflowMock.resolveCalls`:
+Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `workflowMock().setResolveHandler` to drive the user-supplied callback and inspect `resolveCalls`:
 
 ```typescript
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { workflowMock } from "@tailor-platform/sdk/vitest";
-import { beforeEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import resolver from "./resolveApproval";
 
 describe("resolveApproval resolver", () => {
-  beforeEach(() => {
-    workflowMock.reset();
-  });
-
   test("resolves approval with approved=true", async () => {
-    workflowMock.setResolveHandler((_executionId, _key, callback) => {
+    using wf = workflowMock();
+    wf.setResolveHandler((_executionId, _key, callback) => {
       const result = callback({ message: "Please approve order order-1", orderId: "order-1" });
       expect(result).toEqual({ approved: true });
     });
@@ -477,7 +482,7 @@ describe("resolveApproval resolver", () => {
     });
 
     expect(result).toEqual({ resolved: true });
-    expect(workflowMock.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
+    expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
   });
 });
 ```
@@ -588,32 +593,30 @@ describe("fulfillOrder", () => {
 
 #### Jobs that wait on approval
 
-`.wait()` calls delegate to `tailor.workflow.wait`. With the `tailor-runtime` environment active, use `workflowMock.setWaitHandler` to drive each branch and inspect `workflowMock.waitCalls`:
+`.wait()` calls delegate to `tailor.workflow.wait`. With the `tailor-runtime` environment active, use `workflowMock().setWaitHandler` to drive each branch and inspect `waitCalls`:
 
 ```typescript
 import { workflowMock } from "@tailor-platform/sdk/vitest";
-import { beforeEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { processWithApproval } from "./approval";
 
 describe("processWithApproval", () => {
-  beforeEach(() => {
-    workflowMock.reset();
-  });
-
   test("returns approved status when .wait() resolves positively", async () => {
-    workflowMock.setWaitHandler({ approved: true });
+    using wf = workflowMock();
+    wf.setWaitHandler({ approved: true });
 
     const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
 
     expect(result).toEqual({ orderId: "order-1", status: "approved" });
-    expect(workflowMock.waitCalls[0]).toEqual({
+    expect(wf.waitCalls[0]).toEqual({
       key: "approval",
       payload: { message: "Please approve order order-1", orderId: "order-1" },
     });
   });
 
   test("returns rejected status when .wait() resolves negatively", async () => {
-    workflowMock.setWaitHandler({ approved: false });
+    using wf = workflowMock();
+    wf.setWaitHandler({ approved: false });
 
     const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
 

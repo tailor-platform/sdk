@@ -1,16 +1,13 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { tailordbMock } from "@tailor-platform/sdk/vitest";
-import { beforeEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import resolver from "./getProduct";
 
 describe("getProduct resolver", () => {
-  beforeEach(() => {
-    tailordbMock.reset();
-  });
-
   test("returns product with category", async () => {
+    using db = tailordbMock();
     // Select product
-    tailordbMock.enqueueResult({
+    db.enqueueResult({
       id: "product-1",
       name: "Widget",
       price: 9.99,
@@ -21,7 +18,7 @@ describe("getProduct resolver", () => {
       updatedAt: null,
     });
     // Select category
-    tailordbMock.enqueueResult({ name: "Gadgets" });
+    db.enqueueResult({ name: "Gadgets" });
 
     const result = await resolver.body({
       input: { productId: "product-1" },
@@ -35,12 +32,13 @@ describe("getProduct resolver", () => {
       status: "ACTIVE",
       categoryName: "Gadgets",
     });
-    expect(tailordbMock.executedQueries).toHaveLength(2);
+    expect(db.executedQueries).toHaveLength(2);
   });
 
   test("returns product without category", async () => {
+    using db = tailordbMock();
     // Select product (no categoryId)
-    tailordbMock.enqueueResult({
+    db.enqueueResult({
       id: "product-2",
       name: "Standalone Item",
       price: 19.99,
@@ -63,6 +61,6 @@ describe("getProduct resolver", () => {
       status: "DRAFT",
       categoryName: null,
     });
-    expect(tailordbMock.executedQueries).toHaveLength(1);
+    expect(db.executedQueries).toHaveLength(1);
   });
 });

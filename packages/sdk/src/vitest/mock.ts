@@ -148,6 +148,35 @@ function getState(): MockState {
   return g[STATE_KEY] as MockState;
 }
 
+// ---------------------------------------------------------------------------
+// `using`-friendly factory wrapper
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps a singleton mock control object so it can be acquired with a `using`
+ * declaration. The returned factory hands back the shared control object
+ * augmented with `Symbol.dispose`; when the `using` scope exits, `reset()` is
+ * called automatically so the next test starts from a clean slate.
+ *
+ * Acquisition itself is side-effect free — it does NOT reset on entry — so
+ * state seeded outside the test (e.g. secrets loaded from `tailor.config.ts`)
+ * survives until the scope is disposed.
+ * @param mock - The control object to make disposable (must expose `reset()`)
+ * @returns A factory returning the control object augmented with `Symbol.dispose`
+ */
+function asUsingMock<T extends { reset(): void }>(mock: T): () => T & Disposable {
+  const disposable = mock as T & Disposable;
+  Object.defineProperty(disposable, Symbol.dispose, {
+    value(this: T): void {
+      this.reset();
+    },
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+  return () => disposable;
+}
+
 function createDefaultState(): MockState {
   return {
     queryResolver: () => [],
@@ -180,34 +209,7 @@ function createDefaultState(): MockState {
 // TailorDB Mock
 // ---------------------------------------------------------------------------
 
-/**
- * Mock control object for TailorDB operations.
- *
- * Automatically injected into `globalThis.tailordb` by the tailor-runtime environment.
- * Use this object to configure query responses and assert on executed queries.
- * @example
- * ```typescript
- * import { tailordbMock } from "@tailor-platform/sdk/vitest";
- *
- * beforeEach(() => tailordbMock.reset());
- *
- * test("content-based", () => {
- *   tailordbMock.setQueryResolver((query) => {
- *     if (query.includes("SELECT")) return [{ id: "1" }];
- *     return [];
- *   });
- * });
- *
- * test("order-based", () => {
- *   tailordbMock.enqueueResults(
- *     [],            // BEGIN (empty result)
- *     [{ age: 30 }], // SELECT (one row)
- *     [],            // COMMIT (empty result)
- *   );
- * });
- * ```
- */
-export const tailordbMock = {
+const tailordbMockObject = {
   /**
    * Set a fallback query resolver. Called when the result queue is empty.
    * @param resolver - Function that returns rows for a given query and params
@@ -253,7 +255,7 @@ export const tailordbMock = {
     return getState().createdClients;
   },
 
-  /** Reset all TailorDB mock state. Call in `beforeEach`. */
+  /** Reset all TailorDB mock state. Called automatically when the `using` scope exits. */
   reset(): void {
     const state = getState();
     state.queryResolver = () => [];
@@ -263,45 +265,43 @@ export const tailordbMock = {
   },
 };
 
+/**
+ * Acquire a disposable mock control object for TailorDB operations.
+ *
+ * Backed by the mock `tailordb.Client` auto-injected into `globalThis.tailordb`
+ * by the tailor-runtime environment. Acquire it with `using` so its state is
+ * reset automatically when the scope exits — use it to configure query
+ * responses and assert on executed queries.
+ * @returns Disposable TailorDB mock control object
+ * @example
+ * ```typescript
+ * import { tailordbMock } from "@tailor-platform/sdk/vitest";
+ *
+ * test("content-based", () => {
+ *   using db = tailordbMock();
+ *   db.setQueryResolver((query) => {
+ *     if (query.includes("SELECT")) return [{ id: "1" }];
+ *     return [];
+ *   });
+ * }); // db.reset() runs here automatically
+ *
+ * test("order-based", () => {
+ *   using db = tailordbMock();
+ *   db.enqueueResults(
+ *     [],            // BEGIN (empty result)
+ *     [{ age: 30 }], // SELECT (one row)
+ *     [],            // COMMIT (empty result)
+ *   );
+ * });
+ * ```
+ */
+export const tailordbMock = asUsingMock(tailordbMockObject);
+
 // ---------------------------------------------------------------------------
 // Workflow Mock
 // ---------------------------------------------------------------------------
 
-/**
- * Mock control object for workflow operations.
- *
- * Automatically injected into `globalThis.tailor.workflow` by the tailor-runtime environment.
- * @example
- * ```typescript
- * import { workflowMock } from "@tailor-platform/sdk/vitest";
- *
- * beforeEach(() => workflowMock.reset());
- *
- * test("job handler", () => {
- *   workflowMock.setJobHandler((jobName, args) => {
- *     if (jobName === "validate") return { valid: true };
- *     return null;
- *   });
- * });
- *
- * test("wait point", () => {
- *   workflowMock.setWaitHandler(() => ({ approved: true }));
- *   // …
- *   expect(workflowMock.waitCalls).toEqual([{ key: "approval", payload: undefined }]);
- * });
- *
- * test("resolve point", () => {
- *   workflowMock.setResolveHandler((_executionId, _key, callback) =>
- *     callback({ approved: true }),
- *   );
- *   // …
- *   expect(workflowMock.resolveCalls).toEqual([
- *     { executionId: "mock-execution-id", key: "approval" },
- *   ]);
- * });
- * ```
- */
-export const workflowMock = {
+const workflowMockObject = {
   /**
    * Set a fallback job handler. Called when the result queue is empty.
    * @param handler - Function that returns a result for a given job name and args
@@ -396,7 +396,7 @@ export const workflowMock = {
       .map((c) => ({ executionId: c.args[0] as string, key: c.args[1] as string }));
   },
 
-  /** Reset all workflow mock state. Call in `beforeEach`. */
+  /** Reset all workflow mock state. Called automatically when the `using` scope exits. */
   reset(): void {
     const state = getState();
     state.jobHandler = () => null;
@@ -409,12 +409,51 @@ export const workflowMock = {
   },
 };
 
+/**
+ * Acquire a disposable mock control object for workflow operations.
+ *
+ * Backed by `tailor.workflow` auto-injected into globalThis by the
+ * tailor-runtime environment. Acquire it with `using` so its state is reset
+ * automatically when the scope exits.
+ * @returns Disposable workflow mock control object
+ * @example
+ * ```typescript
+ * import { workflowMock } from "@tailor-platform/sdk/vitest";
+ *
+ * test("job handler", () => {
+ *   using wf = workflowMock();
+ *   wf.setJobHandler((jobName, args) => {
+ *     if (jobName === "validate") return { valid: true };
+ *     return null;
+ *   });
+ * }); // wf.reset() runs here automatically
+ *
+ * test("wait point", () => {
+ *   using wf = workflowMock();
+ *   wf.setWaitHandler(() => ({ approved: true }));
+ *   // …
+ *   expect(wf.waitCalls).toEqual([{ key: "approval", payload: undefined }]);
+ * });
+ *
+ * test("resolve point", () => {
+ *   using wf = workflowMock();
+ *   wf.setResolveHandler((_executionId, _key, callback) =>
+ *     callback({ approved: true }),
+ *   );
+ *   // …
+ *   expect(wf.resolveCalls).toEqual([
+ *     { executionId: "mock-execution-id", key: "approval" },
+ *   ]);
+ * });
+ * ```
+ */
+export const workflowMock = asUsingMock(workflowMockObject);
+
 // ---------------------------------------------------------------------------
 // SecretManager Mock
 // ---------------------------------------------------------------------------
 
-/** Mock control for `tailor.secretmanager` — secret store and call recording. */
-export const secretmanagerMock = {
+const secretmanagerMockObject = {
   setSecrets(secrets: Record<string, Record<string, string>>): void {
     getState().secretStore = secrets;
   },
@@ -430,12 +469,29 @@ export const secretmanagerMock = {
   },
 };
 
+/**
+ * Acquire a disposable mock control for `tailor.secretmanager` — secret store
+ * and call recording. Acquire it with `using` so its state is reset
+ * automatically when the scope exits.
+ * @returns Disposable SecretManager mock control object
+ * @example
+ * ```typescript
+ * import { secretmanagerMock } from "@tailor-platform/sdk/vitest";
+ *
+ * test("reads secrets from vault", async () => {
+ *   using sm = secretmanagerMock();
+ *   sm.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
+ *   // …
+ * });
+ * ```
+ */
+export const secretmanagerMock = asUsingMock(secretmanagerMockObject);
+
 // ---------------------------------------------------------------------------
 // AuthConnection Mock
 // ---------------------------------------------------------------------------
 
-/** Mock control for `tailor.authconnection` — token store and call recording. */
-export const authconnectionMock = {
+const authconnectionMockObject = {
   setTokens(tokens: Record<string, unknown>): void {
     getState().authTokens = tokens;
   },
@@ -451,12 +507,29 @@ export const authconnectionMock = {
   },
 };
 
+/**
+ * Acquire a disposable mock control for `tailor.authconnection` — token store
+ * and call recording. Acquire it with `using` so its state is reset
+ * automatically when the scope exits.
+ * @returns Disposable AuthConnection mock control object
+ * @example
+ * ```typescript
+ * import { authconnectionMock } from "@tailor-platform/sdk/vitest";
+ *
+ * test("returns configured token", async () => {
+ *   using ac = authconnectionMock();
+ *   ac.setTokens({ google: { access_token: "ya29.xxx" } });
+ *   // …
+ * });
+ * ```
+ */
+export const authconnectionMock = asUsingMock(authconnectionMockObject);
+
 // ---------------------------------------------------------------------------
 // IDP Mock
 // ---------------------------------------------------------------------------
 
-/** Mock control for `tailor.idp` — IDP client responses and call recording. */
-export const idpMock = {
+const idpMockObject = {
   setResolver(resolver: IdpResolver): void {
     getState().idpResolver = resolver;
   },
@@ -493,12 +566,32 @@ export const idpMock = {
   },
 };
 
+/**
+ * Acquire a disposable mock control for `tailor.idp` — IDP client responses and
+ * call recording. Acquire it with `using` so its state is reset automatically
+ * when the scope exits.
+ * @returns Disposable IDP mock control object
+ * @example
+ * ```typescript
+ * import { idpMock } from "@tailor-platform/sdk/vitest";
+ *
+ * test("resolver-based", async () => {
+ *   using idp = idpMock();
+ *   idp.setResolver((method) => {
+ *     if (method === "user") return { id: "u-1", name: "alice", disabled: false };
+ *     return null;
+ *   });
+ *   // …
+ * });
+ * ```
+ */
+export const idpMock = asUsingMock(idpMockObject);
+
 // ---------------------------------------------------------------------------
 // File Mock
 // ---------------------------------------------------------------------------
 
-/** Mock control for `tailordb.file` — file operation responses and call recording. */
-export const fileMock = {
+const fileMockObject = {
   setResolver(resolver: FileResolver): void {
     getState().fileResolver = resolver;
   },
@@ -536,12 +629,29 @@ export const fileMock = {
   },
 };
 
+/**
+ * Acquire a disposable mock control for `tailordb.file` — file operation
+ * responses and call recording. Acquire it with `using` so its state is reset
+ * automatically when the scope exits.
+ * @returns Disposable File mock control object
+ * @example
+ * ```typescript
+ * import { fileMock } from "@tailor-platform/sdk/vitest";
+ *
+ * test("mock file download", async () => {
+ *   using file = fileMock();
+ *   file.enqueueResult({ data: new Uint8Array([1, 2, 3]), metadata: { ... } });
+ *   // …
+ * });
+ * ```
+ */
+export const fileMock = asUsingMock(fileMockObject);
+
 // ---------------------------------------------------------------------------
 // Iconv Mock
 // ---------------------------------------------------------------------------
 
-/** Mock control for `tailor.iconv` — encoding call recording. */
-export const iconvMock = {
+const iconvMockObject = {
   setResolver(resolver: IconvResolver): void {
     getState().iconvResolver = resolver;
   },
@@ -556,6 +666,24 @@ export const iconvMock = {
     state.iconvCalls.length = 0;
   },
 };
+
+/**
+ * Acquire a disposable mock control for `tailor.iconv` — encoding call
+ * recording. Acquire it with `using` so its state is reset automatically when
+ * the scope exits.
+ * @returns Disposable Iconv mock control object
+ * @example
+ * ```typescript
+ * import { iconvMock } from "@tailor-platform/sdk/vitest";
+ *
+ * test("mock encoding conversion", () => {
+ *   using iconv = iconvMock();
+ *   iconv.setResolver((method) => (method === "decode" ? "decoded-text" : null));
+ *   // …
+ * });
+ * ```
+ */
+export const iconvMock = asUsingMock(iconvMockObject);
 
 // ---------------------------------------------------------------------------
 // Mock Client implementation (injected as globalThis.tailordb.Client)

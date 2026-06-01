@@ -11,7 +11,6 @@ import { cleanupMocks, idpMock, injectMocks } from "@/vitest/mock";
 describe("@tailor-platform/sdk/runtime/idp", () => {
   beforeEach(() => {
     injectMocks(globalThis);
-    idpMock.reset();
   });
 
   afterEach(() => {
@@ -19,26 +18,29 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   });
 
   test("Client.user forwards args and namespace", async () => {
-    idpMock.enqueueResult({ id: "u-1", name: "alice", disabled: false });
+    using idpM = idpMock();
+    idpM.enqueueResult({ id: "u-1", name: "alice", disabled: false });
 
     const client = new idp.Client({ namespace: "ns" });
     const result = await client.user("u-1");
 
     expect(result).toEqual({ id: "u-1", name: "alice", disabled: false });
-    expect(idpMock.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
+    expect(idpM.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
   });
 
   test("Client.userByName forwards", async () => {
-    idpMock.enqueueResult({ id: "u-1", name: "alice", disabled: false });
+    using idpM = idpMock();
+    idpM.enqueueResult({ id: "u-1", name: "alice", disabled: false });
 
     const client = new idp.Client({ namespace: "ns" });
     await client.userByName("alice");
 
-    expect(idpMock.calls).toEqual([{ method: "userByName", args: ["alice"], namespace: "ns" }]);
+    expect(idpM.calls).toEqual([{ method: "userByName", args: ["alice"], namespace: "ns" }]);
   });
 
   test("Client.users forwards options", async () => {
-    idpMock.enqueueResult({
+    using idpM = idpMock();
+    idpM.enqueueResult({
       users: [{ id: "u-1", name: "alice", disabled: false }],
       nextPageToken: null,
       totalCount: 1,
@@ -48,11 +50,12 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
     const result = await client.users({ first: 10 });
 
     expect(result.totalCount).toBe(1);
-    expect(idpMock.calls).toEqual([{ method: "users", args: [{ first: 10 }], namespace: "ns" }]);
+    expect(idpM.calls).toEqual([{ method: "users", args: [{ first: 10 }], namespace: "ns" }]);
   });
 
   test("Client.createUser / updateUser / deleteUser forward", async () => {
-    idpMock.enqueueResults(
+    using idpM = idpMock();
+    idpM.enqueueResults(
       { id: "u-2", name: "bob", disabled: false },
       { id: "u-2", name: "bob2", disabled: false },
       true,
@@ -64,10 +67,11 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
     const removed = await client.deleteUser("u-2");
 
     expect(removed).toBe(true);
-    expect(idpMock.calls.map((c) => c.method)).toEqual(["createUser", "updateUser", "deleteUser"]);
+    expect(idpM.calls.map((c) => c.method)).toEqual(["createUser", "updateUser", "deleteUser"]);
   });
 
   test("Client.sendPasswordResetEmail forwards", async () => {
+    using idpM = idpMock();
     const client = new idp.Client({ namespace: "ns" });
     const ok = await client.sendPasswordResetEmail({
       userId: "u-1",
@@ -75,7 +79,7 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
     });
 
     expect(ok).toBe(true);
-    expect(idpMock.calls).toEqual([
+    expect(idpM.calls).toEqual([
       {
         method: "sendPasswordResetEmail",
         args: [{ userId: "u-1", redirectUri: "https://example.com/reset" }],

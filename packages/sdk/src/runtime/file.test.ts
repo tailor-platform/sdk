@@ -8,7 +8,6 @@ import { cleanupMocks, fileMock, injectMocks } from "@/vitest/mock";
 describe("@tailor-platform/sdk/runtime/file", () => {
   beforeEach(() => {
     injectMocks(globalThis);
-    fileMock.reset();
   });
 
   afterEach(() => {
@@ -16,12 +15,13 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("upload forwards args and records the call", async () => {
-    fileMock.enqueueResult({ metadata: { fileSize: 4, sha256sum: "abc" } });
+    using fileM = fileMock();
+    fileM.enqueueResult({ metadata: { fileSize: 4, sha256sum: "abc" } });
 
     const result = await file.upload("ns", "Doc", "blob", "rec-1", new Uint8Array([1, 2, 3, 4]));
 
     expect(result).toEqual({ metadata: { fileSize: 4, sha256sum: "abc" } });
-    expect(fileMock.calls).toEqual([
+    expect(fileM.calls).toEqual([
       {
         method: "upload",
         namespace: "ns",
@@ -33,7 +33,8 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("download forwards and returns the queued payload", async () => {
-    fileMock.enqueueResult({
+    using fileM = fileMock();
+    fileM.enqueueResult({
       data: new Uint8Array([9, 9]),
       metadata: {
         contentType: "application/octet-stream",
@@ -46,11 +47,12 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     const result = await file.download("ns", "Doc", "blob", "rec-1");
 
     expect(result.data).toEqual(new Uint8Array([9, 9]));
-    expect(fileMock.calls[0]?.method).toBe("download");
+    expect(fileM.calls[0]?.method).toBe("download");
   });
 
   test("downloadAsBase64 forwards", async () => {
-    fileMock.enqueueResult({
+    using fileM = fileMock();
+    fileM.enqueueResult({
       data: "AQID",
       metadata: {
         contentType: "application/octet-stream",
@@ -63,11 +65,12 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     const result = await file.downloadAsBase64("ns", "Doc", "blob", "rec-1");
 
     expect(result.data).toBe("AQID");
-    expect(fileMock.calls[0]?.method).toBe("downloadAsBase64");
+    expect(fileM.calls[0]?.method).toBe("downloadAsBase64");
   });
 
   test("getMetadata forwards", async () => {
-    fileMock.enqueueResult({
+    using fileM = fileMock();
+    fileM.enqueueResult({
       contentType: "image/png",
       fileSize: 100,
       sha256sum: "x",
@@ -77,13 +80,14 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     const meta = await file.getMetadata("ns", "Doc", "blob", "rec-1");
 
     expect(meta.contentType).toBe("image/png");
-    expect(fileMock.calls[0]?.method).toBe("getMetadata");
+    expect(fileM.calls[0]?.method).toBe("getMetadata");
   });
 
   test("delete forwards (re-exported from deleteFile)", async () => {
+    using fileM = fileMock();
     await file.delete("ns", "Doc", "blob", "rec-1");
 
-    expect(fileMock.calls).toEqual([
+    expect(fileM.calls).toEqual([
       {
         method: "delete",
         namespace: "ns",
@@ -95,6 +99,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("openDownloadStream forwards and yields StreamValue chunks", async () => {
+    using fileM = fileMock();
     const sequence: file.StreamValue[] = [
       {
         type: "metadata",
@@ -104,7 +109,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
       { type: "chunk", data: new Uint8Array([2]), position: 1 },
       { type: "complete" },
     ];
-    fileMock.enqueueResult(sequence);
+    fileM.enqueueResult(sequence);
 
     const stream = await file.openDownloadStream("ns", "Doc", "blob", "rec-1");
 
@@ -114,7 +119,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     }
 
     expect(chunks).toEqual(sequence);
-    expect(fileMock.calls[0]?.method).toBe("openDownloadStream");
+    expect(fileM.calls[0]?.method).toBe("openDownloadStream");
   });
 
   test("TailorDBFileError structurally matches globalThis class", () => {

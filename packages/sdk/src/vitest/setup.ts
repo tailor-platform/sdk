@@ -100,7 +100,7 @@ export function extractVaultStore(secrets: unknown): Record<string, Record<strin
  * Returns a vault store on success, or `null` on any failure (missing config,
  * import failure, missing/invalid secrets shape). Errors are swallowed so a
  * misconfigured project still boots — the user can set secrets manually via
- * `secretmanagerMock.setSecrets()`.
+ * `secretmanagerMock().setSecrets()`.
  * @param configPath - Absolute path to tailor.config.ts
  * @returns Vault store keyed by vault name, or null if unavailable
  */
@@ -127,7 +127,9 @@ beforeAll(async () => {
 
   const store = await loadSecretsFromConfig(configPath);
   if (store) {
-    secretmanagerMock.setSecrets(store);
+    // Acquire without `using`: this is a one-time global seed that must persist
+    // across tests, so we deliberately do not dispose (which would reset it).
+    secretmanagerMock().setSecrets(store);
   }
 });
 
