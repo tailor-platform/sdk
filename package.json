@@ -35,7 +35,7 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.12.4",
     "knip": "6.14.2",
-    "lefthook": "2.1.8",
+    "lefthook": "2.1.9",
     "oxfmt": "0.52.0",
     "pkg-pr-new": "0.0.75",
     "publint": "0.3.21",
