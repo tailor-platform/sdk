@@ -1,16 +1,7 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "outDir": "dist",
-    "types": ["node"]
+    "types": ["node", "vitest/globals"]
   },
-  "include": ["**/*.ts"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "problems/*/work",
-    "problems/*/solution",
-    "problems/*/scaffold"
-  ]
+  "include": ["src/**/*.ts"]
 }

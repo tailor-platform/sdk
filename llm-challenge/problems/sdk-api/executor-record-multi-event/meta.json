@@ -1,0 +1,4 @@
+{
+  "id": "executor-record-multi-event",
+  "title": "Handle multiple record events in one executor"
+}

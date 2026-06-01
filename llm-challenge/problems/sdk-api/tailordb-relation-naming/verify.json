@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "customer-and-order-domain-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "customer.*order|order.*customer",
+      "flags": "is",
+      "description": "source includes both customer and sales order domain concepts"
+    },
+    {
+      "id": "related-orders-name-present",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "orders|salesOrders|customerOrders",
+      "flags": "i",
+      "description": "source exposes a clearly named related-order collection"
+    }
+  ]
+}
