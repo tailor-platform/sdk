@@ -351,29 +351,13 @@ async function validateAndDetectMigrations(
 }
 
 /**
- * Reconcile the on-remote migration label with the working tree's latest
- * migration number for each namespace.
+ * Force each namespace's `sdk-migration` label to the working tree's latest
+ * migration number after a create-update apply.
  *
- * Runs after every create-update apply once the schema has been deployed. Two
- * cases motivate it:
- *
- * 1. **Initial baseline.** The initial snapshot (`0000`) is applied through the
- *    normal create-update flow, not the pending-migration flow (it has no diff
- *    and is never reported as pending). Without this reconciliation the very
- *    first deploy after `migration generate` would leave the namespace with no
- *    `sdk-migration` label, forcing the redundant apply/generate/apply dance to
- *    establish the baseline.
- * 2. **`--no-schema-check` drift guard.** That flag skips the local/remote
- *    snapshot drift checks, so if the label were left untouched it could drift
- *    past the working tree's latest migration (e.g. when checking out an older
- *    revision and re-deploying). A subsequent run would then reconstruct the
- *    expected snapshot at a label that no longer exists in the working tree,
- *    triggering a false drift error.
- *
- * Always force `label = working_tree_max` regardless of the previous label so
- * the invariant `label <= working_tree_max` is preserved. Namespaces that have
- * no migration files yet (no `0000` baseline) are skipped so we never record a
- * phantom label.
+ * This records the initial baseline (`0000`), which is deployed via the normal
+ * flow and never bumps the label itself, and keeps the label `<= working_tree_max`
+ * after a `--no-schema-check` deploy from an older revision. Namespaces without a
+ * baseline are skipped so no phantom label is written.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
@@ -384,7 +368,6 @@ async function reconcileMigrationLabels(
   namespacesWithMigrations: NamespaceWithMigrations[],
 ): Promise<void> {
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
-    // No baseline generated yet — nothing to record.
     if (getMigrationFiles(migrationsDir).length === 0) {
       continue;
     }
@@ -589,17 +572,9 @@ export async function applyTailorDB(
       );
     }
 
-    // Reconcile the migration label to the working tree's latest migration once
-    // the schema is deployed. This is required to:
-    //   - establish the initial baseline (`0000`) on the first apply — it is
-    //     deployed via the normal flow above and never bumps the label itself,
-    //     so without this the namespace would be left unlabelled (see
-    //     reconcileMigrationLabels); and
-    //   - keep the label `<= working_tree_max` after a `--no-schema-check`
-    //     deploy from an older revision.
-    // When pending migrations ran, each one already bumped the label to its own
-    // number, so reconciliation is skipped to avoid masking a migration that was
-    // intentionally left pending (e.g. a missing script).
+    // Skip when pending migrations ran: each already bumped the label, and
+    // re-pinning to working_tree_max could mask one left intentionally pending
+    // (e.g. a missing script). --no-schema-check always re-pins to repair drift.
     if (
       namespacesWithMigrations.length > 0 &&
       (migrationContext.noSchemaCheck || pendingMigrations.length === 0)
