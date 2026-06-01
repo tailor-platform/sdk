@@ -18,7 +18,6 @@ Unit-test entrypoints exposed by the SDK:
 Helpers under `@tailor-platform/sdk/test`:
 
 - `unauthenticatedTailorUser` — default `user` value for resolver contexts
-- `WORKFLOW_TEST_ENV_KEY` — env key consumed by `.trigger()` when run locally
 
 Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
@@ -626,18 +625,18 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain without any mocking, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Set `WORKFLOW_TEST_ENV_KEY` first so triggered jobs see the workflow env:
+To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `workflowMock.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
 
 ```typescript
-import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => workflowMock.reset());
 
   test("mainJob.trigger() executes all jobs", async () => {
-    vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({}));
+    workflowMock.setEnv({ PAYMENT_GATEWAY: "stripe" });
 
     const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
 
