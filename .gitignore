@@ -33,7 +33,6 @@ coverage/
 
 # Tailor Platform SDK
 **/.tailor-sdk/**
-.turbo
 tailor.d.ts
 !packages/create-sdk/templates/*/tailor.d.ts
 
