@@ -1,4 +1,5 @@
 import { ScalarType } from "@bufbuild/protobuf";
+import { nestedMessage } from "./proto-reflect";
 import type { DescEnum, DescField, DescMessage, DescMethodUnary } from "@bufbuild/protobuf";
 
 export interface InspectMessageJson {
@@ -100,13 +101,6 @@ export function describeFieldType(field: DescField): string {
   }
 }
 
-function nestedMessageForInspect(field: DescField): DescMessage | undefined {
-  if (field.fieldKind === "message") return field.message;
-  if (field.fieldKind === "list" && field.listKind === "message") return field.message;
-  if (field.fieldKind === "map" && field.mapKind === "message") return field.message;
-  return undefined;
-}
-
 function fieldToJson(field: DescField, visited: Set<DescMessage>): InspectFieldJson {
   const json: InspectFieldJson = {
     name: field.localName,
@@ -123,7 +117,7 @@ function fieldToJson(field: DescField, visited: Set<DescMessage>): InspectFieldJ
     json.enumValues = fieldEnum.values.map((v) => v.name);
   }
 
-  const nested = nestedMessageForInspect(field);
+  const nested = nestedMessage(field);
   if (nested && !visited.has(nested)) {
     visited.add(nested);
     json.message = {
@@ -161,7 +155,7 @@ function renderFieldText(field: DescField, indent: string, visited: Set<DescMess
     lines.push(`${indent}  values: ${values}`);
   }
 
-  const nested = nestedMessageForInspect(field);
+  const nested = nestedMessage(field);
   if (nested && !visited.has(nested)) {
     visited.add(nested);
     for (const sub of nested.fields) {
