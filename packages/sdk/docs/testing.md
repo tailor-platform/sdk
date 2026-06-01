@@ -473,7 +473,7 @@ describe("registerUser", () => {
 });
 ```
 
-Stage results with `enqueueResults(...)` (FIFO, one array per executed query) or `setQueryResolver((query) => rows)` (by compiled SQL). `mock.db.transaction().execute(...)` works too — `begin`/`commit` are no-ops, so they never show up in `executedQueries` and don't affect the counts. For code that receives a `Transaction<DB>` directly (e.g. `command(trx, input)`), pass `mock.trx` — the same instance typed as a transaction.
+Stage results with `enqueueResults(...)` (FIFO, one array per executed query) or `setQueryResolver((query) => rows)` (by compiled SQL). `mock.db.transaction().execute(...)` works too — `begin`/`commit` are no-ops, so they never show up in `executedQueries` and don't affect the counts. For code that receives a `Transaction<DB>` directly (e.g. `command(trx, input)`), call it inside `mock.db.transaction().execute((trx) => command(trx, input))` to hand it a real transaction.
 
 **Use when:** code accepts a `Transaction<DB>` and chains Kysely calls, and you want to assert query intent and operation counts while staging results — without a database. (`streamQuery` is not supported.)
 

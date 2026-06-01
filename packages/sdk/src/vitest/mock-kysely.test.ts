@@ -73,18 +73,6 @@ describe("createMockKysely", () => {
     expect(mock.executedQueries).toHaveLength(2);
   });
 
-  test("exposes the instance as a Transaction for code that receives one directly", async () => {
-    const mock = createMockKysely<Database>();
-
-    // Mirrors `command(trx, input)` style code that takes a Transaction<DB>.
-    const insertUser = (trx: typeof mock.trx) =>
-      trx.insertInto("User").values({ id: "1", email: "a@b.com", age: 30 }).execute();
-
-    await insertUser(mock.trx);
-
-    expect(mock.inserts).toHaveLength(1);
-  });
-
   test("drains enqueued results in FIFO order across queries", async () => {
     const mock = createMockKysely<Database>();
     mock.enqueueResults(

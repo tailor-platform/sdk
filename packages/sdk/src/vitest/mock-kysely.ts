@@ -1,12 +1,9 @@
 /**
  * Kysely-layer mock for unit testing.
  *
- * Builds a real Kysely instance on top of a mock driver that records every
- * executed query and returns staged results. Because the Postgres adapter and
- * query compiler are the same ones {@link https://github.com/tailor-platform | TailordbDialect}
- * uses, queries compile to production-identical SQL, every Kysely method works,
- * and result types are preserved — unlike a fluent-chain stub. No
- * `tailor-runtime` environment is required.
+ * Builds a real Kysely instance backed by a mock driver: queries compile and
+ * type-check normally, but execution returns staged rows and records every
+ * query for assertions.
  */
 
 import {
@@ -15,17 +12,16 @@ import {
   type Dialect,
   type Driver,
   Kysely,
+  type OperationNodeKind,
   PostgresAdapter,
   PostgresIntrospector,
   PostgresQueryCompiler,
   type QueryResult,
 } from "kysely";
-import type { Transaction } from "../kysely";
 
 /** A single statement executed against the mock, captured in order. */
 export interface ExecutedQuery {
-  // Kysely root operation node kind, e.g. "InsertQueryNode" / "UpdateQueryNode".
-  kind: string;
+  kind: OperationNodeKind;
   sql: string;
   parameters: readonly unknown[];
 }
@@ -35,11 +31,7 @@ type QueryResolver = (query: CompiledQuery) => MockRow[] | undefined;
 
 /** Controls and assertions for a {@link createMockKysely} instance. */
 export interface MockKysely<DB> {
-  // The mock Kysely instance. Use it directly or via `db.transaction().execute(...)`.
   db: Kysely<DB>;
-  // The same instance typed as a Transaction, for code that receives a
-  // transaction directly, e.g. `command(trx, input)`.
-  trx: Transaction<DB>;
   executedQueries: ExecutedQuery[];
   selects: ExecutedQuery[];
   inserts: ExecutedQuery[];
@@ -114,21 +106,15 @@ class MockDriver implements Driver {
   async destroy(): Promise<void> {}
 }
 
-function byKind(state: MockState, kind: string): ExecutedQuery[] {
+function byKind(state: MockState, kind: OperationNodeKind): ExecutedQuery[] {
   return state.executed.filter((query) => query.kind === kind);
 }
 
 /**
- * Create a mock Kysely instance for unit-testing database-access logic without
- * a running TailorDB. Pass the namespace schema as the type argument so the
- * returned `db` is fully typed, e.g. `createMockKysely<Namespace["main-db"]>()`.
- *
- * Stage the rows each query returns with {@link MockKysely.enqueueResults} (FIFO)
- * or {@link MockKysely.setQueryResolver} (by compiled SQL). Assert on how many
- * times each operation ran via the `inserts` / `updates` / `deletes` / `selects`
- * getters, or inspect every statement via `executedQueries`.
- * @returns The mock `db`, recorded queries, per-operation getters, result
- * staging, and `reset`.
+ * Create a mock Kysely instance for unit-testing code that runs Kysely queries.
+ * Pass the namespace schema as the type argument, e.g.
+ * `createMockKysely<Namespace["main-db"]>()`.
+ * @returns A {@link MockKysely} with the mock `db`, recorded queries, and result staging.
  */
 export function createMockKysely<DB = Record<string, never>>(): MockKysely<DB> {
   const state = new MockState();
@@ -142,7 +128,6 @@ export function createMockKysely<DB = Record<string, never>>(): MockKysely<DB> {
 
   return {
     db: kysely,
-    trx: kysely as unknown as Transaction<DB>,
     get executedQueries() {
       return state.executed;
     },
