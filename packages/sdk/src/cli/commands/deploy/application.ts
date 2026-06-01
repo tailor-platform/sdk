@@ -206,30 +206,28 @@ export async function planApplication(context: PlanContext) {
   });
 
   if (forRemoval) {
-    const ownedAppNames = new Set<string>();
-    if (existingApplications.some((app) => app.name === application.name)) {
-      ownedAppNames.add(application.name);
-    }
-    if (application.id) {
-      const others = existingApplications.filter((app) => !ownedAppNames.has(app.name));
-      const owned = await Promise.all(
-        others.map(async (app) => {
-          const labels = await fetchAppLabels(client, workspaceId, app.name);
-          return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
-        }),
-      );
-      for (const name of owned) {
-        if (name) ownedAppNames.add(name);
+    // Only delete apps we can prove we own. Ownership is decided by label
+    // match (sdk-app-id when an id is configured, sdk-name otherwise) via
+    // isOwnedByApp — the same check every other resource type uses.
+    // Matching by name alone is unsafe: in a shared workspace a different
+    // user's app may carry the same name, and removing it by name would
+    // delete a resource we don't manage.
+    const owned = await Promise.all(
+      existingApplications.map(async (app) => {
+        const labels = await fetchAppLabels(client, workspaceId, app.name);
+        return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
+      }),
+    );
+    for (const name of owned) {
+      if (name) {
+        changeSet.deletes.push({
+          name,
+          request: {
+            workspaceId,
+            applicationName: name,
+          },
+        });
       }
-    }
-    for (const name of ownedAppNames) {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          applicationName: name,
-        },
-      });
     }
     return changeSet;
   }
