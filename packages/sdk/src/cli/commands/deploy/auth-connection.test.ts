@@ -53,8 +53,9 @@ function createMockClient(connectionNames: string[]): OperatorClient {
       connections: connectionNames.map((name) => oauth2Connection(name)),
       nextPageToken: "",
     }),
-    // getMetadata is intentionally not provided: the platform does not support
-    // metadata for auth connections, so planAuthConnections must never call it.
+    // getMetadata is stubbed to throw InvalidArgument (mirroring the platform, which
+    // does not support metadata for auth connections). planAuthConnections must never
+    // call it; the "does not call getMetadata" test asserts exactly that.
     getMetadata: vi.fn().mockImplementation(() => {
       throw new ConnectError("metadata not supported", Code.InvalidArgument);
     }),
