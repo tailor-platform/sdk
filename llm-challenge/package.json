@@ -1,23 +1,18 @@
 {
   "name": "llm-challenge",
   "private": true,
-  "description": "Challenge problems for evaluating LLM implementations with @tailor-platform/sdk",
-  "license": "MIT",
   "type": "module",
   "scripts": {
-    "challenge": "tsx runner/run.ts",
-    "challenge:verify-solution": "tsx runner/run.ts --all --use-solution",
-    "challenge:solve": "tsx runner/run.ts --all --solve",
-    "challenge:analyze": "tsx runner/analyze.ts",
-    "test:runner": "vitest run --config vitest.runner.config.ts",
+    "challenge": "tsx src/cli.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "typecheck:go": "tsgo"
-  },
-  "dependencies": {
-    "@tailor-platform/sdk": "workspace:^"
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix"
   },
   "devDependencies": {
     "@types/node": "24.12.4",
+    "oxlint": "1.66.0",
+    "oxlint-tsgolint": "0.23.0",
     "tsx": "4.22.3",
     "typescript": "5.9.3",
     "vitest": "4.1.7"

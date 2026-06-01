@@ -51,7 +51,9 @@ tailor.d.ts
 !.claude/skills/e2e-setup/
 CLAUDE.local.md
 
-# LLM Challenge
-llm-challenge/results/
-llm-challenge/problems/*/work
 .claude/tmp/
+
+# llm-challenge artifacts
+llm-challenge/results/
+llm-challenge/.cache/
+llm-challenge/.tmp/

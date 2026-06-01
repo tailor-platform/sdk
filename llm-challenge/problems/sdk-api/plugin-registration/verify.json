@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "local-plugin-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "plugin",
+      "flags": "i",
+      "description": "source includes a local plugin"
+    },
+    {
+      "id": "plugin-output-created",
+      "kind": "file-glob",
+      "glob": "**/generated/**/*",
+      "minCount": 1,
+      "description": "workspace includes a generated artifact or plugin output"
+    }
+  ]
+}

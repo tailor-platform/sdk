@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "maintenance-note-created",
+      "kind": "file-glob",
+      "glob": "**/*.md",
+      "minCount": 1,
+      "description": "workspace includes the requested maintenance note"
+    },
+    {
+      "id": "note-names-local-cli",
+      "kind": "content-match",
+      "glob": "**/*.md",
+      "pattern": "tailor-sdk|pnpm",
+      "flags": "i",
+      "description": "maintenance note names the local CLI command path"
+    }
+  ]
+}
