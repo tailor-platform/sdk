@@ -4,15 +4,7 @@ import { AuthConnection_Type } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import {
-  buildMetaRequest,
-  isOwnedByApp,
-  sdkNameLabelKey,
-  trnPrefix,
-  type WithLabel,
-} from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/deploy/deploy";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type {
@@ -20,29 +12,29 @@ import type {
   RevokeAuthConnectionRequestSchema,
 } from "@tailor-proto/tailor/v1/auth_pb";
 import type { AuthConnection } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+
+// Note: the platform does NOT expose metadata/labels for auth connections — the
+// `auth-connection` TRN is unknown to the metadata service, so SetMetadata/GetMetadata
+// always fail with InvalidArgument (see platform-core-services pkg/trn +
+// service_metadata.go). Label-based ownership tracking is therefore impossible for
+// connections, and the SDK relies on the local secrets-state to remember which
+// connections it created.
 
 type CreateConnection = {
   name: string;
   request: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  metaRequest?: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type ReplaceConnection = {
   name: string;
   revokeRequest: MessageInitShape<typeof RevokeAuthConnectionRequestSchema>;
   createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  metaRequest?: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteConnection = {
   name: string;
   request: MessageInitShape<typeof RevokeAuthConnectionRequestSchema>;
 };
-
-function connectionTrn(workspaceId: string, name: string) {
-  return `${trnPrefix(workspaceId)}:auth-connection:${name}`;
-}
 
 function buildConnectionRequest(
   workspaceId: string,
@@ -112,26 +104,24 @@ function hasNonSecretFieldChanged(
 
 /**
  * Plan auth connection changes based on current and desired state.
+ *
+ * Ownership cannot be tracked via metadata (see file header), so connections the
+ * SDK created are identified through the local secrets-state. Connections that are
+ * present remotely but neither in the desired config nor in the secrets-state are
+ * assumed to be managed outside the SDK (e.g. Terraform/console) and left untouched.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @param appName - Application name for ownership
- * @param appId - Stable application id (when managed by SDK)
  * @param auths - Auth services with connection configs
  * @returns Planned changes for auth connections
  */
 export async function planAuthConnections(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
   const changeSet = createChangeSet<CreateConnection, never, DeleteConnection, ReplaceConnection>(
     "Auth connections",
   );
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
 
   // Collect all desired connections from auth services
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
@@ -160,73 +150,22 @@ export async function planAuthConnections(
     }
   });
 
-  // Build existing map with labels.
-  // Note: the platform does NOT currently expose metadata/labels for auth connections —
-  // the `auth-connection` TRN is unknown to the metadata service, so getMetadata always
-  // fails with InvalidArgument (see platform-core-services pkg/trn + service_metadata.go).
-  // We therefore cannot use label-based ownership tracking for connections today; the
-  // logic below is kept so it lights up automatically if the platform adds support later.
-  const existingConnections: WithLabel<AuthConnection> = {};
-  let metadataSupported = true;
-  await Promise.all(
-    existingList.map(async (resource) => {
-      try {
-        const { metadata } = await client.getMetadata({
-          trn: connectionTrn(workspaceId, resource.name),
-        });
-        existingConnections[resource.name] = {
-          resource,
-          label: metadata?.labels[sdkNameLabelKey],
-          allLabels: metadata?.labels,
-        };
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-          metadataSupported = false;
-          existingConnections[resource.name] = {
-            resource,
-            label: undefined,
-          };
-        } else {
-          throw error;
-        }
-      }
-    }),
-  );
+  const existingConnections: Record<string, AuthConnection> = {};
+  for (const resource of existingList) {
+    existingConnections[resource.name] = resource;
+  }
 
   const state = loadSecretsState();
 
   // Diff desired vs existing
   for (const [name, config] of Object.entries(desiredConnections)) {
     const existing = existingConnections[name];
-    const metaRequest = metadataSupported
-      ? await buildMetaRequest({
-          trn: connectionTrn(workspaceId, name),
-          appName,
-          appId,
-        })
-      : undefined;
 
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (metadataSupported && !existing.label) {
-          unmanaged.push({
-            resourceType: "Auth connection",
-            resourceName: name,
-          });
-        } else if (existing.label) {
-          conflicts.push({
-            resourceType: "Auth connection",
-            resourceName: name,
-            currentOwner: existing.label,
-          });
-        }
-      }
-
       // Check if config has changed
       const currentHash = hashConnectionConfig(config);
       const storedHash = state.connections?.[name];
-      const nonSecretChanged = hasNonSecretFieldChanged(existing.resource, config);
+      const nonSecretChanged = hasNonSecretFieldChanged(existing, config);
       const secretChanged = currentHash !== storedHash;
 
       if (nonSecretChanged || secretChanged) {
@@ -234,7 +173,6 @@ export async function planAuthConnections(
           name,
           revokeRequest: { workspaceId, connectionName: name },
           createRequest: buildConnectionRequest(workspaceId, name, config),
-          metaRequest,
         });
       } else {
         changeSet.unchanged.push({ name });
@@ -244,31 +182,15 @@ export async function planAuthConnections(
       changeSet.creates.push({
         name,
         request: buildConnectionRequest(workspaceId, name, config),
-        metaRequest,
       });
     }
   }
 
-  // Remaining existing connections owned by this app should be deleted
-  for (const [name, entry] of Object.entries(existingConnections)) {
-    if (!entry) continue;
-    const owned = isOwnedByApp(entry.allLabels, appName, appId);
-    if (entry.label && !owned) {
-      resourceOwners.add(entry.label);
-      continue;
-    }
-    // Decide whether to delete:
-    // - Today the platform never supports connection metadata (see note above), so this
-    //   always takes the `!metadataSupported` branch. Labels are unavailable, so ownership
-    //   cannot be derived from them. Deleting "everything not desired" would destroy
-    //   connections created outside the SDK (e.g. Terraform/console). Instead we use the
-    //   local secrets-state as the ownership signal and delete only connections this SDK
-    //   previously created (tracked in state.connections). Externally-managed connections
-    //   are left untouched.
-    // - The `owned` branch is dead today but kept for when the platform adds metadata
-    //   support, at which point label-based ownership becomes authoritative.
-    const shouldDelete = metadataSupported ? owned : state.connections?.[name] !== undefined;
-    if (shouldDelete) {
+  // Delete remaining connections, but only those this SDK previously created
+  // (tracked in secrets-state). Connections created outside the SDK are not in
+  // the secrets-state and are left untouched.
+  for (const [name] of Object.entries(existingConnections)) {
+    if (state.connections?.[name] !== undefined) {
       changeSet.deletes.push({
         name,
         request: { workspaceId, connectionName: name },
@@ -276,27 +198,7 @@ export async function planAuthConnections(
     }
   }
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
-}
-
-/**
- * Attempt to set metadata, silently ignoring InvalidArgument errors
- * when the platform does not yet support auth-connection TRNs.
- * @param client - Operator client instance
- * @param metaRequest - Metadata request to send
- */
-async function trySetMetadata(
-  client: OperatorClient,
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>,
-): Promise<void> {
-  try {
-    await client.setMetadata(metaRequest);
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-      return;
-    }
-    throw error;
-  }
+  return { changeSet };
 }
 
 function extractOAuth2Config(
@@ -335,9 +237,6 @@ export async function applyAuthConnections(
     await Promise.all(
       changeSet.creates.map(async (create) => {
         await client.createAuthConnection(create.request);
-        if (create.metaRequest) {
-          await trySetMetadata(client, create.metaRequest);
-        }
       }),
     );
 
@@ -345,12 +244,10 @@ export async function applyAuthConnections(
     for (const replace of changeSet.replaces) {
       await client.revokeAuthConnection(replace.revokeRequest);
       await client.createAuthConnection(replace.createRequest);
-      if (replace.metaRequest) {
-        await trySetMetadata(client, replace.metaRequest);
-      }
     }
 
-    // Save hashes for all created/replaced connections
+    // Save hashes for all created/replaced connections. This secrets-state is the
+    // only record of which connections the SDK owns (metadata is unavailable).
     const state = loadSecretsState();
     if (!state.connections) {
       state.connections = {};

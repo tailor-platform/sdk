@@ -329,7 +329,7 @@ export async function planAuth(context: PlanContext) {
     ),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
-    planAuthConnections(client, workspaceId, application.name, application.id, auths),
+    planAuthConnections(client, workspaceId, auths),
   ]);
 
   return {
@@ -345,9 +345,9 @@ export async function planAuth(context: PlanContext) {
       scimResource: scimResourceChangeSet,
       connection: connectionResult.changeSet,
     },
-    conflicts: [...conflicts, ...connectionResult.conflicts],
-    unmanaged: [...unmanaged, ...connectionResult.unmanaged],
-    resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
+    conflicts,
+    unmanaged,
+    resourceOwners,
   };
 }
 

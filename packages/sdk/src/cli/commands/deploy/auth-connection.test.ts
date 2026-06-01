@@ -28,28 +28,7 @@ vi.mock("@/cli/shared/client", async (importOriginal) => {
   };
 });
 
-vi.mock("./label", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("./label");
-  return {
-    ...actual,
-    buildMetaRequest: vi
-      .fn()
-      .mockImplementation(async (params: { trn: string; appName: string; appId?: string }) => ({
-        trn: params.trn,
-        labels: { "sdk-name": params.appName, "sdk-version": "v1-0-0" },
-      })),
-  };
-});
-
 const workspaceId = "ws-1";
-const appName = "my-app";
-
-type ConnectionFixture = {
-  name: string;
-  /** sdk-name label value, when the connection carries SDK metadata */
-  ownerLabel?: string;
-};
 
 function oauth2Connection(name: string) {
   return {
@@ -67,28 +46,16 @@ function oauth2Connection(name: string) {
   };
 }
 
-function createMockClient(opts: {
-  connections: ConnectionFixture[];
-  metadataSupported: boolean;
-}): OperatorClient {
+function createMockClient(connectionNames: string[]): OperatorClient {
   return {
     listAuthConnections: vi.fn().mockResolvedValue({
-      connections: opts.connections.map((c) => oauth2Connection(c.name)),
+      connections: connectionNames.map((name) => oauth2Connection(name)),
       nextPageToken: "",
     }),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      if (!opts.metadataSupported) {
-        throw new ConnectError("metadata not supported", Code.InvalidArgument);
-      }
-      const name = trn.split(":").pop();
-      const fixture = opts.connections.find((c) => c.name === name);
-      return {
-        metadata: {
-          labels: fixture?.ownerLabel
-            ? { "sdk-name": fixture.ownerLabel, "sdk-version": "v1-0-0" }
-            : {},
-        },
-      };
+    // getMetadata is intentionally not provided: the platform does not support
+    // metadata for auth connections, so planAuthConnections must never call it.
+    getMetadata: vi.fn().mockImplementation(() => {
+      throw new ConnectError("metadata not supported", Code.InvalidArgument);
     }),
   } as unknown as OperatorClient;
 }
@@ -98,7 +65,7 @@ const emptyAuths: ReadonlyArray<Readonly<AuthService>> = [
   { name: "auth-a", connections: {} } as unknown as AuthService,
 ];
 
-describe("planAuthConnections deletion safety when metadata is not supported", () => {
+describe("planAuthConnections deletion safety", () => {
   beforeEach(() => {
     mockLoadSecretsState.mockReset();
   });
@@ -106,69 +73,31 @@ describe("planAuthConnections deletion safety when metadata is not supported", (
   test("does NOT delete externally-managed connections absent from secrets-state", async () => {
     // Connection exists remotely but was never created by this SDK (not in state).
     mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
-    const client = createMockClient({
-      connections: [{ name: "external-connection" }],
-      metadataSupported: false,
-    });
+    const client = createMockClient(["external-connection"]);
 
-    const { changeSet } = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      undefined,
-      emptyAuths,
-    );
+    const { changeSet } = await planAuthConnections(client, workspaceId, emptyAuths);
 
     expect(changeSet.deletes.map((d) => d.name)).toEqual([]);
   });
 
-  test("deletes connections this SDK previously created (tracked in secrets-state)", async () => {
+  test("deletes only connections this SDK previously created (tracked in secrets-state)", async () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {},
       connections: { "sdk-connection": "some-hash" },
     });
-    const client = createMockClient({
-      connections: [{ name: "sdk-connection" }, { name: "external-connection" }],
-      metadataSupported: false,
-    });
+    const client = createMockClient(["sdk-connection", "external-connection"]);
 
-    const { changeSet } = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      undefined,
-      emptyAuths,
-    );
+    const { changeSet } = await planAuthConnections(client, workspaceId, emptyAuths);
 
     expect(changeSet.deletes.map((d) => d.name)).toEqual(["sdk-connection"]);
   });
-});
 
-describe("planAuthConnections deletion when metadata is supported", () => {
-  beforeEach(() => {
+  test("does not call getMetadata (connection metadata is unsupported by the platform)", async () => {
     mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
-  });
+    const client = createMockClient(["external-connection"]);
 
-  test("deletes connections owned by this app and keeps others", async () => {
-    const client = createMockClient({
-      connections: [
-        { name: "owned-connection", ownerLabel: appName },
-        { name: "other-app-connection", ownerLabel: "other-app" },
-        { name: "unmanaged-connection" },
-      ],
-      metadataSupported: true,
-    });
+    await planAuthConnections(client, workspaceId, emptyAuths);
 
-    const { changeSet, resourceOwners } = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      undefined,
-      emptyAuths,
-    );
-
-    expect(changeSet.deletes.map((d) => d.name)).toEqual(["owned-connection"]);
-    // Connections owned by another app are tracked, not deleted.
-    expect(resourceOwners.has("other-app")).toBe(true);
+    expect(client.getMetadata).not.toHaveBeenCalled();
   });
 });
