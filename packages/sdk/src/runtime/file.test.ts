@@ -117,6 +117,53 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     expect(fileMock.calls[0]?.method).toBe("openDownloadStream");
   });
 
+  test("downloadStream forwards and returns body with metadata", async () => {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+        controller.close();
+      },
+    });
+    fileMock.enqueueResult({
+      body,
+      metadata: {
+        contentType: "application/octet-stream",
+        fileSize: 3,
+        sha256sum: "h",
+        lastUploadedAt: "2026-01-01T00:00:00Z",
+      },
+    });
+
+    const result = await file.downloadStream("ns", "Doc", "blob", "rec-1");
+
+    expect(result.body).toBe(body);
+    expect(result.metadata.fileSize).toBe(3);
+    expect(fileMock.calls[0]?.method).toBe("downloadStream");
+  });
+
+  test("uploadStream forwards args and records the call", async () => {
+    fileMock.enqueueResult({ metadata: { fileSize: 10, sha256sum: "xyz" } });
+
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+        controller.close();
+      },
+    });
+    const result = await file.uploadStream("ns", "Doc", "blob", "rec-1", stream);
+
+    expect(result).toEqual({ metadata: { fileSize: 10, sha256sum: "xyz" } });
+    expect(fileMock.calls).toEqual([
+      {
+        method: "uploadStream",
+        namespace: "ns",
+        typeName: "Doc",
+        fieldName: "blob",
+        recordId: "rec-1",
+      },
+    ]);
+  });
+
   test("TailorDBFileError structurally matches globalThis class", () => {
     const TailorDBFileError = (
       globalThis as unknown as {

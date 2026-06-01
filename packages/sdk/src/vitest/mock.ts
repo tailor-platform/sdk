@@ -922,6 +922,11 @@ const FILE_DEFAULTS: Record<string, any> = {
   },
   delete: undefined,
   getMetadata: { contentType: "", fileSize: 0, sha256sum: "", urlPath: "" },
+  downloadStream: {
+    body: new ReadableStream(),
+    metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+  },
+  uploadStream: { metadata: { fileSize: 0, sha256sum: "" } },
 };
 
 function resolveFileCall(
@@ -1023,6 +1028,31 @@ const mockTailordbFile = {
       recordId,
     );
     return toFileStream(resolved);
+  },
+  async downloadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<{
+    body: ReadableStream<Uint8Array>;
+    metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
+  }> {
+    return resolveFileCall("downloadStream", namespace, typeName, fieldName, recordId) as Awaited<
+      ReturnType<typeof this.downloadStream>
+    >;
+  },
+  async uploadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+    _readableStream: ReadableStream<Uint8Array | ArrayBuffer>,
+    _options?: { contentType?: string; fileSize?: number },
+  ): Promise<{ metadata: { fileSize: number; sha256sum: string } }> {
+    return resolveFileCall("uploadStream", namespace, typeName, fieldName, recordId) as Awaited<
+      ReturnType<typeof this.uploadStream>
+    >;
   },
 };
 
