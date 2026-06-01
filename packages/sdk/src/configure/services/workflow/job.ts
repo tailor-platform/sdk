@@ -1,4 +1,5 @@
 import { brandValue } from "@/utils/brand";
+import { readWorkflowTestEnv } from "./test-env-key";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
@@ -112,8 +113,7 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
       trigger: async (args?: unknown) => {
         // Read env from workflowMock.setEnv() with deprecated env-var fallback.
         // Shallow-copy to isolate against cross-trigger mutation.
-        const fromGlobal = (globalThis as { __tailorWorkflowTestEnv?: TailorEnv })
-          .__tailorWorkflowTestEnv;
+        const fromGlobal = readWorkflowTestEnv();
         const env = (
           fromGlobal !== undefined
             ? { ...fromGlobal }

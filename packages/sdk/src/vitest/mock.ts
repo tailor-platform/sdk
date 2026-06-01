@@ -6,13 +6,14 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
+import {
+  clearWorkflowTestEnv,
+  writeWorkflowTestEnv,
+} from "../configure/services/workflow/test-env-key";
 import type { ContextInvoker } from "../runtime/context";
 import type { TailorDBFileErrorCode } from "../runtime/file";
 import type { User as IdpUser } from "../runtime/idp";
 import type { TailorEnv } from "../types/env";
-
-// `workflowMock.setEnv`/`reset` toggle `globalThis.__tailorWorkflowTestEnv`
-// (read by `.trigger()`). Inline casts keep it off consumer globalThis types.
 
 // ---------------------------------------------------------------------------
 // Types
@@ -368,9 +369,7 @@ export const workflowMock = {
    * @param env - Env passed to job bodies.
    */
   setEnv(env: TailorEnv): void {
-    (globalThis as { __tailorWorkflowTestEnv?: TailorEnv }).__tailorWorkflowTestEnv = {
-      ...env,
-    };
+    writeWorkflowTestEnv({ ...env });
   },
 
   /**
@@ -421,7 +420,7 @@ export const workflowMock = {
     state.waitHandler = null;
     state.resolveHandler = null;
     state.workflowCalls.length = 0;
-    (globalThis as { __tailorWorkflowTestEnv?: TailorEnv }).__tailorWorkflowTestEnv = undefined;
+    clearWorkflowTestEnv();
   },
 };
 
@@ -1237,5 +1236,5 @@ export function cleanupMocks(global: typeof globalThis): void {
   delete g.TailorDBFileError;
   delete g[STATE_KEY];
   delete g[RUNTIME_FLAG_KEY];
-  delete g.__tailorWorkflowTestEnv;
+  clearWorkflowTestEnv();
 }
