@@ -416,6 +416,25 @@ describe("planApplication", () => {
 
       expect(result.deletes).toHaveLength(0);
     });
+
+    test("does not fetch metadata for unrelated apps when no id is configured", async () => {
+      const client = createMockClient([
+        { name: appName, label: appName },
+        { name: "other-app", label: "other-app" },
+        { name: "another-app", label: "another-app" },
+      ]);
+      const application = createMockApplication({ name: appName });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        forRemoval: true,
+      });
+
+      // Only the same-name app is deleted, and metadata is fetched for it alone.
+      expect(result.deletes).toHaveLength(1);
+      expect(result.deletes[0].name).toBe(appName);
+      expect(client.getMetadata).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("CORS resolution on first deployment (issue #1030)", () => {

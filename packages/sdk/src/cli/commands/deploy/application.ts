@@ -208,8 +208,14 @@ export async function planApplication(context: PlanContext) {
   if (forRemoval) {
     // Only delete apps we own (isOwnedByApp), not every name match: a
     // same-named app in a shared workspace may belong to another user.
+    // Without a stable id only the same-name app can be ours, so skip
+    // metadata lookups for the rest; with an id, scan all apps to also
+    // clean up renamed-away ones.
+    const candidates = application.id
+      ? existingApplications
+      : existingApplications.filter((app) => app.name === application.name);
     const owned = await Promise.all(
-      existingApplications.map(async (app) => {
+      candidates.map(async (app) => {
         const labels = await fetchAppLabels(client, workspaceId, app.name);
         return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
       }),
