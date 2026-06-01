@@ -8,6 +8,7 @@ import type {
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
 } from "./auth.generated";
+import type { TailorEnv } from "./env";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "./field-types";
 import type { output } from "./helpers";
 import type { TailorDBInstance } from "./tailor-db-field";
@@ -232,6 +233,8 @@ type MachineUser<
 export type BeforeLoginHookArgs = {
   claims: JsonObject;
   idpConfigName: string;
+  /** Environment variables defined in `defineConfig({ env })`. */
+  env: TailorEnv;
 };
 
 export type BeforeLoginHook<MachineUserNames extends string> = {
