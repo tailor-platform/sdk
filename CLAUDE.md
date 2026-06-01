@@ -8,11 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development
 
-- `pnpm exec turbo run build` - Build all packages
-- `pnpm exec turbo run test` - Run all tests
-- `pnpm exec turbo run check` - Run format, lint:fix, typecheck:go, and knip in sequence
-- `pnpm exec turbo run generate` - Run code generation
-- `pnpm exec turbo run deploy` - Deploy to the Tailor Platform
+- `pnpm build` - Build all packages
+- `pnpm test` - Run all tests
+- `pnpm check` - Run format, lint:fix, typecheck:go, and knip in sequence
+- `pnpm generate` - Run code generation
+- `pnpm deploy` - Deploy to the Tailor Platform
 
 ### Package-specific (in packages/sdk)
 

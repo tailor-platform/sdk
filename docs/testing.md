@@ -9,7 +9,7 @@ Vitest is configured with two projects (see [`packages/sdk/vitest.config.ts`](..
 
 ```bash
 # All tests
-pnpm exec turbo run test
+pnpm test
 
 # In packages/sdk/:
 pnpm test                      # All (unit + e2e)
