@@ -629,11 +629,11 @@ To exercise the full chain with real job bodies, call `workflow.mainJob.trigger(
 
 ```typescript
 import { workflowMock } from "@tailor-platform/sdk/vitest";
-import { beforeEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
-  beforeEach(() => workflowMock.reset());
+  afterEach(() => workflowMock.reset());
 
   test("mainJob.trigger() executes all jobs", async () => {
     workflowMock.setEnv({ PAYMENT_GATEWAY: "stripe" });

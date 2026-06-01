@@ -1,5 +1,5 @@
 import { workflowMock } from "@tailor-platform/sdk/vitest";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
   processPayment,
@@ -8,7 +8,7 @@ import workflow, {
 } from "./order-fulfillment";
 
 describe("order fulfillment workflow", () => {
-  beforeEach(() => {
+  afterEach(() => {
     workflowMock.reset();
   });
 

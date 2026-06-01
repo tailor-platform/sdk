@@ -8,7 +8,7 @@ Add `workflowMock.setEnv()` to control the `env` value passed to job bodies when
 ```typescript
 import { workflowMock } from "@tailor-platform/sdk/vitest";
 
-beforeEach(() => workflowMock.reset());
+afterEach(() => workflowMock.reset());
 
 test("workflow.mainJob.trigger() executes all jobs", async () => {
   workflowMock.setEnv({ STAGE: "test" });
