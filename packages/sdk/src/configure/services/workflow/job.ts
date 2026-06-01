@@ -58,8 +58,9 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
 }
 
 /**
- * Environment variable key for workflow testing.
- * Contains JSON-serialized TailorEnv object.
+ * Env-var fallback read by `.trigger()` when `workflowMock.setEnv()` is unset.
+ * Kept for backward compatibility.
+ * @deprecated Use `workflowMock.setEnv()` from `@tailor-platform/sdk/vitest`.
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
@@ -101,9 +102,10 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  *   },
  * });
  */
-export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(
+/* @__NO_SIDE_EFFECTS__ */
+export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
-): WorkflowJob<Name, I, Awaited<O>> => {
+): WorkflowJob<Name, I, Awaited<O>> {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
 
   // Register on the global job registry so the vitest mock can execute this
@@ -122,4 +124,4 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
     } as WorkflowJob<Name, I, Awaited<O>>,
     "workflow-job",
   );
-};
+}

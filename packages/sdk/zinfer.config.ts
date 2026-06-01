@@ -12,6 +12,7 @@ export default defineConfig({
   withDescriptions: true,
   generateTests: false,
   map: {
+    AppConfigSchema: "AppConfigParsed",
     TailorDBTypeSettingsSchema: "TailorDBTypeParsedSettings",
     TailorDBTypeSchema: "TailorDBTypeRaw",
     SCIMSchema: "SCIMConfig",

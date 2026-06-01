@@ -116,7 +116,7 @@ describe("planFunctionRegistry", () => {
       const client = createMockClient([]);
       const entries = [createEntry("resolver/ns/getUser")];
 
-      await planFunctionRegistry(client, workspaceId, appName, entries);
+      await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(client.listFunctionRegistries).toHaveBeenCalledWith(
         expect.objectContaining({ pageSize: expect.any(Number) }),
@@ -129,7 +129,7 @@ describe("planFunctionRegistry", () => {
       const client = createMockClient([]);
       const entries = [createEntry("resolver/ns/getUser")];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.changeSet.creates).toHaveLength(1);
       expect(result.changeSet.creates[0].name).toBe("resolver/ns/getUser");
@@ -145,7 +145,7 @@ describe("planFunctionRegistry", () => {
         createEntry("workflow-job/process-order"),
       ];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.changeSet.creates).toHaveLength(3);
       expect(result.changeSet.creates.map((c) => c.name).sort()).toEqual([
@@ -163,7 +163,7 @@ describe("planFunctionRegistry", () => {
       ]);
       const entries = [createEntry("resolver/ns/getUser", "// new script")];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.updates[0].name).toBe("resolver/ns/getUser");
@@ -177,7 +177,7 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.unchanged).toHaveLength(1);
@@ -192,7 +192,7 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/getUser", contentHash: entry.contentHash },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.unchanged).toHaveLength(0);
@@ -205,7 +205,7 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: "other-app" },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.unchanged).toHaveLength(0);
@@ -223,7 +223,7 @@ describe("planFunctionRegistry", () => {
         },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.unchanged).toHaveLength(0);
@@ -241,7 +241,7 @@ describe("planFunctionRegistry", () => {
       // Only getUser in entries (listUsers removed)
       const entries = [existingEntry];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.unchanged).toHaveLength(1);
@@ -256,7 +256,7 @@ describe("planFunctionRegistry", () => {
         { name: "executor/my-executor", contentHash: "hash", label: appName },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, []);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(2);
       expect(result.changeSet.deletes.map((d) => d.name).sort()).toEqual([
@@ -272,7 +272,7 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/unmanaged", contentHash: "hash" }, // No label
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, []);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(0);
     });
@@ -282,7 +282,7 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/other", contentHash: "hash", label: "other-app" },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, []);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(0);
       expect(result.resourceOwners.has("other-app")).toBe(true);
@@ -295,7 +295,7 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/unmanaged", contentHash: "hash" }, // No label
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, []);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0].name).toBe("resolver/ns/mine");
@@ -310,7 +310,7 @@ describe("planFunctionRegistry", () => {
       ]);
       const entries = [createEntry("resolver/ns/getUser")];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.unmanaged).toHaveLength(1);
       expect(result.unmanaged[0].resourceName).toBe("resolver/ns/getUser");
@@ -323,7 +323,7 @@ describe("planFunctionRegistry", () => {
       ]);
       const entries = [createEntry("resolver/ns/getUser")];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.conflicts).toHaveLength(1);
       expect(result.conflicts[0].resourceName).toBe("resolver/ns/getUser");
@@ -584,7 +584,7 @@ describe("collectFunctionEntries", () => {
   });
 
   test("skips entries with missing bundled code and warns", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    using _warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const scripts = createBundledScripts(); // empty maps
 
     const app = createMockApplication({
@@ -594,7 +594,6 @@ describe("collectFunctionEntries", () => {
     const entries = collectFunctionEntries(app, [], scripts);
 
     expect(entries).toHaveLength(0);
-    warnSpy.mockRestore();
   });
 
   test("returns empty array when application has no services", () => {

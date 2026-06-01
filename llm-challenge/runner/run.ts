@@ -13,7 +13,6 @@ import {
   requireArg,
   sanitizeForFilename,
 } from "../shared/helpers";
-import type { ProblemMeta } from "../shared/helpers";
 import {
   calculateScore,
   computeAdjustedScore,
@@ -21,16 +20,17 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./score";
-import { checkPodmanAvailability } from "./solver/container";
-import type { ChallengeReport, ProblemResult, ScaffoldChange, StageResult } from "./score";
+import { checkAuthStatus, retrySolveProblem, solveProblem } from "./solve";
 import {
   formatSolveModelLabel,
   normalizeModelForAgent,
   resolveRerunSolveConfig,
 } from "./solve-model";
-import { checkAuthStatus, retrySolveProblem, solveProblem } from "./solve";
-import type { SolveAgent, SolveResult } from "./solve";
+import { checkPodmanAvailability } from "./solver/container";
 import { verifyProblem } from "./verify";
+import type { ProblemMeta } from "../shared/helpers";
+import type { ChallengeReport, ProblemResult, ScaffoldChange, StageResult } from "./score";
+import type { SolveAgent, SolveResult } from "./solve";
 
 const execAsync = promisify(exec);
 

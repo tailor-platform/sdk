@@ -114,4 +114,17 @@ describe("writeCrashReport", () => {
     const files = fs.readdirSync(dir).filter((f) => f.endsWith(".crash.log"));
     expect(files.length).toBe(10);
   });
+
+  test.skipIf(process.platform === "win32")(
+    "writes the crash log with mode 0600 and its directory with mode 0700",
+    () => {
+      const dir = path.join(makeTmpDir(), "crash-reports");
+      const report = makeCrashReport();
+      const filePath = writeCrashReport(report, dir);
+
+      expect(filePath).toBeDefined();
+      expect(fs.statSync(filePath!).mode & 0o777).toBe(0o600);
+      expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+    },
+  );
 });

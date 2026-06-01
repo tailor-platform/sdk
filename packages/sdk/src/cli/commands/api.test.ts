@@ -2,6 +2,7 @@ import { runCommand } from "politty";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { logger } from "@/cli/shared/logger";
 import { apiCommand } from "./api";
 
 vi.mock("@/cli/shared/context", () => ({
@@ -11,6 +12,10 @@ vi.mock("@/cli/shared/context", () => ({
 
 vi.mock("@/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
+}));
+
+vi.mock("@/cli/shared/readonly-guard", () => ({
+  assertWritable: vi.fn(),
 }));
 
 const fetchMock = vi.fn();
@@ -211,6 +216,46 @@ describe("api command body auto-injection", () => {
     });
   });
 
+  describe("response output stream", () => {
+    test("writes JSON response to stdout, not stderr", async () => {
+      using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: "ok", value: 42 }),
+      });
+
+      await runCommand(apiCommand, ["Ping"]);
+
+      const stdoutContent = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      const stderrContent = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(stdoutContent).toContain('"result"');
+      expect(stdoutContent).toContain('"ok"');
+      expect(stderrContent).not.toContain('"result"');
+    });
+
+    test("in jsonMode writes JSON response to stdout", async () => {
+      using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      using consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      using _jsonMode = vi.spyOn(logger, "jsonMode", "get").mockReturnValue(true);
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: "ok", value: 42 }),
+      });
+
+      await runCommand(apiCommand, ["Ping"]);
+
+      const stdoutContent = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      const consoleContent = consoleLogSpy.mock.calls.map((c) => String(c[0])).join("");
+      const allStdout = stdoutContent + consoleContent;
+      const stderrContent = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(allStdout).toContain('"result"');
+      expect(allStdout).toContain('"ok"');
+      expect(stderrContent).not.toContain('"result"');
+    });
+  });
+
   describe("body parsing guards", () => {
     test("should pass through non-object JSON body without attempting injection", async () => {
       await runCommand(apiCommand, ["GetFunctionExecution", "-b", '"just-a-string"']);
@@ -236,6 +281,159 @@ describe("api command body auto-injection", () => {
       ]);
 
       expect(loadWorkspaceId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("--field option", () => {
+    test("should set a flat field into the body", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+
+      await runCommand(apiCommand, ["GetFunctionExecution", "-f", "executionId=exec-1"]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.executionId).toBe("exec-1");
+      expect(body.workspaceId).toBe("ws-1");
+    });
+
+    test("should set nested fields via dotted keys", async () => {
+      await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-f",
+        "a.b.c=hello",
+        "-f",
+        "a.b.d=world",
+      ]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.a).toEqual({ b: { c: "hello", d: "world" } });
+    });
+
+    test("should let --field override matching keys in --body", async () => {
+      await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-b",
+        '{"executionId":"from-body"}',
+        "-f",
+        "executionId=from-field",
+      ]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.executionId).toBe("from-field");
+    });
+
+    test("should destructively overwrite a non-object body value with a nested --field", async () => {
+      await runCommand(apiCommand, ["GetFunctionExecution", "-b", '{"a":"str"}', "-f", "a.b=baz"]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.a).toEqual({ b: "baz" });
+    });
+
+    test("should skip workspaceId auto-injection when supplied via --field", async () => {
+      await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-f",
+        "workspaceId=ws-x",
+        "-f",
+        "executionId=exec-1",
+      ]);
+
+      expect(loadWorkspaceId).not.toHaveBeenCalled();
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.workspaceId).toBe("ws-x");
+    });
+
+    test("should error when --field is combined with a non-object --body", async () => {
+      const result = await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-b",
+        '"just-a-string"',
+        "-f",
+        "executionId=exec-1",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should reject malformed --field values", async () => {
+      const result = await runCommand(apiCommand, ["GetFunctionExecution", "-f", "no-equals"]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should reject empty dotted segments in --field key", async () => {
+      const result = await runCommand(apiCommand, ["GetFunctionExecution", "-f", "a..b=x"]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should coerce true/false to booleans for bool-typed fields", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+
+      await runCommand(apiCommand, [
+        "CreateWorkspace",
+        "-f",
+        "name=ws",
+        "-f",
+        "deleteProtection=true",
+      ]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.deleteProtection).toBe(true);
+      expect(typeof body.deleteProtection).toBe("boolean");
+    });
+
+    test("should reject non-boolean values for bool-typed fields", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+
+      const result = await runCommand(apiCommand, [
+        "CreateWorkspace",
+        "-f",
+        "name=ws",
+        "-f",
+        "deleteProtection=yes",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should leave string scalars unchanged", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+
+      await runCommand(apiCommand, ["GetFunctionExecution", "-f", "executionId=exec-1"]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.executionId).toBe("exec-1");
+      expect(typeof body.executionId).toBe("string");
+    });
+
+    test("should reject prototype-pollution segments in --field key", async () => {
+      // Without this guard, `cursor[key]` would resolve `__proto__` against
+      // Object.prototype, letting the assignment mutate the global prototype
+      // instead of the body.
+      const polluted: { polluted?: unknown } = {};
+      const before = polluted.polluted;
+
+      const result = await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-f",
+        "__proto__.polluted=yes",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(polluted.polluted).toBe(before);
+      expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
     });
   });
 });

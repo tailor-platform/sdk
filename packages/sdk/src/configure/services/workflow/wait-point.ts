@@ -1,4 +1,5 @@
 import { brandValue } from "@/utils/brand";
+import type { TailorWorkflowAPI } from "@/runtime/workflow";
 import type { JsonCompatible } from "@/types/helpers";
 
 /**
@@ -36,18 +37,7 @@ interface WaitPointWithSetter {
 }
 
 function getPlatformWorkflow() {
-  const platform = globalThis as {
-    tailor?: {
-      workflow?: {
-        wait: (k: string, p?: unknown) => unknown;
-        resolve: (
-          e: string,
-          k: string,
-          c: (p: unknown) => unknown | Promise<unknown>,
-        ) => Promise<void>;
-      };
-    };
-  };
+  const platform = globalThis as { tailor?: { workflow?: TailorWorkflowAPI } };
   const workflow = platform.tailor?.workflow;
   if (!workflow) {
     throw new Error(
@@ -133,6 +123,7 @@ type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointDef<Payl
  *
  * await approval.wait({ message: "Please approve" });
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function defineWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointDef<Payload, Result> {
@@ -162,6 +153,7 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
  *
  * // For 2-level access, use destructured export with JSDoc attached to the export itself.
  */
+/* @__NO_SIDE_EFFECTS__ */
 // oxlint-disable-next-line no-explicit-any
 export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
   builder: (define: DefineFn) => T,

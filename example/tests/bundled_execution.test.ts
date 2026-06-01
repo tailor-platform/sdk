@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tailordbMock, workflowMock } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -42,29 +42,24 @@ describe("bundled execution tests", () => {
     workflowMock.reset();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   const importActualMain = createImportMain(actualDir);
 
   test("bundled JS files should not be excessively large", () => {
     // Define maximum acceptable sizes (current size + 10KB buffer)
     const sizeBuffer = 1024 * 10; // 10KB
     const maxSizes: Record<string, number> = {
-      "executors/user-created.js": 162223 + sizeBuffer,
-      "resolvers/add.js": 4504 + sizeBuffer,
-      "resolvers/showUserInfo.js": 6004 + sizeBuffer,
-      "resolvers/stepChain.js": 176907 + sizeBuffer,
-      // triggerOrderProcessing: imports auth from tailor.config (~14KB)
-      "resolvers/triggerOrderProcessing.js": 14022 + sizeBuffer,
-      // workflow-jobs: Kysely jobs (~160KB), date-fns jobs (~28KB), simple jobs (~9KB)
-      "workflow-jobs/check-inventory.js": 28058 + sizeBuffer,
-      "workflow-jobs/fetch-customer.js": 160819 + sizeBuffer,
-      "workflow-jobs/process-order.js": 8755 + sizeBuffer,
-      "workflow-jobs/process-payment.js": 160729 + sizeBuffer,
-      "workflow-jobs/send-notification.js": 28162 + sizeBuffer,
-      "workflow-jobs/validate-order.js": 8554 + sizeBuffer,
+      "executors/user-created.js": 159065 + sizeBuffer,
+      "resolvers/add.js": 5459 + sizeBuffer,
+      "resolvers/showUserInfo.js": 5999 + sizeBuffer,
+      "resolvers/stepChain.js": 172428 + sizeBuffer,
+      "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
+      // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB)
+      "workflow-jobs/check-inventory.js": 19967 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 147682 + sizeBuffer,
+      "workflow-jobs/process-order.js": 1137 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 147576 + sizeBuffer,
+      "workflow-jobs/send-notification.js": 20075 + sizeBuffer,
+      "workflow-jobs/validate-order.js": 893 + sizeBuffer,
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {
@@ -87,7 +82,7 @@ describe("bundled execution tests", () => {
     });
 
     test("resolvers/showUserInfo.js returns user and invoker information", async () => {
-      vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
+      using _invokerSpy = vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
         id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
         type: "machine_user",
         workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",

@@ -3,11 +3,12 @@ import { z } from "zod";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import { extractAllNamespaces } from "@/cli/shared/config";
+import { extractOwnedNamespaces } from "@/cli/shared/config";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { resolveTypeNamespaces } from "@/cli/shared/tailordb-namespace";
 
 export interface TruncateOptions {
@@ -94,7 +95,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 
   // Validate config and get namespaces before confirmation
   const { config } = await loadConfig(options?.configPath);
-  const namespaces = extractAllNamespaces(config);
+  const namespaces = extractOwnedNamespaces(config);
 
   // Handle --all flag
   if (hasAll) {
@@ -106,7 +107,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     if (!options?.yes) {
       const namespaceList = namespaces.join(", ");
       const confirmation = await prompt.confirm({
-        message: `This will truncate ALL tables in the following namespaces: ${namespaceList}. Continue?`,
+        message: `This will truncate ALL tables in the following owned namespaces (external namespaces are excluded): ${namespaceList}. Continue?`,
         default: false,
       });
       if (!confirmation) {
@@ -118,7 +119,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     for (const namespace of namespaces) {
       await truncateNamespace(workspaceId, namespace, client);
     }
-    logger.success("Truncated all tables in all namespaces");
+    logger.success("Truncated all tables in all owned namespaces");
     return;
   }
 
@@ -126,10 +127,16 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
   if (hasNamespace && options?.namespace) {
     const namespace = options.namespace;
 
-    // Validate namespace exists in config
+    // Validate namespace exists in config and is not external
     if (!namespaces.includes(namespace)) {
+      const dbConfig = config.db?.[namespace];
+      if (dbConfig && "external" in dbConfig && dbConfig.external === true) {
+        throw new Error(
+          `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here. Run truncate from the app that owns it.`,
+        );
+      }
       throw new Error(
-        `Namespace "${namespace}" not found in config. Available namespaces: ${namespaces.join(", ")}`,
+        `Namespace "${namespace}" not found in config. Available owned namespaces (external namespaces are excluded): ${namespaces.join(", ")}`,
       );
     }
 
@@ -210,7 +217,7 @@ export const truncateCommand = defineAppCommand({
       }),
       all: arg(z.boolean().default(false), {
         alias: "a",
-        description: "Truncate all tables in all namespaces",
+        description: "Truncate all tables in all owned namespaces (excludes external namespaces)",
       }),
       namespace: arg(z.string().optional(), {
         alias: "n",
@@ -219,6 +226,7 @@ export const truncateCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const types = args.types && args.types.length > 0 ? args.types : undefined;
     await $truncate({
       workspaceId: args["workspace-id"],

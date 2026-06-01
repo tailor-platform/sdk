@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getSdkVersion } from "../shared/helpers";
-import type { ProblemMeta } from "../shared/helpers";
 import { createClaudeAdapter } from "./solver/claude";
 import { createCodexAdapter } from "./solver/codex";
+import type { ProblemMeta } from "../shared/helpers";
 import type { AuthCheckResult, SolveAdapter, SolveAgent, SolveResult } from "./solver/types";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");

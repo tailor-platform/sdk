@@ -18,7 +18,6 @@ Unit-test entrypoints exposed by the SDK:
 Helpers under `@tailor-platform/sdk/test`:
 
 - `unauthenticatedTailorUser` — default `user` value for resolver contexts
-- `WORKFLOW_TEST_ENV_KEY` — env key the workflow mock reads as the `env` argument when it executes a registered job body
 
 Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
@@ -225,6 +224,27 @@ test("mock file download", async () => {
   const result = await tailordb.file.download("ns", "Doc", "attachment", "r-1");
   expect(result.data).toEqual(new Uint8Array([1, 2, 3]));
   expect(fileMock.calls).toMatchObject([{ method: "download", recordId: "r-1" }]);
+});
+```
+
+For `openDownloadStream`, enqueue an iterable of `StreamValue` items — `metadata`, one or more `chunk` items, and a terminal `complete`. Raw `Uint8Array` / `ArrayBuffer` chunks are rejected so tests stay aligned with the platform's structured stream contract.
+
+```typescript
+test("mock file download stream", async () => {
+  fileMock.enqueueResult([
+    {
+      type: "metadata",
+      metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc" },
+    },
+    { type: "chunk", data: new Uint8Array([1, 2]), position: 0 },
+    { type: "chunk", data: new Uint8Array([3]), position: 2 },
+    { type: "complete" },
+  ]);
+
+  const stream = await tailordb.file.openDownloadStream("ns", "Doc", "attachment", "r-1");
+  const items = [];
+  for await (const item of stream) items.push(item);
+  expect(items).toHaveLength(4);
 });
 ```
 
@@ -476,7 +496,7 @@ import * as shared from "./shared";
 
 describe("onUserCreated executor", () => {
   test("creates an audit log with the new user's name and email", async () => {
-    const createAuditLog = vi.spyOn(shared, "createAuditLog").mockResolvedValue(undefined);
+    using createAuditLog = vi.spyOn(shared, "createAuditLog").mockResolvedValue(undefined);
 
     if (onUserCreated.operation.kind !== "function") {
       throw new Error("expected function operation");
@@ -535,20 +555,21 @@ describe("validateOrder", () => {
 Spy on each dependent job's `.trigger()` to replace it with a deterministic result:
 
 ```typescript
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { fulfillOrder, processPayment, sendConfirmation, validateOrder } from "./order-fulfillment";
 
 describe("fulfillOrder", () => {
-  afterEach(() => vi.restoreAllMocks());
-
   test("chains validate → pay → confirm", async () => {
-    vi.spyOn(validateOrder, "trigger").mockResolvedValue({ valid: true, orderId: "order-1" });
-    vi.spyOn(processPayment, "trigger").mockResolvedValue({
+    using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+      valid: true,
+      orderId: "order-1",
+    });
+    using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
       transactionId: "txn-order-1",
       amount: 100,
       status: "completed",
     });
-    vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+    using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
       orderId: "order-1",
       transactionId: "txn-order-1",
       confirmed: true,
@@ -604,18 +625,18 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain without staging job responses, call `workflow.mainJob.trigger()` (or `workflow.trigger()`) under the `tailor-runtime` environment. Each `createWorkflowJob` registers its body at import time and the workflow mock falls back to running the registered body whenever no handler/result is configured for that name — so dependent jobs run their real `.body()` functions automatically. If a job reads `env`, stub `WORKFLOW_TEST_ENV_KEY` first so the mock can hand the deserialized object to the body:
+To exercise the full chain without staging job responses, call `workflow.mainJob.trigger()` (or `workflow.trigger()`) under the `tailor-runtime` environment. Each `createWorkflowJob` registers its body at import time and the workflow mock falls back to running the registered body whenever no handler/result is configured for that name — so dependent jobs run their real `.body()` functions automatically. Use `workflowMock.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
 
 ```typescript
-import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => workflowMock.reset());
 
   test("mainJob.trigger() executes all jobs", async () => {
-    vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({}));
+    workflowMock.setEnv({ PAYMENT_GATEWAY: "stripe" });
 
     const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
 
