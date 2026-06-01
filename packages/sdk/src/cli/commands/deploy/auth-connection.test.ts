@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { planAuthConnections } from "./auth-connection";
 import type { AuthService } from "@/cli/services/auth/service";
 import type { OperatorClient } from "@/cli/shared/client";
+import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 
 const mockLoadSecretsState = vi.fn();
 
@@ -65,6 +66,22 @@ const emptyAuths: ReadonlyArray<Readonly<AuthService>> = [
   { name: "auth-a", connections: {} } as unknown as AuthService,
 ];
 
+// Auth service carrying the given desired connection configs.
+function authsWith(
+  connections: Record<string, AuthConnectionConfig>,
+): ReadonlyArray<Readonly<AuthService>> {
+  return [{ name: "auth-a", connections } as unknown as AuthService];
+}
+
+// Desired config whose non-secret fields match what `oauth2Connection` returns from the server.
+const baseConfig: AuthConnectionConfig = {
+  type: "oauth2",
+  providerUrl: "https://idp.example.com",
+  issuerUrl: "https://idp.example.com",
+  clientId: "client-id",
+  clientSecret: "client-secret",
+};
+
 describe("planAuthConnections deletion safety", () => {
   beforeEach(() => {
     mockLoadSecretsState.mockReset();
@@ -99,5 +116,57 @@ describe("planAuthConnections deletion safety", () => {
     await planAuthConnections(client, workspaceId, emptyAuths);
 
     expect(client.getMetadata).not.toHaveBeenCalled();
+  });
+});
+
+describe("planAuthConnections create/replace planning", () => {
+  beforeEach(() => {
+    mockLoadSecretsState.mockReset();
+    mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
+  });
+
+  test("creates a desired connection that does not exist remotely", async () => {
+    const client = createMockClient([]); // no existing connections
+
+    const { changeSet } = await planAuthConnections(
+      client,
+      workspaceId,
+      authsWith({ "new-conn": baseConfig }),
+    );
+
+    expect(changeSet.creates.map((c) => c.name)).toEqual(["new-conn"]);
+    expect(changeSet.replaces).toEqual([]);
+    expect(changeSet.deletes).toEqual([]);
+  });
+
+  test("replaces when a non-secret field differs from the remote connection", async () => {
+    const client = createMockClient(["c1"]); // remote c1 has clientId "client-id"
+
+    const { changeSet } = await planAuthConnections(
+      client,
+      workspaceId,
+      authsWith({ c1: { ...baseConfig, clientId: "changed-client-id" } }),
+    );
+
+    expect(changeSet.replaces.map((r) => r.name)).toEqual(["c1"]);
+    expect(changeSet.creates).toEqual([]);
+    expect(changeSet.deletes).toEqual([]);
+  });
+
+  test("replaces an in-config connection whose secret hash is unknown (state lost / external)", async () => {
+    // Non-secret fields match the remote connection, but secrets-state has no hash for it,
+    // so the secret is treated as changed and the connection is revoked + recreated.
+    // This pins the declarative behavior: a name present in config is always managed,
+    // even when the SDK has no local record of having created it.
+    const client = createMockClient(["c1"]);
+
+    const { changeSet } = await planAuthConnections(
+      client,
+      workspaceId,
+      authsWith({ c1: baseConfig }),
+    );
+
+    expect(changeSet.replaces.map((r) => r.name)).toEqual(["c1"]);
+    expect(changeSet.deletes).toEqual([]);
   });
 });
