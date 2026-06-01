@@ -448,6 +448,35 @@ describe("decrementUserAge", () => {
 
 **Use when:** multi-step business logic. The tests survive query rewrites because they assert high-level intent, not SQL shape.
 
+#### Kysely-layer mock (`createMockKysely`)
+
+When the code under test takes a Kysely `Transaction` directly, `createMockKysely` gives you a real Kysely instance whose execution is mocked — no `tailor-runtime` environment needed. Because it compiles with the same Postgres compiler `getDB()` uses, every Kysely method works, result types are preserved, and you can assert on the actual SQL. Stage the rows each query returns, then assert how many times each operation ran via the `inserts` / `updates` / `deletes` / `selects` getters:
+
+```typescript
+import { createMockKysely } from "@tailor-platform/sdk/vitest";
+import { describe, expect, test } from "vitest";
+import type { Namespace } from "../generated/db";
+import { registerUser } from "./registerUser";
+
+describe("registerUser", () => {
+  test("inserts the user and writes one audit row", async () => {
+    const mock = createMockKysely<Namespace["main-db"]>();
+    mock.enqueueResults([{ id: "1", email: "a@b.com", age: 30 }]); // rows the next query returns
+
+    await registerUser(mock.db, { email: "a@b.com" });
+
+    expect(mock.inserts).toHaveLength(2);
+    expect(mock.updates).toHaveLength(0);
+    expect(mock.inserts[0].parameters).toContain("a@b.com");
+    expect(mock.executedQueries[0].sql).toContain('insert into "User"');
+  });
+});
+```
+
+Stage results with `enqueueResults(...)` (FIFO, one array per executed query) or `setQueryResolver((query) => rows)` (by compiled SQL). `mock.db.transaction().execute(...)` works too — `begin`/`commit` are no-ops, so they never show up in `executedQueries` and don't affect the counts. For code that receives a `Transaction<DB>` directly (e.g. `command(trx, input)`), pass `mock.trx` — the same instance typed as a transaction.
+
+**Use when:** code accepts a `Transaction<DB>` and chains Kysely calls, and you want to assert query intent and operation counts while staging results — without a database. (`streamQuery` is not supported.)
+
 #### Resolvers that resume a workflow
 
 Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `workflowMock.setResolveHandler` to drive the user-supplied callback and inspect `workflowMock.resolveCalls`:
