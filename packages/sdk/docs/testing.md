@@ -450,36 +450,9 @@ describe("decrementUserAge", () => {
 
 #### Kysely-layer mock (`createMockKysely`)
 
-When the code under test takes a Kysely `Transaction` directly, `createMockKysely` gives you a real Kysely instance whose execution is mocked — no `tailor-runtime` environment needed. Because it compiles with the same Postgres compiler `getDB()` uses, every Kysely method works, result types are preserved, and you can assert on the actual SQL. Stage the rows each query returns, then assert how many times each operation ran via the `inserts` / `updates` / `deletes` / `selects` getters:
+`createMockKysely` returns a real Kysely instance whose execution is mocked. Stage the rows each query returns, run your code, then assert what it did — each query's SQL and parameters, how many inserts/updates/selects ran, and the value your code returned. Queries stay fully typed and compile to the same SQL as production.
 
-```typescript
-import { createMockKysely } from "@tailor-platform/sdk/vitest";
-import { describe, expect, test } from "vitest";
-import type { Namespace } from "../generated/db";
-import { registerUser } from "./registerUser";
-
-describe("registerUser", () => {
-  test("inserts the user and writes one audit row", async () => {
-    const mock = createMockKysely<Namespace["main-db"]>();
-    mock.enqueueResults([{ id: "1", email: "a@b.com", age: 30 }]); // rows the next query returns
-
-    await registerUser(mock.db, { email: "a@b.com" });
-
-    expect(mock.inserts).toHaveLength(2);
-    expect(mock.updates).toHaveLength(0);
-    expect(mock.inserts[0].parameters).toContain("a@b.com");
-    expect(mock.executedQueries[0].sql).toContain('insert into "User"');
-  });
-});
-```
-
-Stage results with `enqueueResults(...)` (FIFO, one array per executed query) or `setQueryResolver((query) => rows)` (by compiled SQL). `mock.db.transaction().execute(...)` works too — `begin`/`commit` are no-ops, so they never show up in `executedQueries` and don't affect the counts. For code that receives a `Transaction<DB>` directly (e.g. `command(trx, input)`), call it inside `mock.db.transaction().execute((trx) => command(trx, input))` to hand it a real transaction.
-
-**Use when:** code accepts a `Transaction<DB>` and chains Kysely calls, and you want to assert query intent and operation counts while staging results — without a database. (`streamQuery` is not supported.)
-
-##### Resolvers/executors that call `getDB()` internally
-
-A resolver usually calls `getDB("main-db")` inside its `body`, so there is no parameter to inject the mock into. Spy on the generated `getDB` and make it return `mock.db` — `getDB` has no injection seam, so this is the way to use `createMockKysely` without refactoring to dependency injection:
+Pass `mock.db` to functions that take a Kysely instance. When a resolver or executor calls `getDB()` internally there is no such seam, so spy the generated `getDB` and point it at the mock:
 
 ```typescript
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
@@ -488,7 +461,6 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getDB, type Namespace } from "../generated/db";
 import resolver from "./upsertUsers";
 
-// Keep the real module but spy its exports, then point getDB at the mock.
 vi.mock("../generated/db", { spy: true });
 
 describe("upsertUsers resolver", () => {
@@ -525,7 +497,7 @@ describe("upsertUsers resolver", () => {
 });
 ```
 
-Compared with [`tailordbMock`](#mocking-the-tailordb-client): you do **not** stage `BEGIN`/`COMMIT` rows (the mock driver makes them no-ops), and you can assert operation counts and SQL parameters. Reach for `tailordbMock` instead when you want to drive the raw query sequence at the `tailordb.Client` level.
+Reach for [`tailordbMock`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer.
 
 #### Resolvers that resume a workflow
 

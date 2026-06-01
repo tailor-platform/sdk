@@ -4,8 +4,6 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getDB, type Namespace } from "../generated/db";
 import resolver from "./upsertUsers";
 
-// The resolver calls getDB("main-db") inside its body, so spy on the generated
-// module and make it return the mock Kysely instance.
 vi.mock("../generated/db", { spy: true });
 
 describe("upsertUsers resolver", () => {
@@ -17,7 +15,6 @@ describe("upsertUsers resolver", () => {
   });
 
   test("inserts new users and updates existing ones", async () => {
-    // "exists@example.com" already has a row; the other email does not.
     mock.setQueryResolver((query) =>
       query.sql.startsWith("select") && query.parameters.includes("exists@example.com")
         ? [{ id: "user-1" }]
@@ -40,7 +37,6 @@ describe("upsertUsers resolver", () => {
     expect(mock.updates).toHaveLength(1);
     expect(mock.inserts).toHaveLength(1);
     expect(mock.inserts[0].parameters).toEqual(["Newcomer", "new@example.com", 22]);
-    // begin/commit are no-ops, so only the real statements are recorded.
     expect(mock.executedQueries).toHaveLength(4);
   });
 });
