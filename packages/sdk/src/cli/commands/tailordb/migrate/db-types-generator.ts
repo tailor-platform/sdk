@@ -163,6 +163,7 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
     " */",
     "",
     `import { ${imports.join(", ")} } from "@tailor-platform/sdk/kysely";`,
+    'import type { TailorEnv } from "@tailor-platform/sdk";',
     "",
     ...utilityTypeDeclarations,
     "",
@@ -171,6 +172,9 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
     "}",
     "",
     "export type Transaction = KyselyTransaction<Database>;",
+    "",
+    "/** Context passed as the second argument to the migration's `main` function. */",
+    "export type MigrationContext = { env: TailorEnv };",
   ];
 
   return lines.join("\n") + "\n";
@@ -192,11 +196,15 @@ function generateEmptyDbTypes(namespace: string): string {
       " */",
       "",
       'import { type Transaction as KyselyTransaction } from "@tailor-platform/sdk/kysely";',
+      'import type { TailorEnv } from "@tailor-platform/sdk";',
       "",
       "// eslint-disable-next-line @typescript-eslint/no-empty-object-type",
       "interface Database {}",
       "",
       "export type Transaction = KyselyTransaction<Database>;",
+      "",
+      "/** Context passed as the second argument to the migration's `main` function. */",
+      "export type MigrationContext = { env: TailorEnv };",
     ].join("\n") + "\n"
   );
 }

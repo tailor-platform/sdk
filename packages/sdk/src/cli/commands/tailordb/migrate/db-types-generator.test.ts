@@ -104,6 +104,9 @@ describe("db-types-generator", () => {
       expect(content).toContain("Namespace: tailordb");
       expect(content).toContain("interface Database {}");
       expect(content).toContain("export type Transaction = KyselyTransaction<Database>");
+      // env-aware migration context type
+      expect(content).toContain('import type { TailorEnv } from "@tailor-platform/sdk"');
+      expect(content).toContain("export type MigrationContext = { env: TailorEnv };");
     });
   });
 

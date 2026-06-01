@@ -418,6 +418,7 @@ function buildMigrationContextForScripts(
       ? Object.keys(authService.config.machineUsers)
       : undefined,
     dbConfig: dbConfigMap,
+    env: migrationContext.config.env ?? {},
   };
 }
 
