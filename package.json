@@ -34,7 +34,7 @@
     "pkg-pr-new": "0.0.75",
     "publint": "0.3.21",
     "tsx": "4.22.3",
-    "turbo": "2.9.14",
+    "turbo": "2.9.16",
     "typescript": "5.9.3"
   },
   "engines": {
