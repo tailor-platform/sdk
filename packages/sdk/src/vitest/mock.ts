@@ -364,21 +364,12 @@ export const workflowMock = {
 
   /**
    * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
-   * Returns a `Disposable` so the env can be scoped with `using`. Also cleared by
-   * `workflowMock.reset()`.
+   * Cleared by `workflowMock.reset()`.
    * @param env - Env passed to job bodies.
-   * @returns Disposable that clears the env on dispose.
-   * @example
-   * using _env = workflowMock.setEnv({ STAGE: "test" });
    */
-  setEnv(env: TailorEnv): Disposable {
-    const slot = globalThis as { __tailorWorkflowTestEnv?: TailorEnv };
-    const prev = slot.__tailorWorkflowTestEnv;
-    slot.__tailorWorkflowTestEnv = { ...env };
-    return {
-      [Symbol.dispose]() {
-        slot.__tailorWorkflowTestEnv = prev;
-      },
+  setEnv(env: TailorEnv): void {
+    (globalThis as { __tailorWorkflowTestEnv?: TailorEnv }).__tailorWorkflowTestEnv = {
+      ...env,
     };
   },
 

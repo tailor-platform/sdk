@@ -625,7 +625,7 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `workflowMock.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`). `setEnv()` returns a `Disposable`, so the env can be scoped to a block with `using`:
+To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `workflowMock.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
 
 ```typescript
 import { workflowMock } from "@tailor-platform/sdk/vitest";
@@ -636,7 +636,7 @@ describe("order-fulfillment workflow", () => {
   beforeEach(() => workflowMock.reset());
 
   test("mainJob.trigger() executes all jobs", async () => {
-    using _env = workflowMock.setEnv({ PAYMENT_GATEWAY: "stripe" });
+    workflowMock.setEnv({ PAYMENT_GATEWAY: "stripe" });
 
     const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
 

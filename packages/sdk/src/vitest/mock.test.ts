@@ -169,41 +169,10 @@ describe("mock", () => {
         body: (_input: undefined, ctx) => ctx.env,
       });
 
-      using _env = workflowMock.setEnv({ STAGE: "test", REGION: "asia" });
+      workflowMock.setEnv({ STAGE: "test", REGION: "asia" });
       const env = await captureEnv.trigger();
 
       expect(env).toEqual({ STAGE: "test", REGION: "asia" });
-    });
-
-    test("setEnv returns a Disposable that clears env on dispose", async () => {
-      const { createWorkflowJob } = await import("../configure/services/workflow/job");
-      const captureEnv = createWorkflowJob({
-        name: "capture-env-dispose",
-        body: (_input: undefined, ctx) => ctx.env,
-      });
-
-      {
-        using _env = workflowMock.setEnv({ STAGE: "test" });
-        expect(await captureEnv.trigger()).toEqual({ STAGE: "test" });
-      }
-
-      expect(await captureEnv.trigger()).toEqual({});
-    });
-
-    test("nested setEnv scopes restore the outer env on inner dispose", async () => {
-      const { createWorkflowJob } = await import("../configure/services/workflow/job");
-      const captureEnv = createWorkflowJob({
-        name: "capture-env-nested",
-        body: (_input: undefined, ctx) => ctx.env,
-      });
-
-      using _outer = workflowMock.setEnv({ STAGE: "outer" });
-      expect(await captureEnv.trigger()).toEqual({ STAGE: "outer" });
-      {
-        using _inner = workflowMock.setEnv({ STAGE: "inner" });
-        expect(await captureEnv.trigger()).toEqual({ STAGE: "inner" });
-      }
-      expect(await captureEnv.trigger()).toEqual({ STAGE: "outer" });
     });
 
     test("reset clears env back to {}", async () => {
@@ -229,7 +198,7 @@ describe("mock", () => {
         });
 
         vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
-        using _env = workflowMock.setEnv({ STAGE: "from-setenv" });
+        workflowMock.setEnv({ STAGE: "from-setenv" });
 
         expect(await captureEnv.trigger()).toEqual({ STAGE: "from-setenv" });
       });
