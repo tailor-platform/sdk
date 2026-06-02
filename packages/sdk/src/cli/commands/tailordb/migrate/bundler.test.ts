@@ -222,5 +222,59 @@ export type Transaction = any;
       expect(result.bundledCode).toBeDefined();
       expect(result.bundledCode.length).toBeGreaterThan(0);
     });
+
+    it("injects env into the migration context", async () => {
+      const scriptPath = path.join(testDir, "migrate.ts");
+      fs.writeFileSync(
+        scriptPath,
+        `
+import type { Transaction, MigrationContext } from "./db";
+export async function main(trx: Transaction, { env }: MigrationContext): Promise<void> {
+  await trx.updateTable("User").set({ stage: env.ENVIRONMENT }).execute();
+}
+`,
+      );
+
+      fs.writeFileSync(
+        path.join(testDir, "db.ts"),
+        `
+export type Transaction = any;
+export type MigrationContext = { env: Record<string, string | number | boolean> };
+`,
+      );
+
+      const result = await bundleMigrationScript(scriptPath, "tailordb", 7, {
+        ENVIRONMENT: "staging",
+        RETRIES: 3,
+      });
+
+      // The serialized env is inlined and forwarded into the migration's main()
+      expect(result.bundledCode).toContain("staging");
+      expect(result.bundledCode).toContain("ENVIRONMENT");
+      expect(result.bundledCode).toContain("env");
+    });
+
+    it("injects an empty env object when none is provided", async () => {
+      const scriptPath = path.join(testDir, "migrate.ts");
+      fs.writeFileSync(
+        scriptPath,
+        `
+import type { Transaction } from "./db";
+export async function main(trx: Transaction): Promise<void> {}
+`,
+      );
+
+      fs.writeFileSync(
+        path.join(testDir, "db.ts"),
+        `
+export type Transaction = any;
+`,
+      );
+
+      const result = await bundleMigrationScript(scriptPath, "tailordb", 8);
+
+      // The wrapper always defines and forwards an env binding
+      expect(result.bundledCode).toContain("env");
+    });
   });
 });

@@ -28,12 +28,14 @@ export interface MigrationBundleResult {
  * @param {string} sourceFile - Path to the migration script file
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number
+ * @param {Record<string, string | number | boolean>} env - Environment variables to inject into the migration context
  * @returns {Promise<MigrationBundleResult>} Bundled migration result
  */
 export async function bundleMigrationScript(
   sourceFile: string,
   namespace: string,
   migrationNumber: number,
+  env: Record<string, string | number | boolean> = {},
 ): Promise<MigrationBundleResult> {
   // Output directory in .tailor-sdk (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
@@ -58,9 +60,10 @@ export async function bundleMigrationScript(
     }
 
     export async function main(input) {
+      const env = ${JSON.stringify(env)};
       const db = getDB("${namespace}");
       await db.transaction().execute(async (trx) => {
-        await _migrationMain(trx);
+        await _migrationMain(trx, { env });
       });
       return { success: true };
     }
