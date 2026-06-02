@@ -24,8 +24,10 @@ automatically when the test scope exits — no more `beforeEach(() => mock.reset
  });
 ```
 
-Acquisition does not reset state, so secrets seeded from `tailor.config.ts`
-survive until the `using` scope is disposed.
+Acquisition does not reset state. `secretmanagerMock()` snapshots the secret
+store on acquisition and restores it on dispose (clearing only call records),
+so secrets seeded from `tailor.config.ts` survive across `using` scopes while
+per-test `setSecrets()` overrides stay isolated.
 
 This is a breaking change to the **Beta** `tailor-runtime` testing API. `using`
 requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose`

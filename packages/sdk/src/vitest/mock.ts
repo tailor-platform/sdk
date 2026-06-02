@@ -152,29 +152,50 @@ function getState(): MockState {
 // `using`-friendly factory wrapper
 // ---------------------------------------------------------------------------
 
+interface UsingHooks {
+  /** Runs when the `using` scope is entered (before the test body). */
+  onAcquire?: () => void;
+  /**
+   * Runs when the `using` scope exits. Defaults to `mock.reset()`. Override to
+   * restore a snapshot instead of hard-resetting — e.g. to keep state seeded
+   * outside the test (config secrets) intact across `using` scopes.
+   */
+  onDispose?: () => void;
+}
+
 /**
  * Wraps a singleton mock control object so it can be acquired with a `using`
  * declaration. The returned factory hands back the shared control object
- * augmented with `Symbol.dispose`; when the `using` scope exits, `reset()` is
- * called automatically so the next test starts from a clean slate.
+ * augmented with `Symbol.dispose`; when the `using` scope exits, the dispose
+ * hook runs (by default `reset()`) so the next test starts from a clean slate.
  *
- * Acquisition itself is side-effect free — it does NOT reset on entry — so
+ * Acquisition is side-effect free by default — it does NOT reset on entry — so
  * state seeded outside the test (e.g. secrets loaded from `tailor.config.ts`)
- * survives until the scope is disposed.
+ * survives until the scope is disposed. Mocks that need to preserve such seeded
+ * state across scopes can pass `onAcquire`/`onDispose` to snapshot-and-restore
+ * instead of resetting to defaults (see `secretmanagerMock`).
  * @param mock - The control object to make disposable (must expose `reset()`)
+ * @param hooks - Optional acquire/dispose overrides
  * @returns A factory returning the control object augmented with `Symbol.dispose`
  */
-function asUsingMock<T extends { reset(): void }>(mock: T): () => T & Disposable {
+function asUsingMock<T extends { reset(): void }>(
+  mock: T,
+  hooks?: UsingHooks,
+): () => T & Disposable {
   const disposable = mock as T & Disposable;
   Object.defineProperty(disposable, Symbol.dispose, {
     value(this: T): void {
-      this.reset();
+      if (hooks?.onDispose) hooks.onDispose();
+      else this.reset();
     },
     enumerable: false,
     writable: true,
     configurable: true,
   });
-  return () => disposable;
+  return () => {
+    hooks?.onAcquire?.();
+    return disposable;
+  };
 }
 
 function createDefaultState(): MockState {
@@ -469,10 +490,22 @@ const secretmanagerMockObject = {
   },
 };
 
+// Snapshot of the secret store captured at `using` acquisition. Restored on
+// dispose so per-test `setSecrets()` overrides are isolated WITHOUT wiping
+// secrets seeded once outside tests (e.g. loaded from `tailor.config.ts` in
+// setup.ts). A plain `reset()` would clear the global seed for later tests.
+let secretStoreSnapshot: Record<string, Record<string, string>> = {};
+
 /**
  * Acquire a disposable mock control for `tailor.secretmanager` — secret store
- * and call recording. Acquire it with `using` so its state is reset
+ * and call recording. Acquire it with `using` so its state is restored
  * automatically when the scope exits.
+ *
+ * Unlike the other mocks, disposal does NOT hard-reset the store to empty:
+ * acquisition snapshots the current store and disposal restores it (clearing
+ * only the call records). This keeps secrets seeded outside the test — e.g.
+ * from `tailor.config.ts` via setup.ts — intact for subsequent tests while
+ * still isolating per-test `setSecrets()` overrides.
  * @returns Disposable SecretManager mock control object
  * @example
  * ```typescript
@@ -482,10 +515,19 @@ const secretmanagerMockObject = {
  *   using sm = secretmanagerMock();
  *   sm.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
  *   // …
- * });
+ * }); // store restored to its pre-test snapshot here
  * ```
  */
-export const secretmanagerMock = asUsingMock(secretmanagerMockObject);
+export const secretmanagerMock = asUsingMock(secretmanagerMockObject, {
+  onAcquire() {
+    secretStoreSnapshot = structuredClone(getState().secretStore);
+  },
+  onDispose() {
+    const state = getState();
+    state.secretStore = secretStoreSnapshot;
+    state.secretCalls.length = 0;
+  },
+});
 
 // ---------------------------------------------------------------------------
 // AuthConnection Mock

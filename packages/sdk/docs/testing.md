@@ -73,7 +73,7 @@ test("...", () => {
 }); // db.reset() runs automatically here
 ```
 
-> **Requirements:** `using` requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose` (Node ≥ 20.4 — the SDK already targets Node ≥ 22, and Vitest's transformer downlevels the syntax for you). Acquisition itself does not reset state, so secrets seeded from `tailor.config.ts` survive until the scope is disposed.
+> **Requirements:** `using` requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose` (Node ≥ 20.4 — the SDK already targets Node ≥ 22, and Vitest's transformer downlevels the syntax for you). Acquisition does not reset state. `secretmanagerMock()` is special: it snapshots the secret store on acquisition and restores it on dispose (clearing only call records), so secrets seeded from `tailor.config.ts` survive across `using` scopes while per-test `setSecrets()` overrides stay isolated.
 
 ### TailorDB Mock
 
@@ -287,7 +287,7 @@ export default defineConfig({
 });
 ```
 
-This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `using sm = secretmanagerMock(); sm.setSecrets(...)` in individual tests — and because acquiring a mock does not reset state, the config-loaded secrets stay in place for tests that don't acquire `secretmanagerMock()`.
+This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `using sm = secretmanagerMock(); sm.setSecrets(...)` in individual tests: `secretmanagerMock()` snapshots the store on acquisition and restores it on dispose, so a per-test override is isolated to that test and the config-loaded secrets remain available to every other test.
 
 ### Per-Project Configuration
 

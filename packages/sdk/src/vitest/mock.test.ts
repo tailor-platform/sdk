@@ -272,6 +272,27 @@ describe("mock", () => {
       const result = await (globalThis as any).tailor.secretmanager.getSecret("v", "k");
       expect(result).toBeUndefined();
     });
+
+    test("disposal restores the seeded store instead of wiping it", async () => {
+      // Simulate secrets seeded once outside the test (as setup.ts does from
+      // tailor.config.ts) by writing directly to the shared state.
+      const state = (globalThis as any)[STATE_KEY];
+      state.secretStore = { seeded: { GLOBAL: "from-config" } };
+
+      {
+        using sm = secretmanagerMock();
+        sm.setSecrets({ override: { LOCAL: "per-test" } });
+        await (globalThis as any).tailor.secretmanager.getSecret("override", "LOCAL");
+        expect(sm.calls).toHaveLength(1);
+      } // dispose runs here
+
+      // The per-test override is gone and call records are cleared, but the
+      // globally seeded secret survives for subsequent tests.
+      expect(state.secretCalls).toHaveLength(0);
+      expect(state.secretStore).toEqual({ seeded: { GLOBAL: "from-config" } });
+      const seeded = await (globalThis as any).tailor.secretmanager.getSecret("seeded", "GLOBAL");
+      expect(seeded).toBe("from-config");
+    });
   });
 
   describe("authconnectionMock", () => {
