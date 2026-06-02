@@ -71,8 +71,6 @@ class MockState {
     this.resolver = resolver;
   }
 
-  // Resolver is used when it returns a value (including `[]`); return `undefined` to fall back
-  // to the FIFO queue; else return `[]`.
   next(query: ExecutedQuery): StagedResult {
     const resolved = this.resolver?.(query);
     if (resolved !== undefined) return toStagedResult(resolved);
