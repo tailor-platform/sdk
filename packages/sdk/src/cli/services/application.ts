@@ -504,6 +504,7 @@ export async function loadApplication(
       configPath: config.path,
       authName,
       handlerAccessPath: `auth.hooks.beforeLogin.handler`,
+      env: config.env ?? {},
       triggerContext,
       cache: bundleCache,
       inlineSourcemap,

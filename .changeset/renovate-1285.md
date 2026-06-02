@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-fix(deps): update oxc
+fix(deps): update @inquirer

@@ -204,6 +204,16 @@ body: (input, { env }) => {
   console.log(`Environment: ${env.bar}`);
   return { value: env.foo };
 };
+
+// In auth before-login hooks
+hooks: {
+  beforeLogin: {
+    handler: async ({ claims, idpConfigName, env }) => {
+      console.log(`Environment: ${env.bar}`);
+    },
+    invoker: "hook-invoker",
+  },
+};
 ```
 
 ### Workflow Service

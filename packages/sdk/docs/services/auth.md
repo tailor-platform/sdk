@@ -472,8 +472,9 @@ export const auth = defineAuth("my-auth", {
   },
   hooks: {
     beforeLogin: {
-      handler: async ({ claims, idpConfigName }) => {
+      handler: async ({ claims, idpConfigName, env }) => {
         // Provision or update user based on IdP claims
+        // `env` exposes the variables defined in `defineConfig({ env })`
       },
       invoker: "hook-invoker",
     },
@@ -481,7 +482,7 @@ export const auth = defineAuth("my-auth", {
 });
 ```
 
-**handler**: An async function that receives `{ claims, idpConfigName }` and is called before each login. `claims` contains the token claims from the identity provider, and `idpConfigName` is the name of the IdP configuration used for authentication.
+**handler**: An async function that receives `{ claims, idpConfigName, env }` and is called before each login. `claims` contains the token claims from the identity provider, `idpConfigName` is the name of the IdP configuration used for authentication, and `env` exposes the environment variables defined in `defineConfig({ env })` (the same values available via `context.env` in resolvers).
 
 **invoker**: The machine user whose permissions are used to execute the hook. Must reference a machine user defined in the same auth configuration.
 
