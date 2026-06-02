@@ -107,7 +107,6 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
 ): WorkflowJob<Name, I, Awaited<O>> {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
 
-  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
   if (!process.env.TAILOR_PLATFORM_BUNDLE) {
     registerJob(config.name, body as RegisteredJobBody);
   }
