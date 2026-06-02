@@ -69,4 +69,4 @@ export {
   iconvMock,
 } from "./mock";
 
-export { createMockKysely, type MockKysely, type ExecutedQuery } from "./mock-kysely";
+export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createMockKysely } from "./mock-kysely";
+import { createKyselyMock } from "./mock-kysely";
 
 interface Database {
   User: {
@@ -14,9 +14,9 @@ interface Database {
   };
 }
 
-describe("createMockKysely", () => {
+describe("createKyselyMock", () => {
   test("returns staged rows for a select and records the compiled query", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
     mock.enqueueResults([{ id: "1", email: "a@b.com", age: 30 }]);
 
     const row = await mock.db
@@ -33,7 +33,7 @@ describe("createMockKysely", () => {
   });
 
   test("records inserts with their parameters", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
     mock.enqueueResults([{ id: "1", email: "a@b.com", age: 30 }]);
 
     const created = await mock.db
@@ -48,7 +48,7 @@ describe("createMockKysely", () => {
   });
 
   test("reports staged numAffectedRows on a non-returning mutation", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
     mock.enqueueResults({ numAffectedRows: 3 });
 
     const result = await mock.db
@@ -61,7 +61,7 @@ describe("createMockKysely", () => {
   });
 
   test("defaults a non-returning mutation's affected count to zero when unstaged", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
 
     const result = await mock.db.deleteFrom("User").where("id", "=", "1").executeTakeFirstOrThrow();
 
@@ -69,7 +69,7 @@ describe("createMockKysely", () => {
   });
 
   test("counts how many times each operation ran", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
 
     await mock.db.insertInto("User").values({ id: "1", email: "a@b.com", age: 30 }).execute();
     await mock.db.insertInto("User").values({ id: "2", email: "c@d.com", age: 40 }).execute();
@@ -82,7 +82,7 @@ describe("createMockKysely", () => {
   });
 
   test("does not record begin/commit when running inside a transaction", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
 
     await mock.db.transaction().execute(async (trx) => {
       await trx.insertInto("User").values({ id: "1", email: "a@b.com", age: 30 }).execute();
@@ -95,7 +95,7 @@ describe("createMockKysely", () => {
   });
 
   test("drains enqueued results in FIFO order across queries", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
     mock.enqueueResults(
       [{ id: "1", email: "a@b.com", age: 30 }],
       [{ id: "2", email: "c@d.com", age: 40 }],
@@ -109,7 +109,7 @@ describe("createMockKysely", () => {
   });
 
   test("resolves results by inspecting the compiled query", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
     mock.setQueryResolver((query) =>
       query.sql.includes('from "Post"') ? [{ id: "p1", userId: "1", title: "Hello" }] : [],
     );
@@ -122,7 +122,7 @@ describe("createMockKysely", () => {
   });
 
   test("reset clears recorded queries and staged results", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
     mock.enqueueResults([{ id: "1", email: "a@b.com", age: 30 }]);
     await mock.db.selectFrom("User").selectAll().execute();
 
@@ -134,7 +134,7 @@ describe("createMockKysely", () => {
   });
 
   test("supports complex queries as a real Kysely instance", async () => {
-    const mock = createMockKysely<Database>();
+    const mock = createKyselyMock<Database>();
 
     await mock.db
       .selectFrom("User")

@@ -448,15 +448,15 @@ describe("decrementUserAge", () => {
 
 **Use when:** multi-step business logic. The tests survive query rewrites because they assert high-level intent, not SQL shape.
 
-#### Kysely-layer mock (`createMockKysely`)
+#### Kysely-layer mock (`createKyselyMock`)
 
-`createMockKysely` returns a real Kysely instance whose execution is mocked. Stage the rows each query returns, run your code, then assert what it did — each query's SQL and parameters, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned. Queries stay fully typed and compile to the same SQL as production.
+`createKyselyMock` returns a real Kysely instance whose execution is mocked. Stage the rows each query returns, run your code, then assert what it did — each query's SQL and parameters, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned. Queries stay fully typed and compile to the same SQL as production.
 
 Pass `mock.db` to functions that take a Kysely instance. When a resolver or executor calls `getDB()` internally there is no such seam, so spy the generated `getDB` and point it at the mock:
 
 ```typescript
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { createMockKysely, type MockKysely } from "@tailor-platform/sdk/vitest";
+import { createKyselyMock, type KyselyMock } from "@tailor-platform/sdk/vitest";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getDB, type Namespace } from "../generated/db";
 import resolver from "./upsertUsers";
@@ -464,10 +464,10 @@ import resolver from "./upsertUsers";
 vi.mock("../generated/db", { spy: true });
 
 describe("upsertUsers resolver", () => {
-  let mock: MockKysely<Namespace["main-db"]>;
+  let mock: KyselyMock<Namespace["main-db"]>;
 
   beforeEach(() => {
-    mock = createMockKysely<Namespace["main-db"]>();
+    mock = createKyselyMock<Namespace["main-db"]>();
     vi.mocked(getDB).mockReturnValue(mock.db);
   });
 

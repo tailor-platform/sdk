@@ -2,13 +2,13 @@
 "@tailor-platform/sdk": minor
 ---
 
-Add `createMockKysely` to `@tailor-platform/sdk/vitest` for unit-testing code that runs Kysely queries. It returns a real Kysely instance whose execution is mocked. You stage the rows each query returns, run your code, then assert what it did — the SQL and parameters of each query, how many inserts/updates/selects ran, and the value your code returned.
+Add `createKyselyMock` to `@tailor-platform/sdk/vitest` for unit-testing code that runs Kysely queries. It returns a real Kysely instance whose execution is mocked. You stage the rows each query returns, run your code, then assert what it did — the SQL and parameters of each query, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned.
 
 ```ts
-import { createMockKysely } from "@tailor-platform/sdk/vitest";
+import { createKyselyMock } from "@tailor-platform/sdk/vitest";
 import type { Namespace } from "./generated/db";
 
-const mock = createMockKysely<Namespace["main-db"]>();
+const mock = createKyselyMock<Namespace["main-db"]>();
 mock.enqueueResults([{ age: 30 }]); // the next query returns this row
 
 const { age } = await mock.db

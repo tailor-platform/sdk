@@ -1,5 +1,5 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { createMockKysely, type MockKysely } from "@tailor-platform/sdk/vitest";
+import { createKyselyMock, type KyselyMock } from "@tailor-platform/sdk/vitest";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getDB, type Namespace } from "../generated/db";
 import resolver from "./upsertUsers";
@@ -7,10 +7,10 @@ import resolver from "./upsertUsers";
 vi.mock("../generated/db", { spy: true });
 
 describe("upsertUsers resolver", () => {
-  let mock: MockKysely<Namespace["main-db"]>;
+  let mock: KyselyMock<Namespace["main-db"]>;
 
   beforeEach(() => {
-    mock = createMockKysely<Namespace["main-db"]>();
+    mock = createKyselyMock<Namespace["main-db"]>();
     vi.mocked(getDB).mockReturnValue(mock.db);
   });
 

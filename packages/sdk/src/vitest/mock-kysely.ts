@@ -44,8 +44,8 @@ function toStagedResult(result: MockResult): StagedResult {
   };
 }
 
-/** Controls and assertions for a {@link createMockKysely} instance. */
-export interface MockKysely<DB> {
+/** Controls and assertions for a {@link createKyselyMock} instance. */
+export interface KyselyMock<DB> {
   db: Kysely<DB>;
   executedQueries: ExecutedQuery[];
   selects: ExecutedQuery[];
@@ -103,7 +103,7 @@ class MockConnection implements DatabaseConnection {
   }
 
   streamQuery<R>(): AsyncIterableIterator<QueryResult<R>> {
-    throw new Error("createMockKysely: streaming is not supported");
+    throw new Error("createKyselyMock: streaming is not supported");
   }
 }
 
@@ -132,10 +132,10 @@ function byKind(state: MockState, kind: OperationNodeKind): ExecutedQuery[] {
 /**
  * Create a mock Kysely instance for unit-testing code that runs Kysely queries.
  * Pass the namespace schema as the type argument, e.g.
- * `createMockKysely<Namespace["main-db"]>()`.
- * @returns A {@link MockKysely} with the mock `db`, recorded queries, and result staging.
+ * `createKyselyMock<Namespace["main-db"]>()`.
+ * @returns A {@link KyselyMock} with the mock `db`, recorded queries, and result staging.
  */
-export function createMockKysely<DB = Record<string, never>>(): MockKysely<DB> {
+export function createKyselyMock<DB = Record<string, never>>(): KyselyMock<DB> {
   const state = new MockState();
   const dialect: Dialect = {
     createDriver: () => new MockDriver(state),
