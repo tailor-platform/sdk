@@ -11,7 +11,6 @@ import {
   iconvMock,
   injectMocks,
   cleanupMocks,
-  STATE_KEY,
   RUNTIME_FLAG_KEY,
 } from "./mock";
 
@@ -248,31 +247,36 @@ describe("mock", () => {
     });
   });
 
-  describe("platform APIs are available", () => {
+  describe("platform APIs are installed on acquire", () => {
     test("tailor.secretmanager", () => {
+      using _sm = secretmanagerMock();
       expect((globalThis as any).tailor.secretmanager.getSecret).toBeTypeOf("function");
       expect((globalThis as any).tailor.secretmanager.getSecrets).toBeTypeOf("function");
     });
 
     test("tailor.authconnection", () => {
+      using _ac = authconnectionMock();
       expect((globalThis as any).tailor.authconnection.getConnectionToken).toBeTypeOf("function");
     });
 
     test("tailor.idp.Client", () => {
+      using _idp = idpMock();
       expect((globalThis as any).tailor.idp.Client).toBeTypeOf("function");
     });
 
-    test("tailor.context", () => {
+    test("tailor.context is part of the always-present base surface", () => {
       expect((globalThis as any).tailor.context.getInvoker).toBeTypeOf("function");
     });
 
     test("tailor.iconv", () => {
+      using _iconv = iconvMock();
       expect((globalThis as any).tailor.iconv.convert).toBeTypeOf("function");
       expect((globalThis as any).tailor.iconv.encodings).toBeTypeOf("function");
       expect((globalThis as any).tailor.iconv.Iconv).toBeTypeOf("function");
     });
 
     test("tailordb.file", () => {
+      using _file = fileMock();
       expect((globalThis as any).tailordb.file.upload).toBeTypeOf("function");
       expect((globalThis as any).tailordb.file.download).toBeTypeOf("function");
       expect((globalThis as any).tailordb.file.delete).toBeTypeOf("function");
@@ -331,24 +335,30 @@ describe("mock", () => {
     });
 
     test("disposal restores the seeded store instead of wiping it", async () => {
-      // Simulate secrets seeded once outside the test (as setup.ts does from
-      // tailor.config.ts) by writing directly to the shared state.
-      const state = (globalThis as any)[STATE_KEY];
-      state.secretStore = { seeded: { GLOBAL: "from-config" } };
+      // Seed secrets once outside the test (as setup.ts does from
+      // tailor.config.ts), installed and left in place (no `using`, not disposed).
+      const seed = secretmanagerMock();
+      seed.setSecrets({ seeded: { GLOBAL: "from-config" } });
 
       {
         using sm = secretmanagerMock();
+        // The seeded store is inherited (cloned) on acquisition.
+        expect(await (globalThis as any).tailor.secretmanager.getSecret("seeded", "GLOBAL")).toBe(
+          "from-config",
+        );
+
         sm.setSecrets({ override: { LOCAL: "per-test" } });
         await (globalThis as any).tailor.secretmanager.getSecret("override", "LOCAL");
-        expect(sm.calls).toHaveLength(1);
-      } // dispose runs here
+        expect(sm.calls).toHaveLength(2);
+      } // dispose restores the seeded install
 
-      // The per-test override is gone and call records are cleared, but the
-      // globally seeded secret survives for subsequent tests.
-      expect(state.secretCalls).toHaveLength(0);
-      expect(state.secretStore).toEqual({ seeded: { GLOBAL: "from-config" } });
-      const seeded = await (globalThis as any).tailor.secretmanager.getSecret("seeded", "GLOBAL");
-      expect(seeded).toBe("from-config");
+      // The per-test override is gone, but the globally seeded secret survives.
+      expect(
+        await (globalThis as any).tailor.secretmanager.getSecret("override", "LOCAL"),
+      ).toBeUndefined();
+      expect(await (globalThis as any).tailor.secretmanager.getSecret("seeded", "GLOBAL")).toBe(
+        "from-config",
+      );
     });
   });
 
@@ -370,6 +380,7 @@ describe("mock", () => {
     });
 
     test("returns default token for unknown connection", async () => {
+      using _ac = authconnectionMock();
       const result = await (globalThis as any).tailor.authconnection.getConnectionToken("unknown");
       expect(result).toEqual({ access_token: "mock-token" });
     });
@@ -604,9 +615,7 @@ describe("mock", () => {
     test("records triggerWorkflow calls", async () => {
       using wf = workflowMock();
       await (globalThis as any).tailor.workflow.triggerWorkflow("wf-1", { key: "val" });
-      expect(wf.calls).toEqual([
-        { method: "triggerWorkflow", args: ["wf-1", { key: "val" }, undefined] },
-      ]);
+      expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }]]);
     });
 
     test("setTriggerHandler with string controls triggerWorkflow response", async () => {
@@ -641,7 +650,7 @@ describe("mock", () => {
     test("records wait calls", () => {
       using wf = workflowMock();
       (globalThis as any).tailor.workflow.wait("key", { data: 1 });
-      expect(wf.calls).toEqual([{ method: "wait", args: ["key", { data: 1 }] }]);
+      expect(wf.wait.mock.calls).toEqual([["key", { data: 1 }]]);
       expect(wf.waitCalls).toEqual([{ key: "key", payload: { data: 1 } }]);
     });
 
@@ -691,8 +700,8 @@ describe("mock", () => {
     });
   });
 
-  describe("injectMocks / cleanupMocks", () => {
-    test("cleanupMocks removes all globals", () => {
+  describe("injectMocks / cleanupMocks (base platform globals)", () => {
+    test("cleanupMocks removes the base globals", () => {
       cleanupMocks(globalThis);
 
       expect((globalThis as any).tailordb).toBeUndefined();
@@ -700,32 +709,24 @@ describe("mock", () => {
       expect((globalThis as any).TailorErrors).toBeUndefined();
       expect((globalThis as any).TailorErrorMessage).toBeUndefined();
       expect((globalThis as any).TailorDBFileError).toBeUndefined();
-      expect((globalThis as any)[STATE_KEY]).toBeUndefined();
       expect((globalThis as any)[RUNTIME_FLAG_KEY]).toBeUndefined();
     });
 
-    test("injectMocks sets the runtime-active flag", () => {
-      // beforeEach already called injectMocks, so the flag must be set here.
+    test("injectMocks sets the runtime-active flag and the base surface", () => {
+      // beforeEach already called injectMocks, so the flag and base must be set.
       expect(RUNTIME_FLAG_KEY in globalThis).toBe(true);
+      expect((globalThis as any).tailor.context.getInvoker).toBeTypeOf("function");
+      expect((globalThis as any).TailorErrors).toBeTypeOf("function");
     });
 
-    test("mock helpers do not set the runtime-active flag", () => {
-      // Regression test: previously, setup.ts detected the tailor-runtime
-      // environment via STATE_KEY. STATE_KEY is created lazily by getState()
-      // whenever any mock helper runs, so a non-tailor-runtime project that
-      // simply imported and used mocks would trip the detection. The flag
-      // must only be raised by injectMocks() — not by mock helpers.
-      cleanupMocks(globalThis);
-      expect(RUNTIME_FLAG_KEY in globalThis).toBe(false);
-
-      tailordbMock().reset();
-      // STATE_KEY should now be lazily created by getState()...
-      expect(STATE_KEY in globalThis).toBe(true);
-      // ...but the runtime flag must remain unset.
-      expect(RUNTIME_FLAG_KEY in globalThis).toBe(false);
-
-      // Restore for the afterEach cleanupMocks.
-      injectMocks(globalThis);
+    test("acquiring a mock installs its namespace and dispose restores it", () => {
+      expect((globalThis as any).tailor.workflow).toBeUndefined();
+      {
+        using _wf = workflowMock();
+        expect((globalThis as any).tailor.workflow.triggerJobFunction).toBeTypeOf("function");
+      }
+      // dispose restored the (absent) previous value.
+      expect((globalThis as any).tailor.workflow).toBeUndefined();
     });
   });
 });

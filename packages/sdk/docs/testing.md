@@ -56,11 +56,11 @@ export default defineConfig({
 
 1. **Node.js module blocking** — `import { randomBytes } from "node:crypto"` in production code throws an error with a suggestion for the Web Standard API alternative (`globalThis.crypto`). Test files (`*.test.ts`, `*.spec.ts`) are exempt.
 2. **Node.js globals removal** — Only globals available in the platform runtime are kept (whitelist). `Buffer`, `global`, `setImmediate`, `__dirname`, `__filename`, `performance`, and others are removed.
-3. **Platform API mocks** — `globalThis.tailordb`, `globalThis.tailor`, `TailorErrors`, `TailorErrorMessage`, `TailorDBFileError` are auto-injected with mock control objects for response configuration and call recording.
+3. **Platform API mocks** — a base surface (`globalThis.tailor.context`, `TailorErrors`, `TailorErrorMessage`, `TailorDBFileError`, and the `globalThis.tailor` / `globalThis.tailordb` containers) is auto-installed. The per-namespace mocks (`tailordb.Client`, `tailor.workflow`, `tailor.secretmanager`, …) are layered on when you acquire the corresponding `xMock()` — see below.
 
 ### Acquiring mocks with `using`
 
-Each mock controller (`tailordbMock`, `workflowMock`, `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
+Each mock controller (`tailordbMock`, `workflowMock`, `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`) is a **factory function** backed by `vi.fn()`s. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — acquiring installs the namespace's mocks onto `globalThis`, and the previous state is restored automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
 
 ```typescript
 import { tailordbMock } from "@tailor-platform/sdk/vitest";
@@ -69,10 +69,16 @@ test("...", () => {
   using db = tailordbMock();
   db.enqueueResult({ age: 30 });
   // …
-}); // db.reset() runs automatically here
+}); // workflow/tailordb/… restored to the previous state here
 ```
 
-> **Requirements:** `using` requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose` (Node ≥ 20.4 — the SDK already targets Node ≥ 22, and Vitest's transformer downlevels the syntax for you). Acquisition does not reset state. `secretmanagerMock()` is special: it snapshots the secret store on acquisition and restores it on dispose (clearing only call records), so secrets seeded from `tailor.config.ts` survive across `using` scopes while per-test `setSecrets()` overrides stay isolated.
+The friendly helpers (`setJobHandler`, `enqueueResult`, `triggeredJobs`, `executedQueries`, …) are thin wrappers over the underlying `vi.fn()`s, which are also exposed directly (e.g. `db.queryObject`, `wf.triggerJobFunction`) so you can use native matchers like `expect(wf.triggerJobFunction).toHaveBeenCalledWith(...)`.
+
+> **Requirements:** `using` requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose` (Node ≥ 20.4 — the SDK already targets Node ≥ 22, and Vitest's transformer downlevels the syntax for you).
+>
+> **Acquire what you use:** because a namespace's mock is installed on acquisition, code under test that calls a platform API (e.g. `tailor.workflow`, `tailordb.Client`) must run inside a test that has acquired the matching `xMock()`. The base surface (`tailor.context`, the error classes) is always present.
+>
+> **Seeded secrets survive:** `secretmanagerMock()` inherits the currently-installed secret store on acquisition and restores it on dispose, so secrets seeded from `tailor.config.ts` survive across `using` scopes while per-test `setSecrets()` overrides stay isolated.
 
 ### TailorDB Mock
 
@@ -380,7 +386,7 @@ describe("add resolver", () => {
 
 Stub the global `tailordb.Client` and queue raw query results in order. Best for resolvers that issue a short, predictable query sequence:
 
-> If you are running with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta), `tailordb.Client` is auto-injected — drive it with `tailordbMock` instead of `vi.stubGlobal()`.
+> If you are running with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta), acquire `using db = tailordbMock()` to install and drive the mock `tailordb.Client` instead of `vi.stubGlobal()`.
 
 ```typescript
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";

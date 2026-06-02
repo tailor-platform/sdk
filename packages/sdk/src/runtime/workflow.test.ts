@@ -22,9 +22,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
 
     expectTypeOf(promise).toEqualTypeOf<Promise<string>>();
     await expect(promise).resolves.toBe("exec-42");
-    expect(wf.calls).toEqual([
-      { method: "triggerWorkflow", args: ["my-workflow", { a: 1 }, undefined] },
-    ]);
+    expect(wf.triggerWorkflow.mock.calls).toEqual([["my-workflow", { a: 1 }]]);
   });
 
   test("triggerWorkflow forwards options", async () => {
@@ -37,7 +35,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
       },
     );
 
-    expect(wf.calls[0]?.args[2]).toEqual({
+    expect(wf.triggerWorkflow.mock.calls[0]?.[2]).toEqual({
       authInvoker: { namespace: "ns", machineUserName: "mu" },
     });
   });
@@ -59,7 +57,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
     const result = workflow.wait("key-1", { p: 1 });
 
     expect(result).toEqual({ resumed: true });
-    expect(wf.calls).toEqual([{ method: "wait", args: ["key-1", { p: 1 }] }]);
+    expect(wf.waitCalls).toEqual([{ key: "key-1", payload: { p: 1 } }]);
   });
 
   test("resolve records the call without invoking the callback", async () => {
@@ -70,7 +68,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
     });
 
     expect(invoked).toBe(false);
-    expect(wf.calls).toHaveLength(1);
-    expect(wf.calls[0]?.method).toBe("resolve");
+    expect(wf.resolve).toHaveBeenCalledTimes(1);
+    expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "key-1" }]);
   });
 });

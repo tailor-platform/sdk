@@ -82,7 +82,7 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 
 ## Testing
 
-`@tailor-platform/sdk/vitest` ships mock controllers for every runtime namespace. Pair them with the `tailor-runtime` Vitest environment so your unit tests run against the same wrappers your production code does. Each controller is a factory — acquire it with a `using` declaration and its state is reset automatically when the test scope exits (no `beforeEach(() => mock.reset())` needed). Requires TypeScript ≥ 5.2 and a runtime with `Symbol.dispose` (Node ≥ 20.4; the SDK targets Node ≥ 22).
+`@tailor-platform/sdk/vitest` ships mock controllers for every runtime namespace. Pair them with the `tailor-runtime` Vitest environment so your unit tests run against the same wrappers your production code does. Each controller is a `vi.fn()`-backed factory — acquire it with a `using` declaration; acquiring installs the namespace's mocks and the previous state is restored automatically when the test scope exits (no `beforeEach(() => mock.reset())` needed). Code under test that calls a platform API must run inside a test that acquired the matching `xMock()`. Requires TypeScript ≥ 5.2 and a runtime with `Symbol.dispose` (Node ≥ 20.4; the SDK targets Node ≥ 22).
 
 ```ts
 import { iconv, secretmanager } from "@tailor-platform/sdk/runtime";

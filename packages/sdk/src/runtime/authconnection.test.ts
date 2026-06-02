@@ -27,6 +27,7 @@ describe("@tailor-platform/sdk/runtime/authconnection", () => {
   });
 
   test("returns default token for unknown connection", async () => {
+    using _ac = authconnectionMock();
     const result = await authconnection.getConnectionToken("unknown");
 
     expect(result).toEqual({ access_token: "mock-token" });

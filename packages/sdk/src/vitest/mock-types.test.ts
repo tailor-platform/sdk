@@ -8,7 +8,7 @@
  */
 import "@/runtime/globals";
 import { afterAll, beforeAll, describe, expectTypeOf, test } from "vitest";
-import { injectMocks, cleanupMocks } from "./mock";
+import { cleanupMocks, injectMocks, secretmanagerMock, workflowMock } from "./mock";
 
 beforeAll(() => injectMocks(globalThis));
 afterAll(() => cleanupMocks(globalThis));
@@ -16,12 +16,14 @@ afterAll(() => cleanupMocks(globalThis));
 describe("mock types match @tailor-platform/sdk/runtime/globals", () => {
   describe("tailor.secretmanager", () => {
     test("getSecrets returns Promise<Partial<Record<T[number], string>>>", () => {
+      using _sm = secretmanagerMock();
       expectTypeOf(tailor.secretmanager.getSecrets("vault", ["a", "b"] as const)).toEqualTypeOf<
         Promise<Partial<Record<"a" | "b", string>>>
       >();
     });
 
     test("getSecret returns Promise<string | undefined>", () => {
+      using _sm = secretmanagerMock();
       expectTypeOf(tailor.secretmanager.getSecret("vault", "name")).toEqualTypeOf<
         Promise<string | undefined>
       >();
@@ -30,6 +32,7 @@ describe("mock types match @tailor-platform/sdk/runtime/globals", () => {
 
   describe("tailor.workflow", () => {
     test("triggerWorkflow returns Promise<string>", () => {
+      using _wf = workflowMock();
       expectTypeOf(tailor.workflow.triggerWorkflow("wf", {})).toEqualTypeOf<Promise<string>>();
     });
   });

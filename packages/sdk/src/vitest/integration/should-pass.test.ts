@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterAll, expect, test } from "vitest";
+import { tailordbMock, workflowMock } from "../mock";
 import { generateId } from "./fixtures/uses-web-crypto";
 
 test("web crypto API works in tailor-runtime", () => {
@@ -17,15 +18,20 @@ test("type-only imports from blocked modules are not blocked", async () => {
   expect(fakeHash("hello")).toBe(5);
 });
 
-test("platform API mocks are injected into globalThis", () => {
+test("base platform globals are injected; namespace mocks install on acquire", () => {
+  using _db = tailordbMock();
+  using _wf = workflowMock();
   const g = globalThis as any;
-  expect(g.tailordb).toBeDefined();
-  expect(g.tailordb.Client).toBeTypeOf("function");
+  // Base surface (always present under the tailor-runtime environment).
   expect(g.tailor).toBeDefined();
-  expect(g.tailor.workflow.triggerJobFunction).toBeTypeOf("function");
+  expect(g.tailordb).toBeDefined();
+  expect(g.tailor.context.getInvoker).toBeTypeOf("function");
   expect(g.TailorErrors).toBeTypeOf("function");
   expect(g.TailorErrorMessage).toBeTypeOf("function");
   expect(g.TailorDBFileError).toBeTypeOf("function");
+  // Namespace mocks are installed once the corresponding mock is acquired.
+  expect(g.tailordb.Client).toBeTypeOf("function");
+  expect(g.tailor.workflow.triggerJobFunction).toBeTypeOf("function");
 });
 
 test("setup.ts removes performance global during test execution", () => {
