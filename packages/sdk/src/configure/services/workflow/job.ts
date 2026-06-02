@@ -102,27 +102,30 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  *   },
  * });
  */
-// Not `/* @__NO_SIDE_EFFECTS__ */`: registerJob below mutates the global
-// registry, so bundlers must not treat the call as pure and drop it.
 export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
 
-  // Register on the global job registry so the vitest mock can execute this
-  // body when `globalThis.tailor.workflow.triggerJobFunction(name, args)` is
-  // invoked. In production, the bundler rewrites `.trigger()` calls and the
-  // platform routes by name, so this registry is never read.
-  registerJob(config.name, body as RegisteredJobBody);
+  // The registry + trigger shim exist only so the vitest mock can run job
+  // bodies by name. In a platform bundle `.trigger()` is rewritten to
+  // tailor.workflow.triggerJobFunction and the registry is never read, so the
+  // `__TAILOR_PLATFORM_BUNDLE__` guard lets the bundler drop both as dead code.
+  if (!globalThis.__TAILOR_PLATFORM_BUNDLE__) {
+    registerJob(config.name, body as RegisteredJobBody);
+  }
+
+  const trigger = globalThis.__TAILOR_PLATFORM_BUNDLE__
+    ? () => {
+        throw new Error(
+          "workflowJob.trigger() is rewritten at build time and unavailable in the bundle",
+        );
+      }
+    : async (args?: unknown) =>
+        (await getPlatformWorkflow().triggerJobFunction(config.name, args)) as Awaited<O>;
 
   return brandValue(
-    {
-      name: config.name,
-      trigger: async (args?: unknown) => {
-        return (await getPlatformWorkflow().triggerJobFunction(config.name, args)) as Awaited<O>;
-      },
-      body,
-    } as WorkflowJob<Name, I, Awaited<O>>,
+    { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,
     "workflow-job",
   );
 }

@@ -54,13 +54,12 @@ describe("bundled execution tests", () => {
       "resolvers/stepChain.js": 172428 + sizeBuffer,
       "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB).
-      // Baselines include the small globalThis-registry shim createWorkflowJob bundles.
-      "workflow-jobs/check-inventory.js": 20256 + sizeBuffer,
-      "workflow-jobs/fetch-customer.js": 158001 + sizeBuffer,
-      "workflow-jobs/process-order.js": 1453 + sizeBuffer,
-      "workflow-jobs/process-payment.js": 157895 + sizeBuffer,
-      "workflow-jobs/send-notification.js": 20364 + sizeBuffer,
-      "workflow-jobs/validate-order.js": 1209 + sizeBuffer,
+      "workflow-jobs/check-inventory.js": 19947 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 157672 + sizeBuffer,
+      "workflow-jobs/process-order.js": 1152 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 157566 + sizeBuffer,
+      "workflow-jobs/send-notification.js": 20055 + sizeBuffer,
+      "workflow-jobs/validate-order.js": 908 + sizeBuffer,
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {

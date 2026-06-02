@@ -355,6 +355,13 @@ async function bundleSingleJob(
             // keep their exports intact for rolldown to resolve cross-file
             // imports (e.g. `import workflow from "./other-workflow"`).
             let transformed = code;
+
+            // Mark this as a platform bundle so createWorkflowJob/createWorkflow
+            // fold out their test-only registry + trigger shim as dead code.
+            // (rolldown 1.0.2 `define` does not replace `globalThis.x` member
+            // expressions, so substitute the literal here before minify/DCE.)
+            transformed = transformed.replaceAll("globalThis.__TAILOR_PLATFORM_BUNDLE__", "true");
+
             const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
             if (isJobSourceFile) {
               transformed = transformWorkflowSource(

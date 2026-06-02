@@ -60,19 +60,27 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
  *   mainJob: processData,
  * });
  */
-// Not `/* @__NO_SIDE_EFFECTS__ */`: registerWorkflow below mutates the global
-// registry, so bundlers must not treat the call as pure and drop it.
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
-  registerWorkflow(config.name, config.mainJob.name);
+  // Registry + trigger shim are test-only (see createWorkflowJob); a platform
+  // bundle rewrites `.trigger()` and never reads the registry, so the
+  // `__TAILOR_PLATFORM_BUNDLE__` guard drops both as dead code there.
+  if (!globalThis.__TAILOR_PLATFORM_BUNDLE__) {
+    registerWorkflow(config.name, config.mainJob.name);
+  }
 
   return brandValue(
     {
       ...config,
-      trigger: async (args, options) => {
-        return await getPlatformWorkflow().triggerWorkflow(config.name, args, options);
-      },
+      trigger: globalThis.__TAILOR_PLATFORM_BUNDLE__
+        ? () => {
+            throw new Error(
+              "workflow.trigger() is rewritten at build time and unavailable in the bundle",
+            );
+          }
+        : async (args, options) =>
+            await getPlatformWorkflow().triggerWorkflow(config.name, args, options),
     } as Workflow<Job>,
     "workflow",
   );
