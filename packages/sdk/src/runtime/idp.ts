@@ -2,7 +2,7 @@
  * IDP (Identity Provider) utilities.
  *
  * Thin typed wrapper around the platform-provided `tailor.idp` runtime API.
- * At runtime this delegates to `globalThis.tailor.idp`. Use `idpMock` from
+ * At runtime this delegates to `globalThis.tailor.idp`. Use `mockIdp` from
  * `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
  * @example
  * import { idp } from "@tailor-platform/sdk/runtime";

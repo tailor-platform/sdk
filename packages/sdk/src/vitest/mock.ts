@@ -11,7 +11,7 @@
  *
  * ```ts
  * test("...", () => {
- *   using wf = workflowMock();
+ *   using wf = mockWorkflow();
  *   wf.setJobHandler(() => ({ ok: true }));
  * }); // previous workflow mock restored here
  * ```
@@ -181,10 +181,10 @@ class MockQueryResult {
  * @returns Disposable TailorDB mock control object
  * @example
  * ```typescript
- * import { tailordbMock } from "@tailor-platform/sdk/vitest";
+ * import { mockTailordb } from "@tailor-platform/sdk/vitest";
  *
  * test("order-based", async () => {
- *   using db = tailordbMock();
+ *   using db = mockTailordb();
  *   db.enqueueResults([], [{ age: 30 }], []); // BEGIN / SELECT / COMMIT
  *   // …
  *   expect(db.queryObject).toHaveBeenCalledTimes(3);
@@ -192,7 +192,7 @@ class MockQueryResult {
  * });
  * ```
  */
-export function tailordbMock() {
+export function mockTailordb() {
   const root = tailordbRoot();
   const prevClient = root.Client;
 
@@ -313,16 +313,16 @@ const TRIGGER_DEFAULT = "mock-execution-id";
  * @returns Disposable workflow mock control object
  * @example
  * ```typescript
- * import { workflowMock } from "@tailor-platform/sdk/vitest";
+ * import { mockWorkflow } from "@tailor-platform/sdk/vitest";
  *
  * test("job handler", () => {
- *   using wf = workflowMock();
+ *   using wf = mockWorkflow();
  *   wf.setJobHandler((name) => (name === "validate" ? { valid: true } : null));
  *   expect(wf.triggerJobFunction).toHaveBeenCalledWith("validate", {});
  * });
  * ```
  */
-export function workflowMock() {
+export function mockWorkflow() {
   const root = tailorRoot();
   const prev = root.workflow;
 
@@ -495,16 +495,16 @@ const SECRET_STORE = Symbol("tailorSecretStore");
  * @returns Disposable SecretManager mock control object
  * @example
  * ```typescript
- * import { secretmanagerMock } from "@tailor-platform/sdk/vitest";
+ * import { mockSecretmanager } from "@tailor-platform/sdk/vitest";
  *
  * test("reads secrets from vault", async () => {
- *   using sm = secretmanagerMock();
+ *   using sm = mockSecretmanager();
  *   sm.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
  *   // …
  * });
  * ```
  */
-export function secretmanagerMock() {
+export function mockSecretmanager() {
   const root = tailorRoot();
   const prev = root.secretmanager;
 
@@ -579,16 +579,16 @@ export function secretmanagerMock() {
  * @returns Disposable AuthConnection mock control object
  * @example
  * ```typescript
- * import { authconnectionMock } from "@tailor-platform/sdk/vitest";
+ * import { mockAuthconnection } from "@tailor-platform/sdk/vitest";
  *
  * test("returns configured token", async () => {
- *   using ac = authconnectionMock();
+ *   using ac = mockAuthconnection();
  *   ac.setTokens({ google: { access_token: "ya29.xxx" } });
  *   // …
  * });
  * ```
  */
-export function authconnectionMock() {
+export function mockAuthconnection() {
   const root = tailorRoot();
   const prev = root.authconnection;
 
@@ -645,10 +645,10 @@ const IDP_DEFAULTS: Record<string, unknown> = {
  * @returns Disposable IDP mock control object
  * @example
  * ```typescript
- * import { idpMock } from "@tailor-platform/sdk/vitest";
+ * import { mockIdp } from "@tailor-platform/sdk/vitest";
  *
  * test("resolver-based", async () => {
- *   using idp = idpMock();
+ *   using idp = mockIdp();
  *   idp.setResolver((method) =>
  *     method === "user" ? { id: "u-1", name: "alice", disabled: false } : null,
  *   );
@@ -656,7 +656,7 @@ const IDP_DEFAULTS: Record<string, unknown> = {
  * });
  * ```
  */
-export function idpMock() {
+export function mockIdp() {
   const root = tailorRoot();
   const prev = root.idp;
 
@@ -784,16 +784,16 @@ function defaultIconvResult(method: string, args: unknown[]): unknown {
  * @returns Disposable Iconv mock control object
  * @example
  * ```typescript
- * import { iconvMock } from "@tailor-platform/sdk/vitest";
+ * import { mockIconv } from "@tailor-platform/sdk/vitest";
  *
  * test("mock encoding conversion", () => {
- *   using iconv = iconvMock();
+ *   using iconv = mockIconv();
  *   iconv.setResolver((method) => (method === "decode" ? "decoded-text" : null));
  *   // …
  * });
  * ```
  */
-export function iconvMock() {
+export function mockIconv() {
   const root = tailorRoot();
   const prev = root.iconv;
 
@@ -887,7 +887,7 @@ function toFileStream(value: unknown): FileStream {
   }
   if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
     throw new TypeError(
-      "fileMock.openDownloadStream expects an iterable of StreamValue items " +
+      "mockFile.openDownloadStream expects an iterable of StreamValue items " +
         '(e.g. [{ type: "chunk", data, position }, { type: "complete" }]); ' +
         "got raw bytes. Wrap the bytes in a structured chunk first.",
     );
@@ -932,20 +932,20 @@ function toFileStream(value: unknown): FileStream {
 function assertStreamValue(v: unknown): void {
   if (v === null || typeof v !== "object") {
     throw new TypeError(
-      'fileMock.openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
+      'mockFile.openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
         `got ${typeof v === "object" ? "null" : typeof v}.`,
     );
   }
   if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
     throw new TypeError(
-      "fileMock.openDownloadStream expected a StreamValue item, got raw bytes. " +
+      "mockFile.openDownloadStream expected a StreamValue item, got raw bytes. " +
         'Wrap the bytes in a structured chunk first (e.g. { type: "chunk", data, position }).',
     );
   }
   const type = (v as { type?: unknown }).type;
   if (type !== "metadata" && type !== "chunk" && type !== "complete") {
     throw new TypeError(
-      'fileMock.openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
+      'mockFile.openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
         `got ${JSON.stringify(type)}.`,
     );
   }
@@ -956,16 +956,16 @@ function assertStreamValue(v: unknown): void {
  * @returns Disposable File mock control object
  * @example
  * ```typescript
- * import { fileMock } from "@tailor-platform/sdk/vitest";
+ * import { mockFile } from "@tailor-platform/sdk/vitest";
  *
  * test("mock file download", async () => {
- *   using file = fileMock();
+ *   using file = mockFile();
  *   file.enqueueResult({ data: new Uint8Array([1, 2, 3]), metadata: { ... } });
  *   // …
  * });
  * ```
  */
-export function fileMock() {
+export function mockFile() {
   const root = tailordbRoot();
   const prev = root.file;
 

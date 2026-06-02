@@ -1,11 +1,11 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { tailordbMock } from "@tailor-platform/sdk/vitest";
+import { mockTailordb } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import resolver from "./getProduct";
 
 describe("getProduct resolver", () => {
   test("returns product with category", async () => {
-    using db = tailordbMock();
+    using db = mockTailordb();
     // Select product
     db.enqueueResult({
       id: "product-1",
@@ -36,7 +36,7 @@ describe("getProduct resolver", () => {
   });
 
   test("returns product without category", async () => {
-    using db = tailordbMock();
+    using db = mockTailordb();
     // Select product (no categoryId)
     db.enqueueResult({
       id: "product-2",

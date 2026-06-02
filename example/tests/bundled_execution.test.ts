@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { tailordbMock, workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockTailordb, mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
@@ -112,7 +112,7 @@ describe("bundled execution tests", () => {
     });
 
     test("resolvers/stepChain.js returns result with summary", async () => {
-      using db = tailordbMock();
+      using db = mockTailordb();
       db.setQueryResolver((query) => {
         const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
         if (normalizedQuery.includes("SELECT NAME FROM USER ORDER BY CREATEDAT DESC")) {
@@ -152,7 +152,7 @@ describe("bundled execution tests", () => {
 
   describe("executors", () => {
     test("executors/user-created.js uses the tailordb client", async () => {
-      using db = tailordbMock();
+      using db = mockTailordb();
       db.setQueryResolver((query, params) => {
         if (query.includes("select * from User where id = $1")) {
           expect(params).toEqual(["user-1"]);
@@ -184,7 +184,7 @@ describe("bundled execution tests", () => {
 
   describe("workflow-jobs", () => {
     test("workflow-jobs/process-order.js calls dependent jobs correctly", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.setJobHandler((jobName, args) => {
         if (jobName === "fetch-customer") {
           const { customerId } = args as { customerId: string };
@@ -223,7 +223,7 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/process-order.js throws error when customer not found", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.setJobHandler(() => null);
 
       const main = await importActualMain("workflow-jobs/process-order.js");
@@ -264,7 +264,7 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/validate-order.js triggers check-inventory job", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.setJobHandler((jobName) => {
         if (jobName === "check-inventory") {
           return formatExpectation;

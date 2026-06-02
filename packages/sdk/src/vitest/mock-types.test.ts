@@ -1,30 +1,25 @@
 /**
- * Type-level tests verifying that the mock-injected globals expose the
- * concrete signatures declared by `@tailor-platform/sdk/runtime/globals`.
+ * Type-level tests verifying that the platform globals expose the concrete
+ * signatures declared by `@tailor-platform/sdk/runtime/globals`.
  *
- * Each test asserts a concrete return type (or call shape) — bare
- * `expectTypeOf(x).toEqualTypeOf<typeof x>()` self-comparisons are tautological
- * and are intentionally omitted because they would always pass.
+ * These are pure type assertions: the call expressions are wrapped in arrow
+ * functions that are never invoked, so nothing touches `globalThis` at runtime
+ * and no mock needs to be acquired. `expectTypeOf(fn).returns` inspects the
+ * function's declared return type.
  */
 import "@/runtime/globals";
-import { afterAll, beforeAll, describe, expectTypeOf, test } from "vitest";
-import { cleanupMocks, injectMocks, secretmanagerMock, workflowMock } from "./mock";
-
-beforeAll(() => injectMocks(globalThis));
-afterAll(() => cleanupMocks(globalThis));
+import { describe, expectTypeOf, test } from "vitest";
 
 describe("mock types match @tailor-platform/sdk/runtime/globals", () => {
   describe("tailor.secretmanager", () => {
     test("getSecrets returns Promise<Partial<Record<T[number], string>>>", () => {
-      using _sm = secretmanagerMock();
-      expectTypeOf(tailor.secretmanager.getSecrets("vault", ["a", "b"] as const)).toEqualTypeOf<
-        Promise<Partial<Record<"a" | "b", string>>>
-      >();
+      expectTypeOf(() =>
+        tailor.secretmanager.getSecrets("vault", ["a", "b"] as const),
+      ).returns.toEqualTypeOf<Promise<Partial<Record<"a" | "b", string>>>>();
     });
 
     test("getSecret returns Promise<string | undefined>", () => {
-      using _sm = secretmanagerMock();
-      expectTypeOf(tailor.secretmanager.getSecret("vault", "name")).toEqualTypeOf<
+      expectTypeOf(() => tailor.secretmanager.getSecret("vault", "name")).returns.toEqualTypeOf<
         Promise<string | undefined>
       >();
     });
@@ -32,14 +27,17 @@ describe("mock types match @tailor-platform/sdk/runtime/globals", () => {
 
   describe("tailor.workflow", () => {
     test("triggerWorkflow returns Promise<string>", () => {
-      using _wf = workflowMock();
-      expectTypeOf(tailor.workflow.triggerWorkflow("wf", {})).toEqualTypeOf<Promise<string>>();
+      expectTypeOf(() => tailor.workflow.triggerWorkflow("wf", {})).returns.toEqualTypeOf<
+        Promise<string>
+      >();
     });
   });
 
   describe("tailor.context", () => {
     test("getInvoker returns Invoker | null", () => {
-      expectTypeOf(tailor.context.getInvoker()).toEqualTypeOf<tailor.context.Invoker | null>();
+      expectTypeOf(() =>
+        tailor.context.getInvoker(),
+      ).returns.toEqualTypeOf<tailor.context.Invoker | null>();
     });
   });
 });

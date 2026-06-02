@@ -1,11 +1,11 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { tailordbMock } from "@tailor-platform/sdk/vitest";
+import { mockTailordb } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import resolver from "./incrementUserAge";
 
 describe("incrementUserAge resolver", () => {
   test("increments user age", async () => {
-    using db = tailordbMock();
+    using db = mockTailordb();
     db.enqueueResults(
       [], // BEGIN
       [{ age: 30 }], // SELECT
@@ -23,7 +23,7 @@ describe("incrementUserAge resolver", () => {
   });
 
   test("throws when user not found", async () => {
-    using db = tailordbMock();
+    using db = mockTailordb();
     db.enqueueResults(
       [], // BEGIN
       [], // SELECT (empty)

@@ -2,12 +2,12 @@
  * Tests for `@tailor-platform/sdk/runtime/iconv` typed wrappers.
  *
  * Verifies that each wrapper forwards to `globalThis.tailor.iconv.*` (recorded
- * via `iconvMock().calls`) and that the return-type narrowing (`UTF-8` →
+ * via `mockIconv().calls`) and that the return-type narrowing (`UTF-8` →
  * `string`, otherwise `Uint8Array`) holds at the type level.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as iconv from "@/runtime/iconv";
-import { cleanupMocks, iconvMock, injectMocks } from "@/vitest/mock";
+import { cleanupMocks, mockIconv, injectMocks } from "@/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/iconv", () => {
   beforeEach(() => {
@@ -19,7 +19,7 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("convert forwards args and returns string for UTF-8 target", () => {
-    using iconvM = iconvMock();
+    using iconvM = mockIconv();
     iconvM.setResolver((method, args) => {
       if (method === "convert" && args[2] === "UTF-8") return "decoded";
       return undefined;
@@ -35,7 +35,7 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("convert returns Uint8Array for non-UTF-8 target", () => {
-    using iconvM = iconvMock();
+    using iconvM = mockIconv();
     iconvM.setResolver(() => new Uint8Array([0x82, 0xa0]));
 
     const out = iconv.convert("あ", "UTF-8", "Shift_JIS");
@@ -45,7 +45,7 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("convertBuffer forwards and narrows return type", () => {
-    using iconvM = iconvMock();
+    using iconvM = mockIconv();
     iconvM.setResolver(() => "ok");
 
     const out = iconv.convertBuffer(new Uint8Array(), "Shift_JIS", "UTF-8");
@@ -56,7 +56,7 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("decode forwards args and returns string", () => {
-    using iconvM = iconvMock();
+    using iconvM = mockIconv();
     iconvM.setResolver(() => "hello");
 
     const out = iconv.decode(new Uint8Array([0x68]), "ASCII");
@@ -70,7 +70,7 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("encode narrows return type by encoding", () => {
-    using iconvM = iconvMock();
+    using iconvM = mockIconv();
     iconvM.setResolver((_method, args) => (args[1] === "UTF-8" ? "x" : new Uint8Array([1])));
 
     const utf8 = iconv.encode("a", "UTF-8");
@@ -83,7 +83,7 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("encodings forwards and returns string[]", () => {
-    using iconvM = iconvMock();
+    using iconvM = mockIconv();
     iconvM.setResolver(() => ["UTF-8", "Shift_JIS"]);
 
     const list = iconv.encodings();
@@ -93,7 +93,7 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("Iconv class delegates convert to global Iconv", () => {
-    using iconvM = iconvMock();
+    using iconvM = mockIconv();
     iconvM.setResolver((method) => (method === "convert" ? "via-class" : undefined));
 
     const conv = new iconv.Iconv("Shift_JIS", "UTF-8");

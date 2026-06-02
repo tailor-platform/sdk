@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import workflow, { processWithApproval } from "./approval";
 
 describe("approval workflow", () => {
   test("approved flow returns approved status", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setWaitHandler((_key, _payload) => ({ approved: true }));
 
     const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
@@ -19,7 +19,7 @@ describe("approval workflow", () => {
   });
 
   test("rejected flow returns rejected status", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setWaitHandler({ approved: false });
 
     const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });

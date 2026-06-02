@@ -2,13 +2,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } from "../configure/services/workflow/job";
 import {
-  tailordbMock,
-  workflowMock,
-  secretmanagerMock,
-  authconnectionMock,
-  idpMock,
-  fileMock,
-  iconvMock,
+  mockTailordb,
+  mockWorkflow,
+  mockSecretmanager,
+  mockAuthconnection,
+  mockIdp,
+  mockFile,
+  mockIconv,
   injectMocks,
   cleanupMocks,
   RUNTIME_FLAG_KEY,
@@ -23,9 +23,9 @@ describe("mock", () => {
     cleanupMocks(globalThis);
   });
 
-  describe("tailordbMock", () => {
+  describe("mockTailordb", () => {
     test("records executed queries", async () => {
-      using db = tailordbMock();
+      using db = mockTailordb();
       const client = new (globalThis as any).tailordb.Client({
         namespace: "test",
       });
@@ -40,7 +40,7 @@ describe("mock", () => {
     });
 
     test("setQueryResolver provides content-based responses", async () => {
-      using db = tailordbMock();
+      using db = mockTailordb();
       db.setQueryResolver((query) => {
         if (query.includes("SELECT")) return [{ id: "1", name: "test" }];
         return [];
@@ -53,7 +53,7 @@ describe("mock", () => {
     });
 
     test("enqueueResult provides order-based responses", async () => {
-      using db = tailordbMock();
+      using db = mockTailordb();
       db.enqueueResult(); // BEGIN (empty)
       db.enqueueResult({ age: 30 }); // SELECT (one row)
       db.enqueueResult(); // COMMIT (empty)
@@ -69,7 +69,7 @@ describe("mock", () => {
     });
 
     test("enqueueResult takes priority over queryResolver", async () => {
-      using db = tailordbMock();
+      using db = mockTailordb();
       db.setQueryResolver(() => [{ fallback: true }]);
       db.enqueueResult({ queued: true });
 
@@ -83,7 +83,7 @@ describe("mock", () => {
     });
 
     test("reset clears all state", async () => {
-      using db = tailordbMock();
+      using db = mockTailordb();
       db.enqueueResult({ data: true });
       const client = new (globalThis as any).tailordb.Client({});
       await client.queryObject("test");
@@ -95,7 +95,7 @@ describe("mock", () => {
     });
 
     test("createTransaction works", async () => {
-      using db = tailordbMock();
+      using db = mockTailordb();
       db.enqueueResult(); // transaction query (empty result)
 
       const client = new (globalThis as any).tailordb.Client({});
@@ -110,13 +110,13 @@ describe("mock", () => {
     });
   });
 
-  describe("workflowMock", () => {
+  describe("mockWorkflow", () => {
     afterEach(() => {
       vi.unstubAllEnvs();
     });
 
     test("records triggered jobs", () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
       trigger("my-job", { key: "value" });
 
@@ -124,7 +124,7 @@ describe("mock", () => {
     });
 
     test("setJobHandler provides content-based responses", () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.setJobHandler((jobName) => {
         if (jobName === "validate") return { valid: true };
         return null;
@@ -137,7 +137,7 @@ describe("mock", () => {
     });
 
     test("enqueueResults provides order-based responses", () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.enqueueResults({ step: 1 }, { step: 2 });
 
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
@@ -146,7 +146,7 @@ describe("mock", () => {
     });
 
     test("enqueueResult takes priority over jobHandler", () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.setJobHandler(() => ({ fallback: true }));
       wf.enqueueResult({ queued: true });
 
@@ -156,7 +156,7 @@ describe("mock", () => {
     });
 
     test("reset clears all state", () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
       trigger("job", {});
 
@@ -166,7 +166,7 @@ describe("mock", () => {
     });
 
     test("setEnv exposes env to job bodies via .trigger()", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       const captureEnv = createWorkflowJob({
         name: "capture-env",
         body: (_input: undefined, ctx) => ctx.env,
@@ -179,7 +179,7 @@ describe("mock", () => {
     });
 
     test("reset clears env back to {}", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       const captureEnv = createWorkflowJob({
         name: "capture-env-reset",
         body: (_input: undefined, ctx) => ctx.env,
@@ -193,7 +193,7 @@ describe("mock", () => {
 
     describe("backward-compat: deprecated WORKFLOW_TEST_ENV_KEY env-var", () => {
       test("setEnv takes priority over the env-var", async () => {
-        using wf = workflowMock();
+        using wf = mockWorkflow();
         const captureEnv = createWorkflowJob({
           name: "capture-env-compat-priority",
           body: (_input: undefined, ctx) => ctx.env,
@@ -249,18 +249,18 @@ describe("mock", () => {
 
   describe("platform APIs are installed on acquire", () => {
     test("tailor.secretmanager", () => {
-      using _sm = secretmanagerMock();
+      using _sm = mockSecretmanager();
       expect((globalThis as any).tailor.secretmanager.getSecret).toBeTypeOf("function");
       expect((globalThis as any).tailor.secretmanager.getSecrets).toBeTypeOf("function");
     });
 
     test("tailor.authconnection", () => {
-      using _ac = authconnectionMock();
+      using _ac = mockAuthconnection();
       expect((globalThis as any).tailor.authconnection.getConnectionToken).toBeTypeOf("function");
     });
 
     test("tailor.idp.Client", () => {
-      using _idp = idpMock();
+      using _idp = mockIdp();
       expect((globalThis as any).tailor.idp.Client).toBeTypeOf("function");
     });
 
@@ -269,35 +269,35 @@ describe("mock", () => {
     });
 
     test("tailor.iconv", () => {
-      using _iconv = iconvMock();
+      using _iconv = mockIconv();
       expect((globalThis as any).tailor.iconv.convert).toBeTypeOf("function");
       expect((globalThis as any).tailor.iconv.encodings).toBeTypeOf("function");
       expect((globalThis as any).tailor.iconv.Iconv).toBeTypeOf("function");
     });
 
     test("tailordb.file", () => {
-      using _file = fileMock();
+      using _file = mockFile();
       expect((globalThis as any).tailordb.file.upload).toBeTypeOf("function");
       expect((globalThis as any).tailordb.file.download).toBeTypeOf("function");
       expect((globalThis as any).tailordb.file.delete).toBeTypeOf("function");
     });
   });
 
-  describe("secretmanagerMock", () => {
+  describe("mockSecretmanager", () => {
     test("records getSecret calls", async () => {
-      using sm = secretmanagerMock();
+      using sm = mockSecretmanager();
       await (globalThis as any).tailor.secretmanager.getSecret("vault", "key");
       expect(sm.calls).toEqual([{ method: "getSecret", vault: "vault", name: "key" }]);
     });
 
     test("records getSecrets calls", async () => {
-      using sm = secretmanagerMock();
+      using sm = mockSecretmanager();
       await (globalThis as any).tailor.secretmanager.getSecrets("vault", ["a", "b"]);
       expect(sm.calls).toEqual([{ method: "getSecrets", vault: "vault", names: ["a", "b"] }]);
     });
 
     test("setSecrets provides nested map responses", async () => {
-      using sm = secretmanagerMock();
+      using sm = mockSecretmanager();
       sm.setSecrets({
         "my-vault": { API_KEY: "sk-123", DB_PASS: "secret" },
       });
@@ -316,7 +316,7 @@ describe("mock", () => {
     });
 
     test("getSecrets returns partial record from store", async () => {
-      using sm = secretmanagerMock();
+      using sm = mockSecretmanager();
       sm.setSecrets({ v: { a: "1", b: "2" } });
 
       const result = await (globalThis as any).tailor.secretmanager.getSecrets("v", ["a", "c"]);
@@ -324,7 +324,7 @@ describe("mock", () => {
     });
 
     test("reset clears store and calls", async () => {
-      using sm = secretmanagerMock();
+      using sm = mockSecretmanager();
       sm.setSecrets({ v: { k: "val" } });
       await (globalThis as any).tailor.secretmanager.getSecret("v", "k");
       sm.reset();
@@ -337,11 +337,11 @@ describe("mock", () => {
     test("disposal restores the seeded store instead of wiping it", async () => {
       // Seed secrets once outside the test (as setup.ts does from
       // tailor.config.ts), installed and left in place (no `using`, not disposed).
-      const seed = secretmanagerMock();
+      const seed = mockSecretmanager();
       seed.setSecrets({ seeded: { GLOBAL: "from-config" } });
 
       {
-        using sm = secretmanagerMock();
+        using sm = mockSecretmanager();
         // The seeded store is inherited (cloned) on acquisition.
         expect(await (globalThis as any).tailor.secretmanager.getSecret("seeded", "GLOBAL")).toBe(
           "from-config",
@@ -362,15 +362,15 @@ describe("mock", () => {
     });
   });
 
-  describe("authconnectionMock", () => {
+  describe("mockAuthconnection", () => {
     test("records calls", async () => {
-      using ac = authconnectionMock();
+      using ac = mockAuthconnection();
       await (globalThis as any).tailor.authconnection.getConnectionToken("google");
       expect(ac.calls).toEqual([{ connectionName: "google" }]);
     });
 
     test("setTokens provides map-based responses", async () => {
-      using ac = authconnectionMock();
+      using ac = mockAuthconnection();
       ac.setTokens({
         google: { access_token: "ya29.xxx", expires_in: 3600 },
       });
@@ -380,13 +380,13 @@ describe("mock", () => {
     });
 
     test("returns default token for unknown connection", async () => {
-      using _ac = authconnectionMock();
+      using _ac = mockAuthconnection();
       const result = await (globalThis as any).tailor.authconnection.getConnectionToken("unknown");
       expect(result).toEqual({ access_token: "mock-token" });
     });
 
     test("reset clears tokens and calls", async () => {
-      using ac = authconnectionMock();
+      using ac = mockAuthconnection();
       ac.setTokens({ g: { access_token: "tok" } });
       await (globalThis as any).tailor.authconnection.getConnectionToken("g");
       ac.reset();
@@ -397,16 +397,16 @@ describe("mock", () => {
     });
   });
 
-  describe("idpMock", () => {
+  describe("mockIdp", () => {
     test("records calls with method, args, namespace", async () => {
-      using idp = idpMock();
+      using idp = mockIdp();
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       await client.user("u-1");
       expect(idp.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
     });
 
     test("enqueueResults provides ordered responses", async () => {
-      using idp = idpMock();
+      using idp = mockIdp();
       idp.enqueueResults({ id: "u-1", name: "alice", disabled: false }, true);
 
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
@@ -418,7 +418,7 @@ describe("mock", () => {
     });
 
     test("setResolver provides content-based responses", async () => {
-      using idp = idpMock();
+      using idp = mockIdp();
       idp.setResolver((method) => {
         if (method === "users")
           return {
@@ -435,7 +435,7 @@ describe("mock", () => {
     });
 
     test("reset clears state", async () => {
-      using idp = idpMock();
+      using idp = mockIdp();
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       await client.user("u-1");
       idp.reset();
@@ -443,7 +443,7 @@ describe("mock", () => {
     });
 
     test("default fallback is cloned so test mutations cannot leak across tests", async () => {
-      using _idp = idpMock();
+      using _idp = mockIdp();
       // resolveIdpCall returns IDP_DEFAULTS[method] when no enqueue/resolver
       // is configured. Without cloning, mutating the returned `users` array
       // would persist across tests in the same worker.
@@ -455,9 +455,9 @@ describe("mock", () => {
     });
   });
 
-  describe("fileMock", () => {
+  describe("mockFile", () => {
     test("records calls", async () => {
-      using file = fileMock();
+      using file = mockFile();
       await (globalThis as any).tailordb.file.upload("ns", "Doc", "file", "r-1", "data");
       expect(file.calls).toEqual([
         {
@@ -471,14 +471,14 @@ describe("mock", () => {
     });
 
     test("enqueueResult provides ordered responses", async () => {
-      using file = fileMock();
+      using file = mockFile();
       file.enqueueResult({ metadata: { fileSize: 100, sha256sum: "abc" } });
       const result = await (globalThis as any).tailordb.file.upload("ns", "T", "f", "r", "data");
       expect(result.metadata.fileSize).toBe(100);
     });
 
     test("setResolver provides content-based responses", async () => {
-      using file = fileMock();
+      using file = mockFile();
       file.setResolver((method) => {
         if (method === "getMetadata")
           return { contentType: "image/png", fileSize: 500, sha256sum: "def", urlPath: "/files/x" };
@@ -489,14 +489,14 @@ describe("mock", () => {
     });
 
     test("reset clears state", async () => {
-      using file = fileMock();
+      using file = mockFile();
       await (globalThis as any).tailordb.file.delete("ns", "T", "f", "r");
       file.reset();
       expect(file.calls).toHaveLength(0);
     });
 
     test("openDownloadStream rejects raw bytes to guide callers to structured chunks", async () => {
-      using file = fileMock();
+      using file = mockFile();
       file.enqueueResult(new Uint8Array([1, 2, 3]));
       await expect(
         (globalThis as any).tailordb.file.openDownloadStream("ns", "T", "f", "r"),
@@ -504,7 +504,7 @@ describe("mock", () => {
     });
 
     test("openDownloadStream rejects non-StreamValue elements yielded by the iterable", async () => {
-      using file = fileMock();
+      using file = mockFile();
       // Uint8Array[] is iterable but its elements aren't StreamValue items.
       file.enqueueResult([new Uint8Array([1]), new Uint8Array([2])]);
       const stream = await (globalThis as any).tailordb.file.openDownloadStream(
@@ -517,7 +517,7 @@ describe("mock", () => {
     });
 
     test("openDownloadStream yields the enqueued StreamValue sequence", async () => {
-      using file = fileMock();
+      using file = mockFile();
       const bytes = new Uint8Array([1, 2, 3]);
       const sequence = [
         {
@@ -540,7 +540,7 @@ describe("mock", () => {
     });
 
     test("default fallback is cloned so test mutations cannot leak across tests", async () => {
-      using _file = fileMock();
+      using _file = mockFile();
       // resolveFileCall returns FILE_DEFAULTS[method] when no enqueue/resolver
       // is configured. Without cloning, mutating the returned `data` payload
       // would persist across tests in the same worker.
@@ -557,15 +557,15 @@ describe("mock", () => {
     });
   });
 
-  describe("iconvMock", () => {
+  describe("mockIconv", () => {
     test("records calls", () => {
-      using iconv = iconvMock();
+      using iconv = mockIconv();
       (globalThis as any).tailor.iconv.convert("hello", "UTF-8", "Shift_JIS");
       expect(iconv.calls).toEqual([{ method: "convert", args: ["hello", "UTF-8", "Shift_JIS"] }]);
     });
 
     test("setResolver overrides responses", () => {
-      using iconv = iconvMock();
+      using iconv = mockIconv();
       iconv.setResolver((method) => {
         if (method === "decode") return "decoded-text";
         return null;
@@ -575,14 +575,14 @@ describe("mock", () => {
     });
 
     test("reset clears calls and resolver", () => {
-      using iconv = iconvMock();
+      using iconv = mockIconv();
       (globalThis as any).tailor.iconv.encodings();
       iconv.reset();
       expect(iconv.calls).toHaveLength(0);
     });
 
     test("default convert returns string for UTF-8 target, Uint8Array otherwise", () => {
-      using _iconv = iconvMock();
+      using _iconv = mockIconv();
       const utf8Result = (globalThis as any).tailor.iconv.convert("hi", "Shift_JIS", "UTF-8");
       expect(utf8Result).toBe("");
       const binResult = (globalThis as any).tailor.iconv.convert("hi", "UTF-8", "Shift_JIS");
@@ -591,7 +591,7 @@ describe("mock", () => {
     });
 
     test("default encode returns string for UTF-8 target, Uint8Array otherwise", () => {
-      using _iconv = iconvMock();
+      using _iconv = mockIconv();
       const utf8Result = (globalThis as any).tailor.iconv.encode("hi", "UTF-8");
       expect(utf8Result).toBe("");
       const binResult = (globalThis as any).tailor.iconv.encode("hi", "Shift_JIS");
@@ -600,7 +600,7 @@ describe("mock", () => {
     });
 
     test("resolver returning undefined falls back to default", () => {
-      using iconv = iconvMock();
+      using iconv = mockIconv();
       // Resolvers using early-return style (`if (...) return;`) implicitly
       // return undefined for unhandled methods. That should fall through to
       // the type-consistent default rather than leaking undefined.
@@ -611,22 +611,22 @@ describe("mock", () => {
     });
   });
 
-  describe("workflowMock extended", () => {
+  describe("mockWorkflow extended", () => {
     test("records triggerWorkflow calls", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       await (globalThis as any).tailor.workflow.triggerWorkflow("wf-1", { key: "val" });
       expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }]]);
     });
 
     test("setTriggerHandler with string controls triggerWorkflow response", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.setTriggerHandler("exec-123");
       const result = await (globalThis as any).tailor.workflow.triggerWorkflow("wf");
       expect(result).toBe("exec-123");
     });
 
     test("setTriggerHandler with function receives name/args/options", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       const seen: unknown[] = [];
       wf.setTriggerHandler((name, args, options) => {
         seen.push({ name, args, options });
@@ -648,28 +648,28 @@ describe("mock", () => {
     });
 
     test("records wait calls", () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       (globalThis as any).tailor.workflow.wait("key", { data: 1 });
       expect(wf.wait.mock.calls).toEqual([["key", { data: 1 }]]);
       expect(wf.waitCalls).toEqual([{ key: "key", payload: { data: 1 } }]);
     });
 
     test("setWaitHandler with value controls wait response", () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.setWaitHandler({ approved: true });
       const result = (globalThis as any).tailor.workflow.wait("key");
       expect(result).toEqual({ approved: true });
     });
 
     test("setWaitHandler with function receives key/payload", () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       wf.setWaitHandler((key: string, payload: unknown) => ({ key, payload }));
       const result = (globalThis as any).tailor.workflow.wait("approval", { reason: "ok" });
       expect(result).toEqual({ key: "approval", payload: { reason: "ok" } });
     });
 
     test("setResolveHandler invokes the user callback", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       const calls: unknown[] = [];
       wf.setResolveHandler((executionId, key, callback) => {
         calls.push({ executionId, key });
@@ -690,7 +690,7 @@ describe("mock", () => {
     });
 
     test("resolve is recorded but callback is not invoked by default", async () => {
-      using wf = workflowMock();
+      using wf = mockWorkflow();
       let callbackRan = false;
       await (globalThis as any).tailor.workflow.resolve("exec-1", "approval", () => {
         callbackRan = true;
@@ -722,7 +722,7 @@ describe("mock", () => {
     test("acquiring a mock installs its namespace and dispose restores it", () => {
       expect((globalThis as any).tailor.workflow).toBeUndefined();
       {
-        using _wf = workflowMock();
+        using _wf = mockWorkflow();
         expect((globalThis as any).tailor.workflow.triggerJobFunction).toBeTypeOf("function");
       }
       // dispose restored the (absent) previous value.

@@ -12,7 +12,7 @@
  */
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeAll, beforeEach } from "vitest";
-import { RUNTIME_FLAG_KEY, secretmanagerMock } from "./mock";
+import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
 
 // Globals that Vitest internals depend on but don't exist in the platform runtime.
 // Removed before each test, restored after.
@@ -100,7 +100,7 @@ export function extractVaultStore(secrets: unknown): Record<string, Record<strin
  * Returns a vault store on success, or `null` on any failure (missing config,
  * import failure, missing/invalid secrets shape). Errors are swallowed so a
  * misconfigured project still boots — the user can set secrets manually via
- * `secretmanagerMock().setSecrets()`.
+ * `mockSecretmanager().setSecrets()`.
  * @param configPath - Absolute path to tailor.config.ts
  * @returns Vault store keyed by vault name, or null if unavailable
  */
@@ -129,7 +129,7 @@ beforeAll(async () => {
   if (store) {
     // Acquire without `using`: this is a one-time global seed that must persist
     // across tests, so we deliberately do not dispose (which would reset it).
-    secretmanagerMock().setSecrets(store);
+    mockSecretmanager().setSecrets(store);
   }
 });
 

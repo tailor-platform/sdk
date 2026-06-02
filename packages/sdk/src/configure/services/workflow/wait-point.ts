@@ -41,7 +41,7 @@ function getPlatformWorkflow() {
   const workflow = platform.tailor?.workflow;
   if (!workflow) {
     throw new Error(
-      "tailor.workflow is not available. Use workflowMock from @tailor-platform/sdk/vitest in tests.",
+      "tailor.workflow is not available. Use mockWorkflow from @tailor-platform/sdk/vitest in tests.",
     );
   }
   return workflow;
@@ -49,7 +49,7 @@ function getPlatformWorkflow() {
 
 /**
  * Create a WaitPointInstance that delegates to the platform runtime.
- * Use `workflowMock` from `@tailor-platform/sdk/vitest` to mock
+ * Use `mockWorkflow` from `@tailor-platform/sdk/vitest` to mock
  * `globalThis.tailor.workflow.wait/resolve` in tests.
  * @param initialKey - Initial key (can be updated via the returned setter)
  * @returns The instance and a setter to update the key after construction

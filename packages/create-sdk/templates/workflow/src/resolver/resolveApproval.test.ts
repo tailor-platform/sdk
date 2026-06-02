@@ -1,11 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import resolver from "./resolveApproval";
 
 describe("resolveApproval resolver", () => {
   test("resolves approval with approved=true", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setResolveHandler((_executionId, _key, callback) => {
       const callbackResult = callback({
         message: "Please approve order order-1",
@@ -25,7 +25,7 @@ describe("resolveApproval resolver", () => {
   });
 
   test("resolves approval with approved=false", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setResolveHandler((_executionId, _key, callback) => {
       const callbackResult = callback({ message: "Please approve", orderId: "order-2" });
       expect(callbackResult).toEqual({ approved: false });

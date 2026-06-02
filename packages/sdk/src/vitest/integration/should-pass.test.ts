@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterAll, expect, test } from "vitest";
-import { tailordbMock, workflowMock } from "../mock";
+import { mockTailordb, mockWorkflow } from "../mock";
 import { generateId } from "./fixtures/uses-web-crypto";
 
 test("web crypto API works in tailor-runtime", () => {
@@ -19,8 +19,8 @@ test("type-only imports from blocked modules are not blocked", async () => {
 });
 
 test("base platform globals are injected; namespace mocks install on acquire", () => {
-  using _db = tailordbMock();
-  using _wf = workflowMock();
+  using _db = mockTailordb();
+  using _wf = mockWorkflow();
   const g = globalThis as any;
   // Base surface (always present under the tailor-runtime environment).
   expect(g.tailor).toBeDefined();

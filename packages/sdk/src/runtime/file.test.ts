@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import * as file from "@/runtime/file";
-import { cleanupMocks, fileMock, injectMocks } from "@/vitest/mock";
+import { cleanupMocks, mockFile, injectMocks } from "@/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/file", () => {
   beforeEach(() => {
@@ -15,7 +15,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("upload forwards args and records the call", async () => {
-    using fileM = fileMock();
+    using fileM = mockFile();
     fileM.enqueueResult({ metadata: { fileSize: 4, sha256sum: "abc" } });
 
     const result = await file.upload("ns", "Doc", "blob", "rec-1", new Uint8Array([1, 2, 3, 4]));
@@ -33,7 +33,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("download forwards and returns the queued payload", async () => {
-    using fileM = fileMock();
+    using fileM = mockFile();
     fileM.enqueueResult({
       data: new Uint8Array([9, 9]),
       metadata: {
@@ -51,7 +51,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("downloadAsBase64 forwards", async () => {
-    using fileM = fileMock();
+    using fileM = mockFile();
     fileM.enqueueResult({
       data: "AQID",
       metadata: {
@@ -69,7 +69,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("getMetadata forwards", async () => {
-    using fileM = fileMock();
+    using fileM = mockFile();
     fileM.enqueueResult({
       contentType: "image/png",
       fileSize: 100,
@@ -84,7 +84,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("delete forwards (re-exported from deleteFile)", async () => {
-    using fileM = fileMock();
+    using fileM = mockFile();
     await file.delete("ns", "Doc", "blob", "rec-1");
 
     expect(fileM.calls).toEqual([
@@ -99,7 +99,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("openDownloadStream forwards and yields StreamValue chunks", async () => {
-    using fileM = fileMock();
+    using fileM = mockFile();
     const sequence: file.StreamValue[] = [
       {
         type: "metadata",
@@ -123,7 +123,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("downloadStream forwards and returns body with metadata", async () => {
-    using fileM = fileMock();
+    using fileM = mockFile();
     const body = new ReadableStream({
       start(controller) {
         controller.enqueue(new Uint8Array([1, 2, 3]));
@@ -148,7 +148,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   });
 
   test("uploadStream forwards args and records the call", async () => {
-    using fileM = fileMock();
+    using fileM = mockFile();
     fileM.enqueueResult({ metadata: { fileSize: 10, sha256sum: "xyz" } });
 
     const stream = new ReadableStream({

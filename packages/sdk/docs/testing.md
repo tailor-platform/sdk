@@ -21,9 +21,9 @@ Helpers under `@tailor-platform/sdk/test`:
 
 Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
-- `tailordbMock` — TailorDB query stubs and call recording
-- `workflowMock` — `tailor.workflow` job / wait / resolve mocks
-- `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock` — corresponding platform API mocks
+- `mockTailordb` — TailorDB query stubs and call recording
+- `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
+- `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv` — corresponding platform API mocks
 
 For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
 
@@ -60,13 +60,13 @@ export default defineConfig({
 
 ### Acquiring mocks with `using`
 
-Each mock controller (`tailordbMock`, `workflowMock`, `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`) is a **factory function** backed by `vi.fn()`s. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — acquiring installs the namespace's mocks onto `globalThis`, and the previous state is restored automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
+Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`) is a **factory function** backed by `vi.fn()`s. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — acquiring installs the namespace's mocks onto `globalThis`, and the previous state is restored automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
 
 ```typescript
-import { tailordbMock } from "@tailor-platform/sdk/vitest";
+import { mockTailordb } from "@tailor-platform/sdk/vitest";
 
 test("...", () => {
-  using db = tailordbMock();
+  using db = mockTailordb();
   db.enqueueResult({ age: 30 });
   // …
 }); // workflow/tailordb/… restored to the previous state here
@@ -78,17 +78,17 @@ The friendly helpers (`setJobHandler`, `enqueueResult`, `triggeredJobs`, `execut
 >
 > **Acquire what you use:** because a namespace's mock is installed on acquisition, code under test that calls a platform API (e.g. `tailor.workflow`, `tailordb.Client`) must run inside a test that has acquired the matching `xMock()`. The base surface (`tailor.context`, the error classes) is always present.
 >
-> **Seeded secrets survive:** `secretmanagerMock()` inherits the currently-installed secret store on acquisition and restores it on dispose, so secrets seeded from `tailor.config.ts` survive across `using` scopes while per-test `setSecrets()` overrides stay isolated.
+> **Seeded secrets survive:** `mockSecretmanager()` inherits the currently-installed secret store on acquisition and restores it on dispose, so secrets seeded from `tailor.config.ts` survive across `using` scopes while per-test `setSecrets()` overrides stay isolated.
 
 ### TailorDB Mock
 
-The environment auto-injects a mock `tailordb.Client`. Use `tailordbMock()` to configure responses and assert on executed queries:
+The environment auto-injects a mock `tailordb.Client`. Use `mockTailordb()` to configure responses and assert on executed queries:
 
 ```typescript
-import { tailordbMock } from "@tailor-platform/sdk/vitest";
+import { mockTailordb } from "@tailor-platform/sdk/vitest";
 
 test("resolver queries the database", async () => {
-  using db = tailordbMock();
+  using db = mockTailordb();
   // Order-based: stage rows for each upcoming query in one call
   db.enqueueResults(
     [], // BEGIN (empty result)
@@ -112,7 +112,7 @@ Three response modes:
 
 ```typescript
 test("content-based mock", async () => {
-  using db = tailordbMock();
+  using db = mockTailordb();
   db.setQueryResolver((query) => {
     if (query.includes("SELECT")) return [{ id: "1", name: "test" }];
     return [];
@@ -126,13 +126,13 @@ test("content-based mock", async () => {
 
 ### Workflow Mock
 
-The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `workflowMock()` to configure job responses:
+The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `mockWorkflow()` to configure job responses:
 
 ```typescript
-import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 
 test("workflow triggers jobs", async () => {
-  using wf = workflowMock();
+  using wf = mockWorkflow();
   wf.setJobHandler((jobName, args) => {
     if (jobName === "validate-order") return { valid: true };
     if (jobName === "process-payment") return { txnId: "txn-1" };
@@ -148,10 +148,10 @@ test("workflow triggers jobs", async () => {
 });
 ```
 
-`workflowMock()` also supports order-based responses:
+`mockWorkflow()` also supports order-based responses:
 
 ```typescript
-using wf = workflowMock();
+using wf = mockWorkflow();
 
 // Single response for the next triggerJobFunction call
 wf.enqueueResult({ valid: true });
@@ -163,10 +163,10 @@ wf.enqueueResults({ valid: true }, { txnId: "txn-1" });
 ### SecretManager Mock
 
 ```typescript
-import { secretmanagerMock } from "@tailor-platform/sdk/vitest";
+import { mockSecretmanager } from "@tailor-platform/sdk/vitest";
 
 test("reads secrets from vault", async () => {
-  using sm = secretmanagerMock();
+  using sm = mockSecretmanager();
   sm.setSecrets({
     "my-vault": { API_KEY: "sk-123", DB_PASS: "secret" },
   });
@@ -180,10 +180,10 @@ test("reads secrets from vault", async () => {
 ### AuthConnection Mock
 
 ```typescript
-import { authconnectionMock } from "@tailor-platform/sdk/vitest";
+import { mockAuthconnection } from "@tailor-platform/sdk/vitest";
 
 test("returns configured token", async () => {
-  using ac = authconnectionMock();
+  using ac = mockAuthconnection();
   ac.setTokens({
     google: { access_token: "ya29.xxx", expires_in: 3600 },
   });
@@ -198,10 +198,10 @@ When no token is configured for a connection, it returns `{ access_token: "mock-
 ### IDP Mock
 
 ```typescript
-import { idpMock } from "@tailor-platform/sdk/vitest";
+import { mockIdp } from "@tailor-platform/sdk/vitest";
 
 test("resolver-based", async () => {
-  using idp = idpMock();
+  using idp = mockIdp();
   idp.setResolver((method, args) => {
     if (method === "user") return { id: "u-1", name: "alice", disabled: false };
     return null; // falls back to defaults
@@ -213,7 +213,7 @@ test("resolver-based", async () => {
 });
 
 test("queue-based", async () => {
-  using idp = idpMock();
+  using idp = mockIdp();
   idp.enqueueResult({ id: "u-1", name: "alice", disabled: false });
 
   const client = new tailor.idp.Client({ namespace: "my-ns" });
@@ -226,10 +226,10 @@ test("queue-based", async () => {
 ### File Mock
 
 ```typescript
-import { fileMock } from "@tailor-platform/sdk/vitest";
+import { mockFile } from "@tailor-platform/sdk/vitest";
 
 test("mock file download", async () => {
-  using file = fileMock();
+  using file = mockFile();
   file.enqueueResult({
     data: new Uint8Array([1, 2, 3]),
     metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc", lastUploadedAt: "" },
@@ -245,7 +245,7 @@ For `downloadStream`, enqueue a `FileDownloadStreamResponse` object with a `Read
 
 ```typescript
 test("mock file download stream", async () => {
-  using file = fileMock();
+  using file = mockFile();
   const body = new ReadableStream({
     start(controller) {
       controller.enqueue(new Uint8Array([1, 2, 3]));
@@ -266,7 +266,7 @@ For the deprecated `openDownloadStream`, enqueue an iterable of `StreamValue` it
 
 ```typescript
 test("mock file download stream (deprecated openDownloadStream)", async () => {
-  using file = fileMock();
+  using file = mockFile();
   file.enqueueResult([
     {
       type: "metadata",
@@ -287,10 +287,10 @@ test("mock file download stream (deprecated openDownloadStream)", async () => {
 ### Iconv Mock
 
 ```typescript
-import { iconvMock } from "@tailor-platform/sdk/vitest";
+import { mockIconv } from "@tailor-platform/sdk/vitest";
 
 test("mock encoding conversion", () => {
-  using iconv = iconvMock();
+  using iconv = mockIconv();
   iconv.setResolver((method, args) => {
     if (method === "decode") return "decoded-text";
     return null; // falls back to default empty string
@@ -313,7 +313,7 @@ export default defineConfig({
 });
 ```
 
-This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `using sm = secretmanagerMock(); sm.setSecrets(...)` in individual tests: `secretmanagerMock()` snapshots the store on acquisition and restores it on dispose, so a per-test override is isolated to that test and the config-loaded secrets remain available to every other test.
+This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `using sm = mockSecretmanager(); sm.setSecrets(...)` in individual tests: `mockSecretmanager()` snapshots the store on acquisition and restores it on dispose, so a per-test override is isolated to that test and the config-loaded secrets remain available to every other test.
 
 ### Per-Project Configuration
 
@@ -386,7 +386,7 @@ describe("add resolver", () => {
 
 Stub the global `tailordb.Client` and queue raw query results in order. Best for resolvers that issue a short, predictable query sequence:
 
-> If you are running with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta), acquire `using db = tailordbMock()` to install and drive the mock `tailordb.Client` instead of `vi.stubGlobal()`.
+> If you are running with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta), acquire `using db = mockTailordb()` to install and drive the mock `tailordb.Client` instead of `vi.stubGlobal()`.
 
 ```typescript
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
@@ -485,17 +485,17 @@ describe("decrementUserAge", () => {
 
 #### Resolvers that resume a workflow
 
-Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `workflowMock().setResolveHandler` to drive the user-supplied callback and inspect `resolveCalls`:
+Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().setResolveHandler` to drive the user-supplied callback and inspect `resolveCalls`:
 
 ```typescript
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import resolver from "./resolveApproval";
 
 describe("resolveApproval resolver", () => {
   test("resolves approval with approved=true", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setResolveHandler((_executionId, _key, callback) => {
       const result = callback({ message: "Please approve order order-1", orderId: "order-1" });
       expect(result).toEqual({ approved: true });
@@ -619,16 +619,16 @@ describe("fulfillOrder", () => {
 
 #### Jobs that wait on approval
 
-`.wait()` calls delegate to `tailor.workflow.wait`. With the `tailor-runtime` environment active, use `workflowMock().setWaitHandler` to drive each branch and inspect `waitCalls`:
+`.wait()` calls delegate to `tailor.workflow.wait`. With the `tailor-runtime` environment active, use `mockWorkflow().setWaitHandler` to drive each branch and inspect `waitCalls`:
 
 ```typescript
-import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import { processWithApproval } from "./approval";
 
 describe("processWithApproval", () => {
   test("returns approved status when .wait() resolves positively", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setWaitHandler({ approved: true });
 
     const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
@@ -641,7 +641,7 @@ describe("processWithApproval", () => {
   });
 
   test("returns rejected status when .wait() resolves negatively", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setWaitHandler({ approved: false });
 
     const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
@@ -655,18 +655,18 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `workflowMock.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
+To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `mockWorkflow.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
 
 ```typescript
-import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { afterEach, describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
-  afterEach(() => workflowMock.reset());
+  afterEach(() => mockWorkflow.reset());
 
   test("mainJob.trigger() executes all jobs", async () => {
-    workflowMock.setEnv({ PAYMENT_GATEWAY: "stripe" });
+    mockWorkflow.setEnv({ PAYMENT_GATEWAY: "stripe" });
 
     const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
 

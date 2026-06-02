@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import * as idp from "@/runtime/idp";
-import { cleanupMocks, idpMock, injectMocks } from "@/vitest/mock";
+import { cleanupMocks, mockIdp, injectMocks } from "@/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/idp", () => {
   beforeEach(() => {
@@ -18,7 +18,7 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   });
 
   test("Client.user forwards args and namespace", async () => {
-    using idpM = idpMock();
+    using idpM = mockIdp();
     idpM.enqueueResult({ id: "u-1", name: "alice", disabled: false });
 
     const client = new idp.Client({ namespace: "ns" });
@@ -29,7 +29,7 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   });
 
   test("Client.userByName forwards", async () => {
-    using idpM = idpMock();
+    using idpM = mockIdp();
     idpM.enqueueResult({ id: "u-1", name: "alice", disabled: false });
 
     const client = new idp.Client({ namespace: "ns" });
@@ -39,7 +39,7 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   });
 
   test("Client.users forwards options", async () => {
-    using idpM = idpMock();
+    using idpM = mockIdp();
     idpM.enqueueResult({
       users: [{ id: "u-1", name: "alice", disabled: false }],
       nextPageToken: null,
@@ -54,7 +54,7 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   });
 
   test("Client.createUser / updateUser / deleteUser forward", async () => {
-    using idpM = idpMock();
+    using idpM = mockIdp();
     idpM.enqueueResults(
       { id: "u-2", name: "bob", disabled: false },
       { id: "u-2", name: "bob2", disabled: false },
@@ -71,7 +71,7 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   });
 
   test("Client.sendPasswordResetEmail forwards", async () => {
-    using idpM = idpMock();
+    using idpM = mockIdp();
     const client = new idp.Client({ namespace: "ns" });
     const ok = await client.sendPasswordResetEmail({
       userId: "u-1",

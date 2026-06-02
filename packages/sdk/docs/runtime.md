@@ -86,11 +86,11 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 
 ```ts
 import { iconv, secretmanager } from "@tailor-platform/sdk/runtime";
-import { iconvMock, secretmanagerMock } from "@tailor-platform/sdk/vitest";
+import { mockIconv, mockSecretmanager } from "@tailor-platform/sdk/vitest";
 import { expect, test } from "vitest";
 
 test("encodes via iconv", () => {
-  using iconvM = iconvMock();
+  using iconvM = mockIconv();
   iconvM.setResolver(() => new Uint8Array([0x82, 0xa0]));
 
   const out = iconv.convert("あ", "UTF-8", "Shift_JIS");
@@ -100,7 +100,7 @@ test("encodes via iconv", () => {
 }); // iconvM.reset() runs here automatically
 
 test("reads from a vault", async () => {
-  using sm = secretmanagerMock();
+  using sm = mockSecretmanager();
   sm.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
 
   await expect(secretmanager.getSecret("my-vault", "API_KEY")).resolves.toBe("sk-123");

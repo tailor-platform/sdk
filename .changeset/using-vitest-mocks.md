@@ -4,11 +4,12 @@
 
 feat(vitest): expose mock controllers as `using`-friendly factories (Beta, breaking)
 
-The mock controllers from `@tailor-platform/sdk/vitest` (`tailordbMock`,
-`workflowMock`, `secretmanagerMock`, `authconnectionMock`, `idpMock`,
-`fileMock`, `iconvMock`) are now **factory functions** instead of singleton
-objects. Acquire one with a `using` declaration and its state is reset
-automatically when the test scope exits — no more `beforeEach(() => mock.reset())`.
+The mock controllers from `@tailor-platform/sdk/vitest` are renamed from
+noun-style singleton objects (`tailordbMock`, `workflowMock`, …) to verb-style
+**factory functions** (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`,
+`mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`). Acquire one with a
+`using` declaration and its state is reset automatically when the test scope
+exits — no more `beforeEach(() => mock.reset())`.
 
 ```diff
 -import { tailordbMock } from "@tailor-platform/sdk/vitest";
@@ -18,7 +19,7 @@ automatically when the test scope exits — no more `beforeEach(() => mock.reset
  test("...", () => {
 -  tailordbMock.enqueueResult({ age: 30 });
 -  expect(tailordbMock.executedQueries).toHaveLength(1);
-+  using db = tailordbMock();
++  using db = mockTailordb();
 +  db.enqueueResult({ age: 30 });
 +  expect(db.executedQueries).toHaveLength(1);
  });
@@ -35,7 +36,7 @@ namespaces and nested scopes are isolated.
 Because a namespace's mock is installed on acquisition, code under test that
 calls a platform API (e.g. `tailor.workflow`, `tailordb.Client`) must run inside
 a test that acquired the matching `xMock()`. The base surface
-(`tailor.context`, the error classes) is always present. `secretmanagerMock()`
+(`tailor.context`, the error classes) is always present. `mockSecretmanager()`
 inherits the currently-installed secret store on acquisition and restores it on
 dispose, so secrets seeded from `tailor.config.ts` survive across `using`
 scopes while per-test `setSecrets()` overrides stay isolated.

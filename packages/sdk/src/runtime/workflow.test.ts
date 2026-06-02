@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as workflow from "@/runtime/workflow";
-import { cleanupMocks, injectMocks, workflowMock } from "@/vitest/mock";
+import { cleanupMocks, injectMocks, mockWorkflow } from "@/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
   beforeEach(() => {
@@ -15,7 +15,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
   });
 
   test("triggerWorkflow forwards args and returns Promise<string>", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setTriggerHandler("exec-42");
 
     const promise = workflow.triggerWorkflow("my-workflow", { a: 1 });
@@ -26,7 +26,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
   });
 
   test("triggerWorkflow forwards options", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     await workflow.triggerWorkflow(
       "my-workflow",
       { a: 1 },
@@ -41,7 +41,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
   });
 
   test("triggerJobFunction forwards and returns enqueued result", () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.enqueueResult({ ok: true });
 
     const result = workflow.triggerJobFunction("my-job", { id: 1 });
@@ -51,7 +51,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
   });
 
   test("wait records the call and returns the configured result", () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     wf.setWaitHandler({ resumed: true });
 
     const result = workflow.wait("key-1", { p: 1 });
@@ -61,7 +61,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
   });
 
   test("resolve records the call without invoking the callback", async () => {
-    using wf = workflowMock();
+    using wf = mockWorkflow();
     let invoked = false;
     await workflow.resolve("exec-1", "key-1", () => {
       invoked = true;
