@@ -1,5 +1,50 @@
 # @tailor-platform/sdk
 
+## 1.54.0
+
+### Minor Changes
+
+- [#1268](https://github.com/tailor-platform/sdk/pull/1268) [`e6b2a23`](https://github.com/tailor-platform/sdk/commit/e6b2a23b99e101cb878d9570e18d9d2fcbc07ac0) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(auth): expose `env` in the `beforeLogin` hook handler
+
+  The `beforeLogin` auth hook handler now receives `env` alongside `claims` and `idpConfigName`, exposing the variables defined in `defineConfig({ env })` (the same values available via `context.env` in resolvers). This lets hooks branch on environment-specific configuration at runtime without relying on `process.env`, which is unavailable in the platform runtime.
+
+- [#1277](https://github.com/tailor-platform/sdk/pull/1277) [`8d05f86`](https://github.com/tailor-platform/sdk/commit/8d05f864bc714f12783f66453791912dae8246a3) Thanks [@remiposo](https://github.com/remiposo)! - Add `createKyselyMock` to `@tailor-platform/sdk/vitest` for unit-testing code that runs Kysely queries. It returns a real Kysely instance whose execution is mocked. You stage the rows each query returns, run your code, then assert what it did — the SQL and parameters of each query, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned.
+
+  ```ts
+  import { createKyselyMock } from "@tailor-platform/sdk/vitest";
+  import type { Namespace } from "./generated/db";
+
+  const mock = createKyselyMock<Namespace["main-db"]>();
+  mock.enqueueResults([{ age: 30 }]); // the next query returns this row
+
+  const { age } = await mock.db
+    .selectFrom("User")
+    .select("age")
+    .where("email", "=", "a@b.com")
+    .executeTakeFirstOrThrow();
+  await mock.db
+    .updateTable("User")
+    .set({ age: age + 1 })
+    .where("email", "=", "a@b.com")
+    .execute();
+
+  expect(mock.updates).toHaveLength(1);
+  expect(mock.updates[0].parameters).toEqual([31, "a@b.com"]); // the actual bound values
+  expect(mock.updates[0].sql).toContain('update "User"'); // the compiled SQL
+  ```
+
+- [#1269](https://github.com/tailor-platform/sdk/pull/1269) [`a230ba6`](https://github.com/tailor-platform/sdk/commit/a230ba6a1b6861f60e6edac82ae59d333f1f3604) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(migration): expose `env` in migration scripts
+
+  The migration `main` function now receives an optional second argument `{ env }: MigrationContext` exposing the variables defined in `defineConfig({ env })` — the same values available via `context.env` in resolvers and `{ env }` in workflow jobs. The values are injected at bundle time and the `MigrationContext` type is exported from the generated `./db`. Existing `main(trx)` scripts continue to work unchanged.
+
+### Patch Changes
+
+- [#1285](https://github.com/tailor-platform/sdk/pull/1285) [`239b146`](https://github.com/tailor-platform/sdk/commit/239b1466ab4fb91d416d7cecb606703b5f9a9a33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1288](https://github.com/tailor-platform/sdk/pull/1288) [`02027b1`](https://github.com/tailor-platform/sdk/commit/02027b1d71120ca50e06dea1060d03c39bec41f7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.5.0
+
+- [#1291](https://github.com/tailor-platform/sdk/pull/1291) [`6f52e3e`](https://github.com/tailor-platform/sdk/commit/6f52e3e8b385ab00e010fd5bbc4f8bd5f15167be) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency date-fns to v4.4.0
+
 ## 1.53.0
 
 ### Minor Changes
