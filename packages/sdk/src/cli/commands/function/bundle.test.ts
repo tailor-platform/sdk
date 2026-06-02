@@ -295,5 +295,31 @@ export default {
       const mod = await import(pathToFileURL(tempFile).href);
       expect(typeof mod.main).toBe("function");
     });
+
+    // The Platform runtime has no `process`; a surviving `process.env.*` read
+    // would crash there. The bundler must fold the flag away at build time.
+    it("folds away the platform-bundle flag", async () => {
+      const sourceFile = path.join(testDir, "flagged.ts");
+      fs.writeFileSync(
+        sourceFile,
+        `
+export const flagged_job = {
+  name: "flagged-job",
+  trigger: () => {},
+  body: () => ({ bundled: Boolean(process.env.TAILOR_PLATFORM_BUNDLE) }),
+};
+`,
+      );
+
+      const result = await bundleForTestRun({
+        detected: { type: "workflow-job", name: "flagged-job", exportName: "flagged_job" },
+        sourceFile,
+        env: {},
+        machineUser: defaultMachineUser,
+        workspaceId: defaultWorkspaceId,
+      });
+
+      expect(result.bundledCode).not.toContain("process.env.TAILOR_PLATFORM_BUNDLE");
+    });
   });
 });

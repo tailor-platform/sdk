@@ -10,6 +10,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { platformBundleDefinePlugin } from "@/cli/services/workflow/platform-bundle-plugin";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
@@ -81,6 +82,7 @@ export async function bundleForTestRun(
   const buildResult = await rolldown.build({
     input: entryPath,
     write: false,
+    plugins: [platformBundleDefinePlugin],
     output: {
       format: "esm",
       sourcemap: inlineSourcemap ? "inline" : true,

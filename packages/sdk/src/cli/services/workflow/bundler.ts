@@ -11,6 +11,7 @@ import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
+import { platformBundleDefinePlugin } from "./platform-bundle-plugin";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 
@@ -356,10 +357,6 @@ async function bundleSingleJob(
             // imports (e.g. `import workflow from "./other-workflow"`).
             let transformed = code;
 
-            // Fold the platform-bundle flag to a literal so the minifier DCEs the
-            // test-only workflow registry/trigger shim.
-            transformed = transformed.replaceAll("process.env.TAILOR_PLATFORM_BUNDLE", "true");
-
             const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
             if (isJobSourceFile) {
               transformed = transformWorkflowSource(
@@ -389,7 +386,11 @@ async function bundleSingleJob(
         },
       };
 
-      const plugins: rolldown.Plugin[] = [transformPlugin, ...cachePlugins];
+      const plugins: rolldown.Plugin[] = [
+        transformPlugin,
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      ];
 
       const result = await rolldown.build({
         input: entryPath,
