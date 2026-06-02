@@ -324,7 +324,8 @@ function normalizeComparablePermission(
       right: c.right ? { kind: c.right.kind } : undefined,
     })),
     permit: policy.permit,
-    description: policy.description,
+    // Platform returns an empty string for an unset description; treat it the same as omitted.
+    description: policy.description || undefined,
   });
   return {
     create: permission.create.map(normalizePolicy),
