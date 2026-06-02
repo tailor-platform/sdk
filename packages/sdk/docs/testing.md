@@ -106,7 +106,7 @@ test("content-based mock", async () => {
 
 ### Workflow Mock
 
-The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `workflowMock` to configure job responses. When no handler/result is configured for a job, the mock falls back to running the body registered by `createWorkflowJob`, so dependent jobs execute their real implementations by default — see [Running a full workflow locally](#running-a-full-workflow-locally) for that flow.
+The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `workflowMock` to configure job responses. When no handler/result is configured for a job, the mock runs that job's real body, so dependent jobs execute their real implementations by default — see [Running a full workflow locally](#running-a-full-workflow-locally) for that flow.
 
 ```typescript
 import { workflowMock } from "@tailor-platform/sdk/vitest";
@@ -625,7 +625,7 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain without staging job responses, call `workflow.mainJob.trigger()` (or `workflow.trigger()`) under the `tailor-runtime` environment. Each `createWorkflowJob` registers its body at import time and the workflow mock falls back to running the registered body whenever no handler/result is configured for that name — so dependent jobs run their real `.body()` functions automatically. Use `workflowMock.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
+To exercise the full chain without staging job responses, call `workflow.mainJob.trigger()` (or `workflow.trigger()`) under the `tailor-runtime` environment. Dependent jobs run their real `.body()` functions automatically whenever no handler/result is configured for them, so no per-job stubbing is needed. Use `workflowMock.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
 
 ```typescript
 import { workflowMock } from "@tailor-platform/sdk/vitest";
@@ -647,7 +647,7 @@ describe("order-fulfillment workflow", () => {
 
 **Use when:** you want to verify orchestration end to end without the cost of a real deployment.
 
-**Requires:** `environment: "tailor-runtime"`. Outside that environment `.trigger()` throws because `globalThis.tailor.workflow` is not injected.
+**Requires:** the `tailor-runtime` environment — `.trigger()` is unavailable without it.
 
 ## End-to-End (E2E) Tests
 
