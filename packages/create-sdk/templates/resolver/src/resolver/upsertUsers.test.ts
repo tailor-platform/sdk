@@ -15,11 +15,17 @@ describe("upsertUsers resolver", () => {
   });
 
   test("inserts new users and updates existing ones", async () => {
-    mock.setQueryResolver((query) =>
-      query.sql.startsWith("select") && query.parameters.includes("exists@example.com")
-        ? [{ id: "user-1" }]
-        : [],
-    );
+    mock.setQueryResolver((query) => {
+      switch (query.kind) {
+        case "SelectQueryNode":
+          return query.parameters.includes("exists@example.com") ? [{ id: "user-1" }] : [];
+        case "InsertQueryNode":
+        case "UpdateQueryNode":
+          return { numAffectedRows: 1 };
+        default:
+          return [];
+      }
+    });
 
     const result = await resolver.body({
       input: {

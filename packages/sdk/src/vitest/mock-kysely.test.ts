@@ -47,6 +47,27 @@ describe("createMockKysely", () => {
     expect(mock.inserts[0].parameters).toEqual(["1", "a@b.com", 30]);
   });
 
+  test("reports staged numAffectedRows on a non-returning mutation", async () => {
+    const mock = createMockKysely<Database>();
+    mock.enqueueResults({ numAffectedRows: 3 });
+
+    const result = await mock.db
+      .updateTable("User")
+      .set({ age: 1 })
+      .where("id", "=", "1")
+      .executeTakeFirstOrThrow();
+
+    expect(result.numUpdatedRows).toBe(3n);
+  });
+
+  test("defaults a non-returning mutation's affected count to zero when unstaged", async () => {
+    const mock = createMockKysely<Database>();
+
+    const result = await mock.db.deleteFrom("User").where("id", "=", "1").executeTakeFirstOrThrow();
+
+    expect(result.numDeletedRows).toBe(0n);
+  });
+
   test("counts how many times each operation ran", async () => {
     const mock = createMockKysely<Database>();
 

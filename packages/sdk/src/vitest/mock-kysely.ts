@@ -27,7 +27,28 @@ export interface ExecutedQuery {
 }
 
 type MockRow = Record<string, unknown>;
-type QueryResolver = (query: CompiledQuery) => MockRow[] | undefined;
+type MockResult = MockRow[] | { rows?: MockRow[]; numAffectedRows?: number | bigint };
+type QueryResolver = (query: ExecutedQuery) => MockResult | undefined;
+
+interface StagedResult {
+  rows: MockRow[];
+  numAffectedRows: bigint | undefined;
+}
+
+const MUTATION_KINDS = new Set<OperationNodeKind>([
+  "InsertQueryNode",
+  "UpdateQueryNode",
+  "DeleteQueryNode",
+]);
+
+function normalize(result: MockResult): StagedResult {
+  if (Array.isArray(result)) return { rows: result, numAffectedRows: undefined };
+  return {
+    rows: result.rows ?? [],
+    numAffectedRows:
+      result.numAffectedRows === undefined ? undefined : BigInt(result.numAffectedRows),
+  };
+}
 
 /** Controls and assertions for a {@link createMockKysely} instance. */
 export interface MockKysely<DB> {
@@ -37,18 +58,18 @@ export interface MockKysely<DB> {
   inserts: ExecutedQuery[];
   updates: ExecutedQuery[];
   deletes: ExecutedQuery[];
-  enqueueResult: (rows: MockRow[]) => void;
-  enqueueResults: (...results: MockRow[][]) => void;
+  enqueueResult: (result: MockResult) => void;
+  enqueueResults: (...results: MockResult[]) => void;
   setQueryResolver: (resolver: QueryResolver) => void;
   reset: () => void;
 }
 
 class MockState {
   readonly executed: ExecutedQuery[] = [];
-  private readonly queue: MockRow[][] = [];
+  private readonly queue: MockResult[] = [];
   private resolver: QueryResolver | undefined;
 
-  enqueue(...results: MockRow[][]): void {
+  enqueue(...results: MockResult[]): void {
     this.queue.push(...results);
   }
 
@@ -56,11 +77,13 @@ class MockState {
     this.resolver = resolver;
   }
 
-  // Resolver wins when it returns rows; otherwise drain the FIFO queue; else [].
-  next(query: CompiledQuery): MockRow[] {
+  // Resolver is used when it returns a value (including `[]`); return `undefined` to fall back
+  // to the FIFO queue; else return `[]`.
+  next(query: ExecutedQuery): StagedResult {
     const resolved = this.resolver?.(query);
-    if (resolved !== undefined) return resolved;
-    return this.queue.shift() ?? [];
+    if (resolved !== undefined) return normalize(resolved);
+    const queued = this.queue.shift();
+    return queued === undefined ? { rows: [], numAffectedRows: undefined } : normalize(queued);
   }
 
   reset(): void {
@@ -74,13 +97,19 @@ class MockConnection implements DatabaseConnection {
   constructor(private readonly state: MockState) {}
 
   async executeQuery<R>(compiledQuery: CompiledQuery): Promise<QueryResult<R>> {
-    this.state.executed.push({
+    const query: ExecutedQuery = {
       kind: compiledQuery.query.kind,
       sql: compiledQuery.sql,
       parameters: compiledQuery.parameters,
-    });
-    const rows = this.state.next(compiledQuery);
-    return { rows: rows as R[], numAffectedRows: BigInt(rows.length) };
+    };
+    this.state.executed.push(query);
+    const { rows, numAffectedRows } = this.state.next(query);
+    return {
+      rows: rows as R[],
+      // Honor a staged count; otherwise mutations report rows.length and selects report nothing.
+      numAffectedRows:
+        numAffectedRows ?? (MUTATION_KINDS.has(query.kind) ? BigInt(rows.length) : undefined),
+    };
   }
 
   streamQuery<R>(): AsyncIterableIterator<QueryResult<R>> {
@@ -143,7 +172,7 @@ export function createMockKysely<DB = Record<string, never>>(): MockKysely<DB> {
     get deletes() {
       return byKind(state, "DeleteQueryNode");
     },
-    enqueueResult: (rows) => state.enqueue(rows),
+    enqueueResult: (result) => state.enqueue(result),
     enqueueResults: (...results) => state.enqueue(...results),
     setQueryResolver: (resolver) => state.setResolver(resolver),
     reset: () => state.reset(),
