@@ -63,9 +63,7 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
-  // Registry + trigger shim are test-only (see createWorkflowJob); a platform
-  // bundle rewrites `.trigger()` and never reads the registry, so the
-  // `TAILOR_PLATFORM_BUNDLE` guard drops both as dead code there.
+  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
   if (!process.env.TAILOR_PLATFORM_BUNDLE) {
     registerWorkflow(config.name, config.mainJob.name);
   }

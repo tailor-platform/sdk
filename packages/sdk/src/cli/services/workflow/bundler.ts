@@ -356,11 +356,8 @@ async function bundleSingleJob(
             // imports (e.g. `import workflow from "./other-workflow"`).
             let transformed = code;
 
-            // Mark this as a platform bundle so createWorkflowJob/createWorkflow
-            // fold out their test-only registry + trigger shim as dead code.
-            // Substituted as a literal (instead of rolldown `define`) so the
-            // value is a boolean the minifier can DCE, independent of how
-            // `process.env.*` member expressions are handled.
+            // Fold the platform-bundle flag to a literal so the minifier DCEs the
+            // test-only workflow registry/trigger shim.
             transformed = transformed.replaceAll("process.env.TAILOR_PLATFORM_BUNDLE", "true");
 
             const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
