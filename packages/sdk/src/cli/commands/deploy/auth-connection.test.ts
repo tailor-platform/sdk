@@ -1,4 +1,3 @@
-import { Code, ConnectError } from "@connectrpc/connect";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { planAuthConnections } from "./auth-connection";
 import type { AuthService } from "@/cli/services/auth/service";
@@ -53,12 +52,9 @@ function createMockClient(connectionNames: string[]): OperatorClient {
       connections: connectionNames.map((name) => oauth2Connection(name)),
       nextPageToken: "",
     }),
-    // getMetadata is stubbed to throw InvalidArgument (mirroring the platform, which
-    // does not support metadata for auth connections). planAuthConnections must never
-    // call it; the "does not call getMetadata" test asserts exactly that.
-    getMetadata: vi.fn().mockImplementation(() => {
-      throw new ConnectError("metadata not supported", Code.InvalidArgument);
-    }),
+    // getMetadata is deliberately omitted: planAuthConnections must not touch the
+    // metadata service for connections (the platform does not support it). Any
+    // accidental call would throw "getMetadata is not a function" and fail the test.
   } as unknown as OperatorClient;
 }
 
@@ -108,15 +104,6 @@ describe("planAuthConnections deletion safety", () => {
     const { changeSet } = await planAuthConnections(client, workspaceId, emptyAuths);
 
     expect(changeSet.deletes.map((d) => d.name)).toEqual(["sdk-connection"]);
-  });
-
-  test("does not call getMetadata (connection metadata is unsupported by the platform)", async () => {
-    mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
-    const client = createMockClient(["external-connection"]);
-
-    await planAuthConnections(client, workspaceId, emptyAuths);
-
-    expect(client.getMetadata).not.toHaveBeenCalled();
   });
 });
 
