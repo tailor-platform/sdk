@@ -53,13 +53,13 @@ describe("bundled execution tests", () => {
       "resolvers/showUserInfo.js": 5999 + sizeBuffer,
       "resolvers/stepChain.js": 172428 + sizeBuffer,
       "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
-      // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB).
-      "workflow-jobs/check-inventory.js": 19947 + sizeBuffer,
-      "workflow-jobs/fetch-customer.js": 157672 + sizeBuffer,
-      "workflow-jobs/process-order.js": 1152 + sizeBuffer,
-      "workflow-jobs/process-payment.js": 157566 + sizeBuffer,
-      "workflow-jobs/send-notification.js": 20055 + sizeBuffer,
-      "workflow-jobs/validate-order.js": 908 + sizeBuffer,
+      // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB)
+      "workflow-jobs/check-inventory.js": 19967 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 147682 + sizeBuffer,
+      "workflow-jobs/process-order.js": 1137 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 147576 + sizeBuffer,
+      "workflow-jobs/send-notification.js": 20075 + sizeBuffer,
+      "workflow-jobs/validate-order.js": 893 + sizeBuffer,
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {
