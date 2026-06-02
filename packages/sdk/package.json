@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.53.0",
+  "version": "1.54.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -181,7 +181,7 @@
     "chalk": "5.6.2",
     "chokidar": "5.0.0",
     "confbox": "0.2.4",
-    "date-fns": "4.3.0",
+    "date-fns": "4.4.0",
     "es-toolkit": "1.47.0",
     "find-up-simple": "1.0.1",
     "globals": "17.6.0",
@@ -196,7 +196,7 @@
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.1",
-    "politty": "0.5.0",
+    "politty": "0.5.1",
     "rolldown": "1.0.3",
     "semver": "7.8.1",
     "serve": "14.2.6",

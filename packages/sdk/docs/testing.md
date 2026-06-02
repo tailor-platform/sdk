@@ -483,6 +483,59 @@ describe("decrementUserAge", () => {
 
 **Use when:** multi-step business logic. The tests survive query rewrites because they assert high-level intent, not SQL shape.
 
+#### Kysely-layer mock (`createKyselyMock`)
+
+`createKyselyMock` returns a real Kysely instance whose execution is mocked. Stage the rows each query returns, run your code, then assert what it did — each query's SQL and parameters, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned. Queries stay fully typed and compile to the same SQL as production.
+
+Pass `mock.db` to functions that take a Kysely instance. When a resolver or executor calls `getDB()` internally there is no such seam, so spy the generated `getDB` and point it at the mock:
+
+```typescript
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { createKyselyMock } from "@tailor-platform/sdk/vitest";
+import { describe, expect, test, vi } from "vitest";
+import { getDB, type Namespace } from "../generated/db";
+import resolver from "./upsertUsers";
+
+vi.mock("../generated/db", { spy: true });
+
+describe("upsertUsers resolver", () => {
+  test("inserts new users and updates existing ones", async () => {
+    const mock = createKyselyMock<Namespace["main-db"]>();
+    vi.mocked(getDB).mockReturnValue(mock.db);
+
+    mock.setQueryResolver((query) => {
+      switch (query.kind) {
+        case "SelectQueryNode":
+          return query.parameters.includes("exists@example.com") ? [{ id: "user-1" }] : [];
+        case "InsertQueryNode":
+        case "UpdateQueryNode":
+          return { numAffectedRows: 1 };
+        default:
+          return [];
+      }
+    });
+
+    const result = await resolver.body({
+      input: {
+        users: [
+          { name: "Newcomer", email: "new@example.com", age: 22 },
+          { name: "Existing", email: "exists@example.com", age: 41 },
+        ],
+      },
+      user: unauthenticatedTailorUser,
+      env: { appName: "Resolver Template", version: 1 },
+    });
+
+    expect(result).toEqual({ created: 1, updated: 1 });
+    expect(mock.selects).toHaveLength(2);
+    expect(mock.inserts).toHaveLength(1);
+    expect(mock.updates).toHaveLength(1);
+  });
+});
+```
+
+Reach for [`tailordbMock`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer.
+
 #### Resolvers that resume a workflow
 
 Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().setResolveHandler` to drive the user-supplied callback and inspect `resolveCalls`:

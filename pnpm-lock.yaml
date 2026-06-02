@@ -51,8 +51,8 @@ importers:
         specifier: workspace:^
         version: link:../packages/tailor-proto
       date-fns:
-        specifier: 4.3.0
-        version: 4.3.0
+        specifier: 4.4.0
+        version: 4.4.0
     devDependencies:
       '@connectrpc/connect':
         specifier: 2.1.1
@@ -118,8 +118,8 @@ importers:
   packages/create-sdk:
     dependencies:
       '@clack/prompts':
-        specifier: 1.4.0
-        version: 1.4.0
+        specifier: 1.5.0
+        version: 1.5.0
       execa:
         specifier: 9.6.1
         version: 9.6.1
@@ -130,8 +130,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.0
-        version: 0.5.0(@clack/prompts@1.4.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
+        specifier: 0.5.1
+        version: 0.5.1(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -437,8 +437,8 @@ importers:
         specifier: 0.2.4
         version: 0.2.4
       date-fns:
-        specifier: 4.3.0
-        version: 4.3.0
+        specifier: 4.4.0
+        version: 4.4.0
       es-toolkit:
         specifier: 1.47.0
         version: 1.47.0
@@ -482,8 +482,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.0
-        version: 0.5.0(@clack/prompts@1.4.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
+        specifier: 0.5.1
+        version: 0.5.1(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
       rolldown:
         specifier: 1.0.3
         version: 1.0.3
@@ -591,8 +591,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.0
-        version: 0.5.0(@clack/prompts@1.4.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
+        specifier: 0.5.1
+        version: 0.5.1(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
       semver:
         specifier: 7.8.1
         version: 7.8.1
@@ -830,12 +830,12 @@ packages:
   '@changesets/write@0.4.0':
     resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
 
-  '@clack/core@1.3.1':
-    resolution: {integrity: sha512-fT1qHVGAag4IEkrupZ6lRRbNCs1vS9P01KB/sG8zKgvUztbYtFBtQpjSITNwooDZ83tpsPzP0mRNs1/KVszCRA==}
+  '@clack/core@1.4.0':
+    resolution: {integrity: sha512-7Wctjq6f7c1CPz8sPpkwUnz8yRgVANkpNupb81q432FjcJg4l+Sw7XANdNSdWfAKq0IHI0JTcUeK5dxs/HrGPw==}
     engines: {node: '>= 20.12.0'}
 
-  '@clack/prompts@1.4.0':
-    resolution: {integrity: sha512-S0My7XPGIgpRWMDG8uRqalbgT+a6FmCUdOW+HaIOVVpUPHOb7RrpvjTjiODadKp06fsrVDJZlIzc6yCTp4AnxA==}
+  '@clack/prompts@1.5.0':
+    resolution: {integrity: sha512-wKh+wTjmrUoUdkZg8KpJO5X+p9PWV+KE9mePseq9UYWkukgTKsGS47RRL2HstwVcvDQH+PenrPJWII8+MfiiyA==}
     engines: {node: '>= 20.12.0'}
 
   '@connectrpc/connect-node@2.1.1':
@@ -2958,8 +2958,8 @@ packages:
   dataloader@1.4.0:
     resolution: {integrity: sha512-68s5jYdlvasItOJnCuI2Q9s4q98g0pCyL3HrcKJu8KNugUl8ahgmZYg38ysLTgQjjXX3H8CJLkAvWrclWfcalw==}
 
-  date-fns@4.3.0:
-    resolution: {integrity: sha512-OYcL+3N/jyWbYdFGqoMAhytDgxP9pbYPUUiRCOgn4Fewaadk9l/Wam4Avciiyp2BgkpfQyBV9B+ehnVJych+eQ==}
+  date-fns@4.4.0:
+    resolution: {integrity: sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w==}
 
   debug@2.6.9:
     resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
@@ -4057,8 +4057,8 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.5.0:
-    resolution: {integrity: sha512-OkEQ57IkbdYC9vZkKNcdwLTJwxBYt6L6kS28yCwR0gnVV4nIkAh7IyZp0rDKYIFVbh/wRjcxtCv3NhDYn4vrcQ==}
+  politty@0.5.1:
+    resolution: {integrity: sha512-KYXOO3R1xMVpUZGXhmwY2dejy22i+2mw1uuFtzRLzdiqtDoAYYyuFQBzpzIhQPMGEOu6/ZWrbXcK1dZrDrOtUQ==}
     engines: {node: '>=18'}
     peerDependencies:
       '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
@@ -5061,14 +5061,14 @@ snapshots:
       human-id: 4.1.3
       prettier: 2.8.8
 
-  '@clack/core@1.3.1':
+  '@clack/core@1.4.0':
     dependencies:
       fast-wrap-ansi: 0.2.0
       sisteransi: 1.0.5
 
-  '@clack/prompts@1.4.0':
+  '@clack/prompts@1.5.0':
     dependencies:
-      '@clack/core': 1.3.1
+      '@clack/core': 1.4.0
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.0
       sisteransi: 1.0.5
@@ -6671,7 +6671,7 @@ snapshots:
 
   dataloader@1.4.0: {}
 
-  date-fns@4.3.0: {}
+  date-fns@4.4.0: {}
 
   debug@2.6.9:
     dependencies:
@@ -7772,12 +7772,12 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.5.0(@clack/prompts@1.4.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3):
+  politty@0.5.1(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3):
     dependencies:
       string-width: 8.2.0
       zod: 4.4.3
     optionalDependencies:
-      '@clack/prompts': 1.4.0
+      '@clack/prompts': 1.5.0
       '@inquirer/prompts': 8.5.1(@types/node@24.12.4)
 
   postcss-values-parser@6.0.2(postcss@8.5.14):
