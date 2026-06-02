@@ -130,8 +130,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.0
-        version: 0.5.0(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
+        specifier: 0.5.1
+        version: 0.5.1(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -482,8 +482,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.0
-        version: 0.5.0(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
+        specifier: 0.5.1
+        version: 0.5.1(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
       rolldown:
         specifier: 1.0.3
         version: 1.0.3
@@ -591,8 +591,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.0
-        version: 0.5.0(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
+        specifier: 0.5.1
+        version: 0.5.1(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3)
       semver:
         specifier: 7.8.1
         version: 7.8.1
@@ -4057,8 +4057,8 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.5.0:
-    resolution: {integrity: sha512-OkEQ57IkbdYC9vZkKNcdwLTJwxBYt6L6kS28yCwR0gnVV4nIkAh7IyZp0rDKYIFVbh/wRjcxtCv3NhDYn4vrcQ==}
+  politty@0.5.1:
+    resolution: {integrity: sha512-KYXOO3R1xMVpUZGXhmwY2dejy22i+2mw1uuFtzRLzdiqtDoAYYyuFQBzpzIhQPMGEOu6/ZWrbXcK1dZrDrOtUQ==}
     engines: {node: '>=18'}
     peerDependencies:
       '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
@@ -7772,7 +7772,7 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.5.0(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3):
+  politty@0.5.1(@clack/prompts@1.5.0)(@inquirer/prompts@8.5.1(@types/node@24.12.4))(zod@4.4.3):
     dependencies:
       string-width: 8.2.0
       zod: 4.4.3
