@@ -35,13 +35,7 @@ interface StagedResult {
   numAffectedRows: bigint | undefined;
 }
 
-const MUTATION_KINDS = new Set<OperationNodeKind>([
-  "InsertQueryNode",
-  "UpdateQueryNode",
-  "DeleteQueryNode",
-]);
-
-function normalize(result: MockResult): StagedResult {
+function toStagedResult(result: MockResult): StagedResult {
   if (Array.isArray(result)) return { rows: result, numAffectedRows: undefined };
   return {
     rows: result.rows ?? [],
@@ -81,9 +75,9 @@ class MockState {
   // to the FIFO queue; else return `[]`.
   next(query: ExecutedQuery): StagedResult {
     const resolved = this.resolver?.(query);
-    if (resolved !== undefined) return normalize(resolved);
+    if (resolved !== undefined) return toStagedResult(resolved);
     const queued = this.queue.shift();
-    return queued === undefined ? { rows: [], numAffectedRows: undefined } : normalize(queued);
+    return queued === undefined ? { rows: [], numAffectedRows: undefined } : toStagedResult(queued);
   }
 
   reset(): void {
@@ -106,9 +100,7 @@ class MockConnection implements DatabaseConnection {
     const { rows, numAffectedRows } = this.state.next(query);
     return {
       rows: rows as R[],
-      // Honor a staged count; otherwise mutations report rows.length and selects report nothing.
-      numAffectedRows:
-        numAffectedRows ?? (MUTATION_KINDS.has(query.kind) ? BigInt(rows.length) : undefined),
+      numAffectedRows: numAffectedRows ?? BigInt(rows.length),
     };
   }
 
