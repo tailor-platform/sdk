@@ -56,6 +56,7 @@ export interface KyselyMock<DB> {
   enqueueResults: (...results: MockResult[]) => void;
   setQueryResolver: (resolver: QueryResolver) => void;
   reset: () => void;
+  [Symbol.dispose]: () => void;
 }
 
 class MockState {
@@ -166,5 +167,6 @@ export function createKyselyMock<DB = Record<string, never>>(): KyselyMock<DB> {
     enqueueResults: (...results) => state.enqueue(...results),
     setQueryResolver: (resolver) => state.setResolver(resolver),
     reset: () => state.reset(),
+    [Symbol.dispose]: () => state.reset(),
   };
 }

@@ -1,20 +1,16 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { createKyselyMock, type KyselyMock } from "@tailor-platform/sdk/vitest";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { createKyselyMock } from "@tailor-platform/sdk/vitest";
+import { describe, expect, test, vi } from "vitest";
 import { getDB, type Namespace } from "../generated/db";
 import resolver from "./upsertUsers";
 
 vi.mock("../generated/db", { spy: true });
 
 describe("upsertUsers resolver", () => {
-  let mock: KyselyMock<Namespace["main-db"]>;
-
-  beforeEach(() => {
-    mock = createKyselyMock<Namespace["main-db"]>();
-    vi.mocked(getDB).mockReturnValue(mock.db);
-  });
-
   test("inserts new users and updates existing ones", async () => {
+    const mock = createKyselyMock<Namespace["main-db"]>();
+    vi.mocked(getDB).mockReturnValue(mock.db);
+
     mock.setQueryResolver((query) => {
       switch (query.kind) {
         case "SelectQueryNode":
