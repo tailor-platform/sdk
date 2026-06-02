@@ -672,15 +672,8 @@ function resolveQuery(query: string, params: unknown[]): MockQueryResult {
 // Mock: tailor.workflow
 // ---------------------------------------------------------------------------
 
-/**
- * Build the context passed to a registered job body when the mock executes
- * it. Mirrors the platform's job context shape (`{ env, invoker }`). Env is
- * sourced from `workflowMock.setEnv()` when set, falling back to the
- * deprecated `process.env[WORKFLOW_TEST_ENV_KEY]` for backward compat with
- * the previous local-trigger implementation. The shallow copy isolates the
- * body against cross-trigger mutation.
- * @returns The job context with env and a null invoker
- */
+// Env comes from workflowMock.setEnv(), falling back to the deprecated
+// WORKFLOW_TEST_ENV_KEY env-var. Shallow-copied to isolate against mutation.
 function buildJobContext(): { env: TailorEnv; invoker: null } {
   const fromGlobal = readWorkflowTestEnv();
   if (fromGlobal !== undefined) {
@@ -708,8 +701,6 @@ function mockTriggerJobFunction(jobName: string, args?: unknown): unknown {
   const serializedArgs = platformSerialize(args);
   state.triggeredJobs.push({ jobName, args: serializedArgs });
 
-  // Serialize every result path (queue/handler/body) through the platform's JSON
-  // boundary; sync results stay sync so synchronous callers observe them directly.
   const serializeResult = (output: unknown): unknown =>
     output instanceof Promise
       ? output.then((resolved) => platformSerialize(resolved))
@@ -744,9 +735,6 @@ async function mockTriggerWorkflow(
 
   const workflow = getRegisteredWorkflow(workflowName);
   if (workflow) {
-    // Route the main job through mockTriggerJobFunction so the invocation
-    // appears in `triggeredJobs` and respects `setJobHandler` / `enqueueResult`
-    // uniformly — there is no longer a special path for the workflow entry.
     await mockTriggerJobFunction(workflow.mainJobName, serializedArgs);
   }
   return DEFAULT_EXECUTION_ID;
@@ -762,24 +750,14 @@ function mockWait(key: string, payload?: unknown): unknown {
     : handler;
 }
 
-// Records the resolve call. By default the callback is not invoked, mirroring
-// platform semantics where tailor.workflow.resolve enqueues the callback
-// against the wait point and returns immediately. Tests that need
-// resolve→wait wiring can register a handler via workflowMock.setResolveHandler
-// — the handler receives `(executionId, key, callback)` and decides whether to
-// invoke the callback (typically with a synthesized payload).
-//
-// The callback is wrapped so its return value crosses the same JSON boundary
-// the platform enforces — so a test that hands the callback a Date or NaN
-// fails locally the same way it would on platform.
+// By default the callback is not invoked (mirrors the platform: resolve enqueues
+// it and returns); a workflowMock.setResolveHandler may choose to invoke it.
 async function mockResolve(
   executionId: string,
   key: string,
   callback: (payload: unknown) => unknown | Promise<unknown>,
 ): Promise<void> {
   const state = getState();
-  // Keep sync callbacks synchronous so handlers that call callback(...) without
-  // await still observe the value.
   const wrappedCallback = (payload: unknown): unknown => {
     const output = callback(payload);
     return output instanceof Promise

@@ -17,14 +17,10 @@
  * @returns The JSON-normalized value (undefined/function properties stripped, etc.)
  */
 export function platformSerialize<T>(value: T): T {
-  // Top-level undefined is allowed (matches the no-input convention for jobs);
-  // JSON.stringify(undefined) would otherwise yield the string "undefined" and
-  // JSON.parse would throw on it.
+  // Top-level undefined is allowed (jobs may take no input).
   if (value === undefined) return undefined as T;
 
-  // Root-level function/symbol would make JSON.stringify return undefined,
-  // which we report below as a generic error. Catch them here so the message
-  // is specific (mirrors the per-property messages produced by the replacer).
+  // Root function/symbol stringify to `undefined`; throw a specific message here.
   if (typeof value === "function") {
     throw new TypeError("platformSerialize: function is not JSON-serializable at <root>");
   }

@@ -666,10 +666,7 @@ describe("mock", () => {
     });
   });
 
-  // Round-trip tests: exercise createWorkflowJob / createWorkflow through the
-  // mock so the registry → globalThis.tailor.workflow → mock path is covered
-  // end-to-end. Names must be unique per-test to avoid clobbering the global
-  // registry across the suite.
+  // Job/workflow names must be unique per-test to avoid clobbering the global registry.
   describe("workflow delegation through globalThis.tailor.workflow", () => {
     beforeEach(() => {
       workflowMock.reset();
@@ -732,9 +729,6 @@ describe("mock", () => {
           return { ok: true };
         },
       });
-      // platformSerialize strips properties whose value is undefined (matches
-      // JSON.stringify), so the body should see `{ id }` only — never the
-      // raw `extra: undefined` the caller passed.
       await (fn.trigger as (a: unknown) => Promise<unknown>)({
         id: "x",
         extra: undefined,
@@ -781,8 +775,6 @@ describe("mock", () => {
       expect(workflowMock.calls).toEqual([
         { method: "triggerWorkflow", args: ["delegation-wf", { x: 21 }, undefined] },
       ]);
-      // The main job invocation is also recorded as a regular triggered job
-      // since mockTriggerWorkflow routes through mockTriggerJobFunction.
       expect(workflowMock.triggeredJobs).toEqual([
         { jobName: "delegation-wf-main", args: { x: 21 } },
       ]);
@@ -827,9 +819,6 @@ describe("mock", () => {
     });
 
     test("mockWait records the platform-serialized payload", () => {
-      // platformSerialize strips properties whose value is undefined — the
-      // handler and waitCalls should see the normalized payload, never the
-      // raw object the caller passed.
       const seenInHandler: unknown[] = [];
       workflowMock.setWaitHandler((key: string, payload: unknown) => {
         seenInHandler.push({ key, payload });
@@ -855,13 +844,10 @@ describe("mock", () => {
       workflowMock.setResolveHandler(async (_executionId, _key, callback) => {
         callbackReturn = await callback({ approved: true });
       });
-      await (globalThis as any).tailor.workflow.resolve(
-        "exec-1",
-        "approval",
-        // Callback's return value is platform-serialized — `dropped: undefined`
-        // is stripped before reaching the handler.
-        () => ({ ok: true, dropped: undefined }),
-      );
+      await (globalThis as any).tailor.workflow.resolve("exec-1", "approval", () => ({
+        ok: true,
+        dropped: undefined,
+      }));
       expect(callbackReturn).toEqual({ ok: true });
     });
 
