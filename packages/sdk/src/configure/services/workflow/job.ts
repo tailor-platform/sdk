@@ -110,12 +110,12 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
   // The registry + trigger shim exist only so the vitest mock can run job
   // bodies by name. In a platform bundle `.trigger()` is rewritten to
   // tailor.workflow.triggerJobFunction and the registry is never read, so the
-  // `__TAILOR_PLATFORM_BUNDLE__` guard lets the bundler drop both as dead code.
-  if (!globalThis.__TAILOR_PLATFORM_BUNDLE__) {
+  // `TAILOR_PLATFORM_BUNDLE` guard lets the bundler drop both as dead code.
+  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
     registerJob(config.name, body as RegisteredJobBody);
   }
 
-  const trigger = globalThis.__TAILOR_PLATFORM_BUNDLE__
+  const trigger = process.env.TAILOR_PLATFORM_BUNDLE
     ? () => {
         throw new Error(
           "workflowJob.trigger() is rewritten at build time and unavailable in the bundle",

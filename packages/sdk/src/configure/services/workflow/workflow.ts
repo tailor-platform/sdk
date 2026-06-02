@@ -65,15 +65,15 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
 ): Workflow<Job> {
   // Registry + trigger shim are test-only (see createWorkflowJob); a platform
   // bundle rewrites `.trigger()` and never reads the registry, so the
-  // `__TAILOR_PLATFORM_BUNDLE__` guard drops both as dead code there.
-  if (!globalThis.__TAILOR_PLATFORM_BUNDLE__) {
+  // `TAILOR_PLATFORM_BUNDLE` guard drops both as dead code there.
+  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
     registerWorkflow(config.name, config.mainJob.name);
   }
 
   return brandValue(
     {
       ...config,
-      trigger: globalThis.__TAILOR_PLATFORM_BUNDLE__
+      trigger: process.env.TAILOR_PLATFORM_BUNDLE
         ? () => {
             throw new Error(
               "workflow.trigger() is rewritten at build time and unavailable in the bundle",

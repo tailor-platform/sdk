@@ -358,9 +358,10 @@ async function bundleSingleJob(
 
             // Mark this as a platform bundle so createWorkflowJob/createWorkflow
             // fold out their test-only registry + trigger shim as dead code.
-            // (rolldown 1.0.2 `define` does not replace `globalThis.x` member
-            // expressions, so substitute the literal here before minify/DCE.)
-            transformed = transformed.replaceAll("globalThis.__TAILOR_PLATFORM_BUNDLE__", "true");
+            // Substituted as a literal (instead of rolldown `define`) so the
+            // value is a boolean the minifier can DCE, independent of how
+            // `process.env.*` member expressions are handled.
+            transformed = transformed.replaceAll("process.env.TAILOR_PLATFORM_BUNDLE", "true");
 
             const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
             if (isJobSourceFile) {

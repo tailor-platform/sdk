@@ -1,18 +1,6 @@
 import type { TailorEnv } from "@/types/env";
 import type { TailorInvoker } from "@/types/user";
 
-declare global {
-  /**
-   * Set to `true` (via the workflow bundler's `define`) only when code is
-   * bundled for the Tailor Platform runtime. Unset everywhere else (tests,
-   * dev). Gates the test-only registry/trigger shim so it is dead-code
-   * eliminated from production bundles. Always read via
-   * `globalThis.__TAILOR_PLATFORM_BUNDLE__` (member access is undefined-safe).
-   */
-  // oxlint-disable-next-line no-var
-  var __TAILOR_PLATFORM_BUNDLE__: boolean | undefined;
-}
-
 /**
  * Body signature shared by workflow jobs at registry-write time.
  * The user's `createWorkflowJob`/`createWorkflow` body uses concrete types,
