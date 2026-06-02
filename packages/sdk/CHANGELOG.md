@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 1.53.0
+
+### Minor Changes
+
+- [#1275](https://github.com/tailor-platform/sdk/pull/1275) [`f650615`](https://github.com/tailor-platform/sdk/commit/f6506158cd7247b4198a76702044346fbb65c669) Thanks [@haru0017](https://github.com/haru0017)! - Add downloadStream and uploadStream to file api. Mark openDownloadStream as deprecated.
+
+### Patch Changes
+
+- [#1263](https://github.com/tailor-platform/sdk/pull/1263) [`c7e065e`](https://github.com/tailor-platform/sdk/commit/c7e065e1213630e5cb77d7067907b35296f98097) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8
+
+- [#1271](https://github.com/tailor-platform/sdk/pull/1271) [`73ab0e0`](https://github.com/tailor-platform/sdk/commit/73ab0e0baf1657b1e916444c77f621823e917b52) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1274](https://github.com/tailor-platform/sdk/pull/1274) [`11b280a`](https://github.com/tailor-platform/sdk/commit/11b280a8e69feeb7973bcc9a6cbe711252ce72fd) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
 ## 1.52.0
 
 ### Minor Changes
