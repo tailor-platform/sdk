@@ -56,11 +56,11 @@ export default defineConfig({
 
 1. **Node.js module blocking** — `import { randomBytes } from "node:crypto"` in production code throws an error with a suggestion for the Web Standard API alternative (`globalThis.crypto`). Test files (`*.test.ts`, `*.spec.ts`) are exempt.
 2. **Node.js globals removal** — Only globals available in the platform runtime are kept (whitelist). `Buffer`, `global`, `setImmediate`, `__dirname`, `__filename`, `performance`, and others are removed.
-3. **Platform API mocks** — a base surface (`globalThis.tailor.context`, `TailorErrors`, `TailorErrorMessage`, `TailorDBFileError`, and the `globalThis.tailor` / `globalThis.tailordb` containers) is auto-installed. The per-namespace mocks (`tailordb.Client`, `tailor.workflow`, `tailor.secretmanager`, …) are layered on when you acquire the corresponding `xMock()` — see below.
+3. **Platform API mocks** — the platform error classes (`TailorErrors`, `TailorErrorMessage`, `TailorDBFileError`) and `tailor.context` are always available. The other namespaces (`tailordb.Client`, `tailor.workflow`, `tailor.secretmanager`, …) are mocked when you acquire the corresponding `mockX()` — see below.
 
 ### Acquiring mocks with `using`
 
-Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`) is a **factory function** backed by `vi.fn()`s. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — acquiring installs the namespace's mocks onto `globalThis`, and the previous state is restored automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
+Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
 
 ```typescript
 import { mockTailordb } from "@tailor-platform/sdk/vitest";
@@ -69,16 +69,16 @@ test("...", () => {
   using db = mockTailordb();
   db.enqueueResult({ age: 30 });
   // …
-}); // workflow/tailordb/… restored to the previous state here
+}); // reset automatically here
 ```
 
-The friendly helpers (`setJobHandler`, `enqueueResult`, `triggeredJobs`, `executedQueries`, …) are thin wrappers over the underlying `vi.fn()`s, which are also exposed directly (e.g. `db.queryObject`, `wf.triggerJobFunction`) so you can use native matchers like `expect(wf.triggerJobFunction).toHaveBeenCalledWith(...)`.
+The mock functions are also exposed directly (e.g. `db.queryObject`, `wf.triggerJobFunction`) so you can assert on them with `expect(...).toHaveBeenCalledWith(...)`.
 
 > **Requirements:** `using` requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose` (Node ≥ 20.4 — the SDK already targets Node ≥ 22, and Vitest's transformer downlevels the syntax for you).
 >
-> **Acquire what you use:** because a namespace's mock is installed on acquisition, code under test that calls a platform API (e.g. `tailor.workflow`, `tailordb.Client`) must run inside a test that has acquired the matching `xMock()`. The base surface (`tailor.context`, the error classes) is always present.
+> **Acquire what you use:** a namespace is only mocked while you hold it with `using`, so code under test that calls a platform API (e.g. `tailor.workflow`, `tailordb.Client`) must run inside a test that has acquired the matching `mockX()`. The error classes and `tailor.context` are always present.
 >
-> **Seeded secrets survive:** `mockSecretmanager()` inherits the currently-installed secret store on acquisition and restores it on dispose, so secrets seeded from `tailor.config.ts` survive across `using` scopes while per-test `setSecrets()` overrides stay isolated.
+> **Seeded secrets survive:** secrets seeded from `tailor.config.ts` stay available across tests; a per-test `mockSecretmanager().setSecrets(...)` override applies only within that test.
 
 ### TailorDB Mock
 
@@ -313,7 +313,7 @@ export default defineConfig({
 });
 ```
 
-This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `using sm = mockSecretmanager(); sm.setSecrets(...)` in individual tests: `mockSecretmanager()` snapshots the store on acquisition and restores it on dispose, so a per-test override is isolated to that test and the config-loaded secrets remain available to every other test.
+This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `using sm = mockSecretmanager(); sm.setSecrets(...)` in individual tests: a per-test override applies only within that test, and the config-loaded secrets remain available to every other test.
 
 ### Per-Project Configuration
 
