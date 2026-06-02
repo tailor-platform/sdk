@@ -61,10 +61,12 @@ export const auth = defineAuth("my-auth", {
   },
   hooks: {
     beforeLogin: {
-      handler: async ({ claims, idpConfigName }) => {
+      handler: async ({ claims, idpConfigName, env }) => {
         // Example before login hook implementation
         console.log("Before login hook triggered with claims:", claims);
         console.log("IDP Config Name:", idpConfigName);
+        // `env` exposes the variables defined in `defineConfig({ env })`
+        console.log("Environment:", env);
         // You can perform additional checks or modifications to claims here
       },
       invoker: "manager-machine-user",
