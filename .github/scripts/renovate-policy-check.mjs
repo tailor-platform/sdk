@@ -6,7 +6,7 @@
 //    version, the rule no longer protects anything and should be removed.
 //
 // 2. Validates pnpm-workspace.yaml `minimumReleaseAgeExclude` entries:
-//    every version-pinned entry (e.g. `turbo@2.9.14`) must be preceded by
+//    every version-pinned entry (e.g. `pkg@1.2.3`) must be preceded by
 //    a `# Renovate security update: ...` comment justifying the bypass.
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -34,7 +34,6 @@ function listFilesRecursive(dir, predicate) {
         e.name === "node_modules" ||
         e.name === ".git" ||
         e.name === "dist" ||
-        e.name === ".turbo" ||
         e.name === ".next"
       ) {
         continue;

@@ -13,7 +13,6 @@ import {
   type Insertable,
   type KyselyConfig,
   type Selectable,
-  sql,
   type Transaction as KyselyTransaction,
   type Updateable,
 } from "kysely";

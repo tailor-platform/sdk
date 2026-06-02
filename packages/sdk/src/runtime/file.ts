@@ -51,6 +51,12 @@ export interface FileUploadOptions {
   contentType?: string;
 }
 
+/** Upload stream options. */
+export interface FileUploadStreamOptions {
+  contentType?: string;
+  fileSize?: number;
+}
+
 /** Upload response. */
 export interface FileUploadResponse {
   metadata: UploadMetadata;
@@ -65,6 +71,12 @@ export interface FileDownloadResponse {
 /** Download-as-Base64 response. */
 export interface FileDownloadAsBase64Response {
   data: string;
+  metadata: DownloadMetadata;
+}
+
+/** Download stream response. */
+export interface FileDownloadStreamResponse {
+  body: ReadableStream<Uint8Array>;
   metadata: DownloadMetadata;
 }
 
@@ -136,7 +148,7 @@ export interface TailorDBFileAPI {
    * Download a file from TailorDB.
    *
    * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
-   * exceeds 10MB — use {@link openDownloadStream} for large files.
+   * exceeds 10MB — use {@link downloadStream} for large files.
    * @param namespace - TailorDB namespace
    * @param typeName - TailorDB type name
    * @param fieldName - File field name on the type
@@ -154,7 +166,7 @@ export interface TailorDBFileAPI {
    * Download a file from TailorDB as a Base64-encoded string.
    *
    * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
-   * exceeds 10MB — use {@link openDownloadStream} for large files.
+   * exceeds 10MB — use {@link downloadStream} for large files.
    * @param namespace - TailorDB namespace
    * @param typeName - TailorDB type name
    * @param fieldName - File field name on the type
@@ -196,6 +208,7 @@ export interface TailorDBFileAPI {
 
   /**
    * Open a download stream for large files.
+   * @deprecated Use {@link downloadStream} instead.
    * @param namespace - TailorDB namespace
    * @param typeName - TailorDB type name
    * @param fieldName - File field name on the type
@@ -208,6 +221,40 @@ export interface TailorDBFileAPI {
     fieldName: string,
     recordId: string,
   ): Promise<FileStreamIterator>;
+
+  /**
+   * Download a file as a ReadableStream.
+   * @param namespace - TailorDB namespace
+   * @param typeName - TailorDB type name
+   * @param fieldName - File field name on the type
+   * @param recordId - Record ID owning the field
+   * @returns ReadableStream body and metadata for the file
+   */
+  downloadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileDownloadStreamResponse>;
+
+  /**
+   * Upload a file using a ReadableStream.
+   * @param namespace - TailorDB namespace
+   * @param typeName - TailorDB type name
+   * @param fieldName - File field name on the type
+   * @param recordId - Record ID owning the field
+   * @param readableStream - ReadableStream providing the file data
+   * @param options - Upload stream options (e.g. `contentType`, `fileSize`)
+   * @returns Upload response containing the file metadata
+   */
+  uploadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+    readableStream: ReadableStream<Uint8Array | ArrayBuffer>,
+    options?: FileUploadStreamOptions,
+  ): Promise<FileUploadResponse>;
 }
 
 const api = (): TailorDBFileAPI =>
@@ -251,10 +298,27 @@ export const getMetadata: TailorDBFileAPI["getMetadata"] = (...args) => api().ge
 
 /**
  * See {@link TailorDBFileAPI.openDownloadStream}.
+ * @deprecated Use {@link downloadStream} instead.
  * @param args - Forwarded to {@link TailorDBFileAPI.openDownloadStream}
  * @returns Async iterator yielding file chunks; call `close()` to release resources
  */
 export const openDownloadStream: TailorDBFileAPI["openDownloadStream"] = (...args) =>
   api().openDownloadStream(...args);
+
+/**
+ * See {@link TailorDBFileAPI.downloadStream}.
+ * @param args - Forwarded to {@link TailorDBFileAPI.downloadStream}
+ * @returns ReadableStream body and metadata for the file
+ */
+export const downloadStream: TailorDBFileAPI["downloadStream"] = (...args) =>
+  api().downloadStream(...args);
+
+/**
+ * See {@link TailorDBFileAPI.uploadStream}.
+ * @param args - Forwarded to {@link TailorDBFileAPI.uploadStream}
+ * @returns Upload response containing the file metadata
+ */
+export const uploadStream: TailorDBFileAPI["uploadStream"] = (...args) =>
+  api().uploadStream(...args);
 
 export { deleteFile as delete };

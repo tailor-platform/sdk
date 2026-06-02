@@ -18,7 +18,6 @@ Unit-test entrypoints exposed by the SDK:
 Helpers under `@tailor-platform/sdk/test`:
 
 - `unauthenticatedTailorUser` — default `user` value for resolver contexts
-- `WORKFLOW_TEST_ENV_KEY` — env key consumed by `.trigger()` when run locally
 
 Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
@@ -236,10 +235,31 @@ test("mock file download", async () => {
 });
 ```
 
-For `openDownloadStream`, enqueue an iterable of `StreamValue` items — `metadata`, one or more `chunk` items, and a terminal `complete`. Raw `Uint8Array` / `ArrayBuffer` chunks are rejected so tests stay aligned with the platform's structured stream contract.
+For `downloadStream`, enqueue a `FileDownloadStreamResponse` object with a `ReadableStream` body and metadata:
 
 ```typescript
 test("mock file download stream", async () => {
+  using file = fileMock();
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3]));
+      controller.close();
+    },
+  });
+  file.enqueueResult({
+    body,
+    metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc", lastUploadedAt: "" },
+  });
+
+  const result = await tailordb.file.downloadStream("ns", "Doc", "attachment", "r-1");
+  expect(result.metadata.fileSize).toBe(3);
+});
+```
+
+For the deprecated `openDownloadStream`, enqueue an iterable of `StreamValue` items — `metadata`, one or more `chunk` items, and a terminal `complete`. Raw `Uint8Array` / `ArrayBuffer` chunks are rejected so tests stay aligned with the platform's structured stream contract.
+
+```typescript
+test("mock file download stream (deprecated openDownloadStream)", async () => {
   using file = fileMock();
   file.enqueueResult([
     {
@@ -629,18 +649,18 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain without any mocking, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Set `WORKFLOW_TEST_ENV_KEY` first so triggered jobs see the workflow env:
+To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `workflowMock.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
 
 ```typescript
-import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => workflowMock.reset());
 
   test("mainJob.trigger() executes all jobs", async () => {
-    vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({}));
+    workflowMock.setEnv({ PAYMENT_GATEWAY: "stripe" });
 
     const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
 

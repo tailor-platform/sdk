@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "resolver-source-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "resolver",
+      "flags": "i",
+      "description": "source includes a resolver-style operation"
+    },
+    {
+      "id": "structured-dashboard-shape",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "summary|items|rows",
+      "flags": "i",
+      "description": "resolver source exposes nested summary and row-like data"
+    }
+  ]
+}

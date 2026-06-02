@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } from "../configure/services/workflow/job";
 import {
   tailordbMock,
   workflowMock,
@@ -111,6 +112,10 @@ describe("mock", () => {
   });
 
   describe("workflowMock", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
     test("records triggered jobs", () => {
       using wf = workflowMock();
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
@@ -159,6 +164,58 @@ describe("mock", () => {
       wf.reset();
 
       expect(wf.triggeredJobs).toHaveLength(0);
+    });
+
+    test("setEnv exposes env to job bodies via .trigger()", async () => {
+      using wf = workflowMock();
+      const captureEnv = createWorkflowJob({
+        name: "capture-env",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      wf.setEnv({ STAGE: "test", REGION: "asia" });
+      const env = await captureEnv.trigger();
+
+      expect(env).toEqual({ STAGE: "test", REGION: "asia" });
+    });
+
+    test("reset clears env back to {}", async () => {
+      using wf = workflowMock();
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-reset",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      wf.setEnv({ STAGE: "test" });
+      wf.reset();
+
+      expect(await captureEnv.trigger()).toEqual({});
+    });
+
+    describe("backward-compat: deprecated WORKFLOW_TEST_ENV_KEY env-var", () => {
+      test("setEnv takes priority over the env-var", async () => {
+        using wf = workflowMock();
+        const captureEnv = createWorkflowJob({
+          name: "capture-env-compat-priority",
+          body: (_input: undefined, ctx) => ctx.env,
+        });
+
+        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
+        wf.setEnv({ STAGE: "from-setenv" });
+
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "from-setenv" });
+      });
+
+      test("env-var is used when setEnv has not been called", async () => {
+        const captureEnv = createWorkflowJob({
+          name: "capture-env-compat-fallback",
+          body: (_input: undefined, ctx) => ctx.env,
+        });
+
+        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
+
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
+      });
     });
   });
 

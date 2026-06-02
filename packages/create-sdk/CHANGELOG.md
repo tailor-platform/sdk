@@ -1,5 +1,26 @@
 # @tailor-platform/create-sdk
 
+## 1.53.0
+
+## 1.52.0
+
+### Patch Changes
+
+- [#1186](https://github.com/tailor-platform/sdk/pull/1186) [`57e00d6`](https://github.com/tailor-platform/sdk/commit/57e00d6bfc2f9602af0ac9c0235da6ec0e04b12e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `workflowMock.setEnv()` to control the `env` value passed to job bodies when `createWorkflowJob().trigger()` is invoked locally. Tests using the `tailor-runtime` Vitest environment can now configure the env through the same `workflowMock` helper they use for `setJobHandler` / `setWaitHandler`, without touching `process.env`.
+
+  ```typescript
+  import { workflowMock } from "@tailor-platform/sdk/vitest";
+
+  afterEach(() => workflowMock.reset());
+
+  test("workflow.mainJob.trigger() executes all jobs", async () => {
+    workflowMock.setEnv({ STAGE: "test" });
+    await workflow.mainJob.trigger({ orderId: "order-1", amount: 100 });
+  });
+  ```
+
+  The previous env-var-based pattern is now deprecated. A non-breaking fallback is retained, but `workflowMock.setEnv()` takes priority when both are set.
+
 ## 1.51.2
 
 ## 1.51.1

@@ -336,12 +336,13 @@ tailor-sdk api [options] [command] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--body <BODY>`                 | `-b`  | Request body as JSON.   | No       | `"{}"`               | -                                 |
+| Option                          | Alias | Description                                                                       | Required | Default              | Env                               |
+| ------------------------------- | ----- | --------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--body <BODY>`                 | `-b`  | Request body as JSON.                                                             | No       | `"{}"`               | -                                 |
+| `--field <FIELD>`               | `-f`  | Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body. | No       | -                    | -                                 |
 
 <!-- politty:command:api:options:end -->
 
@@ -359,6 +360,12 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 $ tailor-sdk api GetApplication -b '{"applicationName":"app-1"}'
+```
+
+**Same as above, using --field instead of --body.**
+
+```bash
+$ tailor-sdk api GetApplication -f applicationName=app-1
 ```
 
 **List all invocable OperatorService methods.**
@@ -389,6 +396,8 @@ The request body is inferred from the proto definition of the target endpoint, a
   - IdP / TailorDB / Pipeline endpoints use the sole configured namespace when exactly one is defined.
 
 Values already present in `--body` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.
+
+Use `--field key=value` (repeatable) to set request body fields without writing JSON. Dotted keys (e.g. `application.name=foo`) build nested objects. `--field` overrides matching fields in `--body` and tab-completes from the endpoint's proto schema.
 
 <!-- politty:command:api:notes:end -->
 <!-- politty:command:api inspect:heading:start -->
