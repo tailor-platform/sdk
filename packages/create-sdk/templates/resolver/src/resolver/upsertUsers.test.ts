@@ -30,8 +30,8 @@ describe("upsertUsers resolver", () => {
     const result = await resolver.body({
       input: {
         users: [
-          { name: "Existing", email: "exists@example.com", age: 41 },
           { name: "Newcomer", email: "new@example.com", age: 22 },
+          { name: "Existing", email: "exists@example.com", age: 41 },
         ],
       },
       user: unauthenticatedTailorUser,
@@ -39,10 +39,15 @@ describe("upsertUsers resolver", () => {
     });
 
     expect(result).toEqual({ created: 1, updated: 1 });
-    expect(mock.selects).toHaveLength(2);
-    expect(mock.updates).toHaveLength(1);
-    expect(mock.inserts).toHaveLength(1);
-    expect(mock.inserts[0].parameters).toEqual(["Newcomer", "new@example.com", 22]);
     expect(mock.executedQueries).toHaveLength(4);
+    expect(mock.selects).toHaveLength(2);
+    expect(mock.inserts).toHaveLength(1);
+    expect(mock.inserts[0].parameters).toEqual(
+      expect.arrayContaining(["Newcomer", "new@example.com", 22]),
+    );
+    expect(mock.updates).toHaveLength(1);
+    expect(mock.updates[0].parameters).toEqual(
+      expect.arrayContaining(["Existing", "exists@example.com", 41]),
+    );
   });
 });

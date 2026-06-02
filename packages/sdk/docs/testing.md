@@ -450,7 +450,7 @@ describe("decrementUserAge", () => {
 
 #### Kysely-layer mock (`createMockKysely`)
 
-`createMockKysely` returns a real Kysely instance whose execution is mocked. Stage the rows each query returns, run your code, then assert what it did — each query's SQL and parameters, how many inserts/updates/selects ran, and the value your code returned. Queries stay fully typed and compile to the same SQL as production.
+`createMockKysely` returns a real Kysely instance whose execution is mocked. Stage the rows each query returns, run your code, then assert what it did — each query's SQL and parameters, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned. Queries stay fully typed and compile to the same SQL as production.
 
 Pass `mock.db` to functions that take a Kysely instance. When a resolver or executor calls `getDB()` internally there is no such seam, so spy the generated `getDB` and point it at the mock:
 
@@ -487,8 +487,8 @@ describe("upsertUsers resolver", () => {
     const result = await resolver.body({
       input: {
         users: [
-          { name: "Existing", email: "exists@example.com", age: 41 },
           { name: "Newcomer", email: "new@example.com", age: 22 },
+          { name: "Existing", email: "exists@example.com", age: 41 },
         ],
       },
       user: unauthenticatedTailorUser,
