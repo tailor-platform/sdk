@@ -605,6 +605,46 @@ describe("TailorDBType withTimestamps option tests", () => {
       updatedAt?: string | Date | null;
     }>();
   });
+
+  it("createdAt create hook respects a user-specified value", () => {
+    const { createdAt } = db.fields.timestamps();
+    const createHook = createdAt.metadata.hooks?.create;
+    expect(createHook).toBeDefined();
+
+    const specified = new Date("2025-02-10T09:00:00Z");
+    // oxlint-disable-next-line no-explicit-any
+    const result = createHook?.({ value: specified, data: {}, user: {} as any });
+    expect(result).toBe(specified);
+  });
+
+  it("createdAt create hook falls back to now when no value is given", () => {
+    const { createdAt } = db.fields.timestamps();
+    const createHook = createdAt.metadata.hooks?.create;
+
+    // oxlint-disable-next-line no-explicit-any
+    const result = createHook?.({ value: null, data: {}, user: {} as any });
+    expect(result).toBeInstanceOf(Date);
+  });
+
+  it("updatedAt update hook respects a user-specified value", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
+
+    const specified = new Date("2025-02-10T09:00:00Z");
+    // oxlint-disable-next-line no-explicit-any
+    const result = updateHook?.({ value: specified, data: {}, user: {} as any });
+    expect(result).toBe(specified);
+  });
+
+  it("updatedAt update hook falls back to now when no value is given", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+
+    // oxlint-disable-next-line no-explicit-any
+    const result = updateHook?.({ value: null, data: {}, user: {} as any });
+    expect(result).toBeInstanceOf(Date);
+  });
 });
 
 describe("TailorDBType composite type tests", () => {
