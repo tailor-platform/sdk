@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.54.2
+
+### Patch Changes
+
+- [#1303](https://github.com/tailor-platform/sdk/pull/1303) [`0881adf`](https://github.com/tailor-platform/sdk/commit/0881adf42f99ae812bb861d537e33b9b0e7192af) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(deploy): stop reporting persistent TailorDB type diffs on every `deploy`. Fields without a `description` are emitted as an empty string by the platform but omitted by the local manifest; the comparison now treats an empty-string `description` as unset (same handling as empty `expr`), so unchanged types are no longer flagged as updates on repeated applies.
+
 ## 1.54.1
 
 ### Patch Changes
