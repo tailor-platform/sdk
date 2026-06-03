@@ -34,14 +34,13 @@ export function createAuthService(
 ): AuthService {
   const parsedConfig = {
     ...config,
-    idProvider: config.idProvider as IdProviderConfig | undefined,
     // application.ts feeds the AuthConfigSchema.parse output here, so the token
     // lifetimes are already transformed to Duration. Reflect that in the type.
     oauth2Clients: config.oauth2Clients as Record<string, OAuth2Client> | undefined,
   };
 
   const connections: Record<string, AuthConnectionConfig> = config.connections
-    ? { ...(config.connections as Record<string, AuthConnectionConfig>) }
+    ? { ...config.connections }
     : {};
 
   let userProfile: UserProfile | undefined;
