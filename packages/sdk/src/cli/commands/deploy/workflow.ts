@@ -1,4 +1,3 @@
-import { type ApplyPhase } from "@/cli/commands/deploy/deploy";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
@@ -17,6 +16,7 @@ import {
   type WithLabel,
 } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { ApplyPhase } from "./phase";
 import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";

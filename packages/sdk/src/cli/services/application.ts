@@ -29,7 +29,7 @@ import { type AuthConfig } from "@/types/auth";
 import { type IdPConfig } from "@/types/idp";
 import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
-import type { BundledScripts } from "@/cli/commands/deploy/function-registry";
+import type { BundledScripts } from "@/cli/commands/deploy/function-registry-types";
 import type { PluginManager } from "@/plugin/manager";
 import type { IdP } from "@/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";

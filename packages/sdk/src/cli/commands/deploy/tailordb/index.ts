@@ -91,7 +91,7 @@ import {
   type MigrationContext,
 } from "./migration";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
-import type { ApplyPhase, PlanContext } from "../deploy";
+import type { ApplyPhase, PlanContext } from "../types";
 import type {
   PendingMigration,
   RemoteSchemaVerificationResult,
