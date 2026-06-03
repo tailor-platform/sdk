@@ -606,24 +606,29 @@ describe("TailorDBType withTimestamps option tests", () => {
     }>();
   });
 
+  const timestampHookUser = { id: "test", _loggedIn: true } as unknown as TailorUser;
+
   it("createdAt create hook respects a user-specified value", () => {
     const { createdAt } = db.fields.timestamps();
     const createHook = createdAt.metadata.hooks?.create;
     expect(createHook).toBeDefined();
 
     const specified = new Date("2025-02-10T09:00:00Z");
-    // oxlint-disable-next-line no-explicit-any
-    const result = createHook?.({ value: specified, data: {}, user: {} as any });
+    const result = createHook!({ value: specified, data: {}, user: timestampHookUser });
     expect(result).toBe(specified);
   });
 
   it("createdAt create hook falls back to now when no value is given", () => {
     const { createdAt } = db.fields.timestamps();
     const createHook = createdAt.metadata.hooks?.create;
+    expect(createHook).toBeDefined();
 
-    // oxlint-disable-next-line no-explicit-any
-    const result = createHook?.({ value: null, data: {}, user: {} as any });
+    const before = Date.now();
+    const result = createHook!({ value: null, data: {}, user: timestampHookUser });
+    const after = Date.now();
     expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
   });
 
   it("updatedAt update hook respects a user-specified value", () => {
@@ -632,18 +637,21 @@ describe("TailorDBType withTimestamps option tests", () => {
     expect(updateHook).toBeDefined();
 
     const specified = new Date("2025-02-10T09:00:00Z");
-    // oxlint-disable-next-line no-explicit-any
-    const result = updateHook?.({ value: specified, data: {}, user: {} as any });
+    const result = updateHook!({ value: specified, data: {}, user: timestampHookUser });
     expect(result).toBe(specified);
   });
 
   it("updatedAt update hook falls back to now when no value is given", () => {
     const { updatedAt } = db.fields.timestamps();
     const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
 
-    // oxlint-disable-next-line no-explicit-any
-    const result = updateHook?.({ value: null, data: {}, user: {} as any });
+    const before = Date.now();
+    const result = updateHook!({ value: null, data: {}, user: timestampHookUser });
+    const after = Date.now();
     expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
   });
 });
 
