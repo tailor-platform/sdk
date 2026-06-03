@@ -1338,6 +1338,8 @@ function normalizeComparableOAuth2Client(
 
   return normalizeProtoConfig({
     ...client,
+    // Platform returns an empty string for an unset description; treat it the same as omitted.
+    description: client.description || undefined,
     redirectUris: normalizeStringArray(client.redirectUris),
     grantTypes: [...(client.grantTypes ?? [])].sort((left, right) => left - right),
     accessTokenLifetime: accessTokenLifetime ?? 86400,
