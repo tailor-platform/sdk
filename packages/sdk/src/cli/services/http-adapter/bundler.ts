@@ -35,9 +35,14 @@ export interface HttpAdapterBundleResult {
  * it to the user's per-method handler. For `output`, the user's function is
  * used directly.
  *
- * The output targets the gateway's Sobek runtime: ES2017 IIFE, no Node imports,
- * no async/await, single file (no code splitting). Each function is bundled
- * separately so the runtime can run them independently.
+ * The output runs on the gateway's Sobek runtime (a goja fork: ES5.1 with most
+ * of ES6). We downlevel to ES2017 (not lower) on purpose: at ES2017 `async`/
+ * `await` stays as detectable syntax so the build-time check rejects it, while
+ * es2018+ syntax is downleveled. A lower target would rewrite async into a
+ * generator+Promise state machine that evades the check and cannot run on
+ * Sobek (no event loop). The es2016/es2017 sync syntax that does reach Sobek
+ * (e.g. `**`) is supported there. Output is a single IIFE, no Node imports, no
+ * async/await, no code splitting, so each function runs independently.
  * @param adapters - Detected adapters to bundle
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @returns Bundled scripts keyed by adapter name
@@ -170,6 +175,11 @@ async function bundleAdapterScript(
           },
           tsconfig,
           plugins,
+          // Target ES2017 deliberately (not a lower level): it keeps `async`/
+          // `await` as detectable syntax so rejectAsyncInBundle can reject it. A
+          // lower target (e.g. es2015) downlevels async into a generator+Promise
+          // state machine that both evades that check and cannot run on Sobek
+          // (no event loop to settle Promises). See the bundler doc comment.
           transform: { target: "es2017" },
           treeshake: {
             moduleSideEffects: false,
