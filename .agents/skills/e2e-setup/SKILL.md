@@ -42,7 +42,7 @@ TAILOR_PLATFORM_FOLDER_ID=<uuid>
 Source it once and reuse:
 
 ```
-set -a; source .claude/skills/e2e-setup/ids.local.env; set +a
+set -a; source .agents/skills/e2e-setup/ids.local.env; set +a
 ```
 
 **Fallback.** If the file is missing, or a needed value is empty, run the discovery flow in [`example/e2e` → One-time setup](#one-time-setup) and then write the resolved IDs back to `ids.local.env` so future runs skip the discovery. Ask the user before creating new workspaces.
@@ -137,7 +137,7 @@ The script uses `loadAccessToken()` so it works with keyring/config credentials 
 | `Failed to refresh token. Your session may have expired.`                                                  | The refresh token in `~/.config/tailor-platform/config.yaml` is expired. | `pnpm exec tailor-sdk login` (interactive; only the user can run this — the agent should ask).                                    |
 | `Workspace ID not found.`                                                                                  | No `--workspace-id`, no `TAILOR_PLATFORM_WORKSPACE_ID`, no profile set.  | Set `TAILOR_PLATFORM_WORKSPACE_ID` or `TAILOR_PLATFORM_PROFILE`.                                                                  |
 | `Application my-app does not have an auth configuration.` / `Machine user manager-machine-user not found.` | Wrong workspace selected, or `example/` was never deployed there.        | Confirm with `tailor-sdk workspace app list`; deploy if missing.                                                                  |
-| `TAILOR_PLATFORM_ORGANIZATION_ID` / `..._FOLDER_ID` unset (in `packages/sdk/e2e`)                          | The suite needs these to create workspaces.                              | `source .claude/skills/e2e-setup/ids.local.env` (or follow the fallback in [Stored IDs](#stored-ids-idslocalenv) to populate it). |
+| `TAILOR_PLATFORM_ORGANIZATION_ID` / `..._FOLDER_ID` unset (in `packages/sdk/e2e`)                          | The suite needs these to create workspaces.                              | `source .agents/skills/e2e-setup/ids.local.env` (or follow the fallback in [Stored IDs](#stored-ids-idslocalenv) to populate it). |
 
 ## When the user reports an e2e failure
 

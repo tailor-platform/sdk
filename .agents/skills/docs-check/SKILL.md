@@ -40,13 +40,13 @@ Filter keys by relevant keywords to find candidate pages.
 
 **Option B -- web search** (when the topic is broad or unclear):
 
-Use WebSearch with `site:docs.tailor.tech <query>` to find relevant pages via Google.
+Use web search with `site:docs.tailor.tech <query>` to find relevant pages.
 
 Use both options in parallel when unsure which will yield better results.
 
 ### Step 2: Fetch and summarize
 
-Use WebFetch on the most relevant pages (usually 1-3). Extract:
+Fetch the most relevant pages (usually 1-3). Extract:
 
 1. The specific specification or behavior the user needs
 2. Code examples if available

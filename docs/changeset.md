@@ -61,7 +61,7 @@ SDK users don't need to know about this change. Their code works exactly the sam
 
 Add the `skip-changeset` label to your PR when:
 
-- Documentation-only changes (README, docs/, CLAUDE.md)
+- Documentation-only changes (README, docs/, AGENTS.md, CLAUDE.md)
 - CI/CD configuration changes (.github/workflows/)
 - Development tooling changes (eslint, lefthook, etc.)
 - Test-only changes with no source code modifications
