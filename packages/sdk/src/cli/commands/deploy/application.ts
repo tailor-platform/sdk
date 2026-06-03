@@ -206,30 +206,28 @@ export async function planApplication(context: PlanContext) {
   });
 
   if (forRemoval) {
-    const ownedAppNames = new Set<string>();
-    if (existingApplications.some((app) => app.name === application.name)) {
-      ownedAppNames.add(application.name);
-    }
-    if (application.id) {
-      const others = existingApplications.filter((app) => !ownedAppNames.has(app.name));
-      const owned = await Promise.all(
-        others.map(async (app) => {
-          const labels = await fetchAppLabels(client, workspaceId, app.name);
-          return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
-        }),
-      );
-      for (const name of owned) {
-        if (name) ownedAppNames.add(name);
+    // A same-named app in a shared workspace may belong to another user, so
+    // never delete by name alone. Without an id only the same-name app can be
+    // ours; with an id, scan all apps to also clean up renamed-away ones.
+    const candidates = application.id
+      ? existingApplications
+      : existingApplications.filter((app) => app.name === application.name);
+    const owned = await Promise.all(
+      candidates.map(async (app) => {
+        const labels = await fetchAppLabels(client, workspaceId, app.name);
+        return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
+      }),
+    );
+    for (const name of owned) {
+      if (name) {
+        changeSet.deletes.push({
+          name,
+          request: {
+            workspaceId,
+            applicationName: name,
+          },
+        });
       }
-    }
-    for (const name of ownedAppNames) {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          applicationName: name,
-        },
-      });
     }
     return changeSet;
   }
