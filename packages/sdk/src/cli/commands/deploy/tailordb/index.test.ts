@@ -601,6 +601,118 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(1);
       expect(result.changeSet.type.unchanged).toHaveLength(0);
     });
+
+    test("treats an omitted remote field description as unchanged against the local empty-string manifest", async () => {
+      const tailordbType: TailorDBType = {
+        name: "Event",
+        pluralForm: "Events",
+        description: "Event type",
+        fields: {
+          name: {
+            name: "name",
+            config: {
+              type: "string",
+              required: false,
+            },
+          },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [tailordbType.name]: tailordbType },
+      });
+
+      const client = {
+        listTailorDBServices: vi.fn().mockResolvedValue({
+          tailordbServices: [{ namespace: { name: "test-tailordb" } }],
+          nextPageToken: "",
+        }),
+        listTailorDBTypes: vi.fn().mockResolvedValue({
+          tailordbTypes: [
+            {
+              name: "Event",
+              schema: {
+                description: "Event type",
+                fields: {
+                  name: {
+                    type: "string",
+                    required: false,
+                    allowedValues: [],
+                    // Platform omits `description` for fields without one, while the
+                    // local manifest always emits `description: ""` (generateTailorDBTypeManifest).
+                    // These must compare as equal.
+                    validate: [],
+                    array: false,
+                    index: false,
+                    unique: false,
+                    foreignKey: false,
+                    vector: false,
+                    fields: {},
+                  },
+                },
+                relationships: {},
+                settings: {
+                  aggregation: false,
+                  bulkUpsert: false,
+                  draft: false,
+                  defaultQueryLimitSize: "100",
+                  maxBulkUpsertSize: "1000",
+                  pluralForm: "events",
+                  publishRecordEvents: false,
+                  disableGqlOperations: {
+                    create: false,
+                    update: false,
+                    delete: false,
+                    read: false,
+                  },
+                },
+                extends: false,
+                directives: [],
+                indexes: {},
+                files: {},
+                permission: {
+                  create: [],
+                  read: [],
+                  update: [],
+                  delete: [],
+                },
+              },
+            },
+          ],
+          nextPageToken: "",
+        }),
+        getMetadata: vi.fn().mockResolvedValue({
+          metadata: {
+            labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
+          },
+        }),
+        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+          permissions: [],
+          nextPageToken: "",
+        }),
+      } as unknown as OperatorClient;
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.unchanged).toEqual([{ name: "Event" }]);
+      expect(result.changeSet.type.updates).toHaveLength(0);
+    });
   });
 });
 
