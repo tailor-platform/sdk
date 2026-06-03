@@ -22,7 +22,13 @@ const erdSite = defineStaticWebSite("my-erd-site", {
 const idp = defineIdp("my-idp", {
   clients: ["default-idp-client"],
   permission: {
-    create: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
+    create: [
+      {
+        conditions: [[{ user: "role" }, "=", "MANAGER"]],
+        permit: true,
+        description: "Only managers can create users",
+      },
+    ],
     read: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
