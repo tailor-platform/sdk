@@ -1,9 +1,9 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { t } from "@/configure/types";
+import { type TailorUser, unauthenticatedTailorUser } from "@/types/user";
 import { db } from "./schema";
 import type { Hook } from "./types";
 import type { output } from "@/types/helpers";
-import type { TailorUser } from "@/types/user";
 import type { FieldValidateInput, ValidateConfig } from "@/types/validation";
 
 describe("TailorDBField basic field type tests", () => {
@@ -606,7 +606,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     }>();
   });
 
-  const timestampHookUser = { id: "test", _loggedIn: true } as unknown as TailorUser;
+  const timestampHookUser = unauthenticatedTailorUser;
 
   it("createdAt create hook respects a user-specified value", () => {
     const { createdAt } = db.fields.timestamps();
