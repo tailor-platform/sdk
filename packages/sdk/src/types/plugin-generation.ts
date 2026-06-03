@@ -1,7 +1,7 @@
 import type { IdProvider as IdProviderConfig, OAuth2ClientInput } from "./auth.generated";
 import type { Executor } from "./executor.generated";
 import type { DependencyKind } from "./generator-config";
-import type { PluginAttachment } from "./plugin";
+import type { PluginAttachment } from "./plugin-attachment";
 import type { Resolver } from "./resolver.generated";
 import type { TailorDBType, TypeSourceInfoEntry } from "./tailordb";
 

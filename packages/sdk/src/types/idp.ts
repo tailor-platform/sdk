@@ -1,4 +1,4 @@
-import type { ValueOperand } from "./auth";
+import type { ValueOperand } from "./auth-value";
 import type { BuiltinIdP } from "./auth.generated";
 import type { IdPInput } from "./idp.generated";
 

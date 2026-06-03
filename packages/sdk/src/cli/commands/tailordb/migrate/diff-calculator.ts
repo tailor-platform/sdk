@@ -5,8 +5,6 @@
  * The actual diff calculation is performed by snapshot.ts.
  */
 
-import type { SnapshotFieldConfig } from "./snapshot";
-
 // ============================================================================
 // Diff Types
 // ============================================================================
@@ -105,6 +103,22 @@ export interface WarningChangeInfo {
   reason: string;
 }
 
+type FormattableSnapshotField = {
+  type: string;
+  required: boolean;
+  array?: boolean;
+  index?: boolean;
+  unique?: boolean;
+  vector?: boolean;
+  allowedValues?: { value: string }[];
+  hooks?: {
+    create?: { expr: string };
+    update?: { expr: string };
+  };
+  validate?: unknown[];
+  serial?: unknown;
+};
+
 /**
  * Check if a migration diff has any changes
  * @param {MigrationDiff} diff - Migration diff to check
@@ -159,17 +173,17 @@ function formatDiffChange(change: DiffChange): string {
     case "type_modified":
       return `  ~ [Type] ${change.typeName}: ${change.reason}`;
     case "field_added": {
-      const field = change.after as SnapshotFieldConfig;
+      const field = change.after as FormattableSnapshotField;
       const typeStr = formatFieldType(field);
       return `  + ${change.fieldName}: ${typeStr}`;
     }
     case "field_removed": {
-      const field = change.before as SnapshotFieldConfig;
+      const field = change.before as FormattableSnapshotField;
       return `  - ${change.fieldName}: ${field.type}`;
     }
     case "field_modified": {
-      const before = change.before as SnapshotFieldConfig;
-      const after = change.after as SnapshotFieldConfig;
+      const before = change.before as FormattableSnapshotField;
+      const after = change.after as FormattableSnapshotField;
       return `  ~ ${change.fieldName}: ${formatFieldModification(before, after)}`;
     }
     case "index_added":
@@ -199,10 +213,10 @@ function formatDiffChange(change: DiffChange): string {
 
 /**
  * Format field type with attributes
- * @param {SnapshotFieldConfig} field - Field configuration
+ * @param {FormattableSnapshotField} field - Field configuration
  * @returns {string} Formatted field type string
  */
-function formatFieldType(field: SnapshotFieldConfig): string {
+function formatFieldType(field: FormattableSnapshotField): string {
   let type = field.type;
   if (field.array) type += "[]";
   if (field.required) type += " (required)";
@@ -212,11 +226,14 @@ function formatFieldType(field: SnapshotFieldConfig): string {
 
 /**
  * Format field modification details
- * @param {SnapshotFieldConfig} before - Before field configuration
- * @param {SnapshotFieldConfig} after - After field configuration
+ * @param {FormattableSnapshotField} before - Before field configuration
+ * @param {FormattableSnapshotField} after - After field configuration
  * @returns {string} Formatted modification details
  */
-function formatFieldModification(before: SnapshotFieldConfig, after: SnapshotFieldConfig): string {
+function formatFieldModification(
+  before: FormattableSnapshotField,
+  after: FormattableSnapshotField,
+): string {
   const changes: string[] = [];
 
   if (before.type !== after.type) {

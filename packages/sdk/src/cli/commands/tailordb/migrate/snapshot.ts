@@ -12,6 +12,7 @@ import {
   type WarningChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
+import { formatMigrationNumber } from "./migration-number";
 import type { SchemaDrift } from "./types";
 import type {
   ParsedField,
@@ -94,6 +95,7 @@ function normalizeSnapshotType(type: TailorDBSnapshotType): void {
 
 // Re-export SCHEMA_SNAPSHOT_VERSION for convenience
 export { SCHEMA_SNAPSHOT_VERSION };
+export { formatMigrationNumber };
 
 // ============================================================================
 // Snapshot Types
@@ -350,15 +352,6 @@ export interface MigrationInfo {
  */
 export function isValidMigrationNumber(numberStr: string): boolean {
   return MIGRATION_NUMBER_PATTERN.test(numberStr);
-}
-
-/**
- * Format migration number as 4-digit string
- * @param {number} num - Migration number
- * @returns {string} 4-digit padded string (e.g., "0001")
- */
-export function formatMigrationNumber(num: number): string {
-  return num.toString().padStart(4, "0");
 }
 
 /**
