@@ -439,6 +439,7 @@ export type AuthConfigInput =
               _output: any;
             };
             usernameField: string;
+            namespace?: string | undefined;
             attributes?:
               | {
                   [x: string]: true;
@@ -786,6 +787,7 @@ export type AuthConfig =
               _output: any;
             };
             usernameField: string;
+            namespace?: string | undefined;
             attributes?:
               | {
                   [x: string]: true;

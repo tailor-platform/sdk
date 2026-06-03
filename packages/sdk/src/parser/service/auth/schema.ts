@@ -194,6 +194,7 @@ export const TenantProviderSchema = z.object({
 });
 
 const UserProfileSchema = z.object({
+  namespace: z.string().optional().describe("TailorDB namespace where the user type is defined"),
   // FIXME: improve TailorDBInstance schema validation
   type: z.object({
     name: z.string(),
