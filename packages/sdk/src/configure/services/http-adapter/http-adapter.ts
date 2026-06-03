@@ -33,6 +33,10 @@ export type {
  * Each handler is bundled into a JS string and executed server-side in a
  * sandboxed Sobek (ES2017 subset) runtime. Node APIs, `fetch`, `async`/`await`,
  * and top-level `await` are not available at runtime.
+ *
+ * Optional fields: `enabled` (default `true`; set `false` to deploy the adapter
+ * without serving it) and `priority` (non-negative integer, default `0`;
+ * reserved for forward compatibility and not yet used by the gateway matcher).
  * @param config - HTTP adapter configuration
  * @returns Branded HTTP adapter definition
  * @example

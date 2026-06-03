@@ -75,6 +75,25 @@ A request to `GET /api/users/abc-123` invokes the `get` handler, runs the result
 
 If `output` is omitted, the raw GraphQL response is returned as JSON.
 
+### Optional fields
+
+Beyond `name`, `pathPattern`, `input`, and `output`, two optional fields control deploy-time behavior:
+
+- `enabled` (default `true`) — set to `false` to deploy the adapter in a disabled state without removing its file. A disabled adapter is uploaded but not served by the gateway.
+- `priority` (non-negative integer, default `0`) — reserved for forward compatibility. The value is plumbed through to the platform, but the gateway's path matcher does not currently rely on it.
+
+```typescript
+export default createHttpAdapter({
+  name: "user",
+  pathPattern: "/users/*",
+  enabled: false, // uploaded but not served
+  priority: 10, // reserved; not yet used by the matcher
+  input: {
+    get: (req) => ({ query: `query { ... }` }),
+  },
+});
+```
+
 ### Why is `output` shared instead of per-method?
 
 The gateway runs `input` and `output` in **separate JavaScript VMs** with no shared globals, and the `output` callback only receives the GraphQL response (not the original request or method). For per-method response shaping, discriminate inside `output` based on the response data shape.
@@ -92,6 +111,17 @@ Exact matching semantics (trailing-slash handling, percent-encoding, etc.) are d
 ## Type Reference
 
 ```typescript
+type HttpAdapter = {
+  name: string;
+  pathPattern: string;
+  input: HttpAdapterInput;
+  output?: HttpAdapterOutputFn;
+  /** Whether the adapter is served by the gateway. Defaults to true. */
+  enabled?: boolean;
+  /** Reserved for forward compatibility; not yet used by the matcher. Defaults to 0. */
+  priority?: number;
+};
+
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type HttpMethodKey = "get" | "post" | "put" | "patch" | "delete";
 

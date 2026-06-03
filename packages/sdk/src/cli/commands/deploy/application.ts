@@ -454,8 +454,10 @@ function buildHttpAdapters(
       methods: loaded.methods.map((m) => HTTP_METHODS[m]),
       inputScript,
       outputScript,
-      enabled: loaded.adapter.enabled ?? true,
-      priority: loaded.adapter.priority ?? 0,
+      // `enabled`/`priority` are always populated here because
+      // HttpAdapterConfigSchema applies their defaults during parse.
+      enabled: loaded.adapter.enabled,
+      priority: loaded.adapter.priority,
     };
   });
 }

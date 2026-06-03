@@ -28,6 +28,9 @@ function actorXml(tag: string, actor: Record<string, unknown> | undefined): stri
 export default createHttpAdapter({
   name: "whoami",
   pathPattern: "/whoami",
+  // `priority` is plumbed through to the platform (reserved for forward
+  // compatibility); set here to exercise the deploy round-trip of the field.
+  priority: 5,
   input: {
     get: () => ({
       query: `query Whoami {
