@@ -23,12 +23,11 @@
  */
 
 import { type Mock, vi } from "vitest";
-import { WORKFLOW_TEST_ENV_KEY } from "@/configure/services/workflow/job";
 import { getRegisteredJob, getRegisteredWorkflow } from "@/configure/services/workflow/registry";
 import { platformSerialize } from "@/utils/test/platform-serialize";
 import {
+  buildJobContext,
   clearWorkflowTestEnv,
-  readWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
 import type { User as IdpUser } from "../runtime/idp";
@@ -310,24 +309,6 @@ export function mockTailordb() {
 // ---------------------------------------------------------------------------
 
 const TRIGGER_DEFAULT = "mock-execution-id";
-
-// Env passed to a registered body run by the mock: mockWorkflow().setEnv() when
-// set, else the deprecated WORKFLOW_TEST_ENV_KEY env-var (fail fast on malformed
-// JSON). Shallow-copied to isolate against cross-trigger mutation.
-function buildJobContext(): { env: TailorEnv; invoker: null } {
-  const fromGlobal = readWorkflowTestEnv();
-  if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker: null };
-  const raw = process.env[WORKFLOW_TEST_ENV_KEY];
-  if (!raw) return { env: {} as TailorEnv, invoker: null };
-  try {
-    return { env: JSON.parse(raw) as TailorEnv, invoker: null };
-  } catch (cause) {
-    throw new Error(
-      `Invalid JSON in ${WORKFLOW_TEST_ENV_KEY}; provide valid JSON or use mockWorkflow().setEnv().`,
-      { cause },
-    );
-  }
-}
 
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).

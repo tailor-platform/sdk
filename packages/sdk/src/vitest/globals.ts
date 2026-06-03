@@ -16,6 +16,7 @@
  * test context where `vi` *is* available.
  */
 
+import { createDefaultWorkflowRuntime } from "./workflow-runtime";
 import type { ContextInvoker } from "../runtime/context";
 import type { TailorDBFileErrorCode } from "../runtime/file";
 
@@ -99,10 +100,13 @@ export function installPlatformGlobals(global: typeof globalThis): void {
 
   g[RUNTIME_FLAG_KEY] = true;
 
-  // Containers. Namespace mocks (workflow, secretmanager, …) are added to these
-  // by the corresponding `xMock()` on acquisition.
+  // Containers. Namespace mocks (secretmanager, …) are added to these by the
+  // corresponding `xMock()` on acquisition. `workflow` carries a default runner
+  // so `.trigger()` runs the real job chain locally without `mockWorkflow()`;
+  // `mockWorkflow()` overlays and restores it.
   g.tailor = {
     context: { getInvoker: defaultGetInvoker },
+    workflow: createDefaultWorkflowRuntime(),
   };
   g.tailordb = {};
 

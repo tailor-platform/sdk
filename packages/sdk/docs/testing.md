@@ -126,7 +126,7 @@ test("content-based mock", async () => {
 
 ### Workflow Mock
 
-Acquire `mockWorkflow()` to route `.trigger()` calls through the mock and configure job responses (without it, `.trigger()` throws since no platform `tailor.workflow` is present):
+`.trigger()` runs the real job bodies locally out of the box (see [Running a full workflow locally](#running-a-full-workflow-locally)). Acquire `mockWorkflow()` when you want to override responses with `setJobHandler` / `enqueueResult` or assert on `triggeredJobs`:
 
 ```typescript
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
@@ -708,18 +708,14 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain with real job bodies, acquire `using wf = mockWorkflow()` and call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `wf.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
+To exercise the full chain with real job bodies, just call `workflow.mainJob.trigger()` — no `mockWorkflow()` needed. Dependent jobs run their real `.body()` functions, and trigger args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
 
 ```typescript
-import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
   test("mainJob.trigger() executes all jobs", async () => {
-    using wf = mockWorkflow();
-    wf.setEnv({ PAYMENT_GATEWAY: "stripe" });
-
     const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
 
     expect(result).toMatchObject({ confirmed: true, paymentStatus: "completed" });
@@ -727,7 +723,7 @@ describe("order-fulfillment workflow", () => {
 });
 ```
 
-Override a specific dependent job with `wf.setJobHandler(...)` while the rest run their real bodies — handler args and results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production.
+Acquire `mockWorkflow()` only when you need to override a dependent job with `wf.setJobHandler(...)` / `wf.enqueueResult(...)` (the rest still run their real bodies), control the env via `wf.setEnv(...)`, or assert on `wf.triggeredJobs`.
 
 **Use when:** you want to verify orchestration end to end without the cost of a real deployment.
 

@@ -38,3 +38,32 @@ export function writeWorkflowTestEnv(env: TailorEnv): void {
 export function clearWorkflowTestEnv(): void {
   delete (globalThis as unknown as Record<string, unknown>)[SLOT_KEY];
 }
+
+/**
+ * Env-var fallback read by `.trigger()` when `mockWorkflow().setEnv()` is unset.
+ * @deprecated Use `mockWorkflow().setEnv()` from `@tailor-platform/sdk/vitest`.
+ * @internal
+ */
+export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
+
+/**
+ * Build the context passed to a registered job body run locally by `.trigger()`:
+ * `mockWorkflow().setEnv()` when set, else the deprecated env-var (failing fast on
+ * malformed JSON). Shallow-copied to isolate against cross-trigger mutation.
+ * @returns Job context with `env` and a `null` invoker.
+ * @internal
+ */
+export function buildJobContext(): { env: TailorEnv; invoker: null } {
+  const fromGlobal = readWorkflowTestEnv();
+  if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker: null };
+  const raw = process.env[WORKFLOW_TEST_ENV_KEY];
+  if (!raw) return { env: {} as TailorEnv, invoker: null };
+  try {
+    return { env: JSON.parse(raw) as TailorEnv, invoker: null };
+  } catch (cause) {
+    throw new Error(
+      `Invalid JSON in ${WORKFLOW_TEST_ENV_KEY}; provide valid JSON or use mockWorkflow().setEnv().`,
+      { cause },
+    );
+  }
+}
