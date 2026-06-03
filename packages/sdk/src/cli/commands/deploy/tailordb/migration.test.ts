@@ -497,6 +497,7 @@ describe("migration", () => {
         authNamespace: "auth",
         machineUsers: ["test-machine-user"],
         dbConfig: {},
+        env: {},
       };
     }
 

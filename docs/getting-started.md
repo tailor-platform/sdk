@@ -14,17 +14,17 @@ Guide for new SDK contributors.
 git clone https://github.com/tailor-platform/sdk.git
 cd sdk
 pnpm install
-pnpm exec turbo run build
+pnpm build
 ```
 
 ## Key Commands
 
-| Command                        | Description                   |
-| ------------------------------ | ----------------------------- |
-| `pnpm exec turbo run build`    | Build all packages            |
-| `pnpm exec turbo run test`     | Run all tests                 |
-| `pnpm exec turbo run check`    | Format, lint, typecheck, knip |
-| `pnpm exec turbo run generate` | Run code generation           |
+| Command         | Description                   |
+| --------------- | ----------------------------- |
+| `pnpm build`    | Build all packages            |
+| `pnpm test`     | Run all tests                 |
+| `pnpm check`    | Format, lint, typecheck, knip |
+| `pnpm generate` | Run code generation           |
 
 In `packages/sdk/`:
 

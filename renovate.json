@@ -70,6 +70,11 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["rolldown", "tsdown"],
       "groupName": "rolldown"
+    },
+    {
+      "description": "Skip aquaproj/update-checksum-workflow v1.0.5 only (broken via update-checksum-action v0.2.7); see https://github.com/aquaproj/update-checksum-action/issues/364. The renovate-policy-check workflow will fail once we move past v1.0.5 so this rule can be removed.",
+      "matchPackageNames": ["aquaproj/update-checksum-workflow"],
+      "allowedVersions": "<1.0.5 || >1.0.5"
     }
   ]
 }

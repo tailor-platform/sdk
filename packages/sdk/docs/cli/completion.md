@@ -36,9 +36,11 @@ tailor-sdk completion [options] [shell]
 
 **Options**
 
-| Option           | Alias | Description                    | Required | Default |
-| ---------------- | ----- | ------------------------------ | -------- | ------- |
-| `--instructions` | `-i`  | Show installation instructions | No       | `false` |
+| Option           | Alias | Description                                                                                                                          | Required | Default |
+| ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------- |
+| `--instructions` | `-i`  | Show installation instructions                                                                                                       | No       | `false` |
+| `--loader`       | -     | Print just the rc loader snippet (bash/zsh). Add it to ~/.bashrc or ~/.zshrc; it auto-regenerates the cache when the binary changes. | No       | `false` |
+| `--install`      | -     | Write the completion script to its on-disk cache (bash/zsh) or autoload location (fish) instead of printing it.                      | No       | `false` |
 
 <!-- politty:command:completion:options:end -->
 

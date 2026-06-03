@@ -30,12 +30,12 @@ pre-commit:
     checks:
       glob: "*.{ts,js}"
       run: >-
-        pnpm exec turbo run build lint typecheck:go knip
-        --filter=@tailor-platform/sdk --filter=example
-        --no-update-notifier --output-logs=errors-only
-        && pnpm exec turbo run lint
-        --filter='./packages/create-sdk/templates/*'
-        --no-update-notifier --output-logs=errors-only
+        pnpm --filter=@tailor-platform/sdk run build &&
+        pnpm --filter=@tailor-platform/sdk --filter=example run generate &&
+        pnpm --filter=@tailor-platform/sdk --filter=example run lint &&
+        pnpm --filter=@tailor-platform/sdk --filter=example run typecheck:go &&
+        pnpm --filter=@tailor-platform/sdk run knip &&
+        pnpm --filter='./packages/create-sdk/templates/*' run lint
 
 post-commit:
   commands:

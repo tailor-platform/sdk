@@ -40,8 +40,11 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
+      - name: Build packages
+        run: pnpm -r run build
+
       - name: Run tests
-        run: pnpm exec turbo run test -- --project unit
+        run: pnpm -r run test --project unit
 
   test-summary:
     needs: [test]

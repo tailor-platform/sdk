@@ -224,7 +224,7 @@ describe("GenerationManager", () => {
     it("processes all generators through generate method", async () => {
       // Spy on the generator's aggregate method to verify it was called
       const testGenerator = manager.generators[0];
-      const aggregateSpy = vi.spyOn(testGenerator, "aggregate");
+      using aggregateSpy = vi.spyOn(testGenerator, "aggregate");
 
       // Use generate method which orchestrates all generator processing
       await manager.generate(false);
@@ -302,9 +302,9 @@ describe("GenerationManager", () => {
       });
 
       // Spy on the generator's methods to verify they were called
-      const processTypeSpy = vi.spyOn(testGenerator, "processType");
-      const processResolverSpy = vi.spyOn(testGenerator, "processResolver");
-      const aggregateSpy = vi.spyOn(testGenerator, "aggregate");
+      using processTypeSpy = vi.spyOn(testGenerator, "processType");
+      using processResolverSpy = vi.spyOn(testGenerator, "processResolver");
+      using aggregateSpy = vi.spyOn(testGenerator, "aggregate");
 
       await manager.processGenerator(testGenerator);
 
@@ -344,7 +344,7 @@ describe("GenerationManager", () => {
     });
 
     it("processes all types", async () => {
-      const processTypeSpy = vi.spyOn(testGenerator, "processType");
+      using processTypeSpy = vi.spyOn(testGenerator, "processType");
       const types = {
         type1: db.type("Type1", {}),
         type2: db.type("Type2", {}),
@@ -401,7 +401,7 @@ describe("GenerationManager", () => {
     });
 
     it("sourceInfo is correctly passed to processType", async () => {
-      const processTypeSpy = vi.spyOn(testGenerator, "processType");
+      using processTypeSpy = vi.spyOn(testGenerator, "processType");
       const types = {
         TestType: db.type("TestType", {}),
       };
@@ -463,7 +463,7 @@ describe("GenerationManager", () => {
     });
 
     it("processes all resolvers", async () => {
-      const processResolverSpy = vi.spyOn(testGenerator, "processResolver");
+      using processResolverSpy = vi.spyOn(testGenerator, "processResolver");
       const resolvers = {
         resolver1: createResolver({
           name: "resolver1",
@@ -513,7 +513,7 @@ describe("GenerationManager", () => {
     });
 
     it("calls generator aggregate method", async () => {
-      const aggregateSpy = vi.spyOn(testGenerator, "aggregate");
+      using aggregateSpy = vi.spyOn(testGenerator, "aggregate");
 
       await manager.aggregate(testGenerator);
 

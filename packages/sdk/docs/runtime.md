@@ -78,7 +78,7 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `idp` — IdP user management (`new Client({ namespace })`)
 - `workflow` — workflow & job control (`triggerWorkflow`, `triggerJobFunction`, `wait`, `resolve`)
 - `context` — execution context (`getInvoker`)
-- `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `openDownloadStream`)
+- `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`, `openDownloadStream` _(deprecated)_)
 
 ## Testing
 

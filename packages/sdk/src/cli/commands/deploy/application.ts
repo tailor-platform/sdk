@@ -34,7 +34,9 @@ export async function applyApplication(
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   if (phase === "create-update") {
-    // Applications
+    // Re-issue updateApplication for unchanged apps too, so the platform
+    // re-composes the gateway schema synchronously on every deploy.
+    const updates = [...changeSet.updates, ...changeSet.unchanged];
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
         create.request.cors = await resolveStaticWebsiteUrls(
@@ -46,7 +48,7 @@ export async function applyApplication(
         await client.createApplication(create.request);
         await client.setMetadata(create.metaRequest);
       }),
-      ...changeSet.updates.map(async (update) => {
+      ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
           client,
           update.request.workspaceId!,
@@ -231,9 +233,13 @@ export async function planApplication(
   httpAdapterBuildResult?: HttpAdapterBundleResult,
 ) {
   const { client, workspaceId, application, forRemoval } = context;
-  const changeSet = createChangeSet<CreateApplication, UpdateApplication, DeleteApplication>(
-    "Applications",
-  );
+  const changeSet = createChangeSet<
+    CreateApplication,
+    UpdateApplication,
+    DeleteApplication,
+    never,
+    UpdateApplication
+  >("Applications");
 
   const existingApplications = await fetchAll(async (pageToken, maxPageSize) => {
     try {
@@ -252,30 +258,28 @@ export async function planApplication(
   });
 
   if (forRemoval) {
-    const ownedAppNames = new Set<string>();
-    if (existingApplications.some((app) => app.name === application.name)) {
-      ownedAppNames.add(application.name);
-    }
-    if (application.id) {
-      const others = existingApplications.filter((app) => !ownedAppNames.has(app.name));
-      const owned = await Promise.all(
-        others.map(async (app) => {
-          const labels = await fetchAppLabels(client, workspaceId, app.name);
-          return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
-        }),
-      );
-      for (const name of owned) {
-        if (name) ownedAppNames.add(name);
+    // A same-named app in a shared workspace may belong to another user, so
+    // never delete by name alone. Without an id only the same-name app can be
+    // ours; with an id, scan all apps to also clean up renamed-away ones.
+    const candidates = application.id
+      ? existingApplications
+      : existingApplications.filter((app) => app.name === application.name);
+    const owned = await Promise.all(
+      candidates.map(async (app) => {
+        const labels = await fetchAppLabels(client, workspaceId, app.name);
+        return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
+      }),
+    );
+    for (const name of owned) {
+      if (name) {
+        changeSet.deletes.push({
+          name,
+          request: {
+            workspaceId,
+            applicationName: name,
+          },
+        });
       }
-    }
-    for (const name of ownedAppNames) {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          applicationName: name,
-        },
-      });
     }
     return changeSet;
   }
@@ -379,20 +383,20 @@ export async function planApplication(
 
   if (existing) {
     const labels = await fetchAppLabels(client, workspaceId, application.name);
+    const update: UpdateApplication = {
+      name: application.name,
+      request,
+      metaRequest,
+    };
     if (
       isOwnedByApp(labels, application.name, application.id) &&
       hasMatchingSdkVersion(labels, metaRequest.labels) &&
       areApplicationsEqual(existing, desired)
     ) {
-      changeSet.unchanged.push({
-        name: application.name,
-      });
+      // Plan display shows this as unchanged, but apply still re-issues it.
+      changeSet.unchanged.push(update);
     } else {
-      changeSet.updates.push({
-        name: application.name,
-        request,
-        metaRequest,
-      });
+      changeSet.updates.push(update);
     }
   } else {
     changeSet.creates.push({

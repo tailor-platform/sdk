@@ -6,9 +6,14 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
+import {
+  clearWorkflowTestEnv,
+  writeWorkflowTestEnv,
+} from "../configure/services/workflow/test-env-key";
 import type { ContextInvoker } from "../runtime/context";
 import type { TailorDBFileErrorCode } from "../runtime/file";
 import type { User as IdpUser } from "../runtime/idp";
+import type { TailorEnv } from "../types/env";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -359,6 +364,15 @@ export const workflowMock = {
   }) as SetWaitHandler,
 
   /**
+   * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
+   * Cleared by `workflowMock.reset()`.
+   * @param env - Env passed to job bodies.
+   */
+  setEnv(env: TailorEnv): void {
+    writeWorkflowTestEnv({ ...env });
+  },
+
+  /**
    * Configure how `tailor.workflow.resolve` runs the user-supplied callback. The handler
    * receives `(executionId, key, callback)` — invoke `callback(payload)` to drive
    * resolve→wait wiring in tests. Default: callback is not invoked (records the call only).
@@ -406,6 +420,7 @@ export const workflowMock = {
     state.waitHandler = null;
     state.resolveHandler = null;
     state.workflowCalls.length = 0;
+    clearWorkflowTestEnv();
   },
 };
 
@@ -907,6 +922,8 @@ const FILE_DEFAULTS: Record<string, any> = {
   },
   delete: undefined,
   getMetadata: { contentType: "", fileSize: 0, sha256sum: "", urlPath: "" },
+  downloadStream: null,
+  uploadStream: { metadata: { fileSize: 0, sha256sum: "" } },
 };
 
 function resolveFileCall(
@@ -1008,6 +1025,40 @@ const mockTailordbFile = {
       recordId,
     );
     return toFileStream(resolved);
+  },
+  async downloadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<{
+    body: ReadableStream<Uint8Array>;
+    metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
+  }> {
+    const resolved = resolveFileCall("downloadStream", namespace, typeName, fieldName, recordId);
+    if (resolved != null) {
+      return resolved as Awaited<ReturnType<typeof this.downloadStream>>;
+    }
+    return {
+      body: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
+      metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+    };
+  },
+  async uploadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+    _readableStream: ReadableStream<Uint8Array | ArrayBuffer>,
+    _options?: { contentType?: string; fileSize?: number },
+  ): Promise<{ metadata: { fileSize: number; sha256sum: string } }> {
+    return resolveFileCall("uploadStream", namespace, typeName, fieldName, recordId) as Awaited<
+      ReturnType<typeof this.uploadStream>
+    >;
   },
 };
 
@@ -1221,4 +1272,5 @@ export function cleanupMocks(global: typeof globalThis): void {
   delete g.TailorDBFileError;
   delete g[STATE_KEY];
   delete g[RUNTIME_FLAG_KEY];
+  clearWorkflowTestEnv();
 }

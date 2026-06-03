@@ -35,6 +35,7 @@ export interface MigrationExecutionOptions {
   client: OperatorClient;
   workspaceId: string;
   authInvoker: AuthInvoker;
+  env: Record<string, string | number | boolean>;
 }
 
 /**
@@ -46,6 +47,7 @@ export interface MigrationContext {
   authNamespace: string;
   machineUsers: string[] | undefined;
   dbConfig: Record<string, TailorDBServiceConfig | undefined>;
+  env: Record<string, string | number | boolean>;
 }
 
 interface ExecutionResult {
@@ -174,7 +176,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, authInvoker } = options;
+  const { client, workspaceId, authInvoker, env } = options;
 
   const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
 
@@ -183,6 +185,7 @@ async function executeSingleMigration(
     migration.scriptPath,
     migration.namespace,
     migration.number,
+    env,
   );
 
   // Execute the script using the shared script executor
@@ -280,6 +283,7 @@ export async function executeMigrations(
       client: context.client,
       workspaceId: context.workspaceId,
       authInvoker,
+      env: context.env,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);

@@ -584,7 +584,7 @@ describe("collectFunctionEntries", () => {
   });
 
   test("skips entries with missing bundled code and warns", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    using _warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const scripts = createBundledScripts(); // empty maps
 
     const app = createMockApplication({
@@ -594,7 +594,6 @@ describe("collectFunctionEntries", () => {
     const entries = collectFunctionEntries(app, [], scripts);
 
     expect(entries).toHaveLength(0);
-    warnSpy.mockRestore();
   });
 
   test("returns empty array when application has no services", () => {

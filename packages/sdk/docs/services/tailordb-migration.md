@@ -186,6 +186,23 @@ export async function main(trx: Transaction): Promise<void> {
 }
 ```
 
+**Accessing environment variables**
+
+The migration `main` receives an optional second argument exposing the variables defined in `defineConfig({ env })` — the same values available via `context.env` in resolvers. The `MigrationContext` type is exported from the generated `./db`:
+
+```typescript
+import type { Transaction, MigrationContext } from "./db";
+
+export async function main(trx: Transaction, { env }: MigrationContext): Promise<void> {
+  // Branch on environment-specific config resolved at deploy time
+  if (env.SKIP_BACKFILL) return;
+
+  await trx.updateTable("User").set({ stage: env.ENVIRONMENT }).execute();
+}
+```
+
+The `env` values are injected at bundle time (the same mechanism as resolvers/executors/workflow jobs); `process.env` and other Node-side environment access remain unavailable at runtime. The second argument is optional — existing `main(trx)` scripts continue to work unchanged.
+
 **Rules**
 
 - Always use the `trx` argument for database access. Anything that bypasses `trx` is not part of the transaction and will not roll back on failure.
@@ -394,7 +411,7 @@ The platform-side execution path is hard to fully replicate locally, but you can
 
 ## Environment-Specific Strategies
 
-A migration script is a function — branching on environment (e.g., to skip a backfill in dev) is just normal TypeScript. The migration runtime injects nothing environment-specific into the script itself; if you need environment awareness, query a sentinel record or rely on data shape. Avoid env-vars inside `migrate.ts` because the script is bundled and shipped to the platform; the platform-side environment is what counts.
+A migration script is a function — branching on environment (e.g., to skip a backfill in dev) is just normal TypeScript. For environment awareness, use the `env` values defined in `defineConfig({ env })`, exposed via the optional second argument `{ env }: MigrationContext` (see [Migration Script Anatomy](#migration-script-anatomy)). These are resolved at deploy time and inlined into the bundle. Do not read `process.env` inside `migrate.ts` — Node-side environment access is unavailable at runtime; only the injected `env` (and the data itself) reflect the target environment.
 
 For genuinely different schemas across environments, prefer separate workspaces with the same migration history rather than divergent `migrations/` directories.
 

@@ -1,5 +1,139 @@
 # @tailor-platform/sdk
 
+## 1.54.0
+
+### Minor Changes
+
+- [#1268](https://github.com/tailor-platform/sdk/pull/1268) [`e6b2a23`](https://github.com/tailor-platform/sdk/commit/e6b2a23b99e101cb878d9570e18d9d2fcbc07ac0) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(auth): expose `env` in the `beforeLogin` hook handler
+
+  The `beforeLogin` auth hook handler now receives `env` alongside `claims` and `idpConfigName`, exposing the variables defined in `defineConfig({ env })` (the same values available via `context.env` in resolvers). This lets hooks branch on environment-specific configuration at runtime without relying on `process.env`, which is unavailable in the platform runtime.
+
+- [#1277](https://github.com/tailor-platform/sdk/pull/1277) [`8d05f86`](https://github.com/tailor-platform/sdk/commit/8d05f864bc714f12783f66453791912dae8246a3) Thanks [@remiposo](https://github.com/remiposo)! - Add `createKyselyMock` to `@tailor-platform/sdk/vitest` for unit-testing code that runs Kysely queries. It returns a real Kysely instance whose execution is mocked. You stage the rows each query returns, run your code, then assert what it did — the SQL and parameters of each query, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned.
+
+  ```ts
+  import { createKyselyMock } from "@tailor-platform/sdk/vitest";
+  import type { Namespace } from "./generated/db";
+
+  const mock = createKyselyMock<Namespace["main-db"]>();
+  mock.enqueueResults([{ age: 30 }]); // the next query returns this row
+
+  const { age } = await mock.db
+    .selectFrom("User")
+    .select("age")
+    .where("email", "=", "a@b.com")
+    .executeTakeFirstOrThrow();
+  await mock.db
+    .updateTable("User")
+    .set({ age: age + 1 })
+    .where("email", "=", "a@b.com")
+    .execute();
+
+  expect(mock.updates).toHaveLength(1);
+  expect(mock.updates[0].parameters).toEqual([31, "a@b.com"]); // the actual bound values
+  expect(mock.updates[0].sql).toContain('update "User"'); // the compiled SQL
+  ```
+
+- [#1269](https://github.com/tailor-platform/sdk/pull/1269) [`a230ba6`](https://github.com/tailor-platform/sdk/commit/a230ba6a1b6861f60e6edac82ae59d333f1f3604) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(migration): expose `env` in migration scripts
+
+  The migration `main` function now receives an optional second argument `{ env }: MigrationContext` exposing the variables defined in `defineConfig({ env })` — the same values available via `context.env` in resolvers and `{ env }` in workflow jobs. The values are injected at bundle time and the `MigrationContext` type is exported from the generated `./db`. Existing `main(trx)` scripts continue to work unchanged.
+
+### Patch Changes
+
+- [#1285](https://github.com/tailor-platform/sdk/pull/1285) [`239b146`](https://github.com/tailor-platform/sdk/commit/239b1466ab4fb91d416d7cecb606703b5f9a9a33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1288](https://github.com/tailor-platform/sdk/pull/1288) [`02027b1`](https://github.com/tailor-platform/sdk/commit/02027b1d71120ca50e06dea1060d03c39bec41f7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.5.0
+
+- [#1291](https://github.com/tailor-platform/sdk/pull/1291) [`6f52e3e`](https://github.com/tailor-platform/sdk/commit/6f52e3e8b385ab00e010fd5bbc4f8bd5f15167be) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency date-fns to v4.4.0
+
+## 1.53.0
+
+### Minor Changes
+
+- [#1275](https://github.com/tailor-platform/sdk/pull/1275) [`f650615`](https://github.com/tailor-platform/sdk/commit/f6506158cd7247b4198a76702044346fbb65c669) Thanks [@haru0017](https://github.com/haru0017)! - Add downloadStream and uploadStream to file api. Mark openDownloadStream as deprecated.
+
+### Patch Changes
+
+- [#1263](https://github.com/tailor-platform/sdk/pull/1263) [`c7e065e`](https://github.com/tailor-platform/sdk/commit/c7e065e1213630e5cb77d7067907b35296f98097) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8
+
+- [#1271](https://github.com/tailor-platform/sdk/pull/1271) [`73ab0e0`](https://github.com/tailor-platform/sdk/commit/73ab0e0baf1657b1e916444c77f621823e917b52) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1274](https://github.com/tailor-platform/sdk/pull/1274) [`11b280a`](https://github.com/tailor-platform/sdk/commit/11b280a8e69feeb7973bcc9a6cbe711252ce72fd) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+## 1.52.0
+
+### Minor Changes
+
+- [#1195](https://github.com/tailor-platform/sdk/pull/1195) [`e4c3c9a`](https://github.com/tailor-platform/sdk/commit/e4c3c9a03e7711d3478a7399e1eac2c5a633baa1) Thanks [@dqn](https://github.com/dqn)! - Add `--field key=value` (`-f`) to `tailor-sdk api <endpoint>` for setting request-body fields without writing JSON. Dotted keys build nested objects (`-f application.name=foo`), `--field` overrides matching keys in `--body`, and field names tab-complete from the endpoint's proto schema (bash / zsh / fish) — including step-by-step completion of nested message fields.
+
+- [#1186](https://github.com/tailor-platform/sdk/pull/1186) [`57e00d6`](https://github.com/tailor-platform/sdk/commit/57e00d6bfc2f9602af0ac9c0235da6ec0e04b12e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `workflowMock.setEnv()` to control the `env` value passed to job bodies when `createWorkflowJob().trigger()` is invoked locally. Tests using the `tailor-runtime` Vitest environment can now configure the env through the same `workflowMock` helper they use for `setJobHandler` / `setWaitHandler`, without touching `process.env`.
+
+  ```typescript
+  import { workflowMock } from "@tailor-platform/sdk/vitest";
+
+  afterEach(() => workflowMock.reset());
+
+  test("workflow.mainJob.trigger() executes all jobs", async () => {
+    workflowMock.setEnv({ STAGE: "test" });
+    await workflow.mainJob.trigger({ orderId: "order-1", amount: 100 });
+  });
+  ```
+
+  The previous env-var-based pattern is now deprecated. A non-breaking fallback is retained, but `workflowMock.setEnv()` takes priority when both are set.
+
+### Patch Changes
+
+- [#1195](https://github.com/tailor-platform/sdk/pull/1195) [`0646e0a`](https://github.com/tailor-platform/sdk/commit/0646e0ad33142bbe89842ec323a66422d8a6a83e) Thanks [@dqn](https://github.com/dqn)! - Make `tailor-sdk api --field` tab completion faster by pre-enumerating candidates into the generated shell script. Field names, enum values, and `true`/`false` for bool fields are now resolved from a static lookup table at TAB time instead of spawning a Node process per keystroke.
+
+- [#1270](https://github.com/tailor-platform/sdk/pull/1270) [`fb540fa`](https://github.com/tailor-platform/sdk/commit/fb540fab090d8f5909804b9189aa97670c892e7b) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(tailordb): set the migration label to `0000` on the first apply
+
+  The initial schema snapshot (`0000`) is deployed through the normal
+  create-update flow and never reports itself as a pending migration, so the
+  first `tailor-sdk deploy` after `tailordb migration generate` previously left
+  the namespace without an `sdk-migration` label. This forced a redundant
+  apply/generate/apply sequence to establish the baseline. The migration label is
+  now reconciled to the latest local migration after every create-update apply, so
+  a single `migration generate` + `deploy` establishes the baseline as documented.
+
+- [#1222](https://github.com/tailor-platform/sdk/pull/1222) [`b9ac1da`](https://github.com/tailor-platform/sdk/commit/b9ac1da45365c5f16bed4f28df3920d009893f79) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.29.2
+
+- [#1237](https://github.com/tailor-platform/sdk/pull/1237) [`eb362d6`](https://github.com/tailor-platform/sdk/commit/eb362d63cc6c39b2d8d2706b67c5e38cdc5fda37) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.2
+
+- [#1250](https://github.com/tailor-platform/sdk/pull/1250) [`1a6ab51`](https://github.com/tailor-platform/sdk/commit/1a6ab51f85c5eb15fd0e9526029f9ab9e1eac759) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1257](https://github.com/tailor-platform/sdk/pull/1257) [`6b3b48e`](https://github.com/tailor-platform/sdk/commit/6b3b48e11b1b67aff9f9e15ad818f8a2587591bf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1259](https://github.com/tailor-platform/sdk/pull/1259) [`a31c292`](https://github.com/tailor-platform/sdk/commit/a31c292a65e30f150778377ab4f06f003f8eeda7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.47.0
+
+- [#1261](https://github.com/tailor-platform/sdk/pull/1261) [`f6de6cf`](https://github.com/tailor-platform/sdk/commit/f6de6cf7fbc3c9d56c75e297ef2f374b2b83337c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v6.26.0
+
+## 1.51.2
+
+### Patch Changes
+
+- [#1252](https://github.com/tailor-platform/sdk/pull/1252) [`631dfe0`](https://github.com/tailor-platform/sdk/commit/631dfe03022574c003918621c5a9395d79e6394f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk api <endpoint>` writing its JSON response to stderr instead of stdout. The response now goes to stdout (matching `api list` / `api inspect`), so `-j` output can be piped to other tools.
+
+- [#1244](https://github.com/tailor-platform/sdk/pull/1244) [`ce749ad`](https://github.com/tailor-platform/sdk/commit/ce749ad02947cacfbfaab2169e9a6522d11abc70) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency date-fns to v4.3.0
+
+- [#1245](https://github.com/tailor-platform/sdk/pull/1245) [`261a49d`](https://github.com/tailor-platform/sdk/commit/261a49de5d30d3a427a8a484956aa10ee6576abf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.1
+
+- [#1248](https://github.com/tailor-platform/sdk/pull/1248) [`a7fc33e`](https://github.com/tailor-platform/sdk/commit/a7fc33e6ce084f6a91210685b29cc9b65b9704c4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.3
+
+## 1.51.1
+
+### Patch Changes
+
+- [#1241](https://github.com/tailor-platform/sdk/pull/1241) [`4c40f74`](https://github.com/tailor-platform/sdk/commit/4c40f741318cdbc940a1b7db288751de50e8f680) Thanks [@remiposo](https://github.com/remiposo)! - `tailor-sdk deploy` now waits for the application's GraphQL schema composition to succeed before returning. Composition errors that previously only surfaced via `tailor-sdk workspace app health` are now raised by `deploy` itself.
+
+- [#1216](https://github.com/tailor-platform/sdk/pull/1216) [`7f3aa30`](https://github.com/tailor-platform/sdk/commit/7f3aa308732ac4cac4c8671ce57733a8328d37d9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.4.0
+
+- [#1219](https://github.com/tailor-platform/sdk/pull/1219) [`77bf0b7`](https://github.com/tailor-platform/sdk/commit/77bf0b71a1f92be4987be5ab344cecc9985c88a2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.6.0
+
+- [#1220](https://github.com/tailor-platform/sdk/pull/1220) [`36b3bce`](https://github.com/tailor-platform/sdk/commit/36b3bceca39899c8fb0d57b4c0d467c2f0fe491e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.0
+
+- [#1249](https://github.com/tailor-platform/sdk/pull/1249) [`2e11bc2`](https://github.com/tailor-platform/sdk/commit/2e11bc28e76fca4874b9d35454e86253ca53b920) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.4.3
+
+- [#1246](https://github.com/tailor-platform/sdk/pull/1246) [`4d3f2d4`](https://github.com/tailor-platform/sdk/commit/4d3f2d4eb7d5f1a7bdcd3a078075f89d4b2048ab) Thanks [@toiroakr](https://github.com/toiroakr)! - Cap parallel bundling of resolvers, executors, and workflow jobs to avoid OOM/SIGTERM on CI runners with many resolvers. Concurrency defaults to `os.cpus().length` and can be overridden via the `TAILOR_BUNDLE_CONCURRENCY` env var.
+
 ## 1.51.0
 
 ### Minor Changes

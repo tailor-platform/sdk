@@ -1,5 +1,25 @@
 # @tailor-platform/sdk-codemod
 
+## 0.2.4
+
+### Patch Changes
+
+- [#1258](https://github.com/tailor-platform/sdk/pull/1258) [`bffece9`](https://github.com/tailor-platform/sdk/commit/bffece9b592972e2bc5e4a882232b2704623e6f4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.43.0
+
+## 0.2.3
+
+### Patch Changes
+
+- [#1245](https://github.com/tailor-platform/sdk/pull/1245) [`261a49d`](https://github.com/tailor-platform/sdk/commit/261a49de5d30d3a427a8a484956aa10ee6576abf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.1
+
+## 0.2.2
+
+### Patch Changes
+
+- [#1236](https://github.com/tailor-platform/sdk/pull/1236) [`8b018b8`](https://github.com/tailor-platform/sdk/commit/8b018b8c224e993adc7faf61614242e3f1141f56) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.42.3
+
+- [#1249](https://github.com/tailor-platform/sdk/pull/1249) [`2e11bc2`](https://github.com/tailor-platform/sdk/commit/2e11bc28e76fca4874b9d35454e86253ca53b920) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.4.3
+
 ## 0.2.1
 
 ### Patch Changes

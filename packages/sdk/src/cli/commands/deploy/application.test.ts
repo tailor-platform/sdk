@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { logger } from "@/cli/shared/logger";
 import { planApplication } from "./application";
 import type { PlanContext } from "./deploy";
@@ -345,13 +345,101 @@ describe("planApplication", () => {
     });
   });
 
-  describe("CORS resolution on first deployment (issue #1030)", () => {
-    afterEach(() => {
-      vi.restoreAllMocks();
+  describe("forRemoval ownership check (issue #1279)", () => {
+    test("deletes a same-name app owned via legacy sdk-name (no sdk-app-id)", async () => {
+      const client = createMockClient([
+        {
+          name: appName,
+          label: appName,
+        },
+      ]);
+      const application = createMockApplication({ name: appName });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        forRemoval: true,
+      });
+
+      expect(result.deletes).toHaveLength(1);
+      expect(result.deletes[0].name).toBe(appName);
     });
 
+    test("deletes a same-name app owned via matching sdk-app-id", async () => {
+      const appId = "stable-id";
+      const client = createMockClient([
+        {
+          name: appName,
+          label: appName,
+          sdkAppId: appId,
+        },
+      ]);
+      const application = createMockApplication({ name: appName, id: appId });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        forRemoval: true,
+      });
+
+      expect(result.deletes).toHaveLength(1);
+      expect(result.deletes[0].name).toBe(appName);
+    });
+
+    test("does not delete a same-name app owned by a different id", async () => {
+      const client = createMockClient([
+        {
+          name: appName,
+          label: appName,
+          sdkAppId: "someone-elses-id",
+        },
+      ]);
+      const application = createMockApplication({ name: appName, id: "my-id" });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        forRemoval: true,
+      });
+
+      expect(result.deletes).toHaveLength(0);
+    });
+
+    test("does not delete a same-name app that carries no SDK labels", async () => {
+      const client = {
+        ...createMockClient([{ name: appName }]),
+        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      } as unknown as OperatorClient;
+      const application = createMockApplication({ name: appName });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        forRemoval: true,
+      });
+
+      expect(result.deletes).toHaveLength(0);
+    });
+
+    test("does not fetch metadata for unrelated apps when no id is configured", async () => {
+      const client = createMockClient([
+        { name: appName, label: appName },
+        { name: "other-app", label: "other-app" },
+        { name: "another-app", label: "another-app" },
+      ]);
+      const application = createMockApplication({ name: appName });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        forRemoval: true,
+      });
+
+      // Only the same-name app is deleted, and metadata is fetched for it alone.
+      expect(result.deletes).toHaveLength(1);
+      expect(result.deletes[0].name).toBe(appName);
+      expect(client.getMetadata).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("CORS resolution on first deployment (issue #1030)", () => {
     test("does not warn when CORS references a locally-defined static website that is not yet on the platform", async () => {
-      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const client = {
         ...createMockClient([]),
         getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
@@ -368,7 +456,7 @@ describe("planApplication", () => {
     });
 
     test("still warns when CORS references a static website that is not defined locally", async () => {
-      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const client = {
         ...createMockClient([]),
         getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
