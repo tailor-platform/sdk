@@ -9,6 +9,7 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import ml from "@/utils/multiline";
 
 export interface MigrationBundleResult {
@@ -76,6 +77,7 @@ export async function bundleMigrationScript(
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
   const result = await rolldown.build({
+    plugins: [platformBundleDefinePlugin],
     input: entryPath,
     write: false,
     output: {

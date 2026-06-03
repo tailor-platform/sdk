@@ -7,11 +7,11 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/ca
 import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
-import { platformBundleDefinePlugin } from "./platform-bundle-plugin";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 
