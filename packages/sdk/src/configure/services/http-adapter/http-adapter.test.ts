@@ -7,14 +7,14 @@ describe("createHttpAdapter", () => {
     const adapter = createHttpAdapter({
       name: "get-user",
       pathPattern: "/users/*",
-      methods: ["GET"],
-      input: () => ({ query: "{ me { id } }" }),
+      input: {
+        get: () => ({ query: "{ me { id } }" }),
+      },
     });
 
     expect(adapter.name).toBe("get-user");
     expect(adapter.pathPattern).toBe("/users/*");
-    expect(adapter.methods).toEqual(["GET"]);
-    expect(typeof adapter.input).toBe("function");
+    expect(typeof adapter.input.get).toBe("function");
     expect(isSdkBranded(adapter, "http-adapter")).toBe(true);
   });
 
@@ -22,8 +22,9 @@ describe("createHttpAdapter", () => {
     const adapter = createHttpAdapter({
       name: "get-user",
       pathPattern: "/users/*",
-      methods: ["GET"],
-      input: () => ({ query: "{ me { id } }" }),
+      input: {
+        get: () => ({ query: "{ me { id } }" }),
+      },
     });
     expect(Object.keys(adapter)).not.toContain(SDK_BRAND.toString());
     expect(Object.getOwnPropertyDescriptor(adapter, SDK_BRAND)?.enumerable).toBe(false);
@@ -34,10 +35,26 @@ describe("createHttpAdapter", () => {
     const adapter = createHttpAdapter({
       name: "get-user",
       pathPattern: "/users/*",
-      methods: ["GET"],
-      input: () => ({ query: "{}" }),
+      input: {
+        get: () => ({ query: "{}" }),
+      },
       output,
     });
     expect(adapter.output).toBe(output);
+  });
+
+  it("accepts multiple per-method handlers", () => {
+    const adapter = createHttpAdapter({
+      name: "user",
+      pathPattern: "/users/*",
+      input: {
+        get: () => ({ query: "{}" }),
+        post: () => ({ query: "{}" }),
+        delete: () => ({ query: "{}" }),
+      },
+    });
+    expect(typeof adapter.input.get).toBe("function");
+    expect(typeof adapter.input.post).toBe("function");
+    expect(typeof adapter.input.delete).toBe("function");
   });
 });

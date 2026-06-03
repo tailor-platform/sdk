@@ -1,30 +1,21 @@
 import * as fs from "node:fs";
-import { builtinModules } from "node:module";
+import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
+import { isNodeBuiltinImport } from "@/cli/services/http-adapter/node-builtins";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
-import ml from "@/utils/multiline";
+import { HTTP_METHODS, type HttpMethodKey } from "@/types/http-adapter";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
 
-// Sobek does not implement Node's host APIs. Reject every Node built-in
-// (including subpath imports like `fs/promises`) and the `node:` prefix.
-// Internal `_*` modules are excluded since they are never valid user imports.
-const NODE_BUILTINS = new Set(builtinModules.filter((m) => !m.startsWith("_")));
-
-function isNodeBuiltinImport(source: string): boolean {
-  if (source.startsWith("node:")) return true;
-  const root = source.includes("/") ? source.slice(0, source.indexOf("/")) : source;
-  return NODE_BUILTINS.has(root);
-}
-
 export interface HttpAdapterBundleInput {
   name: string;
   sourceFile: string;
+  methods: HttpMethodKey[];
   hasOutput: boolean;
 }
 
@@ -38,6 +29,11 @@ export interface HttpAdapterBundleResult {
 /**
  * Bundle each HTTP adapter's `input` (and `output`, if present) function into a
  * single JS string that defines a global `transform(input)` entry point.
+ *
+ * For `input`, the SDK generates a method dispatcher: at runtime the gateway
+ * passes the HTTP request (with `method` in uppercase) and the wrapper routes
+ * it to the user's per-method handler. For `output`, the user's function is
+ * used directly.
  *
  * The output targets the gateway's Sobek runtime: ES2017 IIFE, no Node imports,
  * no async/await, single file (no code splitting). Each function is bundled
@@ -105,7 +101,7 @@ async function bundleAdapterScript(
 ): Promise<[string, "input" | "output", string]> {
   const contextHash = computeBundlerContextHash({
     sourceFile: adapter.sourceFile,
-    serializedTriggerContext: "",
+    serializedTriggerContext: kind === "input" ? adapter.methods.join(",") : "",
     tsconfig,
     inlineSourcemap: false,
     prefix: kind,
@@ -121,10 +117,10 @@ async function bundleAdapterScript(
       const entryPath = path.join(outputDir, `${adapter.name}.${kind}.entry.js`);
       const absoluteSourcePath = path.resolve(adapter.sourceFile);
 
-      const entryContent = ml /* js */ `
-        import __adapter from "${absoluteSourcePath}";
-        globalThis.transform = __adapter.${kind};
-      `;
+      const entryContent =
+        kind === "input"
+          ? buildInputEntry(absoluteSourcePath, adapter.methods)
+          : buildOutputEntry(absoluteSourcePath);
       fs.writeFileSync(entryPath, entryContent);
 
       const rejectNodeImports: rolldown.Plugin = {
@@ -139,7 +135,27 @@ async function bundleAdapterScript(
         },
       };
 
-      const plugins: rolldown.Plugin[] = [rejectNodeImports, ...cachePlugins];
+      // The SDK only contributes the `createHttpAdapter` brand at build time;
+      // at gateway runtime we just need the user's handler bodies. Replace any
+      // `@tailor-platform/sdk` import with a tiny stub so the IIFE output has
+      // no external global dependency.
+      const stubSdkImports: rolldown.Plugin = {
+        name: "http-adapter-stub-sdk",
+        resolveId(source) {
+          if (source === "@tailor-platform/sdk" || source.startsWith("@tailor-platform/sdk/")) {
+            return { id: "\0http-adapter-sdk-stub", moduleSideEffects: false };
+          }
+          return null;
+        },
+        load(id) {
+          if (id === "\0http-adapter-sdk-stub") {
+            return "export const createHttpAdapter = (cfg) => cfg;\nexport default { createHttpAdapter };\n";
+          }
+          return null;
+        },
+      };
+
+      const plugins: rolldown.Plugin[] = [rejectNodeImports, stubSdkImports, ...cachePlugins];
 
       let bundled: string;
       try {
@@ -183,9 +199,83 @@ async function bundleAdapterScript(
         );
       }
 
+      // Async/await isn't supported by Sobek, and the AST check in detector.ts
+      // only inspects the user's top-level handler. Helpers pulled in through
+      // imports could still introduce `async` / `await`, so verify the final
+      // bundled output is fully synchronous.
+      rejectAsyncInBundle(bundled, adapter.name, kind);
+
       return bundled;
     },
   });
 
   return [adapter.name, kind, code];
+}
+
+function buildInputEntry(absoluteSourcePath: string, methods: HttpMethodKey[]): string {
+  const cases = methods
+    .map((method) => `    case "${HTTP_METHODS[method]}": return __adapter.input.${method}(req);`)
+    .join("\n");
+  const supported = methods.map((m) => HTTP_METHODS[m]).join(", ");
+  return `import __adapter from ${JSON.stringify(absoluteSourcePath)};
+globalThis.transform = function(req) {
+  switch (req.method) {
+${cases}
+    default: throw new Error("HTTP adapter received unsupported method: " + req.method + " (supported: ${supported})");
+  }
+};
+`;
+}
+
+function buildOutputEntry(absoluteSourcePath: string): string {
+  return `import __adapter from ${JSON.stringify(absoluteSourcePath)};
+globalThis.transform = __adapter.output;
+`;
+}
+
+function rejectAsyncInBundle(code: string, adapterName: string, kind: "input" | "output"): void {
+  // Use a fake filename so oxc treats this as a module. The bundle is already
+  // minified IIFE; oxc parses it without complaint.
+  const { program } = parseSync(`${adapterName}.${kind}.bundle.js`, code);
+
+  let asyncFound = false;
+  const stack: unknown[] = [program];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object") continue;
+    const n = node as Record<string, unknown>;
+    const type = typeof n.type === "string" ? (n.type as string) : "";
+    if (type === "AwaitExpression") {
+      asyncFound = true;
+      break;
+    }
+    if (
+      (type === "FunctionDeclaration" ||
+        type === "FunctionExpression" ||
+        type === "ArrowFunctionExpression") &&
+      n.async === true
+    ) {
+      asyncFound = true;
+      break;
+    }
+    if ((type === "ForOfStatement" || type === "ForStatement") && n.await === true) {
+      asyncFound = true;
+      break;
+    }
+    for (const key of Object.keys(n)) {
+      const child = n[key];
+      if (Array.isArray(child)) {
+        for (const c of child) stack.push(c);
+      } else if (child && typeof child === "object") {
+        stack.push(child);
+      }
+    }
+  }
+
+  if (asyncFound) {
+    throw new Error(
+      `HTTP adapter "${adapterName}" ${kind} bundle contains async/await, which is unavailable in the gateway runtime. ` +
+        `Check imported helper modules — even if your handler is synchronous, an async helper will fail at runtime.`,
+    );
+  }
 }

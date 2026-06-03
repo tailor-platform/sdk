@@ -6,6 +6,7 @@ import {
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
+import { HTTP_METHODS } from "@/types/http-adapter";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp } from "./label";
@@ -450,7 +451,7 @@ function buildHttpAdapters(
     return {
       name: loaded.adapter.name,
       pathPattern: loaded.adapter.pathPattern,
-      methods: loaded.adapter.methods,
+      methods: loaded.methods.map((m) => HTTP_METHODS[m]),
       inputScript,
       outputScript,
       enabled: loaded.adapter.enabled ?? true,

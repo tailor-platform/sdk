@@ -8,21 +8,41 @@ function detect(source: string) {
 }
 
 describe("findHttpAdaptersInFile", () => {
-  it("detects a createHttpAdapter call and extracts the name", () => {
+  it("detects a createHttpAdapter call and extracts the name and methods", () => {
     const result = detect(`
 import { createHttpAdapter } from "@tailor-platform/sdk";
 
 export default createHttpAdapter({
   name: "get-user",
   pathPattern: "/users/*",
-  methods: ["GET"],
-  input: (req) => ({ query: "{}" }),
+  input: {
+    get: (req) => ({ query: "{}" }),
+  },
 });
 `);
     expect(result.errors).toEqual([]);
     expect(result.adapters).toHaveLength(1);
     expect(result.adapters[0].name).toBe("get-user");
+    expect(result.adapters[0].methods).toEqual(["get"]);
     expect(result.adapters[0].hasOutput).toBe(false);
+  });
+
+  it("captures multiple method handlers", () => {
+    const result = detect(`
+import { createHttpAdapter } from "@tailor-platform/sdk";
+
+export default createHttpAdapter({
+  name: "user",
+  pathPattern: "/users/*",
+  input: {
+    get:    (req) => ({ query: "{}" }),
+    post:   (req) => ({ query: "{}" }),
+    delete: (req) => ({ query: "{}" }),
+  },
+});
+`);
+    expect(result.errors).toEqual([]);
+    expect(result.adapters[0].methods).toEqual(["get", "post", "delete"]);
   });
 
   it("marks adapters that include an output handler", () => {
@@ -32,8 +52,9 @@ import { createHttpAdapter } from "@tailor-platform/sdk";
 export default createHttpAdapter({
   name: "with-output",
   pathPattern: "/x",
-  methods: ["POST"],
-  input: () => ({ query: "{}" }),
+  input: {
+    post: () => ({ query: "{}" }),
+  },
   output: () => ({ body: "" }),
 });
 `);
@@ -48,26 +69,65 @@ const dynamicName = "x";
 export default createHttpAdapter({
   name: dynamicName,
   pathPattern: "/x",
-  methods: ["GET"],
-  input: () => ({ query: "{}" }),
+  input: { get: () => ({ query: "{}" }) },
 });
 `);
     expect(result.adapters).toEqual([]);
     expect(result.errors[0].message).toMatch(/static string `name`/);
   });
 
-  it("errors when input is async", () => {
+  it("errors when input is not an object literal", () => {
+    const result = detect(`
+import { createHttpAdapter } from "@tailor-platform/sdk";
+const handlers = { get: () => ({ query: "{}" }) };
+export default createHttpAdapter({
+  name: "ref-input",
+  pathPattern: "/x",
+  input: handlers,
+});
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors[0].message).toMatch(/`input` must be an object literal/);
+  });
+
+  it("errors when input has no method handlers", () => {
+    const result = detect(`
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "empty-input",
+  pathPattern: "/x",
+  input: {},
+});
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors[0].message).toMatch(/at least one HTTP method handler/);
+  });
+
+  it("errors when a method handler is not a function expression", () => {
+    const result = detect(`
+import { createHttpAdapter } from "@tailor-platform/sdk";
+const handler = () => ({ query: "{}" });
+export default createHttpAdapter({
+  name: "ref-handler",
+  pathPattern: "/x",
+  input: { get: handler },
+});
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors[0].message).toMatch(/`input\.get` must be a function expression/);
+  });
+
+  it("errors when a method handler is async", () => {
     const result = detect(`
 import { createHttpAdapter } from "@tailor-platform/sdk";
 export default createHttpAdapter({
   name: "async-input",
   pathPattern: "/x",
-  methods: ["GET"],
-  input: async () => ({ query: "{}" }),
+  input: { get: async () => ({ query: "{}" }) },
 });
 `);
     expect(result.adapters).toEqual([]);
-    expect(result.errors[0].message).toMatch(/`input` must be synchronous/);
+    expect(result.errors[0].message).toMatch(/`input\.get` must be synchronous/);
   });
 
   it("errors when output is async", () => {
@@ -76,28 +136,12 @@ import { createHttpAdapter } from "@tailor-platform/sdk";
 export default createHttpAdapter({
   name: "async-output",
   pathPattern: "/x",
-  methods: ["GET"],
-  input: () => ({ query: "{}" }),
+  input: { get: () => ({ query: "{}" }) },
   output: async () => ({ body: "" }),
 });
 `);
     expect(result.adapters).toEqual([]);
     expect(result.errors[0].message).toMatch(/`output` must be synchronous/);
-  });
-
-  it("errors when input is not a function expression", () => {
-    const result = detect(`
-import { createHttpAdapter } from "@tailor-platform/sdk";
-const handler = () => ({ query: "{}" });
-export default createHttpAdapter({
-  name: "ref-input",
-  pathPattern: "/x",
-  methods: ["GET"],
-  input: handler,
-});
-`);
-    expect(result.adapters).toEqual([]);
-    expect(result.errors[0].message).toMatch(/`input` to be a function expression/);
   });
 
   it("errors when multiple createHttpAdapter calls exist in one file", () => {
@@ -107,15 +151,13 @@ import { createHttpAdapter } from "@tailor-platform/sdk";
 export const a = createHttpAdapter({
   name: "one",
   pathPattern: "/a",
-  methods: ["GET"],
-  input: () => ({ query: "{}" }),
+  input: { get: () => ({ query: "{}" }) },
 });
 
 export default createHttpAdapter({
   name: "two",
   pathPattern: "/b",
-  methods: ["GET"],
-  input: () => ({ query: "{}" }),
+  input: { get: () => ({ query: "{}" }) },
 });
 `);
     expect(result.adapters).toEqual([]);
@@ -128,6 +170,74 @@ export default createHttpAdapter({
     const result = detect(`
 import { createWorkflow } from "@tailor-platform/sdk";
 export default createWorkflow({});
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("errors when input contains an unknown key (e.g. a typo)", () => {
+    const result = detect(`
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "typo",
+  pathPattern: "/x",
+  input: {
+    get: () => ({ query: "{}" }),
+    delte: () => ({ query: "{}" }),
+  },
+});
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors[0].message).toMatch(/unknown key "delte"/);
+  });
+
+  it("errors when input contains a spread element", () => {
+    const result = detect(`
+import { createHttpAdapter } from "@tailor-platform/sdk";
+const extra = { post: () => ({ query: "{}" }) };
+export default createHttpAdapter({
+  name: "spread",
+  pathPattern: "/x",
+  input: {
+    get: () => ({ query: "{}" }),
+    ...extra,
+  },
+});
+`);
+    expect(result.adapters).toEqual([]);
+    expect(result.errors[0].message).toMatch(/spread elements are not allowed/);
+  });
+
+  it("errors when the file imports a Node built-in module", () => {
+    const result = detect(`
+import * as fs from "node:fs";
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "node-import",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}", fs }) },
+});
+`);
+    expect(result.errors.some((e) => /Node module "node:fs"/.test(e.message))).toBe(true);
+  });
+
+  it("errors when the file imports a Node built-in subpath (e.g. fs/promises)", () => {
+    const result = detect(`
+import { readFile } from "fs/promises";
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "node-subpath",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}", readFile }) },
+});
+`);
+    expect(result.errors.some((e) => /Node module "fs\/promises"/.test(e.message))).toBe(true);
+  });
+
+  it("does not flag Node built-in imports in files without a createHttpAdapter call", () => {
+    const result = detect(`
+import * as fs from "node:fs";
+export const helper = () => fs.readFileSync("x");
 `);
     expect(result.adapters).toEqual([]);
     expect(result.errors).toEqual([]);

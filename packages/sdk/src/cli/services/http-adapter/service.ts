@@ -6,14 +6,20 @@ import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { findHttpAdaptersInFile } from "@/cli/services/http-adapter/detector";
 import { logger, styles } from "@/cli/shared/logger";
 import { HttpAdapterConfigSchema } from "@/parser/service/http-adapter";
+import {
+  HTTP_METHOD_KEYS,
+  type HttpAdapterConfig,
+  type HttpAdapterServiceInput,
+  type HttpMethodKey,
+} from "@/types/http-adapter";
 import { isSdkBranded } from "@/utils/brand";
-import type { HttpAdapterConfig, HttpAdapterServiceInput } from "@/types/http-adapter";
 
 export type HttpAdapterServiceConfig = HttpAdapterServiceInput;
 
 export type LoadedHttpAdapter = {
   adapter: HttpAdapterConfig;
   sourceFile: string;
+  methods: HttpMethodKey[];
   hasOutput: boolean;
 };
 
@@ -77,11 +83,19 @@ async function loadAdapterFiles(
 
   const files = loadFilesWithIgnores(config);
 
-  // Validate AST-level constraints up front so we don't execute (dynamically
-  // import) any adapter module unless its file structure is valid.
-  await Promise.all(files.map(validateAdapterFile));
+  // First pass: AST-level validation. Reject Node-builtin imports, unknown
+  // input keys, async handlers, etc., before any user code runs.
+  const detections = await Promise.all(files.map(detectAdapterInFile));
 
-  const loadResults = await Promise.all(files.map(loadAdapterFromFile));
+  // Second pass: dynamically import only the files that the AST identified
+  // as adapters. Files that match the glob but contain no createHttpAdapter
+  // call are silently skipped; files that *should* export an adapter but
+  // don't are surfaced as a hard error inside loadAdapterFromFile.
+  const loadResults = await Promise.all(
+    detections.map((detection) =>
+      detection.detected ? loadAdapterFromFile(detection.sourceFile) : null,
+    ),
+  );
 
   const adapters: LoadedHttpAdapter[] = [];
   const seenNames = new Map<string, string>();
@@ -103,22 +117,29 @@ async function loadAdapterFiles(
   return { adapters, fileCount: files.length };
 }
 
-async function validateAdapterFile(filePath: string): Promise<void> {
+async function detectAdapterInFile(
+  filePath: string,
+): Promise<{ sourceFile: string; detected: boolean }> {
   const source = await fs.readFile(filePath, "utf8");
   const { program } = parseSync(filePath, source);
-  const { errors } = findHttpAdaptersInFile(program, filePath);
-  if (errors.length === 0) return;
-  const relativePath = path.relative(process.cwd(), filePath);
-  const messages = errors.map((e) => `  - ${e.message}`).join("\n");
-  throw new Error(`Invalid HTTP adapter file ${relativePath}:\n${messages}`);
+  const { adapters, errors } = findHttpAdaptersInFile(program, filePath);
+  if (errors.length > 0) {
+    const relativePath = path.relative(process.cwd(), filePath);
+    const messages = errors.map((e) => `  - ${e.message}`).join("\n");
+    throw new Error(`Invalid HTTP adapter file ${relativePath}:\n${messages}`);
+  }
+  return { sourceFile: filePath, detected: adapters.length > 0 };
 }
 
-async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter | null> {
+async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter> {
   try {
     const module = await import(pathToFileURL(filePath).href);
     const defaultExport = (module as { default?: unknown }).default;
     if (defaultExport === undefined) {
-      return null;
+      throw new Error(
+        "HTTP adapter file declared createHttpAdapter() but is missing a `default` export. " +
+          "Re-export the call result: `export default createHttpAdapter({...})`.",
+      );
     }
 
     const parsed = HttpAdapterConfigSchema.safeParse(defaultExport);
@@ -126,15 +147,20 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
       if (isSdkBranded(defaultExport, "http-adapter")) {
         throw parsed.error;
       }
-      return null;
+      throw new Error(
+        "HTTP adapter file's `default` export is not a createHttpAdapter() result. " +
+          "Make sure the default export is the value returned by createHttpAdapter().",
+      );
     }
 
     const adapter = parsed.data as unknown as HttpAdapterConfig;
-    rejectAsyncHandlers(adapter, filePath);
+    const methods = collectMethodKeys(adapter);
+    rejectAsyncHandlers(adapter, methods, filePath);
 
     return {
       adapter,
       sourceFile: filePath,
+      methods,
       hasOutput: adapter.output !== undefined,
     };
   } catch (error) {
@@ -147,12 +173,24 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
   }
 }
 
-function rejectAsyncHandlers(adapter: HttpAdapterConfig, sourceFile: string): void {
-  if (isAsyncFunction(adapter.input)) {
-    throw new Error(
-      `HTTP adapter "${adapter.name}" in ${sourceFile} has an async \`input\` function. ` +
-        `The gateway runtime does not support async/await.`,
-    );
+function collectMethodKeys(adapter: HttpAdapterConfig): HttpMethodKey[] {
+  const input = adapter.input as Partial<Record<HttpMethodKey, unknown>>;
+  return HTTP_METHOD_KEYS.filter((key) => typeof input[key] === "function");
+}
+
+function rejectAsyncHandlers(
+  adapter: HttpAdapterConfig,
+  methods: HttpMethodKey[],
+  sourceFile: string,
+): void {
+  const input = adapter.input as Partial<Record<HttpMethodKey, unknown>>;
+  for (const method of methods) {
+    if (isAsyncFunction(input[method])) {
+      throw new Error(
+        `HTTP adapter "${adapter.name}" in ${sourceFile} has an async \`input.${method}\` function. ` +
+          `The gateway runtime does not support async/await.`,
+      );
+    }
   }
   if (adapter.output !== undefined && isAsyncFunction(adapter.output)) {
     throw new Error(

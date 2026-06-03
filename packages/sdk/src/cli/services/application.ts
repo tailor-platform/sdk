@@ -535,6 +535,7 @@ export async function loadApplication(
       httpAdapterService.adapters.map((a) => ({
         name: a.adapter.name,
         sourceFile: a.sourceFile,
+        methods: a.methods,
         hasOutput: a.hasOutput,
       })),
       bundleCache,

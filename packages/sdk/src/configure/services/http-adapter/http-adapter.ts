@@ -3,6 +3,7 @@ import type { HttpAdapter } from "@/types/http-adapter";
 
 export type {
   HttpAdapter,
+  HttpAdapterInput,
   HttpAdapterRequest,
   HttpAdapterInputResult,
   HttpAdapterInputFn,
@@ -10,6 +11,7 @@ export type {
   HttpAdapterOutputResult,
   HttpAdapterOutputFn,
   HttpMethod,
+  HttpMethodKey,
 } from "@/types/http-adapter";
 
 /**
@@ -19,20 +21,30 @@ export type {
  * The adapter MUST be the default export of its file.
  * Files are discovered via the `httpAdapter.files` glob in `defineConfig()`.
  *
- * The `input` and `output` functions are bundled into JS strings and executed
- * server-side in a sandboxed Sobek (ES2017 subset) runtime. Node APIs, `fetch`,
- * `async`/`await`, and top-level `await` are not available at runtime.
+ * `input` is an object keyed by lowercase HTTP method (`get`, `post`, `put`,
+ * `patch`, `delete`). At least one method must be declared; the SDK derives
+ * the adapter's matched methods from these keys and generates a per-method
+ * dispatcher at bundle time.
+ *
+ * `output` is optional and shared across all methods. If you need different
+ * response shapes per method, discriminate inside `output` based on the
+ * GraphQL response shape.
+ *
+ * Each handler is bundled into a JS string and executed server-side in a
+ * sandboxed Sobek (ES2017 subset) runtime. Node APIs, `fetch`, `async`/`await`,
+ * and top-level `await` are not available at runtime.
  * @param config - HTTP adapter configuration
  * @returns Branded HTTP adapter definition
  * @example
  * export default createHttpAdapter({
  *   name: "get-user",
  *   pathPattern: "/users/*",
- *   methods: ["GET"],
- *   input: (req) => ({
- *     query: `query($id: ID!) { user(id: $id) { id name } }`,
- *     variables: { id: req.path.split("/")[2] },
- *   }),
+ *   input: {
+ *     get: (req) => ({
+ *       query: `query($id: ID!) { user(id: $id) { id name } }`,
+ *       variables: { id: req.path.split("/")[2] },
+ *     }),
+ *   },
  *   output: (resp) => ({
  *     statusCode: 200,
  *     headers: { "content-type": "application/json" },
