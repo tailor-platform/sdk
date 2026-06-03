@@ -83,5 +83,11 @@ describe("platformSerialize", () => {
         /Symbol is not JSON-serializable at <root>/,
       );
     });
+
+    it("throws when the root collapses to undefined via toJSON", () => {
+      expect(() => platformSerialize({ toJSON: () => undefined })).toThrow(
+        /not JSON-serializable at <root>/,
+      );
+    });
   });
 });

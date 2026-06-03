@@ -216,6 +216,18 @@ describe("mock", () => {
 
         expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
       });
+
+      test("throws when the env-var is valid JSON but not an object", async () => {
+        using _wf = mockWorkflow();
+        const captureEnv = createWorkflowJob({
+          name: "capture-env-compat-nonobject",
+          body: (_input: undefined, ctx) => ctx.env,
+        });
+
+        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, "42");
+
+        await expect(captureEnv.trigger()).rejects.toThrow(/must be a JSON object/);
+      });
     });
   });
 
@@ -657,6 +669,12 @@ describe("mock", () => {
       expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }]]);
     });
 
+    test("preserves a forwarded third options arg even when undefined", async () => {
+      using wf = mockWorkflow();
+      await (globalThis as any).tailor.workflow.triggerWorkflow("wf-1", { key: "val" }, undefined);
+      expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }, undefined]]);
+    });
+
     test("setTriggerHandler with string controls triggerWorkflow response", async () => {
       using wf = mockWorkflow();
       wf.setTriggerHandler("exec-123");
@@ -759,16 +777,13 @@ describe("mock", () => {
     });
 
     test("a mock overlays the default workflow runner and dispose restores it", () => {
-      // The environment installs a default runner so `.trigger()` works without a mock.
       const base = (globalThis as any).tailor.workflow;
       expect(base.triggerJobFunction).toBeTypeOf("function");
       {
         using _wf = mockWorkflow();
-        // The mock overlays the default with its own (vi.fn-backed) implementation.
         expect((globalThis as any).tailor.workflow).not.toBe(base);
         expect((globalThis as any).tailor.workflow.triggerJobFunction).toBeTypeOf("function");
       }
-      // dispose restored the default runner.
       expect((globalThis as any).tailor.workflow).toBe(base);
     });
   });

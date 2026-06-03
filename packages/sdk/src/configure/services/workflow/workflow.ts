@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "@/utils/brand";
-import { getPlatformWorkflow, registerWorkflow } from "./registry";
+import { dispatchTriggerWorkflow, registerWorkflow } from "./registry";
 import type { AuthInvoker } from "../auth";
 import type { WorkflowJob } from "./job";
 import type { MachineUserName } from "@/configure/types/machine-user";
@@ -77,8 +77,7 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
               "workflow.trigger() is rewritten at build time and unavailable in the bundle",
             );
           }
-        : async (args, options) =>
-            await getPlatformWorkflow().triggerWorkflow(config.name, args, options),
+        : async (args, options) => await dispatchTriggerWorkflow(config.name, args, options),
     } as Workflow<Job>,
     "workflow",
   );

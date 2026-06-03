@@ -1,5 +1,6 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, expect, it, expectTypeOf } from "vitest";
 import { createWorkflowJob, type WorkflowJob } from "./job";
+import { createWorkflow } from "./workflow";
 import type { TailorInvoker } from "@/types/user";
 
 describe("WorkflowJob type inference", () => {
@@ -374,5 +375,45 @@ describe("WorkflowJob type constraints", () => {
       });
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
+  });
+});
+
+// Plain `node` environment (no `tailor-runtime`, no `mockWorkflow()`), so
+// `.trigger()` exercises the no-shim fallback.
+describe("trigger fallback without tailor.workflow", () => {
+  it("runs the registered job body locally", async () => {
+    const double = createWorkflowJob({
+      name: "fallback-double",
+      body: (input: { n: number }) => ({ doubled: input.n * 2 }),
+    });
+
+    expect(await double.trigger({ n: 21 })).toEqual({ doubled: 42 });
+  });
+
+  it("runs the whole chain via workflow.mainJob.trigger()", async () => {
+    const inner = createWorkflowJob({
+      name: "fallback-inner",
+      body: (input: { n: number }) => ({ n: input.n + 1 }),
+    });
+    const main = createWorkflowJob({
+      name: "fallback-main",
+      body: async (input: { n: number }) => {
+        const a = await inner.trigger({ n: input.n });
+        const b = await inner.trigger({ n: a.n });
+        return { total: b.n };
+      },
+    });
+    const workflow = createWorkflow({ name: "fallback-wf", mainJob: main });
+
+    expect(await workflow.mainJob.trigger({ n: 0 })).toEqual({ total: 2 });
+  });
+
+  it("enforces the JSON boundary on the fallback path", async () => {
+    const bad = createWorkflowJob({
+      name: "fallback-bad",
+      body: () => ({ when: new Date() }) as never,
+    });
+
+    await expect(bad.trigger()).rejects.toThrow();
   });
 });

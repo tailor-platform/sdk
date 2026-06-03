@@ -1,3 +1,5 @@
+import { platformSerialize } from "@/utils/test/platform-serialize";
+import { buildJobContext } from "./test-env-key";
 import type { TailorEnv } from "@/types/env";
 import type { TailorInvoker } from "@/types/user";
 
@@ -8,7 +10,7 @@ import type { TailorInvoker } from "@/types/user";
  */
 export type RegisteredJobBody = (
   args: unknown,
-  context: { env: TailorEnv; invoker: TailorInvoker | null },
+  context: { env: TailorEnv; invoker?: TailorInvoker },
 ) => unknown | Promise<unknown>;
 
 export interface RegisteredWorkflow {
@@ -90,18 +92,46 @@ export function getRegisteredWorkflow(name: string): RegisteredWorkflow | undefi
   return workflows().get(name);
 }
 
-/**
- * Return the injected `globalThis.tailor.workflow` shim used by `.trigger()`.
- * Production installs it natively; tests install it via `mockWorkflow()` (or the
- * `tailor-runtime` environment). Throws when neither is present.
- * @returns The platform-injected workflow shim
- */
-export function getPlatformWorkflow(): PlatformWorkflow {
-  const workflow = (globalThis as GlobalWithRegistry).tailor?.workflow;
-  if (!workflow) {
-    throw new Error(
-      "tailor.workflow is not available. Acquire mockWorkflow() from @tailor-platform/sdk/vitest in tests.",
-    );
-  }
-  return workflow;
+function currentPlatformWorkflow(): PlatformWorkflow | undefined {
+  return (globalThis as GlobalWithRegistry).tailor?.workflow;
+}
+
+// A valid placeholder UUID, so callers that validate the execution id behave the
+// same locally as against the platform.
+export const TRIGGER_DEFAULT = "00000000-0000-4000-8000-000000000000";
+
+function serializeReturn(out: unknown): unknown {
+  return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
+}
+
+// Runs the registered body across the platform JSON boundary. Shared by the
+// `tailor-runtime` default runner and the no-shim `.trigger()` fallback below.
+export function runRegisteredJob(name: string, args?: unknown): unknown {
+  const body = getRegisteredJob(name);
+  const out = body ? body(platformSerialize(args), buildJobContext()) : null;
+  return serializeReturn(out);
+}
+
+export async function runRegisteredWorkflow(name: string, args?: unknown): Promise<string> {
+  const workflow = getRegisteredWorkflow(name);
+  if (workflow) await runRegisteredJob(workflow.mainJobName, args);
+  return TRIGGER_DEFAULT;
+}
+
+// `.trigger()` routes through the installed `tailor.workflow` shim, falling back
+// to running the registered body/workflow locally when none is installed.
+export function dispatchTriggerJob(name: string, args?: unknown): unknown {
+  const workflow = currentPlatformWorkflow();
+  return workflow ? workflow.triggerJobFunction(name, args) : runRegisteredJob(name, args);
+}
+
+export function dispatchTriggerWorkflow(
+  name: string,
+  args?: unknown,
+  options?: unknown,
+): Promise<string> {
+  const workflow = currentPlatformWorkflow();
+  return workflow
+    ? workflow.triggerWorkflow(name, args, options)
+    : runRegisteredWorkflow(name, args);
 }

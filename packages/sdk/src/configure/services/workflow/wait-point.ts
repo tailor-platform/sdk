@@ -41,7 +41,8 @@ function getPlatformWorkflow() {
   const workflow = platform.tailor?.workflow;
   if (!workflow) {
     throw new Error(
-      "tailor.workflow is not available. Use mockWorkflow from @tailor-platform/sdk/vitest in tests.",
+      "tailor.workflow is not available. Run tests in the `tailor-runtime` Vitest environment, " +
+        "or acquire mockWorkflow() from @tailor-platform/sdk/vitest and set a wait/resolve handler.",
     );
   }
   return workflow;

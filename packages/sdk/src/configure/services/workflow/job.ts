@@ -1,5 +1,5 @@
 import { brandValue } from "@/utils/brand";
-import { getPlatformWorkflow, registerJob, type RegisteredJobBody } from "./registry";
+import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
@@ -110,11 +110,10 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
   const trigger = process.env.TAILOR_PLATFORM_BUNDLE
     ? async () => {
         throw new Error(
-          "workflowJob.trigger() is rewritten at build time and unavailable in the bundle",
+          "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
         );
       }
-    : async (args?: unknown) =>
-        (await getPlatformWorkflow().triggerJobFunction(config.name, args)) as Awaited<O>;
+    : async (args?: unknown) => (await dispatchTriggerJob(config.name, args)) as Awaited<O>;
 
   return brandValue(
     { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,

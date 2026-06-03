@@ -10,6 +10,7 @@
  * @internal
  */
 import type { TailorEnv } from "../../../types/env";
+import type { TailorInvoker } from "../../../types/user";
 
 const SLOT_KEY = "__tailorWorkflowTestEnv";
 
@@ -46,24 +47,26 @@ export function clearWorkflowTestEnv(): void {
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
-/**
- * Build the context passed to a registered job body run locally by `.trigger()`:
- * `mockWorkflow().setEnv()` when set, else the deprecated env-var (failing fast on
- * malformed JSON). Shallow-copied to isolate against cross-trigger mutation.
- * @returns Job context with `env` and a `null` invoker.
- * @internal
- */
-export function buildJobContext(): { env: TailorEnv; invoker: null } {
+// env from `mockWorkflow().setEnv()`, else the deprecated env-var. Shallow-copied
+// to isolate against cross-trigger mutation.
+export function buildJobContext(): { env: TailorEnv; invoker?: TailorInvoker } {
   const fromGlobal = readWorkflowTestEnv();
-  if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker: null };
+  if (fromGlobal !== undefined) return { env: { ...fromGlobal } };
   const raw = process.env[WORKFLOW_TEST_ENV_KEY];
-  if (!raw) return { env: {} as TailorEnv, invoker: null };
+  if (!raw) return { env: {} as TailorEnv };
+  let parsed: unknown;
   try {
-    return { env: JSON.parse(raw) as TailorEnv, invoker: null };
+    parsed = JSON.parse(raw);
   } catch (cause) {
     throw new Error(
       `Invalid JSON in ${WORKFLOW_TEST_ENV_KEY}; provide valid JSON or use mockWorkflow().setEnv().`,
       { cause },
     );
   }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(
+      `${WORKFLOW_TEST_ENV_KEY} must be a JSON object; provide a record or use mockWorkflow().setEnv().`,
+    );
+  }
+  return { env: { ...(parsed as TailorEnv) } };
 }

@@ -53,7 +53,13 @@ export function platformSerialize<T>(value: T): T {
     return val;
   });
 
-  return JSON.parse(serialized as string) as T;
+  // `JSON.stringify` returns `undefined` when the root collapses (e.g. a `toJSON`
+  // returning `undefined`); parsing that would throw opaquely.
+  if (serialized === undefined) {
+    throw new TypeError("platformSerialize: value is not JSON-serializable at <root>");
+  }
+
+  return JSON.parse(serialized) as T;
 }
 
 function formatPath(key: string): string {

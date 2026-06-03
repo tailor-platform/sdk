@@ -23,7 +23,11 @@
  */
 
 import { type Mock, vi } from "vitest";
-import { getRegisteredJob, getRegisteredWorkflow } from "@/configure/services/workflow/registry";
+import {
+  getRegisteredJob,
+  getRegisteredWorkflow,
+  TRIGGER_DEFAULT,
+} from "@/configure/services/workflow/registry";
 import { platformSerialize } from "@/utils/test/platform-serialize";
 import {
   buildJobContext,
@@ -308,8 +312,6 @@ export function mockTailordb() {
 // Workflow Mock
 // ---------------------------------------------------------------------------
 
-const TRIGGER_DEFAULT = "mock-execution-id";
-
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
@@ -366,10 +368,12 @@ export function mockWorkflow() {
 
   root.workflow = {
     triggerJobFunction: installedTriggerJobFunction,
-    triggerWorkflow: (workflowName: string, args?: unknown, options?: TriggerWorkflowOptions) =>
-      options === undefined
-        ? triggerWorkflow(workflowName, platformSerialize(args))
-        : triggerWorkflow(workflowName, platformSerialize(args), options),
+    // Preserve arity so a forwarded third `options` arg — even `undefined` — is
+    // recorded, matching the real `.trigger(args, options)` call shape.
+    triggerWorkflow: (...call: [string, unknown?, TriggerWorkflowOptions?]) =>
+      call.length >= 3
+        ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
+        : triggerWorkflow(call[0], platformSerialize(call[1])),
     wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
     resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
       resolve(executionId, key, (payload: unknown) => {
@@ -430,7 +434,7 @@ export function mockWorkflow() {
 
     /**
      * Configure what `triggerWorkflow` returns. Pass a string (same id every
-     * call) or `(name, args, options) => string`. Default: `"mock-execution-id"`.
+     * call) or `(name, args, options) => string`. Default: a placeholder UUID.
      * @param handler - Static execution ID or a function returning one
      */
     setTriggerHandler(handler: string | TriggerHandlerFn): void {
