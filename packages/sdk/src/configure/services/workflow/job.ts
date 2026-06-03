@@ -112,7 +112,7 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
   }
 
   const trigger = process.env.TAILOR_PLATFORM_BUNDLE
-    ? () => {
+    ? async () => {
         throw new Error(
           "workflowJob.trigger() is rewritten at build time and unavailable in the bundle",
         );

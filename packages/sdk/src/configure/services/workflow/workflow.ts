@@ -71,7 +71,7 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
     {
       ...config,
       trigger: process.env.TAILOR_PLATFORM_BUNDLE
-        ? () => {
+        ? async () => {
             throw new Error(
               "workflow.trigger() is rewritten at build time and unavailable in the bundle",
             );
