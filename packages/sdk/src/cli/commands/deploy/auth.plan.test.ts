@@ -6,7 +6,11 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { defineApplication } from "@/cli/services/application";
 import { logger } from "@/cli/shared/logger";
+import { defineConfig } from "@/configure/config";
+import { defineAuth } from "@/configure/services/auth";
+import { t } from "@/configure/types/type";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { PlanContext } from "./deploy";
 import type { Application } from "@/cli/services/application";
@@ -97,8 +101,10 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
             grantTypes: ["authorization_code", "refresh_token"],
             redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
             clientType: "confidential",
-            accessTokenLifetimeSeconds: 3600,
-            refreshTokenLifetimeSeconds: 7200,
+            // parsedConfig holds the parsed OUTPUT shape: AuthConfigSchema.parse
+            // transforms the numeric *Seconds into a Duration ({ seconds, nanos }).
+            accessTokenLifetimeSeconds: { seconds: 3600n, nanos: 0 },
+            refreshTokenLifetimeSeconds: { seconds: 7200n, nanos: 0 },
             requireDpop: false,
           },
         },
@@ -420,6 +426,68 @@ describe("planAuth", () => {
     });
 
     const result = await planAuth(createCustomOAuth2LifetimeContext(client));
+
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
+    expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  // Regression: build the Application through the real defineApplication pipeline
+  // (config.auth -> AuthConfigSchema.parse -> createAuthService) rather than a
+  // hand-rolled parsedConfig fixture, so the oauth2 token lifetimes flow through
+  // exactly as they do at deploy time. Previously the parse-wiring transformed the
+  // numeric lifetimes to Duration in parsedConfig, and planAuth's protoOAuth2Client
+  // re-parse then threw "expected number, received object".
+  test("handles oauth2 token lifetimes through the real defineApplication pipeline", async () => {
+    const application = defineApplication({
+      config: {
+        ...defineConfig({
+          name: appName,
+          auth: defineAuth("auth-a", {
+            machineUserAttributes: { role: t.string() },
+            oauth2Clients: {
+              sample: {
+                description: "Sample client",
+                grantTypes: ["authorization_code", "refresh_token"],
+                redirectURIs: ["https://a.example.com/callback", "https://b.example.com/callback"],
+                clientType: "confidential",
+                accessTokenLifetimeSeconds: 3600,
+                refreshTokenLifetimeSeconds: 7200,
+                requireDpop: false,
+              },
+            },
+          }),
+        }),
+        path: "tailor.config.ts",
+      },
+    });
+
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+      oauth2Clients: [
+        {
+          name: "sample",
+          description: "Sample client",
+          grantTypes: [
+            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
+            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
+          ],
+          redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
+          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+          accessTokenLifetime: { seconds: 3600n },
+          refreshTokenLifetime: { seconds: 7200n },
+          requireDpop: false,
+        },
+      ],
+    });
+
+    const result = await planAuth({
+      client,
+      workspaceId,
+      application,
+      forRemoval: false,
+      config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    });
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");

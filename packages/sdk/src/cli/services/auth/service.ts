@@ -1,7 +1,7 @@
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import type { AuthOwnConfig } from "@/types/auth";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
-import type { IdProvider as IdProviderConfig } from "@/types/auth.generated";
+import type { IdProvider as IdProviderConfig, OAuth2Client } from "@/types/auth.generated";
 
 type UserProfile = AuthOwnConfig["userProfile"] & {
   namespace: string;
@@ -11,7 +11,10 @@ export type AuthService = {
   readonly config: AuthOwnConfig;
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
   readonly externalTailorDBNamespaces: ReadonlyArray<string>;
-  readonly parsedConfig: AuthOwnConfig & { idProvider?: IdProviderConfig };
+  readonly parsedConfig: Omit<AuthOwnConfig, "oauth2Clients"> & {
+    idProvider?: IdProviderConfig;
+    oauth2Clients?: Record<string, OAuth2Client>;
+  };
   readonly connections: Readonly<Record<string, AuthConnectionConfig>>;
   readonly userProfile: UserProfile | undefined;
   resolveNamespaces: () => Promise<void>;
@@ -32,6 +35,9 @@ export function createAuthService(
   const parsedConfig = {
     ...config,
     idProvider: config.idProvider as IdProviderConfig | undefined,
+    // application.ts feeds the AuthConfigSchema.parse output here, so the token
+    // lifetimes are already transformed to Duration. Reflect that in the type.
+    oauth2Clients: config.oauth2Clients as Record<string, OAuth2Client> | undefined,
   };
 
   const connections: Record<string, AuthConnectionConfig> = config.connections

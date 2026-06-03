@@ -23,7 +23,6 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
@@ -41,7 +40,7 @@ import type { AuthAttributeValue } from "@/types/auth";
 import type {
   BuiltinIdP,
   IdProvider as IdProviderConfig,
-  OAuth2ClientInput,
+  OAuth2Client,
   SCIMAttribute,
   SCIMConfig,
   SCIMResource,
@@ -1544,15 +1543,16 @@ async function planOAuth2Clients(
 
 function protoOAuth2Client(
   oauth2ClientName: string,
-  oauth2Client: OAuth2ClientInput,
+  oauth2Client: OAuth2Client,
 ): MessageInitShape<typeof AuthOAuth2ClientSchema> {
-  // Parse to transform token lifetimes
-  const parsed = OAuth2ClientSchema.parse(oauth2Client);
-
+  // `oauth2Client` is already parsed output: AuthConfigSchema.parse (wired in
+  // application.ts) validated it and transformed the numeric token lifetimes
+  // into Duration ({ seconds, nanos }). Consume it directly instead of
+  // re-parsing, which would reject the already-transformed lifetimes.
   return {
     name: oauth2ClientName,
-    description: parsed.description,
-    grantTypes: parsed.grantTypes?.map((grantType) => {
+    description: oauth2Client.description,
+    grantTypes: oauth2Client.grantTypes.map((grantType) => {
       switch (grantType) {
         case "authorization_code":
           return AuthOAuth2Client_GrantType.AUTHORIZATION_CODE;
@@ -1562,17 +1562,17 @@ function protoOAuth2Client(
           throw new Error(`Unknown OAuth2 client grant type: ${grantType satisfies never}`);
       }
     }),
-    redirectUris: parsed.redirectURIs,
+    redirectUris: oauth2Client.redirectURIs,
     clientType: (
       {
         confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,
         public: AuthOAuth2Client_ClientType.PUBLIC,
         browser: AuthOAuth2Client_ClientType.BROWSER,
-      } satisfies Record<NonNullable<OAuth2ClientInput["clientType"]>, AuthOAuth2Client_ClientType>
-    )[parsed.clientType ?? "confidential"],
-    accessTokenLifetime: parsed.accessTokenLifetimeSeconds,
-    refreshTokenLifetime: parsed.refreshTokenLifetimeSeconds,
-    requireDpop: parsed.requireDpop,
+      } satisfies Record<NonNullable<OAuth2Client["clientType"]>, AuthOAuth2Client_ClientType>
+    )[oauth2Client.clientType ?? "confidential"],
+    accessTokenLifetime: oauth2Client.accessTokenLifetimeSeconds,
+    refreshTokenLifetime: oauth2Client.refreshTokenLifetimeSeconds,
+    requireDpop: oauth2Client.requireDpop,
   };
 }
 
