@@ -647,7 +647,7 @@ describe("order-fulfillment workflow", () => {
 
 **Use when:** you want to verify orchestration end to end without the cost of a real deployment.
 
-**Requires:** the `tailor-runtime` environment — `.trigger()` is unavailable without it.
+**Requires:** the workflow mock to be injected — either the `tailor-runtime` environment or a manual `injectMocks(globalThis)` / `cleanupMocks(globalThis)` (both from `@tailor-platform/sdk/vitest`) in a plain test. Without one of these, `.trigger()` has no `tailor.workflow` to call.
 
 ## End-to-End (E2E) Tests
 
