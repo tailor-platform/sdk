@@ -23,8 +23,12 @@
  */
 
 import { type Mock, vi } from "vitest";
+import { WORKFLOW_TEST_ENV_KEY } from "@/configure/services/workflow/job";
+import { getRegisteredJob, getRegisteredWorkflow } from "@/configure/services/workflow/registry";
+import { platformSerialize } from "@/utils/test/platform-serialize";
 import {
   clearWorkflowTestEnv,
+  readWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
 import type { User as IdpUser } from "../runtime/idp";
@@ -307,6 +311,24 @@ export function mockTailordb() {
 
 const TRIGGER_DEFAULT = "mock-execution-id";
 
+// Env passed to a registered body run by the mock: mockWorkflow().setEnv() when
+// set, else the deprecated WORKFLOW_TEST_ENV_KEY env-var (fail fast on malformed
+// JSON). Shallow-copied to isolate against cross-trigger mutation.
+function buildJobContext(): { env: TailorEnv; invoker: null } {
+  const fromGlobal = readWorkflowTestEnv();
+  if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker: null };
+  const raw = process.env[WORKFLOW_TEST_ENV_KEY];
+  if (!raw) return { env: {} as TailorEnv, invoker: null };
+  try {
+    return { env: JSON.parse(raw) as TailorEnv, invoker: null };
+  } catch (cause) {
+    throw new Error(
+      `Invalid JSON in ${WORKFLOW_TEST_ENV_KEY}; provide valid JSON or use mockWorkflow().setEnv().`,
+      { cause },
+    );
+  }
+}
+
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
@@ -326,14 +348,27 @@ export function mockWorkflow() {
   const root = tailorRoot();
   const prev = root.workflow;
 
-  const triggerJobFunction = vi.fn((_jobName: string, _args?: unknown): unknown => null);
-  const triggerWorkflow = vi.fn(
-    async (
-      _workflowName: string,
-      _args?: unknown,
-      _options?: TriggerWorkflowOptions,
-    ): Promise<string> => TRIGGER_DEFAULT,
-  );
+  // Default impls (also restored by reset): run the registered body by name so a
+  // `.trigger()` with no handler/result executes the real job locally.
+  const defaultTriggerJob = (jobName: string, args?: unknown): unknown => {
+    const body = getRegisteredJob(jobName);
+    return body ? body(args, buildJobContext()) : null;
+  };
+  const defaultTriggerWorkflow = async (
+    workflowName: string,
+    args?: unknown,
+    _options?: TriggerWorkflowOptions,
+  ): Promise<string> => {
+    const wf = getRegisteredWorkflow(workflowName);
+    if (wf) await installedTriggerJobFunction(wf.mainJobName, args);
+    return TRIGGER_DEFAULT;
+  };
+
+  // Inner vi.fns hold the overridable behavior + call recording; the installed
+  // shims below cross the platform JSON boundary (serialize args + results) once
+  // so every path (default body, setJobHandler, enqueueResult) is covered.
+  const triggerJobFunction = vi.fn(defaultTriggerJob);
+  const triggerWorkflow = vi.fn(defaultTriggerWorkflow);
   const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
   const resolve = vi.fn(
     async (
@@ -343,7 +378,26 @@ export function mockWorkflow() {
     ): Promise<void> => {},
   );
 
-  root.workflow = { triggerJobFunction, triggerWorkflow, wait, resolve };
+  const installedTriggerJobFunction = (jobName: string, args?: unknown): unknown => {
+    const out = triggerJobFunction(jobName, platformSerialize(args));
+    return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
+  };
+
+  root.workflow = {
+    triggerJobFunction: installedTriggerJobFunction,
+    triggerWorkflow: (workflowName: string, args?: unknown, options?: TriggerWorkflowOptions) =>
+      options === undefined
+        ? triggerWorkflow(workflowName, platformSerialize(args))
+        : triggerWorkflow(workflowName, platformSerialize(args), options),
+    wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
+    resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
+      resolve(executionId, key, (payload: unknown) => {
+        const out = callback(payload);
+        return out instanceof Promise
+          ? out.then((v) => platformSerialize(v))
+          : platformSerialize(out);
+      }),
+  };
 
   const facade = {
     /** The `triggerJobFunction` `vi.fn`. */
@@ -461,9 +515,9 @@ export function mockWorkflow() {
     /** Reset all workflow responses and recorded calls (keeps the mock installed). */
     reset(): void {
       triggerJobFunction.mockReset();
-      triggerJobFunction.mockImplementation(() => null);
+      triggerJobFunction.mockImplementation(defaultTriggerJob);
       triggerWorkflow.mockReset();
-      triggerWorkflow.mockImplementation(async () => TRIGGER_DEFAULT);
+      triggerWorkflow.mockImplementation(defaultTriggerWorkflow);
       wait.mockReset();
       wait.mockImplementation(() => null);
       resolve.mockReset();

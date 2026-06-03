@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import ml from "@/utils/multiline";
 import type { QueryEngine } from "@/cli/query";
 
@@ -97,6 +98,7 @@ export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
   }
 
   const result = await rolldown.build({
+    plugins: [platformBundleDefinePlugin],
     input: entryPath,
     write: false,
     output: {

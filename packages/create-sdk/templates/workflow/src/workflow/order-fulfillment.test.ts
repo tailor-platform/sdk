@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import workflow, {
   fulfillOrder,
   processPayment,
@@ -109,6 +110,7 @@ describe("order fulfillment workflow", () => {
 
   describe("integration tests with .trigger()", () => {
     test("workflow.mainJob.trigger() executes all jobs", async () => {
+      using _wf = mockWorkflow();
       const result = await workflow.mainJob.trigger({
         orderId: "order-3",
         amount: 300,

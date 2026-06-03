@@ -206,6 +206,7 @@ describe("mock", () => {
       });
 
       test("env-var is used when setEnv has not been called", async () => {
+        using _wf = mockWorkflow();
         const captureEnv = createWorkflowJob({
           name: "capture-env-compat-fallback",
           body: (_input: undefined, ctx) => ctx.env,

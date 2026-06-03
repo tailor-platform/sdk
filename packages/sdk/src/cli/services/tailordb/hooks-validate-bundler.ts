@@ -3,6 +3,7 @@ import { parseSync } from "oxc-parser";
 import { join, resolve } from "pathe";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { ES_BUILTINS } from "./es-builtins";
@@ -468,6 +469,7 @@ async function bundleScriptTarget(args: {
   writeFileSync(entryPath, entryContent);
 
   const buildResult = await rolldown.build({
+    plugins: [platformBundleDefinePlugin],
     input: entryPath,
     write: false,
     output: {
