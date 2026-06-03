@@ -41,7 +41,9 @@ type DeleteConnection = {
 };
 
 function connectionTrn(workspaceId: string, name: string) {
-  return `${trnPrefix(workspaceId)}:auth-connection:${name}`;
+  // Auth connections are workspace-level; the platform expects the `auth_connection`
+  // TRN segment (underscore), consistent with other auth resource type names.
+  return `${trnPrefix(workspaceId)}:auth_connection:${name}`;
 }
 
 function buildConnectionRequest(
@@ -254,8 +256,15 @@ export async function planAuthConnections(
       resourceOwners.add(entry.label);
       continue;
     }
-    // Delete if owned by this app, or if metadata is not supported (no ownership tracking)
-    if (owned || !metadataSupported) {
+    // Decide whether to delete:
+    // - When metadata is supported, ownership is authoritative via labels: delete
+    //   only connections owned by this app.
+    // - When metadata is NOT supported (older platforms), labels are unavailable.
+    //   Deleting everything not desired would destroy connections created outside the
+    //   SDK (e.g. Terraform/console), so fall back to the local secrets-state and
+    //   delete only connections this SDK previously created.
+    const shouldDelete = metadataSupported ? owned : state.connections?.[name] !== undefined;
+    if (shouldDelete) {
       changeSet.deletes.push({
         name,
         request: { workspaceId, connectionName: name },
