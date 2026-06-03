@@ -61,7 +61,7 @@ export function createHttpAdapterService(
     printLoadedAdapters: () => {
       if (adapters.length === 0) return;
       logger.newline();
-      logger.log(`Found ${styles.highlight(adapters.length.toString())} HTTP adapter files`);
+      logger.log(`Found ${styles.highlight(adapters.length.toString())} HTTP adapters`);
       for (const { adapter, sourceFile } of adapters) {
         const relativePath = path.relative(process.cwd(), sourceFile);
         logger.log(
