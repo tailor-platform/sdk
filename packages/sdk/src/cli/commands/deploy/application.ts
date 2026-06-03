@@ -225,7 +225,7 @@ function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApp
 /**
  * Plan application changes based on current and desired state.
  * @param context - Planning context
- * @param httpAdapterBuildResult - Bundled HTTP adapter scripts to embed as gateway filters
+ * @param httpAdapterBuildResult - Bundled HTTP adapter scripts to embed on the Application
  * @returns Planned changes
  */
 export async function planApplication(

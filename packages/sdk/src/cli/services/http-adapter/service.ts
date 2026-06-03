@@ -59,9 +59,9 @@ export function createHttpAdapterService(
       loaded = true;
     },
     printLoadedAdapters: () => {
-      if (fileCount === 0) return;
+      if (adapters.length === 0) return;
       logger.newline();
-      logger.log(`Found ${styles.highlight(fileCount.toString())} HTTP adapter files`);
+      logger.log(`Found ${styles.highlight(adapters.length.toString())} HTTP adapter files`);
       for (const { adapter, sourceFile } of adapters) {
         const relativePath = path.relative(process.cwd(), sourceFile);
         logger.log(
@@ -142,15 +142,20 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter>
       );
     }
 
-    const parsed = HttpAdapterConfigSchema.safeParse(defaultExport);
-    if (!parsed.success) {
-      if (isSdkBranded(defaultExport, "http-adapter")) {
-        throw parsed.error;
-      }
+    // Require the SDK brand first: only a createHttpAdapter() result is a valid
+    // default export. A plain object that happens to match the schema (but was
+    // never produced by createHttpAdapter) must be rejected so it cannot bypass
+    // the inline-handler validations the detector enforces.
+    if (!isSdkBranded(defaultExport, "http-adapter")) {
       throw new Error(
         "HTTP adapter file's `default` export is not a createHttpAdapter() result. " +
           "Make sure the default export is the value returned by createHttpAdapter().",
       );
+    }
+
+    const parsed = HttpAdapterConfigSchema.safeParse(defaultExport);
+    if (!parsed.success) {
+      throw parsed.error;
     }
 
     const adapter = parsed.data as unknown as HttpAdapterConfig;
