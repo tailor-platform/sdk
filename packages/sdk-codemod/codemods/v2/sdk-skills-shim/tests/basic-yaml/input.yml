@@ -1,0 +1,5 @@
+jobs:
+  install-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tailor-sdk-skills

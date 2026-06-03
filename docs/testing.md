@@ -9,7 +9,7 @@ Vitest is configured with two projects (see [`packages/sdk/vitest.config.ts`](..
 
 ```bash
 # All tests
-pnpm exec turbo run test
+pnpm test
 
 # In packages/sdk/:
 pnpm test                      # All (unit + e2e)
@@ -35,7 +35,7 @@ Located in `packages/sdk/e2e/`. CI runs these in the `deploy.yml` workflow on Li
 - `toMatchObjectType` — Structural match
 - `toExtend` — Subtype check
 
-This is enforced by ESLint (see `eslint.config.js`).
+This is enforced by oxlint's local plugin (see `packages/sdk/oxlint-plugins/index.js` and `.oxlintrc.json`).
 
 ## Documentation Tests
 

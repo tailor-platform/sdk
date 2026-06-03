@@ -10,7 +10,7 @@ import {
   getMigrationFilePath,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
-  type SnapshotType,
+  type TailorDBSnapshotType,
 } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
 
@@ -163,6 +163,7 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
     " */",
     "",
     `import { ${imports.join(", ")} } from "@tailor-platform/sdk/kysely";`,
+    'import type { Env } from "@tailor-platform/sdk";',
     "",
     ...utilityTypeDeclarations,
     "",
@@ -171,6 +172,11 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
     "}",
     "",
     "export type Transaction = KyselyTransaction<Database>;",
+    "",
+    "/** Context passed as the second argument to the migration's `main` function. */",
+    "export type MigrationContext = {",
+    "  env: keyof Env extends never ? Record<string, string | number | boolean> : Env;",
+    "};",
   ];
 
   return lines.join("\n") + "\n";
@@ -192,23 +198,29 @@ function generateEmptyDbTypes(namespace: string): string {
       " */",
       "",
       'import { type Transaction as KyselyTransaction } from "@tailor-platform/sdk/kysely";',
+      'import type { Env } from "@tailor-platform/sdk";',
       "",
       "// eslint-disable-next-line @typescript-eslint/no-empty-object-type",
       "interface Database {}",
       "",
       "export type Transaction = KyselyTransaction<Database>;",
+      "",
+      "/** Context passed as the second argument to the migration's `main` function. */",
+      "export type MigrationContext = {",
+      "  env: keyof Env extends never ? Record<string, string | number | boolean> : Env;",
+      "};",
     ].join("\n") + "\n"
   );
 }
 
 /**
  * Generate table type definition from a snapshot type
- * @param {SnapshotType} type - Snapshot type
+ * @param {TailorDBSnapshotType} type - Snapshot type
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
  * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type and utility type usage
  */
 function generateTableType(
-  type: SnapshotType,
+  type: TailorDBSnapshotType,
   breakingChangeFields: BreakingChangeFieldInfo,
 ): {
   typeDef: string;

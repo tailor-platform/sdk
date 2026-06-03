@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "executor-source-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "executor|handler",
+      "flags": "i",
+      "description": "source includes an executor-style handler"
+    },
+    {
+      "id": "multiple-user-events-mentioned",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "user.*(create|created).*user.*(update|updated)|(create|created).*user.*(update|updated)",
+      "flags": "is",
+      "description": "source references both user creation and update activity"
+    }
+  ]
+}

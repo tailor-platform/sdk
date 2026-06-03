@@ -25,6 +25,7 @@ jobs:
         with:
           args: |
             --no-progress
+            --include-fragments
             --exclude 'mailto:'
             packages/sdk/docs/**/*.md
           fail: true

@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tailordbMock, workflowMock } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -40,10 +40,6 @@ describe("bundled execution tests", () => {
   beforeEach(() => {
     tailordbMock.reset();
     workflowMock.reset();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   const importActualMain = createImportMain(actualDir);
@@ -86,7 +82,7 @@ describe("bundled execution tests", () => {
     });
 
     test("resolvers/showUserInfo.js returns user and invoker information", async () => {
-      vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
+      using _invokerSpy = vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
         id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
         type: "machine_user",
         workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",

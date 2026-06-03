@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
+import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
@@ -98,19 +99,18 @@ export async function bundleWorkflowJobs(
     tsconfig = undefined;
   }
 
-  // Process each job
-  const results = await Promise.all(
-    usedJobs.map((job) =>
-      bundleSingleJob(
-        job,
-        usedJobs,
-        outputDir,
-        tsconfig,
-        env,
-        triggerContext,
-        cache,
-        inlineSourcemap,
-      ),
+  // Process each job, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
+  // memory use (each rolldown.build allocates its own module graph).
+  const results = await withBundleConcurrency(usedJobs, (job) =>
+    bundleSingleJob(
+      job,
+      usedJobs,
+      outputDir,
+      tsconfig,
+      env,
+      triggerContext,
+      cache,
+      inlineSourcemap,
     ),
   );
 

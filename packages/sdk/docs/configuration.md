@@ -19,6 +19,8 @@ For service-specific documentation, see:
 import { defineConfig } from "@tailor-platform/sdk";
 
 export default defineConfig({
+  // SDK-managed app id — do not edit, except when copying this config to a separate app.
+  // id: "<uuid>" — written here automatically on first run
   name: "my-app",
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
@@ -27,6 +29,8 @@ export default defineConfig({
 ```
 
 **Name**: Set the application name.
+
+**Id (auto-managed)**: A stable identifier used to recognize resources managed by the SDK across renames. On first `deploy`, the SDK injects an `id: "<uuid>"` field into your `defineConfig({...})` call and commits it to `tailor.config.ts`. Keep it under version control; do not edit it by hand. Delete it only if you want the SDK to assign a new id on the next `deploy` — typically when `tailor.config.ts` was copied from another project and the new application should not share the original's id. Auto-injection requires `defineConfig({...})` to be called with an inline object literal: if the argument is a separate variable (e.g. `defineConfig(config)`), or if `tailor.config.ts` is a wrapper that re-exports `defineConfig` from another file, the SDK cannot inject — add the `id` field manually to the file that contains the actual `defineConfig({...})` object literal.
 
 **CORS**: Specify CORS settings as an array. You can also include Static Website URL references (e.g. `website.url`) in this array; see [Static Website](./services/staticwebsite.md).
 
@@ -89,6 +93,7 @@ When using external resources:
 - The resource itself is not deployed by this project
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
+- Destructive operations like `tailordb truncate` (and `seedPlugin`'s `seed:reset`) automatically exclude external resources to prevent accidental data loss in shared resources
 
 ### Built-in IdP
 
@@ -198,6 +203,16 @@ body: ({ newRecord, env }) => {
 body: (input, { env }) => {
   console.log(`Environment: ${env.bar}`);
   return { value: env.foo };
+};
+
+// In auth before-login hooks
+hooks: {
+  beforeLogin: {
+    handler: async ({ claims, idpConfigName, env }) => {
+      console.log(`Environment: ${env.bar}`);
+    },
+    invoker: "hook-invoker",
+  },
 };
 ```
 

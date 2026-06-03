@@ -250,10 +250,6 @@ describe("formatRequestParams", () => {
 });
 
 describe("resolveStaticWebsiteUrls", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   function makeClient(
     impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
   ): OperatorClient {
@@ -280,7 +276,7 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("warns and drops entry when site is missing and not expected locally", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => {
       throw new ConnectError("not found", Code.NotFound);
     });
@@ -294,7 +290,7 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("suppresses warning and keeps original pattern when site is expected locally", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => {
       throw new ConnectError("not found", Code.NotFound);
     });
@@ -312,7 +308,7 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("still warns when URL is not assigned yet, even when site is expected locally", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
 
     const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
@@ -326,7 +322,7 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("does not suppress non-NotFound errors even when site is expected locally", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => {
       throw new ConnectError("service unavailable", Code.Unavailable);
     });

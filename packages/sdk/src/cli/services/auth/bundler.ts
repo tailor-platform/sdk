@@ -23,6 +23,8 @@ export interface BundleAuthHooksOptions {
   authName: string;
   /** Dot-path expression to reach the handler from the config's default export */
   handlerAccessPath: string;
+  /** Environment variables to inject into the hook args */
+  env?: Record<string, string | number | boolean>;
   /** Trigger context for workflow/job transformations */
   triggerContext?: TriggerContext;
   /** Optional bundle cache for skipping unchanged builds */
@@ -43,8 +45,15 @@ export interface BundleAuthHooksOptions {
 export async function bundleAuthHooks(
   options: BundleAuthHooksOptions,
 ): Promise<Map<string, string>> {
-  const { configPath, authName, handlerAccessPath, triggerContext, cache, inlineSourcemap } =
-    options;
+  const {
+    configPath,
+    authName,
+    handlerAccessPath,
+    env = {},
+    triggerContext,
+    cache,
+    inlineSourcemap,
+  } = options;
 
   logger.newline();
   logger.log(`Bundling auth hook for ${styles.info(`"${authName}"`)}`);
@@ -65,11 +74,17 @@ export async function bundleAuthHooks(
   const absoluteConfigPath = path.resolve(configPath);
 
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
+
+  // Include sorted env variables as a prefix so that env changes invalidate the cache
+  const sortedEnvPrefix = JSON.stringify(
+    Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
+  );
   const contextHash = computeBundlerContextHash({
     sourceFile: absoluteConfigPath,
     serializedTriggerContext,
     tsconfig,
     inlineSourcemap,
+    prefix: sortedEnvPrefix,
   });
 
   const code = await withCache({
@@ -84,7 +99,10 @@ export async function bundleAuthHooks(
       const entryContent = ml /* js */ `
         import _config from "${absoluteConfigPath}";
         const __auth_hook_function = _config.${handlerAccessPath};
-        export { __auth_hook_function as main };
+        export async function main(args) {
+          const env = ${JSON.stringify(env)};
+          return await __auth_hook_function({ ...args, env });
+        }
       `;
       fs.writeFileSync(entryPath, entryContent);
 

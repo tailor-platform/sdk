@@ -77,7 +77,7 @@ describe("runCodemods", () => {
       tmpDir = dir;
 
       // Suppress stderr (diff output) during test
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
       const result = await runCodemods(
         [
@@ -87,8 +87,6 @@ describe("runCodemods", () => {
         tmpDir,
         true, // dry-run
       );
-
-      stderrSpy.mockRestore();
 
       // Both transforms should have applied (B saw A's "midFunc" output)
       expect(result.changed).toBe(true);
@@ -104,7 +102,7 @@ describe("runCodemods", () => {
       tmpDir = dir;
 
       const stderrOutput: string[] = [];
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
         stderrOutput.push(String(chunk));
         return true;
       });
@@ -117,8 +115,6 @@ describe("runCodemods", () => {
         tmpDir,
         true,
       );
-
-      stderrSpy.mockRestore();
 
       const output = stderrOutput.join("");
       // Diff should show oldFunc → newFunc (the chained result), NOT oldFunc → midFunc

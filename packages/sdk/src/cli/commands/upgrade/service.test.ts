@@ -216,7 +216,7 @@ describe("upgrade service", () => {
       error: undefined,
     });
 
-    const stderrWrite = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    using stderrWrite = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
     const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: true, path: "/test" });

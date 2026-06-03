@@ -6,6 +6,15 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
+import {
+  clearWorkflowTestEnv,
+  writeWorkflowTestEnv,
+} from "../configure/services/workflow/test-env-key";
+import type { ContextInvoker } from "../runtime/context";
+import type { TailorDBFileErrorCode } from "../runtime/file";
+import type { User as IdpUser } from "../runtime/idp";
+import type { TailorEnv } from "../types/env";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -355,6 +364,15 @@ export const workflowMock = {
   }) as SetWaitHandler,
 
   /**
+   * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
+   * Cleared by `workflowMock.reset()`.
+   * @param env - Env passed to job bodies.
+   */
+  setEnv(env: TailorEnv): void {
+    writeWorkflowTestEnv({ ...env });
+  },
+
+  /**
    * Configure how `tailor.workflow.resolve` runs the user-supplied callback. The handler
    * receives `(executionId, key, callback)` — invoke `callback(payload)` to drive
    * resolve→wait wiring in tests. Default: callback is not invoked (records the call only).
@@ -402,6 +420,7 @@ export const workflowMock = {
     state.waitHandler = null;
     state.resolveHandler = null;
     state.workflowCalls.length = 0;
+    clearWorkflowTestEnv();
   },
 };
 
@@ -678,7 +697,10 @@ async function mockResolve(
 // Mock: tailor.context
 // ---------------------------------------------------------------------------
 
-function mockGetInvoker(): tailor.context.Invoker | null {
+// Stub-only injection. SDK consumers configure invokers at the body level
+// (resolver/executor/workflow `.body()` `invoker` arg) or, for bundled tests,
+// via `vi.spyOn(globalThis.tailor.context, "getInvoker")`.
+function mockGetInvoker(): ContextInvoker | null {
   return null;
 }
 
@@ -757,23 +779,23 @@ class MockIdpClient {
     first?: number;
     after?: string;
     query?: { ids?: string[]; names?: string[] };
-  }): Promise<{ users: tailor.idp.User[]; nextPageToken: string | null; totalCount: number }> {
+  }): Promise<{ users: IdpUser[]; nextPageToken: string | null; totalCount: number }> {
     return resolveIdpCall("users", [options], this.#namespace) as Awaited<
       ReturnType<typeof this.users>
     >;
   }
-  async user(userId: string): Promise<tailor.idp.User> {
-    return resolveIdpCall("user", [userId], this.#namespace) as tailor.idp.User;
+  async user(userId: string): Promise<IdpUser> {
+    return resolveIdpCall("user", [userId], this.#namespace) as IdpUser;
   }
-  async userByName(name: string): Promise<tailor.idp.User> {
-    return resolveIdpCall("userByName", [name], this.#namespace) as tailor.idp.User;
+  async userByName(name: string): Promise<IdpUser> {
+    return resolveIdpCall("userByName", [name], this.#namespace) as IdpUser;
   }
   async createUser(input: {
     name: string;
     password?: string;
     disabled?: boolean;
-  }): Promise<tailor.idp.User> {
-    return resolveIdpCall("createUser", [input], this.#namespace) as tailor.idp.User;
+  }): Promise<IdpUser> {
+    return resolveIdpCall("createUser", [input], this.#namespace) as IdpUser;
   }
   async updateUser(input: {
     id: string;
@@ -781,8 +803,8 @@ class MockIdpClient {
     password?: string;
     clearPassword?: boolean;
     disabled?: boolean;
-  }): Promise<tailor.idp.User> {
-    return resolveIdpCall("updateUser", [input], this.#namespace) as tailor.idp.User;
+  }): Promise<IdpUser> {
+    return resolveIdpCall("updateUser", [input], this.#namespace) as IdpUser;
   }
   async deleteUser(userId: string): Promise<boolean> {
     return resolveIdpCall("deleteUser", [userId], this.#namespace) as boolean;
@@ -900,6 +922,8 @@ const FILE_DEFAULTS: Record<string, any> = {
   },
   delete: undefined,
   getMetadata: { contentType: "", fileSize: 0, sha256sum: "", urlPath: "" },
+  downloadStream: null,
+  uploadStream: { metadata: { fileSize: 0, sha256sum: "" } },
 };
 
 function resolveFileCall(
@@ -987,7 +1011,7 @@ const mockTailordbFile = {
       ReturnType<typeof this.getMetadata>
     >;
   },
-  openDownloadStream(
+  async openDownloadStream(
     namespace: string,
     typeName: string,
     fieldName: string,
@@ -1000,7 +1024,41 @@ const mockTailordbFile = {
       fieldName,
       recordId,
     );
-    return Promise.resolve(toFileStream(resolved));
+    return toFileStream(resolved);
+  },
+  async downloadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<{
+    body: ReadableStream<Uint8Array>;
+    metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
+  }> {
+    const resolved = resolveFileCall("downloadStream", namespace, typeName, fieldName, recordId);
+    if (resolved != null) {
+      return resolved as Awaited<ReturnType<typeof this.downloadStream>>;
+    }
+    return {
+      body: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
+      metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+    };
+  },
+  async uploadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+    _readableStream: ReadableStream<Uint8Array | ArrayBuffer>,
+    _options?: { contentType?: string; fileSize?: number },
+  ): Promise<{ metadata: { fileSize: number; sha256sum: string } }> {
+    return resolveFileCall("uploadStream", namespace, typeName, fieldName, recordId) as Awaited<
+      ReturnType<typeof this.uploadStream>
+    >;
   },
 };
 
@@ -1016,15 +1074,21 @@ function toFileStream(value: unknown): FileStream {
   ) {
     return value as FileStream;
   }
-  // Binary chunk shorthand: a single ArrayBuffer / TypedArray (e.g. Uint8Array)
-  // should be delivered as one chunk, not iterated as a sequence of numbers.
-  // Tests passing `[chunk1, chunk2]` continue to work via the iterable branch
-  // below.
+  // Guard against passing raw bytes directly: `Uint8Array` is iterable as
+  // numbers, which would silently yield byte values as chunks. The platform's
+  // stream protocol emits structured `StreamValue` items, so callers must
+  // enqueue an iterable of `StreamValue` instead.
   if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
-    return toFileStream([value]);
+    throw new TypeError(
+      "fileMock.openDownloadStream expects an iterable of StreamValue items " +
+        '(e.g. [{ type: "chunk", data, position }, { type: "complete" }]); ' +
+        "got raw bytes. Wrap the bytes in a structured chunk first.",
+    );
   }
   // Iterable (array, sync iterator, etc.): wrap as a chunked async iterator
-  // so `fileMock.enqueueResult([chunk1, chunk2])` controls stream contents.
+  // so `fileMock.enqueueResult([{ type: "metadata", ... }, { type: "chunk", ... }, ...])`
+  // controls stream contents. The platform emits structured StreamValue items;
+  // tests should enqueue an iterable of StreamValue to mirror that contract.
   if (
     value !== null &&
     typeof value === "object" &&
@@ -1038,6 +1102,9 @@ function toFileStream(value: unknown): FileStream {
     const stream: FileStream = {
       async next() {
         const r = await inner.next();
+        if (!r.done) {
+          assertStreamValue(r.value);
+        }
         return r.done ? { done: true as const, value: undefined } : r;
       },
       async close() {},
@@ -1057,6 +1124,29 @@ function toFileStream(value: unknown): FileStream {
     },
   };
   return empty;
+}
+
+function assertStreamValue(v: unknown): void {
+  if (v === null || typeof v !== "object") {
+    throw new TypeError(
+      'fileMock.openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
+        `got ${typeof v === "object" ? "null" : typeof v}.`,
+    );
+  }
+  // ArrayBuffer / TypedArray are objects but never valid StreamValue items.
+  if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
+    throw new TypeError(
+      "fileMock.openDownloadStream expected a StreamValue item, got raw bytes. " +
+        'Wrap the bytes in a structured chunk first (e.g. { type: "chunk", data, position }).',
+    );
+  }
+  const type = (v as { type?: unknown }).type;
+  if (type !== "metadata" && type !== "chunk" && type !== "complete") {
+    throw new TypeError(
+      'fileMock.openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
+        `got ${JSON.stringify(type)}.`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1101,10 +1191,10 @@ class TailorErrorMessageMock extends Error {
 }
 
 class TailorDBFileErrorMock extends Error {
-  code?: string;
+  code?: TailorDBFileErrorCode;
   override cause: unknown;
 
-  constructor(message: string, code?: string, cause?: unknown) {
+  constructor(message: string, code?: TailorDBFileErrorCode, cause?: unknown) {
     super(message);
     this.name = "TailorDBFileError";
     this.code = code;
@@ -1182,4 +1272,5 @@ export function cleanupMocks(global: typeof globalThis): void {
   delete g.TailorDBFileError;
   delete g[STATE_KEY];
   delete g[RUNTIME_FLAG_KEY];
+  clearWorkflowTestEnv();
 }

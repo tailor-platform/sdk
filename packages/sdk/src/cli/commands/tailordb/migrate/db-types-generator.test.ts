@@ -38,6 +38,7 @@ function createMockSnapshot(
     }
     snapshotTypes[typeName] = {
       name: typeName,
+      pluralForm: `${typeName}s`,
       fields,
     };
   }
@@ -61,6 +62,8 @@ function createMockDiff(
     changes,
     hasBreakingChanges: options.hasBreakingChanges ?? false,
     breakingChanges: [],
+    hasWarnings: false,
+    warnings: [],
     requiresMigrationScript: options.requiresMigrationScript ?? false,
   };
 }
@@ -101,6 +104,12 @@ describe("db-types-generator", () => {
       expect(content).toContain("Namespace: tailordb");
       expect(content).toContain("interface Database {}");
       expect(content).toContain("export type Transaction = KyselyTransaction<Database>");
+      // env-aware migration context type (inlines TailorEnv via the exported Env)
+      expect(content).toContain('import type { Env } from "@tailor-platform/sdk"');
+      expect(content).toContain("export type MigrationContext = {");
+      expect(content).toContain(
+        "env: keyof Env extends never ? Record<string, string | number | boolean> : Env;",
+      );
     });
   });
 

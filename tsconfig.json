@@ -15,9 +15,7 @@
     "dist",
     "packages",
     "example",
-    // Scaffold/solution/work dirs contain intentionally broken code or unresolvable imports for challenge fixtures
-    "llm-challenge/problems/*/scaffold",
-    "llm-challenge/problems/*/solution",
-    "llm-challenge/problems/*/work"
+    "llm-challenge/results",
+    "llm-challenge/.tmp"
   ]
 }

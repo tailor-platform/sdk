@@ -10,7 +10,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+    - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
       name: Install pnpm
       with:
         standalone: true
@@ -27,7 +27,7 @@ runs:
 
     # Build SDK so that the bin entry points to a real dist file
     - name: Build SDK package
-      run: pnpm exec turbo run build --filter @tailor-platform/sdk
+      run: pnpm --filter @tailor-platform/sdk run build
       shell: bash
 
     # Re-link the SDK's bin entry after build. pnpm 11 treats a same-lockfile
