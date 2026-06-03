@@ -6,6 +6,7 @@ import {
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
+import { symbols } from "@/cli/shared/logger";
 import { HTTP_METHODS } from "@/types/http-adapter";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -74,12 +75,16 @@ type CreateApplication = {
   name: string;
   request: MessageInitShape<typeof CreateApplicationRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  /** Per-adapter diff lines shown indented beneath the application entry. */
+  details?: string[];
 };
 
 type UpdateApplication = {
   name: string;
   request: MessageInitShape<typeof UpdateApplicationRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  /** Per-adapter diff lines shown indented beneath the application entry. */
+  details?: string[];
 };
 
 type DeleteApplication = {
@@ -396,13 +401,19 @@ export async function planApplication(
       // Plan display shows this as unchanged, but apply still re-issues it.
       changeSet.unchanged.push(update);
     } else {
+      const details = diffHttpAdapterDisplay(existing.httpAdapters, httpAdapters);
+      if (details.length > 0) {
+        update.details = details;
+      }
       changeSet.updates.push(update);
     }
   } else {
+    const details = diffHttpAdapterDisplay(undefined, httpAdapters);
     changeSet.creates.push({
       name: application.name,
       request,
       metaRequest,
+      details: details.length > 0 ? details : undefined,
     });
   }
 
@@ -425,6 +436,42 @@ async function fetchAppLabels(
     }
     throw error;
   }
+}
+
+/**
+ * Build per-adapter diff lines for the application plan display. The platform
+ * models HTTP adapters as an embedded Application field (no dedicated RPC), so
+ * adapter changes surface as an Application update; these lines show which
+ * adapter actually changed instead of just `~ <app>`.
+ * @param existingAdapters - HTTP adapters currently deployed on the application
+ * @param desiredAdapters - HTTP adapters built from the local config
+ * @returns Indented diff lines (`+`/`~`/`-` per adapter), sorted by name
+ */
+export function diffHttpAdapterDisplay(
+  existingAdapters: ReadonlyArray<MessageInitShape<typeof HttpAdapterSchema>> | undefined,
+  desiredAdapters: ReadonlyArray<MessageInitShape<typeof HttpAdapterSchema>>,
+): string[] {
+  const existingByName = new Map((existingAdapters ?? []).map((a) => [a.name ?? "", a]));
+  const desiredByName = new Map(desiredAdapters.map((a) => [a.name ?? "", a]));
+  const entries: Array<{ name: string; symbol: string }> = [];
+  for (const [name, desired] of desiredByName) {
+    const existing = existingByName.get(name);
+    if (!existing) {
+      entries.push({ name, symbol: symbols.create });
+    } else if (
+      !areNormalizedEqual(normalizeHttpAdapters([existing])[0], normalizeHttpAdapters([desired])[0])
+    ) {
+      entries.push({ name, symbol: symbols.update });
+    }
+  }
+  for (const name of existingByName.keys()) {
+    if (!desiredByName.has(name)) {
+      entries.push({ name, symbol: symbols.delete });
+    }
+  }
+  return entries
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((entry) => `${entry.symbol} ${entry.name} (httpAdapter)`);
 }
 
 function buildHttpAdapters(

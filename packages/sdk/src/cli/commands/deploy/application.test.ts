@@ -1,8 +1,8 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { logger } from "@/cli/shared/logger";
-import { planApplication } from "./application";
+import { logger, symbols } from "@/cli/shared/logger";
+import { diffHttpAdapterDisplay, planApplication } from "./application";
 import type { PlanContext } from "./deploy";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -472,5 +472,46 @@ describe("planApplication", () => {
         'Static website "typo-name" not found for CORS configuration. Excluding from CORS.',
       );
     });
+  });
+});
+
+describe("diffHttpAdapterDisplay", () => {
+  function adapter(name: string, overrides: { pathPattern?: string; priority?: number } = {}) {
+    return {
+      name,
+      pathPattern: overrides.pathPattern ?? `/${name}`,
+      methods: ["GET"],
+      inputScript: "input",
+      outputScript: "",
+      enabled: true,
+      priority: overrides.priority ?? 0,
+    };
+  }
+
+  test("treats every adapter as created when none exist remotely", () => {
+    const lines = diffHttpAdapterDisplay(undefined, [adapter("a"), adapter("b")]);
+    expect(lines).toEqual([
+      `${symbols.create} a (httpAdapter)`,
+      `${symbols.create} b (httpAdapter)`,
+    ]);
+  });
+
+  test("classifies create / update / delete and sorts by name", () => {
+    const existing = [adapter("keep"), adapter("change", { priority: 0 }), adapter("gone")];
+    const desired = [adapter("keep"), adapter("change", { priority: 5 }), adapter("new")];
+
+    const lines = diffHttpAdapterDisplay(existing, desired);
+
+    // "keep" is identical → omitted; sorted by adapter name.
+    expect(lines).toEqual([
+      `${symbols.update} change (httpAdapter)`,
+      `${symbols.delete} gone (httpAdapter)`,
+      `${symbols.create} new (httpAdapter)`,
+    ]);
+  });
+
+  test("returns no lines when adapters are unchanged", () => {
+    const same = [adapter("a"), adapter("b")];
+    expect(diffHttpAdapterDisplay(same, [...same])).toEqual([]);
   });
 });

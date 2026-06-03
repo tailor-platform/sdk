@@ -63,10 +63,22 @@ export function createChangeSet<
         return;
       }
       logger.log(styles.bold(`${title}:`));
-      creates.forEach((item) => logger.log(`  ${symbols.create} ${item.name}`));
-      deletes.forEach((item) => logger.log(`  ${symbols.delete} ${item.name}`));
-      updates.forEach((item) => logger.log(`  ${symbols.update} ${item.name}`));
-      replaces.forEach((item) => logger.log(`  ${symbols.replace} ${item.name}`));
+      // An item may carry an optional `details` array of pre-formatted lines
+      // (e.g. per-sub-resource diffs embedded in a single resource). They are
+      // rendered indented beneath the item.
+      const printItem = (symbol: string, item: HasName) => {
+        logger.log(`  ${symbol} ${item.name}`);
+        const details = (item as { details?: readonly string[] }).details;
+        if (details) {
+          for (const detail of details) {
+            logger.log(`    ${detail}`);
+          }
+        }
+      };
+      creates.forEach((item) => printItem(symbols.create, item));
+      deletes.forEach((item) => printItem(symbols.delete, item));
+      updates.forEach((item) => printItem(symbols.update, item));
+      replaces.forEach((item) => printItem(symbols.replace, item));
     },
   };
 }
