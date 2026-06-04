@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { defineConfig } from "vitest/config";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
@@ -5,34 +6,39 @@ import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 const srcDir = path.resolve(__dirname, "./src");
 const protoDir = path.resolve(__dirname, "../tailor-proto/src");
 
-const sdkSourceEntrypoints = [
-  ["", "configure/index.ts"],
-  ["cli", "cli/lib.ts"],
-  ["test", "utils/test/index.ts"],
-  ["kysely", "kysely/index.ts"],
-  ["plugin", "plugin/index.ts"],
-  ["plugin/kysely-type", "plugin/builtin/kysely-type/index.ts"],
-  ["plugin/enum-constants", "plugin/builtin/enum-constants/index.ts"],
-  ["plugin/file-utils", "plugin/builtin/file-utils/index.ts"],
-  ["plugin/seed", "plugin/builtin/seed/index.ts"],
-  ["seed", "seed/index.ts"],
-  ["vitest", "vitest/index.ts"],
-  ["vitest/environment", "vitest/environment.ts"],
-  ["runtime", "runtime/index.ts"],
-  ["runtime/globals", "runtime/globals.ts"],
-  ["runtime/iconv", "runtime/iconv.ts"],
-  ["runtime/secretmanager", "runtime/secretmanager.ts"],
-  ["runtime/authconnection", "runtime/authconnection.ts"],
-  ["runtime/idp", "runtime/idp.ts"],
-  ["runtime/workflow", "runtime/workflow.ts"],
-  ["runtime/context", "runtime/context.ts"],
-  ["runtime/file", "runtime/file.ts"],
-] as const;
+type PackageExport = {
+  import?: string;
+  default?: string;
+};
 
-const sdkSourceAliases = sdkSourceEntrypoints.map(([subpath, sourcePath]) => ({
-  find: new RegExp(`^@tailor-platform\\/sdk${subpath ? `\\/${subpath}` : ""}$`),
-  replacement: path.join(srcDir, sourcePath),
-}));
+const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8")) as {
+  exports: Record<string, PackageExport>;
+};
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const sdkSourceAliases = Object.entries(packageJson.exports).map(([exportName, target]) => {
+  const publicImport =
+    exportName === "." ? "@tailor-platform/sdk" : `@tailor-platform/sdk/${exportName.slice(2)}`;
+  const distImport = target.import ?? target.default;
+
+  if (!distImport?.startsWith("./dist/") || !distImport.endsWith(".mjs")) {
+    throw new Error(
+      `Unsupported @tailor-platform/sdk export ${exportName}: expected ./dist/*.mjs import target`,
+    );
+  }
+
+  return {
+    find: new RegExp(`^${escapeRegExp(publicImport)}$`),
+    replacement: path.resolve(
+      __dirname,
+      distImport
+        .replace(/^\.\//, "")
+        .replace(/^dist\//, "src/")
+        .replace(/\.mjs$/, ".ts"),
+    ),
+  };
+});
 
 export default defineConfig({
   plugins: [{ name: "yaml-text", load: loadYamlText }],
