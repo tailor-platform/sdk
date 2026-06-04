@@ -1,12 +1,12 @@
 import type { InferFieldsOutput } from "./helpers";
-import type { PluginAttachment } from "./plugin";
+import type { PluginAttachment } from "./plugin-attachment";
 import type { TailorField } from "./tailor-field";
 import type {
   TailorDBTypeMetadata,
   RawRelationConfig,
   DBFieldMetadata,
   DefinedDBFieldMetadata,
-} from "./tailordb";
+} from "./tailordb-metadata";
 import type { InferredAttributeMap } from "./user";
 
 /**

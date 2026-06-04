@@ -36,7 +36,7 @@ import {
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "@/types/auth";
 import type {
   BuiltinIdP,
