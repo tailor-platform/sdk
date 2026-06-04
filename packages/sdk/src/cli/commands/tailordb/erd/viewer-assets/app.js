@@ -7,6 +7,7 @@ const CROW_FOOT_TIP_OFFSET = 0;
 const CROW_FOOT_JOIN_OFFSET = 18;
 const CARDINALITY_OUTER_OFFSET = 32;
 const DRAG_THRESHOLD = 4;
+const FIT_PADDING = 80;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.2;
 
@@ -61,7 +62,8 @@ function readHashState() {
   const x = Number(params.get("x"));
   const y = Number(params.get("y"));
   const z = Number(params.get("z"));
-  if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+  const hasViewportParams = params.has("x") && params.has("y") && params.has("z");
+  if (hasViewportParams && Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
     viewport = { x, y, z: clamp(z, MIN_ZOOM, MAX_ZOOM) };
     hasViewportFromHash = true;
   }
@@ -564,8 +566,8 @@ function fitView() {
   const rect = elements.canvas.getBoundingClientRect();
   const scale = clamp(
     Math.min(
-      (rect.width - 80) / Math.max(layout.width, 1),
-      (rect.height - 80) / Math.max(layout.height, 1),
+      (rect.width - FIT_PADDING) / Math.max(layout.width, 1),
+      (rect.height - FIT_PADDING) / Math.max(layout.height, 1),
     ),
     MIN_ZOOM,
     1.2,

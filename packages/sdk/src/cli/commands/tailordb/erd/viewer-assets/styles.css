@@ -92,7 +92,7 @@ button:hover {
   width: 30px;
   height: 30px;
   place-items: center;
-  border-radius: 999px;
+  border-radius: 35%;
   background: var(--accent);
   color: #fff;
   font-weight: 800;
