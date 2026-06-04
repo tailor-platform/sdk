@@ -36,7 +36,7 @@ import {
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "@/types/auth";
 import type {
   BuiltinIdP,
@@ -1338,6 +1338,8 @@ function normalizeComparableOAuth2Client(
 
   return normalizeProtoConfig({
     ...client,
+    // Platform returns an empty string for an unset description; treat it the same as omitted.
+    description: client.description || undefined,
     redirectUris: normalizeStringArray(client.redirectUris),
     grantTypes: [...(client.grantTypes ?? [])].sort((left, right) => left - right),
     accessTokenLifetime: accessTokenLifetime ?? 86400,

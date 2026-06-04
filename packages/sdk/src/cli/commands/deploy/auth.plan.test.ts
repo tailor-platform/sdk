@@ -8,7 +8,7 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "@/cli/shared/logger";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
-import type { PlanContext } from "./deploy";
+import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -423,6 +423,55 @@ describe("planAuth", () => {
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("marks oauth2 client unchanged when description is omitted locally and remote is empty string", async () => {
+    const app = {
+      name: appName,
+      staticWebsiteServices: [],
+      authService: {
+        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        parsedConfig: {
+          name: "auth-a",
+          oauth2Clients: {
+            sample: {
+              grantTypes: ["authorization_code", "refresh_token"],
+              redirectURIs: ["https://a.example.com/callback"],
+              clientType: "confidential",
+            },
+          },
+        },
+        userProfile: undefined,
+      },
+    } as unknown as Application;
+
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+      oauth2Clients: [
+        {
+          name: "sample",
+          // Platform returns the proto default empty string when no description was set
+          description: "",
+          grantTypes: [
+            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
+            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
+          ],
+          redirectUris: ["https://a.example.com/callback"],
+          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+          accessTokenLifetime: { seconds: 86400n },
+          refreshTokenLifetime: { seconds: 604800n },
+          requireDpop: false,
+        },
+      ],
+    });
+
+    const result = await planAuth({
+      ...createContext(client),
+      application: app,
+    });
+
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 

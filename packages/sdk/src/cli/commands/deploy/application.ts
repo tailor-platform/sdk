@@ -11,7 +11,7 @@ import { HTTP_METHODS } from "@/parser/service/http-adapter";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp } from "./label";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
 import type { HttpAdapterBundleResult } from "@/cli/services/http-adapter/bundler";
 import type {

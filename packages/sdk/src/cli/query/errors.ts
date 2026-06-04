@@ -1,5 +1,5 @@
 import { CLIError } from "../shared/errors";
-import type { QueryEngine } from ".";
+import type { QueryEngine } from "./types";
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {

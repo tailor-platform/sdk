@@ -7,6 +7,7 @@ on:
       - "packages/sdk/src/**"
       - "packages/sdk/docs/**"
       - "example/**"
+      - "AGENTS.md"
       - "CLAUDE.md"
 
 permissions:
@@ -43,7 +44,8 @@ jobs:
             - `packages/sdk/docs/cli/*.md` - CLI subcommand docs
             - `packages/sdk/docs/services/*.md` - Service documentation
             - `packages/sdk/docs/configuration.md` - Configuration reference
-            - `CLAUDE.md` - Developer guide and code patterns
+            - `AGENTS.md` - Developer guide and code patterns
+            - `CLAUDE.md` - Compatibility adapter for agent instructions
             - `example/` - Working example code
 
             ## Investigation Steps
@@ -82,7 +84,7 @@ jobs:
             #### 3.3 Pattern / Example Changes
             - Read relevant files in `example/` directory
             - Verify examples use current API patterns (not deprecated ones)
-            - Check `CLAUDE.md` "Code Patterns" and "Non-obvious Rules and Gotchas" sections
+            - Check `AGENTS.md` "Code Patterns" and "Non-obvious Rules and Gotchas" sections
 
             #### 3.4 Reverse Check (docs changed but implementation not updated)
             - If documentation was changed, verify the implementation matches

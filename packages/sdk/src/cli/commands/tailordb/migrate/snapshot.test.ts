@@ -24,7 +24,7 @@ import {
   formatMigrationNumber,
   type SchemaSnapshot,
 } from "./snapshot";
-import type { MigrationDiff } from "./diff-calculator";
+import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
 import type { ParsedField, TailorDBType } from "@/types/tailordb";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
@@ -289,8 +289,7 @@ describe("snapshot", () => {
 
       const diff = compareSnapshots(previous, current);
 
-      expect(diff.changes[0].kind).toBe("field_added");
-      expect(diff.changes[0].fieldName).toBe("email");
+      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "email" });
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
@@ -749,10 +748,12 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       const forwardChange = diff.changes.find(
-        (c) => c.kind === "relationship_added" && c.relationshipName === "author",
+        (c): c is RelationshipAddedChange =>
+          c.kind === "relationship_added" && c.relationshipName === "author",
       );
       const backwardChange = diff.changes.find(
-        (c) => c.kind === "relationship_added" && c.relationshipName === "posts",
+        (c): c is RelationshipAddedChange =>
+          c.kind === "relationship_added" && c.relationshipName === "posts",
       );
 
       expect(forwardChange?.relationshipType).toBe("forward");
@@ -789,8 +790,7 @@ describe("snapshot", () => {
       const diff = compareLocalTypesWithSnapshot(previousSnapshot, snapshotTypes, namespace);
 
       expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0].kind).toBe("field_added");
-      expect(diff.changes[0].fieldName).toBe("email");
+      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "email" });
     });
   });
 
@@ -987,7 +987,13 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        changes: [{ kind: "type_added", typeName: "NewType" }],
+        changes: [
+          {
+            kind: "type_added",
+            typeName: "NewType",
+            after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
+          },
+        ],
         hasBreakingChanges: false,
         breakingChanges: [],
         hasWarnings: false,
@@ -1011,7 +1017,13 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        changes: [{ kind: "type_added", typeName: "NewType" }],
+        changes: [
+          {
+            kind: "type_added",
+            typeName: "NewType",
+            after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
+          },
+        ],
         hasBreakingChanges: false,
         breakingChanges: [],
         requiresMigrationScript: false,
@@ -1378,6 +1390,7 @@ describe("snapshot", () => {
               targetField: "id",
               sourceField: "authorId",
               isArray: false,
+              description: "",
             },
           },
           {
@@ -1390,6 +1403,7 @@ describe("snapshot", () => {
               targetField: "authorId",
               sourceField: "id",
               isArray: true,
+              description: "",
             },
           },
         ],

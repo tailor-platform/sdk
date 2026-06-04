@@ -31,7 +31,7 @@ import {
   type WithLabel,
 } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
   StandardIdPActionPermission,
@@ -324,7 +324,8 @@ function normalizeComparablePermission(
       right: c.right ? { kind: c.right.kind } : undefined,
     })),
     permit: policy.permit,
-    description: policy.description,
+    // Platform returns an empty string for an unset description; treat it the same as omitted.
+    description: policy.description || undefined,
   });
   return {
     create: permission.create.map(normalizePolicy),

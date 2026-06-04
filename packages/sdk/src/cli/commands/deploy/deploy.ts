@@ -5,7 +5,7 @@ import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
-import { initOperatorClient } from "@/cli/shared/client";
+import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
@@ -60,8 +60,7 @@ import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
+import type { PlanContext } from "./types";
 
 export interface DeployOptions {
   workspaceId?: string;
@@ -76,24 +75,6 @@ export interface DeployOptions {
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
 }
-
-export interface PlanContext {
-  client: OperatorClient;
-  workspaceId: string;
-  application: Readonly<Application>;
-  forRemoval: boolean;
-  config: LoadedConfig;
-  noSchemaCheck?: boolean;
-  forceApplyAll?: boolean;
-  /**
-   * Set of IdP names that have at least one executor with an idpUser trigger.
-   * Controls how `publishUserEvents` defaults on each IdP service. Empty when
-   * no idpUser triggers are defined.
-   */
-  idpUserTriggerTargets?: ReadonlySet<string>;
-}
-
-export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
 function applicationTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:application:${name}`;

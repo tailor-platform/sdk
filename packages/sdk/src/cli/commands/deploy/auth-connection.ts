@@ -13,7 +13,7 @@ import {
 } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase } from "./phase";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type {
   CreateAuthConnectionRequestSchema,

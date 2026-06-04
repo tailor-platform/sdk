@@ -34,9 +34,12 @@ import {
   type ColumnSlot,
 } from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
+import { queryEngines, type QueryEngine } from "./types";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
-const queryEngineSchema = z.enum(["sql", "gql"]);
+export type { QueryEngine } from "./types";
+
+const queryEngineSchema = z.enum(queryEngines);
 const queryBaseOptionsSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
@@ -48,7 +51,6 @@ const queryOptionsSchema = queryBaseOptionsSchema.extend({
   query: z.string(),
 });
 
-export type QueryEngine = z.infer<typeof queryEngineSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
 type QueryBaseOptions = z.input<typeof queryBaseOptionsSchema>;
 type QuerySharedOptions = Omit<QueryOptions, "engine">;

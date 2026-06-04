@@ -19,13 +19,7 @@ export interface PluginConfigs<Fields extends string = string> {
   // Extend this interface via declaration merging to add typed plugin configs
 }
 
-/**
- * Plugin attachment stored on TailorAnyDBType instances.
- */
-export interface PluginAttachment {
-  pluginId: string;
-  config: unknown;
-}
+export type { PluginAttachment } from "./plugin-attachment";
 
 /**
  * Context passed to plugin's process method
