@@ -72,6 +72,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = args.json || logger.jsonMode;
     const apps = await listApps({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -79,7 +80,7 @@ export const listCommand = defineAppCommand({
       limit: args.limit,
     });
 
-    const formattedApps = args.json
+    const formattedApps = jsonOutput
       ? apps
       : apps.map(({ updatedAt: _, createdAt, ...rest }) => ({
           ...rest,

@@ -71,6 +71,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = args.json || logger.jsonMode;
     const websites = await listStaticWebsites({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -78,7 +79,7 @@ export const listCommand = defineAppCommand({
       limit: args.limit,
     });
 
-    const formatted = args.json
+    const formatted = jsonOutput
       ? websites
       : websites.map(({ allowedIpAddresses, ...rest }) => {
           if (allowedIpAddresses.length === 0) {

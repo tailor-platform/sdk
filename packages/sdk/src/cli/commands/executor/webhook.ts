@@ -68,6 +68,7 @@ const listWebhookCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = args.json || logger.jsonMode;
     const executors = await listWebhookExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -76,6 +77,11 @@ const listWebhookCommand = defineAppCommand({
     });
 
     if (executors.length === 0) {
+      if (jsonOutput) {
+        logger.out([]);
+        return;
+      }
+
       logger.info("No webhook executors found.");
       return;
     }
@@ -86,7 +92,7 @@ const listWebhookCommand = defineAppCommand({
       },
     });
 
-    if (!args.json) {
+    if (!jsonOutput) {
       logger.info(
         'To test a webhook, run: tailor-sdk executor trigger <name> -d \'{"key":"value"}\'',
       );

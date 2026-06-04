@@ -56,6 +56,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = args.json || logger.jsonMode;
     const executors = await listExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -64,6 +65,11 @@ export const listCommand = defineAppCommand({
     });
 
     if (executors.length === 0) {
+      if (jsonOutput) {
+        logger.out([]);
+        return;
+      }
+
       logger.info("No executors found.");
       return;
     }
@@ -75,7 +81,7 @@ export const listCommand = defineAppCommand({
     });
 
     // Show hint if there are webhook executors (non-JSON mode only)
-    if (!args.json) {
+    if (!jsonOutput) {
       const hasWebhook = executors.some((e) => e.triggerType === "webhook");
       if (hasWebhook) {
         logger.info("To see webhook URLs, run: tailor-sdk executor webhook list");
