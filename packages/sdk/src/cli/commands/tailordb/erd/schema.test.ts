@@ -204,6 +204,31 @@ describe("buildTailorDbErdSchema", () => {
     });
   });
 
+  it("does not duplicate the implicit parsed id field", () => {
+    const user = createType("User", {
+      id: createField("id", {
+        type: "uuid",
+        required: true,
+      }),
+      email: createField("email", {
+        type: "string",
+        required: true,
+      }),
+    });
+
+    const schema = buildTailorDbErdSchema({
+      namespaceData: createNamespace({ User: user }),
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    expect(schema.tables[0].columns.map((column) => column.name)).toEqual(["id", "email"]);
+    expect(schema.tables[0].columns[0]).toMatchObject({
+      name: "id",
+      primaryKey: true,
+      unique: true,
+    });
+  });
+
   it("includes plugin source metadata without local file paths", () => {
     const namespace = createNamespace({
       AuditLog: createType("AuditLog"),

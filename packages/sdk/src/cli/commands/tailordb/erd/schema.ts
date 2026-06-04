@@ -172,14 +172,16 @@ function toTable(type: TailorDBType, source: TypeSourceInfoEntry | undefined): T
     index.name,
     index,
   ]);
-  const fieldColumns = Object.entries(type.fields).map(([fieldName, field]) =>
-    toColumn({
-      fieldName,
-      fieldConfig: field.config,
-      parsedField: field,
-      indexEntries,
-    }),
-  );
+  const fieldColumns = Object.entries(type.fields)
+    .filter(([fieldName]) => fieldName !== "id")
+    .map(([fieldName, field]) =>
+      toColumn({
+        fieldName,
+        fieldConfig: field.config,
+        parsedField: field,
+        indexEntries,
+      }),
+    );
 
   return {
     name: type.name,

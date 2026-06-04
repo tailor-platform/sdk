@@ -8,6 +8,7 @@ import type { TailorDBNamespaceData } from "@/types/plugin-generation";
 export interface LoadLocalErdSchemaOptions {
   configPath?: string;
   namespaces?: string[];
+  importNonce?: string;
 }
 
 export interface LocalErdSchemaContext {
@@ -23,12 +24,18 @@ export interface LocalErdSchemaContext {
 export async function loadLocalErdSchema(
   options: LoadLocalErdSchemaOptions,
 ): Promise<LocalErdSchemaContext> {
-  const { config, plugins } = await loadConfig(options.configPath);
+  const { config, plugins } = await loadConfig(options.configPath, {
+    importNonce: options.importNonce,
+  });
 
   await generateUserTypes({ config, configPath: config.path });
 
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
-  const application = defineApplication({ config, pluginManager });
+  const application = defineApplication({
+    config,
+    pluginManager,
+    importNonce: options.importNonce,
+  });
   const namespaceFilter = options.namespaces ? new Set(options.namespaces) : undefined;
   const services = namespaceFilter
     ? application.tailorDBServices.filter((db) => namespaceFilter.has(db.namespace))

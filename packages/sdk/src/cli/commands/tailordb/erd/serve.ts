@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { glob } from "node:fs/promises";
 import * as http from "node:http";
 import { watch, type FSWatcher } from "chokidar";
 import { lookup as lookupMime } from "mime-types";
@@ -33,6 +34,8 @@ interface WatchOptions {
   initialContext: LocalErdSchemaContext;
   initialResults: ErdBuildResult[];
 }
+
+const GLOB_CHARS = /[*?[\]{}()!+@]/;
 
 function formatServeCommand(namespace: string): string {
   return `tailor-sdk tailordb erd serve --namespace ${namespace}`;
@@ -119,6 +122,57 @@ function getWatchPatterns(context: LocalErdSchemaContext, results: ErdBuildResul
   return [...new Set(patterns)];
 }
 
+function hasGlobPattern(pattern: string): boolean {
+  return GLOB_CHARS.test(pattern);
+}
+
+function globBaseDir(pattern: string): string {
+  const absolutePattern = path.resolve(pattern);
+  const parsed = path.parse(absolutePattern);
+  const relativePattern = absolutePattern.slice(parsed.root.length);
+  const literalParts: string[] = [];
+  for (const part of relativePattern.split(path.sep)) {
+    if (!part || GLOB_CHARS.test(part)) break;
+    literalParts.push(part);
+  }
+
+  const literalPath =
+    literalParts.length > 0 ? path.join(parsed.root, ...literalParts) : parsed.root;
+  if (!literalPath || literalPath === parsed.root) return parsed.root || process.cwd();
+  if (!fs.existsSync(literalPath)) return path.dirname(literalPath);
+  return fs.statSync(literalPath).isDirectory() ? literalPath : path.dirname(literalPath);
+}
+
+async function expandWatchPattern(pattern: string): Promise<string[]> {
+  if (!hasGlobPattern(pattern)) {
+    return [path.resolve(pattern)];
+  }
+
+  const paths = new Set<string>();
+  for await (const file of glob(pattern)) {
+    paths.add(path.resolve(file));
+  }
+
+  const baseDir = globBaseDir(pattern);
+  if (fs.existsSync(baseDir) && fs.statSync(baseDir).isDirectory()) {
+    paths.add(baseDir);
+  }
+  return [...paths];
+}
+
+export async function resolveWatchPaths(
+  context: LocalErdSchemaContext,
+  results: ErdBuildResult[],
+): Promise<string[]> {
+  const paths = new Set<string>();
+  for (const pattern of getWatchPatterns(context, results)) {
+    for (const watchPath of await expandWatchPattern(pattern)) {
+      paths.add(watchPath);
+    }
+  }
+  return [...paths];
+}
+
 function selectPrimaryResult(results: ErdBuildResult[]): ErdBuildResult {
   const [primary, ...rest] = results;
   if (!primary) {
@@ -134,12 +188,13 @@ function selectPrimaryResult(results: ErdBuildResult[]): ErdBuildResult {
   return primary;
 }
 
-function createErdWatcher(options: WatchOptions): FSWatcher {
+async function createErdWatcher(options: WatchOptions): Promise<FSWatcher> {
   let rebuilding = false;
   let pending = false;
-  let patterns = getWatchPatterns(options.initialContext, options.initialResults);
+  let watchPaths = await resolveWatchPaths(options.initialContext, options.initialResults);
+  let importNonce = 0;
 
-  const watcher = watch(patterns, {
+  const watcher = watch(watchPaths, {
     ignored: /node_modules/,
     ignoreInitial: true,
     awaitWriteFinish: {
@@ -159,16 +214,17 @@ function createErdWatcher(options: WatchOptions): FSWatcher {
       const context = await loadLocalErdSchema({
         configPath: options.configPath,
         namespaces: options.namespace ? [options.namespace] : undefined,
+        importNonce: String((importNonce += 1)),
       });
       const results = prepareErdBuildsFromContext({
         context,
         namespace: options.namespace,
         outputDir: options.outputDir,
       });
-      const nextPatterns = getWatchPatterns(context, results);
-      watcher.unwatch(patterns);
-      watcher.add(nextPatterns);
-      patterns = nextPatterns;
+      const nextWatchPaths = await resolveWatchPaths(context, results);
+      watcher.unwatch(watchPaths);
+      watcher.add(nextWatchPaths);
+      watchPaths = nextWatchPaths;
       logger.success(
         `Rebuilt ERD schema (${results.map((result) => result.namespace).join(", ")})`,
         {
@@ -265,7 +321,7 @@ export const erdServeCommand = defineAppCommand({
       port: args.port,
     });
     const watchUrl = `${url}/?watch=1`;
-    const watcher = createErdWatcher({
+    const watcher = await createErdWatcher({
       configPath: args.config,
       namespace: args.namespace,
       outputDir,
