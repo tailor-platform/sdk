@@ -154,6 +154,7 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
   const context = await loadLocalErdSchema({
     configPath: options.configPath,
     namespaces: options.namespace ? [options.namespace] : undefined,
+    requireErdSite: options.requireErdSite,
   });
   return prepareErdBuildsFromContext({
     context,

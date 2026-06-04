@@ -491,7 +491,10 @@ function normalizedRelationType(relation) {
 function relationCardinality(relation) {
   const sourceColumn = sourceColumnForRelation(relation);
   const relationType = normalizedRelationType(relation);
-  const sourceMultiple = relationType === "n-1" || relationType === "keyOnly";
+  const sourceMultiple =
+    relationType === "n-1" ||
+    relationType === "keyOnly" ||
+    (relationType === "foreignKey" && sourceColumn?.unique !== true);
   const targetMultiple = relationType === "keyOnly" && sourceColumn?.array === true;
 
   return {

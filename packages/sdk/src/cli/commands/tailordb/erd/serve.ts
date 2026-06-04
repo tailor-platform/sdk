@@ -343,7 +343,11 @@ export const erdServeCommand = defineAppCommand({
     }
 
     if (args.open) {
-      await open(watchUrl);
+      try {
+        await open(watchUrl);
+      } catch {
+        logger.warn("Failed to open browser automatically. Please open the URL above manually.");
+      }
     }
 
     await waitForShutdown(server, watcher);

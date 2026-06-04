@@ -8,12 +8,42 @@ import type { TailorDBNamespaceData } from "@/types/plugin-generation";
 export interface LoadLocalErdSchemaOptions {
   configPath?: string;
   namespaces?: string[];
+  requireErdSite?: boolean;
   importNonce?: string;
 }
 
 export interface LocalErdSchemaContext {
   config: LoadedConfig;
   namespaces: TailorDBNamespaceData[];
+}
+
+export interface ResolveLocalErdSchemaNamespacesOptions {
+  /** Explicit namespace selection. */
+  namespaces?: string[];
+  /** Limit implicit selection to owned namespaces with erdSite configured. */
+  requireErdSite?: boolean;
+}
+
+/**
+ * Resolve TailorDB namespaces that need local type loading for ERD generation.
+ * @param config - Loaded Tailor config.
+ * @param options - Namespace selection options.
+ * @returns Namespace names to load, or undefined to load all owned namespaces.
+ */
+export function resolveLocalErdSchemaNamespaces(
+  config: LoadedConfig,
+  options: ResolveLocalErdSchemaNamespacesOptions,
+): string[] | undefined {
+  if (options.namespaces) {
+    return options.namespaces;
+  }
+  if (!options.requireErdSite) {
+    return undefined;
+  }
+
+  return Object.entries(config.db ?? {}).flatMap(([namespace, dbConfig]) =>
+    "external" in dbConfig || !dbConfig.erdSite ? [] : [namespace],
+  );
 }
 
 /**
@@ -36,7 +66,11 @@ export async function loadLocalErdSchema(
     pluginManager,
     importNonce: options.importNonce,
   });
-  const namespaceFilter = options.namespaces ? new Set(options.namespaces) : undefined;
+  const namespaceNames = resolveLocalErdSchemaNamespaces(config, {
+    namespaces: options.namespaces,
+    requireErdSite: options.requireErdSite,
+  });
+  const namespaceFilter = namespaceNames ? new Set(namespaceNames) : undefined;
   const services = namespaceFilter
     ? application.tailorDBServices.filter((db) => namespaceFilter.has(db.namespace))
     : application.tailorDBServices;
