@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
+import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -75,16 +76,7 @@ describe("function test-run --json", () => {
     });
     using _json = jsonMode();
 
-    await testRunCommand.run({
-      json: true,
-      file: scriptPath,
-      name: undefined,
-      arg: undefined,
-      "machine-user": "admin",
-      config: "tailor.config.ts",
-      "workspace-id": undefined,
-      profile: undefined,
-    } as never);
+    await runCommand(testRunCommand, [scriptPath, "--machine-user", "admin"]);
 
     expect(JSON.parse(stdout)).toEqual({
       success: true,

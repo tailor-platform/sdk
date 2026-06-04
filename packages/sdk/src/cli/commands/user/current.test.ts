@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "@/cli/shared/context";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
@@ -79,7 +80,7 @@ describe("user current", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await currentCommand.run({ json: true } as never);
+    await runCommand(currentCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });

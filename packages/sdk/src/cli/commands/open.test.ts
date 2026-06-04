@@ -1,9 +1,11 @@
 import open from "open";
+import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadWorkspaceId } from "@/cli/shared/context";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { openCommand } from "./open";
+import type { ChildProcess } from "node:child_process";
 
 vi.mock("open", () => ({
   default: vi.fn(),
@@ -42,7 +44,7 @@ describe("open --json", () => {
         name: "my-app",
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
-    vi.mocked(open).mockResolvedValue(undefined as never);
+    vi.mocked(open).mockResolvedValue({} as ChildProcess);
   });
 
   test("emits a parseable JSON object when the browser opens", async () => {
@@ -50,12 +52,7 @@ describe("open --json", () => {
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
 
-    await openCommand.run({
-      json: true,
-      "workspace-id": undefined,
-      profile: undefined,
-      config: "tailor.config.ts",
-    } as never);
+    await runCommand(openCommand, []);
 
     expect(JSON.parse(stdout.output)).toEqual({
       consoleUrl:
@@ -73,12 +70,7 @@ describe("open --json", () => {
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
 
-    await openCommand.run({
-      json: true,
-      "workspace-id": undefined,
-      profile: undefined,
-      config: "tailor.config.ts",
-    } as never);
+    await runCommand(openCommand, []);
 
     expect(JSON.parse(stdout.output)).toEqual({
       consoleUrl:

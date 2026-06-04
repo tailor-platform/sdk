@@ -70,7 +70,8 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     },
   ],
   run: async (args) => {
-    const showProgress = !args.json;
+    const jsonOutput = args.json || logger.jsonMode;
+    const showProgress = !jsonOutput;
 
     // 1. Resolve and validate file path
     const filePath = path.resolve(args.file);
@@ -182,7 +183,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     });
 
     // 7. Display result
-    if (args.json) {
+    if (jsonOutput) {
       logger.out({
         success: result.success,
         scriptName,

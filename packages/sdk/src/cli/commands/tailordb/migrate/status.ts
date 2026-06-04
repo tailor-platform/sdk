@@ -179,7 +179,7 @@ export const statusCommand = defineAppCommand({
       namespace: args.namespace,
       workspaceId: args["workspace-id"],
       profile: args.profile,
-      json: args.json,
+      json: args.json || logger.jsonMode,
     });
   },
 });

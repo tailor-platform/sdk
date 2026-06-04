@@ -1,9 +1,10 @@
+import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
-import { listCommand } from "./list";
 import { webhookCommand } from "./webhook";
+import { executorCommand } from ".";
 
 vi.mock("@/cli/shared/client", () => ({
   fetchPaged: vi.fn(),
@@ -47,7 +48,7 @@ describe("executor list --json", () => {
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
 
-    await listCommand.run({} as never);
+    await runCommand(executorCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);
@@ -58,7 +59,7 @@ describe("executor list --json", () => {
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
 
-    await webhookCommand.run({} as never);
+    await runCommand(webhookCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);

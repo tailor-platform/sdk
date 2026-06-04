@@ -10,6 +10,7 @@ export const currentCommand = defineAppCommand({
   args: z.object({}).strict(),
   run: async (args) => {
     const config = await readPlatformConfig();
+    const jsonOutput = args.json || logger.jsonMode;
 
     // Check if current user is set
     if (!config.current_user) {
@@ -27,7 +28,7 @@ export const currentCommand = defineAppCommand({
       `);
     }
 
-    if (args.json) {
+    if (jsonOutput) {
       logger.out({ user: config.current_user });
       return;
     }

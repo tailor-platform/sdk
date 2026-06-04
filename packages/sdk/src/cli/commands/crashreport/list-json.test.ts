@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
+import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { parseCrashReportConfig } from "@/cli/crashreport/config";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { listCommand } from "./list";
+import { crashReportCommand } from ".";
 
 vi.mock("@/cli/crashreport/config", () => ({
   parseCrashReportConfig: vi.fn(),
@@ -50,7 +52,7 @@ describe("crashreport list --json", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await listCommand.run({ json: true, limit: 1 } as never);
+    await runCommand(listCommand, ["--limit", "1"]);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([
@@ -71,7 +73,7 @@ describe("crashreport list --json", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await listCommand.run({ json: true } as never);
+    await runCommand(listCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);
@@ -87,7 +89,7 @@ describe("crashreport list --json", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await listCommand.run({} as never);
+    await runCommand(crashReportCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);

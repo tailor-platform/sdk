@@ -371,14 +371,15 @@ export const startCommand = defineAppCommand({
       configPath: args.config,
       interval: parseDuration(args.interval),
     });
+    const jsonOutput = args.json || logger.jsonMode;
 
-    if (!args.json) {
+    if (!jsonOutput) {
       logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
     }
 
     if (args.wait) {
-      const result = await wait({ showProgress: !args.json });
-      if (args.logs && !args.json) {
+      const result = await wait({ showProgress: !jsonOutput });
+      if (args.logs && !jsonOutput) {
         const { execution } = await getWorkflowExecution({
           executionId,
           workspaceId: args["workspace-id"],

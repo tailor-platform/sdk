@@ -1,10 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "@/cli/shared/context";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "@/cli/shared/token-store";
-import { listCommand } from "./list";
+import { userCommand } from ".";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-user-list-${Date.now()}-${Math.random()}`);
 
@@ -69,7 +70,7 @@ describe("user list", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await listCommand.run({} as never);
+    await runCommand(userCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);
@@ -94,7 +95,7 @@ describe("user list", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await listCommand.run({} as never);
+    await runCommand(userCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual(["u@example.com"]);

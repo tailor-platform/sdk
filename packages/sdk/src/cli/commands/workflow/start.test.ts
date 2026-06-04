@@ -1,3 +1,4 @@
+import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -102,18 +103,7 @@ describe("startWorkflow runtime overload", () => {
     });
     using _json = jsonMode();
 
-    await startCommand.run({
-      json: true,
-      name: "legacy-workflow",
-      "machine-user": "legacy-user",
-      arg: undefined,
-      wait: false,
-      interval: "3s",
-      logs: false,
-      "workspace-id": undefined,
-      profile: undefined,
-      config: undefined,
-    } as never);
+    await runCommand(startCommand, ["legacy-workflow", "--machine-user", "legacy-user"]);
 
     expect(JSON.parse(stdout)).toEqual({ executionId: "execution-1" });
     expect(stderr).toBe("");

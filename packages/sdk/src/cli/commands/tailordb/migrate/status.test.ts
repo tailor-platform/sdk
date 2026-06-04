@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
+import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -99,13 +100,7 @@ describe("tailordb migration status --json", () => {
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
 
-    await statusCommand.run({
-      json: true,
-      config: "tailor.config.ts",
-      namespace: undefined,
-      "workspace-id": undefined,
-      profile: undefined,
-    } as never);
+    await runCommand(statusCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([

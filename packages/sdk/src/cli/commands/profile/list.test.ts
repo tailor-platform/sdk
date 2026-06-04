@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "@/cli/shared/context";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "@/cli/shared/token-store";
 import { listCommand } from "./list";
+import { profileCommand } from ".";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-list-${Date.now()}-${Math.random()}`);
 
@@ -68,7 +70,7 @@ describe("profile list", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await listCommand.run({ json: true } as never);
+    await runCommand(listCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);
@@ -78,7 +80,7 @@ describe("profile list", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await listCommand.run({} as never);
+    await runCommand(profileCommand, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);
