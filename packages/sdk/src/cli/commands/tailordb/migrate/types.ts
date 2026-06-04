@@ -2,7 +2,7 @@
  * Types for TailorDB migration execution
  */
 
-import { formatMigrationNumber } from "./snapshot";
+import { formatMigrationNumber } from "./migration-number";
 import type { MigrationDiff } from "./diff-calculator";
 
 // ============================================================================

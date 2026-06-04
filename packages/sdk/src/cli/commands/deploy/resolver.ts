@@ -36,7 +36,7 @@ import {
   type WithLabel,
 } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Executor } from "@/types/executor.generated";
 import type { TailorField } from "@/types/field.generated";
 import type { Resolver } from "@/types/resolver.generated";

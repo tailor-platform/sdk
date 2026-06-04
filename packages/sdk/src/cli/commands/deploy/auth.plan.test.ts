@@ -8,7 +8,7 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "@/cli/shared/logger";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
-import type { PlanContext } from "./deploy";
+import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 

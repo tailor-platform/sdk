@@ -3,7 +3,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import ml from "@/utils/multiline";
-import type { ProfileInfo } from ".";
+import type { ProfileInfo } from "./types";
 
 export const listCommand = defineAppCommand({
   name: "list",

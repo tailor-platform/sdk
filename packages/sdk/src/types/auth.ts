@@ -1,4 +1,5 @@
 import type { AuthConnectionConfig } from "./auth-connection.generated";
+import type { ValueOperand } from "./auth-value";
 import type {
   AuthInvoker,
   IdProvider as IdProviderConfig,
@@ -31,8 +32,7 @@ export type AuthConnectionTokenResult = {
   expiry?: string;
 };
 
-// Helper types for ValueOperand
-export type ValueOperand = string | boolean | string[] | boolean[];
+export type { ValueOperand } from "./auth-value";
 export type AuthAttributeValue = ValueOperand | null | undefined;
 
 // User field type helpers
