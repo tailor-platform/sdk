@@ -307,6 +307,7 @@ button:hover {
 .edge-cardinality.is-selected circle {
   fill: var(--canvas);
   stroke: var(--accent);
+  stroke-width: 3;
 }
 
 .table-card {

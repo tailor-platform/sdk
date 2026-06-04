@@ -2,6 +2,7 @@ const TABLE_WIDTH = 260;
 const TABLE_HEIGHT = 62;
 const X_GAP = 160;
 const Y_GAP = 56;
+const CARDINALITY_MARKER_WIDTH = 50;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.2;
 
@@ -208,17 +209,20 @@ function renderNodes() {
 
 function edgeGeometry(source, target) {
   const sourceRight = source.x < target.x;
-  const sx = sourceRight ? source.x + source.width : source.x;
-  const tx = sourceRight ? target.x : target.x + target.width;
+  const direction = sourceRight ? 1 : -1;
+  const sourceNodeX = sourceRight ? source.x + source.width : source.x;
+  const targetNodeX = sourceRight ? target.x : target.x + target.width;
   const sy = source.y + source.height / 2;
   const ty = target.y + target.height / 2;
+  const sx = sourceNodeX + direction * CARDINALITY_MARKER_WIDTH;
+  const tx = targetNodeX - direction * CARDINALITY_MARKER_WIDTH;
   const bend = Math.max(80, Math.abs(tx - sx) * 0.45);
   const c1x = sx + (sourceRight ? bend : -bend);
   const c2x = tx + (sourceRight ? -bend : bend);
   return {
     d: `M ${sx} ${sy} C ${c1x} ${sy}, ${c2x} ${ty}, ${tx} ${ty}`,
-    sourcePoint: { x: sx, y: sy },
-    targetPoint: { x: tx, y: ty },
+    sourceNodePoint: { x: sourceNodeX, y: sy },
+    targetNodePoint: { x: targetNodeX, y: ty },
     sourceRight,
   };
 }
@@ -257,11 +261,14 @@ function cardinalityMarker(cardinality, point, sideSign, selected) {
   const near = 14;
   const middle = 26;
   const far = 38;
-  const parts = [];
+  const markerEndX = point.x + sideSign * CARDINALITY_MARKER_WIDTH;
+  const parts = [
+    `<line class="edge-cardinality-line" x1="${point.x}" y1="${point.y}" x2="${markerEndX}" y2="${point.y}"></line>`,
+  ];
 
   if (cardinality.max === "n") {
-    const baseX = point.x + sideSign * near;
-    const endX = point.x + sideSign * middle;
+    const baseX = point.x + sideSign * middle;
+    const endX = point.x + sideSign * near;
     parts.push(`
       <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y - 11}"></line>
       <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y}"></line>
@@ -303,8 +310,8 @@ function renderEdges() {
       const direction = geometry.sourceRight ? 1 : -1;
       return `
           <path class="edge ${selected ? "is-selected" : ""}" d="${geometry.d}"></path>
-          ${cardinalityMarker(cardinality.source, geometry.sourcePoint, direction, selected)}
-          ${cardinalityMarker(cardinality.target, geometry.targetPoint, -direction, selected)}
+          ${cardinalityMarker(cardinality.source, geometry.sourceNodePoint, direction, selected)}
+          ${cardinalityMarker(cardinality.target, geometry.targetNodePoint, -direction, selected)}
         `;
     })
     .join("");
