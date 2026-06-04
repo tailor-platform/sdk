@@ -1,7 +1,7 @@
-const TABLE_WIDTH = 280;
-const X_GAP = 140;
-const Y_GAP = 44;
-const MAX_CARD_COLUMNS = 8;
+const TABLE_WIDTH = 260;
+const TABLE_HEIGHT = 62;
+const X_GAP = 160;
+const Y_GAP = 56;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.2;
 
@@ -9,6 +9,7 @@ const elements = {
   namespace: document.getElementById("namespace"),
   revision: document.getElementById("revision"),
   search: document.getElementById("search"),
+  tableSummary: document.getElementById("table-count-summary"),
   tableList: document.getElementById("table-list"),
   canvas: document.getElementById("canvas"),
   world: document.getElementById("world"),
@@ -19,7 +20,9 @@ const elements = {
   status: document.getElementById("status"),
   zoomIn: document.getElementById("zoom-in"),
   zoomOut: document.getElementById("zoom-out"),
+  zoomLabel: document.getElementById("zoom-label"),
   fitView: document.getElementById("fit-view"),
+  copyLink: document.getElementById("copy-link"),
 };
 
 let schema;
@@ -75,11 +78,8 @@ async function fetchSchema() {
   return response.json();
 }
 
-function cardHeight(table) {
-  const shownColumns = Math.min(table.columns.length, MAX_CARD_COLUMNS);
-  const markers = table.columns.some((column) => column.relation || column.index) ? 24 : 0;
-  const more = table.columns.length > MAX_CARD_COLUMNS ? 20 : 0;
-  return 52 + shownColumns * 24 + markers + more + 16;
+function cardHeight() {
+  return TABLE_HEIGHT;
 }
 
 function computeRanks(tables, relations) {
@@ -154,6 +154,7 @@ function matchesSearch(table) {
 function renderHeader() {
   elements.namespace.textContent = schema.namespace;
   elements.revision.textContent = `${schema.tables.length} tables / ${schema.relations.length} relations / ${schema.revision}`;
+  elements.tableSummary.textContent = String(schema.tables.length);
 }
 
 function renderTableList() {
@@ -162,6 +163,7 @@ function renderTableList() {
     .map(
       (table) => `
         <button type="button" data-table="${escapeHtml(table.name)}" aria-current="${table.name === selectedTable}">
+          <span class="table-list-icon" aria-hidden="true"></span>
           <span>${escapeHtml(table.name)}</span>
           <span class="table-count">${table.columns.length}</span>
         </button>
@@ -176,50 +178,26 @@ function renderTableList() {
   });
 }
 
-function columnMarkers(table) {
-  const fkCount = table.columns.filter((column) => column.relation).length;
-  const indexedCount = table.columns.filter((column) => column.index).length;
-  const markers = [];
-  if (fkCount > 0) markers.push(`<span class="marker">${fkCount} FK</span>`);
-  if (indexedCount > 0) markers.push(`<span class="marker">${indexedCount} IDX</span>`);
-  return markers.length ? `<div class="column-markers">${markers.join("")}</div>` : "";
-}
-
 function renderNodes() {
   elements.nodes.innerHTML = schema.tables
     .map((table) => {
       const node = layout.nodes.get(table.name);
-      const columns = table.columns.slice(0, MAX_CARD_COLUMNS);
-      const muted = !matchesSearch(table) || !isTableRelatedToSelection(table);
+      const related = isTableRelatedToSelection(table.name);
+      const muted = !matchesSearch(table) || !related;
       return `
-        <article
-          class="table-card ${table.name === selectedTable ? "is-selected" : ""} ${muted ? "is-muted" : ""}"
+        <button
+          type="button"
+          class="table-card ${table.name === selectedTable ? "is-selected" : ""} ${related ? "is-related" : ""} ${muted ? "is-muted" : ""}"
           data-table="${escapeHtml(table.name)}"
-          style="left: ${node.x}px; top: ${node.y}px; height: ${node.height}px"
+          aria-label="Focus table ${escapeHtml(table.name)}"
+          aria-pressed="${table.name === selectedTable}"
+          style="left: ${node.x}px; top: ${node.y}px"
         >
           <div class="table-head">
+            <span class="table-icon" aria-hidden="true"></span>
             <div class="table-name">${escapeHtml(table.name)}</div>
-            <span class="badge">${table.columns.length}</span>
           </div>
-          <div class="column-list">
-            ${columns
-              .map(
-                (column) => `
-                  <div class="column-row">
-                    <span class="column-name">${column.primaryKey ? "PK " : ""}${column.relation ? "FK " : ""}${escapeHtml(column.name)}</span>
-                    <span class="column-type">${escapeHtml(column.type)}${column.array ? "[]" : ""}</span>
-                  </div>
-                `,
-              )
-              .join("")}
-          </div>
-          ${columnMarkers(table)}
-          ${
-            table.columns.length > MAX_CARD_COLUMNS
-              ? `<div class="more-columns">+${table.columns.length - MAX_CARD_COLUMNS} columns</div>`
-              : ""
-          }
-        </article>
+        </button>
       `;
     })
     .join("");
@@ -247,7 +225,10 @@ function renderEdges() {
   elements.edges.innerHTML = `
     <defs>
       <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-        <path d="M 0 0 L 10 4 L 0 8 z" fill="#aab5c4"></path>
+        <path d="M 0 0 L 10 4 L 0 8 z" fill="#555d5b"></path>
+      </marker>
+      <marker id="arrow-selected" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+        <path d="M 0 0 L 10 4 L 0 8 z" fill="#21e68b"></path>
       </marker>
     </defs>
     ${schema.relations
@@ -257,7 +238,7 @@ function renderEdges() {
         if (!source || !target) return "";
         const selected =
           relation.sourceTable === selectedTable || relation.targetTable === selectedTable;
-        return `<path class="edge ${selected ? "is-selected" : ""}" d="${edgePath(source, target)}" marker-end="url(#arrow)"></path>`;
+        return `<path class="edge ${selected ? "is-selected" : ""}" d="${edgePath(source, target)}" marker-end="url(#${selected ? "arrow-selected" : "arrow"})"></path>`;
       })
       .join("")}
   `;
@@ -306,7 +287,7 @@ function renderDetails() {
     elements.details.innerHTML = `
       <div class="details-inner">
         <section>
-          <h2>${escapeHtml(schema.namespace)}</h2>
+          <h2><span class="table-icon" aria-hidden="true"></span>${escapeHtml(schema.namespace)}</h2>
           <p>${schema.tables.length} tables, ${schema.relations.length} relations</p>
         </section>
       </div>
@@ -317,7 +298,7 @@ function renderDetails() {
   elements.details.innerHTML = `
     <div class="details-inner">
       <section>
-        <h2>${escapeHtml(table.name)}</h2>
+        <h2><span class="table-icon" aria-hidden="true"></span>${escapeHtml(table.name)}</h2>
         <p>${escapeHtml(table.description || table.pluralForm)}</p>
       </section>
       <section class="details-section">
@@ -383,7 +364,20 @@ function renderDetails() {
 
 function applyTransform() {
   elements.world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.z})`;
+  elements.zoomLabel.textContent = `${Math.round(viewport.z * 100)}%`;
   writeHashState();
+}
+
+function centerTable(tableName) {
+  const node = layout?.nodes.get(tableName);
+  if (!node) return;
+
+  const rect = elements.canvas.getBoundingClientRect();
+  viewport = {
+    ...viewport,
+    x: Math.round(rect.width / 2 - (node.x + node.width / 2) * viewport.z),
+    y: Math.round(rect.height / 2 - (node.y + node.height / 2) * viewport.z),
+  };
 }
 
 function fitView() {
@@ -413,13 +407,20 @@ function renderAll(options = {}) {
   renderEdges();
   renderNodes();
   renderDetails();
-  if (options.fit) fitView();
+  if (options.fit) {
+    fitView();
+    return;
+  }
+  if (options.center && selectedTable) {
+    centerTable(selectedTable);
+  }
   applyTransform();
 }
 
-function selectTable(tableName) {
+function selectTable(tableName, options = {}) {
+  if (!tableName) return;
   selectedTable = tableName;
-  renderAll();
+  renderAll({ center: options.center !== false });
 }
 
 function zoomAt(nextZoom, clientX, clientY) {
@@ -450,6 +451,14 @@ function wireInteractions() {
     zoomAt(viewport.z / 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
   });
   elements.fitView.addEventListener("click", fitView);
+  elements.copyLink.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      showStatus("Link copied");
+    } catch {
+      showStatus("Copy failed", true);
+    }
+  });
 
   elements.canvas.addEventListener(
     "wheel",

@@ -16,16 +16,18 @@
             <p id="revision">Loading schema</p>
           </div>
         </div>
+        <div class="toolbar-search">
+          <input id="search" type="search" autocomplete="off" placeholder="Search" />
+        </div>
         <div class="toolbar-actions">
-          <button id="zoom-out" type="button" title="Zoom out">-</button>
-          <button id="zoom-in" type="button" title="Zoom in">+</button>
-          <button id="fit-view" type="button">Fit</button>
+          <button id="copy-link" class="primary-action" type="button">Copy Link</button>
         </div>
       </header>
       <main class="main">
         <aside class="table-nav">
-          <div class="search-wrap">
-            <input id="search" type="search" autocomplete="off" placeholder="Search tables" />
+          <div class="nav-head">
+            <h2>Tables</h2>
+            <span id="table-count-summary"></span>
           </div>
           <div id="table-list" class="table-list"></div>
         </aside>
@@ -36,6 +38,13 @@
           </div>
           <div id="empty-state" class="empty-state" hidden>No TailorDB types found.</div>
           <div id="status" class="status" hidden></div>
+          <div class="canvas-toolbar" aria-label="Canvas controls">
+            <button id="zoom-out" type="button" title="Zoom out">-</button>
+            <span id="zoom-label">100%</span>
+            <button id="zoom-in" type="button" title="Zoom in">+</button>
+            <span class="toolbar-divider"></span>
+            <button id="fit-view" type="button">Fit</button>
+          </div>
         </section>
         <aside id="details" class="details"></aside>
       </main>
