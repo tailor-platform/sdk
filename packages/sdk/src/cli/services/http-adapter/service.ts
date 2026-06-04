@@ -2,13 +2,13 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
-import { HttpAdapterConfigSchema } from "@/parser/service/http-adapter";
 import {
   HTTP_METHOD_KEYS,
-  type HttpAdapterConfig,
-  type HttpAdapterServiceInput,
+  HttpAdapterConfigSchema,
   type HttpMethodKey,
-} from "@/types/http-adapter";
+} from "@/parser/service/http-adapter";
+import { type HttpAdapterServiceInput } from "@/types/app-config";
+import { type HttpAdapterConfig } from "@/types/http-adapter.generated";
 import { isSdkBranded } from "@/utils/brand";
 
 export type HttpAdapterServiceConfig = HttpAdapterServiceInput;

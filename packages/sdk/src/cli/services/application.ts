@@ -33,8 +33,8 @@ import {
   type ResolverServiceInput,
   type WorkflowServiceConfig,
 } from "@/types/app-config";
+import { type HttpAdapterServiceInput } from "@/types/app-config";
 import { type AuthConfig } from "@/types/auth";
-import { type HttpAdapterServiceInput } from "@/types/http-adapter";
 import { type IdPConfig } from "@/types/idp";
 import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";

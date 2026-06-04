@@ -8,7 +8,7 @@ import { isNodeBuiltinImport } from "@/cli/services/http-adapter/node-builtins";
 import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
-import { HTTP_METHODS, type HttpMethodKey } from "@/types/http-adapter";
+import { HTTP_METHODS, type HttpMethodKey } from "@/parser/service/http-adapter";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;

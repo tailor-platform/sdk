@@ -1,18 +1,65 @@
 import { brandValue } from "@/utils/brand";
-import type { HttpAdapter } from "@/types/http-adapter";
+import type { HttpAdapterConfigInput } from "@/types/http-adapter.generated";
 
-export type {
-  HttpAdapter,
-  HttpAdapterInput,
-  HttpAdapterRequest,
-  HttpAdapterGraphQLRequest,
-  HttpAdapterInputFn,
-  HttpAdapterGraphQLResponse,
-  HttpAdapterResponse,
-  HttpAdapterOutputFn,
-  HttpMethod,
-  HttpMethodKey,
-} from "@/types/http-adapter";
+/**
+ * Lowercase HTTP method keys accepted in `input`, derived from the config
+ * schema via the generated type so they cannot drift.
+ */
+type HttpMethodKey = keyof Required<HttpAdapterConfigInput["input"]>;
+
+/** Incoming HTTP request passed to an `input` handler. */
+export type HttpAdapterRequest = {
+  method: Uppercase<HttpMethodKey>;
+  path: string;
+  headers: Record<string, string>;
+  query: Record<string, string>;
+  body: string;
+};
+
+/** GraphQL request returned by an `input` handler. */
+export type HttpAdapterGraphQLRequest = {
+  query: string;
+  variables?: Record<string, unknown>;
+  operationName?: string;
+};
+
+/** Converts an incoming HTTP request into a GraphQL request. */
+export type HttpAdapterInputFn = (req: HttpAdapterRequest) => HttpAdapterGraphQLRequest;
+
+/** GraphQL execution result passed to the `output` handler. */
+export type HttpAdapterGraphQLResponse = {
+  data?: unknown;
+  errors?: unknown;
+  extensions?: unknown;
+};
+
+/** HTTP response returned by the `output` handler. */
+export type HttpAdapterResponse = {
+  statusCode?: number;
+  headers?: Record<string, string>;
+  body: string;
+};
+
+/** Converts a GraphQL response into an HTTP response. */
+export type HttpAdapterOutputFn = (resp: HttpAdapterGraphQLResponse) => HttpAdapterResponse;
+
+/**
+ * Per-method input handlers. At least one method must be provided.
+ * Each handler transforms an HTTP request into a GraphQL request.
+ */
+export type HttpAdapterInput = Partial<Record<HttpMethodKey, HttpAdapterInputFn>>;
+
+/**
+ * HTTP adapter configuration accepted by `createHttpAdapter` with typed
+ * `input` and `output` signatures.
+ */
+// Internally, the parser-side representation is the looser `HttpAdapterConfig`
+// from `@/types/http-adapter.generated`, where the function fields are typed
+// as `Function`.
+export type HttpAdapter = Omit<HttpAdapterConfigInput, "input" | "output"> & {
+  input: HttpAdapterInput;
+  output?: HttpAdapterOutputFn;
+};
 
 /**
  * Defines an HTTP adapter that translates HTTP requests to GraphQL queries

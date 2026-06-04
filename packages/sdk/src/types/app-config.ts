@@ -1,5 +1,4 @@
 import type { AuthConfig } from "./auth";
-import type { HttpAdapterServiceInput } from "./http-adapter";
 import type { IdPConfig } from "./idp";
 import type { SecretsConfig } from "./secrets-config";
 import type { StaticWebsiteConfig } from "./staticwebsite-config";
@@ -7,6 +6,8 @@ import type { TailorDBServiceInput } from "./tailordb";
 
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;
+
+export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
 
 export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
 export type ResolverExternalConfig = { external: true };

@@ -7,7 +7,7 @@ import {
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { symbols } from "@/cli/shared/logger";
-import { HTTP_METHODS } from "@/types/http-adapter";
+import { HTTP_METHODS } from "@/parser/service/http-adapter";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp } from "./label";
