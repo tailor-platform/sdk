@@ -1,0 +1,97 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { initOperatorClient } from "@/cli/shared/client";
+import { loadConfig } from "@/cli/shared/config-loader";
+import { executeScript } from "@/cli/shared/script-executor";
+import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { testRunCommand } from "./test-run";
+
+vi.mock("@/cli/shared/config-loader", () => ({
+  loadConfig: vi.fn(),
+}));
+
+vi.mock("@/cli/shared/context", () => ({
+  loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
+  loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
+}));
+
+vi.mock("@/cli/shared/client", () => ({
+  initOperatorClient: vi.fn(),
+}));
+
+vi.mock("@/cli/shared/script-executor", () => ({
+  executeScript: vi.fn(),
+}));
+
+describe("function test-run --json", () => {
+  let tmpDir: string;
+  let scriptPath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-test-run-json-test-"));
+    scriptPath = path.join(tmpDir, "fn.js");
+    fs.writeFileSync(scriptPath, "export default async function main() { return { ok: true }; }");
+
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        auth: {
+          name: "auth",
+          machineUsers: {
+            admin: {},
+          },
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getAuthMachineUser: vi.fn().mockResolvedValue({
+        machineUser: {
+          id: "machine-user-id",
+        },
+      }),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: '{"ok":true}',
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("emits only a parseable JSON result to stdout", async () => {
+    let stdout = "";
+    using _stdoutSpy = vi.spyOn(console, "log").mockImplementation((chunk) => {
+      stdout += String(chunk);
+    });
+    let stderr = "";
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      stderr += String(chunk);
+      return true;
+    });
+    using _json = jsonMode();
+
+    await testRunCommand.run({
+      json: true,
+      file: scriptPath,
+      name: undefined,
+      arg: undefined,
+      "machine-user": "admin",
+      config: "tailor.config.ts",
+      "workspace-id": undefined,
+      profile: undefined,
+    } as never);
+
+    expect(JSON.parse(stdout)).toEqual({
+      success: true,
+      scriptName: "fn.js",
+      logs: "",
+      result: '{"ok":true}',
+    });
+    expect(stderr).toBe("");
+  });
+});

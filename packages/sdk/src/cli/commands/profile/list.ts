@@ -9,11 +9,16 @@ export const listCommand = defineAppCommand({
   name: "list",
   description: "List all profiles.",
   args: z.object({}).strict(),
-  run: async () => {
+  run: async (args) => {
     const config = await readPlatformConfig();
 
     const profiles = Object.entries(config.profiles);
     if (profiles.length === 0) {
+      if (args.json) {
+        logger.out([]);
+        return;
+      }
+
       logger.info(ml`
         No profiles found.
         Please create a profile first using 'tailor-sdk profile create' command.

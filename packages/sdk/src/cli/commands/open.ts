@@ -26,14 +26,27 @@ export const openCommand = defineAppCommand({
     const consolePath = `/workspaces/${workspaceId}/applications/${encodeURIComponent(applicationName)}/overview`;
     const consoleUrl = new URL(consolePath, consoleBaseUrl).toString();
 
-    logger.info("Opening Tailor Platform Console...");
+    if (!args.json) {
+      logger.info("Opening Tailor Platform Console...");
+    }
 
+    let opened = true;
     try {
       await open(consoleUrl);
+    } catch {
+      opened = false;
+    }
+
+    if (args.json) {
+      logger.out({ consoleUrl, workspaceId, applicationName, opened });
+      return;
+    }
+
+    if (opened) {
       logger.out(`Console URL: ${consoleUrl}`);
       logger.out(`Workspace ID: ${workspaceId}`);
       logger.out(`Application Name: ${applicationName}`);
-    } catch {
+    } else {
       logger.warn(
         `Failed to open browser automatically. Please open this URL manually:\n${consoleUrl}`,
       );
