@@ -21,7 +21,7 @@ jobs:
   coverage-shard:
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
-    name: Coverage shard ${{ matrix.shard }}/2
+    name: Coverage shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -46,31 +46,27 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Run SDK coverage shard
-        run: |
-          mkdir -p coverage-blobs
-          pnpm exec vitest --coverage --reporter=blob --shard=${{ matrix.shard }}/2 --outputFile=coverage-blobs/blob-${{ matrix.shard }}.json
+        run: pnpm exec vitest run --coverage --coverage.reporter=lcovonly --shard=${{ matrix.shard }}/4
         working-directory: packages/sdk
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}-${{ matrix.shard }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
-      - name: Upload coverage blob
+      - name: Upload coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: coverage-blob-${{ matrix.shard }}
-          path: packages/sdk/coverage-blobs/blob-${{ matrix.shard }}.json
+          name: coverage-lcov-${{ matrix.shard }}
+          path: packages/sdk/coverage/lcov.info
           if-no-files-found: error
+          retention-days: 1
 
-      - name: Cleanup e2e workspaces
-        if: always()
-        run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}-${{ matrix.shard }}
-
-  coverage:
-    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
-    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
-    name: Coverage
+  coverage-cleanup:
+    # Safety net for e2e workspace leaks. Run once after all shards finish so
+    # cleanup cannot delete workspaces that a slower shard is still using.
     needs: coverage-shard
+    if: always() && (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
+    name: Cleanup e2e workspaces
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -84,22 +80,14 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Download coverage blobs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: coverage-blob-*
-          path: packages/sdk/coverage-blobs
-          merge-multiple: true
+      - name: Login as machine user
+        run: pnpm tailor-sdk login --machineuser
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
-      - name: Merge SDK coverage
-        run: pnpm exec vitest --mergeReports coverage-blobs --coverage --coverage.reportsDirectory=coverage
-        working-directory: packages/sdk
-
-      - name: Upload results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-results
-          path: packages/sdk/coverage/lcov.info
+      - name: Cleanup e2e workspaces
+        run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
 
   bundle-size:
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
@@ -182,7 +170,7 @@ jobs:
 
   report-metrics:
     name: Report Metrics
-    needs: [coverage, bundle-size, type-performance, runtime-performance]
+    needs: [coverage-shard, bundle-size, type-performance, runtime-performance]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -203,7 +191,10 @@ jobs:
       - name: Prepare coverage
         run: |
           mkdir -p packages/sdk/coverage
-          cp artifacts/coverage-results/lcov.info packages/sdk/coverage/
+          for shard in artifacts/coverage-lcov-*/lcov.info; do
+            cp "$shard" "packages/sdk/coverage/lcov-$(basename "$(dirname "$shard")" | sed 's/coverage-lcov-//').info"
+          done
+          ls -l packages/sdk/coverage/
 
       - name: Display summary
         run: |
