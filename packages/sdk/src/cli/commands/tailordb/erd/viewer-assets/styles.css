@@ -257,6 +257,13 @@ button:hover {
   background:
     radial-gradient(circle, rgba(255, 255, 255, 0.11) 1px, transparent 1.2px), var(--canvas);
   background-size: 22px 22px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.canvas.is-panning {
+  cursor: grabbing;
 }
 
 .world {

@@ -38,6 +38,7 @@ let searchText = "";
 let viewport = { x: 32, y: 32, z: 1 };
 let hasViewportFromHash = false;
 let activeCardDrag;
+let activeCanvasPan;
 const manualNodePositions = new Map();
 
 function escapeHtml(value) {
@@ -627,6 +628,53 @@ function panBy(deltaX, deltaY) {
   applyTransform();
 }
 
+function startCanvasPan(event) {
+  if (event.button !== 0 || event.target.closest("button, input, .canvas-toolbar")) return;
+
+  activeCanvasPan = {
+    moved: false,
+    pointerId: event.pointerId,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    startX: viewport.x,
+    startY: viewport.y,
+  };
+  elements.canvas.setPointerCapture(event.pointerId);
+}
+
+function moveCanvasPan(event) {
+  if (!activeCanvasPan || activeCanvasPan.pointerId !== event.pointerId) return;
+  if ((event.buttons & 1) === 0) {
+    finishCanvasPan(event);
+    return;
+  }
+
+  const deltaX = event.clientX - activeCanvasPan.startClientX;
+  const deltaY = event.clientY - activeCanvasPan.startClientY;
+  if (!activeCanvasPan.moved && Math.hypot(deltaX, deltaY) < DRAG_THRESHOLD) return;
+
+  event.preventDefault();
+  activeCanvasPan.moved = true;
+  elements.canvas.classList.add("is-panning");
+  viewport = {
+    ...viewport,
+    x: activeCanvasPan.startX + deltaX,
+    y: activeCanvasPan.startY + deltaY,
+  };
+  applyTransform();
+}
+
+function finishCanvasPan(event) {
+  if (!activeCanvasPan || activeCanvasPan.pointerId !== event.pointerId) return;
+
+  if (elements.canvas.hasPointerCapture(event.pointerId)) {
+    elements.canvas.releasePointerCapture(event.pointerId);
+  }
+  if (activeCanvasPan.moved) event.preventDefault();
+  activeCanvasPan = undefined;
+  elements.canvas.classList.remove("is-panning");
+}
+
 function wireInteractions() {
   elements.search.addEventListener("input", () => {
     searchText = elements.search.value.trim();
@@ -670,6 +718,11 @@ function wireInteractions() {
     },
     { passive: false },
   );
+  elements.canvas.addEventListener("pointerdown", startCanvasPan);
+  elements.canvas.addEventListener("pointermove", moveCanvasPan);
+  elements.canvas.addEventListener("pointerup", finishCanvasPan);
+  elements.canvas.addEventListener("pointercancel", finishCanvasPan);
+  elements.canvas.addEventListener("lostpointercapture", finishCanvasPan);
 
   window.addEventListener("resize", () => {
     if (!hasViewportFromHash) fitView();
