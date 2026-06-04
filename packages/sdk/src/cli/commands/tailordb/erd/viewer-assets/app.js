@@ -31,7 +31,6 @@ let selectedTable;
 let searchText = "";
 let viewport = { x: 32, y: 32, z: 1 };
 let hasViewportFromHash = false;
-let dragState;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -207,7 +206,7 @@ function renderNodes() {
   });
 }
 
-function edgePath(source, target) {
+function edgeGeometry(source, target) {
   const sourceRight = source.x < target.x;
   const sx = sourceRight ? source.x + source.width : source.x;
   const tx = sourceRight ? target.x : target.x + target.width;
@@ -216,7 +215,46 @@ function edgePath(source, target) {
   const bend = Math.max(80, Math.abs(tx - sx) * 0.45);
   const c1x = sx + (sourceRight ? bend : -bend);
   const c2x = tx + (sourceRight ? -bend : bend);
-  return `M ${sx} ${sy} C ${c1x} ${sy}, ${c2x} ${ty}, ${tx} ${ty}`;
+  return {
+    d: `M ${sx} ${sy} C ${c1x} ${sy}, ${c2x} ${ty}, ${tx} ${ty}`,
+    sourcePoint: { x: sx, y: sy },
+    targetPoint: { x: tx, y: ty },
+    sourceRight,
+  };
+}
+
+function sourceColumnForRelation(relation) {
+  const table = tableByName(relation.sourceTable);
+  const sourceColumn = relation.sourceColumns[0];
+  return table?.columns.find((column) => column.name === sourceColumn);
+}
+
+function normalizedRelationType(relation) {
+  if (["1-1", "oneToOne"].includes(relation.relationType)) return "1-1";
+  if (["n-1", "N-1", "manyToOne"].includes(relation.relationType)) return "n-1";
+  return relation.relationType || "foreignKey";
+}
+
+function relationCardinality(relation) {
+  const sourceColumn = sourceColumnForRelation(relation);
+  const relationType = normalizedRelationType(relation);
+  const sourceMultiple = relationType === "n-1" || relationType === "keyOnly";
+  const targetMultiple = relationType === "keyOnly" && sourceColumn?.array === true;
+
+  return {
+    source: sourceMultiple ? "0..n" : "0..1",
+    target: targetMultiple ? "0..n" : relation.required ? "1" : "0..1",
+  };
+}
+
+function cardinalityLabel(label, x, y, selected) {
+  const width = label.length > 1 ? 36 : 22;
+  return `
+    <g class="edge-label ${selected ? "is-selected" : ""}" transform="translate(${x} ${y})">
+      <rect x="${-width / 2}" y="-10" width="${width}" height="20" rx="5"></rect>
+      <text text-anchor="middle" dominant-baseline="central">${escapeHtml(label)}</text>
+    </g>
+  `;
 }
 
 function renderEdges() {
@@ -238,7 +276,15 @@ function renderEdges() {
         if (!source || !target) return "";
         const selected =
           relation.sourceTable === selectedTable || relation.targetTable === selectedTable;
-        return `<path class="edge ${selected ? "is-selected" : ""}" d="${edgePath(source, target)}" marker-end="url(#${selected ? "arrow-selected" : "arrow"})"></path>`;
+        const geometry = edgeGeometry(source, target);
+        const cardinality = relationCardinality(relation);
+        const sourceLabelX = geometry.sourcePoint.x + (geometry.sourceRight ? 26 : -26);
+        const targetLabelX = geometry.targetPoint.x + (geometry.sourceRight ? -26 : 26);
+        return `
+          <path class="edge ${selected ? "is-selected" : ""}" d="${geometry.d}" marker-end="url(#${selected ? "arrow-selected" : "arrow"})"></path>
+          ${cardinalityLabel(cardinality.source, sourceLabelX, geometry.sourcePoint.y, selected)}
+          ${cardinalityLabel(cardinality.target, targetLabelX, geometry.targetPoint.y, selected)}
+        `;
       })
       .join("")}
   `;
@@ -364,6 +410,8 @@ function renderDetails() {
 
 function applyTransform() {
   elements.world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.z})`;
+  elements.canvas.style.backgroundPosition = `${viewport.x}px ${viewport.y}px`;
+  elements.canvas.style.backgroundSize = `${Math.max(4, 22 * viewport.z)}px ${Math.max(4, 22 * viewport.z)}px`;
   elements.zoomLabel.textContent = `${Math.round(viewport.z * 100)}%`;
   writeHashState();
 }
@@ -436,6 +484,15 @@ function zoomAt(nextZoom, clientX, clientY) {
   applyTransform();
 }
 
+function panBy(deltaX, deltaY) {
+  viewport = {
+    ...viewport,
+    x: viewport.x - deltaX,
+    y: viewport.y - deltaY,
+  };
+  applyTransform();
+}
+
 function wireInteractions() {
   elements.search.addEventListener("input", () => {
     searchText = elements.search.value.trim();
@@ -464,42 +521,21 @@ function wireInteractions() {
     "wheel",
     (event) => {
       event.preventDefault();
-      const factor = event.deltaY < 0 ? 1.12 : 0.88;
-      zoomAt(viewport.z * factor, event.clientX, event.clientY);
+      if (event.ctrlKey || event.metaKey) {
+        zoomAt(viewport.z * Math.exp(-event.deltaY * 0.001), event.clientX, event.clientY);
+        return;
+      }
+
+      if (event.shiftKey) {
+        const deltaX = event.deltaX || event.deltaY;
+        panBy(deltaX, 0);
+        return;
+      }
+
+      panBy(0, event.deltaY);
     },
     { passive: false },
   );
-
-  elements.canvas.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".table-card")) return;
-    dragState = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: viewport.x,
-      originY: viewport.y,
-    };
-    elements.canvas.classList.add("is-dragging");
-    elements.canvas.setPointerCapture(event.pointerId);
-  });
-
-  elements.canvas.addEventListener("pointermove", (event) => {
-    if (!dragState || dragState.pointerId !== event.pointerId) return;
-    viewport.x = dragState.originX + event.clientX - dragState.startX;
-    viewport.y = dragState.originY + event.clientY - dragState.startY;
-    applyTransform();
-  });
-
-  elements.canvas.addEventListener("pointerup", (event) => {
-    if (!dragState || dragState.pointerId !== event.pointerId) return;
-    dragState = undefined;
-    elements.canvas.classList.remove("is-dragging");
-    elements.canvas.releasePointerCapture(event.pointerId);
-  });
-  elements.canvas.addEventListener("pointercancel", () => {
-    dragState = undefined;
-    elements.canvas.classList.remove("is-dragging");
-  });
 
   window.addEventListener("resize", () => {
     if (!hasViewportFromHash) fitView();
