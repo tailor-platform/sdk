@@ -1,10 +1,17 @@
 import type { HttpAdapterConfigInput } from "./http-adapter.generated";
 
-export type {
-  HttpAdapterConfig,
-  HttpAdapterConfigInput,
-  HttpAdapterServiceInput,
-} from "./http-adapter.generated";
+export type { HttpAdapterConfig, HttpAdapterConfigInput } from "./http-adapter.generated";
+
+/**
+ * `httpAdapter` entry of `defineConfig`. Follows the same shape as the other
+ * file-discovery services (resolver/executor/workflow).
+ */
+export type HttpAdapterServiceInput = {
+  /** Glob patterns matching HTTP adapter files */
+  files: string[];
+  /** Glob patterns to exclude */
+  ignores?: string[];
+};
 
 export const HTTP_METHODS = {
   get: "GET",

@@ -1,6 +1,6 @@
 # HTTP Adapter
 
-HTTP adapters expose REST-style HTTP endpoints on your application's gateway by translating each request into a GraphQL query and (optionally) reshaping the GraphQL response back into an HTTP response.
+HTTP adapters expose REST-style HTTP endpoints on your application by translating each request into a GraphQL query and (optionally) reshaping the GraphQL response back into an HTTP response.
 
 ## Overview
 
@@ -10,9 +10,9 @@ Each HTTP adapter is a single file that declares:
 - An `input` object keyed by lowercase HTTP method (`get`, `post`, `put`, `patch`, `delete`) — each value is a function that converts an incoming HTTP request into a GraphQL request (`query`, `variables`, `operationName`)
 - An optional `output` function — **shared across all methods** — that converts the GraphQL response into an HTTP response (`statusCode`, `headers`, `body`)
 
-At deploy time the SDK bundles `input` (with a generated method dispatcher) and `output` into standalone JS scripts that run in the gateway's sandboxed runtime when a matching request reaches the application gateway under the `/api/` prefix.
+At deploy time the SDK bundles `input` (with a generated method dispatcher) and `output` into standalone JS scripts that the platform runs in a sandboxed runtime when a matching request reaches your application under the `/api/` prefix.
 
-For the official Tailor Platform documentation — including the exact URL routing, request/response body limits, execution timeouts, CORS handling, and other gateway-runtime behavior — see https://docs.tailor.tech/.
+For the official Tailor Platform documentation — including the exact URL routing, request/response body limits, execution timeouts, CORS handling, and other runtime behavior — see https://docs.tailor.tech/.
 
 ## Requirements
 
@@ -20,13 +20,13 @@ For the official Tailor Platform documentation — including the exact URL routi
 - `name` must be a string literal that matches `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and be unique across all adapters
 - `input` must be an object literal with at least one method handler
 - Each method handler and `output` must be inline arrow or `function` expressions (not references to functions defined elsewhere)
-- All handlers **must be synchronous** — the SDK rejects `async`/`await` at build time because the gateway runtime does not support it
+- All handlers **must be synchronous** — the SDK rejects `async`/`await` at build time because the runtime does not support it
 
 ## Build-time Limits
 
-Each adapter function is bundled into a standalone script that runs in a sandboxed JavaScript runtime on the gateway. Handlers **must be synchronous**: `async`/`await`, Promises, `fetch`, Node APIs (`fs`, `path`, `crypto`, …), and top-level `await` are not available. The SDK rejects `async`/`await` and Node built-in imports at build time. Each bundle is also capped at 256 KB (error), with a warning above 64 KB.
+Each adapter function is bundled into a standalone script that runs in a sandboxed JavaScript runtime. Handlers **must be synchronous**: `async`/`await`, Promises, `fetch`, Node APIs (`fs`, `path`, `crypto`, …), and top-level `await` are not available. The SDK rejects `async`/`await` and Node built-in imports at build time. Each bundle is also capped at 256 KB (error), with a warning above 64 KB.
 
-Gateway-side runtime limits (request/response body size, execution timeout, available globals) are enforced separately by the platform — see the platform documentation linked above.
+Runtime limits (request/response body size, execution timeout, available globals) are enforced separately by the platform — see the platform documentation linked above.
 
 ## Configuration
 
@@ -79,24 +79,12 @@ If `output` is omitted, the raw GraphQL response is returned as JSON.
 
 Beyond `name`, `pathPattern`, `input`, and `output`, two optional fields control deploy-time behavior:
 
-- `enabled` (default `true`) — set to `false` to deploy the adapter in a disabled state without removing its file. A disabled adapter is uploaded but not served by the gateway.
-- `priority` (non-negative integer, default `0`) — reserved for forward compatibility. The value is plumbed through to the platform, but the gateway's path matcher does not currently rely on it.
-
-```typescript
-export default createHttpAdapter({
-  name: "user",
-  pathPattern: "/users/*",
-  enabled: false, // uploaded but not served
-  priority: 10, // reserved; not yet used by the matcher
-  input: {
-    get: (req) => ({ query: `query { ... }` }),
-  },
-});
-```
+- `enabled` (default `true`) — set to `false` to deploy the adapter in a disabled state without removing its file. A disabled adapter is uploaded but not served.
+- `priority` (non-negative integer, default `0`) — reserved for forward compatibility; request routing does not currently rely on it.
 
 ### Why is `output` shared instead of per-method?
 
-The gateway runs `input` and `output` in **separate JavaScript VMs** with no shared globals, and the `output` callback only receives the GraphQL response (not the original request or method). For per-method response shaping, discriminate inside `output` based on the response data shape.
+The platform runs `input` and `output` in **separate JavaScript VMs** with no shared globals, and the `output` callback only receives the GraphQL response (not the original request or method). `output` is primarily intended for reshaping the response format (e.g. JSON to XML) — method-specific processing is expected to be handled on the `input`/resolver side. For per-method response shaping, discriminate inside `output` based on the response data shape.
 
 ## Path Pattern
 
@@ -108,50 +96,6 @@ The gateway runs `input` and `output` in **separate JavaScript VMs** with no sha
 
 Exact matching semantics (trailing-slash handling, percent-encoding, etc.) are defined by the platform — refer to the platform documentation for details.
 
-## Type Reference
+## Types
 
-```typescript
-type HttpAdapter = {
-  name: string;
-  pathPattern: string;
-  input: HttpAdapterInput;
-  output?: HttpAdapterOutputFn;
-  /** Whether the adapter is served by the gateway. Defaults to true. */
-  enabled?: boolean;
-  /** Reserved for forward compatibility; not yet used by the matcher. Defaults to 0. */
-  priority?: number;
-};
-
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-type HttpMethodKey = "get" | "post" | "put" | "patch" | "delete";
-
-type HttpAdapterRequest = {
-  method: HttpMethod;
-  path: string;
-  headers: Record<string, string>;
-  query: Record<string, string>;
-  body: string;
-};
-
-type HttpAdapterInputResult = {
-  query: string;
-  variables?: Record<string, unknown>;
-  operationName?: string;
-};
-
-type HttpAdapterInputFn = (req: HttpAdapterRequest) => HttpAdapterInputResult;
-
-type HttpAdapterInput = Partial<Record<HttpMethodKey, HttpAdapterInputFn>>;
-
-type HttpAdapterGraphQLResponse = {
-  data?: unknown;
-  errors?: unknown;
-  extensions?: unknown;
-};
-
-type HttpAdapterOutputResult = {
-  statusCode?: number;
-  headers?: Record<string, string>;
-  body: string;
-};
-```
+The request/response shapes (`HttpAdapterRequest`, `HttpAdapterInputResult`, `HttpAdapterGraphQLResponse`, `HttpAdapterOutputResult`, …) are exported from `@tailor-platform/sdk`; refer to the type definitions in your editor rather than this document.

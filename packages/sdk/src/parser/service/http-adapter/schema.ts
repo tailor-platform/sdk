@@ -38,8 +38,3 @@ export const HttpAdapterConfigSchema = z
       .describe("Function that transforms GraphQL response to HTTP response"),
   })
   .brand("HttpAdapterConfig");
-
-export const HttpAdapterServiceInputSchema = z.object({
-  files: z.array(z.string()).min(1).describe("Glob patterns matching HTTP adapter files"),
-  ignores: z.array(z.string()).optional().describe("Glob patterns to exclude"),
-});

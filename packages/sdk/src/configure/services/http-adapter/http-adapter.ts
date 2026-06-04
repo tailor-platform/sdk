@@ -30,13 +30,13 @@ export type {
  * response shapes per method, discriminate inside `output` based on the
  * GraphQL response shape.
  *
- * Each handler runs server-side in a sandboxed JavaScript runtime on the
- * gateway and must be synchronous: Node APIs, `fetch`, `async`/`await`,
- * Promises, and top-level `await` are not available at runtime.
+ * Each handler runs server-side in a sandboxed JavaScript runtime and must be
+ * synchronous: Node APIs, `fetch`, `async`/`await`, Promises, and top-level
+ * `await` are not available at runtime.
  *
  * Optional fields: `enabled` (default `true`; set `false` to deploy the adapter
  * without serving it) and `priority` (non-negative integer, default `0`;
- * reserved for forward compatibility and not yet used by the gateway matcher).
+ * reserved for forward compatibility).
  * @param config - HTTP adapter configuration
  * @returns Branded HTTP adapter definition
  * @example

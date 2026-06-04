@@ -41,11 +41,3 @@ export type HttpAdapterConfig = {
   /** Function that transforms GraphQL response to HTTP response */
   output?: Function | undefined;
 };
-
-export type HttpAdapterServiceInput = {
-  /** Glob patterns matching HTTP adapter files */
-  files: string[];
-  /** Glob patterns to exclude */
-  ignores?: string[] | undefined;
-};
-export type HttpAdapterServiceInputInput = HttpAdapterServiceInput;
