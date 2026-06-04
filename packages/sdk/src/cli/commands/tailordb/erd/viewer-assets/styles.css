@@ -323,9 +323,10 @@ button:hover {
   background: var(--panel-raised);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32);
   color: var(--muted);
-  cursor: pointer;
+  cursor: grab;
   font: inherit;
   text-align: left;
+  touch-action: none;
   user-select: none;
 }
 
@@ -350,6 +351,11 @@ button:hover {
 
 .table-card.is-muted {
   opacity: 0.36;
+}
+
+.table-card.is-dragging {
+  z-index: 4;
+  cursor: grabbing;
 }
 
 .table-head {

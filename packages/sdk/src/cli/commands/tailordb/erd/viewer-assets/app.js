@@ -1,8 +1,10 @@
 const TABLE_WIDTH = 260;
 const TABLE_HEIGHT = 62;
-const X_GAP = 160;
+const X_GAP = 240;
 const Y_GAP = 56;
 const CARDINALITY_MARKER_WIDTH = 50;
+const CARDINALITY_CARD_OFFSET = 4;
+const DRAG_THRESHOLD = 4;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.2;
 
@@ -32,6 +34,8 @@ let selectedTable;
 let searchText = "";
 let viewport = { x: 32, y: 32, z: 1 };
 let hasViewportFromHash = false;
+let activeCardDrag;
+const manualNodePositions = new Map();
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -110,8 +114,6 @@ function computeLayout(nextSchema) {
   }
 
   const nodes = new Map();
-  let maxX = TABLE_WIDTH;
-  let maxY = 0;
   for (const rank of [...layers.keys()].sort((a, b) => a - b)) {
     const layerTables = layers.get(rank).sort((a, b) => a.name.localeCompare(b.name));
     let y = 0;
@@ -119,17 +121,35 @@ function computeLayout(nextSchema) {
       const height = cardHeight(table);
       const x = rank * (TABLE_WIDTH + X_GAP);
       nodes.set(table.name, { x, y, width: TABLE_WIDTH, height });
-      maxX = Math.max(maxX, x + TABLE_WIDTH);
-      maxY = Math.max(maxY, y + height);
       y += height + Y_GAP;
     }
   }
 
   return {
     nodes,
-    width: maxX,
-    height: maxY,
+    ...layoutBounds(nodes),
   };
+}
+
+function layoutBounds(nodes) {
+  let width = TABLE_WIDTH;
+  let height = TABLE_HEIGHT;
+  for (const node of nodes.values()) {
+    width = Math.max(width, node.x + node.width);
+    height = Math.max(height, node.y + node.height);
+  }
+  return { width, height };
+}
+
+function applyManualNodePositions() {
+  for (const [tableName, position] of manualNodePositions) {
+    const node = layout.nodes.get(tableName);
+    if (node) {
+      node.x = position.x;
+      node.y = position.y;
+    }
+  }
+  Object.assign(layout, layoutBounds(layout.nodes));
 }
 
 function isTableRelatedToSelection(tableName) {
@@ -202,9 +222,92 @@ function renderNodes() {
     })
     .join("");
 
-  elements.nodes.querySelectorAll(".table-card").forEach((card) => {
-    card.addEventListener("click", () => selectTable(card.dataset.table));
+  elements.nodes.querySelectorAll(".table-card").forEach(wireTableCard);
+}
+
+function wireTableCard(card) {
+  card.addEventListener("click", (event) => {
+    if (card.dataset.dragged === "true") {
+      event.preventDefault();
+      card.dataset.dragged = "false";
+      return;
+    }
+    selectTable(card.dataset.table);
   });
+
+  card.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const tableName = card.dataset.table;
+    const node = layout.nodes.get(tableName);
+    if (!node) return;
+
+    activeCardDrag = {
+      card,
+      moved: false,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startX: node.x,
+      startY: node.y,
+      tableName,
+    };
+    card.setPointerCapture(event.pointerId);
+  });
+
+  card.addEventListener("pointermove", (event) => {
+    if (!activeCardDrag || activeCardDrag.pointerId !== event.pointerId) return;
+
+    const screenDeltaX = event.clientX - activeCardDrag.startClientX;
+    const screenDeltaY = event.clientY - activeCardDrag.startClientY;
+    if (!activeCardDrag.moved && Math.hypot(screenDeltaX, screenDeltaY) < DRAG_THRESHOLD) {
+      return;
+    }
+
+    event.preventDefault();
+    activeCardDrag.moved = true;
+    activeCardDrag.card.classList.add("is-dragging");
+    moveTableCard(
+      activeCardDrag.tableName,
+      activeCardDrag.card,
+      activeCardDrag.startX + screenDeltaX / viewport.z,
+      activeCardDrag.startY + screenDeltaY / viewport.z,
+    );
+  });
+
+  card.addEventListener("pointerup", finishCardDrag);
+  card.addEventListener("pointercancel", finishCardDrag);
+}
+
+function moveTableCard(tableName, card, x, y) {
+  const node = layout.nodes.get(tableName);
+  if (!node) return;
+
+  node.x = Math.round(x);
+  node.y = Math.round(y);
+  manualNodePositions.set(tableName, { x: node.x, y: node.y });
+  Object.assign(layout, layoutBounds(layout.nodes));
+  card.style.left = `${node.x}px`;
+  card.style.top = `${node.y}px`;
+  renderEdges();
+}
+
+function finishCardDrag(event) {
+  if (!activeCardDrag || activeCardDrag.pointerId !== event.pointerId) return;
+
+  if (activeCardDrag.card.hasPointerCapture(event.pointerId)) {
+    activeCardDrag.card.releasePointerCapture(event.pointerId);
+  }
+  activeCardDrag.card.classList.remove("is-dragging");
+  if (activeCardDrag.moved) {
+    event.preventDefault();
+    activeCardDrag.card.dataset.dragged = "true";
+    selectedTable = activeCardDrag.tableName;
+    activeCardDrag = undefined;
+    renderAll({ center: false });
+    return;
+  }
+
+  activeCardDrag = undefined;
 }
 
 function edgeGeometry(source, target) {
@@ -258,9 +361,9 @@ function oneMarker(x, y) {
 }
 
 function cardinalityMarker(cardinality, point, sideSign, selected) {
-  const adjacent = 0;
-  const near = 14;
-  const middle = 26;
+  const adjacent = CARDINALITY_CARD_OFFSET;
+  const near = 18;
+  const middle = 32;
   const markerEndX = point.x + sideSign * CARDINALITY_MARKER_WIDTH;
   const parts = [
     `<line class="edge-cardinality-line" x1="${point.x}" y1="${point.y}" x2="${markerEndX}" y2="${point.y}"></line>`,
@@ -476,6 +579,7 @@ function fitView() {
 
 function renderAll(options = {}) {
   layout = computeLayout(schema);
+  applyManualNodePositions();
   elements.emptyState.hidden = schema.tables.length > 0;
   renderHeader();
   renderTableList();
