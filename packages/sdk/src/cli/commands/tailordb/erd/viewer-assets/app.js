@@ -242,17 +242,48 @@ function relationCardinality(relation) {
   const targetMultiple = relationType === "keyOnly" && sourceColumn?.array === true;
 
   return {
-    source: sourceMultiple ? "0..n" : "0..1",
-    target: targetMultiple ? "0..n" : relation.required ? "1" : "0..1",
+    source: { min: 0, max: sourceMultiple ? "n" : 1 },
+    target: { min: relation.required ? 1 : 0, max: targetMultiple ? "n" : 1 },
   };
 }
 
-function cardinalityLabel(label, x, y, selected) {
-  const width = label.length > 1 ? 36 : 22;
+function oneMarker(x, y) {
   return `
-    <g class="edge-label ${selected ? "is-selected" : ""}" transform="translate(${x} ${y})">
-      <rect x="${-width / 2}" y="-10" width="${width}" height="20" rx="5"></rect>
-      <text text-anchor="middle" dominant-baseline="central">${escapeHtml(label)}</text>
+    <line x1="${x}" y1="${y - 10}" x2="${x}" y2="${y + 10}"></line>
+  `;
+}
+
+function cardinalityMarker(cardinality, point, sideSign, selected) {
+  const near = 14;
+  const middle = 26;
+  const far = 38;
+  const parts = [];
+
+  if (cardinality.max === "n") {
+    const baseX = point.x + sideSign * near;
+    const endX = point.x + sideSign * middle;
+    parts.push(`
+      <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y - 11}"></line>
+      <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y}"></line>
+      <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y + 11}"></line>
+    `);
+    if (cardinality.min === 0) {
+      parts.push(`<circle cx="${point.x + sideSign * far}" cy="${point.y}" r="6"></circle>`);
+    } else {
+      parts.push(oneMarker(point.x + sideSign * far, point.y));
+    }
+  } else {
+    parts.push(oneMarker(point.x + sideSign * near, point.y));
+    if (cardinality.min === 0) {
+      parts.push(`<circle cx="${point.x + sideSign * middle}" cy="${point.y}" r="6"></circle>`);
+    } else {
+      parts.push(oneMarker(point.x + sideSign * middle, point.y));
+    }
+  }
+
+  return `
+    <g class="edge-cardinality ${selected ? "is-selected" : ""}">
+      ${parts.join("")}
     </g>
   `;
 }
@@ -260,34 +291,23 @@ function cardinalityLabel(label, x, y, selected) {
 function renderEdges() {
   elements.edges.setAttribute("width", String(layout.width + 400));
   elements.edges.setAttribute("height", String(layout.height + 400));
-  elements.edges.innerHTML = `
-    <defs>
-      <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-        <path d="M 0 0 L 10 4 L 0 8 z" fill="#555d5b"></path>
-      </marker>
-      <marker id="arrow-selected" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
-        <path d="M 0 0 L 10 4 L 0 8 z" fill="#21e68b"></path>
-      </marker>
-    </defs>
-    ${schema.relations
-      .map((relation) => {
-        const source = layout.nodes.get(relation.sourceTable);
-        const target = layout.nodes.get(relation.targetTable);
-        if (!source || !target) return "";
-        const selected =
-          relation.sourceTable === selectedTable || relation.targetTable === selectedTable;
-        const geometry = edgeGeometry(source, target);
-        const cardinality = relationCardinality(relation);
-        const sourceLabelX = geometry.sourcePoint.x + (geometry.sourceRight ? 26 : -26);
-        const targetLabelX = geometry.targetPoint.x + (geometry.sourceRight ? -26 : 26);
-        return `
-          <path class="edge ${selected ? "is-selected" : ""}" d="${geometry.d}" marker-end="url(#${selected ? "arrow-selected" : "arrow"})"></path>
-          ${cardinalityLabel(cardinality.source, sourceLabelX, geometry.sourcePoint.y, selected)}
-          ${cardinalityLabel(cardinality.target, targetLabelX, geometry.targetPoint.y, selected)}
+  elements.edges.innerHTML = schema.relations
+    .map((relation) => {
+      const source = layout.nodes.get(relation.sourceTable);
+      const target = layout.nodes.get(relation.targetTable);
+      if (!source || !target) return "";
+      const selected =
+        relation.sourceTable === selectedTable || relation.targetTable === selectedTable;
+      const geometry = edgeGeometry(source, target);
+      const cardinality = relationCardinality(relation);
+      const direction = geometry.sourceRight ? 1 : -1;
+      return `
+          <path class="edge ${selected ? "is-selected" : ""}" d="${geometry.d}"></path>
+          ${cardinalityMarker(cardinality.source, geometry.sourcePoint, direction, selected)}
+          ${cardinalityMarker(cardinality.target, geometry.targetPoint, -direction, selected)}
         `;
-      })
-      .join("")}
-  `;
+    })
+    .join("");
 }
 
 function relationRows(table, direction) {

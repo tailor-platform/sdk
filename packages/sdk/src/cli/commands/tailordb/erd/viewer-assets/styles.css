@@ -290,29 +290,23 @@ button:hover {
   stroke-width: 3;
 }
 
-.edge-label {
+.edge-cardinality {
   pointer-events: none;
 }
 
-.edge-label rect {
-  fill: rgba(18, 21, 20, 0.9);
+.edge-cardinality line,
+.edge-cardinality circle {
+  fill: var(--canvas);
   stroke: #4c5351;
+  stroke-linecap: square;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
-.edge-label text {
-  fill: var(--muted);
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.edge-label.is-selected rect {
-  fill: rgba(33, 230, 139, 0.13);
+.edge-cardinality.is-selected line,
+.edge-cardinality.is-selected circle {
+  fill: var(--canvas);
   stroke: var(--accent);
-}
-
-.edge-label.is-selected text {
-  fill: var(--accent);
 }
 
 .table-card {
