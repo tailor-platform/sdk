@@ -80,7 +80,7 @@ If `output` is omitted, the raw GraphQL response is returned as JSON.
 Beyond `name`, `pathPattern`, `input`, and `output`, two optional fields control deploy-time behavior:
 
 - `enabled` (default `true`) — set to `false` to deploy the adapter in a disabled state without removing its file. A disabled adapter is uploaded but not served.
-- `priority` (non-negative integer, default `0`) — reserved for forward compatibility; request routing does not currently rely on it.
+- `priority` (non-negative integer, default `0`) — when multiple adapters' `pathPattern`s match the same request path, the adapter with the **lowest** `priority` value wins.
 
 ### Why is `output` shared instead of per-method?
 

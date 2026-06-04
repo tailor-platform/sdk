@@ -15,7 +15,7 @@ export type HttpAdapterConfigInput = {
   };
   /** Whether the adapter is active */
   enabled?: boolean | undefined;
-  /** Matching priority */
+  /** Matching priority; the lowest value wins when multiple adapters match */
   priority?: number | undefined;
   /** Function that transforms GraphQL response to HTTP response */
   output?: Function | undefined;
@@ -28,7 +28,7 @@ export type HttpAdapterConfig = {
   pathPattern: string;
   /** Whether the adapter is active */
   enabled: boolean;
-  /** Matching priority */
+  /** Matching priority; the lowest value wins when multiple adapters match */
   priority: number;
   /** Per-method functions that transform HTTP requests to GraphQL requests */
   input: {

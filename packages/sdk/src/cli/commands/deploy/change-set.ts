@@ -2,6 +2,12 @@ import { logger, styles, symbols } from "@/cli/shared/logger";
 
 export interface HasName {
   name: string;
+  /**
+   * Optional pre-formatted lines rendered indented beneath the item by
+   * `ChangeSet.print()` (e.g. per-sub-resource diffs embedded in a single
+   * resource).
+   */
+  details?: readonly string[];
 }
 
 export type ChangeSet<
@@ -63,16 +69,10 @@ export function createChangeSet<
         return;
       }
       logger.log(styles.bold(`${title}:`));
-      // An item may carry an optional `details` array of pre-formatted lines
-      // (e.g. per-sub-resource diffs embedded in a single resource). They are
-      // rendered indented beneath the item.
       const printItem = (symbol: string, item: HasName) => {
         logger.log(`  ${symbol} ${item.name}`);
-        const details = (item as { details?: readonly string[] }).details;
-        if (details) {
-          for (const detail of details) {
-            logger.log(`    ${detail}`);
-          }
+        for (const detail of item.details ?? []) {
+          logger.log(`    ${detail}`);
         }
       };
       creates.forEach((item) => printItem(symbols.create, item));

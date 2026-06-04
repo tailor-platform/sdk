@@ -31,7 +31,12 @@ export const HttpAdapterConfigSchema = z
       .min(1)
       .describe("Path pattern with segment wildcards (trailing or single-segment)"),
     enabled: z.boolean().default(true).describe("Whether the adapter is active"),
-    priority: z.number().int().min(0).default(0).describe("Matching priority"),
+    priority: z
+      .number()
+      .int()
+      .min(0)
+      .default(0)
+      .describe("Matching priority; the lowest value wins when multiple adapters match"),
     input: inputHandlersSchema,
     output: functionSchema
       .optional()

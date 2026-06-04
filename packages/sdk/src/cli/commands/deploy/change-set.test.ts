@@ -13,7 +13,7 @@ describe("ChangeSet.print", () => {
     changeSet.updates.push({
       name: "my-app",
       details: ["~ get-user (httpAdapter)", "+ echo (httpAdapter)"],
-    } as HasName);
+    });
 
     using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
     changeSet.print();

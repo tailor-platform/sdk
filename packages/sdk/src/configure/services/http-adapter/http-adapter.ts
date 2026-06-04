@@ -33,8 +33,8 @@ export type {
  * `async`/`await`, Promises, and top-level `await` are not available.
  *
  * Optional fields: `enabled` (default `true`; set `false` to deploy the adapter
- * without serving it) and `priority` (non-negative integer, default `0`;
- * reserved for forward compatibility).
+ * without serving it) and `priority` (non-negative integer, default `0`; when
+ * multiple adapters match the same request path, the lowest value wins).
  * @param config - HTTP adapter configuration
  * @returns Branded HTTP adapter definition
  * @example

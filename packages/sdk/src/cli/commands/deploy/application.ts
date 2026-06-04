@@ -160,7 +160,9 @@ function normalizeHttpAdapters(
       methods: sortStrings(adapter.methods),
       inputScript: adapter.inputScript ?? "",
       outputScript: adapter.outputScript ?? "",
-      enabled: adapter.enabled ?? false,
+      // Fallbacks mirror the schema defaults; in practice both sides always
+      // carry explicit values (the SDK sets them and proto bools are present).
+      enabled: adapter.enabled ?? true,
       priority: adapter.priority ?? 0,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
