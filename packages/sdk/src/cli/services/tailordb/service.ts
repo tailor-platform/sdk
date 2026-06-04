@@ -34,8 +34,6 @@ export interface CreateTailorDBServiceParams {
   config: TailorDBServiceConfig;
   /** Plugin manager for processing plugins */
   pluginManager?: PluginManager;
-  /** Import cache-busting value for watch-mode reloads. */
-  importNonce?: string;
 }
 
 /**
@@ -44,7 +42,7 @@ export interface CreateTailorDBServiceParams {
  * @returns A new TailorDBService instance
  */
 export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
-  const { namespace, config, pluginManager, importNonce } = params;
+  const { namespace, config, pluginManager } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
   const rawTypes: Record<string, TailorDBTypesByName> = {};
   let types: Record<string, TailorDBType> = {};
@@ -120,11 +118,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     rawTypes[typeFile] = {};
     const loadedTypes: TailorDBTypesByName = {};
     try {
-      const typeFileUrl = pathToFileURL(typeFile);
-      if (importNonce) {
-        typeFileUrl.searchParams.set("tailorImportNonce", importNonce);
-      }
-      const module = await import(typeFileUrl.href);
+      const module = await import(pathToFileURL(typeFile).href);
 
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];

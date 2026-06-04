@@ -9,7 +9,6 @@ export interface LoadLocalErdSchemaOptions {
   configPath?: string;
   namespaces?: string[];
   requireErdSite?: boolean;
-  importNonce?: string;
 }
 
 export interface LocalErdSchemaContext {
@@ -54,9 +53,7 @@ export function resolveLocalErdSchemaNamespaces(
 export async function loadLocalErdSchema(
   options: LoadLocalErdSchemaOptions,
 ): Promise<LocalErdSchemaContext> {
-  const { config, plugins } = await loadConfig(options.configPath, {
-    importNonce: options.importNonce,
-  });
+  const { config, plugins } = await loadConfig(options.configPath);
 
   await generateUserTypes({ config, configPath: config.path });
 
@@ -64,7 +61,6 @@ export async function loadLocalErdSchema(
   const application = defineApplication({
     config,
     pluginManager,
-    importNonce: options.importNonce,
   });
   const namespaceNames = resolveLocalErdSchemaNamespaces(config, {
     namespaces: options.namespaces,

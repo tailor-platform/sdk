@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
 import * as http from "node:http";
@@ -9,6 +10,7 @@ import { arg } from "politty";
 import { z } from "zod";
 import { configArg } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
+import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
 import { logger } from "@/cli/shared/logger";
 import { prepareErdBuildsFromContext, type ErdBuildResult } from "./export";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
@@ -33,6 +35,18 @@ interface WatchOptions {
   outputDir: string;
   initialContext: LocalErdSchemaContext;
   initialResults: ErdBuildResult[];
+}
+
+interface FreshErdExportOptions {
+  configPath?: string;
+  namespace?: string;
+  outputDir: string;
+}
+
+interface ErdExportJsonResult {
+  namespace: string;
+  distDir: string;
+  schemaOutputPath: string;
 }
 
 const GLOB_CHARS = /[*?[\]{}()!+@]/;
@@ -110,11 +124,11 @@ async function startStaticServer(options: StartStaticServerOptions): Promise<Sta
   });
 }
 
-function getWatchPatterns(context: LocalErdSchemaContext, results: ErdBuildResult[]): string[] {
+function getWatchPatterns(config: LoadedConfig, results: ErdBuildResult[]): string[] {
   const namespaces = new Set(results.map((result) => result.namespace));
-  const patterns = [context.config.path];
+  const patterns = [config.path];
   for (const namespace of namespaces) {
-    const dbConfig = context.config.db?.[namespace];
+    const dbConfig = config.db?.[namespace];
     if (dbConfig && !("external" in dbConfig)) {
       patterns.push(...dbConfig.files);
     }
@@ -160,17 +174,106 @@ async function expandWatchPattern(pattern: string): Promise<string[]> {
   return [...paths];
 }
 
-export async function resolveWatchPaths(
-  context: LocalErdSchemaContext,
+async function resolveWatchPathsFromConfig(
+  config: LoadedConfig,
   results: ErdBuildResult[],
 ): Promise<string[]> {
   const paths = new Set<string>();
-  for (const pattern of getWatchPatterns(context, results)) {
+  for (const pattern of getWatchPatterns(config, results)) {
     for (const watchPath of await expandWatchPattern(pattern)) {
       paths.add(watchPath);
     }
   }
   return [...paths];
+}
+
+export async function resolveWatchPaths(
+  context: LocalErdSchemaContext,
+  results: ErdBuildResult[],
+): Promise<string[]> {
+  return await resolveWatchPathsFromConfig(context.config, results);
+}
+
+function parseFreshErdExportResults(stdout: string): ErdBuildResult[] {
+  const lines = stdout
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (const line of lines.toReversed()) {
+    try {
+      const parsed = JSON.parse(line) as unknown;
+      if (!Array.isArray(parsed)) continue;
+      return parsed.map((entry): ErdBuildResult => {
+        const result = entry as Partial<ErdExportJsonResult>;
+        if (
+          typeof result.namespace !== "string" ||
+          typeof result.distDir !== "string" ||
+          typeof result.schemaOutputPath !== "string"
+        ) {
+          throw new Error("Invalid ERD export JSON output.");
+        }
+        return {
+          namespace: result.namespace,
+          distDir: result.distDir,
+          schemaOutputPath: result.schemaOutputPath,
+          erdDir: path.dirname(result.distDir),
+        };
+      });
+    } catch {
+      continue;
+    }
+  }
+  throw new Error("Failed to parse ERD export JSON output.");
+}
+
+function freshErdExportArgs(options: FreshErdExportOptions): string[] {
+  const cliEntry = process.argv[1];
+  if (!cliEntry) {
+    throw new Error("Cannot rebuild ERD schema in a fresh process: CLI entrypoint is unavailable.");
+  }
+
+  const args = [cliEntry, "tailordb", "erd", "export", "--output", options.outputDir, "--json"];
+  if (options.configPath) {
+    args.push("--config", options.configPath);
+  }
+  if (options.namespace) {
+    args.push("--namespace", options.namespace);
+  }
+  return args;
+}
+
+async function runFreshErdExport(options: FreshErdExportOptions): Promise<ErdBuildResult[]> {
+  return await new Promise<ErdBuildResult[]>((resolve, reject) => {
+    const child = spawn(process.execPath, freshErdExportArgs(options), {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      if (code !== 0) {
+        const detail = stderr.trim() || signal || `exit code ${code}`;
+        reject(new Error(`Fresh ERD export failed: ${detail}`));
+        return;
+      }
+      try {
+        resolve(parseFreshErdExportResults(stdout));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
 }
 
 function selectPrimaryResult(results: ErdBuildResult[]): ErdBuildResult {
@@ -211,17 +314,15 @@ async function createErdWatcher(options: WatchOptions): Promise<FSWatcher> {
 
     rebuilding = true;
     try {
-      const context = await loadLocalErdSchema({
+      const results = await runFreshErdExport({
         configPath: options.configPath,
-        namespaces: options.namespace ? [options.namespace] : undefined,
-        importNonce: String((importNonce += 1)),
-      });
-      const results = prepareErdBuildsFromContext({
-        context,
         namespace: options.namespace,
         outputDir: options.outputDir,
       });
-      const nextWatchPaths = await resolveWatchPaths(context, results);
+      const { config } = await loadConfig(options.configPath, {
+        importNonce: String((importNonce += 1)),
+      });
+      const nextWatchPaths = await resolveWatchPathsFromConfig(config, results);
       watcher.unwatch(watchPaths);
       watcher.add(nextWatchPaths);
       watchPaths = nextWatchPaths;

@@ -79,7 +79,6 @@ type DefineTailorDBResult = {
 function defineTailorDB(
   config: TailorDBServiceInput | undefined,
   pluginManager?: PluginManager,
-  importNonce?: string,
 ): DefineTailorDBResult {
   const tailorDBServices: TailorDBService[] = [];
   const externalTailorDBNamespaces: string[] = [];
@@ -99,7 +98,6 @@ function defineTailorDB(
         namespace,
         config: parsedConfig,
         pluginManager,
-        importNonce,
       });
       tailorDBServices.push(tailorDB);
     }
@@ -266,12 +264,8 @@ type DefineServicesResult = {
   ignoreNullishValues: boolean;
 };
 
-function defineServices(
-  config: AppConfig,
-  pluginManager?: PluginManager,
-  importNonce?: string,
-): DefineServicesResult {
-  const tailordbResult = defineTailorDB(config.db, pluginManager, importNonce);
+function defineServices(config: AppConfig, pluginManager?: PluginManager): DefineServicesResult {
+  const tailordbResult = defineTailorDB(config.db, pluginManager);
   const resolverResult = defineResolver(config.resolver);
   const idpResult = defineIdp(config.idp);
   const authResult = defineAuth(
@@ -343,8 +337,6 @@ export interface DefineApplicationParams {
   pluginManager?: PluginManager;
   /** Optional bundle cache for skipping unchanged builds */
   bundleCache?: BundleCache;
-  /** Import cache-busting value for watch-mode reloads. */
-  importNonce?: string;
 }
 
 /**
@@ -356,7 +348,7 @@ export interface DefineApplicationParams {
  */
 export function defineApplication(params: DefineApplicationParams): Application {
   const { config, pluginManager } = params;
-  const services = defineServices(config, pluginManager, params.importNonce);
+  const services = defineServices(config, pluginManager);
   // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
   const executorService = defineExecutor(config.executor, false);
   const workflowService = defineWorkflow(config.workflow);
