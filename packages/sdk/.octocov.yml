@@ -2,9 +2,11 @@ locale: en
 repository: ${GITHUB_REPOSITORY}/packages/sdk
 
 # Coverage metrics
+# The coverage CI shards tests across parallel runners; each shard emits its
+# own lcov report. octocov merges all of them (additive per-line union).
 coverage:
   paths:
-    - coverage/lcov.info
+    - coverage/lcov-*.info
 
 codeToTestRatio:
   code:
