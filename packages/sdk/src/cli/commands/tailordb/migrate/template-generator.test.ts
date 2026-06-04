@@ -347,12 +347,17 @@ describe("template-generator", () => {
             before: {
               type: "enum",
               required: true,
-              allowedValues: ["PENDING", "IN_PROGRESS", "DONE", "CANCELLED"],
+              allowedValues: [
+                { value: "PENDING" },
+                { value: "IN_PROGRESS" },
+                { value: "DONE" },
+                { value: "CANCELLED" },
+              ],
             },
             after: {
               type: "enum",
               required: true,
-              allowedValues: ["PENDING", "IN_PROGRESS", "DONE"],
+              allowedValues: [{ value: "PENDING" }, { value: "IN_PROGRESS" }, { value: "DONE" }],
             },
           },
         ],
