@@ -1,20 +1,25 @@
 import { type TailorDBService } from "@/cli/services/tailordb/service";
-import type { AuthOwnConfig } from "@/types/auth";
+import { type AuthConfigSchema } from "@/parser/service/auth";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
-import type { IdProvider as IdProviderConfig, OAuth2Client } from "@/types/auth.generated";
+import type { z } from "zod";
 
-type UserProfile = AuthOwnConfig["userProfile"] & {
+/**
+ * Auth config after `AuthConfigSchema.parse`. The Zod `.brand("AuthConfig")` makes
+ * this type inhabitable only by parse output, so `createAuthService` can only be
+ * called with a validated/transformed config (e.g. token lifetimes as Duration).
+ * Passing a raw, unparsed config is a compile error.
+ */
+type ParsedAuthConfig = z.output<typeof AuthConfigSchema>;
+
+type UserProfile = NonNullable<ParsedAuthConfig["userProfile"]> & {
   namespace: string;
 };
 
 export type AuthService = {
-  readonly config: AuthOwnConfig;
+  readonly config: ParsedAuthConfig;
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
   readonly externalTailorDBNamespaces: ReadonlyArray<string>;
-  readonly parsedConfig: Omit<AuthOwnConfig, "oauth2Clients"> & {
-    idProvider?: IdProviderConfig;
-    oauth2Clients?: Record<string, OAuth2Client>;
-  };
+  readonly parsedConfig: ParsedAuthConfig;
   readonly connections: Readonly<Record<string, AuthConnectionConfig>>;
   readonly userProfile: UserProfile | undefined;
   resolveNamespaces: () => Promise<void>;
@@ -28,17 +33,10 @@ export type AuthService = {
  * @returns A new AuthService instance
  */
 export function createAuthService(
-  config: AuthOwnConfig,
+  config: ParsedAuthConfig,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
 ): AuthService {
-  const parsedConfig = {
-    ...config,
-    // application.ts feeds the AuthConfigSchema.parse output here, so the token
-    // lifetimes are already transformed to Duration. Reflect that in the type.
-    oauth2Clients: config.oauth2Clients as Record<string, OAuth2Client> | undefined,
-  };
-
   const connections: Record<string, AuthConnectionConfig> = config.connections
     ? { ...config.connections }
     : {};
@@ -49,7 +47,7 @@ export function createAuthService(
     config,
     tailorDBServices,
     externalTailorDBNamespaces,
-    parsedConfig,
+    parsedConfig: config,
     connections,
     get userProfile() {
       return userProfile;

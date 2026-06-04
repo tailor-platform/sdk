@@ -42,7 +42,7 @@ export interface GeneratorAuthInput {
     namespace: string;
     usernameField: string;
   };
-  machineUsers?: Record<string, { attributes: Record<string, unknown> }>;
+  machineUsers?: Record<string, { attributes?: Record<string, unknown> }>;
   oauth2Clients?: Record<string, OAuth2Client>;
   idProvider?: IdProviderConfig;
 }

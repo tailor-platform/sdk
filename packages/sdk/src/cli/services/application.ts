@@ -176,11 +176,11 @@ function defineAuth(
 
   let authService: AuthService | undefined;
   if (!("external" in config)) {
-    const parsedConfig = {
-      ...config,
-      ...AuthConfigSchema.parse(config),
-    } as typeof config;
-    authService = createAuthService(parsedConfig, tailorDBServices, externalTailorDBNamespaces);
+    authService = createAuthService(
+      AuthConfigSchema.parse(config),
+      tailorDBServices,
+      externalTailorDBNamespaces,
+    );
   }
   subgraphs.push({ Type: "auth", Name: config.name });
 
