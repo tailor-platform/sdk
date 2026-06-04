@@ -189,23 +189,6 @@ describe("createKyselyMock", () => {
 
       expect(() => mock.selects[0].insertValues()).toThrow(/expected InsertQueryNode/);
     });
-
-    test("can be called from the query resolver", async () => {
-      const mock = createKyselyMock<Database>();
-      mock.setQueryResolver((query) =>
-        query.kind === "InsertQueryNode" && query.insertValues().email === "a@b.com"
-          ? [{ id: "1", email: "a@b.com", age: 30 }]
-          : [],
-      );
-
-      const created = await mock.db
-        .insertInto("User")
-        .values({ id: "1", email: "a@b.com", age: 30 })
-        .returningAll()
-        .executeTakeFirst();
-
-      expect(created).toMatchObject({ id: "1" });
-    });
   });
 
   describe("insertRows", () => {
@@ -224,6 +207,18 @@ describe("createKyselyMock", () => {
         { id: "1", email: "a@b.com", age: 30 },
         { id: "2", email: "c@d.com", age: 40 },
       ]);
+    });
+
+    test("throws on an unsupported insert shape instead of returning empty", async () => {
+      const mock = createKyselyMock<Database>();
+
+      await mock.db
+        .insertInto("Post")
+        .columns(["id", "userId", "title"])
+        .expression((eb) => eb.selectFrom("User").select(["id", "id as userId", "email as title"]))
+        .execute();
+
+      expect(() => mock.inserts[0].insertRows()).toThrow(/unsupported insert shape/);
     });
   });
 

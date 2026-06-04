@@ -37,15 +37,16 @@ function insertRows(node: OperationNode): Record<string, unknown>[] {
   if (!InsertQueryNode.is(node)) {
     throw new Error(`insertRows: expected InsertQueryNode, got ${node.kind}`);
   }
-  const columns = node.columns ?? [];
+  const columns = node.columns;
   const valuesNode = node.values;
-  if (valuesNode === undefined || !ValuesNode.is(valuesNode)) return [];
+  if (columns === undefined || valuesNode === undefined || !ValuesNode.is(valuesNode)) {
+    throw new Error("insertRows: unsupported insert shape; inspect query.node instead");
+  }
   return valuesNode.values.map((row) => {
-    const values = PrimitiveValueListNode.is(row)
-      ? row.values
-      : ValueListNode.is(row)
-        ? row.values.map(unwrapValue)
-        : [];
+    if (!PrimitiveValueListNode.is(row) && !ValueListNode.is(row)) {
+      throw new Error("insertRows: unsupported insert shape; inspect query.node instead");
+    }
+    const values = PrimitiveValueListNode.is(row) ? row.values : row.values.map(unwrapValue);
     const result: Record<string, unknown> = {};
     columns.forEach((col, i) => {
       result[col.column.name] = values[i];
@@ -56,27 +57,33 @@ function insertRows(node: OperationNode): Record<string, unknown>[] {
 
 function insertValues(node: OperationNode): Record<string, unknown> {
   const rows = insertRows(node);
-  if (rows.length > 1) {
+  if (rows.length !== 1) {
     throw new Error(
       `insertValues: query inserts ${rows.length} rows; use insertRows() for multi-row inserts`,
     );
   }
-  return rows[0] ?? {};
+  return rows[0];
 }
 
 function updateValues(node: OperationNode): Record<string, unknown> {
   if (!UpdateQueryNode.is(node)) {
     throw new Error(`updateValues: expected UpdateQueryNode, got ${node.kind}`);
   }
+  if (node.updates === undefined) {
+    throw new Error("updateValues: unsupported update shape; inspect query.node instead");
+  }
   const result: Record<string, unknown> = {};
-  for (const update of node.updates ?? []) {
+  for (const update of node.updates) {
     const col = update.column;
     const name = ColumnNode.is(col)
       ? col.column.name
       : ReferenceNode.is(col) && ColumnNode.is(col.column)
         ? col.column.column.name
         : undefined;
-    if (name !== undefined) result[name] = unwrapValue(update.value);
+    if (name === undefined) {
+      throw new Error("updateValues: unsupported update shape; inspect query.node instead");
+    }
+    result[name] = unwrapValue(update.value);
   }
   return result;
 }
