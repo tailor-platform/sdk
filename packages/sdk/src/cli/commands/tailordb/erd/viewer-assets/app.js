@@ -258,33 +258,33 @@ function oneMarker(x, y) {
 }
 
 function cardinalityMarker(cardinality, point, sideSign, selected) {
+  const adjacent = 0;
   const near = 14;
   const middle = 26;
-  const far = 38;
   const markerEndX = point.x + sideSign * CARDINALITY_MARKER_WIDTH;
   const parts = [
     `<line class="edge-cardinality-line" x1="${point.x}" y1="${point.y}" x2="${markerEndX}" y2="${point.y}"></line>`,
   ];
 
   if (cardinality.max === "n") {
-    const baseX = point.x + sideSign * middle;
-    const endX = point.x + sideSign * near;
+    const baseX = point.x + sideSign * near;
+    const endX = point.x + sideSign * adjacent;
     parts.push(`
       <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y - 11}"></line>
       <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y}"></line>
       <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y + 11}"></line>
     `);
     if (cardinality.min === 0) {
-      parts.push(`<circle cx="${point.x + sideSign * far}" cy="${point.y}" r="6"></circle>`);
-    } else {
-      parts.push(oneMarker(point.x + sideSign * far, point.y));
-    }
-  } else {
-    parts.push(oneMarker(point.x + sideSign * near, point.y));
-    if (cardinality.min === 0) {
       parts.push(`<circle cx="${point.x + sideSign * middle}" cy="${point.y}" r="6"></circle>`);
     } else {
       parts.push(oneMarker(point.x + sideSign * middle, point.y));
+    }
+  } else {
+    parts.push(oneMarker(point.x + sideSign * adjacent, point.y));
+    if (cardinality.min === 0) {
+      parts.push(`<circle cx="${point.x + sideSign * near}" cy="${point.y}" r="6"></circle>`);
+    } else {
+      parts.push(oneMarker(point.x + sideSign * near, point.y));
     }
   }
 
