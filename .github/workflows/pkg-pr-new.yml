@@ -31,11 +31,11 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # pkg.pr.new URLs are deterministic from the abbreviated (7-char) head SHA,
-      # so they can be computed BEFORE publishing. This lets us embed the SDK
-      # preview URL into create-sdk's templates and publish both packages in a
-      # single `pkg-pr-new publish` call — which produces ONE combined PR comment
-      # instead of two separate publishes whose comments overwrite each other.
+      # pkg.pr.new --compact URLs are deterministic from the abbreviated (7-char)
+      # head SHA, so they can be computed BEFORE publishing. This lets us embed
+      # the SDK preview URL into create-sdk's templates without publishing the
+      # SDK first — both packages go out in a single `pkg-pr-new publish` call,
+      # whereas separate publishes would each rewrite the PR comment (last wins).
       - name: Compute preview URLs
         id: urls
         env:
@@ -65,11 +65,6 @@ jobs:
           node packages/create-sdk/scripts/prepare-templates.js
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
-      # Publish both packages in a single call so pkg.pr.new posts ONE combined
-      # comment listing both. --compact makes the published URLs match the
-      # SHA-based URLs computed above; --commentWithSha makes the comment use the
-      # commit SHA instead of the PR number; --packageManager=pnpm renders the
-      # install commands as `pnpm add`.
       - name: Publish to pkg.pr.new
         run: pnpm dlx pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk"
 
