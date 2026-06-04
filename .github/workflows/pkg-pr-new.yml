@@ -68,9 +68,10 @@ jobs:
       # Publish both packages in a single call so pkg.pr.new posts ONE combined
       # comment listing both. --compact makes the published URLs match the
       # SHA-based URLs computed above; --commentWithSha makes the comment use the
-      # commit SHA instead of the PR number.
+      # commit SHA instead of the PR number; --packageManager=pnpm renders the
+      # install commands as `pnpm add`.
       - name: Publish to pkg.pr.new
-        run: pnpm dlx pkg-pr-new publish --pnpm --compact --commentWithSha "packages/sdk" "packages/create-sdk"
+        run: pnpm dlx pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk"
 
   init-smoke:
     needs: [publish]
