@@ -28,42 +28,38 @@ describe("createHttpAdapterService.loadAdapters", () => {
     return file;
   }
 
-  it("rejects files containing multiple createHttpAdapter calls before importing them", async () => {
-    const file = writeAdapter(
-      "multi.ts",
+  it("loads the default export and skips helper files matched by the glob", async () => {
+    const adapterFile = writeAdapter(
+      "adapter.ts",
       `
 import { createHttpAdapter } from "@tailor-platform/sdk";
-// Importing a Node built-in would normally execute on dynamic import; the
-// detector should reject this file before that happens.
-import * as fs from "node:fs";
-fs.readFileSync("/etc/passwd");
-
-export const a = createHttpAdapter({
-  name: "one",
-  pathPattern: "/a",
-  input: { get: () => ({ query: "{}" }) },
-});
-
 export default createHttpAdapter({
-  name: "two",
-  pathPattern: "/b",
+  name: "adapter",
+  pathPattern: "/a",
   input: { get: () => ({ query: "{}" }) },
 });
 `,
     );
-
-    const service = createHttpAdapterService({ config: { files: [file] } });
-    await expect(service.loadAdapters()).rejects.toThrow(
-      /Expected exactly one createHttpAdapter call per file/,
+    const helperFile = writeAdapter(
+      "helper.ts",
+      `
+export const shared = (value: string) => value.toUpperCase();
+`,
     );
+
+    const service = createHttpAdapterService({ config: { files: [adapterFile, helperFile] } });
+    await service.loadAdapters();
+
+    expect(service.adapters).toHaveLength(1);
+    expect(service.adapters[0].adapter.name).toBe("adapter");
   });
 
-  it("rejects files whose name is not a static string literal", async () => {
+  it("accepts a computed (non-literal) name as long as it is valid at runtime", async () => {
     const file = writeAdapter(
       "dynamic-name.ts",
       `
 import { createHttpAdapter } from "@tailor-platform/sdk";
-const dynamicName = "x";
+const dynamicName = ["dynamic", "name"].join("-");
 export default createHttpAdapter({
   name: dynamicName,
   pathPattern: "/x",
@@ -73,7 +69,31 @@ export default createHttpAdapter({
     );
 
     const service = createHttpAdapterService({ config: { files: [file] } });
-    await expect(service.loadAdapters()).rejects.toThrow(/static string `name`/);
+    await service.loadAdapters();
+
+    expect(service.adapters).toHaveLength(1);
+    expect(service.adapters[0].adapter.name).toBe("dynamic-name");
+  });
+
+  it("allows handlers shared between methods via a local reference", async () => {
+    const file = writeAdapter(
+      "shared-handler.ts",
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+const handler = () => ({ query: "{}" });
+export default createHttpAdapter({
+  name: "shared-handler",
+  pathPattern: "/x",
+  input: { get: handler, post: handler },
+});
+`,
+    );
+
+    const service = createHttpAdapterService({ config: { files: [file] } });
+    await service.loadAdapters();
+
+    expect(service.adapters).toHaveLength(1);
+    expect(service.adapters[0].methods).toEqual(["get", "post"]);
   });
 
   it("rejects files whose input handler is async", async () => {
@@ -90,16 +110,16 @@ export default createHttpAdapter({
     );
 
     const service = createHttpAdapterService({ config: { files: [file] } });
-    await expect(service.loadAdapters()).rejects.toThrow(/`input\.get` must be synchronous/);
+    await expect(service.loadAdapters()).rejects.toThrow(/async `input\.get` function/);
   });
 
-  it("rejects files that call createHttpAdapter but forget to default-export it", async () => {
+  it("rejects files where the adapter is only a named export", async () => {
     const file = writeAdapter(
       "missing-default.ts",
       `
 import { createHttpAdapter } from "@tailor-platform/sdk";
-// User forgot to add \`default\` here. Previously this was silently skipped,
-// leaving the adapter unregistered with no diagnostic.
+// User forgot to default-export the adapter. Without this guard the adapter
+// would be silently dropped from the deployment.
 export const adapter = createHttpAdapter({
   name: "missing-default",
   pathPattern: "/x",
@@ -109,6 +129,25 @@ export const adapter = createHttpAdapter({
     );
 
     const service = createHttpAdapterService({ config: { files: [file] } });
-    await expect(service.loadAdapters()).rejects.toThrow(/missing a `default` export/);
+    await expect(service.loadAdapters()).rejects.toThrow(/must be the default export/);
+  });
+
+  it("rejects plain objects that mimic the adapter shape without createHttpAdapter", async () => {
+    const file = writeAdapter(
+      "unbranded.ts",
+      `
+export default {
+  name: "unbranded",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}" }) },
+};
+`,
+    );
+
+    const service = createHttpAdapterService({ config: { files: [file] } });
+    await service.loadAdapters();
+
+    // Not produced by createHttpAdapter -> treated as a non-adapter file.
+    expect(service.adapters).toHaveLength(0);
   });
 });

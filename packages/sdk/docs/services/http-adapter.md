@@ -16,10 +16,9 @@ For the official Tailor Platform documentation — including the exact URL routi
 
 ## Requirements
 
-- Each adapter file must call `createHttpAdapter` exactly once and `export default` the result
-- `name` must be a string literal that matches `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and be unique across all adapters
-- `input` must be an object literal with at least one method handler
-- Each method handler and `output` must be inline arrow or `function` expressions (not references to functions defined elsewhere)
+- Each adapter file must `export default` the result of `createHttpAdapter`; files matched by the glob without one (e.g. shared helpers) are ignored
+- `name` must match `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and be unique across all adapters
+- `input` must declare at least one method handler
 - All handlers **must be synchronous** — `async`/`await` is rejected at build time
 
 ## Constraints
