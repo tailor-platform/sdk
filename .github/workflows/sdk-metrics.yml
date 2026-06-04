@@ -73,9 +73,6 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Build SDK
-        run: pnpm --filter @tailor-platform/sdk build
-
       - name: Measure bundle size
         run: pnpm --filter @tailor-platform/sdk measure:bundle
 
@@ -127,9 +124,6 @@ jobs:
 
       - name: Install deps
         uses: ./.github/actions/install-deps
-
-      - name: Build SDK
-        run: pnpm --filter @tailor-platform/sdk build
 
       - name: Run runtime performance
         run: pnpm --filter @tailor-platform/sdk perf:runtime

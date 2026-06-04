@@ -51,9 +51,6 @@ jobs:
           echo "SDK preview: $SDK_URL"
           echo "create-sdk preview: $CREATE_SDK_URL"
 
-      - name: Build SDK
-        run: pnpm --filter @tailor-platform/sdk run build
-
       # `prepare-templates.js` rewrites template manifests but leaves the
       # lockfile untouched; pnpm 11's default `verifyDepsBeforeRun: install`
       # would then auto-install the pkg.pr.new tarball (not published yet) before

@@ -43,9 +43,6 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Build SDK
-        run: pnpm -C packages/sdk build
-
       - name: Typecheck template
         working-directory: packages/create-sdk/templates/${{ matrix.template }}
         run: pnpm typecheck
@@ -79,9 +76,6 @@ jobs:
 
       - name: Install deps
         uses: ./.github/actions/install-deps
-
-      - name: Build SDK
-        run: pnpm -C packages/sdk build
 
       - name: Typecheck template
         working-directory: packages/create-sdk/templates/${{ matrix.template }}

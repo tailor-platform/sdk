@@ -28,10 +28,10 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # Build once up front; downstream checks call `pnpm -r run` directly
-      # (not the build-wrapping root scripts) to avoid rebuilding per step.
+      # Install deps builds the SDK once so the CLI bin links resolve; build
+      # the remaining packages here before downstream checks.
       - name: Build packages
-        run: pnpm -r run build
+        run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
       - name: Run lint
         run: pnpm -r run lint
