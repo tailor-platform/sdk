@@ -9,9 +9,9 @@
   --text: #e7ecea;
   --muted: #a0a7a4;
   --subtle: #2d3130;
-  --accent: #21e68b;
-  --accent-weak: rgba(33, 230, 139, 0.14);
-  --accent-glow: rgba(33, 230, 139, 0.32);
+  --accent: #4950e5;
+  --accent-weak: rgba(73, 80, 229, 0.18);
+  --accent-glow: rgba(73, 80, 229, 0.34);
   --warn: #f2b84b;
   --danger: #ff6b5f;
   --shadow: 0 16px 34px rgba(0, 0, 0, 0.42);
@@ -94,7 +94,7 @@ button:hover {
   place-items: center;
   border-radius: 999px;
   background: var(--accent);
-  color: #06130d;
+  color: #fff;
   font-weight: 800;
 }
 
@@ -146,12 +146,12 @@ button:hover {
   min-width: 104px;
   border-color: var(--accent);
   background: var(--accent);
-  color: #06130d;
+  color: #fff;
   font-weight: 800;
 }
 
 .primary-action:hover {
-  background: #5cf1aa;
+  background: #5f65ee;
 }
 
 .main {
@@ -226,7 +226,7 @@ button:hover {
 }
 
 .table-list button[aria-current="true"] {
-  background: linear-gradient(90deg, var(--accent-weak), rgba(33, 230, 139, 0.03));
+  background: linear-gradient(90deg, var(--accent-weak), rgba(73, 80, 229, 0.04));
   color: var(--text);
   font-weight: 700;
 }

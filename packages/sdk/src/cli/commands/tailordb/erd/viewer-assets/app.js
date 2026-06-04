@@ -3,7 +3,9 @@ const TABLE_HEIGHT = 62;
 const X_GAP = 240;
 const Y_GAP = 56;
 const CARDINALITY_MARKER_WIDTH = 50;
-const CARDINALITY_CARD_OFFSET = 4;
+const CROW_FOOT_TIP_OFFSET = 0;
+const CROW_FOOT_JOIN_OFFSET = 18;
+const CARDINALITY_OUTER_OFFSET = 32;
 const DRAG_THRESHOLD = 4;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.2;
@@ -361,33 +363,32 @@ function oneMarker(x, y) {
 }
 
 function cardinalityMarker(cardinality, point, sideSign, selected) {
-  const adjacent = CARDINALITY_CARD_OFFSET;
-  const near = 18;
-  const middle = 32;
+  const crowFootTip = CROW_FOOT_TIP_OFFSET;
+  const crowFootJoin = CROW_FOOT_JOIN_OFFSET;
+  const outer = CARDINALITY_OUTER_OFFSET;
   const markerEndX = point.x + sideSign * CARDINALITY_MARKER_WIDTH;
   const parts = [
     `<line class="edge-cardinality-line" x1="${point.x}" y1="${point.y}" x2="${markerEndX}" y2="${point.y}"></line>`,
   ];
 
   if (cardinality.max === "n") {
-    const baseX = point.x + sideSign * near;
-    const endX = point.x + sideSign * adjacent;
+    const baseX = point.x + sideSign * crowFootJoin;
+    const endX = point.x + sideSign * crowFootTip;
     parts.push(`
       <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y - 11}"></line>
-      <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y}"></line>
       <line x1="${baseX}" y1="${point.y}" x2="${endX}" y2="${point.y + 11}"></line>
     `);
     if (cardinality.min === 0) {
-      parts.push(`<circle cx="${point.x + sideSign * middle}" cy="${point.y}" r="6"></circle>`);
+      parts.push(`<circle cx="${point.x + sideSign * outer}" cy="${point.y}" r="6"></circle>`);
     } else {
-      parts.push(oneMarker(point.x + sideSign * middle, point.y));
+      parts.push(oneMarker(point.x + sideSign * outer, point.y));
     }
   } else {
-    parts.push(oneMarker(point.x + sideSign * adjacent, point.y));
+    parts.push(oneMarker(point.x + sideSign * crowFootJoin, point.y));
     if (cardinality.min === 0) {
-      parts.push(`<circle cx="${point.x + sideSign * near}" cy="${point.y}" r="6"></circle>`);
+      parts.push(`<circle cx="${point.x + sideSign * outer}" cy="${point.y}" r="6"></circle>`);
     } else {
-      parts.push(oneMarker(point.x + sideSign * near, point.y));
+      parts.push(oneMarker(point.x + sideSign * outer, point.y));
     }
   }
 
