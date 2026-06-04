@@ -1,54 +1,266 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { create } from "@bufbuild/protobuf";
-import {
-  TailorDBTypeSchema,
-  TailorDBType_FieldConfigSchema,
-} from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { writeTblsSchemaToFile, buildTblsSchema, toTblsColumn } from "./schema";
-import type {
-  TailorDBType as TailorDBProtoType,
-  TailorDBType_FieldConfig,
-} from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import { buildTailorDbErdSchema, writeTailorDbErdSchemaToFile } from "./schema";
+import type { TailorDBNamespaceData } from "@/types/plugin-generation";
+import type { OperatorFieldConfig, ParsedField, TailorDBType } from "@/types/tailordb";
 
-// Type for field config input in tests (without Protobuf internals)
-type TestFieldConfig = Partial<{
-  type: string;
-  description: string;
-  required: boolean;
-  array: boolean;
-  foreignKey: boolean;
-  foreignKeyType: string;
-  foreignKeyField: string;
-  allowedValues: { value: string }[];
-}>;
-
-// Helper to create a mock TailorDBType_FieldConfig for testing
-function createFieldConfig(config: TestFieldConfig = {}): TailorDBType_FieldConfig {
-  return create(TailorDBType_FieldConfigSchema, {
-    type: config.type ?? "string",
-    description: config.description ?? "",
-    required: config.required ?? false,
-    array: config.array ?? false,
-    foreignKey: config.foreignKey ?? false,
-    foreignKeyType: config.foreignKeyType,
-    foreignKeyField: config.foreignKeyField,
-    allowedValues: config.allowedValues ?? [],
-    validate: [],
-    fields: {},
-    index: false,
-    unique: false,
-    vector: false,
-  });
+function createField(
+  name: string,
+  config: Partial<OperatorFieldConfig>,
+  relation?: ParsedField["relation"],
+): ParsedField {
+  return {
+    name,
+    config: {
+      type: config.type ?? "string",
+      required: config.required,
+      description: config.description,
+      allowedValues: config.allowedValues,
+      array: config.array,
+      index: config.index,
+      unique: config.unique,
+      foreignKey: config.foreignKey,
+      foreignKeyType: config.foreignKeyType,
+      foreignKeyField: config.foreignKeyField,
+      rawRelation: config.rawRelation,
+      validate: config.validate,
+      hooks: config.hooks,
+      serial: config.serial,
+      scale: config.scale,
+      fields: config.fields,
+    },
+    relation,
+  };
 }
 
-describe("writeTblsSchemaToFile", () => {
+function createType(
+  name: string,
+  fields: Record<string, ParsedField> = {},
+  options: Partial<TailorDBType> = {},
+): TailorDBType {
+  return {
+    name,
+    pluralForm: options.pluralForm ?? `${name}s`,
+    description: options.description,
+    fields,
+    forwardRelationships: options.forwardRelationships ?? {},
+    backwardRelationships: options.backwardRelationships ?? {},
+    settings: options.settings ?? {},
+    permissions: options.permissions ?? {},
+    indexes: options.indexes,
+    files: options.files,
+  };
+}
+
+function createNamespace(types: Record<string, TailorDBType>): TailorDBNamespaceData {
+  return {
+    namespace: "shop",
+    types,
+    sourceInfo: new Map(),
+    pluginAttachments: new Map(),
+  };
+}
+
+describe("buildTailorDbErdSchema", () => {
+  it("maps TailorDB types into TailorDB ERD schema v1", () => {
+    const customer = createType(
+      "Customer",
+      {
+        name: createField("name", {
+          type: "string",
+          required: true,
+          description: "Customer name",
+        }),
+        status: createField("status", {
+          type: "enum",
+          required: false,
+          allowedValues: [
+            { value: "active", description: "Can place orders" },
+            { value: "inactive" },
+          ],
+        }),
+        tags: createField("tags", {
+          type: "string",
+          array: true,
+        }),
+      },
+      {
+        description: "Customer records",
+        indexes: {
+          idx_customer_name: { fields: ["name"] },
+        },
+      },
+    );
+
+    const schema = buildTailorDbErdSchema({
+      namespaceData: createNamespace({ Customer: customer }),
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    expect(schema).toMatchObject({
+      version: 1,
+      namespace: "shop",
+      source: "local",
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(schema.cleanRoom.notes.join(" ")).toContain("does not copy Liam source code");
+    expect(schema.tables[0]).toMatchObject({
+      name: "Customer",
+      pluralForm: "Customers",
+      description: "Customer records",
+    });
+    expect(schema.tables[0].columns).toEqual([
+      {
+        name: "id",
+        type: "uuid",
+        required: true,
+        array: false,
+        primaryKey: true,
+        unique: true,
+      },
+      {
+        name: "name",
+        type: "string",
+        required: true,
+        array: false,
+        description: "Customer name",
+        index: true,
+        indexNames: ["idx_customer_name"],
+      },
+      {
+        name: "status",
+        type: "enum",
+        required: false,
+        array: false,
+        enumValues: ["active", "inactive"],
+        enumValueDescriptions: { active: "Can place orders" },
+      },
+      {
+        name: "tags",
+        type: "string",
+        required: true,
+        array: true,
+      },
+    ]);
+  });
+
+  it("builds relations from parsed TailorDB relation metadata", () => {
+    const customer = createType("Customer");
+    const order = createType("Order", {
+      customerId: createField(
+        "customerId",
+        {
+          type: "uuid",
+          required: true,
+          foreignKey: true,
+          foreignKeyType: "Customer",
+          foreignKeyField: "id",
+          rawRelation: {
+            type: "n-1",
+            toward: { type: "Customer", as: "customer", key: "id" },
+            backward: "orders",
+          },
+        },
+        {
+          targetType: "Customer",
+          forwardName: "customer",
+          backwardName: "orders",
+          key: "id",
+          unique: false,
+        },
+      ),
+    });
+
+    const schema = buildTailorDbErdSchema({
+      namespaceData: createNamespace({ Customer: customer, Order: order }),
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    expect(schema.relations).toEqual([
+      {
+        name: "Order.customerId->Customer.id",
+        sourceTable: "Order",
+        sourceColumns: ["customerId"],
+        targetTable: "Customer",
+        targetColumns: ["id"],
+        required: true,
+        unique: false,
+        kind: "relation",
+        relationType: "n-1",
+        forwardName: "customer",
+        backwardName: "orders",
+      },
+    ]);
+    expect(schema.tables.find((table) => table.name === "Order")?.columns[1].relation).toEqual({
+      targetTable: "Customer",
+      targetColumn: "id",
+      kind: "relation",
+      required: true,
+      relationType: "n-1",
+      forwardName: "customer",
+      backwardName: "orders",
+    });
+  });
+
+  it("includes plugin source metadata without local file paths", () => {
+    const namespace = createNamespace({
+      AuditLog: createType("AuditLog"),
+    });
+    namespace.sourceInfo = new Map([
+      [
+        "AuditLog",
+        {
+          exportName: "AuditLog",
+          pluginId: "audit-plugin",
+          pluginImportPath: "@example/audit",
+          originalFilePath: "/Users/example/project/tailordb/user.ts",
+          originalExportName: "User",
+          generatedTypeKind: "history",
+          namespace: "shop",
+        },
+      ],
+    ]);
+
+    const schema = buildTailorDbErdSchema({
+      namespaceData: namespace,
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    expect(schema.tables[0].source).toEqual({
+      kind: "plugin",
+      exportName: "AuditLog",
+      pluginId: "audit-plugin",
+      pluginImportPath: "@example/audit",
+      originalExportName: "User",
+      generatedTypeKind: "history",
+      namespace: "shop",
+    });
+    expect(JSON.stringify(schema)).not.toContain("/Users/example");
+  });
+
+  it("keeps revisions stable when only generatedAt changes", () => {
+    const namespace = createNamespace({ User: createType("User") });
+
+    const first = buildTailorDbErdSchema({
+      namespaceData: namespace,
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const second = buildTailorDbErdSchema({
+      namespaceData: namespace,
+      generatedAt: "2026-01-02T00:00:00.000Z",
+    });
+
+    expect(first.revision).toBe(second.revision);
+  });
+});
+
+describe("writeTailorDbErdSchemaToFile", () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "erd-schema-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-schema-"));
   });
 
   afterEach(() => {
@@ -56,497 +268,19 @@ describe("writeTblsSchemaToFile", () => {
     vi.restoreAllMocks();
   });
 
-  it("maps TailorDB fields into tbls columns", async () => {
-    const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValue({
-        tailordbTypes: [
-          {
-            name: "User",
-            schema: {
-              fields: {
-                tags: {
-                  type: "string",
-                  array: true,
-                  required: true,
-                  description: "Tags",
-                  allowedValues: [],
-                  foreignKey: false,
-                },
-              },
-            },
-          },
-        ],
-        nextPageToken: "",
-      }),
-    };
-
+  it("writes schema JSON to disk", () => {
+    const schema = buildTailorDbErdSchema({
+      namespaceData: createNamespace({ User: createType("User") }),
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    });
     const outputPath = path.join(tempDir, "schema.json");
 
-    await writeTblsSchemaToFile({
-      client: client as never,
-      workspaceId: "workspace-id",
-      namespace: "ns",
-      outputPath,
-    });
-
-    const json = JSON.parse(fs.readFileSync(outputPath, "utf8")) as {
-      tables: Array<{
-        columns: Array<{ name: string; type: string; nullable: boolean; comment: string }>;
-      }>;
-    };
-
-    const columns = json.tables[0]?.columns ?? [];
-    const tags = columns.find((column) => column.name === "tags");
-
-    expect(tags).toEqual({
-      name: "tags",
-      type: "string[]",
-      nullable: false,
-      comment: "Tags",
-    });
-  });
-});
-
-// Helper to create a minimal TailorDBProtoType
-function createType(
-  name: string,
-  fields: Record<string, TestFieldConfig> = {},
-  description = "",
-): TailorDBProtoType {
-  const fieldConfigs: Record<string, TailorDBType_FieldConfig> = {};
-
-  for (const [fieldName, config] of Object.entries(fields)) {
-    fieldConfigs[fieldName] = createFieldConfig(config);
-  }
-
-  return create(TailorDBTypeSchema, {
-    name,
-    schema: {
-      description,
-      fields: fieldConfigs,
-    },
-  });
-}
-
-describe("toTblsColumn", () => {
-  it("should convert basic string field", () => {
-    const fieldConfig = createFieldConfig({
-      type: "string",
-      description: "User name",
-      required: true,
-    });
-
-    const result = toTblsColumn("name", fieldConfig);
-
-    expect(result).toEqual({
-      name: "name",
-      type: "string",
-      nullable: false,
-      comment: "User name",
-    });
-  });
-
-  it("should set nullable true when required is false", () => {
-    const fieldConfig = createFieldConfig({
-      type: "int",
-      required: false,
-    });
-
-    const result = toTblsColumn("age", fieldConfig);
-
-    expect(result.nullable).toBe(true);
-  });
-
-  it("should append [] suffix for array fields", () => {
-    const fieldConfig = createFieldConfig({
-      type: "string",
-      array: true,
-    });
-
-    const result = toTblsColumn("tags", fieldConfig);
-
-    expect(result.type).toBe("string[]");
-  });
-
-  it("should handle empty description", () => {
-    const fieldConfig = createFieldConfig({
-      type: "uuid",
-      required: true,
-    });
-
-    const result = toTblsColumn("refId", fieldConfig);
-
-    expect(result.comment).toBe("");
-  });
-});
-
-describe("buildTblsSchema", () => {
-  describe("basic table structure", () => {
-    it("should return empty schema for empty types array", () => {
-      const result = buildTblsSchema([], "test-namespace");
-
-      expect(result).toEqual({
-        name: "test-namespace",
-        tables: [],
-        relations: [],
-        enums: [],
-      });
-    });
-
-    it("should set namespace as schema name", () => {
-      const result = buildTblsSchema([], "my-namespace");
-
-      expect(result.name).toBe("my-namespace");
-    });
-
-    it("should create table with correct structure", () => {
-      const types = [createType("User")];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.tables).toHaveLength(1);
-      expect(result.tables[0].name).toBe("User");
-      expect(result.tables[0].type).toBe("table");
-      expect(result.tables[0].indexes).toEqual([]);
-      expect(result.tables[0].triggers).toEqual([]);
-      expect(result.tables[0].def).toBe("");
-    });
-
-    it("should set table comment from schema description", () => {
-      const types = [createType("User", {}, "User table description")];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.tables[0].comment).toBe("User table description");
-    });
-  });
-
-  describe("implicit id column", () => {
-    it("should add implicit id column as first column", () => {
-      const types = [createType("User", { name: { type: "string" } })];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.tables[0].columns[0]).toEqual({
-        name: "id",
-        type: "uuid",
-        nullable: false,
-        comment: "",
-      });
-    });
-
-    it("should add PRIMARY KEY constraint for id column", () => {
-      const types = [createType("User")];
-
-      const result = buildTblsSchema(types, "ns");
-
-      const pkConstraint = result.tables[0].constraints.find((c) => c.type === "PRIMARY KEY");
-
-      expect(pkConstraint).toEqual({
-        name: "pk_User",
-        type: "PRIMARY KEY",
-        def: "",
-        table: "User",
-        columns: ["id"],
-      });
-    });
-  });
-
-  describe("field to column conversion", () => {
-    it("should convert fields to columns after id column", () => {
-      const types = [
-        createType("User", {
-          name: { type: "string", required: true, description: "User name" },
-          age: { type: "int", required: false },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-      const columns = result.tables[0].columns;
-
-      expect(columns).toHaveLength(3); // id + name + age
-      expect(columns[1]).toEqual({
-        name: "name",
-        type: "string",
-        nullable: false,
-        comment: "User name",
-      });
-      expect(columns[2]).toEqual({
-        name: "age",
-        type: "int",
-        nullable: true,
-        comment: "",
-      });
-    });
-  });
-
-  describe("foreign key handling", () => {
-    it("should create relation for foreign key field", () => {
-      const types = [
-        createType("Order", {
-          customerId: {
-            type: "uuid",
-            required: true,
-            foreignKey: true,
-            foreignKeyType: "Customer",
-          },
-        }),
-        createType("Customer"),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.relations).toHaveLength(1);
-      expect(result.relations[0]).toMatchObject({
-        table: "Order",
-        columns: ["customerId"],
-        parent_table: "Customer",
-        parent_columns: ["id"],
-        def: "",
-      });
-    });
-
-    it("should use foreignKeyField when specified", () => {
-      const types = [
-        createType("Order", {
-          customerCode: {
-            type: "string",
-            foreignKey: true,
-            foreignKeyType: "Customer",
-            foreignKeyField: "code",
-          },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.relations[0].parent_columns).toEqual(["code"]);
-    });
-
-    it("should set cardinality to exactly_one for required FK", () => {
-      const types = [
-        createType("Order", {
-          customerId: {
-            type: "uuid",
-            required: true,
-            foreignKey: true,
-            foreignKeyType: "Customer",
-          },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.relations[0].cardinality).toBe("exactly_one");
-      expect(result.relations[0].parent_cardinality).toBe("zero_or_more");
-    });
-
-    it("should set cardinality to zero_or_one for optional FK", () => {
-      const types = [
-        createType("Order", {
-          customerId: {
-            type: "uuid",
-            required: false,
-            foreignKey: true,
-            foreignKeyType: "Customer",
-          },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.relations[0].cardinality).toBe("zero_or_one");
-    });
-
-    it("should create FOREIGN KEY constraint", () => {
-      const types = [
-        createType("Order", {
-          customerId: {
-            type: "uuid",
-            foreignKey: true,
-            foreignKeyType: "Customer",
-          },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      const fkConstraint = result.tables[0].constraints.find((c) => c.type === "FOREIGN KEY");
-
-      expect(fkConstraint).toEqual({
-        name: "fk_Order_customerId",
-        type: "FOREIGN KEY",
-        def: "",
-        table: "Order",
-        columns: ["customerId"],
-        referenced_table: "Customer",
-        referenced_columns: ["id"],
-      });
-    });
-
-    it("should populate referenced_tables", () => {
-      const types = [
-        createType("Order", {
-          customerId: {
-            type: "uuid",
-            foreignKey: true,
-            foreignKeyType: "Customer",
-          },
-          supplierId: {
-            type: "uuid",
-            foreignKey: true,
-            foreignKeyType: "Supplier",
-          },
-        }),
-        createType("Customer"),
-        createType("Supplier"),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      const orderTable = result.tables.find((t) => t.name === "Order");
-      expect(orderTable?.referenced_tables).toContain("Customer");
-      expect(orderTable?.referenced_tables).toContain("Supplier");
-    });
-
-    it("should set empty referenced_tables for tables without FK", () => {
-      const types = [createType("User", { name: { type: "string" } })];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.tables[0].referenced_tables).toEqual([]);
-    });
-  });
-
-  describe("enum handling", () => {
-    it("should collect enum values", () => {
-      const types = [
-        createType("User", {
-          status: {
-            type: "enum",
-            allowedValues: [{ value: "active" }, { value: "inactive" }, { value: "pending" }] as {
-              value: string;
-            }[],
-          },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.enums).toHaveLength(1);
-      expect(result.enums[0].name).toBe("User_status");
-      expect(result.enums[0].values).toEqual(["active", "inactive", "pending"]);
-    });
-
-    it("should not create enum for empty allowedValues", () => {
-      const types = [
-        createType("User", {
-          status: {
-            type: "enum",
-            allowedValues: [],
-          },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.enums).toHaveLength(0);
-    });
-
-    it("should handle multiple enums from different tables", () => {
-      const types = [
-        createType("User", {
-          role: {
-            type: "enum",
-            allowedValues: [{ value: "admin" }, { value: "user" }] as { value: string }[],
-          },
-        }),
-        createType("Order", {
-          status: {
-            type: "enum",
-            allowedValues: [{ value: "pending" }, { value: "shipped" }] as { value: string }[],
-          },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ns");
-
-      expect(result.enums).toHaveLength(2);
-      expect(result.enums.map((e) => e.name)).toContain("User_role");
-      expect(result.enums.map((e) => e.name)).toContain("Order_status");
-    });
-  });
-
-  describe("integration", () => {
-    it("should handle complex schema with multiple tables and relations", () => {
-      const types = [
-        createType(
-          "Customer",
-          {
-            name: { type: "string", required: true, description: "Customer name" },
-            email: { type: "string", required: true },
-            status: {
-              type: "enum",
-              allowedValues: [{ value: "active" }, { value: "inactive" }] as { value: string }[],
-            },
-          },
-          "Customer entity",
-        ),
-        createType("Order", {
-          customerId: {
-            type: "uuid",
-            required: true,
-            foreignKey: true,
-            foreignKeyType: "Customer",
-          },
-          total: { type: "float", required: true },
-          items: { type: "string", array: true },
-        }),
-        createType("OrderItem", {
-          orderId: {
-            type: "uuid",
-            required: true,
-            foreignKey: true,
-            foreignKeyType: "Order",
-          },
-          productName: { type: "string", required: true },
-          quantity: { type: "int", required: true },
-        }),
-      ];
-
-      const result = buildTblsSchema(types, "ecommerce");
-
-      // Schema name
-      expect(result.name).toBe("ecommerce");
-
-      // Tables
-      expect(result.tables).toHaveLength(3);
-      expect(result.tables.map((t) => t.name)).toEqual(["Customer", "Order", "OrderItem"]);
-
-      // Relations
-      expect(result.relations).toHaveLength(2);
-
-      // Enums
-      expect(result.enums).toHaveLength(1);
-      expect(result.enums[0].name).toBe("Customer_status");
-
-      // Customer table structure
-      const customerTable = result.tables.find((t) => t.name === "Customer")!;
-      expect(customerTable.comment).toBe("Customer entity");
-      expect(customerTable.columns.map((c) => c.name)).toEqual(["id", "name", "email", "status"]);
-      expect(customerTable.referenced_tables).toEqual([]);
-
-      // Order table referenced_tables
-      const orderTable = result.tables.find((t) => t.name === "Order")!;
-      expect(orderTable.referenced_tables).toContain("Customer");
-
-      // OrderItem table referenced_tables
-      const orderItemTable = result.tables.find((t) => t.name === "OrderItem")!;
-      expect(orderItemTable.referenced_tables).toContain("Order");
-
-      // Array field type
-      const itemsColumn = orderTable.columns.find((c) => c.name === "items");
-      expect(itemsColumn?.type).toBe("string[]");
+    writeTailorDbErdSchemaToFile({ schema, outputPath });
+
+    expect(JSON.parse(fs.readFileSync(outputPath, "utf8"))).toMatchObject({
+      version: 1,
+      namespace: "shop",
+      tables: [{ name: "User" }],
     });
   });
 });

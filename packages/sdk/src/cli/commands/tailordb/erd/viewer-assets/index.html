@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TailorDB ERD</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app">
+      <header class="toolbar">
+        <div class="brand">
+          <span class="brand-mark">T</span>
+          <div>
+            <h1 id="namespace">TailorDB ERD</h1>
+            <p id="revision">Loading schema</p>
+          </div>
+        </div>
+        <div class="toolbar-actions">
+          <button id="zoom-out" type="button" title="Zoom out">-</button>
+          <button id="zoom-in" type="button" title="Zoom in">+</button>
+          <button id="fit-view" type="button">Fit</button>
+        </div>
+      </header>
+      <main class="main">
+        <aside class="table-nav">
+          <div class="search-wrap">
+            <input id="search" type="search" autocomplete="off" placeholder="Search tables" />
+          </div>
+          <div id="table-list" class="table-list"></div>
+        </aside>
+        <section id="canvas" class="canvas" aria-label="ERD canvas">
+          <div id="world" class="world">
+            <svg id="edges" class="edges" aria-hidden="true"></svg>
+            <div id="nodes" class="nodes"></div>
+          </div>
+          <div id="empty-state" class="empty-state" hidden>No TailorDB types found.</div>
+          <div id="status" class="status" hidden></div>
+        </section>
+        <aside id="details" class="details"></aside>
+      </main>
+    </div>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

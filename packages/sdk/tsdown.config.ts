@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
@@ -26,6 +26,13 @@ function stripBannerExceptConfigureEntry(outDir: string): void {
     }
   };
   walk(root);
+}
+
+function copyErdViewerAssets(outDir: string): void {
+  const source = path.resolve("src/cli/commands/tailordb/erd/viewer-assets");
+  const target = path.resolve(outDir, "cli/erd-viewer-assets");
+  rmSync(target, { recursive: true, force: true });
+  cpSync(source, target, { recursive: true });
 }
 
 function yamlText() {
@@ -101,5 +108,6 @@ export default defineConfig({
   plugins,
   onSuccess: (config) => {
     stripBannerExceptConfigureEntry(config.outDir);
+    copyErdViewerAssets(config.outDir);
   },
 });

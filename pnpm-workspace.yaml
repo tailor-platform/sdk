@@ -12,10 +12,6 @@ minimumReleaseAgeExclude:
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
-trustPolicyExclude:
-  # Pre-existing version pulled in transitively via @liam-hq/cli.
-  # Earlier @swc/core versions had provenance attestation; this one does not.
-  - "@swc/core@1.12.11"
 
 packages:
   - packages/*
