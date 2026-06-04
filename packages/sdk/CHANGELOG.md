@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.54.3
+
+### Patch Changes
+
+- [#1293](https://github.com/tailor-platform/sdk/pull/1293) [`1f9991d`](https://github.com/tailor-platform/sdk/commit/1f9991dc089763b9a3dbf95e26742c7100f9dd24) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `db.fields.timestamps()` to respect user-specified `createdAt` / `updatedAt` values instead of always overwriting them with the current time. When a value is provided (e.g. seeding historical records), it is now used; when omitted, the current time is still applied as before.
+
 ## 1.54.2
 
 ### Patch Changes
