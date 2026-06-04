@@ -18,14 +18,18 @@ permissions:
   actions: write
 
 jobs:
-  coverage:
+  coverage-shard:
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
-    name: Coverage
+    name: Coverage shard ${{ matrix.shard }}/2
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -41,21 +45,61 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
-      - name: Run SDK coverage
-        run: pnpm --filter @tailor-platform/sdk test:coverage
+      - name: Run SDK coverage shard
+        run: |
+          mkdir -p coverage-blobs
+          pnpm exec vitest --coverage --reporter=blob --shard=${{ matrix.shard }}/2 --outputFile=coverage-blobs/blob-${{ matrix.shard }}.json
+        working-directory: packages/sdk
         env:
+          GITHUB_RUN_ID: ${{ github.run_id }}-${{ matrix.shard }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+
+      - name: Upload coverage blob
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-blob-${{ matrix.shard }}
+          path: packages/sdk/coverage-blobs/blob-${{ matrix.shard }}.json
+          if-no-files-found: error
+
+      - name: Cleanup e2e workspaces
+        if: always()
+        run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}-${{ matrix.shard }}
+
+  coverage:
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
+    name: Coverage
+    needs: coverage-shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Download coverage blobs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: coverage-blob-*
+          path: packages/sdk/coverage-blobs
+          merge-multiple: true
+
+      - name: Merge SDK coverage
+        run: pnpm exec vitest --mergeReports coverage-blobs --coverage --coverage.reportsDirectory=coverage
+        working-directory: packages/sdk
 
       - name: Upload results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-results
           path: packages/sdk/coverage/lcov.info
-
-      - name: Cleanup e2e workspaces
-        if: always()
-        run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
 
   bundle-size:
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
