@@ -101,8 +101,7 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
             grantTypes: ["authorization_code", "refresh_token"],
             redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
             clientType: "confidential",
-            // parsedConfig holds the parsed OUTPUT shape: AuthConfigSchema.parse
-            // transforms the numeric *Seconds into a Duration ({ seconds, nanos }).
+            // parsedConfig holds parse output: lifetimes are Duration, not numbers.
             accessTokenLifetimeSeconds: { seconds: 3600n, nanos: 0 },
             refreshTokenLifetimeSeconds: { seconds: 7200n, nanos: 0 },
             requireDpop: false,
@@ -432,12 +431,8 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
-  // Regression: build the Application through the real defineApplication pipeline
-  // (config.auth -> AuthConfigSchema.parse -> createAuthService) rather than a
-  // hand-rolled parsedConfig fixture, so the oauth2 token lifetimes flow through
-  // exactly as they do at deploy time. Previously the parse-wiring transformed the
-  // numeric lifetimes to Duration in parsedConfig, and planAuth's protoOAuth2Client
-  // re-parse then threw "expected number, received object".
+  // Regression: drive planAuth through the real defineApplication pipeline (parse ->
+  // createAuthService) so oauth2 token lifetimes flow exactly as they do at deploy.
   test("handles oauth2 token lifetimes through the real defineApplication pipeline", async () => {
     const application = defineApplication({
       config: {
