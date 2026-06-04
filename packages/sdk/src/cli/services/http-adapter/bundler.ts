@@ -5,6 +5,7 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { isNodeBuiltinImport } from "@/cli/services/http-adapter/node-builtins";
+import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { HTTP_METHODS, type HttpMethodKey } from "@/types/http-adapter";
@@ -70,16 +71,15 @@ export async function bundleHttpAdapters(
     tsconfig = undefined;
   }
 
-  const results = await Promise.all(
-    adapters.flatMap((adapter) => {
-      const tasks: Array<Promise<[string, "input" | "output", string]>> = [
-        bundleAdapterScript(adapter, "input", outputDir, tsconfig, cache),
-      ];
-      if (adapter.hasOutput) {
-        tasks.push(bundleAdapterScript(adapter, "output", outputDir, tsconfig, cache));
-      }
-      return tasks;
-    }),
+  // rolldown.build() is memory-intensive; cap parallelism like the other SDK
+  // bundlers (resolvers/executors/workflows) instead of launching every
+  // input/output bundle at once.
+  const tasks = adapters.flatMap((adapter) => {
+    const kinds: Array<"input" | "output"> = adapter.hasOutput ? ["input", "output"] : ["input"];
+    return kinds.map((kind) => ({ adapter, kind }));
+  });
+  const results = await withBundleConcurrency(tasks, ({ adapter, kind }) =>
+    bundleAdapterScript(adapter, kind, outputDir, tsconfig, cache),
   );
 
   const bundledInputs = new Map<string, string>();

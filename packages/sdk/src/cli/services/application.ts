@@ -465,19 +465,19 @@ export async function loadApplication(
     await workflowService.loadWorkflows();
   }
 
-  // 5.5. Load and collect HTTP adapters
+  // 6. Load and collect HTTP adapters
   const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
   if (httpAdapterService) {
     await httpAdapterService.loadAdapters();
   }
 
-  // 6. Build trigger context for workflow/job trigger transformation
+  // 7. Build trigger context for workflow/job trigger transformation
   const triggerContext = await buildTriggerContext(
     config.workflow,
     authResult.authService?.config.name,
   );
 
-  // 6.5. Resolve inline sourcemap setting
+  // 8. Resolve inline sourcemap setting
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
 
   // Collect in-memory bundled scripts
@@ -488,7 +488,7 @@ export async function loadApplication(
     authHooks: new Map(),
   };
 
-  // 7. Bundle resolvers
+  // 9. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
     const resolverBundles = await bundleResolvers(
       pipeline.namespace,
@@ -502,7 +502,7 @@ export async function loadApplication(
     }
   }
 
-  // 8. Bundle executors
+  // 10. Bundle executors
   if (executorService) {
     bundledScripts.executors = await bundleExecutors({
       config: executorService.config,
@@ -513,7 +513,7 @@ export async function loadApplication(
     });
   }
 
-  // 9. Bundle workflows
+  // 11. Bundle workflows
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
@@ -528,7 +528,7 @@ export async function loadApplication(
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
-  // 9.25. Bundle HTTP adapters
+  // 12. Bundle HTTP adapters
   let httpAdapterBuildResult: HttpAdapterBundleResult | undefined;
   if (httpAdapterService && httpAdapterService.adapters.length > 0) {
     httpAdapterBuildResult = await bundleHttpAdapters(
@@ -542,7 +542,7 @@ export async function loadApplication(
     );
   }
 
-  // 9.5. Bundle auth hooks
+  // 13. Bundle auth hooks
   if (authResult.authService?.config.hooks?.beforeLogin) {
     const authName = authResult.authService.config.name;
     bundledScripts.authHooks = await bundleAuthHooks({
@@ -556,7 +556,7 @@ export async function loadApplication(
     });
   }
 
-  // 10. Load resolver and executor definitions (for validation/logging)
+  // 14. Load resolver and executor definitions (for validation/logging)
   for (const pipeline of resolverResult.resolverServices) {
     await pipeline.loadResolvers();
   }
@@ -574,7 +574,7 @@ export async function loadApplication(
   }
   logger.newline();
 
-  // 11. Build immutable Application
+  // 15. Build immutable Application
   const application = buildApplication({
     config,
     tailordbResult,
