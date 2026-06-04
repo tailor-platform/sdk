@@ -1,5 +1,7 @@
 const TABLE_WIDTH = 260;
 const TABLE_HEIGHT = 62;
+const FIELD_ROW_HEIGHT = 28;
+const FIELD_SECTION_BORDER_HEIGHT = 1;
 const X_GAP = 240;
 const Y_GAP = 56;
 const CARDINALITY_MARKER_WIDTH = 50;
@@ -10,6 +12,12 @@ const DRAG_THRESHOLD = 4;
 const FIT_PADDING = 80;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.2;
+const DEFAULT_SHOW_MODE = "TABLE_NAME";
+const SHOW_MODE_OPTIONS = [
+  { value: "ALL_FIELDS", label: "All Fields" },
+  { value: "TABLE_NAME", label: "Table Name" },
+  { value: "KEY_ONLY", label: "Key Only" },
+];
 
 const elements = {
   namespace: document.getElementById("namespace"),
@@ -28,6 +36,8 @@ const elements = {
   zoomOut: document.getElementById("zoom-out"),
   zoomLabel: document.getElementById("zoom-label"),
   fitView: document.getElementById("fit-view"),
+  showMode: document.getElementById("show-mode"),
+  showModeMenu: document.getElementById("show-mode-menu"),
   copyLink: document.getElementById("copy-link"),
 };
 
@@ -37,9 +47,12 @@ let selectedTable;
 let searchText = "";
 let viewport = { x: 32, y: 32, z: 1 };
 let hasViewportFromHash = false;
+let showMode = DEFAULT_SHOW_MODE;
 let activeCardDrag;
 let activeCanvasPan;
+let activeViewportAnimation;
 const manualNodePositions = new Map();
+const hiddenTableNames = new Set();
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -57,9 +70,33 @@ function tableByName(name) {
   return schema?.tables.find((table) => table.name === name);
 }
 
+function showModeOption(value) {
+  return SHOW_MODE_OPTIONS.find((option) => option.value === value);
+}
+
+function isTableHidden(tableName) {
+  return hiddenTableNames.has(tableName);
+}
+
+function visibleTables() {
+  return schema.tables.filter((table) => !isTableHidden(table.name));
+}
+
+function visibleTableNames() {
+  return visibleTables().map((table) => table.name);
+}
+
 function readHashState() {
   const params = new URLSearchParams(location.hash.slice(1));
   selectedTable = params.get("table") || undefined;
+  const nextShowMode = params.get("show");
+  if (showModeOption(nextShowMode)) {
+    showMode = nextShowMode;
+  }
+  hiddenTableNames.clear();
+  for (const tableName of (params.get("hidden") || "").split(",")) {
+    if (tableName) hiddenTableNames.add(tableName);
+  }
   const x = Number(params.get("x"));
   const y = Number(params.get("y"));
   const z = Number(params.get("z"));
@@ -73,6 +110,10 @@ function readHashState() {
 function writeHashState() {
   const params = new URLSearchParams();
   if (selectedTable) params.set("table", selectedTable);
+  if (showMode !== DEFAULT_SHOW_MODE) params.set("show", showMode);
+  if (hiddenTableNames.size > 0) {
+    params.set("hidden", [...hiddenTableNames].sort((a, b) => a.localeCompare(b)).join(","));
+  }
   params.set("x", String(Math.round(viewport.x)));
   params.set("y", String(Math.round(viewport.y)));
   params.set("z", viewport.z.toFixed(3));
@@ -87,8 +128,23 @@ async function fetchSchema() {
   return response.json();
 }
 
-function cardHeight() {
-  return TABLE_HEIGHT;
+function isKeyColumn(column) {
+  return Boolean(column.primaryKey || column.unique || column.index || column.relation);
+}
+
+function columnsForShowMode(table) {
+  if (showMode === "ALL_FIELDS") return table.columns;
+  if (showMode === "KEY_ONLY") return table.columns.filter(isKeyColumn);
+  return [];
+}
+
+function cardHeight(table) {
+  const fieldCount = columnsForShowMode(table).length;
+  return (
+    TABLE_HEIGHT +
+    (fieldCount > 0 ? FIELD_SECTION_BORDER_HEIGHT : 0) +
+    fieldCount * FIELD_ROW_HEIGHT
+  );
 }
 
 function computeRanks(tables, relations) {
@@ -136,14 +192,29 @@ function computeLayout(nextSchema) {
   };
 }
 
-function layoutBounds(nodes) {
-  let width = TABLE_WIDTH;
-  let height = TABLE_HEIGHT;
-  for (const node of nodes.values()) {
-    width = Math.max(width, node.x + node.width);
-    height = Math.max(height, node.y + node.height);
+function layoutBounds(nodes, tableNames) {
+  const includedNames = tableNames ? new Set(tableNames) : undefined;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [tableName, node] of nodes) {
+    if (includedNames && !includedNames.has(tableName)) continue;
+    minX = Math.min(minX, node.x);
+    minY = Math.min(minY, node.y);
+    maxX = Math.max(maxX, node.x + node.width);
+    maxY = Math.max(maxY, node.y + node.height);
   }
-  return { width, height };
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+    return { x: 0, y: 0, width: TABLE_WIDTH, height: TABLE_HEIGHT };
+  }
+
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function visibleLayoutBounds() {
+  return layoutBounds(layout.nodes, visibleTableNames());
 }
 
 function applyManualNodePositions() {
@@ -176,35 +247,103 @@ function matchesSearch(table) {
   );
 }
 
+function eyeIcon(hidden) {
+  if (hidden) {
+    return `
+      <svg class="eye-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 3l18 18"></path>
+        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+        <path d="M8.4 5.6A9.3 9.3 0 0 1 12 5c5 0 8.4 4.1 9.5 6.2a2 2 0 0 1 0 1.6 14.3 14.3 0 0 1-2.7 3.5"></path>
+        <path d="M6.1 6.9a14.7 14.7 0 0 0-3.6 4.3 2 2 0 0 0 0 1.6C3.6 14.9 7 19 12 19a9.8 9.8 0 0 0 4-.8"></path>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg class="eye-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2.5 11.2C3.6 9.1 7 5 12 5s8.4 4.1 9.5 6.2a2 2 0 0 1 0 1.6C20.4 14.9 17 19 12 19s-8.4-4.1-9.5-6.2a2 2 0 0 1 0-1.6Z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  `;
+}
+
 function renderHeader() {
   elements.namespace.textContent = schema.namespace;
   elements.revision.textContent = `${schema.tables.length} tables / ${schema.relations.length} relations / ${schema.revision}`;
-  elements.tableSummary.textContent = String(schema.tables.length);
+  const visibleCount = visibleTables().length;
+  elements.tableSummary.textContent =
+    visibleCount === schema.tables.length
+      ? String(schema.tables.length)
+      : `${visibleCount}/${schema.tables.length}`;
 }
 
 function renderTableList() {
   const tables = schema.tables.filter(matchesSearch);
   elements.tableList.innerHTML = tables
-    .map(
-      (table) => `
-        <button type="button" data-table="${escapeHtml(table.name)}" aria-current="${table.name === selectedTable}">
-          <span class="table-list-icon" aria-hidden="true"></span>
-          <span>${escapeHtml(table.name)}</span>
-          <span class="table-count">${table.columns.length}</span>
-        </button>
-      `,
-    )
+    .map((table) => {
+      const hidden = isTableHidden(table.name);
+      const visibilityLabel = hidden ? "Show" : "Hide";
+      return `
+          <div class="table-list-row ${hidden ? "is-hidden" : ""}">
+            <button
+              type="button"
+              class="table-select"
+              data-table="${escapeHtml(table.name)}"
+              aria-current="${table.name === selectedTable}"
+            >
+              <span class="table-list-icon" aria-hidden="true"></span>
+              <span>${escapeHtml(table.name)}</span>
+            </button>
+            <button
+              type="button"
+              class="table-visibility-toggle"
+              data-table="${escapeHtml(table.name)}"
+              aria-label="${visibilityLabel} table ${escapeHtml(table.name)}"
+              title="${visibilityLabel}"
+            >
+              ${eyeIcon(hidden)}
+            </button>
+          </div>
+      `;
+    })
     .join("");
 
-  elements.tableList.querySelectorAll("button").forEach((button) => {
+  elements.tableList.querySelectorAll(".table-select").forEach((button) => {
     button.addEventListener("click", () => {
       selectTable(button.dataset.table);
     });
   });
+  elements.tableList.querySelectorAll(".table-visibility-toggle").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleTableVisibility(button.dataset.table);
+    });
+  });
+}
+
+function tableFieldRows(table) {
+  const columns = columnsForShowMode(table);
+  if (columns.length === 0) return "";
+
+  return `
+    <div class="table-fields">
+      ${columns
+        .map(
+          (column) => `
+            <div class="table-field ${isKeyColumn(column) ? "is-key" : ""}">
+              <span class="field-name">${escapeHtml(column.name)}</span>
+              <span class="field-type">${escapeHtml(column.type)}${column.array ? "[]" : ""}</span>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function renderNodes() {
   elements.nodes.innerHTML = schema.tables
+    .filter((table) => !isTableHidden(table.name))
     .map((table) => {
       const node = layout.nodes.get(table.name);
       const related = isTableRelatedToSelection(table.name);
@@ -216,12 +355,13 @@ function renderNodes() {
           data-table="${escapeHtml(table.name)}"
           aria-label="Focus table ${escapeHtml(table.name)}"
           aria-pressed="${table.name === selectedTable}"
-          style="left: ${node.x}px; top: ${node.y}px"
+          style="left: ${node.x}px; top: ${node.y}px; height: ${node.height}px"
         >
           <div class="table-head">
             <span class="table-icon" aria-hidden="true"></span>
             <div class="table-name">${escapeHtml(table.name)}</div>
           </div>
+          ${tableFieldRows(table)}
         </button>
       `;
     })
@@ -242,6 +382,7 @@ function wireTableCard(card) {
 
   card.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    cancelViewportAnimation();
     const tableName = card.dataset.table;
     const node = layout.nodes.get(tableName);
     if (!node) return;
@@ -403,10 +544,12 @@ function cardinalityMarker(cardinality, point, sideSign, selected) {
 }
 
 function renderEdges() {
-  elements.edges.setAttribute("width", String(layout.width + 400));
-  elements.edges.setAttribute("height", String(layout.height + 400));
+  const bounds = visibleLayoutBounds();
+  elements.edges.setAttribute("width", String(bounds.width + 400));
+  elements.edges.setAttribute("height", String(bounds.height + 400));
   elements.edges.innerHTML = schema.relations
     .map((relation) => {
+      if (isTableHidden(relation.sourceTable) || isTableHidden(relation.targetTable)) return "";
       const source = layout.nodes.get(relation.sourceTable);
       const target = layout.nodes.get(relation.targetTable);
       if (!source || !target) return "";
@@ -542,6 +685,109 @@ function renderDetails() {
   `;
 }
 
+function checkIcon() {
+  return `
+    <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5"></path>
+    </svg>
+  `;
+}
+
+function renderShowModeControls() {
+  const selectedOption = showModeOption(showMode) ?? showModeOption(DEFAULT_SHOW_MODE);
+  elements.showMode.innerHTML = `
+    <span>${escapeHtml(selectedOption.label)}</span>
+    <span class="show-mode-caret" aria-hidden="true"></span>
+  `;
+  elements.showMode.setAttribute("aria-label", `Show mode: ${selectedOption.label}`);
+  elements.showModeMenu.innerHTML = SHOW_MODE_OPTIONS.map(
+    (option) => `
+      <button
+        type="button"
+        class="show-mode-option"
+        role="menuitemradio"
+        aria-checked="${option.value === showMode}"
+        data-show-mode="${option.value}"
+      >
+        <span>${escapeHtml(option.label)}</span>
+        <span class="show-mode-check">${option.value === showMode ? checkIcon() : ""}</span>
+      </button>
+    `,
+  ).join("");
+
+  elements.showModeMenu.querySelectorAll(".show-mode-option").forEach((button) => {
+    button.addEventListener("click", () => {
+      setShowMode(button.dataset.showMode);
+    });
+  });
+}
+
+function setShowModeMenuOpen(open) {
+  elements.showMode.setAttribute("aria-expanded", String(open));
+  elements.showModeMenu.hidden = !open;
+}
+
+function setShowMode(nextShowMode) {
+  if (!showModeOption(nextShowMode)) return;
+  setShowModeMenuOpen(false);
+  if (showMode === nextShowMode) return;
+
+  showMode = nextShowMode;
+  renderAll({ center: false });
+}
+
+function toggleTableVisibility(tableName) {
+  if (!tableName) return;
+  if (hiddenTableNames.has(tableName)) {
+    hiddenTableNames.delete(tableName);
+  } else {
+    hiddenTableNames.add(tableName);
+  }
+  renderAll({ center: false });
+}
+
+function cancelViewportAnimation() {
+  if (!activeViewportAnimation) return;
+  cancelAnimationFrame(activeViewportAnimation.frame);
+  activeViewportAnimation = undefined;
+}
+
+function easeOutCubic(value) {
+  return 1 - (1 - value) ** 3;
+}
+
+function animateViewportTo(targetViewport) {
+  cancelViewportAnimation();
+  const startViewport = { ...viewport };
+  const duration = 360;
+  let startedAt;
+
+  activeViewportAnimation = { frame: undefined };
+  const step = () => {
+    const now = Date.now();
+    startedAt ??= now;
+    const progress = clamp((now - startedAt) / duration, 0, 1);
+    const eased = easeOutCubic(progress);
+    viewport = {
+      x: startViewport.x + (targetViewport.x - startViewport.x) * eased,
+      y: startViewport.y + (targetViewport.y - startViewport.y) * eased,
+      z: startViewport.z + (targetViewport.z - startViewport.z) * eased,
+    };
+    applyTransform();
+
+    if (progress < 1) {
+      activeViewportAnimation.frame = requestAnimationFrame(step);
+      return;
+    }
+
+    viewport = targetViewport;
+    activeViewportAnimation = undefined;
+    applyTransform();
+  };
+
+  activeViewportAnimation.frame = requestAnimationFrame(step);
+}
+
 function applyTransform() {
   elements.world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.z})`;
   elements.canvas.style.backgroundPosition = `${viewport.x}px ${viewport.y}px`;
@@ -550,12 +796,12 @@ function applyTransform() {
   writeHashState();
 }
 
-function centerTable(tableName) {
+function centeredViewportForTable(tableName) {
   const node = layout?.nodes.get(tableName);
-  if (!node) return;
+  if (!node || isTableHidden(tableName)) return;
 
   const rect = elements.canvas.getBoundingClientRect();
-  viewport = {
+  return {
     ...viewport,
     x: Math.round(rect.width / 2 - (node.x + node.width / 2) * viewport.z),
     y: Math.round(rect.height / 2 - (node.y + node.height / 2) * viewport.z),
@@ -563,20 +809,22 @@ function centerTable(tableName) {
 }
 
 function fitView() {
-  if (!layout || schema.tables.length === 0) return;
+  cancelViewportAnimation();
+  if (!layout || visibleTables().length === 0) return;
+  const bounds = visibleLayoutBounds();
   const rect = elements.canvas.getBoundingClientRect();
   const scale = clamp(
     Math.min(
-      (rect.width - FIT_PADDING) / Math.max(layout.width, 1),
-      (rect.height - FIT_PADDING) / Math.max(layout.height, 1),
+      (rect.width - FIT_PADDING) / Math.max(bounds.width, 1),
+      (rect.height - FIT_PADDING) / Math.max(bounds.height, 1),
     ),
     MIN_ZOOM,
     1.2,
   );
   viewport = {
     z: scale,
-    x: Math.round((rect.width - layout.width * scale) / 2),
-    y: Math.round((rect.height - layout.height * scale) / 2),
+    x: Math.round((rect.width - bounds.width * scale) / 2 - bounds.x * scale),
+    y: Math.round((rect.height - bounds.height * scale) / 2 - bounds.y * scale),
   };
   applyTransform();
 }
@@ -584,9 +832,12 @@ function fitView() {
 function renderAll(options = {}) {
   layout = computeLayout(schema);
   applyManualNodePositions();
-  elements.emptyState.hidden = schema.tables.length > 0;
+  elements.emptyState.textContent =
+    schema.tables.length === 0 ? "No TailorDB types found." : "No visible tables.";
+  elements.emptyState.hidden = visibleTables().length > 0;
   renderHeader();
   renderTableList();
+  renderShowModeControls();
   renderEdges();
   renderNodes();
   renderDetails();
@@ -595,7 +846,17 @@ function renderAll(options = {}) {
     return;
   }
   if (options.center && selectedTable) {
-    centerTable(selectedTable);
+    const nextViewport = centeredViewportForTable(selectedTable);
+    if (nextViewport) {
+      if (options.smooth) {
+        animateViewportTo(nextViewport);
+      } else {
+        cancelViewportAnimation();
+        viewport = nextViewport;
+        applyTransform();
+      }
+      return;
+    }
   }
   applyTransform();
 }
@@ -603,10 +864,11 @@ function renderAll(options = {}) {
 function selectTable(tableName, options = {}) {
   if (!tableName) return;
   selectedTable = tableName;
-  renderAll({ center: options.center !== false });
+  renderAll({ center: options.center !== false, smooth: options.smooth !== false });
 }
 
 function zoomAt(nextZoom, clientX, clientY) {
+  cancelViewportAnimation();
   const rect = elements.canvas.getBoundingClientRect();
   const worldX = (clientX - rect.left - viewport.x) / viewport.z;
   const worldY = (clientY - rect.top - viewport.y) / viewport.z;
@@ -620,6 +882,7 @@ function zoomAt(nextZoom, clientX, clientY) {
 }
 
 function panBy(deltaX, deltaY) {
+  cancelViewportAnimation();
   viewport = {
     ...viewport,
     x: viewport.x - deltaX,
@@ -630,6 +893,7 @@ function panBy(deltaX, deltaY) {
 
 function startCanvasPan(event) {
   if (event.button !== 0 || event.target.closest("button, input, .canvas-toolbar")) return;
+  cancelViewportAnimation();
 
   activeCanvasPan = {
     moved: false,
@@ -690,6 +954,9 @@ function wireInteractions() {
     zoomAt(viewport.z / 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
   });
   elements.fitView.addEventListener("click", fitView);
+  elements.showMode.addEventListener("click", () => {
+    setShowModeMenuOpen(elements.showModeMenu.hidden);
+  });
   elements.copyLink.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(location.href);
@@ -724,6 +991,14 @@ function wireInteractions() {
   elements.canvas.addEventListener("pointercancel", finishCanvasPan);
   elements.canvas.addEventListener("lostpointercapture", finishCanvasPan);
 
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest(".show-mode-control")) {
+      setShowModeMenuOpen(false);
+    }
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setShowModeMenuOpen(false);
+  });
   window.addEventListener("resize", () => {
     if (!hasViewportFromHash) fitView();
   });
