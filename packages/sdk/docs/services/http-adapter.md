@@ -98,4 +98,4 @@ Exact matching semantics (trailing-slash handling, percent-encoding, etc.) are d
 
 ## Types
 
-The request/response shapes (`HttpAdapterRequest`, `HttpAdapterInputResult`, `HttpAdapterGraphQLResponse`, `HttpAdapterOutputResult`, …) are exported from `@tailor-platform/sdk`; refer to the type definitions in your editor rather than this document.
+The request/response shapes (`HttpAdapterRequest`, `HttpAdapterGraphQLRequest`, `HttpAdapterGraphQLResponse`, `HttpAdapterResponse`, …) are exported from `@tailor-platform/sdk`; refer to the type definitions in your editor rather than this document.

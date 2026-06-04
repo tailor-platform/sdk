@@ -35,13 +35,13 @@ export type HttpAdapterRequest = {
   body: string;
 };
 
-export type HttpAdapterInputResult = {
+export type HttpAdapterGraphQLRequest = {
   query: string;
   variables?: Record<string, unknown>;
   operationName?: string;
 };
 
-export type HttpAdapterInputFn = (req: HttpAdapterRequest) => HttpAdapterInputResult;
+export type HttpAdapterInputFn = (req: HttpAdapterRequest) => HttpAdapterGraphQLRequest;
 
 export type HttpAdapterGraphQLResponse = {
   data?: unknown;
@@ -49,13 +49,13 @@ export type HttpAdapterGraphQLResponse = {
   extensions?: unknown;
 };
 
-export type HttpAdapterOutputResult = {
+export type HttpAdapterResponse = {
   statusCode?: number;
   headers?: Record<string, string>;
   body: string;
 };
 
-export type HttpAdapterOutputFn = (resp: HttpAdapterGraphQLResponse) => HttpAdapterOutputResult;
+export type HttpAdapterOutputFn = (resp: HttpAdapterGraphQLResponse) => HttpAdapterResponse;
 
 /**
  * Per-method input handlers. At least one method must be provided.
