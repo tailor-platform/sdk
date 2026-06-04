@@ -49,6 +49,11 @@ interface ErdExportJsonResult {
   schemaOutputPath: string;
 }
 
+interface OpenStaticFileResult {
+  filePath: string;
+  fd: number;
+}
+
 const GLOB_CHARS = /[*?[\]{}()!+@]/;
 
 function formatServeCommand(namespace: string): string {
@@ -82,6 +87,23 @@ function resolveRequestPath(distDir: string, requestUrl: string | undefined): st
   return filePath;
 }
 
+function openStaticFile(filePath: string): OpenStaticFileResult | undefined {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(filePath, "r");
+    if (!fs.fstatSync(fd).isFile()) {
+      fs.closeSync(fd);
+      return undefined;
+    }
+    return { filePath, fd };
+  } catch {
+    if (fd !== undefined) {
+      fs.closeSync(fd);
+    }
+    return undefined;
+  }
+}
+
 function serveFile(distDir: string, req: http.IncomingMessage, res: http.ServerResponse): void {
   const filePath = resolveRequestPath(distDir, req.url);
   if (!filePath) {
@@ -91,15 +113,39 @@ function serveFile(distDir: string, req: http.IncomingMessage, res: http.ServerR
   }
 
   const fallbackPath = path.join(distDir, "index.html");
-  const targetPath =
-    fs.existsSync(filePath) && fs.statSync(filePath).isFile() ? filePath : fallbackPath;
-  const mimeType = lookupMime(targetPath) || "application/octet-stream";
+  const target = openStaticFile(filePath) ?? openStaticFile(fallbackPath);
+  if (!target) {
+    res.writeHead(503, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "Retry-After": "1",
+    });
+    res.end("ERD build is refreshing. Please retry.");
+    return;
+  }
 
+  const mimeType = lookupMime(target.filePath) || "application/octet-stream";
+  const stream = fs.createReadStream(target.filePath, {
+    fd: target.fd,
+    autoClose: true,
+  });
+  stream.on("error", () => {
+    if (!res.headersSent) {
+      res.writeHead(503, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Retry-After": "1",
+      });
+      res.end("ERD build is refreshing. Please retry.");
+      return;
+    }
+    res.destroy();
+  });
   res.writeHead(200, {
     "Content-Type": mimeType,
-    "Cache-Control": getCacheControl(targetPath),
+    "Cache-Control": getCacheControl(target.filePath),
   });
-  fs.createReadStream(targetPath).pipe(res);
+  stream.pipe(res);
 }
 
 async function startStaticServer(options: StartStaticServerOptions): Promise<StaticServerResult> {
