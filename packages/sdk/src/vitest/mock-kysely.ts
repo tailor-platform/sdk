@@ -7,23 +7,109 @@
  */
 
 import {
+  ColumnNode,
   type CompiledQuery,
   type DatabaseConnection,
   type Dialect,
   type Driver,
+  InsertQueryNode,
   Kysely,
+  type OperationNode,
   type OperationNodeKind,
   PostgresAdapter,
   PostgresIntrospector,
   PostgresQueryCompiler,
+  PrimitiveValueListNode,
   type QueryResult,
+  ReferenceNode,
+  type Transaction,
+  UpdateQueryNode,
+  ValueListNode,
+  ValueNode,
+  ValuesNode,
 } from "kysely";
+
+function unwrapValue(node: OperationNode): unknown {
+  return ValueNode.is(node) ? node.value : node;
+}
+
+function insertRows(node: OperationNode): Record<string, unknown>[] {
+  if (!InsertQueryNode.is(node)) {
+    throw new Error(`insertRows: expected InsertQueryNode, got ${node.kind}`);
+  }
+  const columns = node.columns ?? [];
+  const valuesNode = node.values;
+  if (valuesNode === undefined || !ValuesNode.is(valuesNode)) return [];
+  return valuesNode.values.map((row) => {
+    const values = PrimitiveValueListNode.is(row)
+      ? row.values
+      : ValueListNode.is(row)
+        ? row.values.map(unwrapValue)
+        : [];
+    const result: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      result[col.column.name] = values[i];
+    });
+    return result;
+  });
+}
+
+function insertValues(node: OperationNode): Record<string, unknown> {
+  const rows = insertRows(node);
+  if (rows.length > 1) {
+    throw new Error(
+      `insertValues: query inserts ${rows.length} rows; use insertRows() for multi-row inserts`,
+    );
+  }
+  return rows[0] ?? {};
+}
+
+function updateValues(node: OperationNode): Record<string, unknown> {
+  if (!UpdateQueryNode.is(node)) {
+    throw new Error(`updateValues: expected UpdateQueryNode, got ${node.kind}`);
+  }
+  const result: Record<string, unknown> = {};
+  for (const update of node.updates ?? []) {
+    const col = update.column;
+    const name = ColumnNode.is(col)
+      ? col.column.name
+      : ReferenceNode.is(col) && ColumnNode.is(col.column)
+        ? col.column.column.name
+        : undefined;
+    if (name !== undefined) result[name] = unwrapValue(update.value);
+  }
+  return result;
+}
 
 /** A single statement executed against the mock, captured in order. */
 export interface ExecutedQuery {
+  /** The Kysely operation node kind, e.g. `"SelectQueryNode"`. */
   kind: OperationNodeKind;
+  /** The compiled SQL string. */
   sql: string;
+  /** The bound parameter values, in positional order. */
   parameters: readonly unknown[];
+  /** The compiled Kysely operation node. */
+  node: OperationNode;
+  /** One `{ column: value }` map per row written by an insert. */
+  insertRows: () => Record<string, unknown>[];
+  /** The `{ column: value }` map written by a single-row insert. */
+  insertValues: () => Record<string, unknown>;
+  /** The `{ column: value }` map written by an update's SET clause. */
+  updateValues: () => Record<string, unknown>;
+}
+
+function toExecutedQuery(compiledQuery: CompiledQuery): ExecutedQuery {
+  const node = compiledQuery.query;
+  return {
+    kind: node.kind,
+    sql: compiledQuery.sql,
+    parameters: compiledQuery.parameters,
+    node,
+    insertRows: () => insertRows(node),
+    insertValues: () => insertValues(node),
+    updateValues: () => updateValues(node),
+  };
 }
 
 type MockRow = Record<string, unknown>;
@@ -46,16 +132,29 @@ function toStagedResult(result: MockResult): StagedResult {
 
 /** Controls and assertions for a {@link createKyselyMock} instance. */
 export interface KyselyMock<DB> {
+  /** The mock Kysely instance to run queries against. */
   db: Kysely<DB>;
+  /** Every recorded query, in execution order. */
   executedQueries: ExecutedQuery[];
+  /** Recorded SELECT queries. */
   selects: ExecutedQuery[];
+  /** Recorded INSERT queries. */
   inserts: ExecutedQuery[];
+  /** Recorded UPDATE queries. */
   updates: ExecutedQuery[];
+  /** Recorded DELETE queries. */
   deletes: ExecutedQuery[];
+  /** Stage the rows the next query returns. */
   enqueueResult: (result: MockResult) => void;
+  /** Stage the rows for several upcoming queries, consumed in order. */
   enqueueResults: (...results: MockResult[]) => void;
+  /** Set a resolver that returns rows by inspecting each query. */
   setQueryResolver: (resolver: QueryResolver) => void;
+  /** Run `fn` inside a real transaction and return its result. */
+  withTx: <R>(fn: (trx: Transaction<DB>) => Promise<R>) => Promise<R>;
+  /** Clear recorded queries and staged results. */
   reset: () => void;
+  /** Same as {@link KyselyMock.reset}; enables `using` disposal. */
   [Symbol.dispose]: () => void;
 }
 
@@ -90,11 +189,7 @@ class MockConnection implements DatabaseConnection {
   constructor(private readonly state: MockState) {}
 
   async executeQuery<R>(compiledQuery: CompiledQuery): Promise<QueryResult<R>> {
-    const query: ExecutedQuery = {
-      kind: compiledQuery.query.kind,
-      sql: compiledQuery.sql,
-      parameters: compiledQuery.parameters,
-    };
+    const query = toExecutedQuery(compiledQuery);
     this.state.executed.push(query);
     const { rows, numAffectedRows } = this.state.next(query);
     return {
@@ -166,6 +261,7 @@ export function createKyselyMock<DB = Record<string, never>>(): KyselyMock<DB> {
     enqueueResult: (result) => state.enqueue(result),
     enqueueResults: (...results) => state.enqueue(...results),
     setQueryResolver: (resolver) => state.setResolver(resolver),
+    withTx: (fn) => kysely.transaction().execute(fn),
     reset: () => state.reset(),
     [Symbol.dispose]: () => state.reset(),
   };
