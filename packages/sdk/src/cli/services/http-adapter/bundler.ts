@@ -28,22 +28,9 @@ export interface HttpAdapterBundleResult {
 }
 
 /**
- * Bundle each HTTP adapter's `input` (and `output`, if present) function into a
- * single JS string that defines a global `transform(input)` entry point.
- *
- * For `input`, the SDK generates a method dispatcher: at runtime the gateway
- * passes the HTTP request (with `method` in uppercase) and the wrapper routes
- * it to the user's per-method handler. For `output`, the user's function is
- * used directly.
- *
- * The output runs on the gateway's Sobek runtime (a goja fork: ES5.1 with most
- * of ES6). We downlevel to ES2017 (not lower) on purpose: at ES2017 `async`/
- * `await` stays as detectable syntax so the build-time check rejects it, while
- * es2018+ syntax is downleveled. A lower target would rewrite async into a
- * generator+Promise state machine that evades the check and cannot run on
- * Sobek (no event loop). The es2016/es2017 sync syntax that does reach Sobek
- * (e.g. `**`) is supported there. Output is a single IIFE, no Node imports, no
- * async/await, no code splitting, so each function runs independently.
+ * Bundle each adapter's `input` (and `output`, if present) into a standalone
+ * IIFE defining a global `transform(input)` entry point. `input` gets a
+ * generated dispatcher that routes by `req.method`; `output` is used as is.
  * @param adapters - Detected adapters to bundle
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @returns Bundled scripts keyed by adapter name
@@ -71,9 +58,7 @@ export async function bundleHttpAdapters(
     tsconfig = undefined;
   }
 
-  // rolldown.build() is memory-intensive; cap parallelism like the other SDK
-  // bundlers (resolvers/executors/workflows) instead of launching every
-  // input/output bundle at once.
+  // rolldown.build() is memory-intensive; cap parallelism like the other SDK bundlers.
   const tasks = adapters.flatMap((adapter) => {
     const kinds: Array<"input" | "output"> = adapter.hasOutput ? ["input", "output"] : ["input"];
     return kinds.map((kind) => ({ adapter, kind }));
@@ -140,10 +125,8 @@ async function bundleAdapterScript(
         },
       };
 
-      // The SDK only contributes the `createHttpAdapter` brand at build time;
-      // at gateway runtime we just need the user's handler bodies. Replace any
-      // `@tailor-platform/sdk` import with a tiny stub so the IIFE output has
-      // no external global dependency.
+      // Stub out `@tailor-platform/sdk` imports: only the brand matters at
+      // build time, and the IIFE must not depend on external globals.
       const stubSdkImports: rolldown.Plugin = {
         name: "http-adapter-stub-sdk",
         resolveId(source) {
@@ -175,11 +158,9 @@ async function bundleAdapterScript(
           },
           tsconfig,
           plugins,
-          // Target ES2017 deliberately (not a lower level): it keeps `async`/
-          // `await` as detectable syntax so rejectAsyncInBundle can reject it. A
-          // lower target (e.g. es2015) downlevels async into a generator+Promise
-          // state machine that both evades that check and cannot run on Sobek
-          // (no event loop to settle Promises). See the bundler doc comment.
+          // es2017 on purpose: async/await must survive downleveling so
+          // rejectAsyncInBundle can reject it (lower targets rewrite it into
+          // generator+Promise code that evades the check and breaks on Sobek).
           transform: { target: "es2017" },
           treeshake: {
             moduleSideEffects: false,
@@ -209,10 +190,8 @@ async function bundleAdapterScript(
         );
       }
 
-      // Async/await isn't supported by Sobek, and the AST check in detector.ts
-      // only inspects the user's top-level handler. Helpers pulled in through
-      // imports could still introduce `async` / `await`, so verify the final
-      // bundled output is fully synchronous.
+      // Load-time checks only see the handler functions; imported helpers can
+      // still introduce async/await, so verify the whole bundle is synchronous.
       rejectAsyncInBundle(bundled, adapter.name, kind);
 
       return bundled;
