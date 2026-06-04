@@ -26,8 +26,11 @@ describe("createHttpAdapter", () => {
         get: () => ({ query: "{ me { id } }" }),
       },
     });
-    expect(Object.keys(adapter)).not.toContain(SDK_BRAND.toString());
+    // The brand symbol is an own property...
+    expect(Object.getOwnPropertySymbols(adapter)).toContain(SDK_BRAND);
+    // ...but non-enumerable, so it is hidden from enumeration / spread.
     expect(Object.getOwnPropertyDescriptor(adapter, SDK_BRAND)?.enumerable).toBe(false);
+    expect(Object.getOwnPropertySymbols({ ...adapter })).not.toContain(SDK_BRAND);
   });
 
   it("preserves the output function when provided", () => {
