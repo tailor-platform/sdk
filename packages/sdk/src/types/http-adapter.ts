@@ -64,10 +64,12 @@ export type HttpAdapterOutputFn = (resp: HttpAdapterGraphQLResponse) => HttpAdap
 export type HttpAdapterInput = Partial<Record<HttpMethodKey, HttpAdapterInputFn>>;
 
 /**
- * User-facing HTTP adapter shape with typed `input` and `output` signatures.
- * The runtime/parser representation uses the looser `HttpAdapterConfig` from
- * `./http-adapter.generated` where the function fields are typed as `Function`.
+ * HTTP adapter configuration accepted by `createHttpAdapter` with typed
+ * `input` and `output` signatures.
  */
+// Internally, the parser-side representation is the looser `HttpAdapterConfig`
+// from `./http-adapter.generated`, where the function fields are typed as
+// `Function`.
 export type HttpAdapter = Omit<HttpAdapterConfigInput, "input" | "output"> & {
   input: HttpAdapterInput;
   output?: HttpAdapterOutputFn;

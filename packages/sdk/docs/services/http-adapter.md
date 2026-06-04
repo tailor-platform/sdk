@@ -10,9 +10,9 @@ Each HTTP adapter is a single file that declares:
 - An `input` object keyed by lowercase HTTP method (`get`, `post`, `put`, `patch`, `delete`) — each value is a function that converts an incoming HTTP request into a GraphQL request (`query`, `variables`, `operationName`)
 - An optional `output` function — **shared across all methods** — that converts the GraphQL response into an HTTP response (`statusCode`, `headers`, `body`)
 
-At deploy time the SDK bundles `input` (with a generated method dispatcher) and `output` into standalone JS scripts that the platform runs in a sandboxed runtime when a matching request reaches your application under the `/api/` prefix.
+Adapters are deployed together with your application. When a request arrives under the `/api/` prefix and matches an adapter, the handler for the request method runs server-side.
 
-For the official Tailor Platform documentation — including the exact URL routing, request/response body limits, execution timeouts, CORS handling, and other runtime behavior — see https://docs.tailor.tech/.
+For the official Tailor Platform documentation — including the exact URL routing, request/response body limits, execution timeouts, and CORS handling — see https://docs.tailor.tech/.
 
 ## Requirements
 
@@ -20,13 +20,13 @@ For the official Tailor Platform documentation — including the exact URL routi
 - `name` must be a string literal that matches `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$` and be unique across all adapters
 - `input` must be an object literal with at least one method handler
 - Each method handler and `output` must be inline arrow or `function` expressions (not references to functions defined elsewhere)
-- All handlers **must be synchronous** — the SDK rejects `async`/`await` at build time because the runtime does not support it
+- All handlers **must be synchronous** — `async`/`await` is rejected at build time
 
-## Build-time Limits
+## Constraints
 
-Each adapter function is bundled into a standalone script that runs in a sandboxed JavaScript runtime. Handlers **must be synchronous**: `async`/`await`, Promises, `fetch`, Node APIs (`fs`, `path`, `crypto`, …), and top-level `await` are not available. The SDK rejects `async`/`await` and Node built-in imports at build time. Each bundle is also capped at 256 KB (error), with a warning above 64 KB.
+Handlers run server-side and **must be synchronous**: `async`/`await`, Promises, `fetch`, Node APIs (`fs`, `path`, `crypto`, …), and top-level `await` are not available. `async`/`await` and Node built-in imports are rejected at build time. Each adapter's built output (including imported helpers) is capped at 256 KB, with a warning above 64 KB.
 
-Runtime limits (request/response body size, execution timeout, available globals) are enforced separately by the platform — see the platform documentation linked above.
+Request/response body size, execution timeout, and other limits are enforced by the platform — see the platform documentation linked above.
 
 ## Configuration
 
@@ -84,11 +84,11 @@ Beyond `name`, `pathPattern`, `input`, and `output`, two optional fields control
 
 ### Why is `output` shared instead of per-method?
 
-The platform runs `input` and `output` in **separate JavaScript VMs** with no shared globals, and the `output` callback only receives the GraphQL response (not the original request or method). `output` is primarily intended for reshaping the response format (e.g. JSON to XML) — method-specific processing is expected to be handled on the `input`/resolver side. For per-method response shaping, discriminate inside `output` based on the response data shape.
+`input` and `output` run **in isolation** and cannot share any state; `output` only receives the GraphQL response (not the original request or method). `output` is primarily intended for reshaping the response format (e.g. JSON to XML) — method-specific processing is expected to be handled on the `input`/resolver side. For per-method response shaping, discriminate inside `output` based on the response data shape.
 
 ## Path Pattern
 
-`pathPattern` is matched against the request path **after** the platform-side `/api/` prefix.
+`pathPattern` is matched against the request path **after** the `/api/` prefix.
 
 - Literal segments must match exactly
 - A `*` in the middle of the pattern matches exactly one path segment (`/users/*/items`)
