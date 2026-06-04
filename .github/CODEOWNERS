@@ -2,3 +2,7 @@
 # These owners will be the default owners for everything in the repo.
 
 * @toiroakr @remiposo @dqn
+
+# Changeset release PRs (Version Packages) always touch CHANGELOG.md,
+# so releases require review from maintainers.
+CHANGELOG.md @toiroakr @remiposo
