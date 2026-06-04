@@ -33,8 +33,9 @@ export const listCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     const config = parseCrashReportConfig();
+    const jsonOutput = args.json || logger.jsonMode;
     if (!config.localDir) {
-      if (args.json) {
+      if (jsonOutput) {
         logger.out([]);
         return;
       }
@@ -47,7 +48,7 @@ export const listCommand = defineAppCommand({
     try {
       entries = fs.readdirSync(config.localDir);
     } catch {
-      if (args.json) {
+      if (jsonOutput) {
         logger.out([]);
         return;
       }
@@ -59,7 +60,7 @@ export const listCommand = defineAppCommand({
     const files = orderAndLimitCrashReports(entries, { order: args.order, limit: args.limit });
 
     if (files.length === 0) {
-      if (args.json) {
+      if (jsonOutput) {
         logger.out([]);
         return;
       }
@@ -68,7 +69,7 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    if (args.json) {
+    if (jsonOutput) {
       logger.out(formatCrashReportFiles(files, config.localDir));
       return;
     }

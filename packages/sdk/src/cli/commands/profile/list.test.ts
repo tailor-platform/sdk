@@ -73,4 +73,14 @@ describe("profile list", () => {
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);
   });
+
+  test("honors logger jsonMode when parent command delegates without json args", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+
+    await listCommand.run({} as never);
+
+    expect(stdout.output).not.toBe("");
+    expect(JSON.parse(stdout.output)).toEqual([]);
+  });
 });
