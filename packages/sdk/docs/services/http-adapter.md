@@ -24,7 +24,7 @@ For the official Tailor Platform documentation — including the exact URL routi
 
 ## Build-time Limits
 
-The SDK downlevels each adapter function to **ES2017 syntax** and bundles it into a standalone IIFE. ES2017 is the bundler's downlevel target, not the runtime's capability: the gateway executes the bundle in **Sobek** (a Go JavaScript engine, fork of goja — ES5.1 with most of ES6). The target is kept at ES2017 deliberately so that `async`/`await` stays detectable and is rejected at build time; a lower target would rewrite it into Promise-based code that cannot run on Sobek (which has no event loop). Handlers must therefore be synchronous — `async`/`await` and Promises are unavailable at runtime. The bundle is also rejected if it imports Node built-in modules (`fs`, `path`, `crypto`, etc.) or exceeds 256 KB; a warning is emitted above 64 KB.
+Each adapter function is bundled into a standalone script that runs in a sandboxed JavaScript runtime on the gateway. Handlers **must be synchronous**: `async`/`await`, Promises, `fetch`, Node APIs (`fs`, `path`, `crypto`, …), and top-level `await` are not available. The SDK rejects `async`/`await` and Node built-in imports at build time. Each bundle is also capped at 256 KB (error), with a warning above 64 KB.
 
 Gateway-side runtime limits (request/response body size, execution timeout, available globals) are enforced separately by the platform — see the platform documentation linked above.
 

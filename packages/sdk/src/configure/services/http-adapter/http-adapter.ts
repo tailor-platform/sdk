@@ -30,12 +30,9 @@ export type {
  * response shapes per method, discriminate inside `output` based on the
  * GraphQL response shape.
  *
- * Each handler is bundled into a JS string and executed server-side in a
- * sandboxed Sobek runtime (a goja fork — ES5.1 with most of ES6). Bundles are
- * downleveled to ES2017 syntax; that target (rather than the runtime's actual
- * level) is intentional, so `async`/`await` stays detectable and is rejected at
- * build time. Node APIs, `fetch`, `async`/`await`, and top-level `await` are
- * not available at runtime.
+ * Each handler runs server-side in a sandboxed JavaScript runtime on the
+ * gateway and must be synchronous: Node APIs, `fetch`, `async`/`await`,
+ * Promises, and top-level `await` are not available at runtime.
  *
  * Optional fields: `enabled` (default `true`; set `false` to deploy the adapter
  * without serving it) and `priority` (non-negative integer, default `0`;
