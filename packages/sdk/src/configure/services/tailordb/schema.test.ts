@@ -1,9 +1,9 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { t } from "@/configure/types";
+import { type TailorUser, unauthenticatedTailorUser } from "@/types/user";
 import { db } from "./schema";
 import type { Hook } from "./types";
 import type { output } from "@/types/helpers";
-import type { TailorUser } from "@/types/user";
 import type { FieldValidateInput, ValidateConfig } from "@/types/validation";
 
 describe("TailorDBField basic field type tests", () => {
@@ -604,6 +604,54 @@ describe("TailorDBType withTimestamps option tests", () => {
       createdAt: string | Date;
       updatedAt?: string | Date | null;
     }>();
+  });
+
+  const timestampHookUser = unauthenticatedTailorUser;
+
+  it("createdAt create hook respects a user-specified value", () => {
+    const { createdAt } = db.fields.timestamps();
+    const createHook = createdAt.metadata.hooks?.create;
+    expect(createHook).toBeDefined();
+
+    const specified = new Date("2025-02-10T09:00:00Z");
+    const result = createHook!({ value: specified, data: {}, user: timestampHookUser });
+    expect(result).toBe(specified);
+  });
+
+  it("createdAt create hook falls back to now when no value is given", () => {
+    const { createdAt } = db.fields.timestamps();
+    const createHook = createdAt.metadata.hooks?.create;
+    expect(createHook).toBeDefined();
+
+    const before = Date.now();
+    const result = createHook!({ value: null, data: {}, user: timestampHookUser });
+    const after = Date.now();
+    expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+  });
+
+  it("updatedAt update hook respects a user-specified value", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
+
+    const specified = new Date("2025-02-10T09:00:00Z");
+    const result = updateHook!({ value: specified, data: {}, user: timestampHookUser });
+    expect(result).toBe(specified);
+  });
+
+  it("updatedAt update hook falls back to now when no value is given", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
+
+    const before = Date.now();
+    const result = updateHook!({ value: null, data: {}, user: timestampHookUser });
+    const after = Date.now();
+    expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
   });
 });
 
