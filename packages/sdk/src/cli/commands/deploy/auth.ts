@@ -417,7 +417,7 @@ async function planServices(
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existing = existingServices[config.name];
     const metaRequest = await buildMetaRequest({
       trn: trn(workspaceId, config.name),
@@ -537,7 +537,7 @@ async function planIdPConfigs(
   };
 
   for (const authService of auths) {
-    const { parsedConfig: config } = authService;
+    const { config } = authService;
     const existingIdPConfigs = await fetchIdPConfigs(config.name);
     const existingMap = new Map<string, (typeof existingIdPConfigs)[number]>();
     existingIdPConfigs.forEach((idpConfig) => {
@@ -864,7 +864,7 @@ async function planUserProfileConfigs(
   >("Auth userProfileConfigs");
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-user-profile-config`;
     try {
       const { userProfileProviderConfig } = await client.getUserProfileConfig({
@@ -994,7 +994,7 @@ async function planTenantConfigs(
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-tenant-config`;
     try {
       const { tenantProviderConfig } = await client.getTenantConfig({
@@ -1129,7 +1129,7 @@ async function planMachineUsers(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingMachineUsers = await fetchMachineUsers(config.name);
     const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
@@ -1452,7 +1452,7 @@ async function planOAuth2Clients(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingOAuth2Clients = await fetchOAuth2Clients(config.name);
     const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
     existingOAuth2Clients.forEach((oauth2Client) => {
@@ -1620,7 +1620,7 @@ async function planSCIMConfigs(
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-scim-config`;
     try {
       await client.getAuthSCIMConfig({
@@ -1755,7 +1755,7 @@ async function planSCIMResources(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingSCIMResources = await fetchSCIMResources(config.name);
     const existingNameSet = new Set<string>();
     existingSCIMResources.forEach((scimResource) => {
@@ -1986,7 +1986,7 @@ async function planAuthHooks(
   const changeSet = createChangeSet<CreateAuthHook, UpdateAuthHook, DeleteAuthHook>("Auth hooks");
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const beforeLogin = config.hooks?.beforeLogin;
 
     let existingHook:

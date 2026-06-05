@@ -119,7 +119,7 @@ export function createGenerationManager(params: {
     const authService = application.authService;
     if (!authService) return undefined;
 
-    const authConfig = authService.parsedConfig;
+    const authConfig = authService.config;
     const userProfile = authService.userProfile;
     return {
       name: authConfig.name,

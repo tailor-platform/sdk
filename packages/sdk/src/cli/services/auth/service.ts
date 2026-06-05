@@ -19,7 +19,6 @@ export type AuthService = {
   readonly config: ParsedAuthConfig;
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
   readonly externalTailorDBNamespaces: ReadonlyArray<string>;
-  readonly parsedConfig: ParsedAuthConfig;
   readonly connections: Readonly<Record<string, AuthConnectionConfig>>;
   readonly userProfile: UserProfile | undefined;
   resolveNamespaces: () => Promise<void>;
@@ -47,7 +46,6 @@ export function createAuthService(
     config,
     tailorDBServices,
     externalTailorDBNamespaces,
-    parsedConfig: config,
     connections,
     get userProfile() {
       return userProfile;

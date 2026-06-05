@@ -54,7 +54,7 @@ function createMockApplication(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      parsedConfig: {
+      config: {
         name: "auth-a",
         publishSessionEvents: true,
         oauth2Clients: {
@@ -93,7 +93,7 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      parsedConfig: {
+      config: {
         name: "auth-a",
         oauth2Clients: {
           sample: {
@@ -101,7 +101,7 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
             grantTypes: ["authorization_code", "refresh_token"],
             redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
             clientType: "confidential",
-            // parsedConfig holds parse output: lifetimes are Duration, not numbers.
+            // config holds parse output: lifetimes are Duration, not numbers.
             accessTokenLifetimeSeconds: { seconds: 3600n, nanos: 0 },
             refreshTokenLifetimeSeconds: { seconds: 7200n, nanos: 0 },
             requireDpop: false,
@@ -119,7 +119,7 @@ function createMockApplicationWithBuiltInIdP(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      parsedConfig: {
+      config: {
         name: "auth-a",
         idProvider: {
           name: "default",
@@ -495,7 +495,7 @@ describe("planAuth", () => {
       staticWebsiteServices: [],
       authService: {
         resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-        parsedConfig: {
+        config: {
           name: "auth-a",
           oauth2Clients: {
             sample: {
@@ -607,7 +607,7 @@ describe("planAuth", () => {
         staticWebsiteServices: [{ name: "my-frontend" }],
         authService: {
           resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-          parsedConfig: {
+          config: {
             name: "auth-a",
             oauth2Clients: {
               sample: {
