@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { hashContent } from "@/cli/cache/hasher";
 import { logger } from "@/cli/shared/logger";
 import { isPluginGeneratedType } from "@/types/tailordb";
 import type {
@@ -47,7 +47,7 @@ interface BuildColumnOptions {
 }
 
 function buildRevision(schema: Omit<TailorDbErdSchema, "generatedAt" | "revision">): string {
-  return createHash("sha256").update(JSON.stringify(schema)).digest("hex").slice(0, 16);
+  return hashContent(JSON.stringify(schema)).slice(0, 16);
 }
 
 function toTypeSource(source: TypeSourceInfoEntry | undefined): TailorDbErdTypeSource | undefined {
@@ -183,11 +183,13 @@ function toTable(type: TailorDBType, source: TypeSourceInfoEntry | undefined): T
       }),
     );
 
+  const typeSource = toTypeSource(source);
+
   return {
     name: type.name,
     pluralForm: type.pluralForm,
     ...(type.description && { description: type.description }),
-    ...(toTypeSource(source) && { source: toTypeSource(source) }),
+    ...(typeSource && { source: typeSource }),
     columns: [
       {
         name: "id",

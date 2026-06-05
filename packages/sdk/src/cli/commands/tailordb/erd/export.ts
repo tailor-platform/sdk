@@ -24,7 +24,6 @@ interface ErdTarget {
   erdSite?: string;
   schemaOutputPath: string;
   distDir: string;
-  erdDir: string;
 }
 
 interface ErdBuildsOptions {
@@ -46,7 +45,6 @@ export interface ErdBuildResult {
   erdSite?: string;
   schemaOutputPath: string;
   distDir: string;
-  erdDir: string;
 }
 
 function getErdSite(context: LocalErdSchemaContext, namespace: string): string | undefined {
@@ -111,14 +109,12 @@ function toTarget(
   namespaceData: TailorDBNamespaceData,
   erdSite: string | undefined,
 ): ErdTarget {
-  const erdDir = path.join(outputDir, namespaceData.namespace);
-  const distDir = path.join(erdDir, "dist");
+  const distDir = path.join(outputDir, namespaceData.namespace, "dist");
   return {
     namespaceData,
     erdSite,
     schemaOutputPath: path.join(distDir, "schema.json"),
     distDir,
-    erdDir,
   };
 }
 
@@ -141,7 +137,6 @@ function prepareErdBuild(target: ErdTarget): ErdBuildResult {
     erdSite: target.erdSite,
     schemaOutputPath: target.schemaOutputPath,
     distDir: target.distDir,
-    erdDir: target.erdDir,
   };
 }
 

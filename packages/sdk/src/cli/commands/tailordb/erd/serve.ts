@@ -263,7 +263,6 @@ function parseFreshErdExportResults(stdout: string): ErdBuildResult[] {
           namespace: result.namespace,
           distDir: result.distDir,
           schemaOutputPath: result.schemaOutputPath,
-          erdDir: path.dirname(result.distDir),
         };
       });
     } catch {
