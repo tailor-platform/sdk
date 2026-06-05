@@ -16,21 +16,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  template-unit-tests:
+  template-tests:
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        template:
-          - tailordb
-          - resolver
-          - workflow
-          - executor
-          - generators
     runs-on: ${{ matrix.os }}
-    name: Template unit (${{ matrix.template }}, ${{ matrix.os }})
+    name: Template tests (${{ matrix.os }})
     timeout-minutes: 10
     permissions:
       contents: read
@@ -43,46 +37,18 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Build SDK
-        run: pnpm -C packages/sdk build
+      - name: Typecheck templates
+        run: >-
+          pnpm -r
+          --filter "./packages/create-sdk/templates/*"
+          run typecheck
 
-      - name: Typecheck template
-        working-directory: packages/create-sdk/templates/${{ matrix.template }}
-        run: pnpm typecheck
-
-      - name: Run unit tests
-        working-directory: packages/create-sdk/templates/${{ matrix.template }}
-        run: pnpm test:unit
-
-  template-typecheck:
-    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
-    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        template:
-          - hello-world
-          - inventory-management
-          - multi-application
-          - static-web-site
-    runs-on: ${{ matrix.os }}
-    name: Template typecheck (${{ matrix.template }}, ${{ matrix.os }})
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
-
-      - name: Install deps
-        uses: ./.github/actions/install-deps
-
-      - name: Build SDK
-        run: pnpm -C packages/sdk build
-
-      - name: Typecheck template
-        working-directory: packages/create-sdk/templates/${{ matrix.template }}
-        run: pnpm typecheck
+      - name: Run template unit tests
+        run: >-
+          pnpm -r
+          --filter "./packages/create-sdk/templates/tailordb"
+          --filter "./packages/create-sdk/templates/resolver"
+          --filter "./packages/create-sdk/templates/workflow"
+          --filter "./packages/create-sdk/templates/executor"
+          --filter "./packages/create-sdk/templates/generators"
+          run test:unit

@@ -41,7 +41,7 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Build packages
-        run: pnpm -r run build
+        run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
       - name: Run tests
         run: pnpm -r run test --project unit
