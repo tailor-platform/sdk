@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, test } from "vitest";
 import { createExecutor } from "@/configure/services/executor";
 import { idpUserCreatedTrigger } from "@/configure/services/executor/trigger/event";
 import { scheduleTrigger } from "@/configure/services/executor/trigger/schedule";
@@ -36,7 +36,7 @@ const eventExecutor = createExecutor({
 });
 
 describe("triggerExecutor API types", () => {
-  it("allows payload for incomingWebhook executors", () => {
+  test("allows payload for incomingWebhook executors", () => {
     const acceptsOptions = (
       _options: TriggerExecutorTypedOptions<typeof incomingWebhookExecutor>,
     ): void => {};
@@ -52,7 +52,7 @@ describe("triggerExecutor API types", () => {
     });
   });
 
-  it("disallows payload for schedule executors", () => {
+  test("disallows payload for schedule executors", () => {
     const acceptsOptions = (
       _options: TriggerExecutorTypedOptions<typeof scheduleExecutor>,
     ): void => {};
@@ -70,12 +70,12 @@ describe("triggerExecutor API types", () => {
     });
   });
 
-  it("rejects event trigger executors", () => {
+  test("rejects event trigger executors", () => {
     // @ts-expect-error - event trigger executors cannot be triggered manually
     type _InvalidEventTriggerOptions = TriggerExecutorTypedOptions<typeof eventExecutor>;
   });
 
-  it("works with default generic when TriggerExecutorTypedOptions generic is omitted", () => {
+  test("works with default generic when TriggerExecutorTypedOptions generic is omitted", () => {
     const acceptsDefaultOptions = (_options: TriggerExecutorTypedOptions): void => {};
 
     acceptsDefaultOptions({
@@ -99,7 +99,7 @@ describe("triggerExecutor API types", () => {
     });
   });
 
-  it("keeps deprecated TriggerExecutorOptions shape available", () => {
+  test("keeps deprecated TriggerExecutorOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: TriggerExecutorOptions): void => {};
 
     acceptsDeprecatedOptions({

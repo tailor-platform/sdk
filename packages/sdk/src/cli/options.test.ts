@@ -1,5 +1,5 @@
 import { extractFields, isLazyCommand } from "politty";
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { mainCommand } from "./index";
 import type { AnyCommand, ExtractedFields, SubCommandValue } from "politty";
 
@@ -65,7 +65,7 @@ async function walkCommand(cmd: SubCommandValue, path: string[] = []): Promise<v
 }
 
 describe("CLI options", () => {
-  it("does not have duplicate short option aliases in any command", async () => {
+  test("does not have duplicate short option aliases in any command", async () => {
     const subCommands = mainCommand.subCommands;
     expect(subCommands).toBeDefined();
 

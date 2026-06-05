@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, test } from "vitest";
 import { createExecutor } from "@/configure/services/executor";
 import { scheduleTrigger } from "@/configure/services/executor/trigger/schedule";
 import {
@@ -20,7 +20,7 @@ const myExecutor = createExecutor({
 });
 
 describe("listExecutorJobs API types", () => {
-  it("accepts typed options with executor definition", () => {
+  test("accepts typed options with executor definition", () => {
     const acceptsOptions = (_options: ListExecutorJobsTypedOptions<typeof myExecutor>): void => {};
 
     acceptsOptions({
@@ -37,7 +37,7 @@ describe("listExecutorJobs API types", () => {
     });
   });
 
-  it("rejects invalid order values", () => {
+  test("rejects invalid order values", () => {
     const acceptsOptions = (_options: ListExecutorJobsTypedOptions): void => {};
 
     acceptsOptions({
@@ -47,7 +47,7 @@ describe("listExecutorJobs API types", () => {
     });
   });
 
-  it("works with default generic when ListExecutorJobsTypedOptions generic is omitted", () => {
+  test("works with default generic when ListExecutorJobsTypedOptions generic is omitted", () => {
     const acceptsDefaultOptions = (_options: ListExecutorJobsTypedOptions): void => {};
 
     acceptsDefaultOptions({
@@ -59,7 +59,7 @@ describe("listExecutorJobs API types", () => {
     });
   });
 
-  it("rejects legacy options shape in typed overload", () => {
+  test("rejects legacy options shape in typed overload", () => {
     const acceptsTypedOptions = (_options: ListExecutorJobsTypedOptions): void => {};
 
     acceptsTypedOptions({
@@ -68,7 +68,7 @@ describe("listExecutorJobs API types", () => {
     });
   });
 
-  it("keeps deprecated ListExecutorJobsOptions shape available", () => {
+  test("keeps deprecated ListExecutorJobsOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: ListExecutorJobsOptions): void => {};
 
     acceptsDeprecatedOptions({
@@ -89,7 +89,7 @@ describe("listExecutorJobs API types", () => {
 });
 
 describe("getExecutorJob API types", () => {
-  it("accepts typed options with executor definition", () => {
+  test("accepts typed options with executor definition", () => {
     const acceptsOptions = (_options: GetExecutorJobTypedOptions<typeof myExecutor>): void => {};
 
     acceptsOptions({
@@ -106,7 +106,7 @@ describe("getExecutorJob API types", () => {
     });
   });
 
-  it("works with default generic when GetExecutorJobTypedOptions generic is omitted", () => {
+  test("works with default generic when GetExecutorJobTypedOptions generic is omitted", () => {
     const acceptsDefaultOptions = (_options: GetExecutorJobTypedOptions): void => {};
 
     acceptsDefaultOptions({
@@ -120,7 +120,7 @@ describe("getExecutorJob API types", () => {
     });
   });
 
-  it("rejects legacy options shape in typed overload", () => {
+  test("rejects legacy options shape in typed overload", () => {
     const acceptsTypedOptions = (_options: GetExecutorJobTypedOptions): void => {};
 
     acceptsTypedOptions({
@@ -130,7 +130,7 @@ describe("getExecutorJob API types", () => {
     });
   });
 
-  it("keeps deprecated GetExecutorJobOptions shape available", () => {
+  test("keeps deprecated GetExecutorJobOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: GetExecutorJobOptions): void => {};
 
     acceptsDeprecatedOptions({
@@ -147,7 +147,7 @@ describe("getExecutorJob API types", () => {
 });
 
 describe("watchExecutorJob API types", () => {
-  it("accepts typed options with executor definition", () => {
+  test("accepts typed options with executor definition", () => {
     const acceptsOptions = (_options: WatchExecutorJobTypedOptions<typeof myExecutor>): void => {};
 
     acceptsOptions({
@@ -165,7 +165,7 @@ describe("watchExecutorJob API types", () => {
     });
   });
 
-  it("works with default generic when WatchExecutorJobTypedOptions generic is omitted", () => {
+  test("works with default generic when WatchExecutorJobTypedOptions generic is omitted", () => {
     const acceptsDefaultOptions = (_options: WatchExecutorJobTypedOptions): void => {};
 
     acceptsDefaultOptions({
@@ -179,7 +179,7 @@ describe("watchExecutorJob API types", () => {
     });
   });
 
-  it("rejects legacy options shape in typed overload", () => {
+  test("rejects legacy options shape in typed overload", () => {
     const acceptsTypedOptions = (_options: WatchExecutorJobTypedOptions): void => {};
 
     acceptsTypedOptions({
@@ -189,7 +189,7 @@ describe("watchExecutorJob API types", () => {
     });
   });
 
-  it("keeps deprecated WatchExecutorJobOptions shape available", () => {
+  test("keeps deprecated WatchExecutorJobOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: WatchExecutorJobOptions): void => {};
 
     acceptsDeprecatedOptions({

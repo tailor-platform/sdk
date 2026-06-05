@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "./context";
 import { isCLIError } from "./errors";
 import { assertWritable } from "./readonly-guard";
@@ -224,23 +224,23 @@ describe("assertWritable", () => {
     vi.unstubAllEnvs();
   });
 
-  it("resolves when no profile is in scope", async () => {
+  test("resolves when no profile is in scope", async () => {
     await expect(assertWritable()).resolves.toBeUndefined();
   });
 
-  it("resolves when explicit profile has readonly undefined", async () => {
+  test("resolves when explicit profile has readonly undefined", async () => {
     await expect(assertWritable({ profile: "rw" })).resolves.toBeUndefined();
   });
 
-  it("resolves when explicit profile has readonly false", async () => {
+  test("resolves when explicit profile has readonly false", async () => {
     await expect(assertWritable({ profile: "ro_false" })).resolves.toBeUndefined();
   });
 
-  it("resolves silently when profile not found (deferring error to caller)", async () => {
+  test("resolves silently when profile not found (deferring error to caller)", async () => {
     await expect(assertWritable({ profile: "missing" })).resolves.toBeUndefined();
   });
 
-  it("throws CLIError with PROFILE_READONLY when profile is readonly via opts", async () => {
+  test("throws CLIError with PROFILE_READONLY when profile is readonly via opts", async () => {
     const promise = assertWritable({ profile: "ro" });
     await expect(promise).rejects.toThrow('Profile "ro" is read-only.');
     await promise.catch((err) => {
@@ -249,22 +249,22 @@ describe("assertWritable", () => {
     });
   });
 
-  it("throws when readonly profile is selected via TAILOR_PLATFORM_PROFILE env", async () => {
+  test("throws when readonly profile is selected via TAILOR_PLATFORM_PROFILE env", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "ro");
     await expect(assertWritable()).rejects.toThrow('Profile "ro" is read-only.');
   });
 
-  it("opts.profile takes precedence over env (rw opts wins over ro env)", async () => {
+  test("opts.profile takes precedence over env (rw opts wins over ro env)", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "ro");
     await expect(assertWritable({ profile: "rw" })).resolves.toBeUndefined();
   });
 
-  it("opts.profile takes precedence over env (ro opts wins over rw env, throws)", async () => {
+  test("opts.profile takes precedence over env (ro opts wins over rw env, throws)", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "rw");
     await expect(assertWritable({ profile: "ro" })).rejects.toThrow('Profile "ro" is read-only.');
   });
 
-  it("empty opts.profile falls through to env to match loader semantics", async () => {
+  test("empty opts.profile falls through to env to match loader semantics", async () => {
     // loadAccessToken / loadWorkspaceId use truthy fallback (||), so an empty
     // --profile "" flag still ends up resolving to TAILOR_PLATFORM_PROFILE.
     // The guard must mirror that or it leaves a bypass.
@@ -277,7 +277,7 @@ describe("write command coverage", () => {
   const cliDir = path.resolve(__dirname, "..");
   const commandsDir = path.join(cliDir, "commands");
 
-  it("every runnable command not on the read-only allowlist calls assertWritable", () => {
+  test("every runnable command not on the read-only allowlist calls assertWritable", () => {
     // Must match an actual call site, not just the import statement, so that
     // deleting the call (while leaving the import) still fails this test.
     const callPattern = /\bawait\s+assertWritable\s*\(/;
@@ -300,7 +300,7 @@ describe("write command coverage", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("read-only allowlist entries reference real files", () => {
+  test("read-only allowlist entries reference real files", () => {
     const missing: string[] = [];
     for (const relativePath of READ_OR_LOCAL_COMMAND_PATHS) {
       if (!fs.existsSync(path.join(commandsDir, relativePath))) {

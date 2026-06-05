@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { parseYAML } from "confbox";
 import { resolve } from "pathe";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 
 const sdkRoot = resolve(import.meta.dirname, "..", "..", "..");
 const skillsRoot = resolve(sdkRoot, "agent-skills");
@@ -28,7 +28,7 @@ function stripTrailingGlob(relPath: string): string {
 describe("packaged skills", () => {
   const skillDirs = listSkillDirs();
 
-  it("has at least one shipped skill directory", () => {
+  test("has at least one shipped skill directory", () => {
     expect(skillDirs.length).toBeGreaterThan(0);
   });
 
@@ -36,7 +36,7 @@ describe("packaged skills", () => {
     const skillMd = resolve(skillsRoot, name, "SKILL.md");
     const content = readFileSync(skillMd, "utf8");
 
-    it("has SKILL.md frontmatter with matching name and non-empty description", () => {
+    test("has SKILL.md frontmatter with matching name and non-empty description", () => {
       const frontmatter = extractFrontmatter(content);
       expect(frontmatter, `missing --- frontmatter in ${skillMd}`).not.toBeNull();
       expect(frontmatter?.name).toBe(name);
@@ -44,7 +44,7 @@ describe("packaged skills", () => {
       expect((frontmatter?.description as string).trim().length).toBeGreaterThan(0);
     });
 
-    it("references existing SDK files for every node_modules/@tailor-platform/sdk path", () => {
+    test("references existing SDK files for every node_modules/@tailor-platform/sdk path", () => {
       const matches = [...content.matchAll(NODE_MODULES_REF_PATTERN)];
       expect(matches.length, "skill should reference at least one SDK asset").toBeGreaterThan(0);
       for (const match of matches) {

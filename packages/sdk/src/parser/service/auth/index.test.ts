@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf, expect } from "vitest";
+import { describe, expectTypeOf, expect, test } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types/type";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
@@ -30,7 +30,7 @@ type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
 type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
 
 describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
-  it("aligns top-level keys and optionality with the schema", () => {
+  test("aligns top-level keys and optionality with the schema", () => {
     type ServiceOptionalKeys = OptionalKeysOf<AuthInput>;
     type SchemaOptionalKeys = OptionalKeysOf<AuthSchemaInput>;
 
@@ -43,14 +43,14 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     expectTypeOf<keyof AuthInput>().toEqualTypeOf<keyof AuthSchemaInput>();
   });
 
-  it("aligns AuthServiceInput and schema (except userProfile and machineUsers)", () => {
+  test("aligns AuthServiceInput and schema (except userProfile and machineUsers)", () => {
     type FunctionInput = Omit<AuthInput, "userProfile" | "machineUsers">;
     type SchemaInput = Omit<AuthSchemaInput, "userProfile" | "machineUsers">;
 
     expectTypeOf<FunctionInput>().toExtend<SchemaInput>();
   });
 
-  it("aligns particular userProfile with the schema", () => {
+  test("aligns particular userProfile with the schema", () => {
     type ServiceUserProfile = NonNullable<AuthInput["userProfile"]>;
     type SchemaUserProfile = NonNullable<AuthSchemaInput["userProfile"]>;
 
@@ -69,7 +69,7 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     >();
   });
 
-  it("aligns particular machineUsers with the schema", () => {
+  test("aligns particular machineUsers with the schema", () => {
     type SchemaMachineUser = NonNullable<AuthSchemaInput["machineUsers"]>[string];
     type SchemaAttributes = NonNullable<SchemaMachineUser["attributes"]>;
     type SchemaAttributeValue = SchemaAttributes[keyof SchemaAttributes];
@@ -85,7 +85,7 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     expectTypeOf<undefined>().not.toExtend<FunctionMachineUser["attributes"]>();
   });
 
-  it("machineUsers reflects userProfile attribute typing", () => {
+  test("machineUsers reflects userProfile attribute typing", () => {
     expectTypeOf<MachineUserConfig["attributes"]>().toMatchObjectType<{
       role: string;
       isActive: boolean;
@@ -98,17 +98,17 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     }>();
   });
 
-  it("rejects attributes not declared in userProfile", () => {
+  test("rejects attributes not declared in userProfile", () => {
     expectTypeOf<MachineUserConfig["attributes"] & { email: string }>().toBeNever();
   });
 
-  it("rejects attributeList value mismatches", () => {
+  test("rejects attributeList value mismatches", () => {
     expectTypeOf<MachineUserConfig["attributeList"] & [string, boolean]>().toBeNever();
   });
 });
 
 describe("OAuth2ClientSchema validation", () => {
-  it("accepts valid OAuth2 client configuration", () => {
+  test("accepts valid OAuth2 client configuration", () => {
     const validClient = {
       redirectURIs: ["https://example.com/callback"],
       grantTypes: ["authorization_code", "refresh_token"],
@@ -119,7 +119,7 @@ describe("OAuth2ClientSchema validation", () => {
     expect(() => OAuth2ClientSchema.parse(validClient)).not.toThrow();
   });
 
-  it("accepts valid token lifetime values and transforms to Duration", () => {
+  test("accepts valid token lifetime values and transforms to Duration", () => {
     const clientWithLifetimes = {
       redirectURIs: ["https://example.com/callback"],
       accessTokenLifetimeSeconds: 3600,
@@ -137,7 +137,7 @@ describe("OAuth2ClientSchema validation", () => {
     });
   });
 
-  it("accepts minimum token lifetime values and transforms to Duration", () => {
+  test("accepts minimum token lifetime values and transforms to Duration", () => {
     const clientWithMinLifetimes = {
       redirectURIs: ["https://example.com/callback"],
       accessTokenLifetimeSeconds: 60,
@@ -155,7 +155,7 @@ describe("OAuth2ClientSchema validation", () => {
     });
   });
 
-  it("accepts maximum token lifetime values and transforms to Duration", () => {
+  test("accepts maximum token lifetime values and transforms to Duration", () => {
     const clientWithMaxLifetimes = {
       redirectURIs: ["https://example.com/callback"],
       accessTokenLifetimeSeconds: 86400, // 1 day
@@ -173,7 +173,7 @@ describe("OAuth2ClientSchema validation", () => {
     });
   });
 
-  it("rejects access token lifetime below minimum", () => {
+  test("rejects access token lifetime below minimum", () => {
     const invalidClient = {
       redirectURIs: ["https://example.com/callback"],
       accessTokenLifetimeSeconds: 59,
@@ -184,7 +184,7 @@ describe("OAuth2ClientSchema validation", () => {
     );
   });
 
-  it("rejects access token lifetime above maximum", () => {
+  test("rejects access token lifetime above maximum", () => {
     const invalidClient = {
       redirectURIs: ["https://example.com/callback"],
       accessTokenLifetimeSeconds: 86401,
@@ -195,7 +195,7 @@ describe("OAuth2ClientSchema validation", () => {
     );
   });
 
-  it("rejects refresh token lifetime below minimum", () => {
+  test("rejects refresh token lifetime below minimum", () => {
     const invalidClient = {
       redirectURIs: ["https://example.com/callback"],
       refreshTokenLifetimeSeconds: 59,
@@ -206,7 +206,7 @@ describe("OAuth2ClientSchema validation", () => {
     );
   });
 
-  it("rejects refresh token lifetime above maximum", () => {
+  test("rejects refresh token lifetime above maximum", () => {
     const invalidClient = {
       redirectURIs: ["https://example.com/callback"],
       refreshTokenLifetimeSeconds: 604801,
@@ -217,7 +217,7 @@ describe("OAuth2ClientSchema validation", () => {
     );
   });
 
-  it("rejects non-integer token lifetime values", () => {
+  test("rejects non-integer token lifetime values", () => {
     const invalidClient = {
       redirectURIs: ["https://example.com/callback"],
       accessTokenLifetimeSeconds: 3600.5,
@@ -226,7 +226,7 @@ describe("OAuth2ClientSchema validation", () => {
     expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow();
   });
 
-  it("accepts client without token lifetime fields", () => {
+  test("accepts client without token lifetime fields", () => {
     const clientWithoutLifetimes = {
       redirectURIs: ["https://example.com/callback"],
       grantTypes: ["authorization_code", "refresh_token"],
@@ -237,7 +237,7 @@ describe("OAuth2ClientSchema validation", () => {
     expect(result.refreshTokenLifetimeSeconds).toBeUndefined();
   });
 
-  it("accepts requireDpop set to true", () => {
+  test("accepts requireDpop set to true", () => {
     const clientWithDpop = {
       redirectURIs: ["https://example.com/callback"],
       requireDpop: true,
@@ -247,7 +247,7 @@ describe("OAuth2ClientSchema validation", () => {
     expect(result.requireDpop).toBe(true);
   });
 
-  it("accepts requireDpop set to false", () => {
+  test("accepts requireDpop set to false", () => {
     const clientWithDpop = {
       redirectURIs: ["https://example.com/callback"],
       requireDpop: false,
@@ -257,7 +257,7 @@ describe("OAuth2ClientSchema validation", () => {
     expect(result.requireDpop).toBe(false);
   });
 
-  it("accepts client without requireDpop field", () => {
+  test("accepts client without requireDpop field", () => {
     const clientWithoutDpop = {
       redirectURIs: ["https://example.com/callback"],
     };
@@ -266,7 +266,7 @@ describe("OAuth2ClientSchema validation", () => {
     expect(result.requireDpop).toBeUndefined();
   });
 
-  it("rejects requireDpop=true for browser client type", () => {
+  test("rejects requireDpop=true for browser client type", () => {
     const browserClientWithDpop = {
       redirectURIs: ["https://example.com/callback"],
       clientType: "browser",
@@ -278,7 +278,7 @@ describe("OAuth2ClientSchema validation", () => {
     );
   });
 
-  it("accepts requireDpop=false for browser client type", () => {
+  test("accepts requireDpop=false for browser client type", () => {
     const browserClientWithoutDpop = {
       redirectURIs: ["https://example.com/callback"],
       clientType: "browser",
@@ -290,7 +290,7 @@ describe("OAuth2ClientSchema validation", () => {
     expect(result.requireDpop).toBe(false);
   });
 
-  it("accepts requireDpop=true for confidential client type", () => {
+  test("accepts requireDpop=true for confidential client type", () => {
     const confidentialClientWithDpop = {
       redirectURIs: ["https://example.com/callback"],
       clientType: "confidential",
@@ -302,7 +302,7 @@ describe("OAuth2ClientSchema validation", () => {
     expect(result.requireDpop).toBe(true);
   });
 
-  it("accepts requireDpop=true for public client type", () => {
+  test("accepts requireDpop=true for public client type", () => {
     const publicClientWithDpop = {
       redirectURIs: ["https://example.com/callback"],
       clientType: "public",
@@ -316,7 +316,7 @@ describe("OAuth2ClientSchema validation", () => {
 });
 
 describe("AuthConfigSchema publishSessionEvents validation", () => {
-  it("accepts publishSessionEvents set to true", () => {
+  test("accepts publishSessionEvents set to true", () => {
     const config = {
       name: "my-auth",
       publishSessionEvents: true,
@@ -326,7 +326,7 @@ describe("AuthConfigSchema publishSessionEvents validation", () => {
     expect(result.publishSessionEvents).toBe(true);
   });
 
-  it("accepts publishSessionEvents set to false", () => {
+  test("accepts publishSessionEvents set to false", () => {
     const config = {
       name: "my-auth",
       publishSessionEvents: false,
@@ -336,7 +336,7 @@ describe("AuthConfigSchema publishSessionEvents validation", () => {
     expect(result.publishSessionEvents).toBe(false);
   });
 
-  it("accepts config without publishSessionEvents field", () => {
+  test("accepts config without publishSessionEvents field", () => {
     const config = {
       name: "my-auth",
     };
@@ -347,7 +347,7 @@ describe("AuthConfigSchema publishSessionEvents validation", () => {
 });
 
 describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => {
-  it("rejects configs that include both userProfile and machineUserAttributes", () => {
+  test("rejects configs that include both userProfile and machineUserAttributes", () => {
     const config = {
       name: "my-auth",
       userProfile: {
@@ -364,7 +364,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
     );
   });
 
-  it("preserves an explicit userProfile.namespace", () => {
+  test("preserves an explicit userProfile.namespace", () => {
     const config = {
       name: "my-auth",
       userProfile: {

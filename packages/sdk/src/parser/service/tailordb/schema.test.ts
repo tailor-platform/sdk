@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { GQL_PERMISSION_INVALID_OPERAND_MESSAGE, TailorDBTypeSchema } from "./schema";
 
 const makeType = (gql: unknown) => ({
@@ -14,7 +14,7 @@ const makeType = (gql: unknown) => ({
 });
 
 describe("TailorDBTypeSchema gqlPermission validation", () => {
-  it("should reject record operand in gqlPermission", () => {
+  test("should reject record operand in gqlPermission", () => {
     const input = makeType([
       {
         conditions: [[{ record: "ownerId" }, "=", "123"]],
@@ -33,7 +33,7 @@ describe("TailorDBTypeSchema gqlPermission validation", () => {
     }
   });
 
-  it("should reject oldRecord operand in gqlPermission", () => {
+  test("should reject oldRecord operand in gqlPermission", () => {
     const input = makeType([
       {
         conditions: [[{ oldRecord: "status" }, "=", "active"]],
@@ -52,7 +52,7 @@ describe("TailorDBTypeSchema gqlPermission validation", () => {
     }
   });
 
-  it("should reject newRecord operand in gqlPermission", () => {
+  test("should reject newRecord operand in gqlPermission", () => {
     const input = makeType([
       {
         conditions: [[{ newRecord: "status" }, "=", "active"]],
@@ -71,7 +71,7 @@ describe("TailorDBTypeSchema gqlPermission validation", () => {
     }
   });
 
-  it("should allow user operand in gqlPermission", () => {
+  test("should allow user operand in gqlPermission", () => {
     const input = makeType([
       {
         conditions: [[{ user: "role" }, "=", "admin"]],

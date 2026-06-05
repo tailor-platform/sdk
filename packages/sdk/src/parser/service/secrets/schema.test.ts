@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { SecretsSchema } from "./schema";
 
 function wrap(
@@ -9,7 +9,7 @@ function wrap(
 }
 
 describe("SecretsSchema validation", () => {
-  it("accepts valid vault and secret names", () => {
+  test("accepts valid vault and secret names", () => {
     const valid = wrap({
       "my-vault": {
         "my-secret": "secret-value",
@@ -18,7 +18,7 @@ describe("SecretsSchema validation", () => {
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  it("accepts empty secret value", () => {
+  test("accepts empty secret value", () => {
     const valid = wrap({
       "my-vault": {
         "my-secret": "",
@@ -27,7 +27,7 @@ describe("SecretsSchema validation", () => {
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  it("accepts names with only digits", () => {
+  test("accepts names with only digits", () => {
     const valid = wrap({
       "123": {
         "456": "value",
@@ -36,56 +36,56 @@ describe("SecretsSchema validation", () => {
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  it("accepts names at maximum length (63 characters)", () => {
+  test("accepts names at maximum length (63 characters)", () => {
     const name = `a${"b".repeat(61)}c`;
     expect(name).toHaveLength(63);
     const valid = wrap({ [name]: { [name]: "value" } });
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  it("accepts names at minimum length (3 characters)", () => {
+  test("accepts names at minimum length (3 characters)", () => {
     const valid = wrap({ abc: { def: "value" } });
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  it("rejects vault name with uppercase letters", () => {
+  test("rejects vault name with uppercase letters", () => {
     const invalid = wrap({ "My-Vault": { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
-  it("rejects secret name with uppercase letters", () => {
+  test("rejects secret name with uppercase letters", () => {
     const invalid = wrap({ "my-vault": { "My-Secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
-  it("rejects name starting with hyphen", () => {
+  test("rejects name starting with hyphen", () => {
     const invalid = wrap({ "-my-vault": { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
-  it("rejects name ending with hyphen", () => {
+  test("rejects name ending with hyphen", () => {
     const invalid = wrap({ "my-vault-": { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
-  it("rejects name shorter than 3 characters", () => {
+  test("rejects name shorter than 3 characters", () => {
     const invalid = wrap({ ab: { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
-  it("rejects name longer than 63 characters", () => {
+  test("rejects name longer than 63 characters", () => {
     const name = `a${"b".repeat(62)}c`;
     expect(name).toHaveLength(64);
     const invalid = wrap({ [name]: { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
-  it("rejects name with underscores", () => {
+  test("rejects name with underscores", () => {
     const invalid = wrap({ my_vault: { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
-  it("accepts multiple vaults with multiple secrets", () => {
+  test("accepts multiple vaults with multiple secrets", () => {
     const valid = wrap({
       "vault-1": {
         "secret-a": "value-a",
@@ -98,7 +98,7 @@ describe("SecretsSchema validation", () => {
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  it("accepts nullish secret values", () => {
+  test("accepts nullish secret values", () => {
     const valid = wrap(
       {
         "my-vault": {
@@ -111,7 +111,7 @@ describe("SecretsSchema validation", () => {
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  it("accepts ignoreNullishValues option", () => {
+  test("accepts ignoreNullishValues option", () => {
     const valid = wrap({ "my-vault": { "my-secret": "value" } }, true);
     const parsed = SecretsSchema.parse(valid);
     expect(parsed.options.ignoreNullishValues).toBe(true);

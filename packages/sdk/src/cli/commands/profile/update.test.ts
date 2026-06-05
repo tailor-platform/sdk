@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
@@ -71,7 +71,7 @@ describe("profile update --permission", () => {
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
-  it("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
+  test("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["rw", "--permission", "read"]);
 
@@ -86,7 +86,7 @@ describe("profile update --permission", () => {
     expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
   });
 
-  it("clears readonly when --permission write is passed and skips remote validation", async () => {
+  test("clears readonly when --permission write is passed and skips remote validation", async () => {
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["ro", "--permission", "write"]);
 
@@ -98,7 +98,7 @@ describe("profile update --permission", () => {
     expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
   });
 
-  it("performs remote validation when --user is also passed (permission does not bypass it)", async () => {
+  test("performs remote validation when --user is also passed (permission does not bypass it)", async () => {
     using _logger = silenceLogger("out", "success");
     vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);

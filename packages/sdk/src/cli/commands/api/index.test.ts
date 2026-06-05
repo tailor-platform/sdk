@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { getMethodDescriptor } from "./proto-reflect";
 import { normalizeBodyFieldKeys } from "./index";
 
 describe("normalizeBodyFieldKeys", () => {
-  it("collapses snake_case body keys to localName so injection cannot duplicate them", () => {
+  test("collapses snake_case body keys to localName so injection cannot duplicate them", () => {
     // Reproduces the AddCustomDomain regression: a --body written in snake_case
     // must be recognized so workspaceId is not injected a second time.
     const method = getMethodDescriptor("AddCustomDomain");
@@ -25,7 +25,7 @@ describe("normalizeBodyFieldKeys", () => {
     expect("workspace_id" in body).toBe(false);
   });
 
-  it("keeps the canonical key and drops the alias when both forms are present", () => {
+  test("keeps the canonical key and drops the alias when both forms are present", () => {
     const method = getMethodDescriptor("GetApplication");
     const body: Record<string, unknown> = { workspaceId: "camel", workspace_id: "snake" };
 
@@ -34,7 +34,7 @@ describe("normalizeBodyFieldKeys", () => {
     expect(body).toEqual({ workspaceId: "camel" });
   });
 
-  it("leaves keys that are already canonical or unknown untouched", () => {
+  test("leaves keys that are already canonical or unknown untouched", () => {
     const method = getMethodDescriptor("GetApplication");
     const body: Record<string, unknown> = { workspaceId: "ws-1", unknownField: 1 };
 
@@ -44,7 +44,7 @@ describe("normalizeBodyFieldKeys", () => {
     expect(body).toEqual({ workspaceId: "ws-1", unknownField: 1 });
   });
 
-  it("uses own-property checks so a field whose localName is a prototype key keeps its value", () => {
+  test("uses own-property checks so a field whose localName is a prototype key keeps its value", () => {
     // `toString` lives on Object.prototype; an `in` check would treat the
     // canonical key as already present and drop the alias value rather than
     // moving it. normalizeBodyFieldKeys must use an own-property check.

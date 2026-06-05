@@ -1,9 +1,9 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, test, expectTypeOf } from "vitest";
 import { createWorkflowJob, type WorkflowJob } from "./job";
 import type { TailorInvoker } from "@/types/user";
 
 describe("WorkflowJob type inference", () => {
-  it("preserves literal types in output when using as const", () => {
+  test("preserves literal types in output when using as const", () => {
     const _job = createWorkflowJob({
       name: "test",
       body: () => ({ status: "ok" as const, count: 42 }),
@@ -12,7 +12,7 @@ describe("WorkflowJob type inference", () => {
     expectTypeOf<Output>().toEqualTypeOf<{ status: "ok"; count: number }>();
   });
 
-  it("preserves union types in input", () => {
+  test("preserves union types in input", () => {
     const _job = createWorkflowJob({
       name: "test",
       body: (input: { type: "a" | "b" }) => ({ result: input.type }),
@@ -21,7 +21,7 @@ describe("WorkflowJob type inference", () => {
     expectTypeOf<Input>().toEqualTypeOf<{ type: "a" | "b" }>();
   });
 
-  it("allows interface for input type", () => {
+  test("allows interface for input type", () => {
     interface UserInput {
       name: string;
       age: number;
@@ -34,7 +34,7 @@ describe("WorkflowJob type inference", () => {
     expectTypeOf<Input>().toEqualTypeOf<UserInput>();
   });
 
-  it("allows interface for output type", () => {
+  test("allows interface for output type", () => {
     interface UserOutput {
       id: string;
       created: boolean;
@@ -47,7 +47,7 @@ describe("WorkflowJob type inference", () => {
     expectTypeOf<Output>().toEqualTypeOf<UserOutput>();
   });
 
-  it("context exposes invoker field alongside env", () => {
+  test("context exposes invoker field alongside env", () => {
     createWorkflowJob({
       name: "test",
       body: (_input: undefined, context) => {
@@ -61,7 +61,7 @@ describe("WorkflowJob type inference", () => {
 
 describe("WorkflowJob type constraints", () => {
   describe("input constraints", () => {
-    it("allows JsonValue compatible input", () => {
+    test("allows JsonValue compatible input", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (_input: { id: string; count: number }) => ({ result: "ok" }),
@@ -69,7 +69,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows nested JsonValue input", () => {
+    test("allows nested JsonValue input", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (_input: { data: { nested: { value: string } } }) => ({
@@ -79,7 +79,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows array input", () => {
+    test("allows array input", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (_input: { items: string[] }) => ({ result: "ok" }),
@@ -87,7 +87,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("rejects Date in input", () => {
+    test("rejects Date in input", () => {
       createWorkflowJob({
         name: "test",
         // @ts-expect-error - Date is not JsonValue-compatible
@@ -95,7 +95,7 @@ describe("WorkflowJob type constraints", () => {
       });
     });
 
-    it("rejects objects with toJSON in input", () => {
+    test("rejects objects with toJSON in input", () => {
       createWorkflowJob({
         name: "test",
         // @ts-expect-error - objects with methods (function-typed properties) are not JsonValue-compatible
@@ -105,7 +105,7 @@ describe("WorkflowJob type constraints", () => {
       });
     });
 
-    it("rejects null as top-level input", () => {
+    test("rejects null as top-level input", () => {
       createWorkflowJob({
         name: "test",
         // @ts-expect-error - null is not allowed at top level
@@ -113,7 +113,7 @@ describe("WorkflowJob type constraints", () => {
       });
     });
 
-    it("rejects null in top-level union input", () => {
+    test("rejects null in top-level union input", () => {
       createWorkflowJob({
         name: "test",
         // @ts-expect-error - null is not allowed at top level (even in union)
@@ -121,7 +121,7 @@ describe("WorkflowJob type constraints", () => {
       });
     });
 
-    it("rejects undefined in top-level union input", () => {
+    test("rejects undefined in top-level union input", () => {
       createWorkflowJob({
         name: "test",
         // @ts-expect-error - undefined is not allowed at top level (except when I = undefined alone)
@@ -129,7 +129,7 @@ describe("WorkflowJob type constraints", () => {
       });
     });
 
-    it("allows input = undefined (no-input convention)", () => {
+    test("allows input = undefined (no-input convention)", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (_input: undefined) => ({ result: "ok" }),
@@ -137,7 +137,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows nested null in object input", () => {
+    test("allows nested null in object input", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (_input: { data: string | null }) => ({ result: "ok" }),
@@ -145,7 +145,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows nested null in array input", () => {
+    test("allows nested null in array input", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (_input: { items: (string | null)[] }) => ({ result: "ok" }),
@@ -155,7 +155,7 @@ describe("WorkflowJob type constraints", () => {
   });
 
   describe("output constraints", () => {
-    it("allows JsonValue compatible output", () => {
+    test("allows JsonValue compatible output", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => ({ result: "ok", count: 42 }),
@@ -163,7 +163,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("rejects Date in output", () => {
+    test("rejects Date in output", () => {
       createWorkflowJob({
         name: "test",
         // @ts-expect-error - Date is not JsonValue-compatible
@@ -171,7 +171,7 @@ describe("WorkflowJob type constraints", () => {
       });
     });
 
-    it("rejects objects with toJSON in output", () => {
+    test("rejects objects with toJSON in output", () => {
       const customObj = {
         value: 42,
         toJSON: () => ({ serialized: 42 }),
@@ -183,7 +183,7 @@ describe("WorkflowJob type constraints", () => {
       });
     });
 
-    it("rejects async body returning Date", async () => {
+    test("rejects async body returning Date", async () => {
       createWorkflowJob({
         name: "test",
         // @ts-expect-error - Date is not JsonValue-compatible
@@ -191,7 +191,7 @@ describe("WorkflowJob type constraints", () => {
       });
     });
 
-    it("allows undefined output", () => {
+    test("allows undefined output", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => undefined,
@@ -199,7 +199,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows void output (no return statement)", () => {
+    test("allows void output (no return statement)", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => {
@@ -209,7 +209,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows T | undefined output", () => {
+    test("allows T | undefined output", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => {
@@ -222,7 +222,7 @@ describe("WorkflowJob type constraints", () => {
   });
 
   describe("trigger return type", () => {
-    it("returns Output as-is (no Jsonify transformation)", () => {
+    test("returns Output as-is (no Jsonify transformation)", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => ({ result: "ok", count: 42, active: true as boolean }),
@@ -234,7 +234,7 @@ describe("WorkflowJob type constraints", () => {
       }>();
     });
 
-    it("keeps nested object types unchanged", () => {
+    test("keeps nested object types unchanged", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => ({
@@ -252,7 +252,7 @@ describe("WorkflowJob type constraints", () => {
       }>();
     });
 
-    it("returns undefined for undefined output", () => {
+    test("returns undefined for undefined output", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => undefined,
@@ -260,7 +260,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<undefined>();
     });
 
-    it("returns T | undefined for T | undefined output", () => {
+    test("returns T | undefined for T | undefined output", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (): { value: number } | undefined => {
@@ -272,7 +272,7 @@ describe("WorkflowJob type constraints", () => {
   });
 
   describe("input presence affects trigger signature", () => {
-    it("trigger takes no arguments when input is undefined", () => {
+    test("trigger takes no arguments when input is undefined", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => ({ result: "ok" }),
@@ -281,7 +281,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(_trigger).toBeFunction();
     });
 
-    it("trigger requires input when body has input parameter", () => {
+    test("trigger requires input when body has input parameter", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (input: { id: string }) => ({ result: input.id }),
@@ -292,7 +292,7 @@ describe("WorkflowJob type constraints", () => {
   });
 
   describe("WorkflowJob interface constraints", () => {
-    it("WorkflowJob Input constraint is JsonValue | undefined", () => {
+    test("WorkflowJob Input constraint is JsonValue | undefined", () => {
       type ValidJob1 = WorkflowJob<"test", { id: string }, { result: string }>;
       type ValidJob2 = WorkflowJob<"test", undefined, { result: string }>;
 
@@ -300,7 +300,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf<ValidJob2["name"]>().toEqualTypeOf<"test">();
     });
 
-    it("trigger return preserves Output as-is", () => {
+    test("trigger return preserves Output as-is", () => {
       type Job = WorkflowJob<"test", undefined, { id: string; result: string }>;
 
       expectTypeOf<ReturnType<Job["trigger"]>>().resolves.toEqualTypeOf<{
@@ -311,7 +311,7 @@ describe("WorkflowJob type constraints", () => {
   });
 
   describe("input with optional fields", () => {
-    it("allows optional string field in input", () => {
+    test("allows optional string field in input", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (input: { prompt: string; system?: string }) => ({
@@ -321,7 +321,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows multiple optional fields in input", () => {
+    test("allows multiple optional fields in input", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (input: { required: string; optional1?: string; optional2?: number }) => ({
@@ -332,7 +332,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows explicit union with undefined", () => {
+    test("allows explicit union with undefined", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (input: { value: string | undefined }) => ({
@@ -342,7 +342,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows nested objects with optional fields", () => {
+    test("allows nested objects with optional fields", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (input: { data: { required: string; metadata?: { tag?: string } } }) => ({
@@ -353,7 +353,7 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows arrays with optional element types", () => {
+    test("allows arrays with optional element types", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (input: { items: (string | undefined)[] }) => ({
@@ -365,7 +365,7 @@ describe("WorkflowJob type constraints", () => {
   });
 
   describe("output with optional fields", () => {
-    it("allows optional fields in output", () => {
+    test("allows optional fields in output", () => {
       const job = createWorkflowJob({
         name: "test",
         body: (): { value: string; metadata?: string } => {

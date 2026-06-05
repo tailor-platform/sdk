@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, test } from "vitest";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
 import {
   type ListWorkflowExecutionsOptions,
@@ -16,7 +16,7 @@ const myWorkflow = createWorkflow({
 });
 
 describe("listWorkflowExecutions API types", () => {
-  it("accepts typed options with workflow definition", () => {
+  test("accepts typed options with workflow definition", () => {
     const acceptsOptions = (
       _options: ListWorkflowExecutionsTypedOptions<typeof myWorkflow>,
     ): void => {};
@@ -35,7 +35,7 @@ describe("listWorkflowExecutions API types", () => {
     });
   });
 
-  it("rejects invalid order values", () => {
+  test("rejects invalid order values", () => {
     const acceptsOptions = (_options: ListWorkflowExecutionsTypedOptions): void => {};
 
     acceptsOptions({
@@ -44,7 +44,7 @@ describe("listWorkflowExecutions API types", () => {
     });
   });
 
-  it("allows omitting workflow for unfiltered listing", () => {
+  test("allows omitting workflow for unfiltered listing", () => {
     const acceptsOptions = (
       _options: ListWorkflowExecutionsTypedOptions<typeof myWorkflow>,
     ): void => {};
@@ -56,7 +56,7 @@ describe("listWorkflowExecutions API types", () => {
     });
   });
 
-  it("works with default generic when ListWorkflowExecutionsTypedOptions generic is omitted", () => {
+  test("works with default generic when ListWorkflowExecutionsTypedOptions generic is omitted", () => {
     const acceptsDefaultOptions = (_options: ListWorkflowExecutionsTypedOptions): void => {};
 
     acceptsDefaultOptions({
@@ -70,7 +70,7 @@ describe("listWorkflowExecutions API types", () => {
     acceptsDefaultOptions({});
   });
 
-  it("rejects legacy options shape in typed overload", () => {
+  test("rejects legacy options shape in typed overload", () => {
     const acceptsTypedOptions = (_options: ListWorkflowExecutionsTypedOptions): void => {};
 
     acceptsTypedOptions({
@@ -79,7 +79,7 @@ describe("listWorkflowExecutions API types", () => {
     });
   });
 
-  it("keeps deprecated ListWorkflowExecutionsOptions shape available", () => {
+  test("keeps deprecated ListWorkflowExecutionsOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: ListWorkflowExecutionsOptions): void => {};
 
     acceptsDeprecatedOptions({

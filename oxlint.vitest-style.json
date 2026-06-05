@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["vitest"],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off"
+  },
+  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.agent/**", "**/.tailor-sdk/**"],
+  "rules": {
+    "vitest/consistent-test-it": [
+      "error",
+      {
+        "fn": "test",
+        "withinDescribe": "test"
+      }
+    ]
+  }
+}

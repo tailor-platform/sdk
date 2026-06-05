@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import type { TransformFn } from "./runner";
 
 const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
@@ -63,35 +63,35 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
-  it("v2/define-generators-to-plugins transforms correctly", async () => {
+  test("v2/define-generators-to-plugins transforms correctly", async () => {
     await runFixtureCases("v2/define-generators-to-plugins");
   });
 
-  it("v2/test-run-arg-input transforms correctly", async () => {
+  test("v2/test-run-arg-input transforms correctly", async () => {
     await runFixtureCases("v2/test-run-arg-input");
   });
 
-  it("v2/sdk-skills-shim transforms correctly", async () => {
+  test("v2/sdk-skills-shim transforms correctly", async () => {
     await runFixtureCases("v2/sdk-skills-shim");
   });
 
-  it("v2/principal-unify transforms correctly", async () => {
+  test("v2/principal-unify transforms correctly", async () => {
     await runFixtureCases("v2/principal-unify");
   });
 
-  it("v2/apply-to-deploy transforms correctly", async () => {
+  test("v2/apply-to-deploy transforms correctly", async () => {
     await runFixtureCases("v2/apply-to-deploy");
   });
 
-  it("v2/cli-rename transforms correctly", async () => {
+  test("v2/cli-rename transforms correctly", async () => {
     await runFixtureCases("v2/cli-rename");
   });
 
-  it("v2/auth-invoker-unwrap transforms correctly", async () => {
+  test("v2/auth-invoker-unwrap transforms correctly", async () => {
     await runFixtureCases("v2/auth-invoker-unwrap");
   });
 
-  it("v2/tailordb-namespace transforms correctly", async () => {
+  test("v2/tailordb-namespace transforms correctly", async () => {
     await runFixtureCases("v2/tailordb-namespace");
   });
 });
