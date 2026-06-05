@@ -77,8 +77,9 @@ describe("AppConfigSchema", () => {
       logLevel: "OFF",
     });
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0]?.path).toEqual(["logLevel"]);
+    if (result.success) {
+      throw new Error("Expected AppConfigSchema parsing to fail");
     }
+    expect(result.error.issues[0]?.path).toEqual(["logLevel"]);
   });
 });
