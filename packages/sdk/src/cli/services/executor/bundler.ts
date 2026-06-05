@@ -6,6 +6,7 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/ca
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
+import { createFunctionTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
@@ -16,6 +17,7 @@ import {
 } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
 import { loadExecutor } from "./loader";
+import type { LogLevel } from "@/types/app-config";
 
 interface ExecutorInfo {
   name: string;
@@ -36,6 +38,8 @@ export interface BundleExecutorsOptions {
   cache?: BundleCache;
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
+  /** Controls which console calls are kept in bundled code */
+  bundleLogLevel?: LogLevel;
 }
 
 /**
@@ -51,7 +55,14 @@ export async function bundleExecutors(
   options: BundleExecutorsOptions,
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
-  const { config, triggerContext, additionalFiles = [], cache, inlineSourcemap } = options;
+  const {
+    config,
+    triggerContext,
+    additionalFiles = [],
+    cache,
+    inlineSourcemap,
+    bundleLogLevel = "DEBUG",
+  } = options;
   const configFiles = loadFilesWithIgnores(config);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
@@ -109,7 +120,15 @@ export async function bundleExecutors(
   // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
   const results = await withBundleConcurrency(executors, (executor) =>
-    bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
+    bundleSingleExecutor(
+      executor,
+      outputDir,
+      tsconfig,
+      triggerContext,
+      cache,
+      inlineSourcemap,
+      bundleLogLevel,
+    ),
   );
 
   for (const [name, code] of results) {
@@ -128,6 +147,7 @@ async function bundleSingleExecutor(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
+  bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<[string, string]> {
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
@@ -136,6 +156,7 @@ async function bundleSingleExecutor(
     serializedTriggerContext,
     tsconfig,
     inlineSourcemap,
+    bundleLogLevel,
   });
 
   const code = await withCache({
@@ -183,11 +204,7 @@ async function bundleSingleExecutor(
         },
         tsconfig,
         plugins,
-        treeshake: {
-          moduleSideEffects: false,
-          annotations: true,
-          unknownGlobalSideEffects: false,
-        },
+        treeshake: createFunctionTreeshakeOptions(bundleLogLevel),
         logLevel: "silent",
       } as rolldown.BuildOptions);
 

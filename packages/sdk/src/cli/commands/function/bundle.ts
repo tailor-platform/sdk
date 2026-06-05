@@ -10,11 +10,16 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import {
+  createFunctionTreeshakeOptions,
+  resolveBundleLogLevel,
+} from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import ml from "@/utils/multiline";
 import type { DetectedFunction } from "./detect";
+import type { LogLevelInput } from "@/types/app-config";
 
 /** Machine user info resolved from config and API for bundle-time user context. */
 export interface ResolvedMachineUser {
@@ -37,6 +42,8 @@ interface BundleForTestRunOptions {
   env?: Record<string, string | number | boolean>;
   /** Inline sourcemap config value from defineConfig */
   inlineSourcemap?: boolean;
+  /** Log level config value from defineConfig */
+  logLevel?: LogLevelInput;
   /** Machine user info for injecting user context into the bundle */
   machineUser: ResolvedMachineUser;
   /** Workspace ID for user context */
@@ -60,6 +67,7 @@ export async function bundleForTestRun(
 ): Promise<BundleForTestRunResult> {
   const { detected, sourceFile, env = {}, machineUser, workspaceId } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
+  const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
 
   const outputDir = path.resolve(getDistDir(), "test-run");
   fs.mkdirSync(outputDir, { recursive: true });
@@ -99,11 +107,7 @@ export async function bundleForTestRun(
       dir: process.cwd(),
     },
     tsconfig,
-    treeshake: {
-      moduleSideEffects: false,
-      annotations: true,
-      unknownGlobalSideEffects: false,
-    },
+    treeshake: createFunctionTreeshakeOptions(bundleLogLevel),
     logLevel: "silent",
   } as rolldown.BuildOptions);
 

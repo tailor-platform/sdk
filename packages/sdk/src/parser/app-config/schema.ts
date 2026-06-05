@@ -1,6 +1,10 @@
 import { z } from "zod";
+import { isLogLevel, LOG_LEVELS } from "@/types/app-config";
 
 const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
+const logLevelSchema = z.string().refine((value) => isLogLevel(value.trim().toUpperCase()), {
+  message: `'logLevel' must be one of: ${LOG_LEVELS.join(", ")}.`,
+});
 
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
@@ -21,6 +25,7 @@ export const AppConfigSchema = z.object({
   allowedIpAddresses: z.array(z.string()).optional(),
   disableIntrospection: z.boolean().optional(),
   inlineSourcemap: z.boolean().optional(),
+  logLevel: logLevelSchema.optional(),
   db: z.unknown().optional(),
   resolver: z.unknown().optional(),
   idp: z.unknown().optional(),

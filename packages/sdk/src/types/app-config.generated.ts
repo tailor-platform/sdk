@@ -12,6 +12,7 @@ export type AppConfigParsed = {
   allowedIpAddresses?: string[] | undefined;
   disableIntrospection?: boolean | undefined;
   inlineSourcemap?: boolean | undefined;
+  logLevel?: string | undefined;
   db?: unknown;
   resolver?: unknown;
   idp?: unknown;
