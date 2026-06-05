@@ -119,15 +119,10 @@ export interface ExecutorInfo {
   targetConfig: Record<string, unknown>;
 }
 
-function formatEventActions(eventTypes: readonly string[]): string {
-  return eventTypes
-    .map((eventType) => eventType.split(".").at(-1) ?? eventType)
-    .filter((action) => action.length > 0)
-    .join(", ");
-}
-
 function formatSubjectEvent(subject: string, eventTypes: readonly string[]): string {
-  const actions = formatEventActions(eventTypes);
+  const actions = eventTypes
+    .map((eventType) => eventType.split(".").at(-1) ?? eventType)
+    .join(", ");
   return actions ? `event: ${subject} ${actions}` : `event: ${subject}`;
 }
 
