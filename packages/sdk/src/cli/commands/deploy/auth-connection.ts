@@ -41,8 +41,6 @@ type DeleteConnection = {
 };
 
 function connectionTrn(workspaceId: string, name: string) {
-  // Auth connections are workspace-level; the platform expects the `auth_connection`
-  // TRN segment (underscore), consistent with other auth resource type names.
   return `${trnPrefix(workspaceId)}:auth_connection:${name}`;
 }
 
@@ -71,11 +69,6 @@ function buildConnectionRequest(
   };
 }
 
-/**
- * Compute a hash of the full connection config for change detection.
- * @param config - Auth connection config
- * @returns SHA-256 hex digest
- */
 function hashConnectionConfig(config: AuthConnectionConfig): string {
   const serialized = JSON.stringify({
     type: config.type,
@@ -89,12 +82,6 @@ function hashConnectionConfig(config: AuthConnectionConfig): string {
   return hashValue(serialized);
 }
 
-/**
- * Check whether the non-secret fields of an existing connection differ from the desired config.
- * @param existing - Existing connection from the server
- * @param desired - Desired connection config
- * @returns true if any non-secret field has changed
- */
 function hasNonSecretFieldChanged(
   existing: AuthConnection,
   desired: AuthConnectionConfig,
@@ -135,7 +122,6 @@ export async function planAuthConnections(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  // Collect all desired connections from auth services
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
   for (const auth of auths) {
     if (auth.connections) {
@@ -145,7 +131,6 @@ export async function planAuthConnections(
     }
   }
 
-  // Fetch existing connections
   const existingList = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { connections, nextPageToken } = await client.listAuthConnections({
@@ -162,9 +147,6 @@ export async function planAuthConnections(
     }
   });
 
-  // Build existing map with labels
-  // Note: metadata/labels for auth connections may not be supported yet by the platform.
-  // When getMetadata fails with InvalidArgument, we skip label-based ownership tracking.
   const existingConnections: WithLabel<AuthConnection> = {};
   let metadataSupported = true;
   await Promise.all(
@@ -194,7 +176,6 @@ export async function planAuthConnections(
 
   const state = loadSecretsState();
 
-  // Diff desired vs existing
   for (const [name, config] of Object.entries(desiredConnections)) {
     const existing = existingConnections[name];
     const metaRequest = metadataSupported
@@ -222,7 +203,6 @@ export async function planAuthConnections(
         }
       }
 
-      // Check if config has changed
       const currentHash = hashConnectionConfig(config);
       const storedHash = state.connections?.[name];
       const nonSecretChanged = hasNonSecretFieldChanged(existing.resource, config);
@@ -248,7 +228,6 @@ export async function planAuthConnections(
     }
   }
 
-  // Remaining existing connections owned by this app should be deleted
   for (const [name, entry] of Object.entries(existingConnections)) {
     if (!entry) continue;
     const owned = isOwnedByApp(entry.allLabels, appName, appId);
@@ -256,13 +235,6 @@ export async function planAuthConnections(
       resourceOwners.add(entry.label);
       continue;
     }
-    // Decide whether to delete:
-    // - When metadata is supported, ownership is authoritative via labels: delete
-    //   only connections owned by this app.
-    // - When metadata is NOT supported (older platforms), labels are unavailable.
-    //   Deleting everything not desired would destroy connections created outside the
-    //   SDK (e.g. Terraform/console), so fall back to the local secrets-state and
-    //   delete only connections this SDK previously created.
     const shouldDelete = metadataSupported ? owned : state.connections?.[name] !== undefined;
     if (shouldDelete) {
       changeSet.deletes.push({
@@ -275,12 +247,6 @@ export async function planAuthConnections(
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
-/**
- * Attempt to set metadata, silently ignoring InvalidArgument errors
- * when the platform does not yet support auth-connection TRNs.
- * @param client - Operator client instance
- * @param metaRequest - Metadata request to send
- */
 async function trySetMetadata(
   client: OperatorClient,
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>,
@@ -327,7 +293,6 @@ export async function applyAuthConnections(
   const { changeSet } = result;
 
   if (phase === "create-update") {
-    // Creates
     await Promise.all(
       changeSet.creates.map(async (create) => {
         await client.createAuthConnection(create.request);
@@ -337,7 +302,6 @@ export async function applyAuthConnections(
       }),
     );
 
-    // Replaces (revoke then create, sequentially per connection)
     for (const replace of changeSet.replaces) {
       await client.revokeAuthConnection(replace.revokeRequest);
       await client.createAuthConnection(replace.createRequest);
@@ -346,7 +310,6 @@ export async function applyAuthConnections(
       }
     }
 
-    // Save hashes for all created/replaced connections
     const state = loadSecretsState();
     if (!state.connections) {
       state.connections = {};
@@ -365,14 +328,12 @@ export async function applyAuthConnections(
     }
     saveSecretsState(state);
   } else if (phase === "delete-resources" || phase === "delete") {
-    // Revoke deleted connections
     await Promise.all(
       changeSet.deletes.map(async (del) => {
         await client.revokeAuthConnection(del.request);
       }),
     );
 
-    // Remove hashes for deleted connections
     if (changeSet.deletes.length > 0) {
       const state = loadSecretsState();
       if (state.connections) {
