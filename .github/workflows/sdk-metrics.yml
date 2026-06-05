@@ -18,14 +18,18 @@ permissions:
   actions: write
 
 jobs:
-  coverage:
+  coverage-shard:
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
-    name: Coverage
+    name: Coverage shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -41,20 +45,48 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
-      - name: Run SDK coverage
-        run: pnpm --filter @tailor-platform/sdk test:coverage
+      - name: Run SDK coverage shard
+        run: pnpm exec vitest run --coverage --coverage.reporter=lcovonly --shard=${{ matrix.shard }}/4
+        working-directory: packages/sdk
         env:
+          GITHUB_RUN_ID: ${{ github.run_id }}-${{ matrix.shard }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
-      - name: Upload results
+      - name: Upload coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: coverage-results
+          name: coverage-lcov-${{ matrix.shard }}
           path: packages/sdk/coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 1
+
+  coverage-cleanup:
+    # Safety net for e2e workspace leaks. Run once after all shards finish so
+    # cleanup cannot delete workspaces that a slower shard is still using.
+    needs: coverage-shard
+    if: always() && (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
+    name: Cleanup e2e workspaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Login as machine user
+        run: pnpm tailor-sdk login --machineuser
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Cleanup e2e workspaces
-        if: always()
         run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
 
   bundle-size:
@@ -66,15 +98,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
       - name: Install deps
         uses: ./.github/actions/install-deps
-
-      - name: Build SDK
-        run: pnpm --filter @tailor-platform/sdk build
 
       - name: Measure bundle size
         run: pnpm --filter @tailor-platform/sdk measure:bundle
@@ -94,7 +123,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -121,15 +150,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
       - name: Install deps
         uses: ./.github/actions/install-deps
-
-      - name: Build SDK
-        run: pnpm --filter @tailor-platform/sdk build
 
       - name: Run runtime performance
         run: pnpm --filter @tailor-platform/sdk perf:runtime
@@ -144,7 +170,7 @@ jobs:
 
   report-metrics:
     name: Report Metrics
-    needs: [coverage, bundle-size, type-performance, runtime-performance]
+    needs: [coverage-shard, bundle-size, type-performance, runtime-performance]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -153,7 +179,7 @@ jobs:
       actions: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -165,7 +191,10 @@ jobs:
       - name: Prepare coverage
         run: |
           mkdir -p packages/sdk/coverage
-          cp artifacts/coverage-results/lcov.info packages/sdk/coverage/
+          for shard in artifacts/coverage-lcov-*/lcov.info; do
+            cp "$shard" "packages/sdk/coverage/lcov-$(basename "$(dirname "$shard")" | sed 's/coverage-lcov-//').info"
+          done
+          ls -l packages/sdk/coverage/
 
       - name: Display summary
         run: |
