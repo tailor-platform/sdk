@@ -1,5 +1,4 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateExecutorExecutorRequestSchema,
   type DeleteExecutorExecutorRequestSchema,
@@ -14,7 +13,7 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { normalizeAuthInvoker } from "./auth-invoker";
@@ -26,15 +25,14 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
+import { buildMetaRequest, hasMatchingSdkVersion } from "./label";
 import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
 import type { Executor } from "@/types/executor.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -104,34 +102,20 @@ export async function planExecutor(context: PlanContext) {
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingExecutors = await fetchExistingResourcesWithLabels({
+    client,
+    workspaceId,
+    fetchPage: async (pageToken, pageSize) => {
       const { executors, nextPageToken } = await client.listExecutorExecutors({
         workspaceId,
         pageToken,
-        pageSize: maxPageSize,
+        pageSize,
       });
       return [executors, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.name,
+    getTrn: trn,
   });
-  const existingExecutors: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.name),
-      });
-      existingExecutors[resource.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
@@ -143,21 +127,16 @@ export async function planExecutor(context: PlanContext) {
     });
     const desiredExecutor = protoExecutor(application, executor);
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, application.name, application.id);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Executor",
-            resourceName: executor.name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "Executor",
-            resourceName: executor.name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName: application.name,
+        appId: application.id,
+        resourceType: "Executor",
+        resourceName: executor.name,
+        conflicts,
+        unmanaged,
+      });
 
       if (
         owned &&
@@ -190,10 +169,13 @@ export async function planExecutor(context: PlanContext) {
   Object.entries(existingExecutors).forEach(([name]) => {
     const entry = existingExecutors[name];
     const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, application.name, application.id);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: label,
+      appName: application.name,
+      appId: application.id,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name,

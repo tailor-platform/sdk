@@ -5,7 +5,7 @@ import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
-import { initOperatorClient } from "@/cli/shared/client";
+import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
@@ -60,8 +60,7 @@ import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
+import type { PlanContext } from "./types";
 
 export interface DeployOptions {
   workspaceId?: string;
@@ -76,24 +75,6 @@ export interface DeployOptions {
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
 }
-
-export interface PlanContext {
-  client: OperatorClient;
-  workspaceId: string;
-  application: Readonly<Application>;
-  forRemoval: boolean;
-  config: LoadedConfig;
-  noSchemaCheck?: boolean;
-  forceApplyAll?: boolean;
-  /**
-   * Set of IdP names that have at least one executor with an idpUser trigger.
-   * Controls how `publishUserEvents` defaults on each IdP service. Empty when
-   * no idpUser triggers are defined.
-   */
-  idpUserTriggerTargets?: ReadonlySet<string>;
-}
-
-export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
 function applicationTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:application:${name}`;
@@ -432,84 +413,97 @@ export async function deploy(options?: DeployOptions) {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
     // Phase 0: Build
-    const { config, application, workflowBuildResult, bundledScripts, buildOnly } = await withSpan(
-      "build",
-      async () => {
-        const dryRun = options?.dryRun ?? false;
-        const buildOnly =
-          options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
+    const {
+      config,
+      application,
+      workflowBuildResult,
+      httpAdapterBuildResult,
+      bundledScripts,
+      buildOnly,
+    } = await withSpan("build", async () => {
+      const dryRun = options?.dryRun ?? false;
+      const buildOnly =
+        options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
 
-        const { config, plugins } = await withSpan("build.loadConfig", async () => {
-          const foundPath = loadConfigPath(options?.configPath);
-          // Skip id injection in dry-run / build-only flows: those modes are
-          // expected to have no on-disk side effects.
-          if (foundPath && !dryRun && !buildOnly) {
-            const resolvedPath = path.resolve(process.cwd(), foundPath);
-            if (fs.existsSync(resolvedPath)) {
-              await ensureConfigId(resolvedPath);
-            }
+      const { config, plugins } = await withSpan("build.loadConfig", async () => {
+        const foundPath = loadConfigPath(options?.configPath);
+        // Skip id injection in dry-run / build-only flows: those modes are
+        // expected to have no on-disk side effects.
+        if (foundPath && !dryRun && !buildOnly) {
+          const resolvedPath = path.resolve(process.cwd(), foundPath);
+          if (fs.existsSync(resolvedPath)) {
+            await ensureConfigId(resolvedPath);
           }
-          return loadConfig(options?.configPath);
-        });
-
-        const noCache = options?.noCache ?? false;
-
-        // Initialize cache manager
-        const packageJson = await readPackageJson();
-        const cacheDir = path.resolve(getDistDir(), "cache");
-        if (options?.cleanCache) {
-          fs.rmSync(cacheDir, { recursive: true, force: true });
-          logger.info("Bundle cache cleaned");
         }
-        const configDir = path.dirname(config.path);
-        const lockfilePath =
-          findUpSync("pnpm-lock.yaml", { cwd: configDir }) ??
-          findUpSync("package-lock.json", { cwd: configDir }) ??
-          findUpSync("yarn.lock", { cwd: configDir }) ??
-          findUpSync("bun.lock", { cwd: configDir });
-        const cacheManager = createCacheManager({
-          enabled: !noCache,
-          cacheDir,
-          sdkVersion: packageJson.version ?? "unknown",
-          lockfileHash: lockfilePath ? hashFile(lockfilePath) : undefined,
-        });
+        return loadConfig(options?.configPath);
+      });
 
-        let pluginManager: PluginManager | undefined;
-        if (plugins.length > 0) {
-          pluginManager = new PluginManager(plugins);
-        }
+      const noCache = options?.noCache ?? false;
 
-        await withSpan("build.generateUserTypes", () =>
-          generateUserTypes({ config, configPath: config.path }),
+      // Initialize cache manager
+      const packageJson = await readPackageJson();
+      const cacheDir = path.resolve(getDistDir(), "cache");
+      if (options?.cleanCache) {
+        fs.rmSync(cacheDir, { recursive: true, force: true });
+        logger.info("Bundle cache cleaned");
+      }
+      const configDir = path.dirname(config.path);
+      const lockfilePath =
+        findUpSync("pnpm-lock.yaml", { cwd: configDir }) ??
+        findUpSync("package-lock.json", { cwd: configDir }) ??
+        findUpSync("yarn.lock", { cwd: configDir }) ??
+        findUpSync("bun.lock", { cwd: configDir });
+      const cacheManager = createCacheManager({
+        enabled: !noCache,
+        cacheDir,
+        sdkVersion: packageJson.version ?? "unknown",
+        lockfileHash: lockfilePath ? hashFile(lockfilePath) : undefined,
+      });
+
+      let pluginManager: PluginManager | undefined;
+      if (plugins.length > 0) {
+        pluginManager = new PluginManager(plugins);
+      }
+
+      await withSpan("build.generateUserTypes", () =>
+        generateUserTypes({ config, configPath: config.path }),
+      );
+
+      let application: Application;
+      let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+      let httpAdapterBuildResult: Awaited<
+        ReturnType<typeof loadApplication>
+      >["httpAdapterBuildResult"];
+      let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
+      try {
+        const result = await withSpan("build.loadApplication", () =>
+          loadApplication({
+            config,
+            pluginManager,
+            bundleCache: cacheManager.bundleCache,
+          }),
         );
+        application = result.application;
+        workflowBuildResult = result.workflowBuildResult;
+        httpAdapterBuildResult = result.httpAdapterBuildResult;
+        bundledScripts = result.bundledScripts;
+      } finally {
+        // Persist even on partial failure: successfully built bundles
+        // are cached so the next run only rebuilds what failed.
+        cacheManager.finalize();
+      }
 
-        let application: Application;
-        let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
-        let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
-        try {
-          const result = await withSpan("build.loadApplication", () =>
-            loadApplication({ config, pluginManager, bundleCache: cacheManager.bundleCache }),
-          );
-          application = result.application;
-          workflowBuildResult = result.workflowBuildResult;
-          bundledScripts = result.bundledScripts;
-        } finally {
-          // Persist even on partial failure: successfully built bundles
-          // are cached so the next run only rebuilds what failed.
-          cacheManager.finalize();
-        }
-
-        return {
-          config,
-          plugins,
-          application,
-          workflowBuildResult,
-          bundledScripts,
-          dryRun,
-          buildOnly,
-        };
-      },
-    );
+      return {
+        config,
+        plugins,
+        application,
+        workflowBuildResult,
+        httpAdapterBuildResult,
+        bundledScripts,
+        dryRun,
+        buildOnly,
+      };
+    });
     if (buildOnly) {
       return { bundledScripts };
     }
@@ -596,7 +590,7 @@ export async function deploy(options?: DeployOptions) {
           withSpan("plan.idp", () => planIdP(ctx)),
           withSpan("plan.auth", () => planAuth(ctx)),
           withSpan("plan.pipeline", () => planPipeline(ctx)),
-          withSpan("plan.application", () => planApplication(ctx)),
+          withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
           withSpan("plan.executor", () => planExecutor(ctx)),
           withSpan("plan.workflow", () =>
             planWorkflow(

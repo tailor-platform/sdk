@@ -7,6 +7,8 @@ import type { TailorDBServiceInput } from "./tailordb";
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;
 
+export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
+
 export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
 export type ResolverExternalConfig = { external: true };
 export type ResolverServiceInput = {
@@ -70,6 +72,8 @@ export interface AppConfig<
   executor?: ExecutorServiceInput;
   /** Workflow service configuration with workflow files. */
   workflow?: WorkflowServiceInput;
+  /** HTTP adapter service configuration with adapter files. */
+  httpAdapter?: HttpAdapterServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
   /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */

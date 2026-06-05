@@ -31,7 +31,7 @@ import {
   type WithLabel,
 } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
   StandardIdPActionPermission,

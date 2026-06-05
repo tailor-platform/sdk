@@ -1,5 +1,23 @@
 # @tailor-platform/sdk
 
+## 1.55.0
+
+### Minor Changes
+
+- [#1173](https://github.com/tailor-platform/sdk/pull/1173) [`4d8010d`](https://github.com/tailor-platform/sdk/commit/4d8010ddf93edd1e9e7344b7e868b7e6efc3fddf) Thanks [@Mistat](https://github.com/Mistat)! - Add `createHttpAdapter()` for declaring HTTP adapters that translate HTTP requests into GraphQL queries and reshape the responses. Adapter files are discovered via the new `httpAdapter.files` glob in `defineConfig()`.
+
+### Patch Changes
+
+- [#1320](https://github.com/tailor-platform/sdk/pull/1320) [`977c200`](https://github.com/tailor-platform/sdk/commit/977c2007eb6ac28507d6eac1c391448ab91caa2a) Thanks [@remiposo](https://github.com/remiposo)! - `createKyselyMock`: assert what a write wrote as a `{ column: value }` map instead of positional SQL parameters. On a recorded query:
+
+  - `insertValues()` / `insertRows()` — the values a single- / multi-row insert wrote
+  - `updateValues()` — the values an update's SET clause wrote
+  - `node` — the raw Kysely operation node, for anything the helpers don't cover
+
+  Also adds `withTx(fn)` to run `fn` inside a real `Transaction`.
+
+- [#1314](https://github.com/tailor-platform/sdk/pull/1314) [`e423765`](https://github.com/tailor-platform/sdk/commit/e4237652c4ac65074e2bcd1da56adc1841bc71cd) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix generated migrate.ts templates for enum value removal: removed enum values were compared by object identity (so unchanged values were also treated as removed) and rendered as `[object Object]` in the generated migration script.
+
 ## 1.54.3
 
 ### Patch Changes
