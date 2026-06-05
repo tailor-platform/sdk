@@ -265,6 +265,59 @@ $ tailor-sdk workflow wait execution-id --until terminal
 
 <!-- politty:command:workflow wait:examples:end -->
 
+**Shell automation**
+
+Capture the execution ID from `workflow start` and wait for the same run from a
+separate command:
+
+```bash
+execution_id="$(
+  tailor-sdk workflow start order-workflow --json | jq -r '.executionId'
+)"
+
+tailor-sdk workflow wait "$execution_id" \
+  --until success \
+  --timeout 10m \
+  --interval 5s \
+  --json
+```
+
+Wait until a workflow reaches a wait point, such as an approval step:
+
+```bash
+tailor-sdk workflow wait "$execution_id" \
+  --until suspended \
+  --timeout 6m \
+  --logs \
+  --json
+```
+
+**Programmatic API**
+
+Use `waitWorkflowExecution` when a script already has an execution ID and needs
+the same waiter behavior as the CLI:
+
+```ts
+import { waitWorkflowExecution } from "@tailor-platform/sdk/cli";
+
+const executionId = process.env.EXECUTION_ID;
+
+if (!executionId) {
+  throw new Error("EXECUTION_ID is required");
+}
+
+const result = await waitWorkflowExecution({
+  executionId,
+  until: "success",
+  timeout: 10 * 60 * 1000,
+  interval: 5000,
+});
+
+if (result.timedOut) {
+  throw new Error(`Workflow ${result.id} timed out at ${result.status}`);
+}
+```
+
 <!-- politty:command:workflow executions:heading:start -->
 
 ### workflow executions
