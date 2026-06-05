@@ -22,6 +22,7 @@ Configure Auth service using `defineAuth()`:
 
 - **One auth per application**: Each application can have exactly one Auth service
 - **Configuration location**: Define in `tailor.config.ts` using `defineAuth()` and reference directly in the config's `auth` field
+- **`userProfile` and `machineUserAttributes` are mutually exclusive**: Specifying both fails at deploy/generate time with ``Specify either `userProfile` or `machineUserAttributes`, not both.``
 
 ```typescript
 import { defineAuth } from "@tailor-platform/sdk";
@@ -93,6 +94,16 @@ export const user = db.type("User", {
 ```
 
 **type**: The TailorDB type that stores user records.
+
+**namespace** (optional): The TailorDB namespace where the user type is defined. Usually auto-resolved from your `db` configuration, so you don't need to specify it. Required only when multiple TailorDB namespaces exist and the type lives in an external TailorDB:
+
+```typescript
+userProfile: {
+  namespace: "external-ns", // Explicitly specify the namespace
+  type: user,
+  usernameField: "email",
+},
+```
 
 **usernameField**: The field in the TailorDB type used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
 

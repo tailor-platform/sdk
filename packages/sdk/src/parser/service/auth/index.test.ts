@@ -359,6 +359,22 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       },
     };
 
-    expect(() => AuthConfigSchema.parse(config)).toThrow();
+    expect(() => AuthConfigSchema.parse(config)).toThrow(
+      /Specify either `userProfile` or `machineUserAttributes`, not both/,
+    );
+  });
+
+  it("preserves an explicit userProfile.namespace", () => {
+    const config = {
+      name: "my-auth",
+      userProfile: {
+        namespace: "external-ns",
+        type: userType,
+        usernameField: "email",
+      },
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.userProfile?.namespace).toBe("external-ns");
   });
 });

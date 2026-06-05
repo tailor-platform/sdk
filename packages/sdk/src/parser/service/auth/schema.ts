@@ -194,6 +194,7 @@ export const TenantProviderSchema = z.object({
 });
 
 const UserProfileSchema = z.object({
+  namespace: z.string().optional().describe("TailorDB namespace where the user type is defined"),
   // FIXME: improve TailorDBInstance schema validation
   type: z.object({
     name: z.string(),
@@ -257,20 +258,35 @@ const AuthConfigBaseSchema = z.object({
 });
 
 export const AuthConfigSchema = z
-  .union([
-    AuthConfigBaseSchema.extend({
-      userProfile: z.undefined().optional(),
-      machineUserAttributes: z.undefined().optional(),
-    }),
-    z.xor([
+  .xor(
+    [
       AuthConfigBaseSchema.extend({
-        userProfile: UserProfileSchema,
+        userProfile: UserProfileSchema.optional().describe("User profile configuration"),
         machineUserAttributes: z.undefined().optional(),
       }),
       AuthConfigBaseSchema.extend({
         userProfile: z.undefined().optional(),
-        machineUserAttributes: z.record(z.string(), TailorFieldSchema),
+        machineUserAttributes: z
+          .record(z.string(), TailorFieldSchema)
+          .describe("Machine user attribute fields"),
       }),
-    ]),
-  ])
+    ],
+    {
+      error: (iss) => {
+        if (iss.code !== "invalid_union") return undefined;
+        if (iss.errors.length < 2) return undefined;
+        const isOnlyMutexViolation = iss.errors.every((variantErrors) =>
+          variantErrors.every(
+            (e) =>
+              e.path.length === 1 &&
+              (e.path[0] === "userProfile" || e.path[0] === "machineUserAttributes"),
+          ),
+        );
+        if (isOnlyMutexViolation) {
+          return "Specify either `userProfile` or `machineUserAttributes`, not both.";
+        }
+        return undefined;
+      },
+    },
+  )
   .brand("AuthConfig");
