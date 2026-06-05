@@ -4,7 +4,7 @@ import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { parseCrashReportConfig } from "@/cli/crashreport/config";
-import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { listCommand } from "./list";
 import { crashReportCommand } from ".";
@@ -56,6 +56,7 @@ describe("crashreport list --json", () => {
     });
 
     using stdout = captureStdout();
+    using _stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(listCommand, []);
@@ -72,6 +73,7 @@ describe("crashreport list --json", () => {
     });
 
     using stdout = captureStdout();
+    using _stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(crashReportCommand, []);

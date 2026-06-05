@@ -78,6 +78,6 @@ describe("function test-run --json", () => {
       logs: "",
       result: '{"ok":true}',
     });
-    expect(stderr.output).toBe("");
+    expect(stderr.output).not.toBe("");
   });
 });

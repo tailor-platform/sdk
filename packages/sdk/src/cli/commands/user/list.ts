@@ -14,15 +14,13 @@ export const listCommand = defineAppCommand({
 
     const users = Object.keys(config.users);
     if (users.length === 0) {
-      if (jsonOutput) {
-        logger.out([]);
-        return;
-      }
-
       logger.info(ml`
         No users found.
         Please login first using 'tailor-sdk login' command to register a user.
       `);
+      if (jsonOutput) {
+        logger.out([]);
+      }
       return;
     }
 

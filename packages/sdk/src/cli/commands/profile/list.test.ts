@@ -3,7 +3,7 @@ import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "@/cli/shared/context";
-import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "@/cli/shared/token-store";
 import { listCommand } from "./list";
@@ -53,6 +53,7 @@ describe("profile list", () => {
 
   test("with jsonMode emits an empty JSON array when no profiles exist", async () => {
     using stdout = captureStdout();
+    using _stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(listCommand, []);
@@ -63,6 +64,7 @@ describe("profile list", () => {
 
   test("honors logger jsonMode when parent command delegates without json args", async () => {
     using stdout = captureStdout();
+    using _stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(profileCommand, []);

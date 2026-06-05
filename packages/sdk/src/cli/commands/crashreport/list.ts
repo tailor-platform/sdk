@@ -35,12 +35,10 @@ export const listCommand = defineAppCommand({
     const config = parseCrashReportConfig();
     const jsonOutput = logger.jsonMode;
     if (!config.localDir) {
+      logger.info("Crash report directory not available.");
       if (jsonOutput) {
         logger.out([]);
-        return;
       }
-
-      logger.info("Crash report directory not available.");
       return;
     }
 
@@ -48,24 +46,20 @@ export const listCommand = defineAppCommand({
     try {
       entries = fs.readdirSync(config.localDir);
     } catch {
+      logger.info("No crash reports found.");
       if (jsonOutput) {
         logger.out([]);
-        return;
       }
-
-      logger.info("No crash reports found.");
       return;
     }
 
     const files = orderAndLimitCrashReports(entries, { order: args.order, limit: args.limit });
 
     if (files.length === 0) {
+      logger.info("No crash reports found.");
       if (jsonOutput) {
         logger.out([]);
-        return;
       }
-
-      logger.info("No crash reports found.");
       return;
     }
 

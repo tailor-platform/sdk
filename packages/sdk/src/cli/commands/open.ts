@@ -27,9 +27,7 @@ export const openCommand = defineAppCommand({
     const consoleUrl = new URL(consolePath, consoleBaseUrl).toString();
     const jsonOutput = logger.jsonMode;
 
-    if (!jsonOutput) {
-      logger.info("Opening Tailor Platform Console...");
-    }
+    logger.info("Opening Tailor Platform Console...");
 
     let opened = true;
     try {

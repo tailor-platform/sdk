@@ -100,6 +100,6 @@ describe("startWorkflow runtime overload", () => {
     await runCommand(startCommand, ["legacy-workflow", "--machine-user", "legacy-user"]);
 
     expect(JSON.parse(stdout.output)).toEqual({ executionId: "execution-1" });
-    expect(stderr.output).toBe("");
+    expect(stderr.output).not.toBe("");
   });
 });

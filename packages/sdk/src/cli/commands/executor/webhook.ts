@@ -77,12 +77,10 @@ const listWebhookCommand = defineAppCommand({
     });
 
     if (executors.length === 0) {
+      logger.info("No webhook executors found.");
       if (jsonOutput) {
         logger.out([]);
-        return;
       }
-
-      logger.info("No webhook executors found.");
       return;
     }
 

@@ -38,21 +38,19 @@ export const listCommand = defineAppCommand({
       { limit: args.limit },
     );
 
-    if (pats.length === 0 && !jsonOutput) {
+    if (pats.length === 0) {
       logger.info(ml`
         No personal access tokens found.
         Please create a token using 'tailor-sdk user pat create' command.
       `);
-      return;
+      if (!jsonOutput) {
+        return;
+      }
     }
 
     const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
     if (jsonOutput) {
       logger.out(patInfos);
-      return;
-    }
-
-    if (pats.length === 0) {
       return;
     }
 

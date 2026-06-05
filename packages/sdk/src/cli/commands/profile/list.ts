@@ -15,15 +15,13 @@ export const listCommand = defineAppCommand({
 
     const profiles = Object.entries(config.profiles);
     if (profiles.length === 0) {
-      if (jsonOutput) {
-        logger.out([]);
-        return;
-      }
-
       logger.info(ml`
         No profiles found.
         Please create a profile first using 'tailor-sdk profile create' command.
       `);
+      if (jsonOutput) {
+        logger.out([]);
+      }
       return;
     }
 

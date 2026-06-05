@@ -65,12 +65,10 @@ export const listCommand = defineAppCommand({
     });
 
     if (executors.length === 0) {
+      logger.info("No executors found.");
       if (jsonOutput) {
         logger.out([]);
-        return;
       }
-
-      logger.info("No executors found.");
       return;
     }
 

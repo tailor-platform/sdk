@@ -3,7 +3,7 @@ import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "@/cli/shared/context";
-import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "@/cli/shared/token-store";
 import { userCommand } from ".";
@@ -53,6 +53,7 @@ describe("user list", () => {
     });
 
     using stdout = captureStdout();
+    using _stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(userCommand, []);

@@ -373,9 +373,7 @@ export const startCommand = defineAppCommand({
     });
     const jsonOutput = logger.jsonMode;
 
-    if (!jsonOutput) {
-      logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
-    }
+    logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
 
     if (args.wait) {
       const result = await wait({ showProgress: !jsonOutput });

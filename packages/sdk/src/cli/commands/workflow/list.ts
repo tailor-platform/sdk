@@ -64,9 +64,11 @@ export const listCommand = defineAppCommand({
       limit: args.limit,
     });
 
-    if (workflows.length === 0 && !jsonOutput) {
+    if (workflows.length === 0) {
       logger.info("No workflows found.");
-      return;
+      if (!jsonOutput) {
+        return;
+      }
     }
     logger.out(workflows);
   },
