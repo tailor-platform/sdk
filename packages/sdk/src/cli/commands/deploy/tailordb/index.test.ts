@@ -5,8 +5,8 @@ import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "@/cli/commands/tailordb/migrate/pre-migration-schema";
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
-import type { PlanContext } from "../deploy";
-import type { DiffChange } from "@/cli/commands/tailordb/migrate/diff-calculator";
+import type { PlanContext } from "../types";
+import type { FieldDiffChange } from "@/cli/commands/tailordb/migrate/diff-calculator";
 import type { SnapshotFieldConfig } from "@/cli/commands/tailordb/migrate/snapshot";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
@@ -958,7 +958,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
       foreignKey: true,
       foreignKeyType: "OldParent",
     };
-    const typeChanges = new Map<string, DiffChange>([
+    const typeChanges = new Map<string, FieldDiffChange>([
       [
         "oldParentId",
         {
@@ -985,7 +985,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
     const fields: Record<string, ProtoField> = {
       newField: { type: "string", required: true },
     };
-    const typeChanges = new Map<string, DiffChange>([
+    const typeChanges = new Map<string, FieldDiffChange>([
       [
         "newField",
         {
@@ -1006,7 +1006,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
     const fields: Record<string, ProtoField> = {
       keep: { type: "string", required: true },
     };
-    const typeChanges = new Map<string, DiffChange>();
+    const typeChanges = new Map<string, FieldDiffChange>();
 
     applyPreMigrationFieldAdjustments(fields, typeChanges);
 

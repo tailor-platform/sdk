@@ -10,6 +10,12 @@ import {
   type BreakingChangeInfo,
   type WarningChangeInfo,
 } from "./diff-calculator";
+import type { TailorDBSnapshotType } from "./snapshot-types";
+
+// Helper to create a minimal snapshot type for type_added / type_removed changes
+function snapshotType(name: string): TailorDBSnapshotType {
+  return { name, pluralForm: `${name}s`, fields: {} };
+}
 
 // Helper to create a MigrationDiff
 function createDiff(
@@ -115,6 +121,7 @@ describe("diff-calculator", () => {
         {
           kind: "type_added",
           typeName: "NewType",
+          after: snapshotType("NewType"),
         },
       ]);
       const result = formatMigrationDiff(diff);
@@ -126,6 +133,7 @@ describe("diff-calculator", () => {
         {
           kind: "type_removed",
           typeName: "OldType",
+          before: snapshotType("OldType"),
         },
       ]);
       const result = formatMigrationDiff(diff);
@@ -276,15 +284,17 @@ describe("diff-calculator", () => {
 
     it("should count types added", () => {
       const diff = createDiff([
-        { kind: "type_added", typeName: "NewType1" },
-        { kind: "type_added", typeName: "NewType2" },
+        { kind: "type_added", typeName: "NewType1", after: snapshotType("NewType1") },
+        { kind: "type_added", typeName: "NewType2", after: snapshotType("NewType2") },
       ]);
       const result = formatDiffSummary(diff);
       expect(result).toContain("2 type(s) added");
     });
 
     it("should count types removed", () => {
-      const diff = createDiff([{ kind: "type_removed", typeName: "OldType" }]);
+      const diff = createDiff([
+        { kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") },
+      ]);
       const result = formatDiffSummary(diff);
       expect(result).toContain("1 type(s) removed");
     });
@@ -331,7 +341,7 @@ describe("diff-calculator", () => {
 
     it("should combine multiple counts", () => {
       const diff = createDiff([
-        { kind: "type_added", typeName: "NewType" },
+        { kind: "type_added", typeName: "NewType", after: snapshotType("NewType") },
         {
           kind: "field_added",
           typeName: "User",

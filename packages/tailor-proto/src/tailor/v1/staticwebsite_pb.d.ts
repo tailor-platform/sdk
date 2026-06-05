@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { StaticWebsite } from "./staticwebsite_resource_pb";
+import type { CustomDomain, StaticWebsite } from "./staticwebsite_resource_pb";
 import type { PageDirection } from "./resource_pb";
 
 /**
@@ -357,4 +357,153 @@ export declare type PublishDeploymentResponse = Message<"tailor.v1.PublishDeploy
  * Use `create(PublishDeploymentResponseSchema)` to create a new message.
  */
 export declare const PublishDeploymentResponseSchema: GenMessage<PublishDeploymentResponse>;
+
+/**
+ * @generated from message tailor.v1.AddCustomDomainRequest
+ */
+export declare type AddCustomDomainRequest = Message<"tailor.v1.AddCustomDomainRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string static_website_name = 2;
+   */
+  staticWebsiteName: string;
+
+  /**
+   * @generated from field: string domain = 3;
+   */
+  domain: string;
+};
+
+/**
+ * Describes the message tailor.v1.AddCustomDomainRequest.
+ * Use `create(AddCustomDomainRequestSchema)` to create a new message.
+ */
+export declare const AddCustomDomainRequestSchema: GenMessage<AddCustomDomainRequest>;
+
+/**
+ * @generated from message tailor.v1.AddCustomDomainResponse
+ */
+export declare type AddCustomDomainResponse = Message<"tailor.v1.AddCustomDomainResponse"> & {
+  /**
+   * @generated from field: tailor.v1.CustomDomain custom_domain = 1;
+   */
+  customDomain?: CustomDomain;
+};
+
+/**
+ * Describes the message tailor.v1.AddCustomDomainResponse.
+ * Use `create(AddCustomDomainResponseSchema)` to create a new message.
+ */
+export declare const AddCustomDomainResponseSchema: GenMessage<AddCustomDomainResponse>;
+
+/**
+ * @generated from message tailor.v1.GetCustomDomainRequest
+ */
+export declare type GetCustomDomainRequest = Message<"tailor.v1.GetCustomDomainRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string domain = 2;
+   */
+  domain: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetCustomDomainRequest.
+ * Use `create(GetCustomDomainRequestSchema)` to create a new message.
+ */
+export declare const GetCustomDomainRequestSchema: GenMessage<GetCustomDomainRequest>;
+
+/**
+ * @generated from message tailor.v1.GetCustomDomainResponse
+ */
+export declare type GetCustomDomainResponse = Message<"tailor.v1.GetCustomDomainResponse"> & {
+  /**
+   * @generated from field: tailor.v1.CustomDomain custom_domain = 1;
+   */
+  customDomain?: CustomDomain;
+};
+
+/**
+ * Describes the message tailor.v1.GetCustomDomainResponse.
+ * Use `create(GetCustomDomainResponseSchema)` to create a new message.
+ */
+export declare const GetCustomDomainResponseSchema: GenMessage<GetCustomDomainResponse>;
+
+/**
+ * @generated from message tailor.v1.ListCustomDomainsRequest
+ */
+export declare type ListCustomDomainsRequest = Message<"tailor.v1.ListCustomDomainsRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string static_website_name = 2;
+   */
+  staticWebsiteName: string;
+};
+
+/**
+ * Describes the message tailor.v1.ListCustomDomainsRequest.
+ * Use `create(ListCustomDomainsRequestSchema)` to create a new message.
+ */
+export declare const ListCustomDomainsRequestSchema: GenMessage<ListCustomDomainsRequest>;
+
+/**
+ * @generated from message tailor.v1.ListCustomDomainsResponse
+ */
+export declare type ListCustomDomainsResponse = Message<"tailor.v1.ListCustomDomainsResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.CustomDomain custom_domains = 1;
+   */
+  customDomains: CustomDomain[];
+};
+
+/**
+ * Describes the message tailor.v1.ListCustomDomainsResponse.
+ * Use `create(ListCustomDomainsResponseSchema)` to create a new message.
+ */
+export declare const ListCustomDomainsResponseSchema: GenMessage<ListCustomDomainsResponse>;
+
+/**
+ * @generated from message tailor.v1.RemoveCustomDomainRequest
+ */
+export declare type RemoveCustomDomainRequest = Message<"tailor.v1.RemoveCustomDomainRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string domain = 2;
+   */
+  domain: string;
+};
+
+/**
+ * Describes the message tailor.v1.RemoveCustomDomainRequest.
+ * Use `create(RemoveCustomDomainRequestSchema)` to create a new message.
+ */
+export declare const RemoveCustomDomainRequestSchema: GenMessage<RemoveCustomDomainRequest>;
+
+/**
+ * @generated from message tailor.v1.RemoveCustomDomainResponse
+ */
+export declare type RemoveCustomDomainResponse = Message<"tailor.v1.RemoveCustomDomainResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.RemoveCustomDomainResponse.
+ * Use `create(RemoveCustomDomainResponseSchema)` to create a new message.
+ */
+export declare const RemoveCustomDomainResponseSchema: GenMessage<RemoveCustomDomainResponse>;
 
