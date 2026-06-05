@@ -257,33 +257,20 @@ function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<st
     };
   }
 
+  const base = {
+    kind: typedConfig.case,
+    eventTypes: typedConfig.value.eventTypes,
+    namespaceName: typedConfig.value.namespaceName,
+    condition: typedConfig.value.condition?.expr || "",
+  };
+
   switch (typedConfig.case) {
     case "tailordb":
-      return {
-        kind: typedConfig.case,
-        eventTypes: typedConfig.value.eventTypes,
-        namespaceName: typedConfig.value.namespaceName,
-        typeName: typedConfig.value.typeName,
-        condition: typedConfig.value.condition?.expr || "",
-      };
+      return { ...base, typeName: typedConfig.value.typeName };
     case "pipeline":
-      return {
-        kind: typedConfig.case,
-        eventTypes: typedConfig.value.eventTypes,
-        namespaceName: typedConfig.value.namespaceName,
-        resolverName: typedConfig.value.resolverName,
-        condition: typedConfig.value.condition?.expr || "",
-      };
-    case "idp":
-    case "auth":
-      return {
-        kind: typedConfig.case,
-        eventTypes: typedConfig.value.eventTypes,
-        namespaceName: typedConfig.value.namespaceName,
-        condition: typedConfig.value.condition?.expr || "",
-      };
+      return { ...base, resolverName: typedConfig.value.resolverName };
     default:
-      return {};
+      return base;
   }
 }
 
