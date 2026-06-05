@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { detectInstalledVersion } from "./version-detector";
 
 describe("version-detector", () => {
@@ -16,12 +16,12 @@ describe("version-detector", () => {
   });
 
   describe("detectInstalledVersion", () => {
-    it("should return null when SDK is not installed", async () => {
+    test("should return null when SDK is not installed", async () => {
       const version = await detectInstalledVersion(tmpDir);
       expect(version).toBeNull();
     });
 
-    it("should detect version from node_modules", async () => {
+    test("should detect version from node_modules", async () => {
       const sdkDir = path.join(tmpDir, "node_modules", "@tailor-platform", "sdk");
       await fs.promises.mkdir(sdkDir, { recursive: true });
       await fs.promises.writeFile(
@@ -36,7 +36,7 @@ describe("version-detector", () => {
       expect(version).toBe("1.32.1");
     });
 
-    it("should return null when package.json has no version field", async () => {
+    test("should return null when package.json has no version field", async () => {
       const sdkDir = path.join(tmpDir, "node_modules", "@tailor-platform", "sdk");
       await fs.promises.mkdir(sdkDir, { recursive: true });
       await fs.promises.writeFile(
@@ -48,7 +48,7 @@ describe("version-detector", () => {
       expect(version).toBeNull();
     });
 
-    it("should detect version from parent node_modules (workspace hoisting)", async () => {
+    test("should detect version from parent node_modules (workspace hoisting)", async () => {
       const sdkDir = path.join(tmpDir, "node_modules", "@tailor-platform", "sdk");
       await fs.promises.mkdir(sdkDir, { recursive: true });
       await fs.promises.writeFile(
@@ -63,7 +63,7 @@ describe("version-detector", () => {
       expect(version).toBe("1.32.1");
     });
 
-    it("should return null for nonexistent directory", async () => {
+    test("should return null for nonexistent directory", async () => {
       const version = await detectInstalledVersion(path.join(tmpDir, "nonexistent"));
       expect(version).toBeNull();
     });

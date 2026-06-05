@@ -83,6 +83,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = logger.jsonMode;
     const registries = await listFunctionRegistries({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -90,7 +91,7 @@ export const listCommand = defineAppCommand({
       limit: args.limit,
     });
 
-    const formatted = args.json
+    const formatted = jsonOutput
       ? registries
       : registries.map(({ createdAt, updatedAt, ...rest }) => ({
           ...rest,

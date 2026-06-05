@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, beforeEach, afterAll } from "vitest";
 import { bundleMigrationScript } from "./bundler";
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
@@ -29,7 +29,7 @@ describe("migration-bundler", () => {
   });
 
   describe("bundleMigrationScript", () => {
-    it("returns correct namespace and migration number", async () => {
+    test("returns correct namespace and migration number", async () => {
       // Create a simple migration script
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
@@ -57,7 +57,7 @@ export type Transaction = any;
       expect(typeof result.bundledCode).toBe("string");
     });
 
-    it("bundles migration script with getDB function", async () => {
+    test("bundles migration script with getDB function", async () => {
       // Create a migration script that uses Transaction
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
@@ -86,7 +86,7 @@ export type Transaction = any;
       expect(result.bundledCode).toContain("TailordbDialect");
     });
 
-    it("wraps migration in transaction", async () => {
+    test("wraps migration in transaction", async () => {
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
         scriptPath,
@@ -112,7 +112,7 @@ export type Transaction = any;
       expect(result.bundledCode).toContain("execute");
     });
 
-    it("exports main function for TestExecScript", async () => {
+    test("exports main function for TestExecScript", async () => {
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
         scriptPath,
@@ -138,7 +138,7 @@ export type Transaction = any;
       expect(result.bundledCode).toContain("main");
     });
 
-    it("returns success object from main function", async () => {
+    test("returns success object from main function", async () => {
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
         scriptPath,
@@ -163,7 +163,7 @@ export type Transaction = any;
       expect(result.bundledCode).toContain("success");
     });
 
-    it("uses correct namespace in getDB call", async () => {
+    test("uses correct namespace in getDB call", async () => {
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
         scriptPath,
@@ -188,7 +188,7 @@ export type Transaction = any;
       expect(result.bundledCode).toContain('"custom-namespace"');
     });
 
-    it("handles migration with complex logic", async () => {
+    test("handles migration with complex logic", async () => {
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
         scriptPath,
@@ -223,7 +223,7 @@ export type Transaction = any;
       expect(result.bundledCode.length).toBeGreaterThan(0);
     });
 
-    it("injects env into the migration context", async () => {
+    test("injects env into the migration context", async () => {
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
         scriptPath,
@@ -254,7 +254,7 @@ export type MigrationContext = { env: Record<string, string | number | boolean> 
       expect(result.bundledCode).toContain("env");
     });
 
-    it("injects an empty env object when none is provided", async () => {
+    test("injects an empty env object when none is provided", async () => {
       const scriptPath = path.join(testDir, "migrate.ts");
       fs.writeFileSync(
         scriptPath,

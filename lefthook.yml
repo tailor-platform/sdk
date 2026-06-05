@@ -33,6 +33,7 @@ pre-commit:
         pnpm --filter=@tailor-platform/sdk run build &&
         pnpm --filter=@tailor-platform/sdk --filter=example run generate &&
         pnpm --filter=@tailor-platform/sdk --filter=example run lint &&
+        pnpm run lint:vitest &&
         pnpm --filter=@tailor-platform/sdk --filter=example run typecheck:go &&
         pnpm --filter=@tailor-platform/sdk run knip &&
         pnpm --filter='./packages/create-sdk/templates/*' run lint

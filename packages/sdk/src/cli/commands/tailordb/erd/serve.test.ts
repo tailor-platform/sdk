@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { resolveWatchPaths } from "./serve";
 import type { ErdBuildResult } from "./export";
 import type { LocalErdSchemaContext } from "./local-schema";
@@ -17,7 +17,7 @@ describe("resolveWatchPaths", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("expands TailorDB file globs and includes the literal base directory", async () => {
+  test("expands TailorDB file globs and includes the literal base directory", async () => {
     const configPath = path.join(tempDir, "tailor.config.ts");
     const typeDir = path.join(tempDir, "tailordb");
     const typeFile = path.join(typeDir, "user.ts");

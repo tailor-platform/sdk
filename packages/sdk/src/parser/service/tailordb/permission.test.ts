@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { normalizeActionPermission, normalizeGqlPermission } from "./permission";
 
 type Permission = Parameters<typeof normalizeActionPermission>[0];
 
 describe("normalizeActionPermission", () => {
   describe("Object format", () => {
-    it("should return object format as-is", () => {
+    test("should return object format as-is", () => {
       const permission = {
         conditions: [["user.id", "=", "123"]],
         permit: true,
@@ -17,7 +17,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should preserve description field", () => {
+    test("should preserve description field", () => {
       const permission = {
         conditions: [["user.role", "in", ["admin", "manager"] as string[]]],
         description: "Admin and manager access",
@@ -31,7 +31,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should handle single condition in object format", () => {
+    test("should handle single condition in object format", () => {
       const permission = {
         conditions: ["user.id", "=", "123"],
         permit: true,
@@ -42,7 +42,7 @@ describe("normalizeActionPermission", () => {
   });
 
   describe("Single condition array format", () => {
-    it("should normalize single condition without permit (defaults to true)", () => {
+    test("should normalize single condition without permit (defaults to true)", () => {
       const permission = ["user.id", "=", "123"] as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
@@ -51,7 +51,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should normalize single condition with permit=true", () => {
+    test("should normalize single condition with permit=true", () => {
       const permission = ["user.id", "=", "123", true] as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
@@ -60,7 +60,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should normalize single condition with permit=false", () => {
+    test("should normalize single condition with permit=false", () => {
       const permission = ["user.id", "!=", "123", false] as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
@@ -69,7 +69,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should handle array values in conditions", () => {
+    test("should handle array values in conditions", () => {
       const permission = ["user.role", "in", ["admin", "manager"] as string[]] as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
@@ -78,7 +78,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should handle user operand", () => {
+    test("should handle user operand", () => {
       const permission = [{ user: "role" }, "=", "admin"] as unknown as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
@@ -87,7 +87,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should handle record operand", () => {
+    test("should handle record operand", () => {
       const permission = [{ record: "status" }, "=", "active"] as unknown as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
@@ -96,7 +96,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should handle oldRecord/newRecord operands for update", () => {
+    test("should handle oldRecord/newRecord operands for update", () => {
       const permission = [
         { oldRecord: "status" },
         "!=",
@@ -112,7 +112,7 @@ describe("normalizeActionPermission", () => {
   });
 
   describe("Array of conditions format", () => {
-    it("should normalize array of conditions without permit (all default to true)", () => {
+    test("should normalize array of conditions without permit (all default to true)", () => {
       const permission = [
         ["user.role", "=", "admin"],
         ["user.active", "=", true],
@@ -127,7 +127,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should normalize array of conditions with mixed permit values", () => {
+    test("should normalize array of conditions with mixed permit values", () => {
       const permission = [
         ["user.role", "=", "admin"],
         ["user.active", "=", true],
@@ -145,7 +145,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should handle empty array of conditions", () => {
+    test("should handle empty array of conditions", () => {
       const permission = [] as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
@@ -154,7 +154,7 @@ describe("normalizeActionPermission", () => {
       });
     });
 
-    it("should handle complex nested conditions", () => {
+    test("should handle complex nested conditions", () => {
       const permission = [
         [{ user: "id" }, "=", "123"],
         [{ record: "ownerId" }, "=", { user: "id" }],
@@ -174,19 +174,19 @@ describe("normalizeActionPermission", () => {
   });
 
   describe("Operator variations", () => {
-    it("should handle 'not in' operator", () => {
+    test("should handle 'not in' operator", () => {
       const permission = ["user.status", "not in", ["suspended", "banned"] as string[]] as const;
       const result = normalizeActionPermission(permission);
       expect(result.conditions).toEqual([["user.status", "nin", ["suspended", "banned"]]]);
     });
 
-    it("should handle 'hasAny' operator", () => {
+    test("should handle 'hasAny' operator", () => {
       const permission = [{ user: "roles" }, "hasAny", ["admin", "manager"]];
       const result = normalizeActionPermission(permission);
       expect(result.conditions).toEqual([[{ user: "roles" }, "hasAny", ["admin", "manager"]]]);
     });
 
-    it("should handle 'not hasAny' operator", () => {
+    test("should handle 'not hasAny' operator", () => {
       const permission = [{ user: "roles" }, "not hasAny", ["blocked"]];
       const result = normalizeActionPermission(permission);
       expect(result.conditions).toEqual([[{ user: "roles" }, "nhasAny", ["blocked"]]]);
@@ -195,7 +195,7 @@ describe("normalizeActionPermission", () => {
 });
 
 describe("normalizeGqlPermission", () => {
-  it("should normalize basic GQL permission with single policy", () => {
+  test("should normalize basic GQL permission with single policy", () => {
     const permission = [
       {
         conditions: [["user.role", "=", "admin"]],
@@ -214,7 +214,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should normalize GQL permission with 'all' actions", () => {
+  test("should normalize GQL permission with 'all' actions", () => {
     const permission = [
       {
         conditions: [["user.isAdmin", "=", true]],
@@ -233,7 +233,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should normalize GQL permission with deny policy", () => {
+  test("should normalize GQL permission with deny policy", () => {
     const permission = [
       {
         conditions: [["user.status", "=", "suspended"]],
@@ -252,7 +252,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should preserve description field", () => {
+  test("should preserve description field", () => {
     const permission = [
       {
         conditions: [["user.role", "in", ["admin", "moderator"] as string[]]],
@@ -272,7 +272,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle multiple policies", () => {
+  test("should handle multiple policies", () => {
     const permission = [
       {
         conditions: [["user.role", "=", "admin"]],
@@ -313,7 +313,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle empty conditions array", () => {
+  test("should handle empty conditions array", () => {
     const permission = [
       {
         conditions: [],
@@ -332,7 +332,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle multiple conditions in a single policy", () => {
+  test("should handle multiple conditions in a single policy", () => {
     const permission = [
       {
         conditions: [
@@ -359,7 +359,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle all GQL permission actions", () => {
+  test("should handle all GQL permission actions", () => {
     const permission = [
       {
         conditions: [["user.role", "=", "superadmin"]],
@@ -378,7 +378,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle user and record operands in conditions", () => {
+  test("should handle user and record operands in conditions", () => {
     const permission = [
       {
         conditions: [
@@ -403,7 +403,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle operator transformations", () => {
+  test("should handle operator transformations", () => {
     const permission = [
       {
         conditions: [
@@ -430,7 +430,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle hasAny operator in GQL permission", () => {
+  test("should handle hasAny operator in GQL permission", () => {
     const permission = [
       {
         conditions: [[{ user: "roles" }, "hasAny", ["admin", "manager"] as string[]]],
@@ -449,7 +449,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle nhasAny operator in GQL permission", () => {
+  test("should handle nhasAny operator in GQL permission", () => {
     const permission = [
       {
         conditions: [[{ user: "roles" }, "not hasAny", ["blocked"] as string[]]],
@@ -468,7 +468,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle undefined conditions", () => {
+  test("should handle undefined conditions", () => {
     const permission = [
       {
         actions: ["read"],
@@ -486,7 +486,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  it("should handle default permit value", () => {
+  test("should handle default permit value", () => {
     const permission = [
       {
         conditions: [["user.role", "=", "guest"]],

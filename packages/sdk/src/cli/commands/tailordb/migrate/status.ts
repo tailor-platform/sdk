@@ -24,27 +24,32 @@ export interface StatusOptions {
   namespace?: string;
   workspaceId?: string;
   profile?: string;
+  json?: boolean;
 }
 
-/**
- * Show migration status for TailorDB namespaces
- * @param {StatusOptions} options - Command options
- */
-async function status(options: StatusOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
+interface PendingMigrationStatusInfo {
+  number: number;
+  label: string;
+  description?: string;
+}
 
-  // 1. Load configuration
+interface MigrationStatusInfo {
+  namespace: string;
+  currentMigration: number;
+  currentMigrationLabel: string;
+  pendingMigrations: PendingMigrationStatusInfo[];
+}
+
+async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusInfo[]> {
   const { config } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
 
-  // 2. Get namespaces with migrations
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
 
   if (namespacesWithMigrations.length === 0) {
     throw new Error("No TailorDB services with migrations configuration found");
   }
 
-  // 3. Filter by namespace if specified
   const targetNamespaces = options.namespace
     ? namespacesWithMigrations.filter((ns) => ns.namespace === options.namespace)
     : namespacesWithMigrations;
@@ -55,7 +60,6 @@ async function status(options: StatusOptions): Promise<void> {
     );
   }
 
-  // 4. Initialize client
   const accessToken = await loadAccessToken({
     useProfile: false,
     profile: options.profile,
@@ -66,9 +70,9 @@ async function status(options: StatusOptions): Promise<void> {
     profile: options.profile,
   });
 
-  // 5. Display status for each namespace
+  const statuses: MigrationStatusInfo[] = [];
+
   for (const { namespace, migrationsDir } of targetNamespaces) {
-    // Get current migration number
     const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
     let currentMigration: number;
     try {
@@ -79,7 +83,6 @@ async function status(options: StatusOptions): Promise<void> {
       currentMigration = 0;
     }
 
-    // Get available migrations
     const migrationFiles = getMigrationFiles(migrationsDir);
     const availableNumbers = migrationFiles
       .map((f) => f.number)
@@ -87,30 +90,50 @@ async function status(options: StatusOptions): Promise<void> {
       .sort((a, b) => a - b);
     const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
 
-    // Display
-    logger.newline();
-    logger.info(`Namespace: ${styles.bold(namespace)}`);
-    logger.log(`  Current migration: ${styles.bold(formatMigrationNumber(currentMigration))}`);
+    const pendingMigrations = pendingNumbers.map((num) => {
+      const diffPath = getMigrationFilePath(migrationsDir, num, "diff");
+      let description: string | undefined;
 
-    if (pendingNumbers.length > 0) {
-      logger.log("  Pending migrations:");
-      for (const num of pendingNumbers) {
-        const diffPath = getMigrationFilePath(migrationsDir, num, "diff");
-        let description: string | undefined;
-
-        if (fs.existsSync(diffPath)) {
-          try {
-            const diff = loadDiff(diffPath);
-            description = diff.description;
-          } catch {
-            // Ignore errors loading diff
-          }
+      if (fs.existsSync(diffPath)) {
+        try {
+          const diff = loadDiff(diffPath);
+          description = diff.description;
+        } catch {
+          // Ignore errors loading diff
         }
+      }
 
-        if (description) {
-          logger.log(`    - ${formatMigrationNumber(num)}: ${description}`);
+      return {
+        number: num,
+        label: formatMigrationNumber(num),
+        ...(description ? { description } : {}),
+      };
+    });
+
+    statuses.push({
+      namespace,
+      currentMigration,
+      currentMigrationLabel: formatMigrationNumber(currentMigration),
+      pendingMigrations,
+    });
+  }
+
+  return statuses;
+}
+
+function printMigrationStatuses(statuses: MigrationStatusInfo[]): void {
+  for (const statusInfo of statuses) {
+    logger.newline();
+    logger.info(`Namespace: ${styles.bold(statusInfo.namespace)}`);
+    logger.log(`  Current migration: ${styles.bold(statusInfo.currentMigrationLabel)}`);
+
+    if (statusInfo.pendingMigrations.length > 0) {
+      logger.log("  Pending migrations:");
+      for (const pending of statusInfo.pendingMigrations) {
+        if (pending.description) {
+          logger.log(`    - ${pending.label}: ${pending.description}`);
         } else {
-          logger.log(`    - ${formatMigrationNumber(num)}`);
+          logger.log(`    - ${pending.label}`);
         }
       }
     } else {
@@ -119,6 +142,22 @@ async function status(options: StatusOptions): Promise<void> {
   }
 
   logger.newline();
+}
+
+/**
+ * Show migration status for TailorDB namespaces
+ * @param {StatusOptions} options - Command options
+ */
+async function status(options: StatusOptions): Promise<void> {
+  logBetaWarning("tailordb migration");
+
+  const statuses = await collectMigrationStatuses(options);
+  if (options.json) {
+    logger.out(statuses);
+    return;
+  }
+
+  printMigrationStatuses(statuses);
 }
 
 export const statusCommand = defineAppCommand({
@@ -140,6 +179,7 @@ export const statusCommand = defineAppCommand({
       namespace: args.namespace,
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      json: logger.jsonMode,
     });
   },
 });

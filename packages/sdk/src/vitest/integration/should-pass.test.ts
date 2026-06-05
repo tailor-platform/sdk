@@ -59,5 +59,7 @@ test("Web Standard / ECMAScript globals remain available after whitelist cleanup
 // test's afterEach chain completes, so it observes the post-restoration
 // state.
 afterAll(() => {
-  expect("performance" in globalThis).toBe(true);
+  if (!("performance" in globalThis)) {
+    throw new Error("performance global was not restored");
+  }
 });

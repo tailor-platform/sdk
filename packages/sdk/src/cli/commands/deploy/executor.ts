@@ -381,7 +381,7 @@ function resolveAuthNamespace(application: Readonly<Application>): string {
   if (!application.authService) {
     throw new Error("No Auth service configured");
   }
-  return application.authService.parsedConfig.name;
+  return application.authService.config.name;
 }
 
 function protoExecutor(
@@ -497,7 +497,7 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
-  const authNamespace = application.authService?.parsedConfig.name;
+  const authNamespace = application.authService?.config.name;
   const invokerContext = `Executor "${executor.name}"`;
 
   switch (target.kind) {

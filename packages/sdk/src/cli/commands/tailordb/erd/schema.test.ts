@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { buildTailorDbErdSchema, writeTailorDbErdSchemaToFile } from "./schema";
 import type { TailorDBNamespaceData } from "@/types/plugin-generation";
 import type { OperatorFieldConfig, ParsedField, TailorDBType } from "@/types/tailordb";
@@ -64,7 +64,7 @@ function createNamespace(types: Record<string, TailorDBType>): TailorDBNamespace
 }
 
 describe("buildTailorDbErdSchema", () => {
-  it("maps TailorDB types into TailorDB ERD schema v1", () => {
+  test("maps TailorDB types into TailorDB ERD schema v1", () => {
     const customer = createType(
       "Customer",
       {
@@ -146,7 +146,7 @@ describe("buildTailorDbErdSchema", () => {
     ]);
   });
 
-  it("builds relations from parsed TailorDB relation metadata", () => {
+  test("builds relations from parsed TailorDB relation metadata", () => {
     const customer = createType("Customer");
     const order = createType("Order", {
       customerId: createField(
@@ -204,7 +204,7 @@ describe("buildTailorDbErdSchema", () => {
     });
   });
 
-  it("does not duplicate the implicit parsed id field", () => {
+  test("does not duplicate the implicit parsed id field", () => {
     const user = createType("User", {
       id: createField("id", {
         type: "uuid",
@@ -229,7 +229,7 @@ describe("buildTailorDbErdSchema", () => {
     });
   });
 
-  it("includes plugin source metadata without local file paths", () => {
+  test("includes plugin source metadata without local file paths", () => {
     const namespace = createNamespace({
       AuditLog: createType("AuditLog"),
     });
@@ -265,7 +265,7 @@ describe("buildTailorDbErdSchema", () => {
     expect(JSON.stringify(schema)).not.toContain("/Users/example");
   });
 
-  it("keeps revisions stable when only generatedAt changes", () => {
+  test("keeps revisions stable when only generatedAt changes", () => {
     const namespace = createNamespace({ User: createType("User") });
 
     const first = buildTailorDbErdSchema({
@@ -293,7 +293,7 @@ describe("writeTailorDbErdSchemaToFile", () => {
     vi.restoreAllMocks();
   });
 
-  it("writes schema JSON to disk", () => {
+  test("writes schema JSON to disk", () => {
     const schema = buildTailorDbErdSchema({
       namespaceData: createNamespace({ User: createType("User") }),
       generatedAt: "2026-01-01T00:00:00.000Z",

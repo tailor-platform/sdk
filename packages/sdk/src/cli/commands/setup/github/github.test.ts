@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { buildFiles, writeFiles } from "./github";
 import { detectPackageManager, renderDeploy } from "./templates";
 
@@ -15,36 +15,36 @@ describe("detectPackageManager", () => {
     fs.rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("detects pnpm from pnpm-lock.yaml", () => {
+  test("detects pnpm from pnpm-lock.yaml", () => {
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     expect(detectPackageManager(testDir)).toBe("pnpm");
   });
 
-  it("detects yarn from yarn.lock", () => {
+  test("detects yarn from yarn.lock", () => {
     fs.writeFileSync(path.join(testDir, "yarn.lock"), "");
     expect(detectPackageManager(testDir)).toBe("yarn");
   });
 
-  it("defaults to npm when no lockfile found", () => {
+  test("defaults to npm when no lockfile found", () => {
     expect(detectPackageManager(testDir)).toBe("npm");
   });
 
-  it("detects npm from package-lock.json", () => {
+  test("detects npm from package-lock.json", () => {
     fs.writeFileSync(path.join(testDir, "package-lock.json"), "");
     expect(detectPackageManager(testDir)).toBe("npm");
   });
 
-  it("detects bun from bun.lockb", () => {
+  test("detects bun from bun.lockb", () => {
     fs.writeFileSync(path.join(testDir, "bun.lockb"), "");
     expect(detectPackageManager(testDir)).toBe("bun");
   });
 
-  it("detects bun from bun.lock", () => {
+  test("detects bun from bun.lock", () => {
     fs.writeFileSync(path.join(testDir, "bun.lock"), "");
     expect(detectPackageManager(testDir)).toBe("bun");
   });
 
-  it("prefers pnpm when multiple lockfiles exist", () => {
+  test("prefers pnpm when multiple lockfiles exist", () => {
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     fs.writeFileSync(path.join(testDir, "yarn.lock"), "");
     expect(detectPackageManager(testDir)).toBe("pnpm");
@@ -60,12 +60,12 @@ describe("renderDeploy", () => {
     packageManager: "pnpm" as const,
   };
 
-  it("references the composite action", () => {
+  test("references the composite action", () => {
     const content = renderDeploy(baseParams);
     expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[a-f0-9]+ # v\d+\.\d+\.\d+/);
   });
 
-  it("includes setup steps in correct order", () => {
+  test("includes setup steps in correct order", () => {
     const content = renderDeploy(baseParams);
     const checkoutIndex = content.indexOf("uses: actions/checkout@");
     const setupIndex = content.indexOf("uses: pnpm/action-setup@");
@@ -75,7 +75,7 @@ describe("renderDeploy", () => {
     expect(actionIndex).toBeGreaterThan(setupIndex);
   });
 
-  it("pins action versions with SHA and version comment", () => {
+  test("pins action versions with SHA and version comment", () => {
     const content = renderDeploy(baseParams);
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
     expect(content).toMatch(/uses: pnpm\/action-setup@[a-f0-9]+ # v\d+\.\d+\.\d+/);
@@ -83,21 +83,21 @@ describe("renderDeploy", () => {
     expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[a-f0-9]+ # v\d+\.\d+\.\d+/);
   });
 
-  it("generates pnpm setup steps", () => {
+  test("generates pnpm setup steps", () => {
     const content = renderDeploy({ ...baseParams, packageManager: "pnpm" });
     expect(content).toContain("pnpm/action-setup@");
     expect(content).toContain("cache: pnpm");
     expect(content).toContain("pnpm install --frozen-lockfile");
   });
 
-  it("generates yarn setup steps", () => {
+  test("generates yarn setup steps", () => {
     const content = renderDeploy({ ...baseParams, packageManager: "yarn" });
     expect(content).not.toContain("pnpm");
     expect(content).toContain("cache: yarn");
     expect(content).toContain("yarn install --frozen-lockfile");
   });
 
-  it("generates npm setup steps", () => {
+  test("generates npm setup steps", () => {
     const content = renderDeploy({ ...baseParams, packageManager: "npm" });
     expect(content).not.toContain("pnpm");
     expect(content).not.toContain("yarn");
@@ -105,7 +105,7 @@ describe("renderDeploy", () => {
     expect(content).toContain("npm ci");
   });
 
-  it("generates bun setup steps", () => {
+  test("generates bun setup steps", () => {
     const content = renderDeploy({ ...baseParams, packageManager: "bun" });
     expect(content).not.toContain("pnpm");
     expect(content).not.toContain("yarn");
@@ -114,7 +114,7 @@ describe("renderDeploy", () => {
     expect(content).toContain("bun install --frozen-lockfile");
   });
 
-  it("passes workspace inputs", () => {
+  test("passes workspace inputs", () => {
     const content = renderDeploy(baseParams);
     expect(content).toContain("workspace-name: my-app");
     expect(content).toContain("workspace-region: asia-northeast");
@@ -122,7 +122,7 @@ describe("renderDeploy", () => {
     expect(content).toContain("folder-id: folder-456");
   });
 
-  it("passes secrets as action inputs", () => {
+  test("passes secrets as action inputs", () => {
     const content = renderDeploy(baseParams);
     expect(content).toContain("platform-client-id: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}");
     expect(content).toContain(
@@ -130,17 +130,17 @@ describe("renderDeploy", () => {
     );
   });
 
-  it("does not include working-directory when omitted", () => {
+  test("does not include working-directory when omitted", () => {
     expect(renderDeploy(baseParams)).not.toContain("working-directory");
   });
 
-  it("includes working-directory when provided", () => {
+  test("includes working-directory when provided", () => {
     expect(renderDeploy({ ...baseParams, workingDirectory: "apps/foo" })).toContain(
       "working-directory: apps/foo",
     );
   });
 
-  it("preserves $ characters in parameter values", () => {
+  test("preserves $ characters in parameter values", () => {
     const content = renderDeploy({
       ...baseParams,
       workspaceName: "test$&end",
@@ -148,12 +148,12 @@ describe("renderDeploy", () => {
     expect(content).toContain("workspace-name: test$&end");
   });
 
-  it("parameterizes concurrency group with workspace name", () => {
+  test("parameterizes concurrency group with workspace name", () => {
     const content = renderDeploy(baseParams);
     expect(content).toContain("group: tailor-my-app-");
   });
 
-  it("strips plan job by default", () => {
+  test("strips plan job by default", () => {
     const content = renderDeploy(baseParams);
     expect(content).not.toContain("tailor-platform/actions/plan@");
     expect(content).not.toContain("TAILOR_PLATFORM_WORKSPACE_ID");
@@ -162,7 +162,7 @@ describe("renderDeploy", () => {
     expect(content).toContain("tailor-platform/actions/deploy@");
   });
 
-  it("includes plan job when withPlan is true", () => {
+  test("includes plan job when withPlan is true", () => {
     const content = renderDeploy({ ...baseParams, withPlan: true });
     expect(content).toContain("tailor-platform/actions/plan@");
     expect(content).toContain("workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}");
@@ -172,13 +172,13 @@ describe("renderDeploy", () => {
     expect(content).not.toContain("__PLAN_JOB_END__");
   });
 
-  it("includes setup steps in both plan and deploy jobs when withPlan is true", () => {
+  test("includes setup steps in both plan and deploy jobs when withPlan is true", () => {
     const content = renderDeploy({ ...baseParams, withPlan: true });
     const matches = content.match(/uses: pnpm\/action-setup@/g) ?? [];
     expect(matches).toHaveLength(2);
   });
 
-  it("propagates working-directory to plan job when withPlan is true", () => {
+  test("propagates working-directory to plan job when withPlan is true", () => {
     const content = renderDeploy({
       ...baseParams,
       withPlan: true,
@@ -201,7 +201,7 @@ describe("buildFiles", () => {
     fs.rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("generates only the caller workflow file", () => {
+  test("generates only the caller workflow file", () => {
     const files = buildFiles({
       workspaceName: "my-app",
       workspaceRegion: "asia-northeast",
@@ -214,7 +214,7 @@ describe("buildFiles", () => {
     expect(files[0]!.path).toBe(path.join(testDir, ".github/workflows/tailor-my-app.yml"));
   });
 
-  it("detects package manager from project directory", () => {
+  test("detects package manager from project directory", () => {
     const files = buildFiles({
       workspaceName: "my-app",
       workspaceRegion: "asia-northeast",
@@ -226,7 +226,7 @@ describe("buildFiles", () => {
     expect(files[0]!.content).toContain("pnpm/action-setup");
   });
 
-  it("detects package manager from repo root when dir is a subdirectory", () => {
+  test("detects package manager from repo root when dir is a subdirectory", () => {
     const subDir = path.join(testDir, "apps/foo");
     fs.mkdirSync(subDir, { recursive: true });
     const files = buildFiles({
@@ -252,7 +252,7 @@ describe("writeFiles", () => {
     fs.rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("writes files that do not exist", () => {
+  test("writes files that do not exist", () => {
     const filePath = path.join(testDir, "workflow.yml");
     const result = writeFiles([{ path: filePath, content: "test content" }]);
     expect(result.written).toContain(filePath);
@@ -260,7 +260,7 @@ describe("writeFiles", () => {
     expect(fs.readFileSync(filePath, "utf-8")).toBe("test content");
   });
 
-  it("skips files that already exist", () => {
+  test("skips files that already exist", () => {
     const filePath = path.join(testDir, "existing.yml");
     fs.writeFileSync(filePath, "original content");
     const result = writeFiles([{ path: filePath, content: "new content" }]);
@@ -269,14 +269,14 @@ describe("writeFiles", () => {
     expect(fs.readFileSync(filePath, "utf-8")).toBe("original content");
   });
 
-  it("creates parent directories as needed", () => {
+  test("creates parent directories as needed", () => {
     const filePath = path.join(testDir, "deep/nested/dir/file.yml");
     const result = writeFiles([{ path: filePath, content: "nested" }]);
     expect(result.written).toContain(filePath);
     expect(fs.readFileSync(filePath, "utf-8")).toBe("nested");
   });
 
-  it("handles mixed existing and new files", () => {
+  test("handles mixed existing and new files", () => {
     const existingPath = path.join(testDir, "existing.yml");
     const newPath = path.join(testDir, "new.yml");
     fs.writeFileSync(existingPath, "original");

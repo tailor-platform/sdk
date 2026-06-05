@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { resolveLocalErdSchemaNamespaces } from "./local-schema";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 
@@ -12,11 +12,11 @@ describe("resolveLocalErdSchemaNamespaces", () => {
     },
   } as unknown as LoadedConfig;
 
-  it("loads only erdSite namespaces when required and no namespace is explicit", () => {
+  test("loads only erdSite namespaces when required and no namespace is explicit", () => {
     expect(resolveLocalErdSchemaNamespaces(config, { requireErdSite: true })).toEqual(["main"]);
   });
 
-  it("keeps explicit namespaces even when erdSite is required", () => {
+  test("keeps explicit namespaces even when erdSite is required", () => {
     expect(
       resolveLocalErdSchemaNamespaces(config, {
         namespaces: ["admin"],
@@ -25,7 +25,7 @@ describe("resolveLocalErdSchemaNamespaces", () => {
     ).toEqual(["admin"]);
   });
 
-  it("loads all owned namespaces when erdSite is not required", () => {
+  test("loads all owned namespaces when erdSite is not required", () => {
     expect(resolveLocalErdSchemaNamespaces(config, {})).toBeUndefined();
   });
 });

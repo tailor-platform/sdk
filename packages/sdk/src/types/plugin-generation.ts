@@ -1,4 +1,4 @@
-import type { IdProvider as IdProviderConfig, OAuth2ClientInput } from "./auth.generated";
+import type { IdProvider as IdProviderConfig, OAuth2Client } from "./auth.generated";
 import type { Executor } from "./executor.generated";
 import type { DependencyKind } from "./generator-config";
 import type { PluginAttachment } from "./plugin-attachment";
@@ -33,8 +33,8 @@ export interface GeneratorAuthInput {
     namespace: string;
     usernameField: string;
   };
-  machineUsers?: Record<string, { attributes: Record<string, unknown> }>;
-  oauth2Clients?: Record<string, OAuth2ClientInput>;
+  machineUsers?: Record<string, { attributes?: Record<string, unknown> }>;
+  oauth2Clients?: Record<string, OAuth2Client>;
   idProvider?: IdProviderConfig;
 }
 

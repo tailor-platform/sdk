@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { format } from "oxfmt";
 import { assertDocMatch, createCommandRenderer } from "politty/docs";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { commonArgs } from "./shared/args";
 import { mainCommand } from "./index";
@@ -141,7 +141,7 @@ const files: Record<string, FileConfig> = {
 const targetCommands = Object.values(files).flatMap((config) => config.commands);
 
 describe("CLI Documentation", () => {
-  it("uses section-level command markers", () => {
+  test("uses section-level command markers", () => {
     const applicationDoc = readFileSync(
       new URL("../../docs/cli/application.md", import.meta.url),
       "utf-8",
@@ -152,7 +152,7 @@ describe("CLI Documentation", () => {
     expect(applicationDoc).not.toContain("<!-- politty:command:init:start -->");
   });
 
-  it("matches golden files", { timeout: 60000 }, async () => {
+  test("matches golden files", { timeout: 60000 }, async () => {
     await assertDocMatch({
       command: mainCommand,
       files,

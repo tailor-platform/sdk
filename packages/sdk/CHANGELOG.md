@@ -1,5 +1,23 @@
 # @tailor-platform/sdk
 
+## 1.55.1
+
+### Patch Changes
+
+- [#1333](https://github.com/tailor-platform/sdk/pull/1333) [`46a0f78`](https://github.com/tailor-platform/sdk/commit/46a0f78481f4718a470a2cb5a15298db8015f452) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk api` injecting a duplicate `workspaceId` when `--body` supplies the field in snake_case. The auto-injection guard only checked the camelCase key, so a body such as `{"workspace_id": "..."}` slipped past it and the SDK appended a second `workspaceId`, which the server rejected with a duplicate-field error. Body keys are now converged to each field's canonical (camelCase) name before injection, so snake_case and JSON aliases are recognized.
+
+- [#1325](https://github.com/tailor-platform/sdk/pull/1325) [`8bd51e6`](https://github.com/tailor-platform/sdk/commit/8bd51e64143a2877dcdc821a57b8b6b82cf61363) Thanks [@dqn](https://github.com/dqn)! - Fix `--json` output for CLI commands that returned human-readable text or empty stdout instead of parseable JSON.
+
+- [#1276](https://github.com/tailor-platform/sdk/pull/1276) [`f1536d6`](https://github.com/tailor-platform/sdk/commit/f1536d64d182c9456692165397a74ad8c0257d30) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1312](https://github.com/tailor-platform/sdk/pull/1312) [`00c9b07`](https://github.com/tailor-platform/sdk/commit/00c9b07fdec9b6fa59026f6d4451d43f04114c55) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer to v8.5.2
+
+- [#1316](https://github.com/tailor-platform/sdk/pull/1316) [`b7f0389`](https://github.com/tailor-platform/sdk/commit/b7f0389270573ba5cf6accca31acdea027974c8d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.4
+
+- [#1318](https://github.com/tailor-platform/sdk/pull/1318) [`c48aeb6`](https://github.com/tailor-platform/sdk/commit/c48aeb6e72a644b056a48e57d39799cae386461e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.7.0
+
+- [#1328](https://github.com/tailor-platform/sdk/pull/1328) [`8473a4d`](https://github.com/tailor-platform/sdk/commit/8473a4d284cea998759584c151e12c6cb9b7bc67) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.1
+
 ## 1.55.0
 
 ### Minor Changes
