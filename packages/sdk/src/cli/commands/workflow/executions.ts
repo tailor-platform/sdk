@@ -77,9 +77,17 @@ export interface WorkflowExecutionDetailInfo extends WorkflowExecutionInfo {
   })[];
 }
 
+export interface WorkflowExecutionWaitInfo extends WorkflowExecutionDetailInfo {
+  statusClass: WorkflowWaitResult["statusClass"];
+  elapsedMs: number;
+  attempts: number;
+  timedOut: boolean;
+  lastError: string | null;
+}
+
 export interface GetWorkflowExecutionResult {
   execution: WorkflowExecutionDetailInfo;
-  wait: () => Promise<WorkflowExecutionDetailInfo>;
+  wait: () => Promise<WorkflowExecutionWaitInfo>;
 }
 
 function parseStatus(status: string): WorkflowExecution_Status {
@@ -267,9 +275,9 @@ export async function getWorkflowExecution(
     return result;
   }
 
-  async function waitForCompletion(): Promise<WorkflowExecutionDetailInfo> {
+  async function waitForCompletion(): Promise<WorkflowExecutionWaitInfo> {
     const interval = options.interval ?? 3000;
-    await waitForWorkflowExecution({
+    const waitResult = await waitForWorkflowExecution({
       client,
       workspaceId,
       executionId: options.executionId,
@@ -277,7 +285,15 @@ export async function getWorkflowExecution(
       timeout: options.timeout,
       until: options.until ?? "terminal",
     });
-    return await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
+    const execution = await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
+    return {
+      ...execution,
+      statusClass: waitResult.statusClass,
+      elapsedMs: waitResult.elapsedMs,
+      attempts: waitResult.attempts,
+      timedOut: waitResult.timedOut,
+      lastError: waitResult.lastError,
+    };
   }
 
   const execution = await fetchExecutionWithLogs(options.executionId, options.logs ?? false);

@@ -105,6 +105,7 @@ export {
   type ListWorkflowExecutionsTypedOptions,
   type GetWorkflowExecutionOptions,
   type GetWorkflowExecutionResult,
+  type WorkflowExecutionWaitInfo,
 } from "./commands/workflow/executions";
 export { waitWorkflowExecution, type WorkflowWaitOutput } from "./commands/workflow/wait";
 export type { WaitWorkflowExecutionOptions, WorkflowWaitResult } from "./commands/workflow/waiter";
