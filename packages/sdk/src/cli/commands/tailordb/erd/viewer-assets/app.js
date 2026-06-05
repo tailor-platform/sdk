@@ -984,7 +984,8 @@ function wireInteractions() {
         return;
       }
 
-      panBy(0, event.deltaY);
+      // Touchpads report horizontal swipes via deltaX without a modifier key.
+      panBy(event.deltaX, event.deltaY);
     },
     { passive: false },
   );
