@@ -155,6 +155,50 @@ export declare type Workflow = Message<"tailor.v1.Workflow"> & {
 export declare const WorkflowSchema: GenMessage<Workflow>;
 
 /**
+ * WorkflowJobFunctionExecutionPolicy defines a runtime concurrency limit shared by
+ * any job function invocation that specifies a matching execution_policy_key in
+ * triggerJobFunction(). The same key can be referenced by multiple job functions
+ * across different workflows; they all share the same concurrency pool within the workspace.
+ *
+ * @generated from message tailor.v1.WorkflowJobFunctionExecutionPolicy
+ */
+export declare type WorkflowJobFunctionExecutionPolicy = Message<"tailor.v1.WorkflowJobFunctionExecutionPolicy"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string execution_policy_key = 2;
+   */
+  executionPolicyKey: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 3;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp updated_at = 4;
+   */
+  updatedAt?: Timestamp;
+
+  /**
+   * When unset, the policy registers the key as valid but applies no user-defined
+   * concurrency limit (platform hard limits still apply).
+   *
+   * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 5;
+   */
+  concurrencyPolicy?: ConcurrencyPolicy;
+};
+
+/**
+ * Describes the message tailor.v1.WorkflowJobFunctionExecutionPolicy.
+ * Use `create(WorkflowJobFunctionExecutionPolicySchema)` to create a new message.
+ */
+export declare const WorkflowJobFunctionExecutionPolicySchema: GenMessage<WorkflowJobFunctionExecutionPolicy>;
+
+/**
  * @generated from message tailor.v1.WorkflowJobExecution
  */
 export declare type WorkflowJobExecution = Message<"tailor.v1.WorkflowJobExecution"> & {
