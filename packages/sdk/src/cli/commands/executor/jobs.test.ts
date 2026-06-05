@@ -3,11 +3,13 @@ import {
   ExecutorJobStatus,
   ExecutorTargetType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { watchExecutorJob } from "./jobs";
+import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
 import type { ExecutorJob } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 
 vi.mock("@/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -108,5 +110,65 @@ describe("watchExecutorJob", () => {
       },
     });
     expect(result.attempts).toBeGreaterThan(0);
+  });
+
+  test("preserves workflow failure status when optional log fetch fails", async () => {
+    const getWorkflowExecutionMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        execution: {
+          id: "workflow-execution-1",
+          workflowName: "daily-workflow",
+          status: WorkflowExecution_Status.FAILED,
+          jobExecutions: [],
+        } as unknown as WorkflowExecution,
+      })
+      .mockRejectedValueOnce(new Error("logs unavailable"));
+
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getExecutorExecutor: vi.fn().mockResolvedValue({
+        executor: {
+          targetType: ExecutorTargetType.WORKFLOW,
+        },
+      }),
+      getExecutorJob: vi.fn().mockResolvedValue({
+        job: executorJob(ExecutorJobStatus.SUCCESS),
+      }),
+      listExecutorJobAttempts: vi.fn().mockResolvedValue({
+        attempts: [
+          {
+            id: "attempt-1",
+            jobId: "job-1",
+            status: ExecutorJobStatus.SUCCESS,
+            operationReference: "workflow-execution-1",
+          },
+        ],
+        nextPageToken: "",
+      }),
+      getWorkflowExecution: getWorkflowExecutionMock,
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+
+    const result = await watchExecutorJob({
+      executorName: "my-executor",
+      jobId: "job-1",
+      interval: 1,
+      timeout: 100,
+      logs: true,
+      showProgress: false,
+    });
+
+    expect(result).toMatchObject({
+      targetType: "WORKFLOW",
+      workflowExecutionId: "workflow-execution-1",
+      workflowStatus: "FAILED",
+      timedOut: false,
+      job: {
+        id: "job-1",
+        status: "SUCCESS",
+      },
+    });
+    expect(getExecutorWaitFailureMessage(result)).toBe(
+      "Workflow execution 'workflow-execution-1' failed.",
+    );
   });
 });

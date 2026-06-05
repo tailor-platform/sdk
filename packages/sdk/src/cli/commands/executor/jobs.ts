@@ -520,20 +520,26 @@ export async function watchExecutorJob<E extends ExecutorLike>(
             // Fetch logs if requested
             let workflowJobLogs: WorkflowJobLog[] | undefined;
             if (options.logs) {
-              const { execution: execWithLogs } = await getWorkflowExecution({
-                executionId: operationReference,
-                workspaceId: options.workspaceId,
-                profile: options.profile,
-                logs: true,
-              });
-              if (execWithLogs.jobDetails) {
-                workflowJobLogs = execWithLogs.jobDetails
-                  .filter((job) => job.logs || job.result)
-                  .map((job) => ({
-                    jobName: job.stackedJobName || job.id,
-                    logs: job.logs,
-                    result: job.result,
-                  }));
+              try {
+                const { execution: execWithLogs } = await getWorkflowExecution({
+                  executionId: operationReference,
+                  workspaceId: options.workspaceId,
+                  profile: options.profile,
+                  logs: true,
+                });
+                if (execWithLogs.jobDetails) {
+                  workflowJobLogs = execWithLogs.jobDetails
+                    .filter((job) => job.logs || job.result)
+                    .map((job) => ({
+                      jobName: job.stackedJobName || job.id,
+                      logs: job.logs,
+                      result: job.result,
+                    }));
+                }
+              } catch (error) {
+                logger.warn(
+                  `Could not fetch workflow execution logs: ${error instanceof Error ? error.message : error}`,
+                );
               }
             }
 
