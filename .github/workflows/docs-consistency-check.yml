@@ -95,8 +95,9 @@ jobs:
             Search for an existing review summary and update it, or create a new review.
 
             ```bash
-            REVIEW_ID=$(gh api --paginate --slurp repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews \
-              --jq 'map(.[] | select((.body // "") | contains("<!-- docs-consistency-check -->")) | select(.state != "DISMISSED")) | last | .id // empty')
+            REVIEW_ID=$(gh api --paginate repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews \
+              --jq '.[] | select((.body // "") | contains("<!-- docs-consistency-check -->")) | select(.state != "DISMISSED") | .id' \
+              | tail -n 1)
             ```
 
             **If inconsistencies are found**, post a review summary in this format:
