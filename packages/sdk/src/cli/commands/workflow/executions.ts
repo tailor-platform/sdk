@@ -19,15 +19,20 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { styles, logger } from "@/cli/shared/logger";
-import { spinner } from "@/cli/shared/spinner";
 import { waitArgs } from "./args";
-import { isWorkflowExecutionTerminalStatus } from "./status";
+import { type WorkflowWaitUntil } from "./status";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,
   toWorkflowExecutionInfo,
   toWorkflowJobExecutionInfo,
 } from "./transform";
+import {
+  getWorkflowWaitFailureMessage,
+  waitForWorkflowExecution,
+  waitForWorkflowExecutionById,
+  type WorkflowWaitResult,
+} from "./waiter";
 import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
 
 type WorkflowLike = {
@@ -60,6 +65,8 @@ export interface GetWorkflowExecutionOptions {
   workspaceId?: string;
   profile?: string;
   interval?: number;
+  timeout?: number;
+  until?: WorkflowWaitUntil;
   logs?: boolean;
 }
 
@@ -75,32 +82,6 @@ export interface GetWorkflowExecutionResult {
   wait: () => Promise<WorkflowExecutionDetailInfo>;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString("en-US", { hour12: false });
-}
-
-function colorizeStatus(status: WorkflowExecution_Status): string {
-  const statusText = WorkflowExecution_Status[status];
-  switch (status) {
-    case WorkflowExecution_Status.PENDING:
-      return styles.dim(statusText);
-    case WorkflowExecution_Status.PENDING_RESUME:
-      return styles.warning(statusText);
-    case WorkflowExecution_Status.RUNNING:
-      return styles.info(statusText);
-    case WorkflowExecution_Status.SUCCESS:
-      return styles.success(statusText);
-    case WorkflowExecution_Status.FAILED:
-      return styles.error(statusText);
-    default:
-      return statusText;
-  }
-}
-
 function parseStatus(status: string): WorkflowExecution_Status {
   const upperStatus = status.toUpperCase();
   switch (upperStatus) {
@@ -114,9 +95,15 @@ function parseStatus(status: string): WorkflowExecution_Status {
       return WorkflowExecution_Status.SUCCESS;
     case "FAILED":
       return WorkflowExecution_Status.FAILED;
+    case "PENDING_RETRY":
+      return WorkflowExecution_Status.PENDING_RETRY;
+    case "WAITING":
+      return WorkflowExecution_Status.WAITING;
+    case "UNSPECIFIED":
+      return WorkflowExecution_Status.UNSPECIFIED;
     default:
       throw new Error(
-        `Invalid status: ${status}. Valid values: PENDING, PENDING_RESUME, RUNNING, SUCCESS, FAILED`,
+        `Invalid status: ${status}. Valid values: UNSPECIFIED, PENDING, PENDING_RESUME, RUNNING, SUCCESS, FAILED, PENDING_RETRY, WAITING`,
       );
   }
 }
@@ -282,24 +269,15 @@ export async function getWorkflowExecution(
 
   async function waitForCompletion(): Promise<WorkflowExecutionDetailInfo> {
     const interval = options.interval ?? 3000;
-
-    while (true) {
-      const { execution } = await client.getWorkflowExecution({
-        workspaceId,
-        executionId: options.executionId,
-      });
-
-      if (!execution) {
-        throw new Error(`Execution '${options.executionId}' not found.`);
-      }
-
-      // Terminal states (SUCCESS, FAILED, PENDING_RESUME)
-      if (isWorkflowExecutionTerminalStatus(execution.status)) {
-        return await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
-      }
-
-      await sleep(interval);
-    }
+    await waitForWorkflowExecution({
+      client,
+      workspaceId,
+      executionId: options.executionId,
+      interval,
+      timeout: options.timeout,
+      until: options.until ?? "terminal",
+    });
+    return await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
   }
 
   const execution = await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
@@ -308,37 +286,6 @@ export async function getWorkflowExecution(
     execution,
     wait: waitForCompletion,
   };
-}
-
-async function waitWithSpinner(
-  waitFn: () => Promise<WorkflowExecutionDetailInfo>,
-  interval: number,
-  json: boolean,
-): Promise<WorkflowExecutionDetailInfo> {
-  const sp = !json ? spinner().start("Waiting for workflow to complete...") : null;
-
-  const updateInterval = setInterval(() => {
-    if (sp) {
-      const now = formatTime(new Date());
-      sp.text = `Waiting for workflow to complete... (${now})`;
-    }
-  }, interval);
-
-  try {
-    const result = await waitFn();
-    const coloredStatus = colorizeStatus(
-      WorkflowExecution_Status[result.status as keyof typeof WorkflowExecution_Status],
-    );
-    if (result.status === "SUCCESS") {
-      sp?.succeed(`Completed: ${coloredStatus}`);
-    } else {
-      sp?.fail(`Completed: ${coloredStatus}`);
-    }
-    return result;
-  } finally {
-    clearInterval(updateInterval);
-    sp?.stop();
-  }
 }
 
 /**
@@ -425,9 +372,58 @@ export const executionsCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = logger.jsonMode || args.json;
     if (args.executionId) {
       const interval = parseDuration(args.interval);
-      const { execution, wait } = await getWorkflowExecution({
+
+      if (!jsonOutput) {
+        logger.info(`Execution ID: ${args.executionId}`, { mode: "stream" });
+      }
+
+      if (args.wait) {
+        const result = await waitForWorkflowExecutionById({
+          executionId: args.executionId,
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+          interval,
+          timeout: parseDuration(args.timeout),
+          until: args.until,
+          showProgress: !jsonOutput,
+          trackJobs: true,
+        });
+
+        if (args.logs && !jsonOutput) {
+          const { execution } = await getWorkflowExecution({
+            executionId: args.executionId,
+            workspaceId: args["workspace-id"],
+            profile: args.profile,
+            logs: true,
+          });
+          printExecutionWithLogs(execution);
+        } else if (args.logs) {
+          const { execution } = await getWorkflowExecution({
+            executionId: args.executionId,
+            workspaceId: args["workspace-id"],
+            profile: args.profile,
+            logs: true,
+          });
+          const output: WorkflowWaitResult & Pick<WorkflowExecutionDetailInfo, "jobDetails"> = {
+            ...result,
+            jobDetails: execution.jobDetails,
+          };
+          logger.out(output);
+        } else {
+          logger.out(result);
+        }
+
+        const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
+        if (failureMessage) {
+          throw new Error(failureMessage);
+        }
+        return;
+      }
+
+      const { execution } = await getWorkflowExecution({
         executionId: args.executionId,
         workspaceId: args["workspace-id"],
         profile: args.profile,
@@ -435,16 +431,10 @@ export const executionsCommand = defineAppCommand({
         logs: args.logs,
       });
 
-      if (!args.json) {
-        logger.info(`Execution ID: ${execution.id}`, { mode: "stream" });
-      }
-
-      const result = args.wait ? await waitWithSpinner(wait, interval, args.json) : execution;
-
-      if (args.logs && !args.json) {
-        printExecutionWithLogs(result);
+      if (args.logs && !jsonOutput) {
+        printExecutionWithLogs(execution);
       } else {
-        logger.out(result);
+        logger.out(execution);
       }
     } else {
       const executions = await listWorkflowExecutions({

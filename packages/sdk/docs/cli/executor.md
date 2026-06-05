@@ -179,6 +179,7 @@ tailor-sdk executor jobs [options] <executor-name> [job-id]
 | `--attempts`                    | -     | Show job attempts (only with job ID) (detail mode only)                                               | No       | `false`  | -                              |
 | `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only) | No       | `false`  | -                              |
 | `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                        | No       | `"3s"`   | -                              |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait when using --wait (e.g., '30s', '5m')                                            | No       | `"5m"`   | -                              |
 | `--order <ORDER>`               | -     | Sort order (asc or desc)                                                                              | No       | `"desc"` | -                              |
 | `--limit <LIMIT>`               | -     | Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)                           | No       | `50`     | -                              |
 | `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                    | No       | `false`  | -                              |
@@ -283,6 +284,7 @@ tailor-sdk executor trigger [options] <executor-name>
 | `--header <HEADER>`             | `-H`  | Request header (format: 'Key: Value', can be specified multiple times)             | No       | -       | -                              |
 | `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable | No       | `false` | -                              |
 | `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                     | No       | `"3s"`  | -                              |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait when using --wait (e.g., '30s', '5m')                         | No       | `"5m"`  | -                              |
 | `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                 | No       | `false` | -                              |
 
 <!-- politty:command:executor trigger:options:end -->
