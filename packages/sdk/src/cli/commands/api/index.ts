@@ -133,7 +133,7 @@ export function normalizeBodyFieldKeys(
   for (const key of Object.keys(body)) {
     const local = aliasToLocal.get(key);
     if (!local || local === key) continue;
-    if (!(local in body)) body[local] = body[key];
+    if (!Object.hasOwn(body, local)) body[local] = body[key];
     delete body[key];
     changed = true;
   }
@@ -276,7 +276,7 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
 
       const fieldNames = method.input.fields.map((f) => f.localName);
 
-      if (fieldNames.includes("workspaceId") && !("workspaceId" in parsedBody)) {
+      if (fieldNames.includes("workspaceId") && !Object.hasOwn(parsedBody, "workspaceId")) {
         try {
           parsedBody.workspaceId = await loadWorkspaceId({
             workspaceId: args["workspace-id"],
@@ -288,7 +288,7 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
         }
       }
 
-      if (fieldNames.includes("namespaceName") && !("namespaceName" in parsedBody)) {
+      if (fieldNames.includes("namespaceName") && !Object.hasOwn(parsedBody, "namespaceName")) {
         try {
           const { config } = await loadConfig(args.config);
           const ns = resolveNamespaceName(methodName, config);

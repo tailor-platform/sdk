@@ -43,4 +43,21 @@ describe("normalizeBodyFieldKeys", () => {
     expect(changed).toBe(false);
     expect(body).toEqual({ workspaceId: "ws-1", unknownField: 1 });
   });
+
+  it("uses own-property checks so a field whose localName is a prototype key keeps its value", () => {
+    // `toString` lives on Object.prototype; an `in` check would treat the
+    // canonical key as already present and drop the alias value rather than
+    // moving it. normalizeBodyFieldKeys must use an own-property check.
+    const fields = [
+      { name: "to_string", jsonName: "toString", localName: "toString" },
+    ] as unknown as Parameters<typeof normalizeBodyFieldKeys>[1];
+    const body: Record<string, unknown> = { to_string: "kept" };
+
+    const changed = normalizeBodyFieldKeys(body, fields);
+
+    expect(changed).toBe(true);
+    expect(Object.hasOwn(body, "toString")).toBe(true);
+    expect(body.toString).toBe("kept");
+    expect("to_string" in body).toBe(false);
+  });
 });
