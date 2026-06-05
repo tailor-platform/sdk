@@ -1,3 +1,4 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test } from "vitest";
 import { defineConfig } from "./config";
 

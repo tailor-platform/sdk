@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { computeBundlerContextHash, createBundleCache, withCache } from "./bundle-cache";
 import { createCacheStore } from "./store";
 
@@ -318,7 +320,7 @@ describe("withCache", () => {
   }
 
   test("calls build directly when cache is undefined", async () => {
-    const build = vi.fn(async () => "built output");
+    const build = vi.fn<MockProcedure>(async () => "built output");
     const result = await withCache({
       cache: undefined,
       kind: "resolver",
@@ -347,7 +349,7 @@ describe("withCache", () => {
       dependencyPaths: [sourceFile],
     });
 
-    const build = vi.fn(async () => "should not be called");
+    const build = vi.fn<MockProcedure>(async () => "should not be called");
     const result = await withCache({
       cache,
       kind: "resolver",
@@ -366,7 +368,7 @@ describe("withCache", () => {
     const cache = createBundleCache(store);
     const sourceFile = writeFile("src/resolver.ts", "export default {}");
 
-    const build = vi.fn(async () => "built output");
+    const build = vi.fn<MockProcedure>(async () => "built output");
 
     const result = await withCache({
       cache,
@@ -391,7 +393,7 @@ describe("withCache", () => {
     const cache = createBundleCache(store);
     const sourceFile = writeFile("src/job.ts", "export default {}");
 
-    const build = vi.fn(async () => "built output");
+    const build = vi.fn<MockProcedure>(async () => "built output");
 
     // First call: cache miss, should build and save with contextHash
     await withCache({

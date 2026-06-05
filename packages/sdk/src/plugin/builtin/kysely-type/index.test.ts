@@ -207,7 +207,9 @@ describe("KyselyTypePlugin integration tests", () => {
         fields: null,
       };
 
-      await expect(processKyselyType(invalidType)).rejects.toThrow();
+      await expect(processKyselyType(invalidType)).rejects.toThrow(
+        "Cannot convert undefined or null to object",
+      );
     });
 
     test("processes unknown type definitions as string type", async () => {

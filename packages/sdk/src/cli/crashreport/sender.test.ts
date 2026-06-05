@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { sendCrashReport } from "./sender";
 import type { CrashReport } from "./report";
 
@@ -41,7 +43,7 @@ describe("sendCrashReport", () => {
   });
 
   test("sends GraphQL mutation with variables", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
     });
@@ -60,7 +62,7 @@ describe("sendCrashReport", () => {
   });
 
   test("includes all CrashReport fields as variables", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
     });
@@ -74,7 +76,7 @@ describe("sendCrashReport", () => {
   });
 
   test("returns true when server responds with success", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
     });
@@ -85,7 +87,7 @@ describe("sendCrashReport", () => {
   });
 
   test("returns false when response contains GraphQL errors", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
@@ -100,7 +102,7 @@ describe("sendCrashReport", () => {
   });
 
   test("returns true when server returns empty errors array", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
@@ -115,7 +117,7 @@ describe("sendCrashReport", () => {
   });
 
   test("returns false when mutation returns success: false", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ data: { submitCrashReport: { success: false } } }),
     });
@@ -126,7 +128,7 @@ describe("sendCrashReport", () => {
   });
 
   test("returns false on non-ok HTTP response", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: false,
       status: 500,
       json: () => Promise.resolve({}),
@@ -138,7 +140,7 @@ describe("sendCrashReport", () => {
   });
 
   test("returns false on network error", async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
+    globalThis.fetch = vi.fn<MockProcedure>().mockRejectedValue(new Error("Network error"));
 
     const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
 
@@ -146,7 +148,7 @@ describe("sendCrashReport", () => {
   });
 
   test("uses TAILOR_CRASH_REPORT_ENDPOINT env var", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
     });
@@ -161,7 +163,7 @@ describe("sendCrashReport", () => {
   });
 
   test("sends Content-Type application/json and User-Agent headers", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
     });

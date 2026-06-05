@@ -1,11 +1,13 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { resolveTypeNamespace, resolveTypeNamespaces } from "./tailordb-namespace";
 
 describe("resolveTypeNamespaces", () => {
   test("resolves multiple types from different namespaces", async () => {
     const client = {
       listTailorDBTypes: vi
-        .fn()
+        .fn<Mock>()
         .mockResolvedValueOnce({
           tailordbTypes: [{ name: "User" }],
         })
@@ -28,7 +30,7 @@ describe("resolveTypeNamespaces", () => {
   test("continues when one namespace call fails", async () => {
     const client = {
       listTailorDBTypes: vi
-        .fn()
+        .fn<Mock>()
         .mockRejectedValueOnce(new Error("failed"))
         .mockResolvedValueOnce({
           tailordbTypes: [{ name: "User" }],
@@ -47,7 +49,7 @@ describe("resolveTypeNamespaces", () => {
 
   test("stops querying when all types are resolved", async () => {
     const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValueOnce({
+      listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValueOnce({
         tailordbTypes: [{ name: "User" }],
       }),
     };
@@ -64,7 +66,7 @@ describe("resolveTypeNamespaces", () => {
 
   test("matches requested type names case-insensitively", async () => {
     const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValueOnce({
+      listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValueOnce({
         tailordbTypes: [{ name: "Project" }],
       }),
     };
@@ -83,7 +85,7 @@ describe("resolveTypeNamespaces", () => {
 describe("resolveTypeNamespace", () => {
   test("returns null when the type is not found", async () => {
     const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValue({
+      listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue({
         tailordbTypes: [{ name: "Order" }],
       }),
     };

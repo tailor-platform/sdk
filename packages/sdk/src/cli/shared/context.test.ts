@@ -528,10 +528,11 @@ describe("V1 to V2 migration", () => {
     expect(userEntry).toBeDefined();
     expect(userEntry!.storage).toBe("file");
     expect(userEntry!.token_expires_at).toBe(futureDate);
-    if (userEntry!.storage === "file") {
-      expect(userEntry!.access_token).toBe("v1-access-token");
-      expect(userEntry!.refresh_token).toBe("v1-refresh-token");
+    if (userEntry!.storage !== "file") {
+      throw new Error("Expected file-backed user entry");
     }
+    expect(userEntry!.access_token).toBe("v1-access-token");
+    expect(userEntry!.refresh_token).toBe("v1-refresh-token");
 
     // Disk: still V1 (not rewritten to V2)
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as { version: number };

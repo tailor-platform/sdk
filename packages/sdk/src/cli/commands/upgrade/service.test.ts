@@ -1,15 +1,17 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import type { RunOutput } from "./types";
 
 vi.mock("@/cli/shared/logger", () => ({
   logger: {
-    info: vi.fn(),
-    success: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    log: vi.fn(),
-    debug: vi.fn(),
-    out: vi.fn(),
+    info: vi.fn<MockProcedure>(),
+    success: vi.fn<MockProcedure>(),
+    warn: vi.fn<MockProcedure>(),
+    error: vi.fn<MockProcedure>(),
+    log: vi.fn<MockProcedure>(),
+    debug: vi.fn<MockProcedure>(),
+    out: vi.fn<MockProcedure>(),
   },
   styles: {
     success: (s: string) => s,
@@ -24,11 +26,11 @@ vi.mock("@/cli/shared/logger", () => ({
 }));
 
 vi.mock("./version-detector", () => ({
-  detectInstalledVersion: vi.fn(),
+  detectInstalledVersion: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("node:child_process", () => ({
-  spawnSync: vi.fn(),
+  spawnSync: vi.fn<MockProcedure>(),
 }));
 
 function makeOutput(overrides: Partial<RunOutput> = {}): RunOutput {

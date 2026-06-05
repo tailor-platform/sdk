@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { format } from "oxfmt";
 import { assertDocMatch, createCommandRenderer } from "politty/docs";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { z } from "zod";
 import { commonArgs } from "./shared/args";
 import { mainCommand } from "./index";
@@ -19,12 +21,12 @@ async function mdFormatter(content: string): Promise<string> {
 
 vi.mock("node:module", async () => {
   const actual = await vi.importActual("node:module");
-  return { ...actual, register: vi.fn() };
+  return { ...actual, register: vi.fn<MockProcedure>() };
 });
 
 vi.mock("politty", async () => {
   const actual = await vi.importActual("politty");
-  return { ...actual, runMain: vi.fn() };
+  return { ...actual, runMain: vi.fn<MockProcedure>() };
 });
 
 const defaultRender = createCommandRenderer({ headingLevel: 1 });

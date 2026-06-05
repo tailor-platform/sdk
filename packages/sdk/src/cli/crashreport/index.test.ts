@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 
 vi.mock("std-env", () => ({
   isCI: false,
@@ -60,7 +62,7 @@ describe("reportCrash", () => {
   });
 
   test("sends full crash report when remoteEnabled", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
+    const mockFetch = vi.fn<MockProcedure>().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
     });

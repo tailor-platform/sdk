@@ -1,7 +1,19 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+  type Mock,
+} from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
@@ -26,15 +38,15 @@ vi.mock("@napi-rs/keyring", () => ({
 
 vi.mock("@/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
-  initOperatorClient: vi.fn(),
-  fetchAll: vi.fn(),
+  initOperatorClient: vi.fn<MockProcedure>(),
+  fetchAll: vi.fn<MockProcedure>(),
 }));
 
 // Mock fetchLatestToken without disturbing readPlatformConfig / writePlatformConfig,
 // which the run handler also uses and which we want to round-trip on disk.
 vi.mock("@/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
-  fetchLatestToken: vi.fn(),
+  fetchLatestToken: vi.fn<MockProcedure>(),
 }));
 
 const validUUID = "12345678-1234-4abc-8def-123456789012";
@@ -103,7 +115,7 @@ describe("profile update --permission", () => {
     vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
     vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkspaces: vi.fn(),
+      listWorkspaces: vi.fn<MockProcedure>(),
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
     writePlatformConfig({

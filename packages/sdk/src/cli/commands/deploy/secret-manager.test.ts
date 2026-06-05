@@ -1,12 +1,14 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
 import type { PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 
-const mockLoadSecretsState = vi.fn();
-const mockSaveSecretsState = vi.fn();
+const mockLoadSecretsState = vi.fn<MockProcedure>();
+const mockSaveSecretsState = vi.fn<MockProcedure>();
 const sdkVersion = "v1-0-0";
 
 vi.mock("./secrets-state", async (importOriginal) => {
@@ -36,7 +38,7 @@ vi.mock("./label", async (importOriginal) => {
   return {
     ...original,
     buildMetaRequest: vi
-      .fn()
+      .fn<Mock>()
       .mockImplementation(async (params: { trn: string; appName: string; appId?: string }) => ({
         trn: params.trn,
         labels: {
@@ -51,12 +53,12 @@ vi.mock("./label", async (importOriginal) => {
 describe("applySecretManager phase separation", () => {
   function createMockClient() {
     return {
-      createSecretManagerVault: vi.fn().mockResolvedValue({}),
-      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
+      createSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      updateSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 
@@ -201,14 +203,14 @@ describe("applySecretManager phase separation", () => {
 describe("planSecretManager hash-based diff", () => {
   function createMockPlanClient(existingSecrets: string[] = [], vaultName = "my-vault") {
     return {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+      listSecretManagerVaults: vi.fn<MockProcedure>().mockResolvedValue({
         vaults: [{ name: vaultName }],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockResolvedValue({
+      getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
         metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } },
       }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      listSecretManagerSecrets: vi.fn<MockProcedure>().mockResolvedValue({
         secrets: existingSecrets.map((name) => ({ name })),
         nextPageToken: "",
       }),
@@ -346,14 +348,14 @@ describe("planSecretManager vault metadata and deletion", () => {
 
   test("plans vault deletion for managed vaults removed from config", async () => {
     const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+      listSecretManagerVaults: vi.fn<MockProcedure>().mockResolvedValue({
         vaults: [{ name: "kept-vault" }, { name: "removed-vault" }],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockResolvedValue({
+      getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
         metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
       }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      listSecretManagerSecrets: vi.fn<MockProcedure>().mockResolvedValue({
         secrets: [{ name: "secret-in-removed" }],
         nextPageToken: "",
       }),
@@ -380,14 +382,14 @@ describe("planSecretManager vault metadata and deletion", () => {
 
   test("does not delete vaults managed by another application", async () => {
     const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+      listSecretManagerVaults: vi.fn<MockProcedure>().mockResolvedValue({
         vaults: [{ name: "other-vault" }],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockResolvedValue({
+      getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
         metadata: { labels: { "sdk-name": "other-app", "sdk-version": sdkVersion } },
       }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      listSecretManagerSecrets: vi.fn<MockProcedure>().mockResolvedValue({
         secrets: [],
         nextPageToken: "",
       }),
@@ -403,14 +405,14 @@ describe("planSecretManager vault metadata and deletion", () => {
 
   test("treats matching managed vault as unchanged", async () => {
     const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+      listSecretManagerVaults: vi.fn<MockProcedure>().mockResolvedValue({
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockResolvedValue({
+      getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
         metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
       }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      listSecretManagerSecrets: vi.fn<MockProcedure>().mockResolvedValue({
         secrets: [],
         nextPageToken: "",
       }),
@@ -429,14 +431,14 @@ describe("planSecretManager vault metadata and deletion", () => {
 
   test("updates matching managed vault when forceApplyAll is enabled", async () => {
     const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+      listSecretManagerVaults: vi.fn<MockProcedure>().mockResolvedValue({
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockResolvedValue({
+      getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
         metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
       }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      listSecretManagerSecrets: vi.fn<MockProcedure>().mockResolvedValue({
         secrets: [],
         nextPageToken: "",
       }),
@@ -457,14 +459,14 @@ describe("planSecretManager vault metadata and deletion", () => {
 
   test("detects unmanaged vault without metadata label", async () => {
     const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+      listSecretManagerVaults: vi.fn<MockProcedure>().mockResolvedValue({
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockResolvedValue({
+      getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
         metadata: { labels: {} },
       }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      listSecretManagerSecrets: vi.fn<MockProcedure>().mockResolvedValue({
         secrets: [],
         nextPageToken: "",
       }),
@@ -483,14 +485,14 @@ describe("planSecretManager vault metadata and deletion", () => {
 
   test("detects ownership conflict when vault owned by another app", async () => {
     const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+      listSecretManagerVaults: vi.fn<MockProcedure>().mockResolvedValue({
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockResolvedValue({
+      getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
         metadata: { labels: { "sdk-name": "other-app", "sdk-version": sdkVersion } },
       }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      listSecretManagerSecrets: vi.fn<MockProcedure>().mockResolvedValue({
         secrets: [],
         nextPageToken: "",
       }),
@@ -515,12 +517,12 @@ describe("planSecretManager vault metadata and deletion", () => {
 describe("applySecretManager metadata update", () => {
   function createMockClient() {
     return {
-      createSecretManagerVault: vi.fn().mockResolvedValue({}),
-      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
+      createSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      updateSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 
@@ -601,12 +603,12 @@ describe("applySecretManager metadata update", () => {
 describe("applySecretManager state persistence", () => {
   function createMockClient() {
     return {
-      createSecretManagerVault: vi.fn().mockResolvedValue({}),
-      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
+      createSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      updateSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 
@@ -740,14 +742,14 @@ describe("applySecretManager state persistence", () => {
 describe("planSecretManager ignoreNullishValues", () => {
   function createMockPlanClient(existingSecrets: string[] = [], vaultName = "my-vault") {
     return {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+      listSecretManagerVaults: vi.fn<MockProcedure>().mockResolvedValue({
         vaults: [{ name: vaultName }],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockResolvedValue({
+      getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
         metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } },
       }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      listSecretManagerSecrets: vi.fn<MockProcedure>().mockResolvedValue({
         secrets: existingSecrets.map((name) => ({ name })),
         nextPageToken: "",
       }),
@@ -854,12 +856,12 @@ describe("planSecretManager ignoreNullishValues", () => {
 describe("applySecretManager ignoreNullishValues state persistence", () => {
   function createMockClient() {
     return {
-      createSecretManagerVault: vi.fn().mockResolvedValue({}),
-      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
+      createSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      updateSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 

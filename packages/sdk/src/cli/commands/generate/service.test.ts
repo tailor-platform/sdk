@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vitest";
+import { describe, expect, test, beforeEach, afterEach, vi, afterAll, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { defineApplication } from "@/cli/services/application";
 import { createResolver } from "@/configure/services/resolver/resolver";
 import { db } from "@/configure/services/tailordb/schema";
@@ -16,14 +18,14 @@ import type { Resolver } from "@/types/resolver.generated";
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {
   return {
-    writeFile: vi.fn((_, _2, callback) => {
+    writeFile: vi.fn<MockProcedure>((_, _2, callback) => {
       if (typeof callback === "function") callback(null);
     }),
-    mkdirSync: vi.fn(() => ""),
-    mkdtempSync: vi.fn((prefix: string) => `${prefix}xxxxxx`),
-    rmSync: vi.fn(() => {}),
-    existsSync: vi.fn(() => true),
-    globSync: vi.fn(() => []),
+    mkdirSync: vi.fn<MockProcedure>(() => ""),
+    mkdtempSync: vi.fn<MockProcedure>((prefix: string) => `${prefix}xxxxxx`),
+    rmSync: vi.fn<MockProcedure>(() => {}),
+    existsSync: vi.fn<MockProcedure>(() => true),
+    globSync: vi.fn<MockProcedure>(() => []),
   };
 });
 
@@ -37,14 +39,14 @@ vi.mock("@/cli/shared/logger", async (importOriginal) => {
     ...actual,
     logger: {
       ...(actual.logger ?? {}),
-      log: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      info: vi.fn(),
-      success: vi.fn(),
-      newline: vi.fn(),
-      out: vi.fn(),
+      log: vi.fn<MockProcedure>(),
+      debug: vi.fn<MockProcedure>(),
+      warn: vi.fn<MockProcedure>(),
+      error: vi.fn<MockProcedure>(),
+      info: vi.fn<MockProcedure>(),
+      success: vi.fn<MockProcedure>(),
+      newline: vi.fn<MockProcedure>(),
+      out: vi.fn<MockProcedure>(),
     },
   };
 });
@@ -239,15 +241,15 @@ describe("GenerationManager", () => {
         description: "Error generator",
         dependencies: ["tailordb", "resolver", "executor"] as const,
         processType: vi
-          .fn()
+          .fn<Mock>()
           .mockImplementation(() => Promise.reject(new Error("Type processing error"))),
         processResolver: vi
-          .fn()
+          .fn<Mock>()
           .mockImplementation(() => Promise.reject(new Error("Resolver processing error"))),
         processExecutor: vi
-          .fn()
+          .fn<Mock>()
           .mockImplementation(() => Promise.reject(new Error("Executor processing error"))),
-        aggregate: vi.fn().mockImplementation(() => Promise.resolve({ files: [] })),
+        aggregate: vi.fn<MockProcedure>().mockImplementation(() => Promise.resolve({ files: [] })),
       };
 
       manager.generators.push(errorGenerator);
@@ -554,7 +556,7 @@ describe("GenerationManager", () => {
         id: testGenerator.id,
         description: testGenerator.description,
         dependencies: testGenerator.dependencies,
-        aggregate: vi.fn().mockResolvedValue({
+        aggregate: vi.fn<MockProcedure>().mockResolvedValue({
           files: [
             { path: "/test/file1.txt", content: "content1" },
             { path: "/test/file2.txt", content: "content2" },
@@ -587,7 +589,7 @@ describe("GenerationManager", () => {
         id: testGenerator.id,
         description: testGenerator.description,
         dependencies: testGenerator.dependencies,
-        aggregate: vi.fn().mockResolvedValue({
+        aggregate: vi.fn<MockProcedure>().mockResolvedValue({
           files: [{ path: "/test/error.txt", content: "content" }],
         }),
       };

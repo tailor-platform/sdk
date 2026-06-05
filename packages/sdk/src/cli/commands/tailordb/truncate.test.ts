@@ -1,28 +1,30 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { truncate } from "./truncate";
 
 // Mock dependencies
 vi.mock("@/cli/shared/context", () => ({
-  loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
-  loadWorkspaceId: vi.fn().mockResolvedValue("mock-workspace-id"),
+  loadAccessToken: vi.fn<MockProcedure>().mockResolvedValue("mock-token"),
+  loadWorkspaceId: vi.fn<MockProcedure>().mockResolvedValue("mock-workspace-id"),
 }));
 
 vi.mock("@/cli/shared/readonly-guard", () => ({
-  assertWritable: vi.fn(),
+  assertWritable: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("@/cli/shared/client", () => ({
-  initOperatorClient: vi.fn().mockResolvedValue({
-    truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
-    truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
-    listTailorDBTypes: vi.fn().mockResolvedValue({
+  initOperatorClient: vi.fn<MockProcedure>().mockResolvedValue({
+    truncateTailorDBType: vi.fn<MockProcedure>().mockResolvedValue(undefined),
+    truncateTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue(undefined),
+    listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue({
       tailordbTypes: [{ name: "User" }, { name: "Order" }],
     }),
   }),
 }));
 
 vi.mock("@/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn().mockResolvedValue({
+  loadConfig: vi.fn<MockProcedure>().mockResolvedValue({
     config: {
       db: {
         tailordb: { files: ["./tailordb/*.ts"] },
@@ -34,21 +36,21 @@ vi.mock("@/cli/shared/config-loader", () => ({
 
 vi.mock("@/cli/shared/logger", () => ({
   logger: {
-    success: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
+    success: vi.fn<MockProcedure>(),
+    info: vi.fn<MockProcedure>(),
+    warn: vi.fn<MockProcedure>(),
+    error: vi.fn<MockProcedure>(),
   },
   styles: {
-    dim: vi.fn((s: string) => s),
+    dim: vi.fn<MockProcedure>((s: string) => s),
   },
   symbols: {},
 }));
 
 vi.mock("@/cli/shared/prompt", () => ({
   prompt: {
-    confirm: vi.fn().mockResolvedValue(true),
-    text: vi.fn().mockResolvedValue(""),
+    confirm: vi.fn<MockProcedure>().mockResolvedValue(true),
+    text: vi.fn<MockProcedure>().mockResolvedValue(""),
   },
 }));
 
@@ -237,9 +239,9 @@ describe("truncate command", () => {
       const { initOperatorClient } = await import("@/cli/shared/client");
 
       vi.mocked(initOperatorClient).mockResolvedValue({
-        truncateTailorDBType: vi.fn(),
-        truncateTailorDBTypes: vi.fn(),
-        listTailorDBTypes: vi.fn().mockResolvedValue({
+        truncateTailorDBType: vi.fn<MockProcedure>(),
+        truncateTailorDBTypes: vi.fn<MockProcedure>(),
+        listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue({
           tailordbTypes: [],
         }),
       } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);

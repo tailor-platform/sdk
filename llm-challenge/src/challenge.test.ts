@@ -149,10 +149,10 @@ describe("profile filtering", () => {
 
     await applyNoDocsProfile(dir);
 
-    await expect(fs.access(path.join(dir, "README.md"))).rejects.toThrow();
-    await expect(fs.access(path.join(dir, "CHANGELOG.md"))).rejects.toThrow();
-    await expect(fs.access(path.join(dir, "docs"))).rejects.toThrow();
-    await expect(fs.access(path.join(dir, "dist/index.mjs.map"))).rejects.toThrow();
+    await expect(fs.access(path.join(dir, "README.md"))).rejects.toThrow("ENOENT");
+    await expect(fs.access(path.join(dir, "CHANGELOG.md"))).rejects.toThrow("ENOENT");
+    await expect(fs.access(path.join(dir, "docs"))).rejects.toThrow("ENOENT");
+    await expect(fs.access(path.join(dir, "dist/index.mjs.map"))).rejects.toThrow("ENOENT");
     await expect(fs.readFile(path.join(dir, "dist/index.mjs"), "utf8")).resolves.not.toContain(
       "runtime docs",
     );
@@ -710,7 +710,7 @@ describe("workspace preparation", () => {
       ".turbo",
       ".tailor-sdk/cache",
     ]) {
-      await expect(fs.access(path.join(worktreePath, name))).rejects.toThrow();
+      await expect(fs.access(path.join(worktreePath, name))).rejects.toThrow("ENOENT");
     }
   });
 });

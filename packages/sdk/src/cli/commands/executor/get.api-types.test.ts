@@ -1,3 +1,4 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test } from "vitest";
 import { createExecutor } from "@/configure/services/executor";
 import { scheduleTrigger } from "@/configure/services/executor/trigger/schedule";

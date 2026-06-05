@@ -5,7 +5,9 @@ import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { defineApplication } from "@/cli/services/application";
 import { logger } from "@/cli/shared/logger";
 import { defineConfig } from "@/configure/config";
@@ -20,7 +22,7 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:auth:auth-a",
       labels: {
         "sdk-name": "test-app",
@@ -53,7 +55,7 @@ function createMockApplication(): Application {
     name: appName,
     staticWebsiteServices: [],
     authService: {
-      resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+      resolveNamespaces: vi.fn<MockProcedure>().mockResolvedValue(undefined),
       config: {
         name: "auth-a",
         publishSessionEvents: true,
@@ -92,7 +94,7 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
     name: appName,
     staticWebsiteServices: [],
     authService: {
-      resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+      resolveNamespaces: vi.fn<MockProcedure>().mockResolvedValue(undefined),
       config: {
         name: "auth-a",
         oauth2Clients: {
@@ -118,7 +120,7 @@ function createMockApplicationWithBuiltInIdP(): Application {
     name: appName,
     staticWebsiteServices: [],
     authService: {
-      resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+      resolveNamespaces: vi.fn<MockProcedure>().mockResolvedValue(undefined),
       config: {
         name: "auth-a",
         idProvider: {
@@ -178,14 +180,14 @@ function createMockClient(opts?: {
   const authHook = opts?.authHook;
 
   return {
-    listAuthServices: vi.fn().mockResolvedValue({
+    listAuthServices: vi.fn<MockProcedure>().mockResolvedValue({
       authServices: authServices.map((service) => ({
         namespace: { name: service.name },
         publishSessionEvents: service.publishSessionEvents,
       })),
       nextPageToken: "",
     }),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+    getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
       const name = trn.split(":").pop();
       const service = authServices.find((entry) => entry.name === name);
       return {
@@ -194,23 +196,23 @@ function createMockClient(opts?: {
         },
       };
     }),
-    listAuthIDPConfigs: vi.fn().mockResolvedValue({
+    listAuthIDPConfigs: vi.fn<MockProcedure>().mockResolvedValue({
       idpConfigs: authIdPConfigs,
       nextPageToken: "",
     }),
-    getIdPService: vi.fn().mockImplementation(notFound),
-    getIdPClient: vi.fn().mockImplementation(notFound),
-    getUserProfileConfig: vi.fn().mockImplementation(notFound),
-    getTenantConfig: vi.fn().mockImplementation(notFound),
-    listAuthMachineUsers: vi.fn().mockResolvedValue({
+    getIdPService: vi.fn<MockProcedure>().mockImplementation(notFound),
+    getIdPClient: vi.fn<MockProcedure>().mockImplementation(notFound),
+    getUserProfileConfig: vi.fn<MockProcedure>().mockImplementation(notFound),
+    getTenantConfig: vi.fn<MockProcedure>().mockImplementation(notFound),
+    listAuthMachineUsers: vi.fn<MockProcedure>().mockResolvedValue({
       machineUsers,
       nextPageToken: "",
     }),
-    listAuthOAuth2Clients: vi.fn().mockResolvedValue({
+    listAuthOAuth2Clients: vi.fn<MockProcedure>().mockResolvedValue({
       oauth2Clients,
       nextPageToken: "",
     }),
-    getAuthHook: vi.fn().mockImplementation(() => {
+    getAuthHook: vi.fn<MockProcedure>().mockImplementation(() => {
       if (!authHook) {
         return notFound();
       }
@@ -222,11 +224,11 @@ function createMockClient(opts?: {
         },
       };
     }),
-    getAuthSCIMConfig: vi.fn().mockImplementation(notFound),
-    getAuthSCIMResources: vi.fn().mockResolvedValue({
+    getAuthSCIMConfig: vi.fn<MockProcedure>().mockImplementation(notFound),
+    getAuthSCIMResources: vi.fn<MockProcedure>().mockResolvedValue({
       scimResources: [],
     }),
-    listAuthConnections: vi.fn().mockResolvedValue({
+    listAuthConnections: vi.fn<MockProcedure>().mockResolvedValue({
       connections: [],
       nextPageToken: "",
     }),
@@ -494,7 +496,7 @@ describe("planAuth", () => {
       name: appName,
       staticWebsiteServices: [],
       authService: {
-        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        resolveNamespaces: vi.fn<MockProcedure>().mockResolvedValue(undefined),
         config: {
           name: "auth-a",
           oauth2Clients: {
@@ -606,7 +608,7 @@ describe("planAuth", () => {
         name: appName,
         staticWebsiteServices: [{ name: "my-frontend" }],
         authService: {
-          resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+          resolveNamespaces: vi.fn<MockProcedure>().mockResolvedValue(undefined),
           config: {
             name: "auth-a",
             oauth2Clients: {
@@ -629,7 +631,9 @@ describe("planAuth", () => {
       const baseClient = createMockClient({});
       const client = {
         ...baseClient,
-        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+        getStaticWebsite: vi
+          .fn<Mock>()
+          .mockRejectedValue(new ConnectError("not found", Code.NotFound)),
       } as unknown as OperatorClient;
       const context: PlanContext = {
         client,

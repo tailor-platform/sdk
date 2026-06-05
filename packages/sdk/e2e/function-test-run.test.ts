@@ -350,9 +350,8 @@ describe.sequential("E2E: function test-run", () => {
       expect(result.success).toBe(false);
       expect(result.logs).toContain("Log line 1");
       expect(result.logs).toContain("Log line 2");
-      if (result.error) {
-        expect(result.error).not.toContain("Log line 1");
-      }
+      expect(result.error).toBeDefined();
+      expect(result.error).not.toContain("Log line 1");
     });
   });
 });

@@ -1,3 +1,4 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test } from "vitest";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
 import { type GetWorkflowOptions, type GetWorkflowTypedOptions } from "./get";

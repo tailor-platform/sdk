@@ -1,3 +1,4 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { afterEach, describe, expect, test, expectTypeOf } from "vitest";
 import { setupWaitPointMock, setupWorkflowMock } from "@/utils/test/mock";
 import { defineWaitPoint, defineWaitPoints } from "./wait-point";

@@ -1,4 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -10,7 +12,7 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:workflow:test",
       labels: {
         "sdk-name": "test-app",
@@ -65,11 +67,11 @@ describe("planWorkflow", () => {
     }>,
   ): OperatorClient {
     return {
-      listWorkflows: vi.fn().mockResolvedValue({
+      listWorkflows: vi.fn<MockProcedure>().mockResolvedValue({
         workflows: existingWorkflows.map((w) => w.resource ?? { id: w.id, name: w.name }),
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
         const workflow = existingWorkflows.find((w) => w.name === name);
         return {
@@ -83,7 +85,7 @@ describe("planWorkflow", () => {
           },
         };
       }),
-      listWorkflowJobFunctions: vi.fn().mockResolvedValue({
+      listWorkflowJobFunctions: vi.fn<MockProcedure>().mockResolvedValue({
         jobFunctions: [],
         nextPageToken: "",
       }),
@@ -410,11 +412,11 @@ describe("planWorkflow", () => {
     });
 
     test("removes metadata from orphaned job functions even when remaining workflows are unchanged", async () => {
-      const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
+      const listWorkflowJobFunctions = vi.fn<MockProcedure>().mockResolvedValue({
         jobFunctions: [{ name: "keep-job" }, { name: "orphaned-job" }],
         nextPageToken: "",
       });
-      const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      const getMetadata = vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
         const jobName = trn.split(":").pop();
         return {
           metadata: {
@@ -425,14 +427,14 @@ describe("planWorkflow", () => {
           },
         };
       });
-      const setMetadata = vi.fn().mockResolvedValue(undefined);
+      const setMetadata = vi.fn<MockProcedure>().mockResolvedValue(undefined);
 
       const client = {
         listWorkflowJobFunctions,
         getMetadata,
         setMetadata,
-        createWorkflowJobFunction: vi.fn(),
-        updateWorkflowJobFunction: vi.fn(),
+        createWorkflowJobFunction: vi.fn<MockProcedure>(),
+        updateWorkflowJobFunction: vi.fn<MockProcedure>(),
       } as unknown as OperatorClient;
 
       await applyWorkflow(

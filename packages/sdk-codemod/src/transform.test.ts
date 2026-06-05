@@ -52,46 +52,43 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
     const inputPath = path.join(c.caseDir, c.inputFile);
     const input = await fs.promises.readFile(inputPath, "utf-8");
     const result = await transform(input, inputPath);
-
-    if (c.expectedFile) {
-      const expected = await fs.promises.readFile(path.join(c.caseDir, c.expectedFile), "utf-8");
-      expect(result, `${codemodPath}/${c.caseName}`).toBe(expected);
-    } else {
-      expect(result, `${codemodPath}/${c.caseName} (no expected.* → expect no change)`).toBeNull();
-    }
+    const expected = c.expectedFile
+      ? await fs.promises.readFile(path.join(c.caseDir, c.expectedFile), "utf-8")
+      : null;
+    expect(result).toBe(expected);
   }
 }
 
 describe("codemod transforms", () => {
   test("v2/define-generators-to-plugins transforms correctly", async () => {
-    await runFixtureCases("v2/define-generators-to-plugins");
+    await expect(runFixtureCases("v2/define-generators-to-plugins")).resolves.toBeUndefined();
   });
 
   test("v2/test-run-arg-input transforms correctly", async () => {
-    await runFixtureCases("v2/test-run-arg-input");
+    await expect(runFixtureCases("v2/test-run-arg-input")).resolves.toBeUndefined();
   });
 
   test("v2/sdk-skills-shim transforms correctly", async () => {
-    await runFixtureCases("v2/sdk-skills-shim");
+    await expect(runFixtureCases("v2/sdk-skills-shim")).resolves.toBeUndefined();
   });
 
   test("v2/principal-unify transforms correctly", async () => {
-    await runFixtureCases("v2/principal-unify");
+    await expect(runFixtureCases("v2/principal-unify")).resolves.toBeUndefined();
   });
 
   test("v2/apply-to-deploy transforms correctly", async () => {
-    await runFixtureCases("v2/apply-to-deploy");
+    await expect(runFixtureCases("v2/apply-to-deploy")).resolves.toBeUndefined();
   });
 
   test("v2/cli-rename transforms correctly", async () => {
-    await runFixtureCases("v2/cli-rename");
+    await expect(runFixtureCases("v2/cli-rename")).resolves.toBeUndefined();
   });
 
   test("v2/auth-invoker-unwrap transforms correctly", async () => {
-    await runFixtureCases("v2/auth-invoker-unwrap");
+    await expect(runFixtureCases("v2/auth-invoker-unwrap")).resolves.toBeUndefined();
   });
 
   test("v2/tailordb-namespace transforms correctly", async () => {
-    await runFixtureCases("v2/tailordb-namespace");
+    await expect(runFixtureCases("v2/tailordb-namespace")).resolves.toBeUndefined();
   });
 });

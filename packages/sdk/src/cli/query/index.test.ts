@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import {
   getReplHistoryPath,
   query,
@@ -14,60 +16,60 @@ vi.mock("xdg-basedir", () => ({
 }));
 
 vi.mock("node:fs/promises", () => ({
-  readFile: vi.fn(),
-  mkdtemp: vi.fn(),
-  writeFile: vi.fn(),
-  rm: vi.fn(),
+  readFile: vi.fn<MockProcedure>(),
+  mkdtemp: vi.fn<MockProcedure>(),
+  writeFile: vi.fn<MockProcedure>(),
+  rm: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("../shared/editor", () => ({
-  getConfiguredEditorCommand: vi.fn(),
-  getEditorCommand: vi.fn(),
-  openInEditor: vi.fn(),
+  getConfiguredEditorCommand: vi.fn<MockProcedure>(),
+  getEditorCommand: vi.fn<MockProcedure>(),
+  openInEditor: vi.fn<MockProcedure>(),
 }));
 
 const mockClient = {
-  getApplication: vi.fn(),
-  getAuthMachineUser: vi.fn(),
+  getApplication: vi.fn<MockProcedure>(),
+  getAuthMachineUser: vi.fn<MockProcedure>(),
 };
 
 vi.mock("../shared/context", () => ({
-  loadAccessToken: vi.fn(),
-  loadWorkspaceId: vi.fn(),
+  loadAccessToken: vi.fn<MockProcedure>(),
+  loadWorkspaceId: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("../shared/client", () => ({
-  initOperatorClient: vi.fn(),
-  fetchMachineUserToken: vi.fn(),
+  initOperatorClient: vi.fn<MockProcedure>(),
+  fetchMachineUserToken: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("../shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfig: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("../bundler/query/query-bundler", () => ({
-  bundleQueryScript: vi.fn(),
+  bundleQueryScript: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("../shared/script-executor", () => ({
-  executeScript: vi.fn(),
+  executeScript: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("../shared/config", () => ({
-  extractAllNamespaces: vi.fn(),
+  extractAllNamespaces: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("../shared/tailordb-namespace", () => ({
-  resolveTypeNamespaces: vi.fn(),
+  resolveTypeNamespaces: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("./sql-type-extractor", () => ({
-  extractTypeNamesFromSql: vi.fn(),
-  extractColumnTemplate: vi.fn(),
+  extractTypeNamesFromSql: vi.fn<MockProcedure>(),
+  extractColumnTemplate: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("./type-field-order", () => ({
-  loadTypeFieldOrder: vi.fn(),
+  loadTypeFieldOrder: vi.fn<MockProcedure>(),
 }));
 
 describe("query", () => {
@@ -208,7 +210,7 @@ describe("query", () => {
         machineUser: "bot",
         query: "   ",
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Unexpected end of input");
   });
 
   test("throws helpful error when SQL namespace cannot be inferred", async () => {
@@ -239,21 +241,19 @@ describe("query", () => {
       error: "sqlaccess error: failed to parse: expected token at line 1",
     });
 
-    try {
-      await query({
+    await expect(
+      query({
         workspaceId: "workspace-1",
         configPath: "tailor.config.ts",
         engine: "sql",
         machineUser: "bot",
         query: "select 1",
-      });
-      throw new Error("expected query() to throw");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).name).toBe("CLIError");
-      expect((error as Error).message).toBe("SQL parse error.");
-      expect((error as { suggestion?: string }).suggestion).toBe("expected token at line 1");
-    }
+      }),
+    ).rejects.toMatchObject({
+      name: "CLIError",
+      message: "SQL parse error.",
+      suggestion: "expected token at line 1",
+    });
   });
 
   test("splits multiple SQL statements and passes queries array to executeScript", async () => {

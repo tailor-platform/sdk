@@ -1,4 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { PlanContext } from "./types";
@@ -17,7 +19,7 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:pipeline:test",
       labels: {
         "sdk-name": "test-app",
@@ -50,7 +52,7 @@ describe("planPipeline (resolver service level)", () => {
       namespace,
       config: {},
       resolvers: {},
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
+      loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
     } as unknown as ResolverService;
   }
 
@@ -59,7 +61,7 @@ describe("planPipeline (resolver service level)", () => {
     return {
       config: {},
       executors: {},
-      loadExecutors: vi.fn().mockResolvedValue({}),
+      loadExecutors: vi.fn<MockProcedure>().mockResolvedValue({}),
     } as unknown as ExecutorService;
   }
 
@@ -74,20 +76,20 @@ describe("planPipeline (resolver service level)", () => {
     resolverDetails: Record<string, Record<string, unknown>> = {},
   ): OperatorClient {
     return {
-      listPipelineServices: vi.fn().mockResolvedValue({
+      listPipelineServices: vi.fn<MockProcedure>().mockResolvedValue({
         pipelineServices: existingServices.map((s) => ({
           namespace: { name: s.name },
         })),
         nextPageToken: "",
       }),
       listPipelineResolvers: vi
-        .fn()
+        .fn<Mock>()
         .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
           pipelineResolvers: existingResolvers[namespaceName] || [],
           nextPageToken: "",
         })),
       getPipelineResolver: vi
-        .fn()
+        .fn<Mock>()
         .mockImplementation(
           ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
             pipelineResolver:
@@ -97,7 +99,7 @@ describe("planPipeline (resolver service level)", () => {
               ),
           }),
         ),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
         const service = existingServices.find((s) => s.name === name);
         return {
@@ -311,7 +313,7 @@ describe("planPipeline (resolver service level)", () => {
         namespace: "my-resolver",
         config: {},
         resolvers: { [resolver.name]: resolver },
-        loadResolvers: vi.fn().mockResolvedValue(undefined),
+        loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
       } as unknown as ResolverService;
 
       const createClient = createMockClient([]);
@@ -354,7 +356,7 @@ describe("planPipeline (resolver service level)", () => {
         namespace: "my-resolver",
         config: {},
         resolvers: { [resolver.name]: resolver },
-        loadResolvers: vi.fn().mockResolvedValue(undefined),
+        loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
       } as unknown as ResolverService;
 
       const createClient = createMockClient([]);
@@ -403,7 +405,7 @@ describe("planPipeline (resolver service level)", () => {
         namespace: "my-resolver",
         config: {},
         resolvers: { [resolver.name]: resolver },
-        loadResolvers: vi.fn().mockResolvedValue(undefined),
+        loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
       } as unknown as ResolverService;
 
       const createClient = createMockClient([]);
@@ -447,7 +449,7 @@ describe("planPipeline (resolver service level)", () => {
         namespace: "my-resolver",
         config: {},
         resolvers: { [resolver.name]: resolver },
-        loadResolvers: vi.fn().mockResolvedValue(undefined),
+        loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
       } as unknown as ResolverService;
 
       const createClient = createMockClient([]);
@@ -495,19 +497,19 @@ describe("processResolver authInvoker mapping", () => {
     existingResolvers: Record<string, Array<{ name: string }>> = {},
   ): OperatorClient {
     return {
-      listPipelineServices: vi.fn().mockResolvedValue({
+      listPipelineServices: vi.fn<MockProcedure>().mockResolvedValue({
         pipelineServices: existingServices.map((s) => ({
           namespace: { name: s.name },
         })),
         nextPageToken: "",
       }),
       listPipelineResolvers: vi
-        .fn()
+        .fn<Mock>()
         .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
           pipelineResolvers: existingResolvers[namespaceName] || [],
           nextPageToken: "",
         })),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
         const service = existingServices.find((s) => s.name === name);
         return {
@@ -543,7 +545,7 @@ describe("processResolver authInvoker mapping", () => {
           authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
         },
       },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
+      loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
     } as unknown as ResolverService;
 
     const application = {
@@ -553,7 +555,7 @@ describe("processResolver authInvoker mapping", () => {
       executorService: {
         config: {},
         executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
+        loadExecutors: vi.fn<MockProcedure>().mockResolvedValue({}),
       },
     } as unknown as Application;
 
@@ -592,7 +594,7 @@ describe("processResolver authInvoker mapping", () => {
           authInvoker: "batch-user",
         },
       },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
+      loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
     } as unknown as ResolverService;
 
     const application = {
@@ -603,7 +605,7 @@ describe("processResolver authInvoker mapping", () => {
       executorService: {
         config: {},
         executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
+        loadExecutors: vi.fn<MockProcedure>().mockResolvedValue({}),
       },
     } as unknown as Application;
 
@@ -642,7 +644,7 @@ describe("processResolver authInvoker mapping", () => {
           authInvoker: "batch-user",
         },
       },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
+      loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
     } as unknown as ResolverService;
 
     const application = {
@@ -652,7 +654,7 @@ describe("processResolver authInvoker mapping", () => {
       executorService: {
         config: {},
         executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
+        loadExecutors: vi.fn<MockProcedure>().mockResolvedValue({}),
       },
     } as unknown as Application;
 
@@ -681,7 +683,7 @@ describe("processResolver authInvoker mapping", () => {
           output: { type: "string", metadata: {}, fields: {} },
         },
       },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
+      loadResolvers: vi.fn<MockProcedure>().mockResolvedValue(undefined),
     } as unknown as ResolverService;
 
     const application = {
@@ -691,7 +693,7 @@ describe("processResolver authInvoker mapping", () => {
       executorService: {
         config: {},
         executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
+        loadExecutors: vi.fn<MockProcedure>().mockResolvedValue({}),
       },
     } as unknown as Application;
 
@@ -789,13 +791,13 @@ describe("applyPipeline phase separation", () => {
   // Helper to create mock client with spies for delete operations
   function createMockClientWithSpies() {
     return {
-      deletePipelineResolver: vi.fn().mockResolvedValue({}),
-      deletePipelineService: vi.fn().mockResolvedValue({}),
+      deletePipelineResolver: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deletePipelineService: vi.fn<MockProcedure>().mockResolvedValue({}),
       // Also mock create/update methods for completeness
-      createPipelineService: vi.fn().mockResolvedValue({}),
-      createPipelineResolver: vi.fn().mockResolvedValue({}),
-      updatePipelineResolver: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
+      createPipelineService: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createPipelineResolver: vi.fn<MockProcedure>().mockResolvedValue({}),
+      updatePipelineResolver: vi.fn<MockProcedure>().mockResolvedValue({}),
+      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 

@@ -1,4 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { PlanContext } from "./types";
@@ -10,13 +12,13 @@ import type { Executor } from "@/types/executor.generated";
 
 // Mock node:fs to avoid file system access
 vi.mock("node:fs", () => ({
-  readFileSync: vi.fn().mockReturnValue("// mock script"),
-  existsSync: vi.fn().mockReturnValue(true),
+  readFileSync: vi.fn<MockProcedure>().mockReturnValue("// mock script"),
+  existsSync: vi.fn<MockProcedure>().mockReturnValue(true),
 }));
 
 // Mock dist-dir to avoid getDistDir issues
 vi.mock("@/cli/shared/dist-dir", () => ({
-  getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
+  getDistDir: vi.fn<MockProcedure>().mockReturnValue(".tailor-sdk"),
 }));
 
 // Mock config values for tests
@@ -28,7 +30,7 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:executor:test",
       labels: {
         "sdk-name": "test-app",
@@ -101,11 +103,11 @@ describe("planExecutor", () => {
     }>,
   ): OperatorClient {
     return {
-      listExecutorExecutors: vi.fn().mockResolvedValue({
+      listExecutorExecutors: vi.fn<MockProcedure>().mockResolvedValue({
         executors: existingExecutors.map((e) => e.resource ?? { name: e.name }),
         nextPageToken: "",
       }),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
         const executor = existingExecutors.find((e) => e.name === name);
         return {
@@ -128,7 +130,7 @@ describe("planExecutor", () => {
     return {
       config: {},
       executors: executorMap,
-      loadExecutors: vi.fn().mockResolvedValue(executorMap),
+      loadExecutors: vi.fn<MockProcedure>().mockResolvedValue(executorMap),
     } as unknown as ExecutorService;
   }
 
@@ -579,7 +581,7 @@ describe("planExecutor", () => {
         { name: "executor-2", label: appName },
       ]);
 
-      const loadExecutors = vi.fn();
+      const loadExecutors = vi.fn<MockProcedure>();
       const application = {
         name: appName,
         env: {},

@@ -223,7 +223,7 @@ describe("OAuth2ClientSchema validation", () => {
       accessTokenLifetimeSeconds: 3600.5,
     };
 
-    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow();
+    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(/Invalid input/);
   });
 
   test("accepts client without token lifetime fields", () => {

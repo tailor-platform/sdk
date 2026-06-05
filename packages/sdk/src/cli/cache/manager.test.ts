@@ -1,13 +1,15 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { createCacheManager } from "./manager";
 
 vi.mock("@/cli/shared/logger", async (importOriginal) => ({
   ...(await importOriginal()),
   logger: {
-    debug: vi.fn(),
+    debug: vi.fn<MockProcedure>(),
   },
 }));
 
@@ -48,14 +50,15 @@ describe("createCacheManager", () => {
         sdkVersion: "1.0.0",
       });
 
-      // Should not throw
-      manager.bundleCache.save({
-        kind: "resolver",
-        name: "test",
-        sourceFile: "/tmp/src.ts",
-        content: "bundled output",
-        dependencyPaths: [],
-      });
+      expect(() =>
+        manager.bundleCache.save({
+          kind: "resolver",
+          name: "test",
+          sourceFile: "/tmp/src.ts",
+          content: "bundled output",
+          dependencyPaths: [],
+        }),
+      ).not.toThrow();
     });
 
     test("finalize is a no-op", () => {

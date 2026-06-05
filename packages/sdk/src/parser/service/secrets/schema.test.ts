@@ -50,39 +50,39 @@ describe("SecretsSchema validation", () => {
 
   test("rejects vault name with uppercase letters", () => {
     const invalid = wrap({ "My-Vault": { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow();
+    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
   });
 
   test("rejects secret name with uppercase letters", () => {
     const invalid = wrap({ "my-vault": { "My-Secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow();
+    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
   });
 
   test("rejects name starting with hyphen", () => {
     const invalid = wrap({ "-my-vault": { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow();
+    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
   });
 
   test("rejects name ending with hyphen", () => {
     const invalid = wrap({ "my-vault-": { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow();
+    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
   });
 
   test("rejects name shorter than 3 characters", () => {
     const invalid = wrap({ ab: { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow();
+    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
   });
 
   test("rejects name longer than 63 characters", () => {
     const name = `a${"b".repeat(62)}c`;
     expect(name).toHaveLength(64);
     const invalid = wrap({ [name]: { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow();
+    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
   });
 
   test("rejects name with underscores", () => {
     const invalid = wrap({ my_vault: { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow();
+    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
   });
 
   test("accepts multiple vaults with multiple secrets", () => {

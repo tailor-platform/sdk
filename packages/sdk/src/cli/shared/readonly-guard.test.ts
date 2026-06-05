@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "./context";
-import { isCLIError } from "./errors";
 import { assertWritable } from "./readonly-guard";
 import { resetKeyringState } from "./token-store";
 
@@ -243,9 +242,8 @@ describe("assertWritable", () => {
   test("throws CLIError with PROFILE_READONLY when profile is readonly via opts", async () => {
     const promise = assertWritable({ profile: "ro" });
     await expect(promise).rejects.toThrow('Profile "ro" is read-only.');
-    await promise.catch((err) => {
-      expect(isCLIError(err)).toBe(true);
-      expect(err.code).toBe("PROFILE_READONLY");
+    await expect(promise).rejects.toMatchObject({
+      code: "PROFILE_READONLY",
     });
   });
 

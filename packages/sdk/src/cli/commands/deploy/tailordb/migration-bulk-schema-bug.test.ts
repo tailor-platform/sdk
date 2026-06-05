@@ -7,7 +7,9 @@
  * See `services/tailordb-migration.md` §"Per-migration phases".
  */
 
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { applyTailorDB } from "./index";
 import type { PendingMigration } from "@/cli/commands/tailordb/migrate/types";
 import type { Application } from "@/cli/services/application";
@@ -21,7 +23,7 @@ vi.mock("../label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("../label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:tailordb:test-ns",
       labels: {},
     }),
@@ -48,15 +50,15 @@ vi.mock("./migration", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./migration");
   return {
     ...original,
-    detectPendingMigrations: vi.fn(),
-    executeMigrations: vi.fn().mockResolvedValue(undefined),
-    updateMigrationLabel: vi.fn().mockResolvedValue(undefined),
+    detectPendingMigrations: vi.fn<MockProcedure>(),
+    executeMigrations: vi.fn<MockProcedure>().mockResolvedValue(undefined),
+    updateMigrationLabel: vi.fn<MockProcedure>().mockResolvedValue(undefined),
   };
 });
 
 // Mock migration config / snapshot helpers (called inside validateAndDetectMigrations)
 vi.mock("@/cli/commands/tailordb/migrate/config", () => ({
-  getNamespacesWithMigrations: vi.fn().mockReturnValue([
+  getNamespacesWithMigrations: vi.fn<MockProcedure>().mockReturnValue([
     {
       namespace: "test-ns",
       migrationsDir: "/test/migrations",
@@ -115,8 +117,10 @@ vi.mock("@/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
     (await importOriginal()) as typeof import("@/cli/commands/tailordb/migrate/snapshot");
   return {
     ...original,
-    assertValidMigrationFiles: vi.fn(),
-    reconstructSnapshotFromMigrations: vi.fn(snapshotFixtures.reconstructSnapshotFromMigrations),
+    assertValidMigrationFiles: vi.fn<MockProcedure>(),
+    reconstructSnapshotFromMigrations: vi.fn<MockProcedure>(
+      snapshotFixtures.reconstructSnapshotFromMigrations,
+    ),
   };
 });
 
@@ -127,22 +131,22 @@ const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 describe("per-migration prePhase: schema is scoped to migration[N]", () => {
   function createMockClient() {
     return {
-      createTailorDBService: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      createTailorDBType: vi.fn().mockResolvedValue({}),
-      updateTailorDBType: vi.fn().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn().mockResolvedValue({}),
-      deleteTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBService: vi.fn<MockProcedure>().mockResolvedValue({}),
+      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
+      updateTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteTailorDBService: vi.fn<MockProcedure>().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 
   function createMockPlanResult() {
     const mockService = {
       namespace: "test-ns",
-      loadTypes: vi.fn().mockResolvedValue({}),
+      loadTypes: vi.fn<MockProcedure>().mockResolvedValue({}),
       types: {},
     } as unknown as TailorDBService;
 

@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test, vi, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, vi, beforeEach, afterAll, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import {
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
@@ -31,13 +33,13 @@ vi.mock("../label", () => ({
 // Mock logger to suppress output during tests
 vi.mock("@/cli/shared/logger", () => ({
   logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-    debug: vi.fn(),
-    newline: vi.fn(),
-    log: vi.fn(),
+    info: vi.fn<MockProcedure>(),
+    warn: vi.fn<MockProcedure>(),
+    error: vi.fn<MockProcedure>(),
+    success: vi.fn<MockProcedure>(),
+    debug: vi.fn<MockProcedure>(),
+    newline: vi.fn<MockProcedure>(),
+    log: vi.fn<MockProcedure>(),
   },
   styles: {
     bold: (s: string) => s,
@@ -48,16 +50,16 @@ vi.mock("@/cli/shared/logger", () => ({
 vi.mock("@/cli/shared/spinner", () => ({
   spinner: () => ({
     start: () => ({
-      succeed: vi.fn(),
-      fail: vi.fn(),
+      succeed: vi.fn<MockProcedure>(),
+      fail: vi.fn<MockProcedure>(),
     }),
   }),
 }));
 
 // Mock bundler and script executor so executeMigrations can run without
 // touching the network or building real bundles.
-const bundleMigrationScriptMock = vi.fn();
-const executeScriptMock = vi.fn();
+const bundleMigrationScriptMock = vi.fn<MockProcedure>();
+const executeScriptMock = vi.fn<MockProcedure>();
 vi.mock("@/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
 }));
@@ -243,7 +245,7 @@ describe("migration", () => {
 
     function createMockClient(currentMigrations: Record<string, number>): OperatorClient {
       return {
-        getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+        getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
           const namespace = trn.split(":").pop();
           const migrationNumber = namespace ? currentMigrations[namespace] : undefined;
           return {
@@ -418,9 +420,9 @@ describe("migration", () => {
     const namespace = "tailordb";
 
     test("updates migration label on service metadata", async () => {
-      const setMetadataMock = vi.fn();
+      const setMetadataMock = vi.fn<MockProcedure>();
       const client = {
-        getMetadata: vi.fn().mockResolvedValue({
+        getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
           metadata: {
             labels: {},
           },
@@ -439,9 +441,9 @@ describe("migration", () => {
     });
 
     test("preserves existing labels", async () => {
-      const setMetadataMock = vi.fn();
+      const setMetadataMock = vi.fn<MockProcedure>();
       const client = {
-        getMetadata: vi.fn().mockResolvedValue({
+        getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
           metadata: {
             labels: {
               "existing-label": "value",
@@ -465,9 +467,9 @@ describe("migration", () => {
     });
 
     test("handles missing metadata gracefully", async () => {
-      const setMetadataMock = vi.fn();
+      const setMetadataMock = vi.fn<MockProcedure>();
       const client = {
-        getMetadata: vi.fn().mockResolvedValue({
+        getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
           metadata: null,
         }),
         setMetadata: setMetadataMock,

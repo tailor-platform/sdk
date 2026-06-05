@@ -5,17 +5,19 @@ import {
   generateCandidates,
   parseCompletionContext,
 } from "politty/completion";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { mainCommand } from "./index";
 
 vi.mock("node:module", async (importOriginal) => ({
   ...(await importOriginal()),
-  register: vi.fn(),
+  register: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("politty", async (importOriginal) => ({
   ...(await importOriginal()),
-  runMain: vi.fn(),
+  runMain: vi.fn<MockProcedure>(),
 }));
 
 describe("shell completion", () => {

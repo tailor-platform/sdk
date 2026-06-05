@@ -103,9 +103,10 @@ describe("PluginManager", () => {
     });
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toContain("requires typeConfig");
+    if (result.success) {
+      throw new Error("Expected plugin attachment to fail");
     }
+    expect(result.error).toContain("requires typeConfig");
   });
 
   test("processes type attachment without configSchema (arbitrary config)", async () => {
@@ -132,9 +133,10 @@ describe("PluginManager", () => {
     });
 
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.output.types).toBeDefined();
-      expect(result.output.types?.derived.name).toBe("Derived");
+    if (!result.success) {
+      throw new Error("Expected plugin attachment to succeed");
     }
+    expect(result.output.types).toBeDefined();
+    expect(result.output.types?.derived.name).toBe("Derived");
   });
 });

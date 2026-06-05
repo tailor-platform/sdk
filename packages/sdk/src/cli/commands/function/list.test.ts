@@ -1,21 +1,23 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { listFunctionRegistries } from "./list";
 import type * as ClientModule from "@/cli/shared/client";
 
 vi.mock("@/cli/shared/context", () => ({
-  loadAccessToken: vi.fn(),
-  loadWorkspaceId: vi.fn(),
+  loadAccessToken: vi.fn<MockProcedure>(),
+  loadWorkspaceId: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("@/cli/shared/client", async () => {
   const actual = await vi.importActual<typeof ClientModule>("@/cli/shared/client");
   return {
     ...actual,
-    initOperatorClient: vi.fn(),
+    initOperatorClient: vi.fn<MockProcedure>(),
   };
 });
 
@@ -37,7 +39,7 @@ describe("listFunctionRegistries", () => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    listMock = vi.fn();
+    listMock = vi.fn<MockProcedure>();
     vi.mocked(initOperatorClient).mockResolvedValue({
       listFunctionRegistries: listMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);

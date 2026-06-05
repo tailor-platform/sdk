@@ -1,4 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -7,16 +9,16 @@ describe("applyIdP phase separation", () => {
   function createMockClientWithSpies() {
     return {
       // Delete methods
-      deleteIdPClient: vi.fn().mockResolvedValue({}),
-      deleteIdPService: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
+      deleteIdPClient: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteIdPService: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
       // Create/update methods for completeness
-      createIdPService: vi.fn().mockResolvedValue({}),
-      createIdPClient: vi.fn().mockResolvedValue({}),
-      updateIdPClient: vi.fn().mockResolvedValue({}),
-      createSecretManagerVault: vi.fn().mockResolvedValue({}),
-      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
+      createIdPService: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createIdPClient: vi.fn<MockProcedure>().mockResolvedValue({}),
+      updateIdPClient: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createSecretManagerVault: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createSecretManagerSecret: vi.fn<MockProcedure>().mockResolvedValue({}),
+      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 

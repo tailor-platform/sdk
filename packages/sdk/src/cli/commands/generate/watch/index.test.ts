@@ -2,10 +2,12 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 
 const madgeMock = vi.hoisted(() =>
-  vi.fn(async () => ({
+  vi.fn<MockProcedure>(async () => ({
     obj: () => ({}),
     circular: () => [],
   })),
@@ -155,7 +157,7 @@ describe("DependencyWatcher", () => {
 
   describe("error handling", () => {
     test("can set error callback", () => {
-      const errorCallback = vi.fn();
+      const errorCallback = vi.fn<MockProcedure>();
       watcher.onError(errorCallback);
 
       expect(errorCallback).not.toHaveBeenCalled();

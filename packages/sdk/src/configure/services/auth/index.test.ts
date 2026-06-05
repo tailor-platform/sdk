@@ -1,3 +1,4 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { randomUUID } from "node:crypto";
 import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "@/configure/types/type";

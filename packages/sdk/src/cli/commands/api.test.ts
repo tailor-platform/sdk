@@ -1,24 +1,26 @@
 import { runCommand } from "politty";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { apiCommand } from "./api";
 
 vi.mock("@/cli/shared/context", () => ({
-  loadAccessToken: vi.fn(),
-  loadWorkspaceId: vi.fn(),
+  loadAccessToken: vi.fn<MockProcedure>(),
+  loadWorkspaceId: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("@/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfig: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("@/cli/shared/readonly-guard", () => ({
-  assertWritable: vi.fn(),
+  assertWritable: vi.fn<MockProcedure>(),
 }));
 
-const fetchMock = vi.fn();
+const fetchMock = vi.fn<MockProcedure>();
 
 describe("api command body auto-injection", () => {
   beforeAll(() => {

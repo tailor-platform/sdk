@@ -1,4 +1,6 @@
-import { describe, expect, test, vi, beforeEach } from "vitest";
+import { describe, expect, test, vi, beforeEach, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import {
   isKeyringAvailable,
   loadKeyringTokens,
@@ -9,7 +11,7 @@ import {
 
 vi.mock("./logger", () => ({
   logger: {
-    warn: vi.fn(),
+    warn: vi.fn<MockProcedure>(),
   },
 }));
 

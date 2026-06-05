@@ -1,4 +1,6 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { SKILL_NAME, buildSkillsAddArgs, runSkillsInstaller } from "./skills-installer";
 
 const TEST_SOURCE = "/fake/sdk/skills";
@@ -66,7 +68,7 @@ describe("skills-installer", () => {
 
   test("runs npx with generated arguments and returns exit code", async () => {
     const mock = createMockChildProcess();
-    const spawnFn = vi.fn(() => mock.process);
+    const spawnFn = vi.fn<MockProcedure>(() => mock.process);
 
     const promise = runSkillsInstaller({
       source: TEST_SOURCE,
@@ -86,7 +88,7 @@ describe("skills-installer", () => {
 
   test("returns 1 when child process exits without status code", async () => {
     const mock = createMockChildProcess();
-    const spawnFn = vi.fn(() => mock.process);
+    const spawnFn = vi.fn<MockProcedure>(() => mock.process);
     const promise = runSkillsInstaller({ source: TEST_SOURCE, spawnFn });
 
     mock.emitClose(null);
@@ -95,7 +97,7 @@ describe("skills-installer", () => {
 
   test("rejects when npx execution fails", async () => {
     const mock = createMockChildProcess();
-    const spawnFn = vi.fn(() => mock.process);
+    const spawnFn = vi.fn<MockProcedure>(() => mock.process);
     const promise = runSkillsInstaller({ source: TEST_SOURCE, spawnFn });
 
     mock.emitError(new Error("spawn failed"));

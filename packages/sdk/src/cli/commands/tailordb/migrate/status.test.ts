@@ -2,7 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
+
+type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
@@ -11,20 +13,20 @@ import { statusCommand } from "./status";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
-  getMetadata: vi.fn(),
+  getMetadata: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("@/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfig: vi.fn<MockProcedure>(),
 }));
 
 vi.mock("@/cli/shared/context", () => ({
-  loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
-  loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
+  loadAccessToken: vi.fn<MockProcedure>().mockResolvedValue("mock-token"),
+  loadWorkspaceId: vi.fn<MockProcedure>().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
 }));
 
 vi.mock("@/cli/shared/client", () => ({
-  initOperatorClient: vi.fn(),
+  initOperatorClient: vi.fn<MockProcedure>(),
 }));
 
 function writeDiff(number: number, description: string): void {

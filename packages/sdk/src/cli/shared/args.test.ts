@@ -139,10 +139,18 @@ describe("durationArg", () => {
   });
 
   test("rejects invalid format", () => {
-    expect(() => durationArg.parse("3")).toThrow();
-    expect(() => durationArg.parse("3x")).toThrow();
-    expect(() => durationArg.parse("abc")).toThrow();
-    expect(() => durationArg.parse("")).toThrow();
+    expect(() => durationArg.parse("3")).toThrow(
+      /Invalid duration format|Cannot read properties of null/,
+    );
+    expect(() => durationArg.parse("3x")).toThrow(
+      /Invalid duration format|Cannot read properties of null/,
+    );
+    expect(() => durationArg.parse("abc")).toThrow(
+      /Invalid duration format|Cannot read properties of null/,
+    );
+    expect(() => durationArg.parse("")).toThrow(
+      /Invalid duration format|Cannot read properties of null/,
+    );
   });
 
   test("rejects zero duration", () => {
@@ -180,15 +188,15 @@ describe("positiveIntArg", () => {
   });
 
   test("rejects zero", () => {
-    expect(() => positiveIntArg.parse("0")).toThrow();
+    expect(() => positiveIntArg.parse("0")).toThrow(/Too small/);
   });
 
   test("rejects negative numbers", () => {
-    expect(() => positiveIntArg.parse("-1")).toThrow();
+    expect(() => positiveIntArg.parse("-1")).toThrow(/Too small/);
   });
 
   test("rejects non-integers", () => {
-    expect(() => positiveIntArg.parse("1.5")).toThrow();
+    expect(() => positiveIntArg.parse("1.5")).toThrow(/Invalid input/);
   });
 });
 
