@@ -11,10 +11,11 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import {
-  createFunctionTreeshakeOptions,
+  createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
 } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import ml from "@/utils/multiline";
@@ -107,7 +108,7 @@ export async function bundleForTestRun(
       dir: process.cwd(),
     },
     tsconfig,
-    treeshake: createFunctionTreeshakeOptions(bundleLogLevel),
+    treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(bundleLogLevel)]),
     logLevel: "silent",
   } as rolldown.BuildOptions);
 

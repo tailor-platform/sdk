@@ -6,8 +6,9 @@ import { type BundleCache, computeBundlerContextHash, withCache } from "@/cli/ca
 import { type FileLoadConfig, loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
-import { createFunctionTreeshakeOptions } from "@/cli/shared/bundle-log-level";
+import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import {
@@ -194,7 +195,9 @@ async function bundleSingleResolver(
         },
         tsconfig,
         plugins,
-        treeshake: createFunctionTreeshakeOptions(bundleLogLevel),
+        treeshake: composeFunctionTreeshakeOptions([
+          createLogLevelTreeshakeOptions(bundleLogLevel),
+        ]),
         logLevel: "silent",
       } as rolldown.BuildOptions);
 

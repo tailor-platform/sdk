@@ -1,8 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
-  createFunctionTreeshakeOptions,
+  createLogLevelTreeshakeOptions,
   manualPureFunctionsForLogLevel,
-  mergeFunctionTreeshakeOptions,
   normalizeBundleLogLevel,
   resolveBundleLogLevel,
 } from "./bundle-log-level";
@@ -39,19 +38,6 @@ describe("bundle-log-level", () => {
   });
 
   test("omits manual pure functions for DEBUG", () => {
-    expect(createFunctionTreeshakeOptions("DEBUG")).not.toHaveProperty("manualPureFunctions");
-  });
-
-  test("merges treeshake fragments and de-duplicates manual pure functions", () => {
-    expect(
-      mergeFunctionTreeshakeOptions([
-        { moduleSideEffects: false, manualPureFunctions: ["console.log"] },
-        { annotations: true, manualPureFunctions: ["console.log", "debug.trace"] },
-      ]),
-    ).toEqual({
-      moduleSideEffects: false,
-      annotations: true,
-      manualPureFunctions: ["console.log", "debug.trace"],
-    });
+    expect(createLogLevelTreeshakeOptions("DEBUG")).not.toHaveProperty("manualPureFunctions");
   });
 });

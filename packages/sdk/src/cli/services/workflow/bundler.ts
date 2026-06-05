@@ -5,8 +5,9 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
-import { createFunctionTreeshakeOptions } from "@/cli/shared/bundle-log-level";
+import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "@/cli/shared/trigger-context";
@@ -410,7 +411,9 @@ async function bundleSingleJob(
         },
         tsconfig,
         plugins,
-        treeshake: createFunctionTreeshakeOptions(bundleLogLevel),
+        treeshake: composeFunctionTreeshakeOptions([
+          createLogLevelTreeshakeOptions(bundleLogLevel),
+        ]),
         logLevel: "silent",
       } as rolldown.BuildOptions);
 
