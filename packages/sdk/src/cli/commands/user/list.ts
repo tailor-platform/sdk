@@ -8,9 +8,9 @@ export const listCommand = defineAppCommand({
   name: "list",
   description: "List all users.",
   args: z.object({}).strict(),
-  run: async (args) => {
+  run: async () => {
     const config = await readPlatformConfig();
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
 
     const users = Object.keys(config.users);
     if (users.length === 0) {

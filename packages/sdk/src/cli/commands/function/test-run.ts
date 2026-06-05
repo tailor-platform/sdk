@@ -70,8 +70,12 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     },
   ],
   run: async (args) => {
-    const jsonOutput = args.json || logger.jsonMode;
-    const showProgress = !jsonOutput;
+    const jsonOutput = logger.jsonMode;
+    const progress = (message: string) => {
+      if (!jsonOutput) {
+        logger.info(message);
+      }
+    };
 
     // 1. Resolve and validate file path
     const filePath = path.resolve(args.file);
@@ -116,14 +120,10 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       // Pre-bundled .js file
       scriptName = path.basename(filePath);
       bundledCode = fs.readFileSync(filePath, "utf-8");
-      if (showProgress) {
-        logger.info(`Using pre-bundled script ${styles.bold(scriptName)}`);
-      }
+      progress(`Using pre-bundled script ${styles.bold(scriptName)}`);
     } else {
       // Source file: detect type and bundle
-      if (showProgress) {
-        logger.info(`Detecting function type from ${styles.path(relativePath)}`);
-      }
+      progress(`Detecting function type from ${styles.path(relativePath)}`);
 
       const detected = await detectFunctionType({
         filePath,
@@ -132,9 +132,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
       functionType = detected.type;
       functionName = detected.name;
-      if (showProgress) {
-        logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
-      }
+      progress(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
 
       if (detected.type === "resolver" && args.arg) {
         if (!detected.hasInput) {
@@ -147,9 +145,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         }
       }
 
-      if (showProgress) {
-        logger.info("Bundling...");
-      }
+      progress("Bundling...");
       ({ bundledCode, scriptName } = await bundleForTestRun({
         detected,
         sourceFile: filePath,
@@ -158,9 +154,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         machineUser,
         workspaceId,
       }));
-      if (showProgress) {
-        logger.info(`Bundled as ${styles.bold(scriptName)}`);
-      }
+      progress(`Bundled as ${styles.bold(scriptName)}`);
     }
 
     // 5. Execute via TestExecScript
@@ -169,9 +163,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       machineUserName: machineUser.name,
     });
 
-    if (showProgress) {
-      logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
-    }
+    progress(`Executing on workspace ${styles.dim(workspaceId)}...`);
 
     const result = await executeScript({
       client,

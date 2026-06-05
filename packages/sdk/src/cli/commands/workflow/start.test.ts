@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { resolveWorkflow } from "./get";
 import { startCommand, startWorkflow } from "./start";
@@ -92,20 +93,13 @@ describe("startWorkflow runtime overload", () => {
   });
 
   test("start command with jsonMode emits only parseable JSON to stdout", async () => {
-    let stdout = "";
-    using _stdoutSpy = vi.spyOn(console, "log").mockImplementation((chunk) => {
-      stdout += String(chunk);
-    });
-    let stderr = "";
-    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
-      stderr += String(chunk);
-      return true;
-    });
+    using stdout = captureStdout();
+    using stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(startCommand, ["legacy-workflow", "--machine-user", "legacy-user"]);
 
-    expect(JSON.parse(stdout)).toEqual({ executionId: "execution-1" });
-    expect(stderr).toBe("");
+    expect(JSON.parse(stdout.output)).toEqual({ executionId: "execution-1" });
+    expect(stderr.output).toBe("");
   });
 });

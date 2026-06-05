@@ -12,7 +12,7 @@ export const listCommand = defineAppCommand({
   description: "List all personal access tokens.",
   args: z.object({ ...paginationArgs() }).strict(),
   run: async (args) => {
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
     const config = await readPlatformConfig();
 
     if (!config.current_user) {

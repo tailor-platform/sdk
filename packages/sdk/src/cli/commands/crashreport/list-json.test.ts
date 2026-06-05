@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { parseCrashReportConfig } from "@/cli/crashreport/config";
+import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { listCommand } from "./list";
 import { crashReportCommand } from ".";
@@ -11,22 +12,6 @@ import { crashReportCommand } from ".";
 vi.mock("@/cli/crashreport/config", () => ({
   parseCrashReportConfig: vi.fn(),
 }));
-
-function captureStdout() {
-  let output = "";
-  const spy = vi.spyOn(console, "log").mockImplementation((chunk) => {
-    output += String(chunk);
-  });
-
-  return {
-    get output() {
-      return output;
-    },
-    [Symbol.dispose]() {
-      spy.mockRestore();
-    },
-  };
-}
 
 describe("crashreport list --json", () => {
   let tmpDir: string;

@@ -68,7 +68,7 @@ const listWebhookCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
     const executors = await listWebhookExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,

@@ -2,6 +2,7 @@ import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { webhookCommand } from "./webhook";
 import { executorCommand } from ".";
@@ -15,22 +16,6 @@ vi.mock("@/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
-
-function captureStdout() {
-  let output = "";
-  const spy = vi.spyOn(console, "log").mockImplementation((chunk) => {
-    output += String(chunk);
-  });
-
-  return {
-    get output() {
-      return output;
-    },
-    [Symbol.dispose]() {
-      spy.mockRestore();
-    },
-  };
-}
 
 describe("executor list --json", () => {
   beforeEach(() => {

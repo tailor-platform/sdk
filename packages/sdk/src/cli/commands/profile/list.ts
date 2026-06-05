@@ -9,9 +9,9 @@ export const listCommand = defineAppCommand({
   name: "list",
   description: "List all profiles.",
   args: z.object({}).strict(),
-  run: async (args) => {
+  run: async () => {
     const config = await readPlatformConfig();
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
 
     const profiles = Object.entries(config.profiles);
     if (profiles.length === 0) {

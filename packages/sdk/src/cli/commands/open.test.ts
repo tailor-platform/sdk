@@ -3,6 +3,7 @@ import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadWorkspaceId } from "@/cli/shared/context";
+import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { openCommand } from "./open";
 import type { ChildProcess } from "node:child_process";
@@ -18,22 +19,6 @@ vi.mock("@/cli/shared/config-loader", () => ({
 vi.mock("@/cli/shared/context", () => ({
   loadWorkspaceId: vi.fn(),
 }));
-
-function captureStdout() {
-  let output = "";
-  const spy = vi.spyOn(console, "log").mockImplementation((chunk) => {
-    output += String(chunk);
-  });
-
-  return {
-    get output() {
-      return output;
-    },
-    [Symbol.dispose]() {
-      spy.mockRestore();
-    },
-  };
-}
 
 describe("open --json", () => {
   beforeEach(() => {

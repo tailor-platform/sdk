@@ -5,6 +5,7 @@ import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
+import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { statusCommand } from "./status";
 
@@ -25,22 +26,6 @@ vi.mock("@/cli/shared/context", () => ({
 vi.mock("@/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
-
-function captureStdout() {
-  let output = "";
-  const spy = vi.spyOn(console, "log").mockImplementation((chunk) => {
-    output += String(chunk);
-  });
-
-  return {
-    get output() {
-      return output;
-    },
-    [Symbol.dispose]() {
-      spy.mockRestore();
-    },
-  };
-}
 
 function writeDiff(number: number, description: string): void {
   const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));

@@ -56,7 +56,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
     const workflows = await listWorkflows({
       workspaceId: args["workspace-id"],
       profile: args.profile,

@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "@/cli/shared/context";
+import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "@/cli/shared/token-store";
 import { listCommand } from "./list";
@@ -23,22 +24,6 @@ vi.mock("@napi-rs/keyring", () => ({
     deletePassword() {}
   },
 }));
-
-function captureStdout() {
-  let output = "";
-  const spy = vi.spyOn(console, "log").mockImplementation((chunk) => {
-    output += String(chunk);
-  });
-
-  return {
-    get output() {
-      return output;
-    },
-    [Symbol.dispose]() {
-      spy.mockRestore();
-    },
-  };
-}
 
 beforeAll(() => {
   fs.mkdirSync(xdgTempDir, { recursive: true });

@@ -25,7 +25,7 @@ export const openCommand = defineAppCommand({
     const applicationName = config.name;
     const consolePath = `/workspaces/${workspaceId}/applications/${encodeURIComponent(applicationName)}/overview`;
     const consoleUrl = new URL(consolePath, consoleBaseUrl).toString();
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
 
     if (!jsonOutput) {
       logger.info("Opening Tailor Platform Console...");

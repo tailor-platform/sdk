@@ -83,7 +83,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
     const registries = await listFunctionRegistries({
       workspaceId: args["workspace-id"],
       profile: args.profile,

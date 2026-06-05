@@ -33,7 +33,7 @@ export const listCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     const config = parseCrashReportConfig();
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
     if (!config.localDir) {
       if (jsonOutput) {
         logger.out([]);

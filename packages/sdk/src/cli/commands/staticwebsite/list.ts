@@ -71,7 +71,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
     const websites = await listStaticWebsites({
       workspaceId: args["workspace-id"],
       profile: args.profile,

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { executeScript } from "@/cli/shared/script-executor";
+import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { testRunCommand } from "./test-run";
 
@@ -65,25 +66,18 @@ describe("function test-run --json", () => {
   });
 
   test("emits only a parseable JSON result to stdout", async () => {
-    let stdout = "";
-    using _stdoutSpy = vi.spyOn(console, "log").mockImplementation((chunk) => {
-      stdout += String(chunk);
-    });
-    let stderr = "";
-    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
-      stderr += String(chunk);
-      return true;
-    });
+    using stdout = captureStdout();
+    using stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(testRunCommand, [scriptPath, "--machine-user", "admin"]);
 
-    expect(JSON.parse(stdout)).toEqual({
+    expect(JSON.parse(stdout.output)).toEqual({
       success: true,
       scriptName: "fn.js",
       logs: "",
       result: '{"ok":true}',
     });
-    expect(stderr).toBe("");
+    expect(stderr.output).toBe("");
   });
 });

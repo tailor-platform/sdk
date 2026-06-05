@@ -371,7 +371,7 @@ export const startCommand = defineAppCommand({
       configPath: args.config,
       interval: parseDuration(args.interval),
     });
-    const jsonOutput = args.json || logger.jsonMode;
+    const jsonOutput = logger.jsonMode;
 
     if (!jsonOutput) {
       logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
