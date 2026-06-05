@@ -134,6 +134,11 @@ export async function bundleAuthHooks(
         },
         tsconfig,
         plugins,
+        transform: {
+          define: {
+            "process.env.LOG_LEVEL": JSON.stringify(bundleLogLevel),
+          },
+        },
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),

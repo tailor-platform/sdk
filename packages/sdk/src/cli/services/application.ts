@@ -549,6 +549,7 @@ export async function loadApplication(
         hasOutput: a.hasOutput,
       })),
       bundleCache,
+      bundleLogLevel,
     );
   }
 
