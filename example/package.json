@@ -34,7 +34,7 @@
     "@connectrpc/connect-node": "2.1.1",
     "@types/node": "24.12.4",
     "@typescript/native-preview": "7.0.0-dev.20260527.2",
-    "graphql": "16.14.0",
+    "graphql": "16.14.1",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
     "oxfmt": "0.52.0",
