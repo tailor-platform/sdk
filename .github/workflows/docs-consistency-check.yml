@@ -92,14 +92,14 @@ jobs:
 
             ### 4. Post Results
 
-            Search for an existing comment and update it, or create a new one.
+            Search for an existing review summary and update it, or create a new review.
 
             ```bash
-            COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments \
-              --jq '.[] | select(.body | contains("<!-- docs-consistency-check -->")) | .id' | head -n 1)
+            REVIEW_ID=$(gh api repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews \
+              --jq '[.[] | select((.body // "") | contains("<!-- docs-consistency-check -->")) | select(.state != "DISMISSED")] | last | .id // empty')
             ```
 
-            **If inconsistencies are found**, post a comment in this format:
+            **If inconsistencies are found**, post a review summary in this format:
 
             ```markdown
             ## 📖 Docs Consistency Check
@@ -124,7 +124,7 @@ jobs:
             <!-- docs-consistency-check -->
             ```
 
-            **If no inconsistencies are found**, post:
+            **If no inconsistencies are found**, post a review summary in this format:
 
             ```markdown
             ## 📖 Docs Consistency Check
@@ -140,11 +140,25 @@ jobs:
             <!-- docs-consistency-check -->
             ```
 
-            Use `gh api --method PATCH` to update if `COMMENT_ID` is set, otherwise use `gh pr comment` to create.
+            Store the selected markdown in `REVIEW_BODY`. Use `gh api --method PUT` to
+            update if `REVIEW_ID` is set. Otherwise use `gh api --method POST` with
+            `event=COMMENT` to create a new pull request review. Do not use `APPROVE`,
+            `REQUEST_CHANGES`, or `gh pr comment`.
+
+            ```bash
+            if [ -n "$REVIEW_ID" ]; then
+              gh api --method PUT "repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews/$REVIEW_ID" \
+                -f body="$REVIEW_BODY"
+            else
+              gh api --method POST "repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews" \
+                -f event=COMMENT \
+                -f body="$REVIEW_BODY"
+            fi
+            ```
 
             ## Important Notes
             - The PR branch is already checked out
-            - Always post results as a PR comment using `gh` commands, not as a conversational response
+            - Always post results as a pull request review summary using `gh` commands, not as a conversational response
             - Be specific: include file paths and line numbers for every inconsistency
             - Only flag real inconsistencies, not stylistic differences
             - If unsure whether something is an inconsistency, mention it with a note that it may be intentional
