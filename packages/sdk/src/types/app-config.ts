@@ -92,7 +92,7 @@ export interface AppConfig<
    */
   inlineSourcemap?: boolean;
   /**
-   * Controls which console log calls remain in bundled functions.
+   * Controls which `console.*` calls remain in bundled functions.
    * @default "DEBUG"
    */
   logLevel?: LogLevelInput;
