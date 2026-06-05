@@ -8,8 +8,9 @@ export const listCommand = defineAppCommand({
   name: "list",
   description: "List all users.",
   args: z.object({}).strict(),
-  run: async (args) => {
+  run: async () => {
     const config = await readPlatformConfig();
+    const jsonOutput = logger.jsonMode;
 
     const users = Object.keys(config.users);
     if (users.length === 0) {
@@ -17,10 +18,13 @@ export const listCommand = defineAppCommand({
         No users found.
         Please login first using 'tailor-sdk login' command to register a user.
       `);
+      if (jsonOutput) {
+        logger.out([]);
+      }
       return;
     }
 
-    if (args.json) {
+    if (jsonOutput) {
       logger.out(users);
       return;
     }

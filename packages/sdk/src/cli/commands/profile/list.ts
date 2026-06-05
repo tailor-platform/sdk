@@ -11,6 +11,7 @@ export const listCommand = defineAppCommand({
   args: z.object({}).strict(),
   run: async () => {
     const config = await readPlatformConfig();
+    const jsonOutput = logger.jsonMode;
 
     const profiles = Object.entries(config.profiles);
     if (profiles.length === 0) {
@@ -18,6 +19,9 @@ export const listCommand = defineAppCommand({
         No profiles found.
         Please create a profile first using 'tailor-sdk profile create' command.
       `);
+      if (jsonOutput) {
+        logger.out([]);
+      }
       return;
     }
 
