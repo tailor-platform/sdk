@@ -19,10 +19,8 @@
  */
 
 import { convertFieldConfigToProto } from "./snapshot-manifest";
-import type { DiffChange } from "./diff-calculator";
-import type { SnapshotFieldConfig } from "./snapshot";
+import type { DiffChange, FieldDiffChange } from "./diff-calculator";
 import type { PendingMigration } from "./types";
-import type { EnumValue } from "@/types/field-types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
@@ -36,6 +34,16 @@ const PRE_MIGRATION_FIELD_KINDS = new Set<DiffChange["kind"]>([
 ]);
 
 /**
+ * Type guard: is the change a field-level change that needs pre-migration
+ * schema adjustment?
+ * @param {DiffChange} change - Diff change to test
+ * @returns {boolean} True if the change is a field-level change
+ */
+function isPreMigrationFieldChange(change: DiffChange): change is FieldDiffChange {
+  return PRE_MIGRATION_FIELD_KINDS.has(change.kind);
+}
+
+/**
  * Map of pre-migration field changes: typeName -> fieldName -> change.
  *
  * Includes both breaking changes (required-add, unique-add, enum value
@@ -43,7 +51,7 @@ const PRE_MIGRATION_FIELD_KINDS = new Set<DiffChange["kind"]>([
  * adjust the schema for both so that migrate.ts can still see the previous
  * shape.
  */
-export type PreMigrationChangesMap = Map<string, Map<string, DiffChange>>;
+export type PreMigrationChangesMap = Map<string, Map<string, FieldDiffChange>>;
 
 /**
  * Build a map of field changes that require pre-migration schema adjustment.
@@ -56,23 +64,14 @@ export function buildPreMigrationChangesMap(
   const map: PreMigrationChangesMap = new Map();
   for (const migration of pendingMigrations) {
     for (const change of migration.diff.changes) {
-      if (!PRE_MIGRATION_FIELD_KINDS.has(change.kind)) continue;
+      if (!isPreMigrationFieldChange(change)) continue;
       if (!change.fieldName) continue;
-      const perType = map.get(change.typeName) ?? new Map<string, DiffChange>();
+      const perType = map.get(change.typeName) ?? new Map<string, FieldDiffChange>();
       perType.set(change.fieldName, change);
       map.set(change.typeName, perType);
     }
   }
   return map;
-}
-
-/**
- * Field config subset for pre-migration adjustment heuristics.
- */
-interface FieldConfig {
-  required?: boolean;
-  unique?: boolean;
-  allowedValues?: EnumValue[];
 }
 
 /**
@@ -86,17 +85,18 @@ interface FieldConfig {
  * - Modified fields keep the looser side of unique/required/enum.
  *
  * @param {Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>} fields - Field map to adjust (mutated in place)
- * @param {Map<string, DiffChange>} typeChanges - Changes for this type, keyed by fieldName
+ * @param {Map<string, FieldDiffChange>} typeChanges - Changes for this type, keyed by fieldName
  */
 export function applyPreMigrationFieldAdjustments(
   fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
-  typeChanges: Map<string, DiffChange>,
+  typeChanges: Map<string, FieldDiffChange>,
 ): void {
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
-      const before = change.before as SnapshotFieldConfig | undefined;
-      if (before) {
-        fields[fieldName] = convertFieldConfigToProto(before);
+      // Guard against malformed diff.json: `before` is typed required but
+      // the file is parsed without validation.
+      if (change.before) {
+        fields[fieldName] = convertFieldConfigToProto(change.before);
       }
       continue;
     }
@@ -104,17 +104,14 @@ export function applyPreMigrationFieldAdjustments(
     const field = fields[fieldName];
     if (!field) continue;
 
-    const before = change.before as FieldConfig | undefined;
-    const after = change.after as FieldConfig | undefined;
-
-    if (change.kind === "field_added" && after?.required) {
-      field.required = false;
+    if (change.kind === "field_added") {
+      if (change.after?.required) {
+        field.required = false;
+      }
       continue;
     }
 
-    if (change.kind !== "field_modified") {
-      continue;
-    }
+    const { before, after } = change;
 
     if (!before?.required && after?.required) {
       field.required = false;

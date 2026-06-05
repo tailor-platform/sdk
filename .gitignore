@@ -44,10 +44,11 @@ tailor.d.ts
 !.claude/rules/
 !.claude/skills/
 .claude/skills/*
-!.claude/skills/llm-challenge/
-!.claude/skills/docs-check/
+!.claude/skills/llm-challenge
+!.claude/skills/docs-check
 !.claude/skills/tailor-sdk
-!.claude/skills/e2e-setup/
+!.claude/skills/e2e-setup
+AGENTS.local.md
 CLAUDE.local.md
 
 .claude/tmp/

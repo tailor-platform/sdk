@@ -123,7 +123,7 @@
             "varsIgnorePattern": "^_"
           }
         ],
-        "import/no-cycle": "error",
+        "import/no-cycle": ["error", { "ignoreTypes": false }],
         "typescript/consistent-type-imports": [
           "error",
           {

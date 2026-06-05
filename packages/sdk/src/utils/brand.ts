@@ -8,7 +8,8 @@ export type SdkBrandKind =
   | "executor"
   | "workflow"
   | "workflow-job"
-  | "wait-point";
+  | "wait-point"
+  | "http-adapter";
 
 /**
  * Adds a non-enumerable SDK brand symbol to the given object (in-place).

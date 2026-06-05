@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as path from "pathe";
 import { z } from "zod";
 import { parseCrashReportConfig } from "@/cli/crashreport/config";
 import { CRASH_LOG_EXTENSION } from "@/cli/crashreport/writer";
@@ -15,6 +16,13 @@ export function orderAndLimitCrashReports(
   return options.limit && options.limit > 0 ? ordered.slice(0, options.limit) : ordered;
 }
 
+function formatCrashReportFiles(files: string[], localDir: string) {
+  return files.map((file) => ({
+    file,
+    path: path.join(localDir, file),
+  }));
+}
+
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List local crash report files.",
@@ -25,8 +33,12 @@ export const listCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     const config = parseCrashReportConfig();
+    const jsonOutput = logger.jsonMode;
     if (!config.localDir) {
       logger.info("Crash report directory not available.");
+      if (jsonOutput) {
+        logger.out([]);
+      }
       return;
     }
 
@@ -35,6 +47,9 @@ export const listCommand = defineAppCommand({
       entries = fs.readdirSync(config.localDir);
     } catch {
       logger.info("No crash reports found.");
+      if (jsonOutput) {
+        logger.out([]);
+      }
       return;
     }
 
@@ -42,6 +57,14 @@ export const listCommand = defineAppCommand({
 
     if (files.length === 0) {
       logger.info("No crash reports found.");
+      if (jsonOutput) {
+        logger.out([]);
+      }
+      return;
+    }
+
+    if (jsonOutput) {
+      logger.out(formatCrashReportFiles(files, config.localDir));
       return;
     }
 

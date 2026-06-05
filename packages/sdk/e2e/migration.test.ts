@@ -414,8 +414,7 @@ export type user = typeof user;
       const diff = loadDiff(diffPath);
       expect(diff.hasBreakingChanges).toBe(false);
       expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0].kind).toBe("field_added");
-      expect(diff.changes[0].fieldName).toBe("phone");
+      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
     }, 60000);
 
     /**

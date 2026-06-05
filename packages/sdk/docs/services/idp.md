@@ -88,6 +88,12 @@ defineIdp("my-idp", {
 - `delete` - Controls who can delete IdP users
 - `sendPasswordResetEmail` - Controls who can send password reset emails. The examples above disable this operation; to enable it, use a permission such as `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]`.
 
+**Policy fields:** each entry in an operation's policy array supports:
+
+- `conditions` - Array of conditions evaluated for the policy (see Operands/Operators below)
+- `permit` - Whether to allow (`true`) or deny (`false`) when the conditions match
+- `description` - (Optional) Human-readable description of the policy
+
 **Operands:**
 
 - `{ user: "field" }` - Authenticated user's attribute. Built-in fields: `"id"` (user ID), `"_loggedIn"` (boolean, whether the user is authenticated). User-defined attributes (e.g., `"role"`) are also available when configured via `userProfile.attributes` or `machineUserAttributes` in `defineAuth()`

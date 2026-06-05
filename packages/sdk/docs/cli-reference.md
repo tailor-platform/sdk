@@ -22,6 +22,18 @@ tailor-sdk <command> [options]
 
 <!-- politty:global-options:end -->
 
+### JSON Output
+
+For commands that return structured results, passing `--json` writes one parseable JSON document
+to stdout on success. Empty successful result sets are emitted as JSON values such as `[]`, not as
+human-readable text or empty stdout.
+
+Commands that only perform side effects and do not define a structured result may leave stdout empty
+even when `--json` is passed.
+
+Errors, warnings, progress, and diagnostic messages are written to stderr. On failure, check the
+non-zero exit code and read stderr; stdout is not guaranteed to contain a JSON error object.
+
 ## Common Options
 
 The following options are available for most commands:

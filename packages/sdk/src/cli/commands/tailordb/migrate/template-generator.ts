@@ -10,12 +10,7 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
-import {
-  getMigrationDirPath,
-  getMigrationFilePath,
-  type SchemaSnapshot,
-  type SnapshotFieldConfig,
-} from "./snapshot";
+import { getMigrationDirPath, getMigrationFilePath, type SchemaSnapshot } from "./snapshot";
 import type { MigrationDiff, DiffChange } from "./diff-calculator";
 
 /**
@@ -193,7 +188,7 @@ ${updates.join("\n\n")}
  */
 function generateChangeScript(change: DiffChange): string | null {
   if (change.kind === "field_added") {
-    const field = change.after as SnapshotFieldConfig;
+    const field = change.after;
     if (field.required) {
       return `  // Populate ${change.fieldName} for existing ${change.typeName} records
   await trx
@@ -211,8 +206,7 @@ function generateChangeScript(change: DiffChange): string | null {
     return null;
   }
 
-  const before = change.before as SnapshotFieldConfig;
-  const after = change.after as SnapshotFieldConfig;
+  const { before, after } = change;
 
   // Note: Type change is rejected as unsupported in generate.ts
   // No script generation needed here
@@ -260,8 +254,8 @@ function generateChangeScript(change: DiffChange): string | null {
 
   // Enum values removed
   if (before.type === "enum" && after.type === "enum") {
-    const beforeValues = before.allowedValues ?? [];
-    const afterValues = after.allowedValues ?? [];
+    const beforeValues = (before.allowedValues ?? []).map((v) => v.value);
+    const afterValues = (after.allowedValues ?? []).map((v) => v.value);
     const removedValues = beforeValues.filter((v) => !afterValues.includes(v));
     if (removedValues.length > 0) {
       const defaultValue = afterValues[0] ?? "NEW_VALUE";

@@ -4,12 +4,7 @@ import { deleteCommand } from "./delete";
 import { listCommand } from "./list";
 import { updateCommand } from "./update";
 
-export interface ProfileInfo {
-  name: string;
-  user: string;
-  workspaceId: string;
-  permission: "read" | "write";
-}
+export type { ProfileInfo } from "./types";
 
 export const profileCommand = defineCommand({
   name: "profile",

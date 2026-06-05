@@ -1,7 +1,7 @@
-import { IdPLang } from "@tailor-proto/tailor/v1/idp_resource_pb";
+import { IdPLang, IdPPermissionPermit } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { planIdP } from "./idp";
-import type { PlanContext } from "./deploy";
+import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -398,6 +398,67 @@ describe("planIdP", () => {
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
+  });
+
+  test("marks idp service unchanged when permission policies omit description and remote returns empty string", async () => {
+    const client = createMockClient({
+      services: [
+        {
+          name: "idp-a",
+          authorization: "user != null && size(user.id) > 0",
+          lang: IdPLang.JA,
+          publishUserEvents: true,
+          userAuthPolicy: {
+            useNonEmailIdentifier: false,
+            allowSelfPasswordReset: true,
+            passwordRequireUppercase: true,
+            passwordRequireLowercase: true,
+            passwordRequireNonAlphanumeric: false,
+            passwordRequireNumeric: true,
+            passwordMinLength: 8,
+            passwordMaxLength: 64,
+            allowedEmailDomains: ["a.example.com", "b.example.com"],
+            allowGoogleOauth: false,
+            disablePasswordAuth: false,
+            allowMicrosoftOauth: false,
+          },
+          disableGqlOperations: {
+            create: false,
+            update: false,
+            delete: false,
+            read: false,
+            sendPasswordResetEmail: false,
+          },
+          // Platform returns the proto default empty string for policy descriptions
+          permission: {
+            create: [{ conditions: [], permit: IdPPermissionPermit.ALLOW, description: "" }],
+            read: [],
+            update: [],
+            delete: [],
+            sendPasswordResetEmail: [],
+          },
+          label: appName,
+        },
+      ],
+      clients: {
+        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
+      },
+    });
+
+    const context = createContext(client);
+    // oxlint-disable-next-line no-explicit-any
+    (context.application as any).idpServices[0].permission = {
+      create: [{ conditions: [], permit: true }],
+      read: [],
+      update: [],
+      delete: [],
+      sendPasswordResetEmail: [],
+    };
+
+    const result = await planIdP(context);
+
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+    expect(result.changeSet.service.updates).toHaveLength(0);
   });
 
   test("marks idp service unchanged when authorization is omitted and remote is empty string", async () => {

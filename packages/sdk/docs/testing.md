@@ -534,7 +534,7 @@ describe("upsertUsers resolver", () => {
 });
 ```
 
-Reach for [`tailordbMock`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer.
+Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer.
 
 #### Resolvers that resume a workflow
 
