@@ -108,6 +108,38 @@ interface ParsedField {
   value: string;
 }
 
+/**
+ * Collapse top-level body keys that address a known input field by its
+ * protobuf name (snake_case) or JSON name to the field's `localName`. protojson
+ * accepts every alias, so converging them here lets the presence checks below
+ * reason in a single namespace — otherwise a `--body` written as
+ * `{"workspace_id": ...}` slips past the camelCase check and we inject a second
+ * `workspaceId`, which the server rejects as a duplicate field. When both forms
+ * are present the canonical key wins and the alias is dropped.
+ * @param body - The parsed body object to mutate
+ * @param fields - The target endpoint's input fields
+ * @returns Whether any key was rewritten
+ */
+export function normalizeBodyFieldKeys(
+  body: Record<string, unknown>,
+  fields: readonly DescField[],
+): boolean {
+  const aliasToLocal = new Map<string, string>();
+  for (const f of fields) {
+    aliasToLocal.set(f.name, f.localName);
+    aliasToLocal.set(f.jsonName, f.localName);
+  }
+  let changed = false;
+  for (const key of Object.keys(body)) {
+    const local = aliasToLocal.get(key);
+    if (!local || local === key) continue;
+    if (!(local in body)) body[local] = body[key];
+    delete body[key];
+    changed = true;
+  }
+  return changed;
+}
+
 // Prototype-pollution sinks: `setNestedPath` walks `cursor[key]`, so a
 // segment that resolves on `Object.prototype` (e.g. `__proto__`) would let an
 // untrusted dotted key mutate the runtime prototype instead of the body.
@@ -236,8 +268,12 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
     }
 
     if (parsedBody && method) {
-      // Use localName so the presence check matches the keys --body parsing
-      // writes into the request body.
+      // Converge any snake_case / JSON aliases to each field's localName first,
+      // so the presence checks below operate in a single (camelCase) namespace.
+      if (normalizeBodyFieldKeys(parsedBody, method.input.fields)) {
+        mutated = true;
+      }
+
       const fieldNames = method.input.fields.map((f) => f.localName);
 
       if (fieldNames.includes("workspaceId") && !("workspaceId" in parsedBody)) {
