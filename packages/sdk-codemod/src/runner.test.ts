@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { runCodemods } from "./runner";
 import type { CodemodPackage } from "./types";
 
@@ -72,7 +72,7 @@ describe("runCodemods", () => {
       await fs.promises.rm(transformBPath, { force: true });
     });
 
-    it("should chain transforms so B sees A's output in dry-run", async () => {
+    test("should chain transforms so B sees A's output in dry-run", async () => {
       const { tmpDir: dir } = await createTestProject("test.ts", 'const oldFunc = "hello";');
       tmpDir = dir;
 
@@ -97,7 +97,7 @@ describe("runCodemods", () => {
       expect(onDisk).toBe('const oldFunc = "hello";');
     });
 
-    it("should produce diff showing final result (oldFunc → newFunc) in dry-run", async () => {
+    test("should produce diff showing final result (oldFunc → newFunc) in dry-run", async () => {
       const { tmpDir: dir } = await createTestProject("test.ts", 'const oldFunc = "hello";');
       tmpDir = dir;
 
@@ -123,7 +123,7 @@ describe("runCodemods", () => {
       expect(output).not.toContain("midFunc");
     });
 
-    it("should write final chained result in non-dry-run", async () => {
+    test("should write final chained result in non-dry-run", async () => {
       const { tmpDir: dir, filePath } = await createTestProject(
         "test.ts",
         'const oldFunc = "hello";',
@@ -143,7 +143,7 @@ describe("runCodemods", () => {
       expect(result).toBe('const newFunc = "hello";');
     });
 
-    it("should skip transform B if A produces no match for B", async () => {
+    test("should skip transform B if A produces no match for B", async () => {
       const { tmpDir: dir } = await createTestProject("test.ts", 'const something = "hello";');
       tmpDir = dir;
 
@@ -179,7 +179,7 @@ describe("runCodemods", () => {
       await fs.promises.rm(transformPath, { force: true });
     });
 
-    it("should only apply transform to files matching filePatterns", async () => {
+    test("should only apply transform to files matching filePatterns", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-pattern-test-"));
       tmpDir = dir;
       await fs.promises.writeFile(path.join(dir, "config.ts"), "hello", "utf-8");

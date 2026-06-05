@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, expect, test, vi, beforeEach } from "vitest";
 import {
   isKeyringAvailable,
   loadKeyringTokens,
@@ -43,13 +43,13 @@ describe("token-store", () => {
   });
 
   describe("isKeyringAvailable", () => {
-    it("returns true when keyring is functional", async () => {
+    test("returns true when keyring is functional", async () => {
       expect(await isKeyringAvailable()).toBe(true);
     });
   });
 
   describe("keyring operations", () => {
-    it("saves, loads, and deletes tokens", async () => {
+    test("saves, loads, and deletes tokens", async () => {
       const user = "test-user";
       await saveKeyringTokens(user, {
         accessToken: "test-access-token",
@@ -66,7 +66,7 @@ describe("token-store", () => {
       expect(await loadKeyringTokens(user)).toBeUndefined();
     });
 
-    it("saves tokens without refreshToken (machine user)", async () => {
+    test("saves tokens without refreshToken (machine user)", async () => {
       const user = "test-machine";
       await saveKeyringTokens(user, { accessToken: "machine-token" });
 
@@ -74,11 +74,11 @@ describe("token-store", () => {
       expect(tokens).toEqual({ accessToken: "machine-token" });
     });
 
-    it("returns undefined for non-existent entry", async () => {
+    test("returns undefined for non-existent entry", async () => {
       expect(await loadKeyringTokens("non-existent-user")).toBeUndefined();
     });
 
-    it("does not throw when deleting non-existent entry", async () => {
+    test("does not throw when deleting non-existent entry", async () => {
       await expect(deleteKeyringTokens("non-existent-user")).resolves.not.toThrow();
     });
   });

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, beforeEach, afterAll } from "vitest";
 import { writeDbTypesFile } from "./db-types-generator";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
 import {
@@ -91,7 +91,7 @@ describe("db-types-generator", () => {
   // writeDbTypesFile - Empty Types
   // ==========================================================================
   describe("writeDbTypesFile with empty types", () => {
-    it("generates empty db types when no types in snapshot", async () => {
+    test("generates empty db types when no types in snapshot", async () => {
       const snapshot = createMockSnapshot({}, "tailordb");
       createMigrationDir(testDir, 1);
 
@@ -117,7 +117,7 @@ describe("db-types-generator", () => {
   // writeDbTypesFile - Basic Field Types
   // ==========================================================================
   describe("writeDbTypesFile with basic field types", () => {
-    it("generates types with string fields", async () => {
+    test("generates types with string fields", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -136,7 +136,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("email: string | null;");
     });
 
-    it("generates types with number fields (integer, float)", async () => {
+    test("generates types with number fields (integer, float)", async () => {
       const snapshot = createMockSnapshot({
         Product: {
           fields: {
@@ -156,7 +156,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("discount: number | null;");
     });
 
-    it("generates types with boolean fields", async () => {
+    test("generates types with boolean fields", async () => {
       const snapshot = createMockSnapshot({
         Settings: {
           fields: {
@@ -174,7 +174,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("isVerified: boolean | null;");
     });
 
-    it("generates types with uuid fields", async () => {
+    test("generates types with uuid fields", async () => {
       const snapshot = createMockSnapshot({
         Entity: {
           fields: {
@@ -192,7 +192,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("referenceId: string | null;");
     });
 
-    it("generates types with date/datetime fields using Timestamp", async () => {
+    test("generates types with date/datetime fields using Timestamp", async () => {
       const snapshot = createMockSnapshot({
         Event: {
           fields: {
@@ -219,7 +219,7 @@ describe("db-types-generator", () => {
   // writeDbTypesFile - Array Fields
   // ==========================================================================
   describe("writeDbTypesFile with array fields", () => {
-    it("generates types with array fields", async () => {
+    test("generates types with array fields", async () => {
       const snapshot = createMockSnapshot({
         Document: {
           fields: {
@@ -242,7 +242,7 @@ describe("db-types-generator", () => {
   // writeDbTypesFile - Enum Fields
   // ==========================================================================
   describe("writeDbTypesFile with enum fields", () => {
-    it("generates types with enum fields and allowed values", async () => {
+    test("generates types with enum fields and allowed values", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -268,7 +268,7 @@ describe("db-types-generator", () => {
       expect(content).toContain('"ADMIN" | "USER"');
     });
 
-    it("generates types with enum array fields", async () => {
+    test("generates types with enum array fields", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -295,7 +295,7 @@ describe("db-types-generator", () => {
   // writeDbTypesFile - Generated ID Field
   // ==========================================================================
   describe("writeDbTypesFile with Generated id field", () => {
-    it("always includes Generated id field", async () => {
+    test("always includes Generated id field", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -319,7 +319,7 @@ describe("db-types-generator", () => {
   // writeDbTypesFile - Multiple Types
   // ==========================================================================
   describe("writeDbTypesFile with multiple types", () => {
-    it("generates types with multiple types", async () => {
+    test("generates types with multiple types", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -352,7 +352,7 @@ describe("db-types-generator", () => {
   // writeDbTypesFile - Breaking Changes
   // ==========================================================================
   describe("writeDbTypesFile with breaking changes (diff)", () => {
-    it("generates ColumnType for optional to required change", async () => {
+    test("generates ColumnType for optional to required change", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -386,7 +386,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("email: ColumnType<string | null, string, string>;");
     });
 
-    it("generates ColumnType for added required fields", async () => {
+    test("generates ColumnType for added required fields", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -415,7 +415,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("role: ColumnType<string | null, string, string>;");
     });
 
-    it("generates ColumnType for enum value changes", async () => {
+    test("generates ColumnType for enum value changes", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -459,7 +459,7 @@ describe("db-types-generator", () => {
       expect(content).toContain('"ACTIVE" | "INACTIVE"'); // INSERT/UPDATE type (only after values)
     });
 
-    it("handles enum value changes with nullable fields", async () => {
+    test("handles enum value changes with nullable fields", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -501,7 +501,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("| null");
     });
 
-    it("handles enum value changes with array fields", async () => {
+    test("handles enum value changes with array fields", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -552,7 +552,7 @@ describe("db-types-generator", () => {
   // writeDbTypesFile - File Location
   // ==========================================================================
   describe("writeDbTypesFile file location", () => {
-    it("writes file to correct location", async () => {
+    test("writes file to correct location", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {

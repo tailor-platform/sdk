@@ -132,8 +132,7 @@ describe("createCacheStore", () => {
     test("deleteEntry is a no-op for non-existent key", () => {
       const store = createCacheStore({ cacheDir });
 
-      // Should not throw
-      store.deleteEntry("nonexistent");
+      expect(() => store.deleteEntry("nonexistent")).not.toThrow();
     });
 
     test("entries persist through saveManifest and loadManifest cycle", () => {

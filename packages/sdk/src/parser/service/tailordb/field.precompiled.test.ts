@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseFieldConfig } from "./field";
 import { setPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 
 describe("parseFieldConfig precompiled expressions", () => {
-  it("uses precompiled hook expression when attached", () => {
+  test("uses precompiled hook expression when attached", () => {
     const createHook = ({ value }: { value: string | null }) => value ?? "fallback";
     setPrecompiledScriptExpr(createHook, "PRECOMPILED_HOOK_EXPR");
 
@@ -19,7 +19,7 @@ describe("parseFieldConfig precompiled expressions", () => {
     expect(field.hooks?.create?.expr).toBe("PRECOMPILED_HOOK_EXPR");
   });
 
-  it("uses precompiled validate expression when attached", () => {
+  test("uses precompiled validate expression when attached", () => {
     const validator = ({ value }: { value: string }) => value.length > 0;
     setPrecompiledScriptExpr(validator, "PRECOMPILED_VALIDATE_EXPR");
 

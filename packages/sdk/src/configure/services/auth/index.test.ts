@@ -1,5 +1,6 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { randomUUID } from "node:crypto";
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "@/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth, type AuthInvoker } from "./index";
@@ -35,7 +36,7 @@ const attributeListConfig: AttributeList = ["externalId"];
 const machineUserAttributeList: [string] = [randomUUID()];
 
 describe("defineAuth", () => {
-  it("creates auth configuration with userProfile and machineUsers", () => {
+  test("creates auth configuration with userProfile and machineUsers", () => {
     const authConfig = defineAuth("test", {
       userProfile: {
         type: userType,
@@ -62,7 +63,7 @@ describe("defineAuth", () => {
     expect(authConfig.machineUsers?.admin.attributes?.role).toBe("ADMIN");
   });
 
-  it("creates auth configuration with invoker method", () => {
+  test("creates auth configuration with invoker method", () => {
     const authConfig = defineAuth("test-service", {
       userProfile: {
         type: userType,
@@ -83,7 +84,7 @@ describe("defineAuth", () => {
     expect(workerInvoker.machineUserName).toBe("worker");
   });
 
-  it("creates minimal auth configuration", () => {
+  test("creates minimal auth configuration", () => {
     const authConfig = defineAuth("minimal", {
       userProfile: {
         type: userType,
@@ -96,7 +97,7 @@ describe("defineAuth", () => {
     expect(authConfig.machineUsers).toBeUndefined();
   });
 
-  it("creates auth configuration with machineUsers only", () => {
+  test("creates auth configuration with machineUsers only", () => {
     const authConfig = defineAuth("machine-only", {
       machineUserAttributes: {
         role: t.enum(["ADMIN", "WORKER"]),
@@ -133,7 +134,7 @@ describe("defineAuth", () => {
     >();
   });
 
-  it("rejects invalid machine user attributes when machineUsers-only", () => {
+  test("rejects invalid machine user attributes when machineUsers-only", () => {
     defineAuth("machine-only-invalid", {
       machineUserAttributes: {
         role: t.enum(["ADMIN", "WORKER"]),
@@ -155,7 +156,7 @@ describe("defineAuth", () => {
   });
 
   describe("name literal type inference", () => {
-    it("infers name as literal type", () => {
+    test("infers name as literal type", () => {
       const authConfig = defineAuth("my-auth-service", {
         userProfile: {
           type: userType,
@@ -166,7 +167,7 @@ describe("defineAuth", () => {
       expectTypeOf(authConfig.name).toEqualTypeOf<"my-auth-service">();
     });
 
-    it("preserves name literal in readonly object", () => {
+    test("preserves name literal in readonly object", () => {
       const _authConfig = defineAuth("production-auth", {
         userProfile: {
           type: userType,
@@ -184,7 +185,7 @@ describe("defineAuth", () => {
       }>();
     });
 
-    it("name type is available for type extraction", () => {
+    test("name type is available for type extraction", () => {
       const _authConfig = defineAuth("typed-auth", {
         userProfile: {
           type: userType,
@@ -198,7 +199,7 @@ describe("defineAuth", () => {
   });
 
   describe("beforeLogin hook", () => {
-    it("includes beforeLogin in auth config when provided", () => {
+    test("includes beforeLogin in auth config when provided", () => {
       const handler = async (_args: { claims: JsonObject; idpConfigName: string }) => {
         // no return value
       };
@@ -223,14 +224,14 @@ describe("defineAuth", () => {
       expect(authConfig.hooks!.beforeLogin!.invoker).toBe("hook-invoker");
     });
 
-    it("constrains invoker to machine user names at the type level", () => {
+    test("constrains invoker to machine user names at the type level", () => {
       // BeforeLoginHook<MachineUserNames> constrains invoker to MachineUserNames.
       // We verify this structurally rather than via overload resolution (which differs in tsgo).
       type Hook = BeforeLoginHook<"admin" | "worker">;
       expectTypeOf<Hook["invoker"]>().toEqualTypeOf<"admin" | "worker">();
     });
 
-    it("works with multiple machine users without narrowing MachineUserNames", () => {
+    test("works with multiple machine users without narrowing MachineUserNames", () => {
       const authConfig = defineAuth("multi-mu-hook", {
         userProfile: {
           type: userType,
@@ -256,7 +257,7 @@ describe("defineAuth", () => {
       expectTypeOf(authConfig.invoker).parameter(0).toEqualTypeOf<"admin" | "worker">();
     });
 
-    it("is optional — existing tests continue to pass without it", () => {
+    test("is optional — existing tests continue to pass without it", () => {
       const authConfig = defineAuth("no-hook", {
         userProfile: {
           type: userType,
@@ -269,7 +270,7 @@ describe("defineAuth", () => {
   });
 
   describe("AuthInvoker type compatibility with tailor-proto", () => {
-    it("AuthInvoker has namespace field compatible with proto", () => {
+    test("AuthInvoker has namespace field compatible with proto", () => {
       // Verify the field name matches tailor.v1.AuthInvoker
       type HasNamespace = AuthInvoker<string> extends { namespace: string } ? true : false;
       expectTypeOf<HasNamespace>().toEqualTypeOf<true>();
@@ -279,7 +280,7 @@ describe("defineAuth", () => {
       expectTypeOf<ProtoHasNamespace>().toEqualTypeOf<true>();
     });
 
-    it("AuthInvoker has machineUserName field compatible with proto", () => {
+    test("AuthInvoker has machineUserName field compatible with proto", () => {
       // Verify the field name matches tailor.v1.AuthInvoker
       type HasMachineUserName =
         AuthInvoker<string> extends {
@@ -298,7 +299,7 @@ describe("defineAuth", () => {
       expectTypeOf<ProtoHasMachineUserName>().toEqualTypeOf<true>();
     });
 
-    it("AuthInvoker is assignable to proto AuthInvoker fields", () => {
+    test("AuthInvoker is assignable to proto AuthInvoker fields", () => {
       // This ensures that our AuthInvoker can be used where proto AuthInvoker is expected
       // (checking the common properties)
       type IsCompatible =
@@ -308,7 +309,7 @@ describe("defineAuth", () => {
       expectTypeOf<IsCompatible>().toEqualTypeOf<true>();
     });
 
-    it("invoker() returns AuthInvoker compatible object", () => {
+    test("invoker() returns AuthInvoker compatible object", () => {
       const authConfig = defineAuth("test-auth", {
         userProfile: {
           type: userType,

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutput } from "@/utils/test/internal";
@@ -35,7 +35,7 @@ describe("FileUtilsPlugin", () => {
   }
 
   describe("basic properties", () => {
-    it("should have correct id and description", () => {
+    test("should have correct id and description", () => {
       const plugin = fileUtilsPlugin({ distPath: testDistPath });
       expect(plugin.id).toBe(FileUtilsGeneratorID);
       expect(plugin.description).toBe(
@@ -45,7 +45,7 @@ describe("FileUtilsPlugin", () => {
   });
 
   describe("file field collection", () => {
-    it("should collect file field names", async () => {
+    test("should collect file field names", async () => {
       const type = db
         .type("User", {
           name: db.string(),
@@ -59,7 +59,7 @@ describe("FileUtilsPlugin", () => {
       expect(result.fileFields).toEqual(["avatar"]);
     });
 
-    it("should collect multiple file field names", async () => {
+    test("should collect multiple file field names", async () => {
       const type = db
         .type("SalesOrder", {
           name: db.string(),
@@ -74,7 +74,7 @@ describe("FileUtilsPlugin", () => {
       expect(result.fileFields).toEqual(["receipt", "form"]);
     });
 
-    it("should return empty array when no files are present", async () => {
+    test("should return empty array when no files are present", async () => {
       const type = db.type("User", {
         name: db.string(),
       });
@@ -86,7 +86,7 @@ describe("FileUtilsPlugin", () => {
   });
 
   describe("generateUnifiedFileUtils", () => {
-    it("should merge types from single namespace", () => {
+    test("should merge types from single namespace", () => {
       const namespaceData = [
         {
           namespace: "tailordb",
@@ -108,7 +108,7 @@ describe("FileUtilsPlugin", () => {
       expect(result).toContain('SalesOrder: "tailordb"');
     });
 
-    it("should merge types from multiple namespaces", () => {
+    test("should merge types from multiple namespaces", () => {
       const namespaceData = [
         {
           namespace: "tailordb",
@@ -137,13 +137,13 @@ describe("FileUtilsPlugin", () => {
       expect(result).toContain('Customer: "someNamespace"');
     });
 
-    it("should return empty string when no namespace data", () => {
+    test("should return empty string when no namespace data", () => {
       const result = generateUnifiedFileUtils([]);
 
       expect(result).toBe("");
     });
 
-    it("should return empty string when all namespaces have no types", () => {
+    test("should return empty string when all namespaces have no types", () => {
       const namespaceData = [
         {
           namespace: "tailordb",
@@ -158,7 +158,7 @@ describe("FileUtilsPlugin", () => {
   });
 
   describe("onTailorDBReady integration", () => {
-    it("should generate file utils for types with file fields", async () => {
+    test("should generate file utils for types with file fields", async () => {
       const userType = db
         .type("User", {
           name: db.string(),
@@ -198,7 +198,7 @@ describe("FileUtilsPlugin", () => {
       expect(content).toContain("SalesOrder: {");
     });
 
-    it("should return empty files when no types have file fields", async () => {
+    test("should return empty files when no types have file fields", async () => {
       const userType = db.type("User", {
         name: db.string(),
       });
@@ -218,7 +218,7 @@ describe("FileUtilsPlugin", () => {
       expect(result.files).toHaveLength(0);
     });
 
-    it("should handle multiple namespaces", async () => {
+    test("should handle multiple namespaces", async () => {
       const userType = db
         .type("User", {
           name: db.string(),

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { createHttpAdapterService } from "./service";
 
 describe("createHttpAdapterService.loadAdapters", () => {
@@ -28,7 +28,7 @@ describe("createHttpAdapterService.loadAdapters", () => {
     return file;
   }
 
-  it("loads the default export and skips helper files matched by the glob", async () => {
+  test("loads the default export and skips helper files matched by the glob", async () => {
     const adapterFile = writeAdapter(
       "adapter.ts",
       `
@@ -54,7 +54,7 @@ export const shared = (value: string) => value.toUpperCase();
     expect(service.adapters[0].adapter.name).toBe("adapter");
   });
 
-  it("accepts a computed (non-literal) name as long as it is valid at runtime", async () => {
+  test("accepts a computed (non-literal) name as long as it is valid at runtime", async () => {
     const file = writeAdapter(
       "dynamic-name.ts",
       `
@@ -75,7 +75,7 @@ export default createHttpAdapter({
     expect(service.adapters[0].adapter.name).toBe("dynamic-name");
   });
 
-  it("allows handlers shared between methods via a local reference", async () => {
+  test("allows handlers shared between methods via a local reference", async () => {
     const file = writeAdapter(
       "shared-handler.ts",
       `
@@ -96,7 +96,7 @@ export default createHttpAdapter({
     expect(service.adapters[0].methods).toEqual(["get", "post"]);
   });
 
-  it("rejects files whose input handler is async", async () => {
+  test("rejects files whose input handler is async", async () => {
     const file = writeAdapter(
       "async-input.ts",
       `
@@ -113,7 +113,7 @@ export default createHttpAdapter({
     await expect(service.loadAdapters()).rejects.toThrow(/async `input\.get` function/);
   });
 
-  it("rejects files where the adapter is only a named export", async () => {
+  test("rejects files where the adapter is only a named export", async () => {
     const file = writeAdapter(
       "missing-default.ts",
       `
@@ -132,7 +132,7 @@ export const adapter = createHttpAdapter({
     await expect(service.loadAdapters()).rejects.toThrow(/must be the default export/);
   });
 
-  it("rejects plain objects that mimic the adapter shape without createHttpAdapter", async () => {
+  test("rejects plain objects that mimic the adapter shape without createHttpAdapter", async () => {
     const file = writeAdapter(
       "unbranded.ts",
       `

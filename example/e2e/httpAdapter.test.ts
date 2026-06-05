@@ -55,7 +55,9 @@ describe("HTTP adapter with path wildcard", () => {
         }
       }
     `);
-    expect(result.errors).toBeUndefined();
+    if (result.errors) {
+      throw new Error(JSON.stringify(result.errors));
+    }
     userId = result.data.createUser.id;
   });
 

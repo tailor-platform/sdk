@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { tempCwd } from "@/cli/shared/test-helpers/temp-cwd";
 import { bundleResolvers } from "./bundler";
 import type * as rolldown from "rolldown";
@@ -29,7 +29,7 @@ vi.mock("rolldown", async (importOriginal) => {
 });
 
 describe("bundleResolvers", () => {
-  it("does not throw when no resolver files match", async () => {
+  test("does not throw when no resolver files match", async () => {
     using tmp = tempCwd("sdk-bundler-");
     fs.mkdirSync(path.join(tmp.dir, "src/backend/provisioning/resolver"), {
       recursive: true,
@@ -48,7 +48,7 @@ describe("bundleResolvers", () => {
       buildTracker = undefined;
     });
 
-    it("caps concurrent rolldown.build invocations to TAILOR_BUNDLE_CONCURRENCY", async () => {
+    test("caps concurrent rolldown.build invocations to TAILOR_BUNDLE_CONCURRENCY", async () => {
       using tmp = tempCwd("sdk-bundler-conc-");
       const resolverDir = path.join(tmp.dir, "src/backend/concurrency/resolver");
       fs.mkdirSync(resolverDir, { recursive: true });

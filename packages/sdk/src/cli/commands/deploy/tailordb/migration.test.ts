@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it, vi, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, vi, beforeEach, afterAll } from "vitest";
 import {
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
@@ -131,27 +131,27 @@ describe("migration", () => {
   // getMigrationMachineUser
   // ==========================================================================
   describe("getMigrationMachineUser", () => {
-    it("returns explicit machineUser from config", () => {
+    test("returns explicit machineUser from config", () => {
       const result = getMigrationMachineUser({ machineUser: "explicit-user" }, ["fallback-user"]);
       expect(result).toBe("explicit-user");
     });
 
-    it("falls back to first machine user from auth", () => {
+    test("falls back to first machine user from auth", () => {
       const result = getMigrationMachineUser(undefined, ["first-user", "second-user"]);
       expect(result).toBe("first-user");
     });
 
-    it("falls back to first machine user when config has no machineUser", () => {
+    test("falls back to first machine user when config has no machineUser", () => {
       const result = getMigrationMachineUser({}, ["first-user", "second-user"]);
       expect(result).toBe("first-user");
     });
 
-    it("returns undefined when no machine users available", () => {
+    test("returns undefined when no machine users available", () => {
       const result = getMigrationMachineUser(undefined, undefined);
       expect(result).toBeUndefined();
     });
 
-    it("returns undefined when machine users array is empty", () => {
+    test("returns undefined when machine users array is empty", () => {
       const result = getMigrationMachineUser(undefined, []);
       expect(result).toBeUndefined();
     });
@@ -161,7 +161,7 @@ describe("migration", () => {
   // groupMigrationsByNamespace
   // ==========================================================================
   describe("groupMigrationsByNamespace", () => {
-    it("groups migrations by namespace", () => {
+    test("groups migrations by namespace", () => {
       const migrations = [
         {
           namespace: "namespace-a",
@@ -201,12 +201,12 @@ describe("migration", () => {
       expect(result.get("namespace-a")?.[1].number).toBe(2);
     });
 
-    it("returns empty map for empty input", () => {
+    test("returns empty map for empty input", () => {
       const result = groupMigrationsByNamespace([]);
       expect(result.size).toBe(0);
     });
 
-    it("handles single namespace", () => {
+    test("handles single namespace", () => {
       const migrations = [
         {
           namespace: "single",
@@ -258,7 +258,7 @@ describe("migration", () => {
       } as unknown as OperatorClient;
     }
 
-    it("returns empty array when no pending migrations", async () => {
+    test("returns empty array when no pending migrations", async () => {
       const client = createMockClient({ tailordb: 1 });
 
       // Create migration 0001 (already applied)
@@ -272,7 +272,7 @@ describe("migration", () => {
       expect(result).toHaveLength(0);
     });
 
-    it("detects single pending migration", async () => {
+    test("detects single pending migration", async () => {
       const client = createMockClient({ tailordb: 0 });
 
       // Create migration 0001 (pending)
@@ -289,7 +289,7 @@ describe("migration", () => {
       expect(result[0].namespace).toBe("tailordb");
     });
 
-    it("detects multiple pending migrations", async () => {
+    test("detects multiple pending migrations", async () => {
       const client = createMockClient({ tailordb: 1 });
 
       // Create migrations 0002 and 0003 (pending)
@@ -307,7 +307,7 @@ describe("migration", () => {
       expect(result[1].number).toBe(3);
     });
 
-    it("skips migrations without diff file", async () => {
+    test("skips migrations without diff file", async () => {
       const client = createMockClient({ tailordb: 0 });
 
       // Create migration directory without diff file
@@ -324,7 +324,7 @@ describe("migration", () => {
       expect(result).toHaveLength(0);
     });
 
-    it("warns when breaking change migration missing script", async () => {
+    test("warns when breaking change migration missing script", async () => {
       const { logger } = await import("@/cli/shared/logger");
       const client = createMockClient({ tailordb: 0 });
 
@@ -351,7 +351,7 @@ describe("migration", () => {
       );
     });
 
-    it("includes breaking change migration with script", async () => {
+    test("includes breaking change migration with script", async () => {
       const client = createMockClient({ tailordb: 0 });
 
       // Create migration with breaking change and script
@@ -375,7 +375,7 @@ describe("migration", () => {
       expect(result[0].diff.requiresMigrationScript).toBe(true);
     });
 
-    it("sorts migrations by namespace and number", async () => {
+    test("sorts migrations by namespace and number", async () => {
       const testDir2 = path.join(
         TEST_MIGRATIONS_BASE,
         `test2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -417,7 +417,7 @@ describe("migration", () => {
     const workspaceId = "test-workspace";
     const namespace = "tailordb";
 
-    it("updates migration label on service metadata", async () => {
+    test("updates migration label on service metadata", async () => {
       const setMetadataMock = vi.fn();
       const client = {
         getMetadata: vi.fn().mockResolvedValue({
@@ -438,7 +438,7 @@ describe("migration", () => {
       });
     });
 
-    it("preserves existing labels", async () => {
+    test("preserves existing labels", async () => {
       const setMetadataMock = vi.fn();
       const client = {
         getMetadata: vi.fn().mockResolvedValue({
@@ -464,7 +464,7 @@ describe("migration", () => {
       });
     });
 
-    it("handles missing metadata gracefully", async () => {
+    test("handles missing metadata gracefully", async () => {
       const setMetadataMock = vi.fn();
       const client = {
         getMetadata: vi.fn().mockResolvedValue({
@@ -528,7 +528,7 @@ describe("migration", () => {
       });
     });
 
-    it("skips migrations without a script file on disk", async () => {
+    test("skips migrations without a script file on disk", async () => {
       const migrations = [
         createMockMigration({ number: 1, hasScript: false }),
         createMockMigration({ number: 2, hasScript: false }),
@@ -540,7 +540,7 @@ describe("migration", () => {
       expect(executeScriptMock).not.toHaveBeenCalled();
     });
 
-    it("executes warning-tier migrations whose script exists even when not required", async () => {
+    test("executes warning-tier migrations whose script exists even when not required", async () => {
       // requiresMigrationScript=false but hasScript=true represents the
       // warning-tier case (e.g. field_removed) where the user opted in by
       // running `tailordb migration script`. The optional script must still
@@ -573,7 +573,7 @@ describe("migration", () => {
       });
     });
 
-    it("executes only the subset with hasScript=true when mixed with breaking changes", async () => {
+    test("executes only the subset with hasScript=true when mixed with breaking changes", async () => {
       const migrations = [
         createMockMigration({
           number: 1,

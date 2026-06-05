@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { discoverProblems, selectProblems } from "./problems";
@@ -30,7 +30,7 @@ afterEach(async () => {
 });
 
 describe("argument parsing", () => {
-  it("parses run defaults", () => {
+  test("parses run defaults", () => {
     expect(parseRunCommand(["run"])).toMatchObject({
       sdkRef: "HEAD",
       profile: "no-docs",
@@ -47,17 +47,17 @@ describe("argument parsing", () => {
     });
   });
 
-  it("allows implicit profile with cli group", () => {
+  test("allows implicit profile with cli group", () => {
     expect(parseRunArgs(["--group", "cli"]).profileExplicit).toBe(false);
   });
 
-  it("rejects explicit profile with cli group", () => {
+  test("rejects explicit profile with cli group", () => {
     expect(() => parseRunArgs(["--group", "cli", "--profile", "full"])).toThrow(
       "--profile cannot be used with --group cli",
     );
   });
 
-  it("parses repeated and comma-separated problem filters", () => {
+  test("parses repeated and comma-separated problem filters", () => {
     expect(
       parseRunArgs([
         "--profile=full",
@@ -73,7 +73,7 @@ describe("argument parsing", () => {
     });
   });
 
-  it("parses runner workflow options", () => {
+  test("parses runner workflow options", () => {
     expect(
       parseRunArgs([
         "--no-preflight",
@@ -91,7 +91,7 @@ describe("argument parsing", () => {
     );
   });
 
-  it("rejects an empty comma-separated problem filter", () => {
+  test("rejects an empty comma-separated problem filter", () => {
     expect(() => parseRunArgs(["--problems", ""])).toThrow(
       "--problems must contain at least one problem",
     );
@@ -102,7 +102,7 @@ describe("argument parsing", () => {
 });
 
 describe("problem discovery", () => {
-  it("discovers the initial problem set from group directories", async () => {
+  test("discovers the initial problem set from group directories", async () => {
     const problems = await discoverProblems(packageRoot);
 
     expect(problems).toHaveLength(19);
@@ -115,7 +115,7 @@ describe("problem discovery", () => {
     ).toBe(true);
   });
 
-  it("selects problems by bare id and group-qualified id", async () => {
+  test("selects problems by bare id and group-qualified id", async () => {
     const problems = await discoverProblems(packageRoot);
 
     expect(
@@ -127,7 +127,7 @@ describe("problem discovery", () => {
 });
 
 describe("profile filtering", () => {
-  it("removes docs entries and declaration JSDoc", async () => {
+  test("removes docs entries and declaration JSDoc", async () => {
     const dir = await makeTempDir();
     await fs.mkdir(path.join(dir, "docs"), { recursive: true });
     await fs.mkdir(path.join(dir, "dist"), { recursive: true });
@@ -149,10 +149,10 @@ describe("profile filtering", () => {
 
     await applyNoDocsProfile(dir);
 
-    await expect(fs.access(path.join(dir, "README.md"))).rejects.toThrow();
-    await expect(fs.access(path.join(dir, "CHANGELOG.md"))).rejects.toThrow();
-    await expect(fs.access(path.join(dir, "docs"))).rejects.toThrow();
-    await expect(fs.access(path.join(dir, "dist/index.mjs.map"))).rejects.toThrow();
+    await expect(fs.access(path.join(dir, "README.md"))).rejects.toThrow("ENOENT");
+    await expect(fs.access(path.join(dir, "CHANGELOG.md"))).rejects.toThrow("ENOENT");
+    await expect(fs.access(path.join(dir, "docs"))).rejects.toThrow("ENOENT");
+    await expect(fs.access(path.join(dir, "dist/index.mjs.map"))).rejects.toThrow("ENOENT");
     await expect(fs.readFile(path.join(dir, "dist/index.mjs"), "utf8")).resolves.not.toContain(
       "runtime docs",
     );
@@ -167,13 +167,13 @@ describe("profile filtering", () => {
     );
   });
 
-  it("strips only JSDoc blocks from declaration text", () => {
+  test("strips only JSDoc blocks from declaration text", () => {
     expect(stripJsDocBlocks("/** remove */\nexport type A = string;\n/* keep */\n")).toBe(
       "\nexport type A = string;\n/* keep */\n",
     );
   });
 
-  it("strips JSDoc blocks without corrupting string literals", () => {
+  test("strips JSDoc blocks without corrupting string literals", () => {
     expect(
       stripJsDocBlocks(
         [
@@ -197,7 +197,7 @@ describe("profile filtering", () => {
 });
 
 describe("process command", () => {
-  it("merges explicit environment values with the parent environment", async () => {
+  test("merges explicit environment values with the parent environment", async () => {
     expect(process.env.PATH).toBeDefined();
     const script = [
       "const pathStatus = process.env.PATH === process.env.PARENT_PATH ? 'inherited' : 'missing';",
@@ -216,7 +216,7 @@ describe("process command", () => {
 });
 
 describe("report and artifact paths", () => {
-  it("builds the required run artifact layout", () => {
+  test("builds the required run artifact layout", () => {
     const paths = buildRunArtifactPaths(
       "/tmp/out",
       { group: "sdk-api", id: "plugin-registration" },
@@ -238,7 +238,7 @@ describe("report and artifact paths", () => {
     });
   });
 
-  it("writes report paths relative to llm-challenge", async () => {
+  test("writes report paths relative to llm-challenge", async () => {
     const dir = await makeTempDir();
     const reportFile = path.join(dir, "report.json");
     const problem = makeProblem();
@@ -288,7 +288,7 @@ describe("report and artifact paths", () => {
 });
 
 describe("artifact summary", () => {
-  it("indexes useful solver artifacts without cache-heavy directories", async () => {
+  test("indexes useful solver artifacts without cache-heavy directories", async () => {
     const dir = await makeTempDir();
     const worktreePath = path.join(dir, "work");
     await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
@@ -385,7 +385,7 @@ describe("artifact summary", () => {
     expect(summary.errors).toEqual(["solver error"]);
   });
 
-  it("classifies timeout, successful, usage-limit, and runner-startup failures", async () => {
+  test("classifies timeout, successful, usage-limit, and runner-startup failures", async () => {
     const dir = await makeTempDir();
     const tracePath = path.join(dir, "trace.jsonl");
     const solverStdoutPath = path.join(dir, "solver.stdout.log");
@@ -438,7 +438,7 @@ describe("artifact summary", () => {
 });
 
 describe("verification summary", () => {
-  it("loads every problem verification spec without definition errors", async () => {
+  test("loads every problem verification spec without definition errors", async () => {
     const dir = await makeTempDir();
     const worktreePath = path.join(dir, "work");
     await fs.mkdir(worktreePath, { recursive: true });
@@ -459,7 +459,7 @@ describe("verification summary", () => {
     }
   });
 
-  it("records common and problem-level minimum correctness checks", async () => {
+  test("records common and problem-level minimum correctness checks", async () => {
     const dir = await makeTempDir();
     const problemRoot = path.join(dir, "problem");
     const worktreePath = path.join(dir, "work");
@@ -529,7 +529,7 @@ describe("verification summary", () => {
     ).resolves.toContain('"problemId": "example"');
   });
 
-  it("runs TypeScript verification through the installed compiler directly", async () => {
+  test("runs TypeScript verification through the installed compiler directly", async () => {
     const dir = await makeTempDir();
     const worktreePath = path.join(dir, "work");
     await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
@@ -556,7 +556,7 @@ describe("verification summary", () => {
     });
   });
 
-  it("excludes SDK cache files from problem verification evidence", async () => {
+  test("excludes SDK cache files from problem verification evidence", async () => {
     const dir = await makeTempDir();
     const problemRoot = path.join(dir, "problem");
     const worktreePath = path.join(dir, "work");
@@ -607,7 +607,7 @@ describe("verification summary", () => {
 });
 
 describe("workspace preparation", () => {
-  it("copies scaffold, prompt, and the selected SDK tarball", async () => {
+  test("copies scaffold, prompt, and the selected SDK tarball", async () => {
     const dir = await makeTempDir();
     const problemRoot = path.join(dir, "problem");
     const scaffoldPath = path.join(problemRoot, "scaffold");
@@ -686,12 +686,12 @@ describe("workspace preparation", () => {
     });
   });
 
-  it("uses null profile for cli problems", () => {
+  test("uses null profile for cli problems", () => {
     expect(profileForProblem({ group: "cli" }, "full")).toBeNull();
     expect(profileForProblem({ group: "sdk-api" }, "full")).toBe("full");
   });
 
-  it("prunes dependency and SDK cache directories", async () => {
+  test("prunes dependency and SDK cache directories", async () => {
     const dir = await makeTempDir();
     const worktreePath = path.join(dir, "work");
     await Promise.all(
@@ -710,21 +710,21 @@ describe("workspace preparation", () => {
       ".turbo",
       ".tailor-sdk/cache",
     ]) {
-      await expect(fs.access(path.join(worktreePath, name))).rejects.toThrow();
+      await expect(fs.access(path.join(worktreePath, name))).rejects.toThrow("ENOENT");
     }
   });
 });
 
 describe("codex runner", () => {
-  it("uses a digest-pinned default image", () => {
+  test("uses a digest-pinned default image", () => {
     expect(DEFAULT_CODEX_IMAGE).toMatch(/^ghcr\.io\/openai\/codex-universal@sha256:/);
   });
 
-  it("keeps the shared pnpm store outside the solver workspace", () => {
+  test("keeps the shared pnpm store outside the solver workspace", () => {
     expect(CONTAINER_PNPM_STORE).not.toMatch(/^\/workspace(?:\/|$)/);
   });
 
-  it("uses a pnpm 11-compatible store environment variable", async () => {
+  test("uses a pnpm 11-compatible store environment variable", async () => {
     const dir = await makeTempDir();
     const storePath = path.join(dir, "pnpm-store");
     const result = await runCommand("pnpm", ["store", "path"], {
@@ -734,14 +734,14 @@ describe("codex runner", () => {
     expect(result.stdout.trim()).toBe(path.join(storePath, "v11"));
   });
 
-  it("does not enable web search for challenge solves", () => {
+  test("does not enable web search for challenge solves", () => {
     const args = buildCodexExecArgs({ model: "gpt-5.5", effort: "xhigh" });
 
     expect(args[0]).toBe("exec");
     expect(args).not.toContain("--search");
   });
 
-  it("falls back to installing codex inside the container", () => {
+  test("falls back to installing codex inside the container", () => {
     const script = buildCodexBootstrapScript(
       ["exec", "--model", "gpt-5.5", "-"],
       DEFAULT_CODEX_NPM_PACKAGE,
@@ -754,7 +754,7 @@ describe("codex runner", () => {
     );
   });
 
-  it("builds a non-model preflight script", () => {
+  test("builds a non-model preflight script", () => {
     const script = buildCodexPreflightScript(DEFAULT_CODEX_NPM_PACKAGE);
 
     expect(script).toContain("exec codex --version");

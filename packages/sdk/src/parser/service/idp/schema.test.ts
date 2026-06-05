@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   IdPUserAuthPolicySchema,
   IdPSchema,
@@ -7,7 +7,7 @@ import {
 } from "./schema";
 
 describe("IdPUserAuthPolicySchema validation", () => {
-  it("accepts valid password policy configuration", () => {
+  test("accepts valid password policy configuration", () => {
     const validPolicy = {
       passwordRequireUppercase: true,
       passwordRequireLowercase: true,
@@ -20,7 +20,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(validPolicy)).not.toThrow();
   });
 
-  it("accepts minimum password length", () => {
+  test("accepts minimum password length", () => {
     const policy = {
       passwordMinLength: 6,
     };
@@ -28,7 +28,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
   });
 
-  it("accepts maximum password length", () => {
+  test("accepts maximum password length", () => {
     const policy = {
       passwordMaxLength: 4096,
     };
@@ -36,7 +36,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
   });
 
-  it("rejects passwordMinLength below minimum (5)", () => {
+  test("rejects passwordMinLength below minimum (5)", () => {
     const policy = {
       passwordMinLength: 5,
     };
@@ -46,7 +46,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects passwordMinLength above maximum (31)", () => {
+  test("rejects passwordMinLength above maximum (31)", () => {
     const policy = {
       passwordMinLength: 31,
     };
@@ -56,7 +56,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects passwordMaxLength below minimum (5)", () => {
+  test("rejects passwordMaxLength below minimum (5)", () => {
     const policy = {
       passwordMaxLength: 5,
     };
@@ -66,7 +66,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects passwordMaxLength above maximum (4097)", () => {
+  test("rejects passwordMaxLength above maximum (4097)", () => {
     const policy = {
       passwordMaxLength: 4097,
     };
@@ -76,7 +76,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects when passwordMinLength > passwordMaxLength", () => {
+  test("rejects when passwordMinLength > passwordMaxLength", () => {
     const policy = {
       passwordMinLength: 20,
       passwordMaxLength: 10,
@@ -87,7 +87,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts when passwordMinLength equals passwordMaxLength", () => {
+  test("accepts when passwordMinLength equals passwordMaxLength", () => {
     const policy = {
       passwordMinLength: 10,
       passwordMaxLength: 10,
@@ -96,7 +96,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
   });
 
-  it("returns undefined for unspecified fields (allows platform defaults)", () => {
+  test("returns undefined for unspecified fields (allows platform defaults)", () => {
     const policy = {};
 
     const result = IdPUserAuthPolicySchema.parse(policy);
@@ -115,7 +115,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.disablePasswordAuth).toBeUndefined();
   });
 
-  it("accepts allowedEmailDomains with empty array", () => {
+  test("accepts allowedEmailDomains with empty array", () => {
     const policy = {
       allowedEmailDomains: [],
     };
@@ -124,7 +124,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowedEmailDomains).toEqual([]);
   });
 
-  it("accepts allowedEmailDomains with single domain", () => {
+  test("accepts allowedEmailDomains with single domain", () => {
     const policy = {
       allowedEmailDomains: ["example.com"],
     };
@@ -133,7 +133,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowedEmailDomains).toEqual(["example.com"]);
   });
 
-  it("accepts allowedEmailDomains with multiple domains", () => {
+  test("accepts allowedEmailDomains with multiple domains", () => {
     const policy = {
       allowedEmailDomains: ["example.com", "corp.example.com", "test.org"],
     };
@@ -142,7 +142,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowedEmailDomains).toEqual(["example.com", "corp.example.com", "test.org"]);
   });
 
-  it("rejects allowedEmailDomains when useNonEmailIdentifier is true", () => {
+  test("rejects allowedEmailDomains when useNonEmailIdentifier is true", () => {
     const policy = {
       useNonEmailIdentifier: true,
       allowedEmailDomains: ["example.com"],
@@ -153,7 +153,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts empty allowedEmailDomains when useNonEmailIdentifier is true", () => {
+  test("accepts empty allowedEmailDomains when useNonEmailIdentifier is true", () => {
     const policy = {
       useNonEmailIdentifier: true,
       allowedEmailDomains: [],
@@ -162,7 +162,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
   });
 
-  it("accepts allowedEmailDomains when useNonEmailIdentifier is false", () => {
+  test("accepts allowedEmailDomains when useNonEmailIdentifier is false", () => {
     const policy = {
       useNonEmailIdentifier: false,
       allowedEmailDomains: ["example.com"],
@@ -172,7 +172,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowedEmailDomains).toEqual(["example.com"]);
   });
 
-  it("accepts allowGoogleOauth as true with allowedEmailDomains", () => {
+  test("accepts allowGoogleOauth as true with allowedEmailDomains", () => {
     const policy = {
       allowGoogleOauth: true,
       allowedEmailDomains: ["example.com"],
@@ -182,7 +182,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowGoogleOauth).toBe(true);
   });
 
-  it("accepts allowGoogleOauth as false", () => {
+  test("accepts allowGoogleOauth as false", () => {
     const policy = {
       allowGoogleOauth: false,
     };
@@ -191,7 +191,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowGoogleOauth).toBe(false);
   });
 
-  it("rejects allowGoogleOauth when useNonEmailIdentifier is true", () => {
+  test("rejects allowGoogleOauth when useNonEmailIdentifier is true", () => {
     const policy = {
       useNonEmailIdentifier: true,
       allowGoogleOauth: true,
@@ -202,7 +202,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts allowGoogleOauth false when useNonEmailIdentifier is true", () => {
+  test("accepts allowGoogleOauth false when useNonEmailIdentifier is true", () => {
     const policy = {
       useNonEmailIdentifier: true,
       allowGoogleOauth: false,
@@ -211,7 +211,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
   });
 
-  it("accepts allowGoogleOauth when useNonEmailIdentifier is false", () => {
+  test("accepts allowGoogleOauth when useNonEmailIdentifier is false", () => {
     const policy = {
       useNonEmailIdentifier: false,
       allowGoogleOauth: true,
@@ -222,7 +222,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowGoogleOauth).toBe(true);
   });
 
-  it("rejects allowGoogleOauth when allowedEmailDomains is not set", () => {
+  test("rejects allowGoogleOauth when allowedEmailDomains is not set", () => {
     const policy = {
       allowGoogleOauth: true,
     };
@@ -232,7 +232,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects allowGoogleOauth when allowedEmailDomains is empty", () => {
+  test("rejects allowGoogleOauth when allowedEmailDomains is empty", () => {
     const policy = {
       allowGoogleOauth: true,
       allowedEmailDomains: [],
@@ -243,7 +243,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts allowMicrosoftOauth as true with allowedEmailDomains and disablePasswordAuth", () => {
+  test("accepts allowMicrosoftOauth as true with allowedEmailDomains and disablePasswordAuth", () => {
     const policy = {
       allowMicrosoftOauth: true,
       allowedEmailDomains: ["example.com"],
@@ -254,7 +254,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowMicrosoftOauth).toBe(true);
   });
 
-  it("accepts allowMicrosoftOauth as false", () => {
+  test("accepts allowMicrosoftOauth as false", () => {
     const policy = {
       allowMicrosoftOauth: false,
     };
@@ -263,7 +263,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowMicrosoftOauth).toBe(false);
   });
 
-  it("rejects allowMicrosoftOauth when useNonEmailIdentifier is true", () => {
+  test("rejects allowMicrosoftOauth when useNonEmailIdentifier is true", () => {
     const policy = {
       useNonEmailIdentifier: true,
       allowMicrosoftOauth: true,
@@ -274,7 +274,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts allowMicrosoftOauth false when useNonEmailIdentifier is true", () => {
+  test("accepts allowMicrosoftOauth false when useNonEmailIdentifier is true", () => {
     const policy = {
       useNonEmailIdentifier: true,
       allowMicrosoftOauth: false,
@@ -283,7 +283,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
   });
 
-  it("accepts allowMicrosoftOauth when useNonEmailIdentifier is false", () => {
+  test("accepts allowMicrosoftOauth when useNonEmailIdentifier is false", () => {
     const policy = {
       useNonEmailIdentifier: false,
       allowMicrosoftOauth: true,
@@ -295,7 +295,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowMicrosoftOauth).toBe(true);
   });
 
-  it("rejects allowMicrosoftOauth when disablePasswordAuth is not set", () => {
+  test("rejects allowMicrosoftOauth when disablePasswordAuth is not set", () => {
     const policy = {
       allowMicrosoftOauth: true,
       allowedEmailDomains: ["example.com"],
@@ -306,7 +306,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects allowMicrosoftOauth when disablePasswordAuth is false", () => {
+  test("rejects allowMicrosoftOauth when disablePasswordAuth is false", () => {
     const policy = {
       allowMicrosoftOauth: true,
       allowedEmailDomains: ["example.com"],
@@ -318,7 +318,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects allowMicrosoftOauth when allowedEmailDomains is not set", () => {
+  test("rejects allowMicrosoftOauth when allowedEmailDomains is not set", () => {
     const policy = {
       allowMicrosoftOauth: true,
     };
@@ -328,7 +328,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects allowMicrosoftOauth when allowedEmailDomains is empty", () => {
+  test("rejects allowMicrosoftOauth when allowedEmailDomains is empty", () => {
     const policy = {
       allowMicrosoftOauth: true,
       allowedEmailDomains: [],
@@ -339,7 +339,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts disablePasswordAuth as true when allowGoogleOauth is true", () => {
+  test("accepts disablePasswordAuth as true when allowGoogleOauth is true", () => {
     const policy = {
       disablePasswordAuth: true,
       allowGoogleOauth: true,
@@ -350,7 +350,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.disablePasswordAuth).toBe(true);
   });
 
-  it("accepts disablePasswordAuth as true when allowMicrosoftOauth is true", () => {
+  test("accepts disablePasswordAuth as true when allowMicrosoftOauth is true", () => {
     const policy = {
       disablePasswordAuth: true,
       allowMicrosoftOauth: true,
@@ -361,7 +361,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.disablePasswordAuth).toBe(true);
   });
 
-  it("accepts disablePasswordAuth as false", () => {
+  test("accepts disablePasswordAuth as false", () => {
     const policy = {
       disablePasswordAuth: false,
     };
@@ -370,7 +370,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.disablePasswordAuth).toBe(false);
   });
 
-  it("rejects disablePasswordAuth when allowGoogleOauth is not set", () => {
+  test("rejects disablePasswordAuth when allowGoogleOauth is not set", () => {
     const policy = {
       disablePasswordAuth: true,
     };
@@ -380,7 +380,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("rejects disablePasswordAuth when allowGoogleOauth is false", () => {
+  test("rejects disablePasswordAuth when allowGoogleOauth is false", () => {
     const policy = {
       disablePasswordAuth: true,
       allowGoogleOauth: false,
@@ -391,7 +391,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts disablePasswordAuth as false when allowGoogleOauth is false", () => {
+  test("accepts disablePasswordAuth as false when allowGoogleOauth is false", () => {
     const policy = {
       disablePasswordAuth: false,
       allowGoogleOauth: false,
@@ -400,7 +400,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
   });
 
-  it("rejects disablePasswordAuth when allowSelfPasswordReset is true", () => {
+  test("rejects disablePasswordAuth when allowSelfPasswordReset is true", () => {
     const policy = {
       disablePasswordAuth: true,
       allowGoogleOauth: true,
@@ -413,7 +413,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts disablePasswordAuth when allowSelfPasswordReset is false", () => {
+  test("accepts disablePasswordAuth when allowSelfPasswordReset is false", () => {
     const policy = {
       disablePasswordAuth: true,
       allowGoogleOauth: true,
@@ -425,7 +425,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.disablePasswordAuth).toBe(true);
   });
 
-  it("accepts partial password policy configuration", () => {
+  test("accepts partial password policy configuration", () => {
     const policy = {
       passwordRequireUppercase: true,
       passwordMinLength: 8,
@@ -440,7 +440,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
 });
 
 describe("IdPSchema validation", () => {
-  it("accepts missing authorization", () => {
+  test("accepts missing authorization", () => {
     const config = {
       name: "test-idp",
       clients: ["client-1"],
@@ -450,7 +450,7 @@ describe("IdPSchema validation", () => {
     expect(result.authorization).toBeUndefined();
   });
 
-  it("accepts publishUserEvents as true", () => {
+  test("accepts publishUserEvents as true", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -462,7 +462,7 @@ describe("IdPSchema validation", () => {
     expect(result.publishUserEvents).toBe(true);
   });
 
-  it("accepts publishUserEvents as false", () => {
+  test("accepts publishUserEvents as false", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -474,7 +474,7 @@ describe("IdPSchema validation", () => {
     expect(result.publishUserEvents).toBe(false);
   });
 
-  it("accepts missing publishUserEvents", () => {
+  test("accepts missing publishUserEvents", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -485,7 +485,7 @@ describe("IdPSchema validation", () => {
     expect(result.publishUserEvents).toBeUndefined();
   });
 
-  it("accepts gqlOperations with all fields", () => {
+  test("accepts gqlOperations with all fields", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -507,7 +507,7 @@ describe("IdPSchema validation", () => {
     expect(result.gqlOperations?.sendPasswordResetEmail).toBe(true);
   });
 
-  it("accepts gqlOperations with partial fields", () => {
+  test("accepts gqlOperations with partial fields", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -526,7 +526,7 @@ describe("IdPSchema validation", () => {
     expect(result.gqlOperations?.sendPasswordResetEmail).toBeUndefined();
   });
 
-  it("accepts missing gqlOperations", () => {
+  test("accepts missing gqlOperations", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -539,7 +539,7 @@ describe("IdPSchema validation", () => {
 });
 
 describe("IdPGqlOperationsSchema validation", () => {
-  it("accepts empty object", () => {
+  test("accepts empty object", () => {
     const result = IdPGqlOperationsSchema.parse({});
     expect(result.create).toBeUndefined();
     expect(result.update).toBeUndefined();
@@ -548,7 +548,7 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.sendPasswordResetEmail).toBeUndefined();
   });
 
-  it("accepts all fields as true", () => {
+  test("accepts all fields as true", () => {
     const config = {
       create: true,
       update: true,
@@ -565,7 +565,7 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.sendPasswordResetEmail).toBe(true);
   });
 
-  it("accepts all fields as false", () => {
+  test("accepts all fields as false", () => {
     const config = {
       create: false,
       update: false,
@@ -582,7 +582,7 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.sendPasswordResetEmail).toBe(false);
   });
 
-  it("accepts partial configuration", () => {
+  test("accepts partial configuration", () => {
     const config = {
       create: true,
       read: false,
@@ -596,7 +596,7 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.sendPasswordResetEmail).toBeUndefined();
   });
 
-  it("accepts 'query' alias and normalizes to read-only mode", () => {
+  test("accepts 'query' alias and normalizes to read-only mode", () => {
     const result = IdPGqlOperationsSchema.parse("query");
     expect(result.create).toBe(false);
     expect(result.update).toBe(false);
@@ -607,7 +607,7 @@ describe("IdPGqlOperationsSchema validation", () => {
 });
 
 describe("IdPEmailConfigSchema validation", () => {
-  it("accepts valid email config", () => {
+  test("accepts valid email config", () => {
     const result = IdPEmailConfigSchema.parse({
       fromName: "My App",
       passwordResetSubject: "Reset your password",
@@ -616,31 +616,31 @@ describe("IdPEmailConfigSchema validation", () => {
     expect(result.passwordResetSubject).toBe("Reset your password");
   });
 
-  it("accepts partial config", () => {
+  test("accepts partial config", () => {
     const result = IdPEmailConfigSchema.parse({ fromName: "My App" });
     expect(result.fromName).toBe("My App");
     expect(result.passwordResetSubject).toBeUndefined();
   });
 
-  it("accepts empty object", () => {
+  test("accepts empty object", () => {
     const result = IdPEmailConfigSchema.parse({});
     expect(result.fromName).toBeUndefined();
     expect(result.passwordResetSubject).toBeUndefined();
   });
 
-  it("rejects fromName exceeding 200 characters", () => {
+  test("rejects fromName exceeding 200 characters", () => {
     expect(() => IdPEmailConfigSchema.parse({ fromName: "a".repeat(201) })).toThrow(
       "200 characters or less",
     );
   });
 
-  it("rejects passwordResetSubject exceeding 200 characters", () => {
+  test("rejects passwordResetSubject exceeding 200 characters", () => {
     expect(() => IdPEmailConfigSchema.parse({ passwordResetSubject: "a".repeat(201) })).toThrow(
       "200 characters or less",
     );
   });
 
-  it("rejects fromName containing newline characters", () => {
+  test("rejects fromName containing newline characters", () => {
     expect(() => IdPEmailConfigSchema.parse({ fromName: "My\nApp" })).toThrow(
       "must not contain newline characters",
     );
@@ -649,20 +649,20 @@ describe("IdPEmailConfigSchema validation", () => {
     );
   });
 
-  it("rejects passwordResetSubject containing newline characters", () => {
+  test("rejects passwordResetSubject containing newline characters", () => {
     expect(() =>
       IdPEmailConfigSchema.parse({ passwordResetSubject: "Reset\nyour password" }),
     ).toThrow("must not contain newline characters");
   });
 
-  it("accepts fromName at exactly 200 characters", () => {
+  test("accepts fromName at exactly 200 characters", () => {
     const result = IdPEmailConfigSchema.parse({ fromName: "a".repeat(200) });
     expect(result.fromName).toHaveLength(200);
   });
 });
 
 describe("IdPSchema emailConfig tests", () => {
-  it("accepts emailConfig in IdPSchema", () => {
+  test("accepts emailConfig in IdPSchema", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -678,7 +678,7 @@ describe("IdPSchema emailConfig tests", () => {
     expect(result.emailConfig?.passwordResetSubject).toBe("Reset your password");
   });
 
-  it("accepts missing emailConfig", () => {
+  test("accepts missing emailConfig", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -689,7 +689,7 @@ describe("IdPSchema emailConfig tests", () => {
     expect(result.emailConfig).toBeUndefined();
   });
 
-  it("rejects invalid emailConfig in IdPSchema", () => {
+  test("rejects invalid emailConfig in IdPSchema", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -704,7 +704,7 @@ describe("IdPSchema emailConfig tests", () => {
 });
 
 describe("IdPSchema permission tests", () => {
-  it("accepts permission with all 5 actions", () => {
+  test("accepts permission with all 5 actions", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -726,7 +726,7 @@ describe("IdPSchema permission tests", () => {
     expect(result.permission!.sendPasswordResetEmail).toHaveLength(1);
   });
 
-  it("accepts missing permission", () => {
+  test("accepts missing permission", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -737,7 +737,7 @@ describe("IdPSchema permission tests", () => {
     expect(result.permission).toBeUndefined();
   });
 
-  it("accepts permission with empty arrays (deny-all)", () => {
+  test("accepts permission with empty arrays (deny-all)", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -755,7 +755,7 @@ describe("IdPSchema permission tests", () => {
     expect(result.permission!.create).toHaveLength(0);
   });
 
-  it("accepts permission with array shorthand format", () => {
+  test("accepts permission with array shorthand format", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -773,7 +773,7 @@ describe("IdPSchema permission tests", () => {
     expect(result.permission).toBeDefined();
   });
 
-  it("accepts permission with in/not in operators", () => {
+  test("accepts permission with in/not in operators", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -793,7 +793,7 @@ describe("IdPSchema permission tests", () => {
 });
 
 describe("IdPSchema gqlOperations alias tests", () => {
-  it("accepts 'query' alias in IdPSchema", () => {
+  test("accepts 'query' alias in IdPSchema", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -809,7 +809,7 @@ describe("IdPSchema gqlOperations alias tests", () => {
     expect(result.gqlOperations?.sendPasswordResetEmail).toBe(false);
   });
 
-  it("'query' alias works with other IdP config options", () => {
+  test("'query' alias works with other IdP config options", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,

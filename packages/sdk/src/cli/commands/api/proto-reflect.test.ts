@@ -120,9 +120,10 @@ describe("resolveLeafField", () => {
     const field = resolveLeafField(m.input, ["deleteProtection"]);
     expect(field?.localName).toBe("deleteProtection");
     expect(field?.fieldKind).toBe("scalar");
-    if (field?.fieldKind === "scalar") {
-      expect(field.scalar).toBe(ScalarType.BOOL);
+    if (field?.fieldKind !== "scalar") {
+      throw new Error("Expected scalar field");
     }
+    expect(field.scalar).toBe(ScalarType.BOOL);
   });
 
   test("resolves a nested leaf through a singular message", () => {

@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, test, expectTypeOf } from "vitest";
 import type {
   TailorDBField as FullTailorDBField,
   TailorAnyDBField as FullTailorAnyDBField,
@@ -25,35 +25,35 @@ import type {
 } from "@/types/tailor-field";
 
 describe("configure/ full types extend types/ minimal structural interfaces", () => {
-  it("TailorField (full) extends TailorField (minimal)", () => {
+  test("TailorField (full) extends TailorField (minimal)", () => {
     expectTypeOf<FullTailorField>().toExtend<MinimalTailorField>();
   });
 
-  it("TailorAnyField (full) extends TailorAnyField (minimal)", () => {
+  test("TailorAnyField (full) extends TailorAnyField (minimal)", () => {
     expectTypeOf<FullTailorAnyField>().toExtend<MinimalTailorAnyField>();
   });
 
-  it("TailorDBField (full) extends TailorDBField (minimal)", () => {
+  test("TailorDBField (full) extends TailorDBField (minimal)", () => {
     expectTypeOf<FullTailorDBField>().toExtend<MinimalTailorDBField>();
   });
 
-  it("TailorAnyDBField (full) extends TailorAnyDBField (minimal)", () => {
+  test("TailorAnyDBField (full) extends TailorAnyDBField (minimal)", () => {
     expectTypeOf<FullTailorAnyDBField>().toExtend<MinimalTailorAnyDBField>();
   });
 
-  it("TailorDBType (full) extends TailorDBType (minimal)", () => {
+  test("TailorDBType (full) extends TailorDBType (minimal)", () => {
     expectTypeOf<FullTailorDBType>().toExtend<MinimalTailorDBType>();
   });
 
-  it("TailorAnyDBType (full) extends TailorAnyDBType (minimal)", () => {
+  test("TailorAnyDBType (full) extends TailorAnyDBType (minimal)", () => {
     expectTypeOf<FullTailorAnyDBType>().toExtend<MinimalTailorAnyDBType>();
   });
 
-  it("TailorDBInstance (full) extends TailorDBInstance (minimal)", () => {
+  test("TailorDBInstance (full) extends TailorDBInstance (minimal)", () => {
     expectTypeOf<FullTailorDBInstance>().toExtend<MinimalTailorDBInstance>();
   });
 
-  it("AppConfig (full) extends AppConfig (minimal)", () => {
+  test("AppConfig (full) extends AppConfig (minimal)", () => {
     expectTypeOf<FullAppConfig>().toExtend<MinimalAppConfig>();
   });
 });
