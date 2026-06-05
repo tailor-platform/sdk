@@ -95,8 +95,8 @@ jobs:
             Search for an existing review summary and update it, or create a new review.
 
             ```bash
-            REVIEW_ID=$(gh api repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews \
-              --jq '[.[] | select((.body // "") | contains("<!-- docs-consistency-check -->")) | select(.state != "DISMISSED")] | last | .id // empty')
+            REVIEW_ID=$(gh api --paginate --slurp repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews \
+              --jq 'map(.[] | select((.body // "") | contains("<!-- docs-consistency-check -->")) | select(.state != "DISMISSED")) | last | .id // empty')
             ```
 
             **If inconsistencies are found**, post a review summary in this format:
@@ -142,7 +142,8 @@ jobs:
 
             Store the selected markdown in `REVIEW_BODY`. Use `gh api --method PUT` to
             update if `REVIEW_ID` is set. Otherwise use `gh api --method POST` with
-            `event=COMMENT` to create a new pull request review. Do not use `APPROVE`,
+            `event=COMMENT` to create a new pull request review. Use `COMMENT` so the
+            review does not affect PR mergeability. Do not use `APPROVE`,
             `REQUEST_CHANGES`, or `gh pr comment`.
 
             ```bash
