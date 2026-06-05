@@ -6,9 +6,7 @@ import {
   TailorDBType_FieldConfigSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterEach, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
 import { writeTblsSchemaToFile, buildTblsSchema, toTblsColumn } from "./schema";
 import type {
   TailorDBType as TailorDBProtoType,
@@ -60,7 +58,7 @@ describe("writeTblsSchemaToFile", () => {
 
   test("maps TailorDB fields into tbls columns", async () => {
     const client = {
-      listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue({
+      listTailorDBTypes: vi.fn().mockResolvedValue({
         tailordbTypes: [
           {
             name: "User",

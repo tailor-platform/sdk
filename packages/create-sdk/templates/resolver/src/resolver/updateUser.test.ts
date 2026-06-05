@@ -1,16 +1,14 @@
-import { describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, expect, test, vi } from "vitest";
 import { type DbOperations, decrementUserAge } from "./updateUser";
 
 describe("decrementUserAge resolver", () => {
   test("decrements user age", async () => {
     const dbOperations = {
-      transaction: vi.fn<MockProcedure>(
+      transaction: vi.fn(
         async (fn: (ops: DbOperations) => Promise<unknown>) => await fn(dbOperations),
       ),
-      getUser: vi.fn<MockProcedure>().mockResolvedValue({ email: "test@example.com", age: 30 }),
-      updateUser: vi.fn<MockProcedure>(),
+      getUser: vi.fn().mockResolvedValue({ email: "test@example.com", age: 30 }),
+      updateUser: vi.fn(),
     } as DbOperations;
 
     const result = await decrementUserAge("test@example.com", dbOperations);
@@ -27,11 +25,11 @@ describe("decrementUserAge resolver", () => {
 
   test("throws when user not found", async () => {
     const dbOperations = {
-      transaction: vi.fn<MockProcedure>(
+      transaction: vi.fn(
         async (fn: (ops: DbOperations) => Promise<unknown>) => await fn(dbOperations),
       ),
-      getUser: vi.fn<MockProcedure>().mockRejectedValue(new Error("User not found")),
-      updateUser: vi.fn<MockProcedure>(),
+      getUser: vi.fn().mockRejectedValue(new Error("User not found")),
+      updateUser: vi.fn(),
     } as DbOperations;
 
     const result = decrementUserAge("test@example.com", dbOperations);

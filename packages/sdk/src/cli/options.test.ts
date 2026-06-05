@@ -1,7 +1,5 @@
 import { extractFields, isLazyCommand } from "politty";
-import { describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, expect, test, vi } from "vitest";
 import { mainCommand } from "./index";
 import type { AnyCommand, ExtractedFields, SubCommandValue } from "politty";
 
@@ -9,7 +7,7 @@ vi.mock("node:module", async () => {
   const actual = await vi.importActual("node:module");
   return {
     ...actual,
-    register: vi.fn<MockProcedure>(),
+    register: vi.fn(),
   };
 });
 
@@ -17,7 +15,7 @@ vi.mock("politty", async () => {
   const actual = await vi.importActual("politty");
   return {
     ...actual,
-    runMain: vi.fn<MockProcedure>(),
+    runMain: vi.fn(),
   };
 });
 

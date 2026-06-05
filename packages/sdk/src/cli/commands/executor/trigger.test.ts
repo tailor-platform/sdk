@@ -1,21 +1,19 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { triggerExecutor } from "./trigger";
 
 vi.mock("@/cli/shared/context", () => ({
-  loadAccessToken: vi.fn<MockProcedure>(),
-  loadWorkspaceId: vi.fn<MockProcedure>(),
+  loadAccessToken: vi.fn(),
+  loadWorkspaceId: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/client", () => ({
-  initOperatorClient: vi.fn<MockProcedure>(),
+  initOperatorClient: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/readonly-guard", () => ({
-  assertWritable: vi.fn<MockProcedure>(),
+  assertWritable: vi.fn(),
 }));
 
 describe("triggerExecutor runtime overload", () => {
@@ -27,7 +25,7 @@ describe("triggerExecutor runtime overload", () => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
 
-    triggerExecutorMock = vi.fn<MockProcedure>().mockResolvedValue({
+    triggerExecutorMock = vi.fn().mockResolvedValue({
       jobId: "job-1",
     });
 

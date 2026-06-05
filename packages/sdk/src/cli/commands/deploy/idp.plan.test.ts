@@ -1,7 +1,5 @@
 import { IdPLang, IdPPermissionPermit } from "@tailor-proto/tailor/v1/idp_resource_pb";
-import { describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, expect, test, vi } from "vitest";
 import { planIdP } from "./idp";
 import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
@@ -11,7 +9,7 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
   return {
     ...original,
-    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:idp:idp-a",
       labels: {
         "sdk-name": "test-app",
@@ -108,7 +106,7 @@ function createMockClient(opts?: {
   const clients = opts?.clients ?? {};
 
   return {
-    listIdPServices: vi.fn<MockProcedure>().mockResolvedValue({
+    listIdPServices: vi.fn().mockResolvedValue({
       idpServices: services.map((service) => ({
         namespace: { name: service.name },
         authorization: service.authorization,
@@ -120,13 +118,11 @@ function createMockClient(opts?: {
       })),
       nextPageToken: "",
     }),
-    listIdPClients: vi
-      .fn<Mock>()
-      .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-        clients: clients[namespaceName] ?? [],
-        nextPageToken: "",
-      })),
-    getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
+    listIdPClients: vi.fn().mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
+      clients: clients[namespaceName] ?? [],
+      nextPageToken: "",
+    })),
+    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
       const name = trn.split(":").pop();
       const service = services.find((entry) => entry.name === name);
       return {

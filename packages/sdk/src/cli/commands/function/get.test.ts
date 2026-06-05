@@ -1,19 +1,17 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { getFunctionRegistry } from "./get";
 
 vi.mock("@/cli/shared/context", () => ({
-  loadAccessToken: vi.fn<MockProcedure>(),
-  loadWorkspaceId: vi.fn<MockProcedure>(),
+  loadAccessToken: vi.fn(),
+  loadWorkspaceId: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/client", () => ({
-  initOperatorClient: vi.fn<MockProcedure>(),
+  initOperatorClient: vi.fn(),
 }));
 
 describe("getFunctionRegistry", () => {
@@ -23,7 +21,7 @@ describe("getFunctionRegistry", () => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    getFunctionRegistryMock = vi.fn<MockProcedure>();
+    getFunctionRegistryMock = vi.fn();
     vi.mocked(initOperatorClient).mockResolvedValue({
       getFunctionRegistry: getFunctionRegistryMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);

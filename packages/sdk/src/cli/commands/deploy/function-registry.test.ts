@@ -1,6 +1,4 @@
-import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, test, expect, vi, beforeEach } from "vitest";
 import {
   applyFunctionRegistry,
   authHookFunctionName,
@@ -23,7 +21,7 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:function_registry:test",
       labels: {
         "sdk-name": "test-app",
@@ -82,14 +80,14 @@ describe("planFunctionRegistry", () => {
     }>,
   ): OperatorClient {
     return {
-      listFunctionRegistries: vi.fn<MockProcedure>().mockResolvedValue({
+      listFunctionRegistries: vi.fn().mockResolvedValue({
         functions: existingFunctions.map((f) => ({
           name: f.name,
           contentHash: f.contentHash,
         })),
         nextPageToken: "",
       }),
-      getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
+      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
         // TRN format: trn:v1:workspace:{workspaceId}:function_registry:{name}
         // Name may contain colons (e.g., "resolver/ns/getUser"), so extract after the prefix
         const prefix = `trn:v1:workspace:${workspaceId}:function_registry:`;
@@ -373,10 +371,10 @@ describe("splitFunctionRegistryChanges", () => {
 describe("applyFunctionRegistry phase separation", () => {
   function createMockClientWithSpies() {
     return {
-      createFunctionRegistry: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateFunctionRegistry: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteFunctionRegistry: vi.fn<MockProcedure>().mockResolvedValue({}),
-      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createFunctionRegistry: vi.fn().mockResolvedValue({}),
+      updateFunctionRegistry: vi.fn().mockResolvedValue({}),
+      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 

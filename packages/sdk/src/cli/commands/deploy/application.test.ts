@@ -1,8 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, expect, test, vi } from "vitest";
 import { logger, symbols } from "@/cli/shared/logger";
 import { diffHttpAdapterDisplay, planApplication } from "./application";
 import type { PlanContext } from "./types";
@@ -14,7 +12,7 @@ vi.mock("./label", async (importOriginal) => {
   return {
     ...original,
     buildMetaRequest: vi
-      .fn<Mock>()
+      .fn()
       .mockImplementation(
         async ({ trn, appName, appId }: { trn: string; appName: string; appId?: string }) => ({
           trn,
@@ -93,15 +91,15 @@ function createMockClient(
   }>,
 ): OperatorClient {
   return {
-    listApplications: vi.fn<MockProcedure>().mockResolvedValue({
+    listApplications: vi.fn().mockResolvedValue({
       applications,
       nextPageToken: "",
     }),
-    listAuthIDPConfigs: vi.fn<MockProcedure>().mockResolvedValue({
+    listAuthIDPConfigs: vi.fn().mockResolvedValue({
       idpConfigs: [],
       nextPageToken: "",
     }),
-    getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
+    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
       const name = trn.split(":").pop();
       const application = applications.find((app) => app.name === name);
       return {
@@ -407,7 +405,7 @@ describe("planApplication", () => {
     test("does not delete a same-name app that carries no SDK labels", async () => {
       const client = {
         ...createMockClient([{ name: appName }]),
-        getMetadata: vi.fn<MockProcedure>().mockResolvedValue({ metadata: { labels: {} } }),
+        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
       } as unknown as OperatorClient;
       const application = createMockApplication({ name: appName });
 
@@ -444,9 +442,7 @@ describe("planApplication", () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const client = {
         ...createMockClient([]),
-        getStaticWebsite: vi
-          .fn<Mock>()
-          .mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
       } as unknown as OperatorClient;
       const application = createMockApplication({
         cors: ["my-frontend:url"],
@@ -463,9 +459,7 @@ describe("planApplication", () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const client = {
         ...createMockClient([]),
-        getStaticWebsite: vi
-          .fn<Mock>()
-          .mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
       } as unknown as OperatorClient;
       const application = createMockApplication({
         cors: ["typo-name:url"],

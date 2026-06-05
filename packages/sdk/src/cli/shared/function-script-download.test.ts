@@ -1,8 +1,6 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
-import { describe, test, expect, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, test, expect, vi } from "vitest";
 import { downloadFunctionScript, scriptNameToRegistryName } from "./function-script-download";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -15,7 +13,7 @@ interface DownloadResponse {
 
 function makeStreamingClient(responses: DownloadResponse[]): OperatorClient {
   return {
-    downloadFunctionRegistryScript: vi.fn<MockProcedure>(async function* () {
+    downloadFunctionRegistryScript: vi.fn(async function* () {
       for (const r of responses) {
         yield r;
       }
@@ -75,7 +73,7 @@ describe("downloadFunctionScript", () => {
 
   test("returns null when the streaming RPC throws", async () => {
     const client = {
-      downloadFunctionRegistryScript: vi.fn<MockProcedure>(() => {
+      downloadFunctionRegistryScript: vi.fn(() => {
         throw new Error("not found");
       }),
     } as unknown as OperatorClient;
@@ -94,7 +92,7 @@ describe("downloadFunctionScript", () => {
     // scriptNameToRegistryName before calling. This test verifies the
     // raw `name` field is forwarded as-is so the translation contract
     // is enforced at the call site.
-    const fn = vi.fn<MockProcedure>(async function* () {
+    const fn = vi.fn(async function* () {
       yield { payload: { case: "chunk" as const, value: new TextEncoder().encode("x") } };
     });
     const client = { downloadFunctionRegistryScript: fn } as unknown as OperatorClient;
@@ -113,7 +111,7 @@ describe("downloadFunctionScript", () => {
   });
 
   test("forwards contentHash to the RPC request", async () => {
-    const fn = vi.fn<MockProcedure>(async function* () {
+    const fn = vi.fn(async function* () {
       yield { payload: { case: "chunk" as const, value: new TextEncoder().encode("x") } };
     });
     const client = { downloadFunctionRegistryScript: fn } as unknown as OperatorClient;

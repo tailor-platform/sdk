@@ -1,9 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
-import { describe, test, expect, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, test, expect, vi } from "vitest";
 import {
   composeExecutionErrorString,
   downloadScriptForMapping,
@@ -13,7 +11,7 @@ import type { OperatorClient } from "@/cli/shared/client";
 
 function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }): OperatorClient {
   return {
-    downloadFunctionRegistryScript: vi.fn<MockProcedure>(async function* () {
+    downloadFunctionRegistryScript: vi.fn(async function* () {
       yield {
         payload: {
           case: "metadata" as const,

@@ -4,9 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { getMethodDescriptor } from "./proto-reflect";
 import { apiCommand, normalizeBodyFieldKeys } from "./index";
 
-type ApiCallMock = (options: { body: string }) => Promise<{ status: number; data: unknown }>;
-
-const apiCallMock = vi.hoisted(() => vi.fn<ApiCallMock>());
+const apiCallMock = vi.hoisted(() => vi.fn());
 vi.mock("./api-call", () => ({ apiCall: apiCallMock }));
 
 describe("normalizeBodyFieldKeys", () => {

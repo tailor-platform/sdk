@@ -1,7 +1,5 @@
 import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
-import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, test, expect, vi, beforeEach } from "vitest";
 import { waitForExecution, executeScript, DEFAULT_POLL_INTERVAL } from "./script-executor";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
@@ -9,8 +7,8 @@ import type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 // Mock client factory
 function createMockClient(overrides: Partial<OperatorClient> = {}): OperatorClient {
   return {
-    testExecScript: vi.fn<MockProcedure>(),
-    getFunctionExecution: vi.fn<MockProcedure>(),
+    testExecScript: vi.fn(),
+    getFunctionExecution: vi.fn(),
     ...overrides,
   } as unknown as OperatorClient;
 }
@@ -28,7 +26,7 @@ describe("waitForExecution", () => {
 
   test("returns immediately when execution is SUCCESS", async () => {
     const client = createMockClient({
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: {
           status: FunctionExecution_Status.SUCCESS,
           logs: "test logs",
@@ -52,7 +50,7 @@ describe("waitForExecution", () => {
 
   test("returns immediately when execution is FAILED", async () => {
     const client = createMockClient({
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: {
           status: FunctionExecution_Status.FAILED,
           logs: "error logs",
@@ -70,7 +68,7 @@ describe("waitForExecution", () => {
 
   test("throws error when execution is not found", async () => {
     const client = createMockClient({
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: null,
       }),
     });
@@ -82,7 +80,7 @@ describe("waitForExecution", () => {
 
   test("polls until execution completes", async () => {
     const getFunctionExecution = vi
-      .fn<Mock>()
+      .fn()
       .mockResolvedValueOnce({
         execution: {
           status: FunctionExecution_Status.RUNNING,
@@ -128,7 +126,7 @@ describe("waitForExecution", () => {
 
   test("uses default poll interval", async () => {
     const getFunctionExecution = vi
-      .fn<Mock>()
+      .fn()
       .mockResolvedValueOnce({
         execution: {
           status: FunctionExecution_Status.RUNNING,
@@ -170,10 +168,10 @@ describe("executeScript", () => {
 
   test("executes script and returns success result", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn<MockProcedure>().mockResolvedValue({
+      testExecScript: vi.fn().mockResolvedValue({
         executionId: "exec-123",
       }),
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: {
           status: FunctionExecution_Status.SUCCESS,
           logs: "Script executed successfully",
@@ -209,10 +207,10 @@ describe("executeScript", () => {
 
   test("executes script with default empty arg", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn<MockProcedure>().mockResolvedValue({
+      testExecScript: vi.fn().mockResolvedValue({
         executionId: "exec-123",
       }),
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: {
           status: FunctionExecution_Status.SUCCESS,
           logs: "",
@@ -238,10 +236,10 @@ describe("executeScript", () => {
 
   test("returns failure result when script fails", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn<MockProcedure>().mockResolvedValue({
+      testExecScript: vi.fn().mockResolvedValue({
         executionId: "exec-123",
       }),
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: {
           status: FunctionExecution_Status.FAILED,
           logs: "Error: TypeError: undefined is not a function",
@@ -266,10 +264,10 @@ describe("executeScript", () => {
 
   test("returns error message when logs and result are empty", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn<MockProcedure>().mockResolvedValue({
+      testExecScript: vi.fn().mockResolvedValue({
         executionId: "exec-123",
       }),
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: {
           status: FunctionExecution_Status.FAILED,
           logs: "",
@@ -292,7 +290,7 @@ describe("executeScript", () => {
 
   test("uses custom poll interval", async () => {
     const getFunctionExecution = vi
-      .fn<Mock>()
+      .fn()
       .mockResolvedValueOnce({
         execution: {
           status: FunctionExecution_Status.RUNNING,
@@ -309,7 +307,7 @@ describe("executeScript", () => {
       });
 
     const client = createMockClient({
-      testExecScript: vi.fn<MockProcedure>().mockResolvedValue({
+      testExecScript: vi.fn().mockResolvedValue({
         executionId: "exec-123",
       }),
       getFunctionExecution,
@@ -341,11 +339,11 @@ describe("executeScript", () => {
 
   test("uses response.result as fallback when execution result is empty", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn<MockProcedure>().mockResolvedValue({
+      testExecScript: vi.fn().mockResolvedValue({
         executionId: "exec-123",
         result: "compilation error: invalid syntax",
       }),
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: {
           status: FunctionExecution_Status.FAILED,
           logs: "",
@@ -369,11 +367,11 @@ describe("executeScript", () => {
 
   test("includes response.result in error details alongside execution result", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn<MockProcedure>().mockResolvedValue({
+      testExecScript: vi.fn().mockResolvedValue({
         executionId: "exec-123",
         result: "initial error info",
       }),
-      getFunctionExecution: vi.fn<MockProcedure>().mockResolvedValue({
+      getFunctionExecution: vi.fn().mockResolvedValue({
         execution: {
           status: FunctionExecution_Status.FAILED,
           logs: "runtime error log",
@@ -397,7 +395,7 @@ describe("executeScript", () => {
 
   test("propagates testExecScript errors", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn<MockProcedure>().mockRejectedValue(new Error("API error")),
+      testExecScript: vi.fn().mockRejectedValue(new Error("API error")),
     });
 
     await expect(

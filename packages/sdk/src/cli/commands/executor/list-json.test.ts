@@ -1,7 +1,5 @@
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
@@ -10,13 +8,13 @@ import { webhookCommand } from "./webhook";
 import { executorCommand } from ".";
 
 vi.mock("@/cli/shared/client", () => ({
-  fetchPaged: vi.fn<MockProcedure>(),
-  initOperatorClient: vi.fn<MockProcedure>(),
+  fetchPaged: vi.fn(),
+  initOperatorClient: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/context", () => ({
-  loadAccessToken: vi.fn<MockProcedure>(),
-  loadWorkspaceId: vi.fn<MockProcedure>(),
+  loadAccessToken: vi.fn(),
+  loadWorkspaceId: vi.fn(),
 }));
 
 describe("executor list --json", () => {

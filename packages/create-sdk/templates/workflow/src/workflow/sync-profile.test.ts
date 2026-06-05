@@ -1,6 +1,4 @@
-import { describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, expect, test, vi } from "vitest";
 import { type DbOperations, syncUserProfile } from "./sync-profile";
 
 describe("syncUserProfile workflow", () => {
@@ -14,9 +12,9 @@ describe("syncUserProfile workflow", () => {
       updatedAt: null,
     };
     const dbOperations = {
-      getUser: vi.fn<MockProcedure>().mockResolvedValue(undefined),
-      createUser: vi.fn<MockProcedure>().mockResolvedValue(createdUser),
-      updateUser: vi.fn<MockProcedure>(),
+      getUser: vi.fn().mockResolvedValue(undefined),
+      createUser: vi.fn().mockResolvedValue(createdUser),
+      updateUser: vi.fn(),
     } satisfies DbOperations;
 
     const result = await syncUserProfile(
@@ -47,9 +45,9 @@ describe("syncUserProfile workflow", () => {
       updatedAt: null,
     };
     const dbOperations = {
-      getUser: vi.fn<MockProcedure>().mockResolvedValue(existingUser),
-      createUser: vi.fn<MockProcedure>(),
-      updateUser: vi.fn<MockProcedure>(),
+      getUser: vi.fn().mockResolvedValue(existingUser),
+      createUser: vi.fn(),
+      updateUser: vi.fn(),
     } satisfies DbOperations;
 
     const result = await syncUserProfile(

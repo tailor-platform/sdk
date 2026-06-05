@@ -1,6 +1,4 @@
-import { describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, expect, test, vi } from "vitest";
 import { planStaticWebsite } from "./staticwebsite";
 import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
@@ -10,7 +8,7 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
   return {
     ...original,
-    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:staticwebsite:site-a",
       labels: {
         "sdk-name": "test-app",
@@ -60,7 +58,7 @@ function createMockClient(
   }>,
 ): OperatorClient {
   return {
-    listStaticWebsites: vi.fn<MockProcedure>().mockResolvedValue({
+    listStaticWebsites: vi.fn().mockResolvedValue({
       staticwebsites: websites.map((website) => ({
         name: website.name,
         description: website.description ?? "",
@@ -69,7 +67,7 @@ function createMockClient(
       })),
       nextPageToken: "",
     }),
-    getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
+    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
       const name = trn.split(":").pop();
       const website = websites.find((entry) => entry.name === name);
       return {

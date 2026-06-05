@@ -1,8 +1,6 @@
 import open from "open";
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadWorkspaceId } from "@/cli/shared/context";
 import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
@@ -11,15 +9,15 @@ import { openCommand } from "./open";
 import type { ChildProcess } from "node:child_process";
 
 vi.mock("open", () => ({
-  default: vi.fn<MockProcedure>(),
+  default: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn<MockProcedure>(),
+  loadConfig: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/context", () => ({
-  loadWorkspaceId: vi.fn<MockProcedure>(),
+  loadWorkspaceId: vi.fn(),
 }));
 
 describe("open --json", () => {

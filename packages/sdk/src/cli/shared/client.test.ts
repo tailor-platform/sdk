@@ -1,7 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { afterEach, describe, test, expect, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { afterEach, describe, test, expect, vi } from "vitest";
 import {
   createTransport,
   fetchAll,
@@ -15,7 +13,7 @@ import {
 import { logger } from "./logger";
 
 vi.mock("@connectrpc/connect-node", () => ({
-  createConnectTransport: vi.fn<MockProcedure>(() => ({ type: "node-transport" })),
+  createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
 }));
 
 describe("createTransport", () => {
@@ -37,7 +35,7 @@ describe("createTransport", () => {
 
 describe("fetchAll", () => {
   test("passes MAX_PAGE_SIZE to callback", async () => {
-    const fn = vi.fn<MockProcedure>().mockResolvedValue([["item1"], ""]);
+    const fn = vi.fn().mockResolvedValue([["item1"], ""]);
 
     await fetchAll(fn);
 
@@ -48,7 +46,7 @@ describe("fetchAll", () => {
 describe("fetchPaged", () => {
   test("returns every page when limit is undefined", async () => {
     const fn = vi
-      .fn<Mock>()
+      .fn()
       .mockResolvedValueOnce([["a", "b"], "next"])
       .mockResolvedValueOnce([["c"], ""]);
 
@@ -61,7 +59,7 @@ describe("fetchPaged", () => {
 
   test("treats limit 0 as unlimited", async () => {
     const fn = vi
-      .fn<Mock>()
+      .fn()
       .mockResolvedValueOnce([["a", "b"], "next"])
       .mockResolvedValueOnce([["c"], ""]);
 
@@ -73,7 +71,7 @@ describe("fetchPaged", () => {
 
   test("stops fetching once limit is reached and slices overflow", async () => {
     const fn = vi
-      .fn<Mock>()
+      .fn()
       .mockResolvedValueOnce([["a", "b", "c", "d"], "next"])
       .mockResolvedValueOnce([["e"], ""]);
 
@@ -86,7 +84,7 @@ describe("fetchPaged", () => {
 
   test("requests smaller pages as it approaches the limit", async () => {
     const fn = vi
-      .fn<Mock>()
+      .fn()
       .mockResolvedValueOnce([new Array(MAX_PAGE_SIZE).fill("x"), "next"])
       .mockResolvedValueOnce([["y", "y", "y"], ""]);
 
@@ -98,7 +96,7 @@ describe("fetchPaged", () => {
   });
 
   test("exits when the server returns no next page token", async () => {
-    const fn = vi.fn<MockProcedure>().mockResolvedValue([["only"], ""]);
+    const fn = vi.fn().mockResolvedValue([["only"], ""]);
 
     const items = await fetchPaged(fn, { limit: 100 });
 
@@ -256,7 +254,7 @@ describe("resolveStaticWebsiteUrls", () => {
     impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
   ): OperatorClient {
     return {
-      getStaticWebsite: vi.fn<MockProcedure>(({ name }: { name: string }) => impl(name)),
+      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
     } as unknown as OperatorClient;
   }
 

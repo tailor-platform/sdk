@@ -1,15 +1,13 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createCacheManager } from "./manager";
 
 vi.mock("@/cli/shared/logger", async (importOriginal) => ({
   ...(await importOriginal()),
   logger: {
-    debug: vi.fn<MockProcedure>(),
+    debug: vi.fn(),
   },
 }));
 

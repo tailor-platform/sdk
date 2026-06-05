@@ -1,6 +1,4 @@
-import { describe, test, expect, vi, beforeEach, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applyAuth, type planAuth } from "./auth";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -9,34 +7,34 @@ describe("applyAuth phase separation", () => {
   function createMockClientWithSpies() {
     return {
       // Delete methods
-      deleteAuthSCIMResource: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteAuthSCIMConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteAuthOAuth2Client: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteAuthHook: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteAuthMachineUser: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTenantConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteUserProfileConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteAuthIDPConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteAuthService: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteAuthSCIMResource: vi.fn().mockResolvedValue({}),
+      deleteAuthSCIMConfig: vi.fn().mockResolvedValue({}),
+      deleteAuthOAuth2Client: vi.fn().mockResolvedValue({}),
+      deleteAuthHook: vi.fn().mockResolvedValue({}),
+      deleteAuthMachineUser: vi.fn().mockResolvedValue({}),
+      deleteTenantConfig: vi.fn().mockResolvedValue({}),
+      deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
+      deleteAuthIDPConfig: vi.fn().mockResolvedValue({}),
+      deleteAuthService: vi.fn().mockResolvedValue({}),
       // Create/update methods for completeness
-      createAuthService: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createAuthIDPConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createUserProfileConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTenantConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createAuthMachineUser: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createAuthHook: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createAuthOAuth2Client: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createAuthSCIMConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createAuthSCIMResource: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateAuthIDPConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateUserProfileConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateTenantConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateAuthMachineUser: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateAuthHook: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateAuthOAuth2Client: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateAuthSCIMConfig: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateAuthSCIMResource: vi.fn<MockProcedure>().mockResolvedValue({}),
-      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createAuthService: vi.fn().mockResolvedValue({}),
+      createAuthIDPConfig: vi.fn().mockResolvedValue({}),
+      createUserProfileConfig: vi.fn().mockResolvedValue({}),
+      createTenantConfig: vi.fn().mockResolvedValue({}),
+      createAuthMachineUser: vi.fn().mockResolvedValue({}),
+      createAuthHook: vi.fn().mockResolvedValue({}),
+      createAuthOAuth2Client: vi.fn().mockResolvedValue({}),
+      createAuthSCIMConfig: vi.fn().mockResolvedValue({}),
+      createAuthSCIMResource: vi.fn().mockResolvedValue({}),
+      updateAuthIDPConfig: vi.fn().mockResolvedValue({}),
+      updateUserProfileConfig: vi.fn().mockResolvedValue({}),
+      updateTenantConfig: vi.fn().mockResolvedValue({}),
+      updateAuthMachineUser: vi.fn().mockResolvedValue({}),
+      updateAuthHook: vi.fn().mockResolvedValue({}),
+      updateAuthOAuth2Client: vi.fn().mockResolvedValue({}),
+      updateAuthSCIMConfig: vi.fn().mockResolvedValue({}),
+      updateAuthSCIMResource: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 

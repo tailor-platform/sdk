@@ -1,6 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   getReplHistoryPath,
   query,
@@ -16,60 +14,60 @@ vi.mock("xdg-basedir", () => ({
 }));
 
 vi.mock("node:fs/promises", () => ({
-  readFile: vi.fn<MockProcedure>(),
-  mkdtemp: vi.fn<MockProcedure>(),
-  writeFile: vi.fn<MockProcedure>(),
-  rm: vi.fn<MockProcedure>(),
+  readFile: vi.fn(),
+  mkdtemp: vi.fn(),
+  writeFile: vi.fn(),
+  rm: vi.fn(),
 }));
 
 vi.mock("../shared/editor", () => ({
-  getConfiguredEditorCommand: vi.fn<MockProcedure>(),
-  getEditorCommand: vi.fn<MockProcedure>(),
-  openInEditor: vi.fn<MockProcedure>(),
+  getConfiguredEditorCommand: vi.fn(),
+  getEditorCommand: vi.fn(),
+  openInEditor: vi.fn(),
 }));
 
 const mockClient = {
-  getApplication: vi.fn<MockProcedure>(),
-  getAuthMachineUser: vi.fn<MockProcedure>(),
+  getApplication: vi.fn(),
+  getAuthMachineUser: vi.fn(),
 };
 
 vi.mock("../shared/context", () => ({
-  loadAccessToken: vi.fn<MockProcedure>(),
-  loadWorkspaceId: vi.fn<MockProcedure>(),
+  loadAccessToken: vi.fn(),
+  loadWorkspaceId: vi.fn(),
 }));
 
 vi.mock("../shared/client", () => ({
-  initOperatorClient: vi.fn<MockProcedure>(),
-  fetchMachineUserToken: vi.fn<MockProcedure>(),
+  initOperatorClient: vi.fn(),
+  fetchMachineUserToken: vi.fn(),
 }));
 
 vi.mock("../shared/config-loader", () => ({
-  loadConfig: vi.fn<MockProcedure>(),
+  loadConfig: vi.fn(),
 }));
 
 vi.mock("../bundler/query/query-bundler", () => ({
-  bundleQueryScript: vi.fn<MockProcedure>(),
+  bundleQueryScript: vi.fn(),
 }));
 
 vi.mock("../shared/script-executor", () => ({
-  executeScript: vi.fn<MockProcedure>(),
+  executeScript: vi.fn(),
 }));
 
 vi.mock("../shared/config", () => ({
-  extractAllNamespaces: vi.fn<MockProcedure>(),
+  extractAllNamespaces: vi.fn(),
 }));
 
 vi.mock("../shared/tailordb-namespace", () => ({
-  resolveTypeNamespaces: vi.fn<MockProcedure>(),
+  resolveTypeNamespaces: vi.fn(),
 }));
 
 vi.mock("./sql-type-extractor", () => ({
-  extractTypeNamesFromSql: vi.fn<MockProcedure>(),
-  extractColumnTemplate: vi.fn<MockProcedure>(),
+  extractTypeNamesFromSql: vi.fn(),
+  extractColumnTemplate: vi.fn(),
 }));
 
 vi.mock("./type-field-order", () => ({
-  loadTypeFieldOrder: vi.fn<MockProcedure>(),
+  loadTypeFieldOrder: vi.fn(),
 }));
 
 describe("query", () => {

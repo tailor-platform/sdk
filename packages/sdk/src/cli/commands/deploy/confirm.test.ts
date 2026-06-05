@@ -1,16 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { confirmOwnerConflict, type OwnerConflict } from "./confirm";
 
 vi.mock("@/cli/shared/logger", () => ({
   logger: {
-    log: vi.fn<MockProcedure>(),
-    info: vi.fn<MockProcedure>(),
-    success: vi.fn<MockProcedure>(),
-    warn: vi.fn<MockProcedure>(),
-    error: vi.fn<MockProcedure>(),
-    newline: vi.fn<MockProcedure>(),
+    log: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    newline: vi.fn(),
   },
   styles: {
     bold: (s: string) => s,
@@ -24,7 +22,7 @@ vi.mock("@/cli/shared/logger", () => ({
 
 vi.mock("@/cli/shared/prompt", () => ({
   prompt: {
-    confirm: vi.fn<MockProcedure>().mockResolvedValue(true),
+    confirm: vi.fn().mockResolvedValue(true),
   },
 }));
 

@@ -1,9 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "@/cli/commands/tailordb/migrate/pre-migration-schema";
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
@@ -25,7 +23,7 @@ vi.mock("../label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("../label");
   return {
     ...original,
-    buildMetaRequest: vi.fn<MockProcedure>().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockResolvedValue({
       trn: "trn:v1:workspace:test-workspace:tailordb:test",
       labels: {
         "sdk-name": "test-app",
@@ -61,7 +59,7 @@ describe("planTailorDB (service level)", () => {
       config: {},
       types: {},
       typeSourceInfo: {},
-      loadTypes: vi.fn<MockProcedure>().mockResolvedValue({}),
+      loadTypes: vi.fn().mockResolvedValue({}),
     } as unknown as TailorDBService;
   }
 
@@ -69,7 +67,7 @@ describe("planTailorDB (service level)", () => {
     return {
       config: {},
       executors: {},
-      loadExecutors: vi.fn<MockProcedure>().mockResolvedValue({}),
+      loadExecutors: vi.fn().mockResolvedValue({}),
     } as unknown as ExecutorService;
   }
 
@@ -81,21 +79,21 @@ describe("planTailorDB (service level)", () => {
     }>,
   ): OperatorClient {
     return {
-      listTailorDBServices: vi.fn<MockProcedure>().mockResolvedValue({
+      listTailorDBServices: vi.fn().mockResolvedValue({
         tailordbServices: existingServices.map((s) => ({
           namespace: { name: s.name },
         })),
         nextPageToken: "",
       }),
-      listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue({
+      listTailorDBTypes: vi.fn().mockResolvedValue({
         tailordbTypes: [],
         nextPageToken: "",
       }),
-      listTailorDBGQLPermissions: vi.fn<MockProcedure>().mockResolvedValue({
+      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
         permissions: [],
         nextPageToken: "",
       }),
-      getMetadata: vi.fn<MockProcedure>().mockImplementation(({ trn }: { trn: string }) => {
+      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
         const service = existingServices.find((s) => s.name === name);
         return {
@@ -393,11 +391,11 @@ describe("planTailorDB (service level)", () => {
       });
 
       const client = {
-        listTailorDBServices: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBServices: vi.fn().mockResolvedValue({
           tailordbServices: [{ namespace: { name: "test-tailordb" } }],
           nextPageToken: "",
         }),
-        listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBTypes: vi.fn().mockResolvedValue({
           tailordbTypes: [
             {
               name: "Invoice",
@@ -466,12 +464,12 @@ describe("planTailorDB (service level)", () => {
           ],
           nextPageToken: "",
         }),
-        getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
+        getMetadata: vi.fn().mockResolvedValue({
           metadata: {
             labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
           },
         }),
-        listTailorDBGQLPermissions: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
           permissions: [],
           nextPageToken: "",
         }),
@@ -520,11 +518,11 @@ describe("planTailorDB (service level)", () => {
       });
 
       const client = {
-        listTailorDBServices: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBServices: vi.fn().mockResolvedValue({
           tailordbServices: [{ namespace: { name: "test-tailordb" } }],
           nextPageToken: "",
         }),
-        listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBTypes: vi.fn().mockResolvedValue({
           tailordbTypes: [
             {
               name: "Invoice",
@@ -576,12 +574,12 @@ describe("planTailorDB (service level)", () => {
           ],
           nextPageToken: "",
         }),
-        getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
+        getMetadata: vi.fn().mockResolvedValue({
           metadata: {
             labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
           },
         }),
-        listTailorDBGQLPermissions: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
           permissions: [],
           nextPageToken: "",
         }),
@@ -631,11 +629,11 @@ describe("planTailorDB (service level)", () => {
       });
 
       const client = {
-        listTailorDBServices: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBServices: vi.fn().mockResolvedValue({
           tailordbServices: [{ namespace: { name: "test-tailordb" } }],
           nextPageToken: "",
         }),
-        listTailorDBTypes: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBTypes: vi.fn().mockResolvedValue({
           tailordbTypes: [
             {
               name: "Event",
@@ -689,12 +687,12 @@ describe("planTailorDB (service level)", () => {
           ],
           nextPageToken: "",
         }),
-        getMetadata: vi.fn<MockProcedure>().mockResolvedValue({
+        getMetadata: vi.fn().mockResolvedValue({
           metadata: {
             labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
           },
         }),
-        listTailorDBGQLPermissions: vi.fn<MockProcedure>().mockResolvedValue({
+        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
           permissions: [],
           nextPageToken: "",
         }),
@@ -808,15 +806,15 @@ describe("applyTailorDB phase separation", () => {
   // Helper to create mock client with spies for delete operations
   function createMockClientWithSpies() {
     return {
-      deleteTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTailorDBService: vi.fn<MockProcedure>().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+      deleteTailorDBService: vi.fn().mockResolvedValue({}),
       // Also mock create/update methods for completeness
-      createTailorDBService: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      setMetadata: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 
@@ -825,7 +823,7 @@ describe("applyTailorDB phase separation", () => {
     // Create mock TailorDB service for context
     const mockTailorDBService = {
       namespace: "test-tailordb",
-      loadTypes: vi.fn<MockProcedure>().mockResolvedValue({}),
+      loadTypes: vi.fn().mockResolvedValue({}),
       types: {},
     } as unknown as TailorDBService;
 
@@ -1048,7 +1046,7 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
   function makePlanResult(): Awaited<ReturnType<typeof planTailorDB>> {
     const mockTailorDBService = {
       namespace: "test-tailordb",
-      loadTypes: vi.fn<MockProcedure>().mockResolvedValue({}),
+      loadTypes: vi.fn().mockResolvedValue({}),
       types: {},
     } as unknown as TailorDBService;
 
@@ -1110,20 +1108,20 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
     // Remote label is m0002 but the working tree only has migration 0000.
     // Without reconciliation, the next deploy would reconstruct a snapshot at
     // m0002 (which does not exist) and trigger a false drift error.
-    const getMetadata = vi.fn<MockProcedure>().mockResolvedValue({
+    const getMetadata = vi.fn().mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0002" } },
     });
-    const setMetadata = vi.fn<MockProcedure>().mockResolvedValue({});
+    const setMetadata = vi.fn().mockResolvedValue({});
     const client = {
       getMetadata,
       setMetadata,
-      createTailorDBService: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
 
     await applyTailorDB(client, makePlanResult(), "create-update");
@@ -1137,18 +1135,18 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
   });
 
   test("forces migration label even when remote has no prior label", async () => {
-    const getMetadata = vi.fn<MockProcedure>().mockResolvedValue({ metadata: { labels: {} } });
-    const setMetadata = vi.fn<MockProcedure>().mockResolvedValue({});
+    const getMetadata = vi.fn().mockResolvedValue({ metadata: { labels: {} } });
+    const setMetadata = vi.fn().mockResolvedValue({});
     const client = {
       getMetadata,
       setMetadata,
-      createTailorDBService: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
 
     await applyTailorDB(client, makePlanResult(), "create-update");
@@ -1193,7 +1191,7 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
   function makePlanResult(): Awaited<ReturnType<typeof planTailorDB>> {
     const mockTailorDBService = {
       namespace: "test-tailordb",
-      loadTypes: vi.fn<MockProcedure>().mockResolvedValue({}),
+      loadTypes: vi.fn().mockResolvedValue({}),
       types: {},
     } as unknown as TailorDBService;
 
@@ -1256,21 +1254,19 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
     // namespace has no `sdk-migration` label yet. A single `apply` should
     // establish the baseline by setting the label to 0000 — without requiring
     // the redundant apply/generate/apply dance.
-    const getMetadata = vi.fn<MockProcedure>().mockResolvedValue({ metadata: { labels: {} } });
-    const setMetadata = vi.fn<MockProcedure>().mockResolvedValue({});
+    const getMetadata = vi.fn().mockResolvedValue({ metadata: { labels: {} } });
+    const setMetadata = vi.fn().mockResolvedValue({});
     const client = {
       getMetadata,
       setMetadata,
-      listTailorDBTypes: vi
-        .fn<MockProcedure>()
-        .mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
-      createTailorDBService: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn<MockProcedure>().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn<MockProcedure>().mockResolvedValue({}),
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
 
     await applyTailorDB(client, makePlanResult(), "create-update");

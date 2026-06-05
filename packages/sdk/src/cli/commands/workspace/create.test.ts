@@ -1,19 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-  vi,
-  type Mock,
-} from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
@@ -38,7 +26,7 @@ vi.mock("@napi-rs/keyring", () => ({
 
 vi.mock("@/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
-  initOperatorClient: vi.fn<MockProcedure>(),
+  initOperatorClient: vi.fn(),
 }));
 
 const validUUID = "12345678-1234-4abc-8def-123456789012";
@@ -62,10 +50,8 @@ function seedConfig() {
 
 function stubClient() {
   vi.mocked(initOperatorClient).mockResolvedValue({
-    listAvailableWorkspaceRegions: vi
-      .fn<MockProcedure>()
-      .mockResolvedValue({ regions: ["us-west"] }),
-    createWorkspace: vi.fn<MockProcedure>().mockResolvedValue({
+    listAvailableWorkspaceRegions: vi.fn().mockResolvedValue({ regions: ["us-west"] }),
+    createWorkspace: vi.fn().mockResolvedValue({
       workspace: {
         id: validUUID,
         name: "test-ws",

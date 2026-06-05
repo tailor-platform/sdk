@@ -1,7 +1,5 @@
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -11,20 +9,20 @@ import { resolveWorkflow } from "./get";
 import { startCommand, startWorkflow } from "./start";
 
 vi.mock("@/cli/shared/context", () => ({
-  loadAccessToken: vi.fn<MockProcedure>(),
-  loadWorkspaceId: vi.fn<MockProcedure>(),
+  loadAccessToken: vi.fn(),
+  loadWorkspaceId: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/client", () => ({
-  initOperatorClient: vi.fn<MockProcedure>(),
+  initOperatorClient: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn<MockProcedure>(),
+  loadConfig: vi.fn(),
 }));
 
 vi.mock("./get", () => ({
-  resolveWorkflow: vi.fn<MockProcedure>(),
+  resolveWorkflow: vi.fn(),
 }));
 
 describe("startWorkflow runtime overload", () => {
@@ -42,12 +40,12 @@ describe("startWorkflow runtime overload", () => {
       },
     } as Awaited<ReturnType<typeof loadConfig>>);
 
-    getApplicationMock = vi.fn<MockProcedure>().mockResolvedValue({
+    getApplicationMock = vi.fn().mockResolvedValue({
       application: {
         authNamespace: "auth-ns",
       },
     });
-    testStartWorkflowMock = vi.fn<MockProcedure>().mockResolvedValue({
+    testStartWorkflowMock = vi.fn().mockResolvedValue({
       executionId: "execution-1",
     });
 

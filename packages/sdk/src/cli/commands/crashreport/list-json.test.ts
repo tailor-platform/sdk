@@ -2,9 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from "vitest";
-
-type MockProcedure = (...args: Parameters<Mock>) => ReturnType<Mock>;
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { parseCrashReportConfig } from "@/cli/crashreport/config";
 import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
@@ -12,7 +10,7 @@ import { listCommand } from "./list";
 import { crashReportCommand } from ".";
 
 vi.mock("@/cli/crashreport/config", () => ({
-  parseCrashReportConfig: vi.fn<MockProcedure>(),
+  parseCrashReportConfig: vi.fn(),
 }));
 
 describe("crashreport list --json", () => {
