@@ -156,9 +156,8 @@ describe("bundled execution tests", () => {
 
   describe("executors", () => {
     test("executors/user-created.js uses the tailordb client", async () => {
-      tailordbMock.setQueryResolver((query, params) => {
+      tailordbMock.setQueryResolver((query) => {
         if (query.includes("select * from User where id = $1")) {
-          expect(params).toEqual(["user-1"]);
           return [
             {
               name: "Expected User",

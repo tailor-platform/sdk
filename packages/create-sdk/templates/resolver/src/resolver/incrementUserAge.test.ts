@@ -37,7 +37,7 @@ describe("incrementUserAge resolver", () => {
       user: unauthenticatedTailorUser,
       env: { appName: "Resolver Template", version: 1 },
     });
-    await expect(result).rejects.toThrowError();
+    await expect(result).rejects.toThrowError(/no result/i);
     expect(tailordbMock.executedQueries).toHaveLength(3);
   });
 });

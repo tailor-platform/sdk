@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { normalizeFilePath } from "@/cli/shared/trigger-context";
 import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
-  it("does not throw when no workflow jobs are provided", async () => {
+  test("does not throw when no workflow jobs are provided", async () => {
     await expect(bundleWorkflowJobs([], [], {})).resolves.toEqual({
       mainJobDeps: {},
       usedJobNames: [],
@@ -24,7 +24,7 @@ describe("bundleWorkflowJobs", () => {
       }
     });
 
-    it("transforms workflow.trigger() from cross-file default import", async () => {
+    test("transforms workflow.trigger() from cross-file default import", async () => {
       // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
 
@@ -103,7 +103,7 @@ export default createWorkflow({
       expect(callerCode).not.toContain("simpleWorkflow.trigger");
     });
 
-    it("transforms workflow.trigger() in .mts dependency files", async () => {
+    test("transforms workflow.trigger() in .mts dependency files", async () => {
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
 
       // simple.mts: exports a workflow as default export with .mts extension

@@ -6,7 +6,7 @@ import {
   TailorDBType_FieldConfigSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as path from "pathe";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
 import { writeTblsSchemaToFile, buildTblsSchema, toTblsColumn } from "./schema";
 import type {
   TailorDBType as TailorDBProtoType,
@@ -56,7 +56,7 @@ describe("writeTblsSchemaToFile", () => {
     vi.restoreAllMocks();
   });
 
-  it("maps TailorDB fields into tbls columns", async () => {
+  test("maps TailorDB fields into tbls columns", async () => {
     const client = {
       listTailorDBTypes: vi.fn().mockResolvedValue({
         tailordbTypes: [
@@ -129,7 +129,7 @@ function createType(
 }
 
 describe("toTblsColumn", () => {
-  it("should convert basic string field", () => {
+  test("should convert basic string field", () => {
     const fieldConfig = createFieldConfig({
       type: "string",
       description: "User name",
@@ -146,7 +146,7 @@ describe("toTblsColumn", () => {
     });
   });
 
-  it("should set nullable true when required is false", () => {
+  test("should set nullable true when required is false", () => {
     const fieldConfig = createFieldConfig({
       type: "int",
       required: false,
@@ -157,7 +157,7 @@ describe("toTblsColumn", () => {
     expect(result.nullable).toBe(true);
   });
 
-  it("should append [] suffix for array fields", () => {
+  test("should append [] suffix for array fields", () => {
     const fieldConfig = createFieldConfig({
       type: "string",
       array: true,
@@ -168,7 +168,7 @@ describe("toTblsColumn", () => {
     expect(result.type).toBe("string[]");
   });
 
-  it("should handle empty description", () => {
+  test("should handle empty description", () => {
     const fieldConfig = createFieldConfig({
       type: "uuid",
       required: true,
@@ -182,7 +182,7 @@ describe("toTblsColumn", () => {
 
 describe("buildTblsSchema", () => {
   describe("basic table structure", () => {
-    it("should return empty schema for empty types array", () => {
+    test("should return empty schema for empty types array", () => {
       const result = buildTblsSchema([], "test-namespace");
 
       expect(result).toEqual({
@@ -193,13 +193,13 @@ describe("buildTblsSchema", () => {
       });
     });
 
-    it("should set namespace as schema name", () => {
+    test("should set namespace as schema name", () => {
       const result = buildTblsSchema([], "my-namespace");
 
       expect(result.name).toBe("my-namespace");
     });
 
-    it("should create table with correct structure", () => {
+    test("should create table with correct structure", () => {
       const types = [createType("User")];
 
       const result = buildTblsSchema(types, "ns");
@@ -212,7 +212,7 @@ describe("buildTblsSchema", () => {
       expect(result.tables[0].def).toBe("");
     });
 
-    it("should set table comment from schema description", () => {
+    test("should set table comment from schema description", () => {
       const types = [createType("User", {}, "User table description")];
 
       const result = buildTblsSchema(types, "ns");
@@ -222,7 +222,7 @@ describe("buildTblsSchema", () => {
   });
 
   describe("implicit id column", () => {
-    it("should add implicit id column as first column", () => {
+    test("should add implicit id column as first column", () => {
       const types = [createType("User", { name: { type: "string" } })];
 
       const result = buildTblsSchema(types, "ns");
@@ -235,7 +235,7 @@ describe("buildTblsSchema", () => {
       });
     });
 
-    it("should add PRIMARY KEY constraint for id column", () => {
+    test("should add PRIMARY KEY constraint for id column", () => {
       const types = [createType("User")];
 
       const result = buildTblsSchema(types, "ns");
@@ -253,7 +253,7 @@ describe("buildTblsSchema", () => {
   });
 
   describe("field to column conversion", () => {
-    it("should convert fields to columns after id column", () => {
+    test("should convert fields to columns after id column", () => {
       const types = [
         createType("User", {
           name: { type: "string", required: true, description: "User name" },
@@ -281,7 +281,7 @@ describe("buildTblsSchema", () => {
   });
 
   describe("foreign key handling", () => {
-    it("should create relation for foreign key field", () => {
+    test("should create relation for foreign key field", () => {
       const types = [
         createType("Order", {
           customerId: {
@@ -306,7 +306,7 @@ describe("buildTblsSchema", () => {
       });
     });
 
-    it("should use foreignKeyField when specified", () => {
+    test("should use foreignKeyField when specified", () => {
       const types = [
         createType("Order", {
           customerCode: {
@@ -323,7 +323,7 @@ describe("buildTblsSchema", () => {
       expect(result.relations[0].parent_columns).toEqual(["code"]);
     });
 
-    it("should set cardinality to exactly_one for required FK", () => {
+    test("should set cardinality to exactly_one for required FK", () => {
       const types = [
         createType("Order", {
           customerId: {
@@ -341,7 +341,7 @@ describe("buildTblsSchema", () => {
       expect(result.relations[0].parent_cardinality).toBe("zero_or_more");
     });
 
-    it("should set cardinality to zero_or_one for optional FK", () => {
+    test("should set cardinality to zero_or_one for optional FK", () => {
       const types = [
         createType("Order", {
           customerId: {
@@ -358,7 +358,7 @@ describe("buildTblsSchema", () => {
       expect(result.relations[0].cardinality).toBe("zero_or_one");
     });
 
-    it("should create FOREIGN KEY constraint", () => {
+    test("should create FOREIGN KEY constraint", () => {
       const types = [
         createType("Order", {
           customerId: {
@@ -384,7 +384,7 @@ describe("buildTblsSchema", () => {
       });
     });
 
-    it("should populate referenced_tables", () => {
+    test("should populate referenced_tables", () => {
       const types = [
         createType("Order", {
           customerId: {
@@ -409,7 +409,7 @@ describe("buildTblsSchema", () => {
       expect(orderTable?.referenced_tables).toContain("Supplier");
     });
 
-    it("should set empty referenced_tables for tables without FK", () => {
+    test("should set empty referenced_tables for tables without FK", () => {
       const types = [createType("User", { name: { type: "string" } })];
 
       const result = buildTblsSchema(types, "ns");
@@ -419,7 +419,7 @@ describe("buildTblsSchema", () => {
   });
 
   describe("enum handling", () => {
-    it("should collect enum values", () => {
+    test("should collect enum values", () => {
       const types = [
         createType("User", {
           status: {
@@ -438,7 +438,7 @@ describe("buildTblsSchema", () => {
       expect(result.enums[0].values).toEqual(["active", "inactive", "pending"]);
     });
 
-    it("should not create enum for empty allowedValues", () => {
+    test("should not create enum for empty allowedValues", () => {
       const types = [
         createType("User", {
           status: {
@@ -453,7 +453,7 @@ describe("buildTblsSchema", () => {
       expect(result.enums).toHaveLength(0);
     });
 
-    it("should handle multiple enums from different tables", () => {
+    test("should handle multiple enums from different tables", () => {
       const types = [
         createType("User", {
           role: {
@@ -478,7 +478,7 @@ describe("buildTblsSchema", () => {
   });
 
   describe("integration", () => {
-    it("should handle complex schema with multiple tables and relations", () => {
+    test("should handle complex schema with multiple tables and relations", () => {
       const types = [
         createType(
           "Customer",

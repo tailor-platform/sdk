@@ -36,6 +36,9 @@ jobs:
       - name: Run lint
         run: pnpm -r run lint
 
+      - name: Run Vitest lint
+        run: pnpm run lint:vitest
+
       # Ensure no executable files are present
       # refs: https://github.com/changesets/action/issues/523
       # Skip symlinks: `-x` follows symlinks to directories and reports them as executable.

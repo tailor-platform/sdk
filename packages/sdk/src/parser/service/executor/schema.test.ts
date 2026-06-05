@@ -1,6 +1,16 @@
 import { describe, expect, test } from "vitest";
 import { ExecutorSchema, GqlOperationSchema, WorkflowOperationSchema } from "./schema";
 
+function expectParseSuccess<T>(
+  result: { success: true; data: T } | { success: false; error: unknown },
+): T {
+  expect(result.success).toBe(true);
+  if (!result.success) {
+    throw new Error("Expected schema parsing to succeed");
+  }
+  return result.data;
+}
+
 describe("GqlOperationSchema", () => {
   test("converts query to string", () => {
     const documentNode = {
@@ -14,10 +24,8 @@ describe("GqlOperationSchema", () => {
       query: documentNode,
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.query).toBe("query { users { id } }");
-    }
+    const data = expectParseSuccess(result);
+    expect(data.query).toBe("query { users { id } }");
   });
 
   test("accepts string query directly", () => {
@@ -26,10 +34,8 @@ describe("GqlOperationSchema", () => {
       query: "query { users { id } }",
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.query).toBe("query { users { id } }");
-    }
+    const data = expectParseSuccess(result);
+    expect(data.query).toBe("query { users { id } }");
   });
 });
 
@@ -41,11 +47,9 @@ describe("WorkflowOperationSchema", () => {
       args: { id: "123" },
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.workflowName).toBe("my-workflow");
-      expect(result.data).not.toHaveProperty("workflow");
-    }
+    const data = expectParseSuccess(result);
+    expect(data.workflowName).toBe("my-workflow");
+    expect(data).not.toHaveProperty("workflow");
   });
 
   test("accepts workflowName directly", () => {
@@ -55,10 +59,8 @@ describe("WorkflowOperationSchema", () => {
       args: { id: "123" },
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.workflowName).toBe("my-workflow");
-    }
+    const data = expectParseSuccess(result);
+    expect(data.workflowName).toBe("my-workflow");
   });
 });
 
@@ -77,13 +79,12 @@ describe("ExecutorSchema", () => {
       },
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.operation.kind).toBe("workflow");
-      if (result.data.operation.kind === "workflow") {
-        expect(result.data.operation.workflowName).toBe("test-workflow");
-      }
+    const data = expectParseSuccess(result);
+    expect(data.operation.kind).toBe("workflow");
+    if (data.operation.kind !== "workflow") {
+      throw new Error("Expected workflow operation");
     }
+    expect(data.operation.workflowName).toBe("test-workflow");
   });
 
   test("transforms graphql executor correctly", () => {
@@ -104,12 +105,11 @@ describe("ExecutorSchema", () => {
       },
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.operation.kind).toBe("graphql");
-      if (result.data.operation.kind === "graphql") {
-        expect(result.data.operation.query).toBe("mutation { createUser { id } }");
-      }
+    const data = expectParseSuccess(result);
+    expect(data.operation.kind).toBe("graphql");
+    if (data.operation.kind !== "graphql") {
+      throw new Error("Expected graphql operation");
     }
+    expect(data.operation.query).toBe("mutation { createUser { id } }");
   });
 });

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
 
@@ -35,7 +35,7 @@ describe("bundleForTestRun", () => {
   });
 
   describe("plain function", () => {
-    it("bundles a default-exported function as main", async () => {
+    test("bundles a default-exported function as main", async () => {
       const sourceFile = path.join(testDir, "fn.ts");
       fs.writeFileSync(
         sourceFile,
@@ -65,7 +65,7 @@ export default function(input: any) {
       expect(typeof mod.main).toBe("function");
     });
 
-    it("bundles a named-exported main function", async () => {
+    test("bundles a named-exported main function", async () => {
       const sourceFile = path.join(testDir, "named-main.ts");
       fs.writeFileSync(
         sourceFile,
@@ -94,7 +94,7 @@ export function main(input: any) {
       expect(typeof mod.main).toBe("function");
     });
 
-    it("drops console calls below the configured logLevel", async () => {
+    test("drops console calls below the configured logLevel", async () => {
       const sourceFile = path.join(testDir, "logs.ts");
       fs.writeFileSync(
         sourceFile,
@@ -129,7 +129,7 @@ export function main() {
   });
 
   describe("resolver", () => {
-    it("bundles a resolver with validation wrapper", async () => {
+    test("bundles a resolver with validation wrapper", async () => {
       const sourceFile = path.join(testDir, "resolver.ts");
       fs.writeFileSync(
         sourceFile,
@@ -159,7 +159,7 @@ export default {
       expect(result.bundledCode).toContain("input");
     });
 
-    it("embeds machine user as user context", async () => {
+    test("embeds machine user as user context", async () => {
       const sourceFile = path.join(testDir, "resolver-user.ts");
       fs.writeFileSync(
         sourceFile,
@@ -187,7 +187,7 @@ export default {
       expect(result.bundledCode).toContain(defaultWorkspaceId);
     });
 
-    it("embeds machine user with null attributes (external auth)", async () => {
+    test("embeds machine user with null attributes (external auth)", async () => {
       const sourceFile = path.join(testDir, "resolver-ext.ts");
       fs.writeFileSync(
         sourceFile,
@@ -221,7 +221,7 @@ export default {
   });
 
   describe("executor", () => {
-    it("bundles an executor extracting operation.body", async () => {
+    test("bundles an executor extracting operation.body", async () => {
       const sourceFile = path.join(testDir, "executor.ts");
       fs.writeFileSync(
         sourceFile,
@@ -255,7 +255,7 @@ export default {
       expect(typeof mod.main).toBe("function");
     });
 
-    it("embeds machine user as actor context", async () => {
+    test("embeds machine user as actor context", async () => {
       const sourceFile = path.join(testDir, "executor-actor.ts");
       fs.writeFileSync(
         sourceFile,
@@ -287,7 +287,7 @@ export default {
   });
 
   describe("workflow job", () => {
-    it("bundles a workflow job with env injection", async () => {
+    test("bundles a workflow job with env injection", async () => {
       const sourceFile = path.join(testDir, "workflow.ts");
       fs.writeFileSync(
         sourceFile,

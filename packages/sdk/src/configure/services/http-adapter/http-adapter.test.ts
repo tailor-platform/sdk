@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { SDK_BRAND, isSdkBranded } from "@/utils/brand";
 import { createHttpAdapter } from "./http-adapter";
 
 describe("createHttpAdapter", () => {
-  it("returns a branded HTTP adapter object", () => {
+  test("returns a branded HTTP adapter object", () => {
     const adapter = createHttpAdapter({
       name: "get-user",
       pathPattern: "/users/*",
@@ -18,7 +18,7 @@ describe("createHttpAdapter", () => {
     expect(isSdkBranded(adapter, "http-adapter")).toBe(true);
   });
 
-  it("hides the brand symbol from enumeration", () => {
+  test("hides the brand symbol from enumeration", () => {
     const adapter = createHttpAdapter({
       name: "get-user",
       pathPattern: "/users/*",
@@ -33,7 +33,7 @@ describe("createHttpAdapter", () => {
     expect(Object.getOwnPropertySymbols({ ...adapter })).not.toContain(SDK_BRAND);
   });
 
-  it("preserves the output function when provided", () => {
+  test("preserves the output function when provided", () => {
     const output = () => ({ body: "" });
     const adapter = createHttpAdapter({
       name: "get-user",
@@ -46,7 +46,7 @@ describe("createHttpAdapter", () => {
     expect(adapter.output).toBe(output);
   });
 
-  it("accepts multiple per-method handlers", () => {
+  test("accepts multiple per-method handlers", () => {
     const adapter = createHttpAdapter({
       name: "user",
       pathPattern: "/users/*",
