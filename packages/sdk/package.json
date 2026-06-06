@@ -141,7 +141,7 @@
     "test:coverage": "vitest --coverage",
     "docs:check": "vitest run --project=unit src/cli/docs.test.ts",
     "docs:update": "POLITTY_DOCS_UPDATE=true vitest run --project=unit src/cli/docs.test.ts",
-    "build": "tsdown && node scripts/generate-completion-worker.mjs",
+    "build": "tsdown && politty generate-worker --bin dist/cli/index.mjs --program tailor-sdk --shell zsh --verify",
     "lint": "oxlint --type-aware .",
     "check:public-api-jsdoc": "tsx scripts/check-public-api-jsdoc.ts",
     "lint:fix": "oxlint --type-aware . --fix",
