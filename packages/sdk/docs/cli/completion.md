@@ -43,6 +43,7 @@ tailor-sdk completion [options] [shell]
 | `--install`      | -     | Write the completion script to its on-disk cache (bash/zsh) or autoload location (fish) instead of printing it.                      | No       | `false` |
 | `--static`       | -     | Generate the legacy static completion script with command metadata baked in.                                                         | No       | `false` |
 | `--dispatcher`   | -     | Generate the runtime dispatcher completion script. This is the default.                                                              | No       | `false` |
+| `--worker`       | -     | Generate an internal static worker artifact for dispatcher mode.                                                                     | No       | `false` |
 
 <!-- politty:command:completion:options:end -->
 
