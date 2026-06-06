@@ -210,6 +210,7 @@ describe("shell completion", () => {
       const { script } = generateCompletion(mainCommand, {
         shell: "zsh",
         programName: "tailor-sdk",
+        mode: "static",
       });
       expect(script).toMatch(/__tailor_sdk_expand_[a-z_]+__field=/);
       expect(script).toContain("GetFunctionExecution");
