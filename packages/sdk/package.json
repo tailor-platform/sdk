@@ -144,7 +144,6 @@
     "build": "tsdown && node scripts/generate-completion-worker.mjs",
     "lint": "oxlint --type-aware .",
     "check:public-api-jsdoc": "tsx scripts/check-public-api-jsdoc.ts",
-    "check:completion-worker": "node scripts/check-completion-worker.mjs",
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
     "typecheck:go": "tsgo",
