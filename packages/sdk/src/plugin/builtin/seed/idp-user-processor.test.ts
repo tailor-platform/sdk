@@ -11,7 +11,6 @@ type TruncateResult = { success: boolean; deleted: number; total: number; errors
 type IdpUserPage = {
   users: Array<{ id: string; name: string }>;
   nextPageToken: string | null;
-  totalCount: number;
 };
 
 /**
@@ -115,7 +114,6 @@ describe("generateIdpTruncateScriptCode", () => {
         { id: "2", name: "u2" },
       ],
       nextPageToken: "page2",
-      totalCount: 4,
     };
     const secondPage: IdpUserPage = {
       users: [
@@ -123,7 +121,6 @@ describe("generateIdpTruncateScriptCode", () => {
         { id: "4", name: "u4" },
       ],
       nextPageToken: null,
-      totalCount: 4,
     };
 
     (globalThis as { tailor?: unknown }).tailor = {
@@ -133,8 +130,8 @@ describe("generateIdpTruncateScriptCode", () => {
             requests.push(options);
             return options?.after === "page2" ? secondPage : firstPage;
           }
-          async deleteUser(_id: string): Promise<boolean> {
-            deleted.push(_id);
+          async deleteUser(id: string): Promise<boolean> {
+            deleted.push(id);
             return true;
           }
         },
