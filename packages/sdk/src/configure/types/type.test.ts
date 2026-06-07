@@ -906,6 +906,19 @@ describe("TailorField clone-on-write / no aliasing", () => {
     expect(cloned.metadata.description).toBe("status");
   });
 
+  test("clone-on-write deep-copies mutable metadata so clones never share containers", () => {
+    const enumField = t.enum(["active", "inactive"]);
+    const enumClone = enumField.description("status");
+    // Same contents, but separate array AND separate value objects.
+    expect(enumClone.metadata.allowedValues).toEqual(enumField.metadata.allowedValues);
+    expect(enumClone.metadata.allowedValues).not.toBe(enumField.metadata.allowedValues);
+    expect(enumClone.metadata.allowedValues?.[0]).not.toBe(enumField.metadata.allowedValues?.[0]);
+
+    const validated = t.string().validate((args) => args.value.length > 0);
+    const validatedClone = validated.description("name");
+    expect(validatedClone.metadata.validate).not.toBe(validated.metadata.validate);
+  });
+
   test("clone-on-write rebinds validation closures so parse still works", () => {
     const status = t.enum(["active", "inactive"]);
     const cloned = status.description("status field");

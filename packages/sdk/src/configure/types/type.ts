@@ -173,6 +173,7 @@ function createTailorField<
   function validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
+    const path = pathArray.length > 0 ? pathArray : undefined;
 
     // Type-specific validation
     switch (type) {
@@ -180,7 +181,7 @@ function createTailorField<
         if (typeof value !== "string") {
           issues.push({
             message: `Expected a string: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -189,7 +190,7 @@ function createTailorField<
         if (typeof value !== "number" || !Number.isInteger(value)) {
           issues.push({
             message: `Expected an integer: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -198,7 +199,7 @@ function createTailorField<
         if (typeof value !== "number" || !Number.isFinite(value)) {
           issues.push({
             message: `Expected a number: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -207,7 +208,7 @@ function createTailorField<
         if (typeof value !== "boolean") {
           issues.push({
             message: `Expected a boolean: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -216,7 +217,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.uuid.test(value)) {
           issues.push({
             message: `Expected a valid UUID: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -224,7 +225,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.date.test(value)) {
           issues.push({
             message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -232,7 +233,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.datetime.test(value)) {
           issues.push({
             message: `Expected to match ISO format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -240,7 +241,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.time.test(value)) {
           issues.push({
             message: `Expected to match "HH:mm" format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -248,7 +249,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.decimal.test(value)) {
           issues.push({
             message: `Expected a decimal string: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -259,7 +260,7 @@ function createTailorField<
           if (typeof value !== "string" || !allowedValues.includes(value)) {
             issues.push({
               message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
-              path: pathArray.length > 0 ? pathArray : undefined,
+              path,
             });
           }
         }
@@ -275,7 +276,7 @@ function createTailorField<
         ) {
           issues.push({
             message: `Expected an object: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         } else if (field.fields && Object.keys(field.fields).length > 0) {
           for (const [fieldName, nestedField] of Object.entries(field.fields)) {
@@ -306,7 +307,7 @@ function createTailorField<
         if (!fn({ value, data, user })) {
           issues.push({
             message,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
       }
@@ -325,13 +326,14 @@ function createTailorField<
   ): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
+    const path = pathArray.length > 0 ? pathArray : undefined;
 
     // 1. Check required/optional
     const isNullOrUndefined = value === null || value === undefined;
     if (field._metadata.required && isNullOrUndefined) {
       issues.push({
         message: "Required field is missing",
-        path: pathArray.length > 0 ? pathArray : undefined,
+        path,
       });
       return { issues };
     }
@@ -346,7 +348,7 @@ function createTailorField<
       if (!Array.isArray(value)) {
         issues.push({
           message: "Expected an array",
-          path: pathArray.length > 0 ? pathArray : undefined,
+          path,
         });
         return { issues };
       }
@@ -461,10 +463,18 @@ function createTailorField<
       // rebind to the new instance instead of the original.
       const clonedField = createTailorField(type, options, clonedFields, values);
 
-      // Copy metadata onto the new instance. Clone-on-write never mutates the
-      // metadata arrays in place, so sharing their references (as the `metadata`
-      // getter already does) keeps the validate functions intact and is safe.
-      Object.assign(clonedField._metadata, this._metadata);
+      // Copy metadata onto the new instance, deep-copying the mutable containers
+      // (the enum value objects and the `[fn, message]` validator tuples) so no
+      // two field instances share mutable metadata. Validator functions are kept
+      // by reference, the same as db.*'s cloneDeep.
+      const m = clonedField._metadata;
+      Object.assign(m, this._metadata);
+      if (m.allowedValues) {
+        m.allowedValues = m.allowedValues.map((v) => ({ ...v }));
+      }
+      if (m.validate) {
+        m.validate = m.validate.map((v) => (Array.isArray(v) ? ([...v] as typeof v) : v));
+      }
 
       // oxlint-disable-next-line no-explicit-any
       return clonedField as any;
