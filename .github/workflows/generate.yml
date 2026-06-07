@@ -29,6 +29,14 @@ jobs:
       - name: Run generate
         run: pnpm -r run generate
 
+      # The generator test "expected" fixtures are produced by a separate
+      # config (tailor.config.expected.ts) and are not covered by `pnpm
+      # generate` or any CI test, so SDK output changes can silently drift
+      # from them. Regenerate here so the commit step below picks up any
+      # drift on every PR.
+      - name: Update generator expected fixtures
+        run: pnpm --filter example run test:generator:update-expects
+
       - name: Get changed files
         id: changes
         run: |
