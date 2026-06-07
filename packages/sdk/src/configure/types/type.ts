@@ -87,6 +87,17 @@ export interface TailorField<
   _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
 }
 
+/**
+ * Internal shape carried by every runtime field for clone-on-write support.
+ *
+ * `clone()` is intentionally kept off the public {@link TailorField} interface:
+ * adding it there would force `TailorDBField` (which has a differently-typed
+ * `clone`) to stop being assignable to `TailorField`, breaking the supported
+ * `t.object({ field: db.string() })` usage. Every `t.*` and `db.*` field carries
+ * a `clone()` at runtime, so the internal cast in `clone()` is safe.
+ */
+type CloneableField = { clone(): TailorAnyField };
+
 const regex = {
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
@@ -374,10 +385,24 @@ function createTailorField<
     return { value };
   }
 
+  /**
+   * Clone the field and apply metadata updates to the clone.
+   * The original instance is never mutated, so a field shared across places
+   * cannot leak metadata between them.
+   * @param metadataUpdates - Metadata properties to overwrite on the clone
+   * @returns A new field with the updated metadata
+   */
+  function cloneWith(metadataUpdates: Partial<FieldMetadata>) {
+    const cloned = field.clone();
+    Object.assign(cloned._metadata, metadataUpdates);
+    return cloned;
+  }
+
   const field: TailorField<
     { type: T; array: TOptions extends { array: true } ? true : false },
     FieldOutput<OutputBase, TOptions>
-  > = {
+  > &
+    CloneableField = {
     type,
     fields: fields ?? {},
     _defined: undefined as unknown as {
@@ -392,24 +417,21 @@ function createTailorField<
     },
 
     description(description: string) {
-      this._metadata.description = description;
-      // Fluent API returns this with updated type
+      // Clone-on-write so a shared field instance never leaks metadata.
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ description }) as any;
     },
 
     typeName(typeName: string) {
-      this._metadata.typeName = typeName;
-      // Fluent API returns this with updated type
+      // Clone-on-write so a shared field instance never leaks metadata.
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ typeName }) as any;
     },
 
     validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
-      this._metadata.validate = validateInputs;
-      // Fluent API returns this with updated type
+      // Clone-on-write so a shared field instance never leaks metadata.
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ validate: validateInputs }) as any;
     },
 
     parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
@@ -422,6 +444,31 @@ function createTailorField<
     },
 
     _parseInternal: parseInternal,
+
+    clone() {
+      // Deep clone nested object fields so the new instance shares no mutable state.
+      let clonedFields = fields;
+      if (fields) {
+        const cloned: Record<string, TailorAnyField> = {};
+        for (const [key, nestedField] of Object.entries(fields)) {
+          // Both t.* and db.* fields carry clone() at runtime (see CloneableField).
+          cloned[key] = (nestedField as TailorAnyField & CloneableField).clone();
+        }
+        clonedFields = cloned;
+      }
+
+      // Recreate via the factory so the parseInternal/validateValue closures
+      // rebind to the new instance instead of the original.
+      const clonedField = createTailorField(type, options, clonedFields, values);
+
+      // Copy metadata onto the new instance. Clone-on-write never mutates the
+      // metadata arrays in place, so sharing their references (as the `metadata`
+      // getter already does) keeps the validate functions intact and is safe.
+      Object.assign(clonedField._metadata, this._metadata);
+
+      // oxlint-disable-next-line no-explicit-any
+      return clonedField as any;
+    },
   };
 
   return field;
