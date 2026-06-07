@@ -205,8 +205,8 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
       token_expires_at: entry.token_expires_at,
     };
   }
-  // Clear current_user if the referenced user is not representable in v1 (e.g.
-  // dropped above), so the downgraded file never points at a missing user.
+  // Clear current_user when it points at a user missing from the rebuilt v1
+  // users map, so the downgraded file never references a non-existent user.
   const currentUser =
     config.current_user && users[config.current_user] ? config.current_user : null;
   return {

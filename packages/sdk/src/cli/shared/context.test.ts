@@ -616,6 +616,31 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     expect(diskConfig.version).toBe(1);
     expect(diskConfig.current_user).toBe("file@example.com");
   });
+
+  test("clears current_user on V1 downgrade when it points at a user not representable in V1", () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "file@example.com": {
+          storage: "file",
+          access_token: "file-access-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      // current_user references a user that is not in the users map, so it
+      // cannot be represented in V1 and must be cleared on downgrade.
+      current_user: "missing@example.com",
+    });
+
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      version: number;
+      current_user: string | null;
+    };
+    expect(diskConfig.version).toBe(1);
+    expect(diskConfig.current_user).toBeNull();
+  });
 });
 
 describe.skipIf(process.platform === "win32")("writePlatformConfig file permissions", () => {
