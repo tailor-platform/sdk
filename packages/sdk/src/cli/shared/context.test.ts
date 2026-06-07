@@ -540,6 +540,84 @@ describe("V1 to V2 migration", () => {
   });
 });
 
+describe("keyring user persistence on V2 -> V1 downgrade", () => {
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    vi.resetModules();
+    resetKeyringState();
+    process.env = { ...originalEnv };
+    // Downgrade only happens when TAILOR_USE_KEYRING is unset, which is the
+    // default for every command that is not opting into keyring storage.
+    delete process.env.TAILOR_USE_KEYRING;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  test("keeps the config V2 and preserves the keyring user when written without TAILOR_USE_KEYRING", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "keyring@example.com": { storage: "keyring", token_expires_at: futureDate },
+        "file@example.com": {
+          storage: "file",
+          access_token: "file-access-token",
+          refresh_token: "file-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "keyring@example.com",
+    });
+
+    // Disk: stays V2 so the keyring entry is not dropped.
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      version: number;
+      users: Record<string, { storage?: string }>;
+      current_user: string | null;
+    };
+    expect(diskConfig.version).toBe(2);
+    expect(diskConfig.users["keyring@example.com"]?.storage).toBe("keyring");
+    expect(diskConfig.users["file@example.com"]?.storage).toBe("file");
+    expect(diskConfig.current_user).toBe("keyring@example.com");
+
+    // Round trip: the keyring user (and current_user) survive a re-read.
+    const { readPlatformConfig } = await import("./context");
+    const config = await readPlatformConfig();
+    expect(config.version).toBe(2);
+    expect(config.users["keyring@example.com"]?.storage).toBe("keyring");
+    expect(config.current_user).toBe("keyring@example.com");
+  });
+
+  test("still downgrades a file-only config to V1 for backward compatibility", () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "file@example.com": {
+          storage: "file",
+          access_token: "file-access-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "file@example.com",
+    });
+
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      version: number;
+      current_user: string | null;
+    };
+    expect(diskConfig.version).toBe(1);
+    expect(diskConfig.current_user).toBe("file@example.com");
+  });
+});
+
 describe.skipIf(process.platform === "win32")("writePlatformConfig file permissions", () => {
   test("writes the config file with mode 0600 and its directory with mode 0700", () => {
     writePlatformConfig({
