@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.55.2
+
+### Patch Changes
+
+- [#1190](https://github.com/tailor-platform/sdk/pull/1190) [`6f891e8`](https://github.com/tailor-platform/sdk/commit/6f891e8a0f948ca2b58bb7e1d4ad19efc31cc38c) Thanks [@toiroakr](https://github.com/toiroakr)! - Validate auth service configuration during `deploy` / `generate`, consistent with how IdP, TailorDB, and static websites are already handled. Configs that set both `userProfile` and `machineUserAttributes` now fail with a clearer message: "Specify either `userProfile` or `machineUserAttributes`, not both."
+
+- [#1332](https://github.com/tailor-platform/sdk/pull/1332) [`aa898b7`](https://github.com/tailor-platform/sdk/commit/aa898b7f369c441077973848a92a09152f6bed4f) Thanks [@dqn](https://github.com/dqn)! - Fix `executor get --json` to include typed event trigger metadata such as event types, namespaces, target names, and conditions.
+
 ## 1.55.1
 
 ### Patch Changes
