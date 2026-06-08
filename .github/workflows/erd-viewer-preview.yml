@@ -1,0 +1,61 @@
+name: ERD Viewer Preview
+
+on:
+  pull_request:
+    paths:
+      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - example/tailordb/**
+      - example/tailor.config.ts
+      - .github/workflows/erd-viewer-preview.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: Build ERD viewer preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      # `erd export --inline` is fully local (no platform login/network needed).
+      - name: Build ERD viewer (self-contained HTML)
+        working-directory: example
+        run: pnpm exec tailor-sdk tailordb erd export --inline --output "$RUNNER_TEMP/erd-export"
+
+      - name: Collect standalone previews
+        run: |
+          mkdir -p erd-preview
+          shopt -s nullglob
+          for html in "$RUNNER_TEMP"/erd-export/*/dist/index.html; do
+            namespace="$(basename "$(dirname "$(dirname "$html")")")"
+            cp "$html" "erd-preview/${namespace}.html"
+          done
+          ls -la erd-preview
+
+      # archive: false (upload-artifact v7+) keeps files unzipped so the HTML can
+      # be viewed directly in the browser from the run's artifact list.
+      # https://github.blog/changelog/2026-02-26-github-actions-now-supports-uploading-and-downloading-non-zipped-artifacts/
+      - name: Upload ERD viewer preview
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: erd-viewer-preview
+          path: erd-preview
+          if-no-files-found: error
+          archive: false
+          retention-days: 7
