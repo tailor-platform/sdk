@@ -20,7 +20,7 @@ import {
 } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
-import { parseIdPPermission } from "@/parser/service/idp/permission";
+import { findOmittedPermitRules, parseIdPPermission } from "@/parser/service/idp/permission";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
@@ -433,6 +433,12 @@ async function planServices(
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);
+    }
+    const omittedPermitLocations = findOmittedPermitRules(idp.permission);
+    if (omittedPermitLocations.length > 0) {
+      logger.warn(
+        `IdP service "${namespaceName}" has permission rule(s) ${omittedPermitLocations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+      );
     }
     const parsedPermission = parseIdPPermission(idp.permission);
     const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;

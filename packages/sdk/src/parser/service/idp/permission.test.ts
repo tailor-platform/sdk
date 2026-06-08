@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { normalizeIdPActionPermission, normalizeIdPPermission } from "./permission";
+import {
+  findOmittedPermitRules,
+  normalizeIdPActionPermission,
+  normalizeIdPPermission,
+} from "./permission";
 
 describe("normalizeIdPActionPermission", () => {
   describe("object format", () => {
@@ -220,5 +224,35 @@ describe("normalizeIdPPermission", () => {
     expect(result.update).toHaveLength(0);
     expect(result.delete).toHaveLength(0);
     expect(result.sendPasswordResetEmail).toHaveLength(0);
+  });
+});
+
+describe("findOmittedPermitRules", () => {
+  type RawIdPPermission = NonNullable<Parameters<typeof findOmittedPermitRules>[0]>;
+
+  test("flags object-form rules that omit permit", () => {
+    const result = findOmittedPermitRules({
+      create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]] }],
+      read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+      update: [],
+      delete: [],
+      sendPasswordResetEmail: [],
+    } as RawIdPPermission);
+    expect(result).toEqual(["create[0]"]);
+  });
+
+  test("ignores array-shorthand rules (they default to allow)", () => {
+    const result = findOmittedPermitRules({
+      create: [[{ user: "role" }, "=", "ADMIN"]],
+      read: [],
+      update: [],
+      delete: [],
+      sendPasswordResetEmail: [],
+    } as RawIdPPermission);
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty for undefined permission", () => {
+    expect(findOmittedPermitRules(undefined)).toEqual([]);
   });
 });

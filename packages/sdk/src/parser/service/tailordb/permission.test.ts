@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { normalizeActionPermission, normalizeGqlPermission } from "./permission";
+import {
+  findOmittedPermitRules,
+  normalizeActionPermission,
+  normalizeGqlPermission,
+} from "./permission";
 
 type Permission = Parameters<typeof normalizeActionPermission>[0];
 
@@ -38,6 +42,18 @@ describe("normalizeActionPermission", () => {
       } as Permission;
       const result = normalizeActionPermission(permission);
       expect(result.conditions).toEqual([["user.id", "eq", "123"]]);
+    });
+
+    test("defaults permit to deny when omitted (unlike the array shorthand)", () => {
+      const permission = {
+        conditions: [["user.id", "=", "123"]],
+      } as Permission;
+      const result = normalizeActionPermission(permission);
+      expect(result).toEqual({
+        conditions: [["user.id", "eq", "123"]],
+        permit: "deny",
+        description: undefined,
+      });
     });
   });
 
@@ -486,7 +502,7 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  test("should handle default permit value", () => {
+  test("defaults permit to deny when omitted", () => {
     const permission = [
       {
         conditions: [["user.role", "=", "guest"]],
@@ -502,5 +518,60 @@ describe("normalizeGqlPermission", () => {
         description: undefined,
       },
     ]);
+  });
+});
+
+describe("findOmittedPermitRules", () => {
+  type RawPermissions = Parameters<typeof findOmittedPermitRules>[0];
+
+  test("flags object-form record rules that omit permit", () => {
+    const result = findOmittedPermitRules({
+      record: {
+        read: [{ conditions: [["user.id", "=", "123"]] }],
+        create: [{ conditions: [["user.role", "=", "admin"]], permit: true }],
+      },
+    } as unknown as RawPermissions);
+    expect(result).toEqual(["record.read[0]"]);
+  });
+
+  test("flags single-array object form and reports every offending action", () => {
+    const result = findOmittedPermitRules({
+      record: {
+        read: [{ conditions: ["user.id", "=", "123"] }],
+        delete: [{ conditions: [["user.role", "=", "admin"]] }],
+      },
+    } as unknown as RawPermissions);
+    expect(result).toEqual(["record.read[0]", "record.delete[0]"]);
+  });
+
+  test("ignores array-shorthand rules (they default to allow)", () => {
+    const result = findOmittedPermitRules({
+      record: {
+        read: [["user.id", "=", "123"]],
+      },
+    } as unknown as RawPermissions);
+    expect(result).toEqual([]);
+  });
+
+  test("flags gql policies that omit permit", () => {
+    const result = findOmittedPermitRules({
+      gql: [
+        { conditions: [["user.role", "=", "guest"]], actions: ["read"] },
+        { conditions: [["user.role", "=", "admin"]], actions: "all", permit: false },
+      ],
+    } as unknown as RawPermissions);
+    expect(result).toEqual(["gql[0]"]);
+  });
+
+  test("returns empty when every rule sets permit explicitly", () => {
+    const result = findOmittedPermitRules({
+      record: { read: [{ conditions: [["user.id", "=", "1"]], permit: true }] },
+      gql: [{ conditions: [], actions: ["read"], permit: true }],
+    } as unknown as RawPermissions);
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty for empty permissions", () => {
+    expect(findOmittedPermitRules({} as unknown as RawPermissions)).toEqual([]);
   });
 });

@@ -98,6 +98,11 @@ type IdPActionPermission<
         | IdPPermissionCondition<User, Update>
         | readonly IdPPermissionCondition<User, Update>[];
       description?: string | undefined;
+      /**
+       * Whether matching users are granted (`true`) or denied (`false`).
+       * Omitting `permit` in this object form defaults to `deny` and emits a
+       * warning; set it explicitly. (The array shorthand defaults to `allow`.)
+       */
       permit?: boolean;
     }
   | readonly [...IdPPermissionCondition<User, Update>, ...([] | [boolean])]

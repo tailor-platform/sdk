@@ -145,3 +145,30 @@ export function parseIdPPermission(
   }
   return normalizeIdPPermission(rawPermission);
 }
+
+/**
+ * Find object-format IdP permission rules that omit `permit`.
+ *
+ * Object-format rules default to `deny` when `permit` is omitted, whereas the
+ * array shorthand defaults to `allow`. Omitting `permit` on an object rule is
+ * therefore an easy way to accidentally deny access you meant to grant, so the
+ * CLI warns about these locations to nudge authors toward setting `permit`
+ * explicitly.
+ * @param permission - Raw IdP permission from user config
+ * @returns Locations of offending rules, e.g. `read[0]`
+ */
+export function findOmittedPermitRules(permission: RawIdPPermission | undefined): string[] {
+  if (!permission) {
+    return [];
+  }
+  const locations: string[] = [];
+  const actions = ["create", "read", "update", "delete", "sendPasswordResetEmail"] as const;
+  for (const action of actions) {
+    permission[action]?.forEach((rule: unknown, index: number) => {
+      if (isObjectFormat(rule) && rule.permit === undefined) {
+        locations.push(`${action}[${index}]`);
+      }
+    });
+  }
+  return locations;
+}
