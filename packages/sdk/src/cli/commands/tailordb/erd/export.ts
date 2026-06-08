@@ -222,7 +222,8 @@ export const erdExportCommand = defineAppCommand({
         results.map((result) => ({
           namespace: result.namespace,
           distDir: result.distDir,
-          ...(result.schemaOutputPath ? { schemaOutputPath: result.schemaOutputPath } : {}),
+          // Keep a stable JSON schema: null for inline builds that embed the schema.
+          schemaOutputPath: result.schemaOutputPath ?? null,
         })),
       );
     } else {
