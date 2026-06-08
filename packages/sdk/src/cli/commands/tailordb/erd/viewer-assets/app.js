@@ -53,6 +53,7 @@ let showMode = DEFAULT_SHOW_MODE;
 let activeCardDrag;
 let activeCanvasPan;
 let activeViewportAnimation;
+let suppressNextCanvasClick = false;
 const manualNodePositions = new Map();
 const hiddenTableNames = new Set();
 
@@ -377,6 +378,8 @@ function renderNodes() {
 
 function wireTableCard(card) {
   card.addEventListener("click", (event) => {
+    event.stopPropagation();
+    suppressNextCanvasClick = false;
     if (card.dataset.dragged === "true") {
       event.preventDefault();
       card.dataset.dragged = "false";
@@ -882,8 +885,20 @@ function renderAll(options = {}) {
 
 function selectTable(tableName, options = {}) {
   if (!tableName) return;
+  if (selectedTable === tableName) {
+    selectedTable = undefined;
+    renderAll({ center: false });
+    return;
+  }
+
   selectedTable = tableName;
   renderAll({ center: options.center !== false, smooth: options.smooth !== false });
+}
+
+function clearTableSelection() {
+  if (!selectedTable) return;
+  selectedTable = undefined;
+  renderAll({ center: false });
 }
 
 function zoomAt(nextZoom, clientX, clientY) {
@@ -953,7 +968,10 @@ function finishCanvasPan(event) {
   if (elements.canvas.hasPointerCapture(event.pointerId)) {
     elements.canvas.releasePointerCapture(event.pointerId);
   }
-  if (activeCanvasPan.moved) event.preventDefault();
+  if (activeCanvasPan.moved) {
+    event.preventDefault();
+    suppressNextCanvasClick = true;
+  }
   activeCanvasPan = undefined;
   elements.canvas.classList.remove("is-panning");
 }
@@ -991,6 +1009,14 @@ function wireInteractions() {
     }
   });
 
+  elements.canvas.addEventListener("click", (event) => {
+    if (suppressNextCanvasClick) {
+      suppressNextCanvasClick = false;
+      return;
+    }
+    if (event.target.closest("button, input, .canvas-toolbar")) return;
+    clearTableSelection();
+  });
   elements.canvas.addEventListener(
     "wheel",
     (event) => {
@@ -1050,7 +1076,7 @@ function startPolling() {
       if (nextSchema.revision !== schema.revision) {
         schema = nextSchema;
         if (selectedTable && !tableByName(selectedTable)) {
-          selectedTable = schema.tables[0]?.name;
+          selectedTable = undefined;
         }
         renderAll();
         showStatus("Schema updated");
@@ -1066,8 +1092,8 @@ async function main() {
   wireInteractions();
   try {
     schema = await fetchSchema();
-    if (!selectedTable || !tableByName(selectedTable)) {
-      selectedTable = schema.tables[0]?.name;
+    if (selectedTable && !tableByName(selectedTable)) {
+      selectedTable = undefined;
     }
     renderAll({ fit: !hasViewportFromHash });
     startPolling();
