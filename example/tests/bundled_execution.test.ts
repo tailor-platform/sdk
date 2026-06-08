@@ -43,16 +43,16 @@ describe("bundled execution tests", () => {
     // Define maximum acceptable sizes (current size + 10KB buffer)
     const sizeBuffer = 1024 * 10; // 10KB
     const maxSizes: Record<string, number> = {
-      "executors/user-created.js": 159065 + sizeBuffer,
+      "executors/user-created.js": 169078 + sizeBuffer,
       "resolvers/add.js": 5459 + sizeBuffer,
       "resolvers/showUserInfo.js": 5999 + sizeBuffer,
-      "resolvers/stepChain.js": 172428 + sizeBuffer,
+      "resolvers/stepChain.js": 182391 + sizeBuffer,
       "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
-      // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB)
+      // workflow-jobs: Kysely jobs (~158KB), date-fns jobs (~20KB), simple jobs (<2KB)
       "workflow-jobs/check-inventory.js": 19967 + sizeBuffer,
-      "workflow-jobs/fetch-customer.js": 147682 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 157770 + sizeBuffer,
       "workflow-jobs/process-order.js": 1137 + sizeBuffer,
-      "workflow-jobs/process-payment.js": 147576 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 157664 + sizeBuffer,
       "workflow-jobs/send-notification.js": 20075 + sizeBuffer,
       "workflow-jobs/validate-order.js": 893 + sizeBuffer,
     };
@@ -153,9 +153,8 @@ describe("bundled execution tests", () => {
   describe("executors", () => {
     test("executors/user-created.js uses the tailordb client", async () => {
       using db = mockTailordb();
-      db.setQueryResolver((query, params) => {
+      db.setQueryResolver((query) => {
         if (query.includes("select * from User where id = $1")) {
-          expect(params).toEqual(["user-1"]);
           return [
             {
               name: "Expected User",

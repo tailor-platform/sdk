@@ -5,6 +5,14 @@ import { bundleAuthHooks } from "@/cli/services/auth/bundler";
 import { createAuthService, type AuthService } from "@/cli/services/auth/service";
 import { bundleExecutors } from "@/cli/services/executor/bundler";
 import { createExecutorService, type ExecutorService } from "@/cli/services/executor/service";
+import {
+  bundleHttpAdapters,
+  type HttpAdapterBundleResult,
+} from "@/cli/services/http-adapter/bundler";
+import {
+  createHttpAdapterService,
+  type HttpAdapterService,
+} from "@/cli/services/http-adapter/service";
 import { bundleResolvers } from "@/cli/services/resolver/bundler";
 import { createResolverService, type ResolverService } from "@/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/services/tailordb/service";
@@ -15,6 +23,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger } from "@/cli/shared/logger";
 import { buildTriggerContext } from "@/cli/shared/trigger-context";
+import { AuthConfigSchema } from "@/parser/service/auth";
 import { IdPSchema } from "@/parser/service/idp";
 import { SecretsSchema } from "@/parser/service/secrets";
 import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
@@ -25,11 +34,12 @@ import {
   type ResolverServiceInput,
   type WorkflowServiceConfig,
 } from "@/types/app-config";
+import { type HttpAdapterServiceInput } from "@/types/app-config";
 import { type AuthConfig } from "@/types/auth";
 import { type IdPConfig } from "@/types/idp";
 import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
-import type { BundledScripts } from "@/cli/commands/deploy/function-registry";
+import type { BundledScripts } from "@/cli/commands/deploy/function-registry-types";
 import type { PluginManager } from "@/plugin/manager";
 import type { IdP } from "@/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
@@ -51,6 +61,7 @@ export type Application = {
   readonly authService: Readonly<AuthService> | undefined;
   readonly executorService: Readonly<ExecutorService> | undefined;
   readonly workflowService: Readonly<WorkflowService> | undefined;
+  readonly httpAdapterService: Readonly<HttpAdapterService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
@@ -66,6 +77,8 @@ export interface LoadApplicationResult {
   application: Application;
   /** Workflow bundling result (if workflows were bundled) */
   workflowBuildResult?: BundleWorkflowJobsResult;
+  /** HTTP adapter bundling result (if adapters were bundled) */
+  httpAdapterBuildResult?: HttpAdapterBundleResult;
   /** In-memory bundled scripts organized by kind */
   bundledScripts: BundledScripts;
 }
@@ -175,7 +188,11 @@ function defineAuth(
 
   let authService: AuthService | undefined;
   if (!("external" in config)) {
-    authService = createAuthService(config, tailorDBServices, externalTailorDBNamespaces);
+    authService = createAuthService(
+      AuthConfigSchema.parse(config),
+      tailorDBServices,
+      externalTailorDBNamespaces,
+    );
   }
   subgraphs.push({ Type: "auth", Name: config.name });
 
@@ -197,6 +214,15 @@ function defineWorkflow(config: WorkflowServiceConfig | undefined): WorkflowServ
     return undefined;
   }
   return createWorkflowService({ config });
+}
+
+function defineHttpAdapterService(
+  config: HttpAdapterServiceInput | undefined,
+): HttpAdapterService | undefined {
+  if (!config) {
+    return undefined;
+  }
+  return createHttpAdapterService({ config });
 }
 
 function defineStaticWebsites(
@@ -290,6 +316,7 @@ function buildApplication(params: {
   authResult: DefineAuthResult;
   executorService: ExecutorService | undefined;
   workflowService: WorkflowService | undefined;
+  httpAdapterService: HttpAdapterService | undefined;
   staticWebsiteServices: StaticWebsite[];
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
@@ -312,6 +339,7 @@ function buildApplication(params: {
     authService: params.authResult.authService,
     executorService: params.executorService,
     workflowService: params.workflowService,
+    httpAdapterService: params.httpAdapterService,
     staticWebsiteServices: params.staticWebsiteServices,
     secrets: params.secrets,
     ignoreNullishValues: params.ignoreNullishValues,
@@ -348,12 +376,14 @@ export function defineApplication(params: DefineApplicationParams): Application 
   // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
   const executorService = defineExecutor(config.executor, false);
   const workflowService = defineWorkflow(config.workflow);
+  const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
 
   return buildApplication({
     config,
     ...services,
     executorService,
     workflowService,
+    httpAdapterService,
     env: config.env ?? {},
   });
 }
@@ -440,13 +470,19 @@ export async function loadApplication(
     await workflowService.loadWorkflows();
   }
 
-  // 6. Build trigger context for workflow/job trigger transformation
+  // 6. Load and collect HTTP adapters
+  const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
+  if (httpAdapterService) {
+    await httpAdapterService.loadAdapters();
+  }
+
+  // 7. Build trigger context for workflow/job trigger transformation
   const triggerContext = await buildTriggerContext(
     config.workflow,
     authResult.authService?.config.name,
   );
 
-  // 6.5. Resolve inline sourcemap setting
+  // 8. Resolve inline sourcemap setting
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
 
   // Collect in-memory bundled scripts
@@ -457,7 +493,7 @@ export async function loadApplication(
     authHooks: new Map(),
   };
 
-  // 7. Bundle resolvers
+  // 9. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
     const resolverBundles = await bundleResolvers(
       pipeline.namespace,
@@ -471,7 +507,7 @@ export async function loadApplication(
     }
   }
 
-  // 8. Bundle executors
+  // 10. Bundle executors
   if (executorService) {
     bundledScripts.executors = await bundleExecutors({
       config: executorService.config,
@@ -482,7 +518,7 @@ export async function loadApplication(
     });
   }
 
-  // 9. Bundle workflows
+  // 11. Bundle workflows
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
@@ -497,7 +533,21 @@ export async function loadApplication(
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
-  // 9.5. Bundle auth hooks
+  // 12. Bundle HTTP adapters
+  let httpAdapterBuildResult: HttpAdapterBundleResult | undefined;
+  if (httpAdapterService && httpAdapterService.adapters.length > 0) {
+    httpAdapterBuildResult = await bundleHttpAdapters(
+      httpAdapterService.adapters.map((a) => ({
+        name: a.adapter.name,
+        sourceFile: a.sourceFile,
+        methods: a.methods,
+        hasOutput: a.hasOutput,
+      })),
+      bundleCache,
+    );
+  }
+
+  // 13. Bundle auth hooks
   if (authResult.authService?.config.hooks?.beforeLogin) {
     const authName = authResult.authService.config.name;
     bundledScripts.authHooks = await bundleAuthHooks({
@@ -511,7 +561,7 @@ export async function loadApplication(
     });
   }
 
-  // 10. Load resolver and executor definitions (for validation/logging)
+  // 14. Load resolver and executor definitions (for validation/logging)
   for (const pipeline of resolverResult.resolverServices) {
     await pipeline.loadResolvers();
   }
@@ -524,9 +574,12 @@ export async function loadApplication(
   if (workflowService) {
     workflowService.printLoadedWorkflows();
   }
+  if (httpAdapterService) {
+    httpAdapterService.printLoadedAdapters();
+  }
   logger.newline();
 
-  // 11. Build immutable Application
+  // 15. Build immutable Application
   const application = buildApplication({
     config,
     tailordbResult,
@@ -535,11 +588,12 @@ export async function loadApplication(
     authResult,
     executorService,
     workflowService,
+    httpAdapterService,
     staticWebsiteServices,
     secrets,
     ignoreNullishValues,
     env: config.env ?? {},
   });
 
-  return { application, workflowBuildResult, bundledScripts };
+  return { application, workflowBuildResult, httpAdapterBuildResult, bundledScripts };
 }

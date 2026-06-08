@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutput } from "@/utils/test/internal";
@@ -18,7 +18,7 @@ describe("EnumConstantsPlugin", () => {
   const testDistPath = "/test/dist/enums.ts";
 
   describe("basic properties", () => {
-    it("should have correct id and description", () => {
+    test("should have correct id and description", () => {
       const plugin = enumConstantsPlugin({ distPath: testDistPath });
       expect(plugin.id).toBe(EnumConstantsGeneratorID);
       expect(plugin.description).toBe("Generates enum constants from TailorDB type definitions");
@@ -26,7 +26,7 @@ describe("EnumConstantsPlugin", () => {
   });
 
   describe("enum collection", () => {
-    it("should collect top-level enum fields", async () => {
+    test("should collect top-level enum fields", async () => {
       const type = db.type("User", {
         role: db.enum(["ADMIN", "USER"]),
         status: db.enum(["ACTIVE", "INACTIVE"], { optional: true }),
@@ -47,7 +47,7 @@ describe("EnumConstantsPlugin", () => {
       ]);
     });
 
-    it("should collect enum fields from nested objects", async () => {
+    test("should collect enum fields from nested objects", async () => {
       const type = db.type("PurchaseOrder", {
         attachedFiles: db.object(
           {
@@ -69,7 +69,7 @@ describe("EnumConstantsPlugin", () => {
       ]);
     });
 
-    it("should return empty array when no enums are present", async () => {
+    test("should return empty array when no enums are present", async () => {
       const type = db.type("User", {
         name: db.string(),
         age: db.int(),
@@ -80,7 +80,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result.enums).toEqual([]);
     });
 
-    it("should collect enum values with descriptions", async () => {
+    test("should collect enum values with descriptions", async () => {
       const type = db.type("Invoice", {
         status: db.enum([
           { value: "draft", description: "Draft invoice" },
@@ -102,7 +102,7 @@ describe("EnumConstantsPlugin", () => {
   });
 
   describe("generateUnifiedEnumConstants", () => {
-    it("should generate enum constants in as const format", () => {
+    test("should generate enum constants in as const format", () => {
       const allEnums = [
         {
           name: "UserRole",
@@ -119,7 +119,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toContain("export type UserRole = (typeof UserRole)[keyof typeof UserRole];");
     });
 
-    it("should preserve original enum values", () => {
+    test("should preserve original enum values", () => {
       const allEnums = [
         {
           name: "InvoiceStatus",
@@ -134,7 +134,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toContain('  "paid": "paid"');
     });
 
-    it("should handle enum values with hyphens and spaces", () => {
+    test("should handle enum values with hyphens and spaces", () => {
       const allEnums = [
         {
           name: "OrderStatus",
@@ -149,7 +149,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toContain('  "delivered": "delivered"');
     });
 
-    it("should return empty string when no enums are present", () => {
+    test("should return empty string when no enums are present", () => {
       const allEnums: EnumDefinition[] = [];
 
       const result = generateUnifiedEnumConstants(allEnums);
@@ -157,7 +157,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toBe("");
     });
 
-    it("should handle multiple enums", () => {
+    test("should handle multiple enums", () => {
       const allEnums = [
         {
           name: "UserRole",
@@ -175,7 +175,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toContain("export const InvoiceStatus = {");
     });
 
-    it("should generate JSDoc comments for enums with descriptions", () => {
+    test("should generate JSDoc comments for enums with descriptions", () => {
       const allEnums = [
         {
           name: "InvoiceStatus",
@@ -197,7 +197,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toContain("export const InvoiceStatus = {");
     });
 
-    it("should not generate JSDoc comments when no descriptions are present", () => {
+    test("should not generate JSDoc comments when no descriptions are present", () => {
       const allEnums = [
         {
           name: "UserRole",
@@ -212,7 +212,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toContain("export const UserRole = {");
     });
 
-    it("should only include @property for values with descriptions", () => {
+    test("should only include @property for values with descriptions", () => {
       const allEnums = [
         {
           name: "InvoiceStatus",
@@ -234,7 +234,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toContain("export const InvoiceStatus = {");
     });
 
-    it("should include field description at the top of JSDoc", () => {
+    test("should include field description at the top of JSDoc", () => {
       const allEnums = [
         {
           name: "InvoiceStatus",
@@ -258,7 +258,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).toContain(" */");
     });
 
-    it("should only show field description when no value descriptions exist", () => {
+    test("should only show field description when no value descriptions exist", () => {
       const allEnums = [
         {
           name: "UserRole",
@@ -275,7 +275,7 @@ describe("EnumConstantsPlugin", () => {
       expect(result).not.toContain(" * @property");
     });
 
-    it("should deduplicate enums by name", () => {
+    test("should deduplicate enums by name", () => {
       const allEnums = [
         {
           name: "UserRole",

@@ -1,13 +1,14 @@
-import { describe, it, expectTypeOf, expect } from "vitest";
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import { describe, expectTypeOf, expect, test } from "vitest";
 import { t } from "@/configure/types";
+import { type TailorUser, unauthenticatedTailorUser } from "@/types/user";
 import { db } from "./schema";
 import type { Hook } from "./types";
 import type { output } from "@/types/helpers";
-import type { TailorUser } from "@/types/user";
 import type { FieldValidateInput, ValidateConfig } from "@/types/validation";
 
 describe("TailorDBField basic field type tests", () => {
-  it("string field outputs string type correctly", () => {
+  test("string field outputs string type correctly", () => {
     const _stringType = db.type("Test", {
       name: db.string(),
     });
@@ -17,7 +18,7 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  it("int field outputs number type correctly", () => {
+  test("int field outputs number type correctly", () => {
     const _intType = db.type("Test", {
       age: db.int(),
     });
@@ -27,7 +28,7 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  it("bool field outputs boolean type correctly", () => {
+  test("bool field outputs boolean type correctly", () => {
     const _boolType = db.type("Test", {
       active: db.bool(),
     });
@@ -37,7 +38,7 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  it("float field outputs number type correctly", () => {
+  test("float field outputs number type correctly", () => {
     const _floatType = db.type("Test", {
       price: db.float(),
     });
@@ -47,7 +48,7 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  it("uuid field outputs string type correctly", () => {
+  test("uuid field outputs string type correctly", () => {
     const _uuidType = db.type("Test", {
       uuid: db.uuid(),
     });
@@ -57,7 +58,7 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  it("date field outputs string type correctly", () => {
+  test("date field outputs string type correctly", () => {
     const _dateType = db.type("Test", {
       birthDate: db.date(),
     });
@@ -67,7 +68,7 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  it("datetime field outputs string | Date type correctly", () => {
+  test("datetime field outputs string | Date type correctly", () => {
     const _datetimeType = db.type("Test", {
       timestamp: db.datetime(),
     });
@@ -77,7 +78,7 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  it("time field outputs string type correctly", () => {
+  test("time field outputs string type correctly", () => {
     const _timeType = db.type("Test", {
       openingTime: db.time(),
     });
@@ -89,7 +90,7 @@ describe("TailorDBField basic field type tests", () => {
 });
 
 describe("TailorDBField optional option tests", () => {
-  it("optional option generates nullable type", () => {
+  test("optional option generates nullable type", () => {
     const _optionalType = db.type("Test", {
       description: db.string({ optional: true }),
     });
@@ -99,7 +100,7 @@ describe("TailorDBField optional option tests", () => {
     }>();
   });
 
-  it("multiple optional fields work correctly", () => {
+  test("multiple optional fields work correctly", () => {
     const _multiOptionalType = db.type("Test", {
       title: db.string(),
       description: db.string({ optional: true }),
@@ -115,7 +116,7 @@ describe("TailorDBField optional option tests", () => {
 });
 
 describe("TailorDBField array option tests", () => {
-  it("array option generates array type", () => {
+  test("array option generates array type", () => {
     const _arrayType = db.type("Test", {
       tags: db.string({ array: true }),
     });
@@ -125,7 +126,7 @@ describe("TailorDBField array option tests", () => {
     }>();
   });
 
-  it("optional array works correctly", () => {
+  test("optional array works correctly", () => {
     const _optionalArrayType = db.type("Test", {
       items: db.string({ optional: true, array: true }),
     });
@@ -135,7 +136,7 @@ describe("TailorDBField array option tests", () => {
     }>();
   });
 
-  it("multiple array fields work correctly", () => {
+  test("multiple array fields work correctly", () => {
     const _multiArrayType = db.type("Test", {
       tags: db.string({ array: true }),
       numbers: db.int({ array: true }),
@@ -151,7 +152,7 @@ describe("TailorDBField array option tests", () => {
 });
 
 describe("TailorDBField enum field tests", () => {
-  it("set enum field by passing string", () => {
+  test("set enum field by passing string", () => {
     const enumField = db.enum(["active", "inactive", "pending"]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
     expect(enumField.metadata.allowedValues).toEqual([
@@ -161,7 +162,7 @@ describe("TailorDBField enum field tests", () => {
     ]);
   });
 
-  it("set enum field by passing object", () => {
+  test("set enum field by passing object", () => {
     const enumField = db.enum([
       { value: "small", description: "Small size" },
       { value: "medium" },
@@ -175,7 +176,7 @@ describe("TailorDBField enum field tests", () => {
     ]);
   });
 
-  it("set enum field by mixing string and object", () => {
+  test("set enum field by mixing string and object", () => {
     const enumField = db.enum(["red", { value: "green", description: "Green color" }, "blue"]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"red" | "green" | "blue">();
     expect(enumField.metadata.allowedValues).toEqual([
@@ -185,14 +186,14 @@ describe("TailorDBField enum field tests", () => {
     ]);
   });
 
-  it("setting enum without values causes type error", () => {
+  test("setting enum without values causes type error", () => {
     // @ts-expect-error AllowedValues requires at least one value
     db.enum([]);
     // @ts-expect-error AllowedValues requires at least one value
     db.enum([], { optional: true });
   });
 
-  it("optional enum() works correctly", () => {
+  test("optional enum() works correctly", () => {
     const _optionalEnumType = db.type("Test", {
       priority: db.enum(["high", "medium", "low"], { optional: true }),
     });
@@ -202,7 +203,7 @@ describe("TailorDBField enum field tests", () => {
     }>();
   });
 
-  it("accepts as const readonly array", () => {
+  test("accepts as const readonly array", () => {
     const STATUSES = ["active", "inactive", "pending"] as const;
     const enumField = db.enum(STATUSES);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
@@ -213,7 +214,7 @@ describe("TailorDBField enum field tests", () => {
     ]);
   });
 
-  it("enum array works correctly", () => {
+  test("enum array works correctly", () => {
     const _enumArrayType = db.type("Test", {
       categories: db.enum(["a", "b", "c"], { array: true }),
     });
@@ -235,7 +236,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     customerId: db.string(),
   });
 
-  it("when toward.as is omitted, undefined is stored (inflection is executed at parser layer)", () => {
+  test("when toward.as is omitted, undefined is stored (inflection is executed at parser layer)", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -251,7 +252,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     expect(userField.rawRelation!.backward).toBeUndefined();
   });
 
-  it("behavior when toward.as, toward.key, and backward are all explicitly specified", () => {
+  test("behavior when toward.as, toward.key, and backward are all explicitly specified", () => {
     const managerField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -269,7 +270,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     expect(managerField.rawRelation!.backward).toEqual("subordinates");
   });
 
-  it("behavior when only toward.as is explicitly specified", () => {
+  test("behavior when only toward.as is explicitly specified", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -285,7 +286,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     expect(userField.rawRelation!.backward).toBeUndefined();
   });
 
-  it("behavior when only toward.key is explicitly specified", () => {
+  test("behavior when only toward.key is explicitly specified", () => {
     const customerField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -301,7 +302,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     expect(customerField.rawRelation!.backward).toBeUndefined();
   });
 
-  it("specifying non-existent field name for toward.key causes type error", () => {
+  test("specifying non-existent field name for toward.key causes type error", () => {
     // @ts-ignore 'nonExisting' does not exist on type 'Customer'
     // NOTE: This is required for tsc/tsgo compatibility.
     // tsc and tsgo (TypeScript v7) report the same type error on different nodes.
@@ -319,7 +320,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     });
   });
 
-  it("behavior when only backward is explicitly specified", () => {
+  test("behavior when only backward is explicitly specified", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -335,7 +336,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     expect(userField.rawRelation!.backward).toEqual("relatedItems");
   });
 
-  it("type inference verification for manyToOne relation", () => {
+  test("type inference verification for manyToOne relation", () => {
     const userField = db.uuid().relation({
       type: "manyToOne",
       toward: {
@@ -355,7 +356,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
 });
 
 describe("TailorDBField modifier chain tests", () => {
-  it("index() modifier does not affect type", () => {
+  test("index() modifier does not affect type", () => {
     const _indexType = db.type("Test", {
       email: db.string().index(),
     });
@@ -365,7 +366,7 @@ describe("TailorDBField modifier chain tests", () => {
     }>();
   });
 
-  it("unique() modifier does not affect type", () => {
+  test("unique() modifier does not affect type", () => {
     const _uniqueType = db.type("Test", {
       username: db.string().unique(),
     });
@@ -377,7 +378,7 @@ describe("TailorDBField modifier chain tests", () => {
 });
 
 describe("TailorDBField relation modifier tests", () => {
-  it("relation does not create reference type", () => {
+  test("relation does not create reference type", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
@@ -396,7 +397,7 @@ describe("TailorDBField relation modifier tests", () => {
     }>();
   });
 
-  it("attempting to set relation twice causes type error", () => {
+  test("attempting to set relation twice causes type error", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
@@ -415,7 +416,7 @@ describe("TailorDBField relation modifier tests", () => {
 });
 
 describe("TailorDBField hooks modifier tests", () => {
-  it("hooks modifier does not affect output type", () => {
+  test("hooks modifier does not affect output type", () => {
     const _hookType = db.type("Test", {
       name: db.string().hooks({
         create: () => "created",
@@ -428,7 +429,7 @@ describe("TailorDBField hooks modifier tests", () => {
     }>();
   });
 
-  it("setting hooks on nested field causes type error", () => {
+  test("setting hooks on nested field causes type error", () => {
     // @ts-expect-error hooks() cannot be called on nested fields
     db.object({
       first: db.string(),
@@ -436,19 +437,19 @@ describe("TailorDBField hooks modifier tests", () => {
     }).hooks({ create: () => ({ first: "A", last: "B" }) });
   });
 
-  it("hooks modifier on string field receives string", () => {
+  test("hooks modifier on string field receives string", () => {
     const _hooks = db.string().hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string>>();
   });
 
-  it("hooks modifier on optional field receives null", () => {
+  test("hooks modifier on optional field receives null", () => {
     const _hooks = db.string({ optional: true }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string | null>>();
   });
 });
 
 describe("TailorDBField validate modifier tests", () => {
-  it("validate modifier does not affect type", () => {
+  test("validate modifier does not affect type", () => {
     const _validateType = db.type("Test", {
       email: db.string().validate(() => true),
     });
@@ -458,7 +459,7 @@ describe("TailorDBField validate modifier tests", () => {
     }>();
   });
 
-  it("validate modifier can receive object with message", () => {
+  test("validate modifier can receive object with message", () => {
     const _validateType = db.type("Test", {
       email: db.string().validate([({ value }) => value.includes("@"), "Email must contain @"]),
     });
@@ -475,7 +476,7 @@ describe("TailorDBField validate modifier tests", () => {
     expect(fieldMetadata.validate?.[0]).toEqual([expect.any(Function), "Email must contain @"]);
   });
 
-  it("validate modifier can receive multiple validators", () => {
+  test("validate modifier can receive multiple validators", () => {
     const _validateType = db.type("Test", {
       password: db
         .string()
@@ -493,19 +494,19 @@ describe("TailorDBField validate modifier tests", () => {
     );
   });
 
-  it("calling validate modifier more than once causes type error", () => {
+  test("calling validate modifier more than once causes type error", () => {
     // @ts-expect-error validate() cannot be called after validate() has already been called
     db.string()
       .validate(() => true)
       .validate(() => true);
   });
 
-  it("validate modifier on string field receives string", () => {
+  test("validate modifier on string field receives string", () => {
     const _validate = db.string().validate;
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<FieldValidateInput<string>>();
   });
 
-  it("validate modifier on optional field receives null", () => {
+  test("validate modifier on optional field receives null", () => {
     const _validate = db.string({ optional: true }).validate;
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
       FieldValidateInput<string | null>
@@ -514,7 +515,7 @@ describe("TailorDBField validate modifier tests", () => {
 });
 
 describe("TailorDBField vector modifier tests", () => {
-  it("vector modifier can only be used on string field", () => {
+  test("vector modifier can only be used on string field", () => {
     const _vector = db.string().vector();
     expectTypeOf<output<typeof _vector>>().toEqualTypeOf<string>();
     expect(_vector.metadata.vector).toBe(true);
@@ -525,14 +526,14 @@ describe("TailorDBField vector modifier tests", () => {
     db.string({ array: true }).vector();
   });
 
-  it("calling vector modifier more than once causes type error", () => {
+  test("calling vector modifier more than once causes type error", () => {
     // @ts-expect-error vector() cannot be called after vector() has already been called
     db.string().vector().vector();
   });
 });
 
 describe("TailorDBField serial modifier tests", () => {
-  it("serial modifier can only be used on string and int fields", () => {
+  test("serial modifier can only be used on string and int fields", () => {
     const _stringSerial = db.string().serial({ start: 0 });
     expectTypeOf<output<typeof _stringSerial>>().toEqualTypeOf<string>();
     expect(_stringSerial.metadata.serial).toEqual({ start: 0 });
@@ -547,14 +548,14 @@ describe("TailorDBField serial modifier tests", () => {
     db.string({ array: true }).serial({ start: 0 });
   });
 
-  it("calling serial modifier more than once causes type error", () => {
+  test("calling serial modifier more than once causes type error", () => {
     // @ts-expect-error serial() cannot be called after serial() has already been called
     db.string().serial({ start: 0 }).serial({ start: 0 });
   });
 });
 
 describe("TailorDBField index modifier tests", () => {
-  it("index modifier cannot be called on array fields", () => {
+  test("index modifier cannot be called on array fields", () => {
     const _indexed = db.string().index();
     expect(_indexed.metadata.index).toBe(true);
 
@@ -566,14 +567,14 @@ describe("TailorDBField index modifier tests", () => {
     db.int({ array: true }).index();
   });
 
-  it("calling index modifier more than once causes type error", () => {
+  test("calling index modifier more than once causes type error", () => {
     // @ts-expect-error index() cannot be called after index() has already been called
     db.string().index().index();
   });
 });
 
 describe("TailorDBField unique modifier tests", () => {
-  it("unique modifier cannot be called on array fields", () => {
+  test("unique modifier cannot be called on array fields", () => {
     const _unique = db.string().unique();
     expect(_unique.metadata.unique).toBe(true);
     expect(_unique.metadata.index).toBe(true);
@@ -586,14 +587,14 @@ describe("TailorDBField unique modifier tests", () => {
     db.int({ array: true }).unique();
   });
 
-  it("calling unique modifier more than once causes type error", () => {
+  test("calling unique modifier more than once causes type error", () => {
     // @ts-expect-error unique() cannot be called after unique() has already been called
     db.string().unique().unique();
   });
 });
 
 describe("TailorDBType withTimestamps option tests", () => {
-  it("withTimestamps: true adds timestamp fields", () => {
+  test("withTimestamps: true adds timestamp fields", () => {
     const _timestampType = db.type("TestWithTimestamp", {
       name: db.string(),
       ...db.fields.timestamps(),
@@ -605,10 +606,58 @@ describe("TailorDBType withTimestamps option tests", () => {
       updatedAt?: string | Date | null;
     }>();
   });
+
+  const timestampHookUser = unauthenticatedTailorUser;
+
+  test("createdAt create hook respects a user-specified value", () => {
+    const { createdAt } = db.fields.timestamps();
+    const createHook = createdAt.metadata.hooks?.create;
+    expect(createHook).toBeDefined();
+
+    const specified = new Date("2025-02-10T09:00:00Z");
+    const result = createHook!({ value: specified, data: {}, user: timestampHookUser });
+    expect(result).toBe(specified);
+  });
+
+  test("createdAt create hook falls back to now when no value is given", () => {
+    const { createdAt } = db.fields.timestamps();
+    const createHook = createdAt.metadata.hooks?.create;
+    expect(createHook).toBeDefined();
+
+    const before = Date.now();
+    const result = createHook!({ value: null, data: {}, user: timestampHookUser });
+    const after = Date.now();
+    expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+  });
+
+  test("updatedAt update hook respects a user-specified value", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
+
+    const specified = new Date("2025-02-10T09:00:00Z");
+    const result = updateHook!({ value: specified, data: {}, user: timestampHookUser });
+    expect(result).toBe(specified);
+  });
+
+  test("updatedAt update hook falls back to now when no value is given", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
+
+    const before = Date.now();
+    const result = updateHook!({ value: null, data: {}, user: timestampHookUser });
+    const after = Date.now();
+    expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+  });
 });
 
 describe("TailorDBType composite type tests", () => {
-  it("type with multiple fields works correctly", () => {
+  test("type with multiple fields works correctly", () => {
     const _complexType = db.type("User", {
       name: db.string(),
       email: db.string(),
@@ -638,7 +687,7 @@ describe("TailorDBType composite type tests", () => {
 });
 
 describe("TailorDBType edge case tests", () => {
-  it("type with single field works correctly", () => {
+  test("type with single field works correctly", () => {
     const _singleFieldType = db.type("Simple", {
       value: db.string(),
     });
@@ -648,7 +697,7 @@ describe("TailorDBType edge case tests", () => {
     }>();
   });
 
-  it("type with all optional fields works correctly", () => {
+  test("type with all optional fields works correctly", () => {
     const _allOptionalType = db.type("Optional", {
       a: db.string({ optional: true }),
       b: db.int({ optional: true }),
@@ -662,7 +711,7 @@ describe("TailorDBType edge case tests", () => {
     }>();
   });
 
-  it("type with all array fields works correctly", () => {
+  test("type with all array fields works correctly", () => {
     const _allArrayType = db.type("Array", {
       strings: db.string({ array: true }),
       numbers: db.int({ array: true }),
@@ -678,7 +727,7 @@ describe("TailorDBType edge case tests", () => {
 });
 
 describe("TailorDBType type consistency tests", () => {
-  it("same definition generates same type", () => {
+  test("same definition generates same type", () => {
     const _type1 = db.type("Same", {
       name: db.string(),
       age: db.int(),
@@ -690,7 +739,7 @@ describe("TailorDBType type consistency tests", () => {
     expectTypeOf<output<typeof _type1>>().toEqualTypeOf<output<typeof _type2>>();
   });
 
-  it("id field is automatically added", () => {
+  test("id field is automatically added", () => {
     const _typeWithoutId = db.type("Test", {
       name: db.string(),
     });
@@ -702,7 +751,7 @@ describe("TailorDBType type consistency tests", () => {
 });
 
 describe("TailorDBType self relation tests", () => {
-  it("when toward.type is self, rawRelation stores the config (processing happens in parser layer)", () => {
+  test("when toward.type is self, rawRelation stores the config (processing happens in parser layer)", () => {
     const TestType = db.type("TestType", {
       name: db.string(),
       parentID: db.uuid().relation({
@@ -738,7 +787,7 @@ describe("TailorDBType self relation tests", () => {
     expect(keyRaw.type).toBe("keyOnly");
   });
 
-  it("when backward is not specified, undefined is stored in rawRelation (inflection happens in parser layer)", () => {
+  test("when backward is not specified, undefined is stored in rawRelation (inflection happens in parser layer)", () => {
     const A = db.type("Node", {
       // Many-to-one (non-unique): backward is plural (nodes)
       parentID: db.uuid().relation({ type: "n-1", toward: { type: "self" } }),
@@ -755,7 +804,7 @@ describe("TailorDBType self relation tests", () => {
 });
 
 describe("TailorDBType plural form tests", () => {
-  it("when defining type with single name, pluralForm is not set in configure (inflection is executed at parser layer)", () => {
+  test("when defining type with single name, pluralForm is not set in configure (inflection is executed at parser layer)", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
@@ -763,7 +812,7 @@ describe("TailorDBType plural form tests", () => {
     expect(_userType.metadata.settings?.pluralForm).toBeUndefined();
   });
 
-  it("when specifying name and plural form as tuple, pluralForm is set", () => {
+  test("when specifying name and plural form as tuple, pluralForm is set", () => {
     const _personType = db.type(["Person", "People"], {
       name: db.string(),
     });
@@ -771,7 +820,7 @@ describe("TailorDBType plural form tests", () => {
     expect(_personType.metadata.settings?.pluralForm).toBe("People");
   });
 
-  it("when plural form is explicitly specified, default pluralization is not used", () => {
+  test("when plural form is explicitly specified, default pluralization is not used", () => {
     const _childType = db.type(["Child", "Children"], {
       name: db.string(),
       age: db.int(),
@@ -780,7 +829,7 @@ describe("TailorDBType plural form tests", () => {
     expect(_childType.metadata.settings?.pluralForm).toBe("Children");
   });
 
-  it("when plural form is empty string, it is not set in configure (inflection is executed at parser layer)", () => {
+  test("when plural form is empty string, it is not set in configure (inflection is executed at parser layer)", () => {
     const _dataType = db.type(["Datum", ""], {
       value: db.string(),
     });
@@ -788,13 +837,13 @@ describe("TailorDBType plural form tests", () => {
     expect(_dataType.metadata.settings?.pluralForm).toBeUndefined();
   });
 
-  it("error when plural form is same as name (when explicitly specified in tuple format)", () => {
+  test("error when plural form is same as name (when explicitly specified in tuple format)", () => {
     expect(() => db.type(["Data", "Data"], {})).toThrowError(
       "The name and the plural form must be different. name=Data",
     );
   });
 
-  it("all existing features work correctly with tuple format", () => {
+  test("all existing features work correctly with tuple format", () => {
     const _postType = db.type(["Post", "Posts"], {
       title: db.string(),
       content: db.string({ optional: true }),
@@ -813,7 +862,7 @@ describe("TailorDBType plural form tests", () => {
     expect(_postType.metadata.settings?.pluralForm).toBe("Posts");
   });
 
-  it("plural form with special characters can also be set", () => {
+  test("plural form with special characters can also be set", () => {
     const _deviceType = db.type(["Device", "Device's"], {
       name: db.string(),
       status: db.enum(["active", "inactive"]),
@@ -822,7 +871,7 @@ describe("TailorDBType plural form tests", () => {
     expect(_deviceType.metadata.settings?.pluralForm).toBe("Device's");
   });
 
-  it("plural form with numbers can also be set", () => {
+  test("plural form with numbers can also be set", () => {
     const _itemType = db.type(["Item", "100Items"], {
       name: db.string(),
       quantity: db.int(),
@@ -831,7 +880,7 @@ describe("TailorDBType plural form tests", () => {
     expect(_itemType.metadata.settings?.pluralForm).toBe("100Items");
   });
 
-  it("validation and plural form coexist in tuple format", () => {
+  test("validation and plural form coexist in tuple format", () => {
     const _userType = db
       .type(["User", "Users"], {
         name: db.string(),
@@ -851,7 +900,7 @@ describe("TailorDBType plural form tests", () => {
     expect(emailMetadata.validate).toHaveLength(1);
   });
 
-  it("plural form works correctly for types with relations", () => {
+  test("plural form works correctly for types with relations", () => {
     const _categoryType = db.type(["Category", "Categories"], {
       name: db.string(),
     });
@@ -868,7 +917,7 @@ describe("TailorDBType plural form tests", () => {
     expect(_productType.metadata.settings?.pluralForm).toBe("Products");
   });
 
-  it("plural form with mixed case can also be set", () => {
+  test("plural form with mixed case can also be set", () => {
     const _dataType = db.type(["Data", "DataSet"], {
       value: db.string(),
     });
@@ -878,7 +927,7 @@ describe("TailorDBType plural form tests", () => {
 });
 
 describe("TailorDBType hooks modifier tests", () => {
-  it("hooks modifier does not affect output type", () => {
+  test("hooks modifier does not affect output type", () => {
     const _hookType = db
       .type("Test", {
         name: db.string(),
@@ -895,7 +944,7 @@ describe("TailorDBType hooks modifier tests", () => {
     }>();
   });
 
-  it("setting hooks on id causes type error", () => {
+  test("setting hooks on id causes type error", () => {
     db.type("Test", {
       name: db.string(),
     }).hooks({
@@ -906,7 +955,7 @@ describe("TailorDBType hooks modifier tests", () => {
     });
   });
 
-  it("setting hooks on nested field causes type error", () => {
+  test("setting hooks on nested field causes type error", () => {
     db.type("Test", {
       name: db.object({
         first: db.string(),
@@ -920,7 +969,7 @@ describe("TailorDBType hooks modifier tests", () => {
     });
   });
 
-  it("hooks modifier on string field receives string", () => {
+  test("hooks modifier on string field receives string", () => {
     const testType = db.type("Test", { name: db.string() });
     const _hooks = testType.hooks;
     type ExpectedHooksParam = Parameters<typeof _hooks>[0];
@@ -937,7 +986,7 @@ describe("TailorDBType hooks modifier tests", () => {
     >();
   });
 
-  it("hooks modifier on optional field receives null", () => {
+  test("hooks modifier on optional field receives null", () => {
     const testType = db.type("Test", {
       name: db.string({ optional: true }),
     });
@@ -958,7 +1007,7 @@ describe("TailorDBType hooks modifier tests", () => {
 });
 
 describe("TailorDBType validate modifier tests", () => {
-  it("validate modifier can receive function", () => {
+  test("validate modifier can receive function", () => {
     const _validateType = db
       .type("Test", {
         email: db.string(),
@@ -975,7 +1024,7 @@ describe("TailorDBType validate modifier tests", () => {
     expect(fieldMetadata.validate).toHaveLength(1);
   });
 
-  it("validate modifier can receive object with message", () => {
+  test("validate modifier can receive object with message", () => {
     const _validateType = db
       .type("Test", {
         email: db.string(),
@@ -990,7 +1039,7 @@ describe("TailorDBType validate modifier tests", () => {
     expect((fieldMetadata.validate?.[0] as [unknown, string])[1]).toBe("Email must contain @");
   });
 
-  it("validate modifier can receive multiple validators", () => {
+  test("validate modifier can receive multiple validators", () => {
     const _validateType = db
       .type("Test", {
         password: db.string(),
@@ -1010,7 +1059,7 @@ describe("TailorDBType validate modifier tests", () => {
     );
   });
 
-  it("type error occurs when validate is already set on TailorDBField", () => {
+  test("type error occurs when validate is already set on TailorDBField", () => {
     db.type("Test", {
       name: db.string().validate(() => true),
       // @ts-expect-error validate() cannot be called after validate() has already been called
@@ -1019,7 +1068,7 @@ describe("TailorDBType validate modifier tests", () => {
     });
   });
 
-  it("setting validate on id causes type error", () => {
+  test("setting validate on id causes type error", () => {
     db.type("Test", {
       name: db.string(),
     }).validate({
@@ -1028,14 +1077,14 @@ describe("TailorDBType validate modifier tests", () => {
     });
   });
 
-  it("validate modifier on string field receives string", () => {
+  test("validate modifier on string field receives string", () => {
     const _validate = db.type("Test", { name: db.string() }).validate;
     expectTypeOf<ValidateConfig<string, { id: string; name: string }>>().toExtend<
       Parameters<typeof _validate>[0]["name"]
     >();
   });
 
-  it("validate modifier on optional field receives null", () => {
+  test("validate modifier on optional field receives null", () => {
     const _validate = db.type("Test", {
       name: db.string({ optional: true }),
     }).validate;
@@ -1046,7 +1095,7 @@ describe("TailorDBType validate modifier tests", () => {
 });
 
 describe("db.object tests", () => {
-  it("correctly infers basic object type", () => {
+  test("correctly infers basic object type", () => {
     const _objectType = db.type("Test", {
       user: db.object({
         name: db.string(),
@@ -1062,7 +1111,7 @@ describe("db.object tests", () => {
     }>();
   });
 
-  it("nesting db.object causes type error", () => {
+  test("nesting db.object causes type error", () => {
     db.object({
       name: db.string(),
       // @ts-expect-error Nested db.object() is not allowed
@@ -1072,7 +1121,7 @@ describe("db.object tests", () => {
     });
   });
 
-  it("correctly infers object type with optional fields", () => {
+  test("correctly infers object type with optional fields", () => {
     const _objectType = db.type("Test", {
       user: db.object({
         name: db.string(),
@@ -1090,7 +1139,7 @@ describe("db.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with optional option", () => {
+  test("correctly infers object type with optional option", () => {
     const _objectType = db.type("Test", {
       user: db.object(
         {
@@ -1109,7 +1158,7 @@ describe("db.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with array option", () => {
+  test("correctly infers object type with array option", () => {
     const _objectType = db.type("Test", {
       users: db.object(
         {
@@ -1128,7 +1177,7 @@ describe("db.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with array fields", () => {
+  test("correctly infers object type with array fields", () => {
     const _objectType = db.type("Test", {
       user: db.object({
         name: db.string(),
@@ -1146,7 +1195,7 @@ describe("db.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with multiple modifiers", () => {
+  test("correctly infers object type with multiple modifiers", () => {
     const _objectType = db.type("Test", {
       optionalUsers: db.object(
         {
@@ -1169,7 +1218,7 @@ describe("db.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with bool type", () => {
+  test("correctly infers object type with bool type", () => {
     const _objectType = db.type("Test", {
       settings: db.object({
         enabled: db.bool(),
@@ -1185,7 +1234,7 @@ describe("db.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with float and enum types", () => {
+  test("correctly infers object type with float and enum types", () => {
     const _objectType = db.type("Test", {
       product: db.object({
         name: db.string(),
@@ -1207,7 +1256,7 @@ describe("db.object tests", () => {
 });
 
 describe("TailorField/TailorType compatibility tests", () => {
-  it("can use TailorDBField inside t.type", () => {
+  test("can use TailorDBField inside t.type", () => {
     const _stringType = t.object({
       name: db.string(),
     });
@@ -1218,7 +1267,7 @@ describe("TailorField/TailorType compatibility tests", () => {
 });
 
 describe("TailorDBType/TailorDBField description support", () => {
-  it("TailorDBField supports description", () => {
+  test("TailorDBField supports description", () => {
     const userType = db.type("User", {
       name: db.string().description("User name"),
       age: db.int().description("User age"),
@@ -1228,7 +1277,7 @@ describe("TailorDBType/TailorDBField description support", () => {
     expect(userType.fields.age.metadata.description).toBe("User age");
   });
 
-  it("TailorDBType description is set via second argument", () => {
+  test("TailorDBType description is set via second argument", () => {
     const userType = db.type("User", "User profile type", {
       name: db.string(),
     });
@@ -1236,7 +1285,7 @@ describe("TailorDBType/TailorDBField description support", () => {
     expect(userType._description).toBe("User profile type");
   });
 
-  it("TailorDBField nested object supports description", () => {
+  test("TailorDBField nested object supports description", () => {
     const profileType = db.type("Profile", {
       userInfo: db
         .object({
@@ -1251,7 +1300,7 @@ describe("TailorDBType/TailorDBField description support", () => {
     expect(profileType.fields.userInfo.fields.email.metadata.description).toBe("Email address");
   });
 
-  it("TailorDBType can be used in resolver with description preserved", () => {
+  test("TailorDBType can be used in resolver with description preserved", () => {
     const userType = db.type("User", "User type for resolver", {
       name: db.string().description("User name"),
       email: db.string().description("User email"),
@@ -1266,22 +1315,22 @@ describe("TailorDBType/TailorDBField description support", () => {
 });
 
 describe("TailorDBField fluent API type preservation", () => {
-  it("description() preserves _output type", () => {
+  test("description() preserves _output type", () => {
     const _field = db.string().description("A name field");
     expectTypeOf<output<typeof _field>>().toEqualTypeOf<string>();
   });
 
-  it("description() on optional field preserves nullable type", () => {
+  test("description() on optional field preserves nullable type", () => {
     const _field = db.string({ optional: true }).description("Optional field");
     expectTypeOf<output<typeof _field>>().toEqualTypeOf<string | null>();
   });
 
-  it("description() on array field preserves array type", () => {
+  test("description() on array field preserves array type", () => {
     const _field = db.string({ array: true }).description("Array field");
     expectTypeOf<output<typeof _field>>().toEqualTypeOf<string[]>();
   });
 
-  it("multiple method chain preserves type", () => {
+  test("multiple method chain preserves type", () => {
     const _field = db
       .string()
       .description("Email address")
@@ -1290,12 +1339,12 @@ describe("TailorDBField fluent API type preservation", () => {
     expectTypeOf<output<typeof _field>>().toEqualTypeOf<string>();
   });
 
-  it("chained methods on optional field preserve nullable type", () => {
+  test("chained methods on optional field preserve nullable type", () => {
     const _field = db.int({ optional: true }).description("Optional count").index();
     expectTypeOf<output<typeof _field>>().toEqualTypeOf<number | null>();
   });
 
-  it("relation() preserves uuid type", () => {
+  test("relation() preserves uuid type", () => {
     const User = db.type("User", { name: db.string() });
     const _field = db
       .uuid()
@@ -1306,7 +1355,7 @@ describe("TailorDBField fluent API type preservation", () => {
 });
 
 describe("TailorDBType files method tests", () => {
-  it("files method adds file fields to metadata", () => {
+  test("files method adds file fields to metadata", () => {
     const userType = db
       .type("User", {
         name: db.string(),
@@ -1322,7 +1371,7 @@ describe("TailorDBType files method tests", () => {
     });
   });
 
-  it("files field names cannot conflict with existing field names (type error)", () => {
+  test("files field names cannot conflict with existing field names (type error)", () => {
     const _userType = db.type("User", {
       name: db.string(),
       avatar: db.string(), // existing field
@@ -1335,7 +1384,7 @@ describe("TailorDBType files method tests", () => {
     expectTypeOf<FilesParam>().not.toExtend<{ nonExists?: never }>();
   });
 
-  it("files field names that do not conflict are allowed", () => {
+  test("files field names that do not conflict are allowed", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
@@ -1357,7 +1406,7 @@ describe("TailorDBField runtime validation tests", () => {
   };
   const data = {};
 
-  it("validates string field values", () => {
+  test("validates string field values", () => {
     const field = db.string();
     const result = field.parse({ value: "hello", data, user });
     expect(result.issues).toBeUndefined();
@@ -1370,7 +1419,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.message).toBe("Expected a string: received 123");
   });
 
-  it("validates enum values", () => {
+  test("validates enum values", () => {
     const field = db.enum(["active", "inactive"]);
     const result = field.parse({ value: "active", data, user });
     expect(result.issues).toBeUndefined();
@@ -1383,7 +1432,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.message).toBe("Must be one of [active, inactive]: received unknown");
   });
 
-  it("validates integer values", () => {
+  test("validates integer values", () => {
     const field = db.int();
     const ok = field.parse({ value: 42, data, user });
     expect(ok.issues).toBeUndefined();
@@ -1396,7 +1445,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.message).toBe("Expected an integer: received not-a-number");
   });
 
-  it("validates float values", () => {
+  test("validates float values", () => {
     const field = db.float();
     const ok = field.parse({ value: 3.14, data, user });
     expect(ok.issues).toBeUndefined();
@@ -1409,7 +1458,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.message).toBe("Expected a number: received not-a-number");
   });
 
-  it("validates boolean values", () => {
+  test("validates boolean values", () => {
     const field = db.bool();
     const ok = field.parse({ value: true, data, user });
     expect(ok.issues).toBeUndefined();
@@ -1422,7 +1471,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.message).toBe("Expected a boolean: received true");
   });
 
-  it("validates nested object values", () => {
+  test("validates nested object values", () => {
     const field = db.object({
       name: db.string(),
       age: db.int({ optional: true }),
@@ -1439,7 +1488,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.message).toBe("Expected a string: received 123");
   });
 
-  it("validates array values", () => {
+  test("validates array values", () => {
     const field = db.int({ array: true });
     const ok = field.parse({ value: [1, 2, 3], data, user });
     expect(ok.issues).toBeUndefined();
@@ -1449,7 +1498,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(ok.value).toEqual([1, 2, 3]);
   });
 
-  it("validates UUID format", () => {
+  test("validates UUID format", () => {
     const field = db.uuid();
     const ok = field.parse({ value: "123e4567-e89b-12d3-a456-426614174000", data, user });
     expect(ok.issues).toBeUndefined();
@@ -1462,7 +1511,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.message).toBe("Expected a valid UUID: received not-a-uuid");
   });
 
-  it("validates date format", () => {
+  test("validates date format", () => {
     const field = db.date();
     const ok = field.parse({ value: "2025-01-01", data, user });
     expect(ok.issues).toBeUndefined();
@@ -1477,7 +1526,7 @@ describe("TailorDBField runtime validation tests", () => {
     );
   });
 
-  it("validates time format", () => {
+  test("validates time format", () => {
     const field = db.time();
     const ok = field.parse({ value: "10:11", data, user });
     expect(ok.issues).toBeUndefined();
@@ -1490,7 +1539,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(bad.issues?.[0]?.message).toBe('Expected to match "HH:mm" format: received 10:11:12');
   });
 
-  it("validates required and optional handling", () => {
+  test("validates required and optional handling", () => {
     const requiredField = db.string();
     const requiredMissing = requiredField.parse({ value: undefined, data, user });
     expect(requiredMissing.issues?.[0]?.message).toBe("Required field is missing");
@@ -1506,7 +1555,7 @@ describe("TailorDBField runtime validation tests", () => {
 });
 
 describe("TailorDBType gqlOperations tests", () => {
-  it("gqlOperations stores raw config via features()", () => {
+  test("gqlOperations stores raw config via features()", () => {
     const orderType = db
       .type("Order", {
         name: db.string(),
@@ -1522,7 +1571,7 @@ describe("TailorDBType gqlOperations tests", () => {
     expect(ops).toEqual({ delete: false });
   });
 
-  it("gqlOperations stores multiple operations config", () => {
+  test("gqlOperations stores multiple operations config", () => {
     const archiveType = db
       .type("Archive", {
         data: db.string(),
@@ -1539,7 +1588,7 @@ describe("TailorDBType gqlOperations tests", () => {
     expect(ops).toEqual({ create: false, update: false, delete: false });
   });
 
-  it("gqlOperations stores read config", () => {
+  test("gqlOperations stores read config", () => {
     const secretType = db
       .type("Secret", {
         value: db.string(),
@@ -1554,7 +1603,7 @@ describe("TailorDBType gqlOperations tests", () => {
     expect(ops).toEqual({ read: false });
   });
 
-  it("gqlOperations works with other features", () => {
+  test("gqlOperations works with other features", () => {
     const logType = db
       .type("Log", {
         message: db.string(),
@@ -1574,7 +1623,7 @@ describe("TailorDBType gqlOperations tests", () => {
 });
 
 describe("TailorDBType gqlOperations alias tests", () => {
-  it("gqlOperations: 'query' stores alias as raw value", () => {
+  test("gqlOperations: 'query' stores alias as raw value", () => {
     const readOnlyType = db
       .type("ReadOnly", {
         data: db.string(),
@@ -1588,7 +1637,7 @@ describe("TailorDBType gqlOperations alias tests", () => {
     expect(ops).toBe("query");
   });
 
-  it("gqlOperations: 'query' works with other features", () => {
+  test("gqlOperations: 'query' works with other features", () => {
     const auditType = db
       .type("Audit", {
         action: db.string(),
@@ -1604,7 +1653,7 @@ describe("TailorDBType gqlOperations alias tests", () => {
 });
 
 describe("TailorDBField immutability", () => {
-  it("field.hooks() returns a new field without mutating the original", () => {
+  test("field.hooks() returns a new field without mutating the original", () => {
     const original = db.string();
     const withHooks = original.hooks({ create: () => "created" });
 
@@ -1616,7 +1665,7 @@ describe("TailorDBField immutability", () => {
     expect(withHooks.metadata.hooks?.create).toBeDefined();
   });
 
-  it("field.validate() returns a new field without mutating the original", () => {
+  test("field.validate() returns a new field without mutating the original", () => {
     const original = db.string();
     const withValidate = original.validate(({ value }) => value.length > 0);
 
@@ -1625,7 +1674,7 @@ describe("TailorDBField immutability", () => {
     expect(withValidate.metadata.validate).toHaveLength(1);
   });
 
-  it("field.description() returns a new field without mutating the original", () => {
+  test("field.description() returns a new field without mutating the original", () => {
     const original = db.string();
     const withDesc = original.description("desc");
 
@@ -1634,7 +1683,7 @@ describe("TailorDBField immutability", () => {
     expect(withDesc.metadata.description).toBe("desc");
   });
 
-  it("field.index() returns a new field without mutating the original", () => {
+  test("field.index() returns a new field without mutating the original", () => {
     const original = db.string();
     const withIndex = original.index();
 
@@ -1643,7 +1692,7 @@ describe("TailorDBField immutability", () => {
     expect(withIndex.metadata.index).toBe(true);
   });
 
-  it("field.unique() returns a new field without mutating the original", () => {
+  test("field.unique() returns a new field without mutating the original", () => {
     const original = db.string();
     const withUnique = original.unique();
 
@@ -1652,7 +1701,7 @@ describe("TailorDBField immutability", () => {
     expect(withUnique.metadata.unique).toBe(true);
   });
 
-  it("field.serial() returns a new field without mutating the original", () => {
+  test("field.serial() returns a new field without mutating the original", () => {
     const original = db.int();
     const withSerial = original.serial({ start: 1 });
 
@@ -1661,7 +1710,7 @@ describe("TailorDBField immutability", () => {
     expect(withSerial.metadata.serial).toEqual({ start: 1 });
   });
 
-  it("field.vector() returns a new field without mutating the original", () => {
+  test("field.vector() returns a new field without mutating the original", () => {
     const original = db.string();
     const withVector = original.vector();
 
@@ -1670,7 +1719,7 @@ describe("TailorDBField immutability", () => {
     expect(withVector.metadata.vector).toBe(true);
   });
 
-  it("field.relation() returns a new field without mutating the original", () => {
+  test("field.relation() returns a new field without mutating the original", () => {
     const User = db.type("User", { name: db.string() });
     const original = db.uuid();
     const withRelation = original.relation({ type: "n-1", toward: { type: User } });
@@ -1680,7 +1729,7 @@ describe("TailorDBField immutability", () => {
     expect(withRelation.rawRelation).toBeDefined();
   });
 
-  it("chained fluent calls produce correct result", () => {
+  test("chained fluent calls produce correct result", () => {
     const field = db
       .string()
       .description("name")
@@ -1694,7 +1743,7 @@ describe("TailorDBField immutability", () => {
 });
 
 describe("TailorDBType does not mutate shared fields", () => {
-  it("type.hooks() does not mutate the shared field", () => {
+  test("type.hooks() does not mutate the shared field", () => {
     const sharedField = db.string();
 
     const typeA = db.type("TypeA", { name: sharedField }).hooks({ name: { create: () => "A" } });
@@ -1705,7 +1754,7 @@ describe("TailorDBType does not mutate shared fields", () => {
     expect(sharedField.metadata.hooks).toBeUndefined();
   });
 
-  it("type.validate() does not mutate the shared field", () => {
+  test("type.validate() does not mutate the shared field", () => {
     const sharedField = db.string();
 
     const typeA = db
@@ -1718,7 +1767,7 @@ describe("TailorDBType does not mutate shared fields", () => {
     expect(sharedField.metadata.validate).toBeUndefined();
   });
 
-  it("hooks() does not replace entries in the original fields record", () => {
+  test("hooks() does not replace entries in the original fields record", () => {
     const nameField = db.string();
     const fields = { name: nameField };
 
@@ -1728,7 +1777,7 @@ describe("TailorDBType does not mutate shared fields", () => {
     expect(fields.name).toBe(nameField);
   });
 
-  it("validate() does not replace entries in the original fields record", () => {
+  test("validate() does not replace entries in the original fields record", () => {
     const emailField = db.string();
     const fields = { email: emailField };
 
@@ -1740,7 +1789,7 @@ describe("TailorDBType does not mutate shared fields", () => {
 });
 
 describe("TailorDBField clone tests", () => {
-  it("clones field with same metadata", () => {
+  test("clones field with same metadata", () => {
     const original = db.string().description("test description").index();
     const cloned = original.clone();
 
@@ -1749,7 +1798,7 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.metadata.required).toBe(true);
   });
 
-  it("cloned field is independent from original", () => {
+  test("cloned field is independent from original", () => {
     const original = db.string().description("original");
     const cloned = original.clone();
 
@@ -1758,7 +1807,7 @@ describe("TailorDBField clone tests", () => {
     expect(original.metadata.description).toBe("original");
   });
 
-  it("clone with optional override changes required to false", () => {
+  test("clone with optional override changes required to false", () => {
     const required = db.string();
     expect(required.metadata.required).toBe(true);
 
@@ -1769,7 +1818,7 @@ describe("TailorDBField clone tests", () => {
     expect(required.metadata.required).toBe(true);
   });
 
-  it("clone with array override", () => {
+  test("clone with array override", () => {
     const single = db.int();
     const array = single.clone({ array: true });
 
@@ -1777,7 +1826,7 @@ describe("TailorDBField clone tests", () => {
     expectTypeOf<output<typeof array>>().toEqualTypeOf<number[]>();
   });
 
-  it("clone with both optional and array overrides", () => {
+  test("clone with both optional and array overrides", () => {
     const original = db.string();
     const cloned = original.clone({ optional: true, array: true });
 
@@ -1786,7 +1835,7 @@ describe("TailorDBField clone tests", () => {
     expectTypeOf<output<typeof cloned>>().toEqualTypeOf<string[] | null>();
   });
 
-  it("clones unique modifier correctly", () => {
+  test("clones unique modifier correctly", () => {
     const original = db.string().unique();
     const cloned = original.clone();
 
@@ -1794,7 +1843,7 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.metadata.index).toBe(true);
   });
 
-  it("clones relation config correctly", () => {
+  test("clones relation config correctly", () => {
     const User = db.type("User", { name: db.string() });
     const original = db.uuid().relation({
       type: "n-1",
@@ -1814,7 +1863,7 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.rawRelation?.toward).not.toBe(original.rawRelation?.toward);
   });
 
-  it("clones hooks correctly", () => {
+  test("clones hooks correctly", () => {
     const createHook = () => "created";
     const original = db.string().hooks({ create: createHook });
     const cloned = original.clone();
@@ -1826,7 +1875,7 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.metadata.hooks).not.toBe(original.metadata.hooks);
   });
 
-  it("clones validate correctly", () => {
+  test("clones validate correctly", () => {
     const validator = ({ value }: { value: string }) => value.length > 0;
     const original = db.string().validate(validator);
     const cloned = original.clone();
@@ -1838,7 +1887,7 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
   });
 
-  it("clones validate with tuple format correctly", () => {
+  test("clones validate with tuple format correctly", () => {
     const validator = ({ value }: { value: string }) => value.length > 0;
     const original = db.string().validate([validator, "Value must not be empty"]);
     const cloned = original.clone();
@@ -1852,7 +1901,7 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.metadata.validate?.[0]).not.toBe(original.metadata.validate?.[0]);
   });
 
-  it("clones serial config correctly", () => {
+  test("clones serial config correctly", () => {
     const original = db.int().serial({ start: 100 });
     const cloned = original.clone();
 
@@ -1862,14 +1911,14 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.metadata.serial).not.toBe(original.metadata.serial);
   });
 
-  it("clones vector config correctly", () => {
+  test("clones vector config correctly", () => {
     const original = db.string().vector();
     const cloned = original.clone();
 
     expect(cloned.metadata.vector).toBe(true);
   });
 
-  it("clones enum field correctly", () => {
+  test("clones enum field correctly", () => {
     const original = db.enum(["active", "inactive", "pending"]);
     const cloned = original.clone();
 
@@ -1884,7 +1933,7 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.metadata.allowedValues?.[0]).not.toBe(original.metadata.allowedValues?.[0]);
   });
 
-  it("clones nested object field correctly", () => {
+  test("clones nested object field correctly", () => {
     const original = db.object({
       name: db.string(),
       age: db.int({ optional: true }),
@@ -1902,7 +1951,7 @@ describe("TailorDBField clone tests", () => {
 });
 
 describe("TailorDBField decimal type tests", () => {
-  it("decimal field outputs string type correctly", () => {
+  test("decimal field outputs string type correctly", () => {
     const _decimalType = db.type("Test", {
       price: db.decimal(),
     });
@@ -1912,7 +1961,7 @@ describe("TailorDBField decimal type tests", () => {
     }>();
   });
 
-  it("optional decimal field outputs string | null type correctly", () => {
+  test("optional decimal field outputs string | null type correctly", () => {
     const _decimalType = db.type("Test", {
       discount: db.decimal({ optional: true }),
     });
@@ -1922,28 +1971,28 @@ describe("TailorDBField decimal type tests", () => {
     }>();
   });
 
-  it("decimal with scale stores scale in metadata", () => {
+  test("decimal with scale stores scale in metadata", () => {
     const field = db.decimal({ scale: 2 });
     expect(field.type).toBe("decimal");
     expect(field._metadata.scale).toBe(2);
   });
 
-  it("decimal without scale has no scale in metadata", () => {
+  test("decimal without scale has no scale in metadata", () => {
     const field = db.decimal();
     expect(field.type).toBe("decimal");
     expect(field._metadata.scale).toBeUndefined();
   });
 
-  it("decimal scale validation rejects out-of-range values", () => {
+  test("decimal scale validation rejects out-of-range values", () => {
     expect(() => db.decimal({ scale: -1 })).toThrow("scale must be an integer between 0 and 12");
     expect(() => db.decimal({ scale: 13 })).toThrow("scale must be an integer between 0 and 12");
   });
 
-  it("decimal scale validation rejects non-integer values", () => {
+  test("decimal scale validation rejects non-integer values", () => {
     expect(() => db.decimal({ scale: 1.5 })).toThrow("scale must be an integer between 0 and 12");
   });
 
-  it("decimal parse validates valid decimal strings", () => {
+  test("decimal parse validates valid decimal strings", () => {
     const field = db.decimal();
     const user = { id: "test", _loggedIn: true } as unknown as TailorUser;
     expect(field.parse({ value: "123.45", data: {}, user })).toEqual({ value: "123.45" });
@@ -1958,7 +2007,7 @@ describe("TailorDBField decimal type tests", () => {
     expect(field.parse({ value: "-1.5e10", data: {}, user })).toEqual({ value: "-1.5e10" });
   });
 
-  it("decimal parse rejects invalid decimal strings", () => {
+  test("decimal parse rejects invalid decimal strings", () => {
     const field = db.decimal();
     const user = { id: "test", _loggedIn: true } as unknown as TailorUser;
     const result1 = field.parse({ value: "abc", data: {}, user });

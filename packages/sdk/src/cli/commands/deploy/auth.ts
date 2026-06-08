@@ -23,7 +23,6 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
@@ -36,12 +35,12 @@ import {
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "@/types/auth";
 import type {
   BuiltinIdP,
   IdProvider as IdProviderConfig,
-  OAuth2ClientInput,
+  OAuth2Client,
   SCIMAttribute,
   SCIMConfig,
   SCIMResource,
@@ -418,7 +417,7 @@ async function planServices(
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existing = existingServices[config.name];
     const metaRequest = await buildMetaRequest({
       trn: trn(workspaceId, config.name),
@@ -538,7 +537,7 @@ async function planIdPConfigs(
   };
 
   for (const authService of auths) {
-    const { parsedConfig: config } = authService;
+    const { config } = authService;
     const existingIdPConfigs = await fetchIdPConfigs(config.name);
     const existingMap = new Map<string, (typeof existingIdPConfigs)[number]>();
     existingIdPConfigs.forEach((idpConfig) => {
@@ -865,7 +864,7 @@ async function planUserProfileConfigs(
   >("Auth userProfileConfigs");
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-user-profile-config`;
     try {
       const { userProfileProviderConfig } = await client.getUserProfileConfig({
@@ -995,7 +994,7 @@ async function planTenantConfigs(
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-tenant-config`;
     try {
       const { tenantProviderConfig } = await client.getTenantConfig({
@@ -1130,7 +1129,7 @@ async function planMachineUsers(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingMachineUsers = await fetchMachineUsers(config.name);
     const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
@@ -1338,6 +1337,8 @@ function normalizeComparableOAuth2Client(
 
   return normalizeProtoConfig({
     ...client,
+    // Platform returns an empty string for an unset description; treat it the same as omitted.
+    description: client.description || undefined,
     redirectUris: normalizeStringArray(client.redirectUris),
     grantTypes: [...(client.grantTypes ?? [])].sort((left, right) => left - right),
     accessTokenLifetime: accessTokenLifetime ?? 86400,
@@ -1451,7 +1452,7 @@ async function planOAuth2Clients(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingOAuth2Clients = await fetchOAuth2Clients(config.name);
     const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
     existingOAuth2Clients.forEach((oauth2Client) => {
@@ -1560,15 +1561,16 @@ async function planOAuth2Clients(
 
 function protoOAuth2Client(
   oauth2ClientName: string,
-  oauth2Client: OAuth2ClientInput,
+  oauth2Client: OAuth2Client,
 ): MessageInitShape<typeof AuthOAuth2ClientSchema> {
-  // Parse to transform token lifetimes
-  const parsed = OAuth2ClientSchema.parse(oauth2Client);
-
+  // `oauth2Client` is already parsed output: AuthConfigSchema.parse (wired in
+  // application.ts) validated it and transformed the numeric token lifetimes
+  // into Duration ({ seconds, nanos }). Consume it directly instead of
+  // re-parsing, which would reject the already-transformed lifetimes.
   return {
     name: oauth2ClientName,
-    description: parsed.description,
-    grantTypes: parsed.grantTypes?.map((grantType) => {
+    description: oauth2Client.description,
+    grantTypes: oauth2Client.grantTypes.map((grantType) => {
       switch (grantType) {
         case "authorization_code":
           return AuthOAuth2Client_GrantType.AUTHORIZATION_CODE;
@@ -1578,17 +1580,17 @@ function protoOAuth2Client(
           throw new Error(`Unknown OAuth2 client grant type: ${grantType satisfies never}`);
       }
     }),
-    redirectUris: parsed.redirectURIs,
+    redirectUris: oauth2Client.redirectURIs,
     clientType: (
       {
         confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,
         public: AuthOAuth2Client_ClientType.PUBLIC,
         browser: AuthOAuth2Client_ClientType.BROWSER,
-      } satisfies Record<NonNullable<OAuth2ClientInput["clientType"]>, AuthOAuth2Client_ClientType>
-    )[parsed.clientType ?? "confidential"],
-    accessTokenLifetime: parsed.accessTokenLifetimeSeconds,
-    refreshTokenLifetime: parsed.refreshTokenLifetimeSeconds,
-    requireDpop: parsed.requireDpop,
+      } satisfies Record<NonNullable<OAuth2Client["clientType"]>, AuthOAuth2Client_ClientType>
+    )[oauth2Client.clientType ?? "confidential"],
+    accessTokenLifetime: oauth2Client.accessTokenLifetimeSeconds,
+    refreshTokenLifetime: oauth2Client.refreshTokenLifetimeSeconds,
+    requireDpop: oauth2Client.requireDpop,
   };
 }
 
@@ -1618,7 +1620,7 @@ async function planSCIMConfigs(
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-scim-config`;
     try {
       await client.getAuthSCIMConfig({
@@ -1753,7 +1755,7 @@ async function planSCIMResources(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingSCIMResources = await fetchSCIMResources(config.name);
     const existingNameSet = new Set<string>();
     existingSCIMResources.forEach((scimResource) => {
@@ -1984,7 +1986,7 @@ async function planAuthHooks(
   const changeSet = createChangeSet<CreateAuthHook, UpdateAuthHook, DeleteAuthHook>("Auth hooks");
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const beforeLogin = config.hooks?.beforeLogin;
 
     let existingHook:

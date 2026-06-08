@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { defineSecretManager } from "./index";
 
 describe("defineSecretManager", () => {
-  it("should have get and getAll methods", () => {
+  test("should have get and getAll methods", () => {
     const secrets = defineSecretManager({
       "my-vault": {
         "api-key": "test-key",
@@ -14,7 +14,7 @@ describe("defineSecretManager", () => {
     expect(typeof secrets.getAll).toBe("function");
   });
 
-  it("should support multiple vaults", () => {
+  test("should support multiple vaults", () => {
     const secrets = defineSecretManager({
       "vault-1": {
         "secret-a": "value-a",
@@ -28,7 +28,7 @@ describe("defineSecretManager", () => {
     expect(typeof secrets.getAll).toBe("function");
   });
 
-  it("should store vaults and options as separate properties", () => {
+  test("should store vaults and options as separate properties", () => {
     const secrets = defineSecretManager({
       "my-vault": {
         "api-key": "test-key",
@@ -41,7 +41,7 @@ describe("defineSecretManager", () => {
     expect(secrets.options).toEqual({ ignoreNullishValues: false });
   });
 
-  it("should accept undefined values with ignoreNullishValues option", () => {
+  test("should accept undefined values with ignoreNullishValues option", () => {
     const secrets = defineSecretManager(
       {
         "my-vault": {
@@ -58,7 +58,7 @@ describe("defineSecretManager", () => {
     expect(typeof secrets.getAll).toBe("function");
   });
 
-  it("should not expose get/getAll as enumerable properties", () => {
+  test("should not expose get/getAll as enumerable properties", () => {
     const secrets = defineSecretManager({
       "my-vault": {
         "api-key": "test-key",

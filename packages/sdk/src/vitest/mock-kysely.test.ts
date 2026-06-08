@@ -47,6 +47,14 @@ describe("createKyselyMock", () => {
     expect(mock.inserts[0].parameters).toEqual(["1", "a@b.com", 30]);
   });
 
+  test("retains the compiled node on each recorded query", async () => {
+    const mock = createKyselyMock<Database>();
+
+    await mock.db.selectFrom("User").selectAll().execute();
+
+    expect(mock.executedQueries[0].node.kind).toBe("SelectQueryNode");
+  });
+
   test("reports staged numAffectedRows on a non-returning mutation", async () => {
     const mock = createKyselyMock<Database>();
     mock.enqueueResults({ numAffectedRows: 3 });
@@ -149,5 +157,102 @@ describe("createKyselyMock", () => {
     expect(mock.selects).toHaveLength(1);
     expect(mock.executedQueries[0].sql).toContain("left join");
     expect(mock.executedQueries[0].sql).toContain("group by");
+  });
+
+  describe("insertValues", () => {
+    test("recovers the column -> value map for a single-row insert", async () => {
+      const mock = createKyselyMock<Database>();
+
+      await mock.db.insertInto("User").values({ id: "1", email: "a@b.com", age: 30 }).execute();
+
+      expect(mock.inserts[0].insertValues()).toEqual({ id: "1", email: "a@b.com", age: 30 });
+    });
+
+    test("throws on a multi-row insert", async () => {
+      const mock = createKyselyMock<Database>();
+
+      await mock.db
+        .insertInto("User")
+        .values([
+          { id: "1", email: "a@b.com", age: 30 },
+          { id: "2", email: "c@d.com", age: 40 },
+        ])
+        .execute();
+
+      expect(() => mock.inserts[0].insertValues()).toThrow(/inserts 2 rows/);
+    });
+
+    test("throws when given a non-insert query", async () => {
+      const mock = createKyselyMock<Database>();
+
+      await mock.db.selectFrom("User").selectAll().execute();
+
+      expect(() => mock.selects[0].insertValues()).toThrow(/expected InsertQueryNode/);
+    });
+  });
+
+  describe("insertRows", () => {
+    test("recovers the column -> value map for every row of a multi-row insert", async () => {
+      const mock = createKyselyMock<Database>();
+
+      await mock.db
+        .insertInto("User")
+        .values([
+          { id: "1", email: "a@b.com", age: 30 },
+          { id: "2", email: "c@d.com", age: 40 },
+        ])
+        .execute();
+
+      expect(mock.inserts[0].insertRows()).toEqual([
+        { id: "1", email: "a@b.com", age: 30 },
+        { id: "2", email: "c@d.com", age: 40 },
+      ]);
+    });
+
+    test("throws on an unsupported insert shape instead of returning empty", async () => {
+      const mock = createKyselyMock<Database>();
+
+      await mock.db
+        .insertInto("Post")
+        .columns(["id", "userId", "title"])
+        .expression((eb) => eb.selectFrom("User").select(["id", "id as userId", "email as title"]))
+        .execute();
+
+      expect(() => mock.inserts[0].insertRows()).toThrow(/unsupported insert shape/);
+    });
+  });
+
+  describe("updateValues", () => {
+    test("recovers the column -> value map from a SET clause", async () => {
+      const mock = createKyselyMock<Database>();
+
+      await mock.db.updateTable("User").set({ age: 31 }).where("id", "=", "1").execute();
+
+      expect(mock.updates[0].updateValues()).toEqual({ age: 31 });
+    });
+
+    test("throws when given a non-update query", async () => {
+      const mock = createKyselyMock<Database>();
+
+      await mock.db.selectFrom("User").selectAll().execute();
+
+      expect(() => mock.selects[0].updateValues()).toThrow(/expected UpdateQueryNode/);
+    });
+  });
+
+  describe("withTx", () => {
+    test("runs fn in a real transaction and records inner queries", async () => {
+      const mock = createKyselyMock<Database>();
+      mock.enqueueResults([{ id: "1", email: "a@b.com", age: 30 }]);
+
+      const result = await mock.withTx(async (trx) => {
+        expect(trx.isTransaction).toBe(true);
+        return trx.selectFrom("User").selectAll().executeTakeFirst();
+      });
+
+      expect(result).toEqual({ id: "1", email: "a@b.com", age: 30 });
+      // begin/commit are not recorded; only the select is.
+      expect(mock.executedQueries).toHaveLength(1);
+    });
   });
 });

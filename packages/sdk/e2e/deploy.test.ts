@@ -598,10 +598,12 @@ export default defineConfig({
 `;
 
     const configPath = createTestConfig(cleanupConfig);
-    await deploy({
-      workspaceId,
-      configPath,
-      yes: true,
-    });
+    await expect(
+      deploy({
+        workspaceId,
+        configPath,
+        yes: true,
+      }),
+    ).resolves.toBeUndefined();
   }, 120000);
 });

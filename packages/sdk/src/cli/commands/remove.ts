@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { applyApplication, planApplication } from "@/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "@/cli/commands/deploy/auth";
-import { type PlanContext } from "@/cli/commands/deploy/deploy";
 import { applyExecutor, planExecutor } from "@/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
@@ -23,6 +22,7 @@ import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import ml from "@/utils/multiline";
+import type { PlanContext } from "@/cli/commands/deploy/types";
 
 export interface RemoveOptions {
   workspaceId?: string;

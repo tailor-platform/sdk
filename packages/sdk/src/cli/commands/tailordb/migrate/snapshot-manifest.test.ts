@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
   generateTailorDBTypeManifestFromSnapshot,
@@ -36,7 +36,7 @@ describe("snapshot-manifest", () => {
   }
 
   describe("generateTailorDBTypeManifestFromSnapshot", () => {
-    it("generates basic type manifest with required fields", () => {
+    test("generates basic type manifest with required fields", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -55,14 +55,14 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.email?.required).toBe(false);
     });
 
-    it("generates plural form correctly", () => {
+    test("generates plural form correctly", () => {
       const snapshotType = createTestSnapshotType("User");
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
       expect(manifest.schema?.settings?.pluralForm).toBe("users");
     });
 
-    it("uses custom plural form when provided", () => {
+    test("uses custom plural form when provided", () => {
       const snapshotType = createTestSnapshotType("User", {
         pluralForm: "UserList",
       });
@@ -71,7 +71,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.pluralForm).toBe("userList");
     });
 
-    it("includes description when provided", () => {
+    test("includes description when provided", () => {
       const snapshotType = createTestSnapshotType("User", {
         description: "A user in the system",
       });
@@ -80,7 +80,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.description).toBe("A user in the system");
     });
 
-    it("sets publishRecordEvents from options", () => {
+    test("sets publishRecordEvents from options", () => {
       const snapshotType = createTestSnapshotType("User");
 
       const manifestWithEvents = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
@@ -94,7 +94,7 @@ describe("snapshot-manifest", () => {
       expect(manifestWithoutEvents.schema?.settings?.publishRecordEvents).toBe(false);
     });
 
-    it("reads publishEvents from snapshot settings", () => {
+    test("reads publishEvents from snapshot settings", () => {
       const snapshotTypeWithEvents = createTestSnapshotType("User", {
         settings: { publishEvents: true },
       });
@@ -110,7 +110,7 @@ describe("snapshot-manifest", () => {
       expect(manifestWithoutEvents.schema?.settings?.publishRecordEvents).toBe(false);
     });
 
-    it("prioritizes snapshot settings.publishEvents over options.publishRecordEvents", () => {
+    test("prioritizes snapshot settings.publishEvents over options.publishRecordEvents", () => {
       const snapshotType = createTestSnapshotType("User", {
         settings: { publishEvents: true },
       });
@@ -123,7 +123,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.publishRecordEvents).toBe(true);
     });
 
-    it("handles enum fields with allowed values", () => {
+    test("handles enum fields with allowed values", () => {
       const snapshotType = createTestSnapshotType("Task", {
         fields: {
           id: { type: "uuid", required: true },
@@ -146,7 +146,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.status?.allowedValues?.[0]?.value).toBe("PENDING");
     });
 
-    it("handles array fields", () => {
+    test("handles array fields", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -159,7 +159,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.tags?.array).toBe(true);
     });
 
-    it("handles foreign key relationships", () => {
+    test("handles foreign key relationships", () => {
       const snapshotType = createTestSnapshotType("Post", {
         fields: {
           id: { type: "uuid", required: true },
@@ -180,7 +180,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.authorId?.foreignKeyField).toBe("id");
     });
 
-    it("handles indexes", () => {
+    test("handles indexes", () => {
       const snapshotType = createTestSnapshotType("User", {
         indexes: {
           email_unique: {
@@ -202,7 +202,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.indexes?.name_status?.unique).toBe(false);
     });
 
-    it("handles file fields", () => {
+    test("handles file fields", () => {
       const snapshotType = createTestSnapshotType("Document", {
         files: {
           attachment: "Document attachment",
@@ -216,7 +216,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.files?.thumbnail?.description).toBe("");
     });
 
-    it("handles forward relationships", () => {
+    test("handles forward relationships", () => {
       const snapshotType = createTestSnapshotType("Post", {
         forwardRelationships: {
           author: {
@@ -235,7 +235,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.relationships?.author?.array).toBe(false);
     });
 
-    it("handles backward relationships", () => {
+    test("handles backward relationships", () => {
       const snapshotType = createTestSnapshotType("User", {
         backwardRelationships: {
           posts: {
@@ -254,7 +254,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.relationships?.posts?.array).toBe(true);
     });
 
-    it("handles record permissions", () => {
+    test("handles record permissions", () => {
       const permission: SnapshotRecordPermission = {
         create: [
           {
@@ -277,7 +277,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.permission?.create).toHaveLength(1);
     });
 
-    it("applies gqlOperations from options", () => {
+    test("applies gqlOperations from options", () => {
       const snapshotType = createTestSnapshotType("User");
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
@@ -293,7 +293,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
-    it("handles hooks configuration", () => {
+    test("handles hooks configuration", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -314,7 +314,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.updatedAt?.hooks?.update?.expr).toBe("now()");
     });
 
-    it("keeps validate and hooks in nested fields", () => {
+    test("keeps validate and hooks in nested fields", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -377,7 +377,7 @@ describe("snapshot-manifest", () => {
       expect(emailField?.hooks?.create?.expr).toBe("(_value ?? '').toLowerCase()");
     });
 
-    it("handles serial configuration", () => {
+    test("handles serial configuration", () => {
       const snapshotType = createTestSnapshotType("Order", {
         fields: {
           id: { type: "uuid", required: true },
@@ -402,7 +402,7 @@ describe("snapshot-manifest", () => {
   });
 
   describe("generateAllTypeManifestsFromSnapshot", () => {
-    it("generates manifests for all types in snapshot", () => {
+    test("generates manifests for all types in snapshot", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -417,7 +417,7 @@ describe("snapshot-manifest", () => {
       expect(manifests.has("Comment")).toBe(true);
     });
 
-    it("applies executorUsedTypes to enable publishRecordEvents", () => {
+    test("applies executorUsedTypes to enable publishRecordEvents", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -431,7 +431,7 @@ describe("snapshot-manifest", () => {
       expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
     });
 
-    it("applies manual publishEvents setting from snapshot", () => {
+    test("applies manual publishEvents setting from snapshot", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User", {
           settings: { publishEvents: true },
@@ -445,7 +445,7 @@ describe("snapshot-manifest", () => {
       expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
     });
 
-    it("throws error when executor uses type with publishEvents=false", () => {
+    test("throws error when executor uses type with publishEvents=false", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User", {
           settings: { publishEvents: false },
@@ -461,7 +461,7 @@ describe("snapshot-manifest", () => {
       );
     });
 
-    it("respects explicit publishEvents=false when no executor uses the type", () => {
+    test("respects explicit publishEvents=false when no executor uses the type", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User", {
           settings: { publishEvents: false },
@@ -477,7 +477,7 @@ describe("snapshot-manifest", () => {
       expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
     });
 
-    it("combines manual setting and executor usage correctly", () => {
+    test("combines manual setting and executor usage correctly", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User", {
           settings: { publishEvents: true },
@@ -501,7 +501,7 @@ describe("snapshot-manifest", () => {
       expect(manifests.get("Comment")?.schema?.settings?.publishRecordEvents).toBe(true);
     });
 
-    it("falls back to baseOptions.publishRecordEvents when no manual setting and no executor", () => {
+    test("falls back to baseOptions.publishRecordEvents when no manual setting and no executor", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -519,7 +519,7 @@ describe("snapshot-manifest", () => {
       expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(true);
     });
 
-    it("returns empty map for empty snapshot", () => {
+    test("returns empty map for empty snapshot", () => {
       const snapshot = createTestSnapshot({});
 
       const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
@@ -527,7 +527,7 @@ describe("snapshot-manifest", () => {
       expect(manifests.size).toBe(0);
     });
 
-    it("applies namespace gqlOperations to all types", () => {
+    test("applies namespace gqlOperations to all types", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -548,7 +548,7 @@ describe("snapshot-manifest", () => {
   });
 
   describe("compareSnapshotWithRemote", () => {
-    it("identifies types to create", () => {
+    test("identifies types to create", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -563,7 +563,7 @@ describe("snapshot-manifest", () => {
       expect(comparison.deletes).toEqual([]);
     });
 
-    it("identifies types to update", () => {
+    test("identifies types to update", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -579,7 +579,7 @@ describe("snapshot-manifest", () => {
       expect(comparison.deletes).toEqual([]);
     });
 
-    it("identifies types to delete", () => {
+    test("identifies types to delete", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
       });
@@ -594,7 +594,7 @@ describe("snapshot-manifest", () => {
       expect(comparison.deletes).toContain("Comment");
     });
 
-    it("handles empty snapshot", () => {
+    test("handles empty snapshot", () => {
       const snapshot = createTestSnapshot({});
 
       const existingTypes = new Set(["User", "Post"]);
@@ -607,7 +607,7 @@ describe("snapshot-manifest", () => {
       expect(comparison.deletes).toContain("Post");
     });
 
-    it("handles empty remote", () => {
+    test("handles empty remote", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),

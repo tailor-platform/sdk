@@ -2,7 +2,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const madgeMock = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -72,7 +72,7 @@ describe("DependencyWatcher", () => {
   });
 
   describe("initialization", () => {
-    it("can initialize correctly", async () => {
+    test("can initialize correctly", async () => {
       await watcher.initialize();
       const status = watcher.getWatchStatus();
       expect(status.isWatching).toBe(true);
@@ -82,7 +82,7 @@ describe("DependencyWatcher", () => {
   });
 
   describe("watch group management", () => {
-    it("can add watch group", async () => {
+    test("can add watch group", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
@@ -93,7 +93,7 @@ describe("DependencyWatcher", () => {
       expect(status.fileCount).toBe(1);
     });
 
-    it("can watch multiple files with glob pattern", async () => {
+    test("can watch multiple files with glob pattern", async () => {
       const testFile1 = path.join(tempDir, "file1.ts");
       const testFile2 = path.join(tempDir, "file2.ts");
       await createTestFile(testFile1, 'export const file1 = "hello";');
@@ -107,7 +107,7 @@ describe("DependencyWatcher", () => {
       expect(status.fileCount).toBe(2);
     });
 
-    it("can remove watch group", async () => {
+    test("can remove watch group", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
@@ -119,7 +119,7 @@ describe("DependencyWatcher", () => {
       expect(status.fileCount).toBe(0);
     });
 
-    it("duplicate group ID causes error", async () => {
+    test("duplicate group ID causes error", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
@@ -130,17 +130,17 @@ describe("DependencyWatcher", () => {
   });
 
   describe("validation", () => {
-    it("invalid group ID causes error", async () => {
+    test("invalid group ID causes error", async () => {
       await expect(watcher.addWatchGroup("", ["test.ts"])).rejects.toThrow(WatcherError);
     });
 
-    it("empty pattern array causes error", async () => {
+    test("empty pattern array causes error", async () => {
       await expect(watcher.addWatchGroup("test-group", [])).rejects.toThrow(WatcherError);
     });
   });
 
   describe("impact scope calculation", () => {
-    it("impact scope is empty for files without dependencies", async () => {
+    test("impact scope is empty for files without dependencies", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
@@ -154,14 +154,14 @@ describe("DependencyWatcher", () => {
   });
 
   describe("error handling", () => {
-    it("can set error callback", () => {
+    test("can set error callback", () => {
       const errorCallback = vi.fn();
       watcher.onError(errorCallback);
 
       expect(errorCallback).not.toHaveBeenCalled();
     });
 
-    it("WatcherError is created correctly", () => {
+    test("WatcherError is created correctly", () => {
       const error = new WatcherError(
         "Test error",
         WatcherErrorCode.INVALID_WATCH_GROUP,
@@ -176,7 +176,7 @@ describe("DependencyWatcher", () => {
   });
 
   describe("watch status", () => {
-    it("can get watch status correctly", async () => {
+    test("can get watch status correctly", async () => {
       const testFile1 = path.join(tempDir, "file1.ts");
       const testFile2 = path.join(tempDir, "file2.ts");
       await createTestFile(testFile1, 'export const file1 = "hello";');
@@ -194,7 +194,7 @@ describe("DependencyWatcher", () => {
   });
 
   describe("circular dependency detection", () => {
-    it("can detect circular dependencies", async () => {
+    test("can detect circular dependencies", async () => {
       const circular = watcher.detectCircularDependencies();
       expect(Array.isArray(circular)).toBe(true);
     });
@@ -212,11 +212,11 @@ describe("DependencyGraphManager", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("can build graph with empty file array", async () => {
+  test("can build graph with empty file array", async () => {
     await expect(manager.buildGraph([])).resolves.not.toThrow();
   });
 
-  it("calls madge to build dependency graph", async () => {
+  test("calls madge to build dependency graph", async () => {
     const testFile = path.join(tempDir, "sample.ts");
     await createTestFile(testFile, "export const value = 1;");
 
@@ -230,7 +230,7 @@ describe("DependencyGraphManager", () => {
     );
   });
 
-  it("detects error when madge does not provide function", async () => {
+  test("detects error when madge does not provide function", async () => {
     const mockedMadge = await import("madge");
     const originalDefault = (mockedMadge as { default?: unknown }).default;
     (mockedMadge as { default?: unknown }).default = undefined;
@@ -250,7 +250,7 @@ describe("DependencyGraphManager", () => {
 });
 
 describe("WatcherErrorCode", () => {
-  it("all error codes are defined", () => {
+  test("all error codes are defined", () => {
     expect(WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED).toBe("DEPENDENCY_ANALYSIS_FAILED");
     expect(WatcherErrorCode.FILE_WATCH_FAILED).toBe("FILE_WATCH_FAILED");
     expect(WatcherErrorCode.CIRCULAR_DEPENDENCY_DETECTED).toBe("CIRCULAR_DEPENDENCY_DETECTED");

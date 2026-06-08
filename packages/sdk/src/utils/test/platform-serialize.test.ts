@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { platformSerialize } from "./platform-serialize";
 
 describe("platformSerialize", () => {
   describe("happy path", () => {
-    it("round-trips plain JSON values", () => {
+    test("round-trips plain JSON values", () => {
       expect(platformSerialize({ a: 1, b: "x", c: [true, null, { d: 2 }] })).toEqual({
         a: 1,
         b: "x",
@@ -11,56 +11,56 @@ describe("platformSerialize", () => {
       });
     });
 
-    it("returns undefined unchanged", () => {
+    test("returns undefined unchanged", () => {
       expect(platformSerialize(undefined)).toBeUndefined();
     });
 
-    it("strips undefined properties (JSON.stringify semantics)", () => {
+    test("strips undefined properties (JSON.stringify semantics)", () => {
       expect(platformSerialize({ a: 1, b: undefined })).toEqual({ a: 1 });
     });
   });
 
   describe("Platform parity errors", () => {
-    it("throws on NaN", () => {
+    test("throws on NaN", () => {
       expect(() => platformSerialize({ n: NaN })).toThrow(/non-finite/);
     });
 
-    it("throws on Infinity", () => {
+    test("throws on Infinity", () => {
       expect(() => platformSerialize({ n: Infinity })).toThrow(/non-finite/);
     });
 
-    it("throws on -Infinity", () => {
+    test("throws on -Infinity", () => {
       expect(() => platformSerialize(-Infinity)).toThrow(/non-finite/);
     });
 
-    it("throws on BigInt", () => {
+    test("throws on BigInt", () => {
       expect(() => platformSerialize({ n: 1n })).toThrow(/BigInt/);
     });
 
-    it("throws on Date instances", () => {
+    test("throws on Date instances", () => {
       expect(() => platformSerialize({ at: new Date() })).toThrow(/Date instance/);
     });
 
-    it("throws on Map instances", () => {
+    test("throws on Map instances", () => {
       expect(() => platformSerialize({ m: new Map() })).toThrow(/Map instance/);
     });
 
-    it("throws on Set instances", () => {
+    test("throws on Set instances", () => {
       expect(() => platformSerialize({ s: new Set() })).toThrow(/Set instance/);
     });
 
-    it("throws on Error instances", () => {
+    test("throws on Error instances", () => {
       expect(() => platformSerialize({ e: new Error("boom") })).toThrow(/Error instance/);
     });
 
-    it("throws on user-defined class instances", () => {
+    test("throws on user-defined class instances", () => {
       class Dto {
         constructor(public x: number) {}
       }
       expect(() => platformSerialize({ d: new Dto(1) })).toThrow(/Dto instance/);
     });
 
-    it("throws on circular references via JSON.stringify", () => {
+    test("throws on circular references via JSON.stringify", () => {
       const obj: Record<string, unknown> = {};
       obj.self = obj;
       expect(() => platformSerialize(obj)).toThrow(TypeError);
@@ -68,23 +68,23 @@ describe("platformSerialize", () => {
   });
 
   describe("class instance detection at top level", () => {
-    it("throws when the root value is a class instance", () => {
+    test("throws when the root value is a class instance", () => {
       expect(() => platformSerialize(new Error("boom"))).toThrow(/Error instance/);
     });
 
-    it("throws with a specific message when the root value is a function", () => {
+    test("throws with a specific message when the root value is a function", () => {
       expect(() => platformSerialize(() => 1)).toThrow(
         /function is not JSON-serializable at <root>/,
       );
     });
 
-    it("throws with a specific message when the root value is a symbol", () => {
+    test("throws with a specific message when the root value is a symbol", () => {
       expect(() => platformSerialize(Symbol("x"))).toThrow(
         /Symbol is not JSON-serializable at <root>/,
       );
     });
 
-    it("throws when the root collapses to undefined via toJSON", () => {
+    test("throws when the root collapses to undefined via toJSON", () => {
       expect(() => platformSerialize({ toJSON: () => undefined })).toThrow(
         /not JSON-serializable at <root>/,
       );

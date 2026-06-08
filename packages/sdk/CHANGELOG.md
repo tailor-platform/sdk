@@ -1,5 +1,98 @@
 # @tailor-platform/sdk
 
+## 1.55.2
+
+### Patch Changes
+
+- [#1190](https://github.com/tailor-platform/sdk/pull/1190) [`6f891e8`](https://github.com/tailor-platform/sdk/commit/6f891e8a0f948ca2b58bb7e1d4ad19efc31cc38c) Thanks [@toiroakr](https://github.com/toiroakr)! - Validate auth service configuration during `deploy` / `generate`, consistent with how IdP, TailorDB, and static websites are already handled. Configs that set both `userProfile` and `machineUserAttributes` now fail with a clearer message: "Specify either `userProfile` or `machineUserAttributes`, not both."
+
+- [#1332](https://github.com/tailor-platform/sdk/pull/1332) [`aa898b7`](https://github.com/tailor-platform/sdk/commit/aa898b7f369c441077973848a92a09152f6bed4f) Thanks [@dqn](https://github.com/dqn)! - Fix `executor get --json` to include typed event trigger metadata such as event types, namespaces, target names, and conditions.
+
+## 1.55.1
+
+### Patch Changes
+
+- [#1333](https://github.com/tailor-platform/sdk/pull/1333) [`46a0f78`](https://github.com/tailor-platform/sdk/commit/46a0f78481f4718a470a2cb5a15298db8015f452) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk api` injecting a duplicate `workspaceId` when `--body` supplies the field in snake_case. The auto-injection guard only checked the camelCase key, so a body such as `{"workspace_id": "..."}` slipped past it and the SDK appended a second `workspaceId`, which the server rejected with a duplicate-field error. Body keys are now converged to each field's canonical (camelCase) name before injection, so snake_case and JSON aliases are recognized.
+
+- [#1325](https://github.com/tailor-platform/sdk/pull/1325) [`8bd51e6`](https://github.com/tailor-platform/sdk/commit/8bd51e64143a2877dcdc821a57b8b6b82cf61363) Thanks [@dqn](https://github.com/dqn)! - Fix `--json` output for CLI commands that returned human-readable text or empty stdout instead of parseable JSON.
+
+- [#1276](https://github.com/tailor-platform/sdk/pull/1276) [`f1536d6`](https://github.com/tailor-platform/sdk/commit/f1536d64d182c9456692165397a74ad8c0257d30) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1312](https://github.com/tailor-platform/sdk/pull/1312) [`00c9b07`](https://github.com/tailor-platform/sdk/commit/00c9b07fdec9b6fa59026f6d4451d43f04114c55) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer to v8.5.2
+
+- [#1316](https://github.com/tailor-platform/sdk/pull/1316) [`b7f0389`](https://github.com/tailor-platform/sdk/commit/b7f0389270573ba5cf6accca31acdea027974c8d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.4
+
+- [#1318](https://github.com/tailor-platform/sdk/pull/1318) [`c48aeb6`](https://github.com/tailor-platform/sdk/commit/c48aeb6e72a644b056a48e57d39799cae386461e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.7.0
+
+- [#1328](https://github.com/tailor-platform/sdk/pull/1328) [`8473a4d`](https://github.com/tailor-platform/sdk/commit/8473a4d284cea998759584c151e12c6cb9b7bc67) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.1
+
+## 1.55.0
+
+### Minor Changes
+
+- [#1173](https://github.com/tailor-platform/sdk/pull/1173) [`4d8010d`](https://github.com/tailor-platform/sdk/commit/4d8010ddf93edd1e9e7344b7e868b7e6efc3fddf) Thanks [@Mistat](https://github.com/Mistat)! - Add `createHttpAdapter()` for declaring HTTP adapters that translate HTTP requests into GraphQL queries and reshape the responses. Adapter files are discovered via the new `httpAdapter.files` glob in `defineConfig()`.
+
+### Patch Changes
+
+- [#1320](https://github.com/tailor-platform/sdk/pull/1320) [`977c200`](https://github.com/tailor-platform/sdk/commit/977c2007eb6ac28507d6eac1c391448ab91caa2a) Thanks [@remiposo](https://github.com/remiposo)! - `createKyselyMock`: assert what a write wrote as a `{ column: value }` map instead of positional SQL parameters. On a recorded query:
+
+  - `insertValues()` / `insertRows()` — the values a single- / multi-row insert wrote
+  - `updateValues()` — the values an update's SET clause wrote
+  - `node` — the raw Kysely operation node, for anything the helpers don't cover
+
+  Also adds `withTx(fn)` to run `fn` inside a real `Transaction`.
+
+- [#1314](https://github.com/tailor-platform/sdk/pull/1314) [`e423765`](https://github.com/tailor-platform/sdk/commit/e4237652c4ac65074e2bcd1da56adc1841bc71cd) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix generated migrate.ts templates for enum value removal: removed enum values were compared by object identity (so unchanged values were also treated as removed) and rendered as `[object Object]` in the generated migration script.
+
+## 1.54.3
+
+### Patch Changes
+
+- [#1293](https://github.com/tailor-platform/sdk/pull/1293) [`1f9991d`](https://github.com/tailor-platform/sdk/commit/1f9991dc089763b9a3dbf95e26742c7100f9dd24) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `db.fields.timestamps()` to respect user-specified `createdAt` / `updatedAt` values instead of always overwriting them with the current time. When a value is provided (e.g. seeding historical records), it is now used; when omitted, the current time is still applied as before.
+
+## 1.54.2
+
+### Patch Changes
+
+- [#1303](https://github.com/tailor-platform/sdk/pull/1303) [`0881adf`](https://github.com/tailor-platform/sdk/commit/0881adf42f99ae812bb861d537e33b9b0e7192af) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(deploy): stop reporting persistent TailorDB type diffs on every `deploy`. Fields without a `description` are emitted as an empty string by the platform but omitted by the local manifest; the comparison now treats an empty-string `description` as unset (same handling as empty `expr`), so unchanged types are no longer flagged as updates on repeated applies.
+
+## 1.54.1
+
+### Patch Changes
+
+- [#1292](https://github.com/tailor-platform/sdk/pull/1292) [`0976bac`](https://github.com/tailor-platform/sdk/commit/0976bac530ecf4f7214f6f69796e98a7bedb3e38) Thanks [@dqn](https://github.com/dqn)! - Update generated shell completions so saved completion files can refresh
+  themselves after future SDK upgrades.
+
+  Existing `eval "$(tailor-sdk completion bash)"` and
+  `eval "$(tailor-sdk completion zsh)"` setups do not need to change because they
+  regenerate completions on every shell startup.
+
+  If you saved a static completion file generated by an older SDK version,
+  regenerate that file once:
+
+  ```bash
+  # bash
+  mkdir -p ~/.local/share/bash-completion/completions
+  tailor-sdk completion bash > ~/.local/share/bash-completion/completions/tailor-sdk
+
+  # zsh fpath
+  mkdir -p ~/.zsh/completions
+  tailor-sdk completion zsh > ~/.zsh/completions/_tailor-sdk
+
+  # fish
+  tailor-sdk completion fish --install
+  ```
+
+  After that one-time regeneration, saved completion files can self-refresh when
+  the `tailor-sdk` binary changes. Open a new shell, or reload your shell
+  configuration, after regenerating.
+
+- [#1294](https://github.com/tailor-platform/sdk/pull/1294) [`fd1c5cf`](https://github.com/tailor-platform/sdk/commit/fd1c5cf7f2b1512df4a2798521119658cb6a2088) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix IdP services and OAuth2 clients always being reported as changed on consecutive deployments when a description is omitted
+
+- [#1281](https://github.com/tailor-platform/sdk/pull/1281) [`9711826`](https://github.com/tailor-platform/sdk/commit/971182600b5866cc44194865ae1a308871a8c377) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): `remove` no longer deletes an application matched by name alone. Removal now verifies ownership via `sdk-app-id`/`sdk-name` labels (`isOwnedByApp`), consistent with every other resource type, so a same-named application owned by another user in a shared workspace is left untouched.
+
+- [#1299](https://github.com/tailor-platform/sdk/pull/1299) [`c10681f`](https://github.com/tailor-platform/sdk/commit/c10681fc33211ec7a92a9ea9e61e00ebf0a69862) Thanks [@k1LoW](https://github.com/k1LoW)! - fix(runtime): remove non-existent `updatedAt` field from `idp.User`. The IDP service does not return this field, so the declaration was misleading consumers into expecting an optional timestamp that was always `undefined`.
+
 ## 1.54.0
 
 ### Minor Changes

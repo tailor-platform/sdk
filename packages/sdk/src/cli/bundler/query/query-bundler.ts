@@ -5,7 +5,7 @@ import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import ml from "@/utils/multiline";
-import type { QueryEngine } from "@/cli/query";
+import type { QueryEngine } from "@/cli/query/types";
 
 function createSqlEntry(): string {
   return ml /* ts */ `

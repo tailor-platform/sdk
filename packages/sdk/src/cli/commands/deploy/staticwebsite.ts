@@ -1,22 +1,20 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateStaticWebsiteRequestSchema,
   type DeleteStaticWebsiteRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
+import { buildMetaRequest, hasMatchingSdkVersion } from "./label";
 import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-proto/tailor/v1/staticwebsite_resource_pb";
 
@@ -125,35 +123,20 @@ export async function planStaticWebsite(context: PlanContext) {
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  // Fetch existing static websites
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingWebsites = await fetchExistingResourcesWithLabels({
+    client,
+    workspaceId,
+    fetchPage: async (pageToken, pageSize) => {
       const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
         workspaceId,
         pageToken,
-        pageSize: maxPageSize,
+        pageSize,
       });
       return [staticwebsites, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.name,
+    getTrn: trn,
   });
-  const existingWebsites: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.name),
-      });
-      existingWebsites[resource.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   const staticWebsiteServices = forRemoval ? [] : application.staticWebsiteServices;
   for (const websiteService of staticWebsiteServices) {
@@ -176,21 +159,16 @@ export async function planStaticWebsite(context: PlanContext) {
     };
 
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, application.name, application.id);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "StaticWebsite",
-            resourceName: name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "StaticWebsite",
-            resourceName: name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName: application.name,
+        appId: application.id,
+        resourceType: "StaticWebsite",
+        resourceName: name,
+        conflicts,
+        unmanaged,
+      });
 
       if (
         owned &&
@@ -217,10 +195,13 @@ export async function planStaticWebsite(context: PlanContext) {
   Object.entries(existingWebsites).forEach(([name]) => {
     const entry = existingWebsites[name];
     const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, application.name, application.id);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: label,
+      appName: application.name,
+      appId: application.id,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name,

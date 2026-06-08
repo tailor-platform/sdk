@@ -2,8 +2,9 @@
 // @generated from file tailor/v1/staticwebsite_resource.proto (package tailor.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/staticwebsite_resource.proto.
@@ -40,4 +41,90 @@ export declare type StaticWebsite = Message<"tailor.v1.StaticWebsite"> & {
  * Use `create(StaticWebsiteSchema)` to create a new message.
  */
 export declare const StaticWebsiteSchema: GenMessage<StaticWebsite>;
+
+/**
+ * @generated from message tailor.v1.CustomDomain
+ */
+export declare type CustomDomain = Message<"tailor.v1.CustomDomain"> & {
+  /**
+   * @generated from field: string domain = 1;
+   */
+  domain: string;
+
+  /**
+   * @generated from field: tailor.v1.CustomDomainStatus status = 2;
+   */
+  status: CustomDomainStatus;
+
+  /**
+   * @generated from field: string traffic_cname_target = 3;
+   */
+  trafficCnameTarget: string;
+
+  /**
+   * @generated from field: string certificate_cname_target = 4;
+   */
+  certificateCnameTarget: string;
+
+  /**
+   * @generated from field: string error_message = 5;
+   */
+  errorMessage: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 6;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp updated_at = 7;
+   */
+  updatedAt?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.CustomDomain.
+ * Use `create(CustomDomainSchema)` to create a new message.
+ */
+export declare const CustomDomainSchema: GenMessage<CustomDomain>;
+
+/**
+ * @generated from enum tailor.v1.CustomDomainStatus
+ */
+export enum CustomDomainStatus {
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_STATUS_PENDING = 1;
+   */
+  PENDING = 1,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_STATUS_VERIFYING = 2;
+   */
+  VERIFYING = 2,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_STATUS_CERT_ISSUED = 3;
+   */
+  CERT_ISSUED = 3,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_STATUS_ACTIVE = 4;
+   */
+  ACTIVE = 4,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_STATUS_FAILED = 5;
+   */
+  FAILED = 5,
+}
+
+/**
+ * Describes the enum tailor.v1.CustomDomainStatus.
+ */
+export declare const CustomDomainStatusSchema: GenEnum<CustomDomainStatus>;
 

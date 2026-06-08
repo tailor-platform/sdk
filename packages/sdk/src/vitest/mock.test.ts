@@ -265,7 +265,7 @@ describe("mock", () => {
         body: () => ({ when: new Date() }) as never,
       });
 
-      await expect(bad.trigger()).rejects.toThrow();
+      await expect(bad.trigger()).rejects.toThrow(/Date instance/);
     });
   });
 

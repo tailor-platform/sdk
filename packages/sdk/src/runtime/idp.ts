@@ -22,7 +22,6 @@ export interface User {
   name: string;
   disabled: boolean;
   createdAt?: string;
-  updatedAt?: string;
 }
 
 /** Filter options for {@link Client.users}. */

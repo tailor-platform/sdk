@@ -5,7 +5,7 @@ import {
   generateCandidates,
   parseCompletionContext,
 } from "politty/completion";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { mainCommand } from "./index";
 
 vi.mock("node:module", async (importOriginal) => ({
@@ -20,7 +20,7 @@ vi.mock("politty", async (importOriginal) => ({
 
 describe("shell completion", () => {
   describe("subcommand completion", () => {
-    it("completes root subcommands", async () => {
+    test("completes root subcommands", async () => {
       const ctx = parseCompletionContext([""], mainCommand);
       const result = await generateCandidates(ctx, { shell: "bash" });
 
@@ -32,7 +32,7 @@ describe("shell completion", () => {
       expect(values).toContain("completion");
     });
 
-    it("completes nested subcommands for tailordb", async () => {
+    test("completes nested subcommands for tailordb", async () => {
       const ctx = parseCompletionContext(["tailordb", ""], mainCommand);
       const result = await generateCandidates(ctx, { shell: "bash" });
 
@@ -44,7 +44,7 @@ describe("shell completion", () => {
   });
 
   describe("option name completion", () => {
-    it("completes option names for deploy command", async () => {
+    test("completes option names for deploy command", async () => {
       const ctx = parseCompletionContext(["deploy", "--"], mainCommand);
       const result = await generateCandidates(ctx, { shell: "bash" });
 
@@ -55,7 +55,7 @@ describe("shell completion", () => {
       expect(values).toContain("--yes");
     });
 
-    it("completes option names for workspace create command", async () => {
+    test("completes option names for workspace create command", async () => {
       const ctx = parseCompletionContext(["workspace", "create", "--"], mainCommand);
       const result = await generateCandidates(ctx, { shell: "bash" });
 
@@ -67,7 +67,7 @@ describe("shell completion", () => {
   });
 
   describe("file completion", () => {
-    it("triggers file completion with extension filter for --config", async () => {
+    test("triggers file completion with extension filter for --config", async () => {
       const ctx = parseCompletionContext(["deploy", "--config", ""], mainCommand);
       const result = await generateCandidates(ctx, { shell: "bash" });
 
@@ -80,14 +80,14 @@ describe("shell completion", () => {
   });
 
   describe("directory completion", () => {
-    it("triggers directory completion for staticwebsite deploy --dir", async () => {
+    test("triggers directory completion for staticwebsite deploy --dir", async () => {
       const ctx = parseCompletionContext(["staticwebsite", "deploy", "--dir", ""], mainCommand);
       const result = await generateCandidates(ctx, { shell: "bash" });
 
       expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
     });
 
-    it("triggers directory completion for tailordb erd export --output", async () => {
+    test("triggers directory completion for tailordb erd export --output", async () => {
       const ctx = parseCompletionContext(
         ["tailordb", "erd", "export", "--output", ""],
         mainCommand,
@@ -99,14 +99,14 @@ describe("shell completion", () => {
   });
 
   describe("no file completion", () => {
-    it("suppresses file completion for --workspace-id", async () => {
+    test("suppresses file completion for --workspace-id", async () => {
       const ctx = parseCompletionContext(["deploy", "--workspace-id", ""], mainCommand);
       const result = await generateCandidates(ctx, { shell: "bash" });
 
       expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();
     });
 
-    it("suppresses file completion for --profile", async () => {
+    test("suppresses file completion for --profile", async () => {
       const ctx = parseCompletionContext(["deploy", "--profile", ""], mainCommand);
       const result = await generateCandidates(ctx, { shell: "bash" });
 
@@ -115,7 +115,7 @@ describe("shell completion", () => {
   });
 
   describe("enum completion", () => {
-    it("completes role values for workspace user invite", async () => {
+    test("completes role values for workspace user invite", async () => {
       const ctx = parseCompletionContext(
         ["workspace", "user", "invite", "--role", ""],
         mainCommand,
@@ -162,18 +162,18 @@ describe("shell completion", () => {
       return row.candidates;
     }
 
-    it("depends on the endpoint positional", () => {
+    test("depends on the endpoint positional", () => {
       const { dependsOn } = getFieldExpandTable();
       expect(dependsOn).toEqual(["endpoint"]);
     });
 
-    it("enumerates top-level fields for the endpoint's proto schema", () => {
+    test("enumerates top-level fields for the endpoint's proto schema", () => {
       const values = candidatesFor("GetFunctionExecution").map((c) => c.value);
       expect(values).toContain("workspaceId=");
       expect(values).toContain("executionId=");
     });
 
-    it("keys the expand table for the fully-qualified endpoint form too", () => {
+    test("keys the expand table for the fully-qualified endpoint form too", () => {
       // `api` accepts both `GetApplication` and
       // `tailor.v1.OperatorService/GetApplication`. politty's expand keys the
       // static table by the literal `endpoint` value, so a row keyed by the
@@ -186,7 +186,7 @@ describe("shell completion", () => {
       expect(values).toContain("executionId=");
     });
 
-    it("enumerates enum values inline alongside the key", () => {
+    test("enumerates enum values inline alongside the key", () => {
       const values = candidatesFor("ListWorkspaces").map((c) => c.value);
       expect(values).toContain("pageDirection=");
       expect(values).toContain("pageDirection=PAGE_DIRECTION_UNSPECIFIED");
@@ -194,14 +194,14 @@ describe("shell completion", () => {
       expect(values).toContain("pageDirection=PAGE_DIRECTION_DESC");
     });
 
-    it("enumerates true/false inline for bool-typed fields", () => {
+    test("enumerates true/false inline for bool-typed fields", () => {
       const values = candidatesFor("CreateWorkspace").map((c) => c.value);
       expect(values).toContain("deleteProtection=");
       expect(values).toContain("deleteProtection=true");
       expect(values).toContain("deleteProtection=false");
     });
 
-    it("bakes the expand table and dedup tracker into the generated shell script", () => {
+    test("bakes the expand table and dedup tracker into the generated shell script", () => {
       // The whole point of `expand` is that candidates are inlined into the
       // static script — no Node process is spawned per TAB. politty's shell
       // generator additionally populates `_used_field_keys` from already-typed

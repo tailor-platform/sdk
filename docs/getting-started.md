@@ -55,7 +55,7 @@ pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 
 1. **Build** — Rebuild SDK if `.ts` files changed
 2. **Format** — Check formatting with oxfmt
-3. **Lint** — Run oxlint and check public API JSDoc
+3. **Lint** — Run standard and Vitest-specific oxlint passes, and check public API JSDoc
 4. **Typecheck** — Run tsgo
 5. **Knip** — Detect unused dependencies and exports
 
