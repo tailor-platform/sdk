@@ -37,6 +37,12 @@ describe("bundle-log-level", () => {
     );
   });
 
+  test("never drops console.assert, which is outside the platform severity system", () => {
+    for (const level of ["DEBUG", "INFO", "WARN", "ERROR", "SILENT"] as const) {
+      expect(manualPureFunctionsForLogLevel(level)).not.toContain("console.assert");
+    }
+  });
+
   test("omits manual pure functions for DEBUG", () => {
     expect(createLogLevelTreeshakeOptions("DEBUG")).not.toHaveProperty("manualPureFunctions");
   });

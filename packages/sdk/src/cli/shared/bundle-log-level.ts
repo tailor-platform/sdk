@@ -23,7 +23,11 @@ const DEBUG_LEVEL_CONSOLE_METHODS = ["console.debug", "console.trace"] as const;
 
 const WARN_LEVEL_CONSOLE_METHODS = ["console.warn"] as const;
 
-const ERROR_LEVEL_CONSOLE_METHODS = ["console.error", "console.assert"] as const;
+// `console.assert` is intentionally excluded: on the deployment runtime
+// (deno_core/V8) only log/debug/info/warn/error are wrapped with a log
+// severity, so `console.assert` sits outside the platform's severity system
+// and is never dropped by the log-level treeshaking.
+const ERROR_LEVEL_CONSOLE_METHODS = ["console.error"] as const;
 
 const MANUAL_PURE_FUNCTIONS_BY_LOG_LEVEL: Record<LogLevel, readonly string[]> = {
   DEBUG: [],
