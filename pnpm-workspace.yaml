@@ -12,6 +12,9 @@ minimumReleaseAgeExclude:
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Pre-existing transitive version without provenance attestation.
+  - "@swc/core@1.12.11"
 
 packages:
   - packages/*

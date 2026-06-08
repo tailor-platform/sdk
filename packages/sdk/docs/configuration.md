@@ -25,6 +25,7 @@ export default defineConfig({
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
   disableIntrospection: false,
+  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
 });
 ```
 
@@ -37,6 +38,17 @@ export default defineConfig({
 **Allowed IP Addresses**: Specify IP addresses allowed to access the application in CIDR format.
 
 **Disable Introspection**: Disable GraphQL introspection. Default is `false`.
+
+**Log Level**: Controls which `console.*` calls are kept when deployment functions are bundled. Supported values are `"DEBUG"`, `"INFO"`, `"WARN"`, `"ERROR"`, and `"SILENT"`. The default is `"DEBUG"` and keeps all console calls. For production deployments, use `"WARN"` to keep `console.warn` and `console.error` while dropping debug, log, and info calls:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+});
+```
+
+This is a bundle-time setting. Changing `LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
 
 ### Service Configuration
 
