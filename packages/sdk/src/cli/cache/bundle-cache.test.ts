@@ -503,6 +503,13 @@ describe("computeBundlerContextHash", () => {
     expect(a).not.toBe(b);
   });
 
+  test("returns different hash when bundleLogLevel differs", () => {
+    const a = computeBundlerContextHash({ ...baseParams, bundleLogLevel: "DEBUG" });
+    const b = computeBundlerContextHash({ ...baseParams, bundleLogLevel: "WARN" });
+
+    expect(a).not.toBe(b);
+  });
+
   test("returns same hash when prefix is undefined vs empty string", () => {
     const a = computeBundlerContextHash({ ...baseParams, prefix: undefined });
     const b = computeBundlerContextHash({ ...baseParams, prefix: "" });

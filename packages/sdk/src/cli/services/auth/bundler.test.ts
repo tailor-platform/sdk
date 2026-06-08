@@ -64,4 +64,31 @@ export default {
     // The wrapper always defines an env binding, even when empty
     expect(code).toContain("env");
   });
+
+  test("inlines LOG_LEVEL references from config during bundling", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-test-")));
+    const configFile = path.join(tmpDir, "tailor.config.ts");
+    fs.writeFileSync(
+      configFile,
+      `
+const handler = async () => ({ ok: true });
+
+export default {
+  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  auth: { hooks: { beforeLogin: { handler } } },
+};
+`,
+    );
+
+    const bundled = await bundleAuthHooks({
+      configPath: configFile,
+      authName: "my-auth",
+      handlerAccessPath: "auth.hooks.beforeLogin.handler",
+      bundleLogLevel: "WARN",
+    });
+
+    const code = bundled.get("auth-hook--my-auth--before-login");
+    expect(code).toBeDefined();
+    expect(code).not.toContain("process.env.LOG_LEVEL");
+  });
 });
