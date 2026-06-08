@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.56.1
+
+### Patch Changes
+
+- [#1347](https://github.com/tailor-platform/sdk/pull/1347) [`6888110`](https://github.com/tailor-platform/sdk/commit/6888110fa61f9f3fd991e0fb44e86fd37f9536f3) Thanks [@dqn](https://github.com/dqn)! - Fix resolver field builders (`t.*`) leaking metadata between fields. `description()`, `typeName()`, and `validate()` now return a new field instead of mutating the original, so a field instance reused across places (for example shared between a resolver's `input` and `output`, or a record passed to `t.object`) no longer leaks its metadata into the other usages. This matches the existing `db.*` behavior.
+
+- [#1346](https://github.com/tailor-platform/sdk/pull/1346) [`0254e3c`](https://github.com/tailor-platform/sdk/commit/0254e3caff0d1eeb7407d8932385bf5bdbaf4356) Thanks [@dqn](https://github.com/dqn)! - Warn when a permission rule is written in object form without an explicit `permit`. Object-format rules (e.g. `read: [{ conditions: [...] }]`) default to `deny`, unlike the array shorthand which defaults to `allow`, so omitting `permit` can silently lock out access you meant to grant. The CLI now flags these rules during generate/deploy so you can set `permit: true` (allow) or `permit: false` (deny) explicitly. Runtime behavior is unchanged. This covers TailorDB record permissions, TailorDB GraphQL permissions, and IdP permissions.
+
 ## 1.56.0
 
 ### Minor Changes
