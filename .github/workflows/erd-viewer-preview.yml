@@ -17,11 +17,17 @@ permissions:
 
 jobs:
   preview:
-    name: Build ERD viewer preview
+    name: Build ERD viewer preview (${{ matrix.namespace }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Self-contained artifacts are uploaded one file per namespace because
+        # `archive: false` only supports a single-file upload.
+        namespace: [tailordb, analyticsdb]
 
     steps:
       - name: Checkout
@@ -33,29 +39,23 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # `erd export --inline` is fully local (no platform login/network needed).
+      # `erd export --inline` is fully local (no platform login/network needed)
+      # and emits a single self-contained index.html per namespace.
       - name: Build ERD viewer (self-contained HTML)
         working-directory: example
-        run: pnpm exec tailor-sdk tailordb erd export --inline --output "$RUNNER_TEMP/erd-export"
+        env:
+          NAMESPACE: ${{ matrix.namespace }}
+        run: pnpm exec tailor-sdk tailordb erd export --inline --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
 
-      - name: Collect standalone previews
-        run: |
-          mkdir -p erd-preview
-          shopt -s nullglob
-          for html in "$RUNNER_TEMP"/erd-export/*/dist/index.html; do
-            namespace="$(basename "$(dirname "$(dirname "$html")")")"
-            cp "$html" "erd-preview/${namespace}.html"
-          done
-          ls -la erd-preview
-
-      # archive: false (upload-artifact v7+) keeps files unzipped so the HTML can
-      # be viewed directly in the browser from the run's artifact list.
+      # archive: false (upload-artifact v7+) keeps the file unzipped so the HTML
+      # can be viewed directly in the browser from the run's artifact list. Only
+      # a single file may be uploaded per artifact when archive is false.
       # https://github.blog/changelog/2026-02-26-github-actions-now-supports-uploading-and-downloading-non-zipped-artifacts/
       - name: Upload ERD viewer preview
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: erd-viewer-preview
-          path: erd-preview
+          name: erd-viewer-preview-${{ matrix.namespace }}
+          path: ${{ runner.temp }}/erd-export/${{ matrix.namespace }}/dist/index.html
           if-no-files-found: error
           archive: false
           retention-days: 7
