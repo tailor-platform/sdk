@@ -183,10 +183,17 @@ button:hover {
   z-index: 2;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   height: 52px;
   padding: 0 12px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+}
+
+.nav-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
 }
 
 .nav-head h2 {
@@ -197,6 +204,32 @@ button:hover {
 .nav-head span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.table-list-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.table-list-action {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 7px;
+  background: #2a2e2d;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.table-list-action:hover:not(:disabled) {
+  background: #333837;
+}
+
+.table-list-action:disabled {
+  opacity: 0.42;
 }
 
 .table-list {
