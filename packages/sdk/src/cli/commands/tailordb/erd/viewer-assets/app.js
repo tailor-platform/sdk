@@ -24,8 +24,7 @@ const elements = {
   revision: document.getElementById("revision"),
   search: document.getElementById("search"),
   tableSummary: document.getElementById("table-count-summary"),
-  showAllTables: document.getElementById("show-all-tables"),
-  hideAllTables: document.getElementById("hide-all-tables"),
+  toggleAllTables: document.getElementById("toggle-all-tables"),
   tableList: document.getElementById("table-list"),
   canvas: document.getElementById("canvas"),
   world: document.getElementById("world"),
@@ -278,9 +277,12 @@ function renderHeader() {
     visibleCount === schema.tables.length
       ? String(schema.tables.length)
       : `${visibleCount}/${schema.tables.length}`;
-  elements.showAllTables.disabled =
-    schema.tables.length === 0 || visibleCount === schema.tables.length;
-  elements.hideAllTables.disabled = schema.tables.length === 0 || visibleCount === 0;
+  const allTablesHidden = schema.tables.length > 0 && visibleCount === 0;
+  const allTableVisibilityLabel = allTablesHidden ? "Show all tables" : "Hide all tables";
+  elements.toggleAllTables.disabled = schema.tables.length === 0;
+  elements.toggleAllTables.innerHTML = eyeIcon(allTablesHidden);
+  elements.toggleAllTables.setAttribute("aria-label", allTableVisibilityLabel);
+  elements.toggleAllTables.title = allTableVisibilityLabel;
 }
 
 function renderTableList() {
@@ -768,6 +770,11 @@ function setAllTableVisibility(hidden) {
   renderAll({ center: false });
 }
 
+function toggleAllTableVisibility() {
+  if (!schema) return;
+  setAllTableVisibility(visibleTables().length > 0);
+}
+
 function cancelViewportAnimation() {
   if (!activeViewportAnimation) return;
   cancelAnimationFrame(activeViewportAnimation.frame);
@@ -991,12 +998,7 @@ function wireInteractions() {
     zoomAt(viewport.z / 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
   });
   elements.fitView.addEventListener("click", fitView);
-  elements.showAllTables.addEventListener("click", () => {
-    setAllTableVisibility(false);
-  });
-  elements.hideAllTables.addEventListener("click", () => {
-    setAllTableVisibility(true);
-  });
+  elements.toggleAllTables.addEventListener("click", toggleAllTableVisibility);
   elements.showMode.addEventListener("click", () => {
     setShowModeMenuOpen(elements.showModeMenu.hidden);
   });

@@ -206,32 +206,6 @@ button:hover {
   font-size: 12px;
 }
 
-.table-list-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 4px;
-}
-
-.table-list-action {
-  height: 28px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0 7px;
-  background: #2a2e2d;
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.table-list-action:hover:not(:disabled) {
-  background: #333837;
-}
-
-.table-list-action:disabled {
-  opacity: 0.42;
-}
-
 .table-list {
   display: grid;
   gap: 1px;
@@ -287,9 +261,13 @@ button:hover {
   color: var(--muted);
 }
 
-.table-visibility-toggle:hover {
+.table-visibility-toggle:hover:not(:disabled) {
   background: #252a28;
   color: var(--text);
+}
+
+.table-visibility-toggle:disabled {
+  opacity: 0.42;
 }
 
 .eye-icon {
