@@ -821,3 +821,139 @@ describe("TailorField runtime validation tests", () => {
     });
   });
 });
+
+describe("TailorField clone-on-write / no aliasing", () => {
+  const user: TailorUser = {
+    id: "test",
+    type: "user",
+    workspaceId: "workspace-test",
+    attributes: {},
+    attributeList: [],
+  };
+  const data = {};
+
+  test("description() returns a clone and never mutates the original", () => {
+    const original = t.string();
+    const updated = original.description("for A");
+
+    expect(original.metadata.description).toBeUndefined();
+    expect(updated.metadata.description).toBe("for A");
+    expect(updated).not.toBe(original);
+  });
+
+  test("typeName() returns a clone and never mutates the original", () => {
+    const original = t.object({ name: t.string() });
+    const updated = original.typeName("Custom");
+
+    expect(original.metadata.typeName).toBeUndefined();
+    expect(updated.metadata.typeName).toBe("Custom");
+    expect(updated).not.toBe(original);
+  });
+
+  test("validate() returns a clone and never mutates the original", () => {
+    const original = t.string();
+    const updated = original.validate((args) => args.value.length > 0);
+
+    expect(original.metadata.validate).toBeUndefined();
+    expect(updated.metadata.validate).toHaveLength(1);
+    expect(updated).not.toBe(original);
+  });
+
+  test("a field instance shared across places does not leak metadata", () => {
+    const shared = t.string();
+    const a = shared;
+    const b = shared;
+    a.description("for A");
+
+    expect(b.metadata.description).toBeUndefined();
+  });
+
+  test("t.object does not let builder calls leak into the caller's record", () => {
+    const inner = { city: t.string() };
+    const objField = t.object(inner);
+    objField.fields.city.description("mutated");
+
+    expect(inner.city.metadata.description).toBeUndefined();
+    expect(objField.fields.city.metadata.description).toBeUndefined();
+  });
+
+  test("chained builders accumulate metadata on the returned clone", () => {
+    const field = t.object({ name: t.string() }).typeName("Custom").description("a custom object");
+
+    expect(field.metadata.typeName).toBe("Custom");
+    expect(field.metadata.description).toBe("a custom object");
+  });
+
+  test("clone-on-write deep-clones nested object fields (no shared instances)", () => {
+    const original = t.object({ city: t.string() });
+    // description() clones the object field; nested fields must be deep-cloned too.
+    const updated = original.description("an object");
+
+    expect(updated).not.toBe(original);
+    expect(updated.fields.city).not.toBe(original.fields.city);
+
+    updated.fields.city.description("mutated");
+    expect(original.fields.city.metadata.description).toBeUndefined();
+  });
+
+  test("clone-on-write preserves options and enum values", () => {
+    const original = t.enum(["active", "inactive"], { array: true, optional: true });
+    const cloned = original.description("status");
+
+    expect(cloned.metadata.array).toBe(true);
+    expect(cloned.metadata.required).toBe(false);
+    expect(cloned.metadata.allowedValues).toEqual(original.metadata.allowedValues);
+    expect(cloned.metadata.description).toBe("status");
+  });
+
+  test("clone-on-write deep-copies mutable metadata so clones never share containers", () => {
+    const enumField = t.enum(["active", "inactive"]);
+    const enumClone = enumField.description("status");
+    // Same contents, but separate array AND separate value objects.
+    expect(enumClone.metadata.allowedValues).toEqual(enumField.metadata.allowedValues);
+    expect(enumClone.metadata.allowedValues).not.toBe(enumField.metadata.allowedValues);
+    expect(enumClone.metadata.allowedValues?.[0]).not.toBe(enumField.metadata.allowedValues?.[0]);
+
+    const validated = t.string().validate((args) => args.value.length > 0);
+    const validatedClone = validated.description("name");
+    expect(validatedClone.metadata.validate).not.toBe(validated.metadata.validate);
+  });
+
+  test("clone-on-write rebinds validation closures so parse still works", () => {
+    const status = t.enum(["active", "inactive"]);
+    const cloned = status.description("status field");
+
+    const ok = cloned.parse({ value: "active", data, user });
+    expect(ok.issues).toBeUndefined();
+
+    const ng = cloned.parse({ value: "pending", data, user });
+    expect(ng.issues).toBeDefined();
+    expect(ng.issues?.[0]?.message).toEqual("Must be one of [active, inactive]: received pending");
+  });
+
+  test("validate() preserves function references through cloning", () => {
+    const calls: unknown[] = [];
+    const field = t.string().validate((args) => {
+      calls.push(args.value);
+      return args.value.length > 0;
+    });
+
+    const result = field.parse({ value: "x", data, user });
+    expect(result.issues).toBeUndefined();
+    expect(calls).toEqual(["x"]);
+  });
+
+  test("validators survive a clone triggered by a later builder, leaving the original intact", () => {
+    const validated = t.string().validate((args) => args.value.length > 0);
+    // description() clones the field; the validators must carry over to the clone
+    // and keep working, while the original stays unchanged.
+    const described = validated.description("name");
+
+    expect(described.metadata.validate).toHaveLength(1);
+    expect(described.metadata.description).toBe("name");
+    expect(validated.metadata.description).toBeUndefined();
+
+    const failed = described.parse({ value: "", data, user });
+    expect(failed.issues).toBeDefined();
+  });
+});
