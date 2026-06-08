@@ -162,11 +162,10 @@ export function findOmittedPermitRules(permission: RawIdPPermission | undefined)
     return [];
   }
   const locations: string[] = [];
-  const actions = ["create", "read", "update", "delete", "sendPasswordResetEmail"] as const;
-  for (const action of actions) {
+  for (const action of Object.keys(permission) as Array<keyof typeof permission>) {
     permission[action]?.forEach((rule: unknown, index: number) => {
       if (isObjectFormat(rule) && rule.permit === undefined) {
-        locations.push(`${action}[${index}]`);
+        locations.push(`${String(action)}[${index}]`);
       }
     });
   }

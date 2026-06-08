@@ -252,6 +252,17 @@ describe("findOmittedPermitRules", () => {
     expect(result).toEqual([]);
   });
 
+  test("flags single-array object form", () => {
+    const result = findOmittedPermitRules({
+      create: [{ conditions: [{ user: "role" }, "=", "ADMIN"] }],
+      read: [],
+      update: [],
+      delete: [],
+      sendPasswordResetEmail: [],
+    } as RawIdPPermission);
+    expect(result).toEqual(["create[0]"]);
+  });
+
   test("returns empty for undefined permission", () => {
     expect(findOmittedPermitRules(undefined)).toEqual([]);
   });
