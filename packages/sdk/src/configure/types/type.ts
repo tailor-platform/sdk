@@ -135,6 +135,9 @@ type FieldParseInternalArgs = {
  * @param options - Field options
  * @param fields - Nested fields for object-like types
  * @param values - Allowed values for enum-like fields
+ * @param metadata - Pre-built metadata to clone from (used by `clone()`); when
+ *   given, the mutable containers are deep-copied here and `options`/`values` are
+ *   ignored for metadata construction
  * @returns A new TailorField
  */
 function createTailorField<
@@ -146,22 +149,38 @@ function createTailorField<
   options?: TOptions,
   fields?: Record<string, TailorAnyField>,
   values?: AllowedValues,
+  metadata?: FieldMetadata,
 ): TailorField<
   { type: T; array: TOptions extends { array: true } ? true : false },
   FieldOutput<OutputBase, TOptions>
 > {
-  const _metadata: FieldMetadata = { required: true };
+  // When cloning, take ownership of the source metadata and deep-copy its mutable
+  // containers (enum value objects and `[fn, message]` validator tuples; validator
+  // functions are kept by reference) so no two instances share mutable state.
+  const _metadata: FieldMetadata = metadata
+    ? {
+        ...metadata,
+        ...(metadata.allowedValues && {
+          allowedValues: metadata.allowedValues.map((v) => ({ ...v })),
+        }),
+        ...(metadata.validate && {
+          validate: metadata.validate.map((v) => (Array.isArray(v) ? ([...v] as typeof v) : v)),
+        }),
+      }
+    : { required: true };
 
-  if (options) {
-    if (options.optional === true) {
-      _metadata.required = false;
+  if (!metadata) {
+    if (options) {
+      if (options.optional === true) {
+        _metadata.required = false;
+      }
+      if (options.array === true) {
+        _metadata.array = true;
+      }
     }
-    if (options.array === true) {
-      _metadata.array = true;
+    if (values) {
+      _metadata.allowedValues = mapAllowedValues(values);
     }
-  }
-  if (values) {
-    _metadata.allowedValues = mapAllowedValues(values);
   }
 
   /**
@@ -459,25 +478,11 @@ function createTailorField<
         clonedFields = cloned;
       }
 
-      // Recreate via the factory so the parseInternal/validateValue closures
-      // rebind to the new instance instead of the original.
-      const clonedField = createTailorField(type, options, clonedFields, values);
-
-      // Copy metadata onto the new instance, deep-copying the mutable containers
-      // (the enum value objects and the `[fn, message]` validator tuples) so no
-      // two field instances share mutable metadata. Validator functions are kept
-      // by reference, the same as db.*'s cloneDeep.
-      const m = clonedField._metadata;
-      Object.assign(m, this._metadata);
-      if (m.allowedValues) {
-        m.allowedValues = m.allowedValues.map((v) => ({ ...v }));
-      }
-      if (m.validate) {
-        m.validate = m.validate.map((v) => (Array.isArray(v) ? ([...v] as typeof v) : v));
-      }
-
+      // Rebuild via the factory, handing it this field's metadata so the new
+      // parseInternal/validateValue closures rebind to the clone and the factory
+      // owns the metadata deep-copy.
       // oxlint-disable-next-line no-explicit-any
-      return clonedField as any;
+      return createTailorField(type, options, clonedFields, values, this._metadata) as any;
     },
   };
 
