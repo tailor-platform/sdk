@@ -1,4 +1,5 @@
-import { afterEach, describe, it, expect, expectTypeOf } from "vitest";
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import { afterEach, describe, expect, test, expectTypeOf } from "vitest";
 import { setupWaitPointMock, setupWorkflowMock } from "@/utils/test/mock";
 import { defineWaitPoint, defineWaitPoints } from "./wait-point";
 import type { TailorRuntime } from "@/runtime";
@@ -10,7 +11,7 @@ describe("defineWaitPoints", () => {
     delete TailorGlobal.tailor;
   });
 
-  it("creates instances with typed wait/resolve", () => {
+  test("creates instances with typed wait/resolve", () => {
     const wps = defineWaitPoints((define) => ({
       approval: define<{ message: string }, { approved: boolean }>(),
     }));
@@ -18,7 +19,7 @@ describe("defineWaitPoints", () => {
     expectTypeOf(wps.approval.resolve).toBeFunction();
   });
 
-  it("rejects Date in Payload / Result (pure JSON only)", () => {
+  test("rejects Date in Payload / Result (pure JSON only)", () => {
     defineWaitPoints((define) => ({
       // @ts-expect-error - Date is not JsonValue-compatible (Result)
       check: define<undefined, { timestamp: Date }>(),
@@ -29,42 +30,42 @@ describe("defineWaitPoints", () => {
     }));
   });
 
-  it("rejects top-level null in Payload", () => {
+  test("rejects top-level null in Payload", () => {
     defineWaitPoints((define) => ({
       // @ts-expect-error - null is not allowed at top level (even in union)
       check: define<{ id: string } | null, { ok: boolean }>(),
     }));
   });
 
-  it("rejects top-level undefined in Payload union", () => {
+  test("rejects top-level undefined in Payload union", () => {
     defineWaitPoints((define) => ({
       // @ts-expect-error - undefined is not allowed at top level (except when Payload = undefined alone)
       check: define<{ id: string } | undefined, { ok: boolean }>(),
     }));
   });
 
-  it("allows Payload = undefined (no-payload convention)", () => {
+  test("allows Payload = undefined (no-payload convention)", () => {
     const wps = defineWaitPoints((define) => ({
       check: define<undefined, { ok: boolean }>(),
     }));
     expectTypeOf(wps.check.wait).toBeFunction();
   });
 
-  it("allows nested null in Payload", () => {
+  test("allows nested null in Payload", () => {
     const wps = defineWaitPoints((define) => ({
       check: define<{ data: string | null }, { ok: boolean }>(),
     }));
     expectTypeOf(wps.check.wait).toBeFunction();
   });
 
-  it("allows top-level null in Result", () => {
+  test("allows top-level null in Result", () => {
     const wps = defineWaitPoints((define) => ({
       check: define<{ id: string }, { data: string } | null>(),
     }));
     expectTypeOf(wps.check.wait).toBeFunction();
   });
 
-  it("wait return type is Result as-is (no Jsonify transformation)", () => {
+  test("wait return type is Result as-is (no Jsonify transformation)", () => {
     const wps = defineWaitPoints((define) => ({
       check: define<undefined, { count: number; tags: string[] }>(),
     }));
@@ -72,7 +73,7 @@ describe("defineWaitPoints", () => {
     expectTypeOf<WaitReturn>().toEqualTypeOf<{ count: number; tags: string[] }>();
   });
 
-  it("wait omits payload when Payload is undefined", () => {
+  test("wait omits payload when Payload is undefined", () => {
     const wps = defineWaitPoints((define) => ({
       signal: define<undefined, { done: boolean }>(),
     }));
@@ -80,14 +81,14 @@ describe("defineWaitPoints", () => {
     expectTypeOf<Params>().toEqualTypeOf<[]>();
   });
 
-  it("throws without platform API or mock", () => {
+  test("throws without platform API or mock", () => {
     const wps = defineWaitPoints((define) => ({
       approval: define<undefined, { ok: boolean }>(),
     }));
     expect(() => wps.approval.wait()).toThrow("mockWorkflow");
   });
 
-  it("throws a helpful error when only setupWorkflowMock is active (wait/resolve auto-stubbed)", () => {
+  test("throws a helpful error when only setupWorkflowMock is active (wait/resolve auto-stubbed)", () => {
     setupWorkflowMock(() => undefined);
     const wps = defineWaitPoints((define) => ({
       approval: define<undefined, { ok: boolean }>(),
@@ -95,28 +96,28 @@ describe("defineWaitPoints", () => {
     expect(() => wps.approval.wait()).toThrow("mockWorkflow");
   });
 
-  it("rejects Result = undefined (callback must return a value)", () => {
+  test("rejects Result = undefined (callback must return a value)", () => {
     defineWaitPoints((define) => ({
       // @ts-expect-error - Result cannot be undefined; platform throws if callback returns undefined
       check: define<undefined, undefined>(),
     }));
   });
 
-  it("rejects top-level undefined in Result union", () => {
+  test("rejects top-level undefined in Result union", () => {
     defineWaitPoints((define) => ({
       // @ts-expect-error - Result cannot include top-level undefined
       check: define<undefined, { ok: boolean } | undefined>(),
     }));
   });
 
-  it("allows nested undefined (optional fields) in Result", () => {
+  test("allows nested undefined (optional fields) in Result", () => {
     const wps = defineWaitPoints((define) => ({
       check: define<undefined, { ok: boolean; reason?: string }>(),
     }));
     expectTypeOf(wps.check.wait).toBeFunction();
   });
 
-  it("wait() delegates to mock", async () => {
+  test("wait() delegates to mock", async () => {
     const { waitCalls } = setupWaitPointMock({
       onWait: (_key, _payload) => ({ approved: true }),
     });
@@ -131,7 +132,7 @@ describe("defineWaitPoints", () => {
     expect(waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
   });
 
-  it("resolve() delegates to mock", async () => {
+  test("resolve() delegates to mock", async () => {
     const { resolveCalls } = setupWaitPointMock({
       onResolve: async (_execId, _key, callback) => {
         callback({ msg: "hello" });
@@ -150,7 +151,7 @@ describe("defineWaitPoints", () => {
     expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "approval" });
   });
 
-  it("sets correct key from property name", async () => {
+  test("sets correct key from property name", async () => {
     const { waitCalls } = setupWaitPointMock({
       onWait: () => "ok",
     });
@@ -169,24 +170,24 @@ describe("defineWaitPoint", () => {
     delete TailorGlobal.tailor;
   });
 
-  it("creates a typed instance with the given key", () => {
+  test("creates a typed instance with the given key", () => {
     const wp = defineWaitPoint<{ msg: string }, { ok: boolean }>("my-key");
     expectTypeOf(wp.wait).toBeFunction();
     expectTypeOf(wp.resolve).toBeFunction();
   });
 
-  it("throws without platform API or mock", () => {
+  test("throws without platform API or mock", () => {
     const wp = defineWaitPoint<undefined, { ok: boolean }>("my-step");
     expect(() => wp.wait()).toThrow("mockWorkflow");
   });
 
-  it("rejects Result = undefined (callback must return a value)", () => {
+  test("rejects Result = undefined (callback must return a value)", () => {
     const wp = defineWaitPoint<undefined, undefined>("my-step");
     // @ts-expect-error - wp resolves to an error string, not WaitPointInstance
     expectTypeOf(wp.wait).toBeFunction();
   });
 
-  it("uses the provided key", async () => {
+  test("uses the provided key", async () => {
     const { waitCalls } = setupWaitPointMock({
       onWait: (_key, _payload) => ({ ok: true }),
     });
@@ -196,7 +197,7 @@ describe("defineWaitPoint", () => {
     expect(waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
   });
 
-  it("resolve delegates to mock", async () => {
+  test("resolve delegates to mock", async () => {
     const { resolveCalls } = setupWaitPointMock({
       onResolve: async (_execId, _key, callback) => {
         callback(undefined);

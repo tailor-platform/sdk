@@ -1,5 +1,5 @@
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { defineAuth } from "@/configure/services/auth";
 import { t } from "@/configure/types/type";
 import {
@@ -10,7 +10,7 @@ import {
 import type { AttributeListConfig, AttributeMapConfig } from "./type-generator";
 
 describe("generateTypeDefinition", () => {
-  it("should generate tuple type in __tuple property", () => {
+  test("should generate tuple type in __tuple property", () => {
     const attributeList: AttributeListConfig = ["attr1", "attr2"];
 
     const result = generateTypeDefinition(undefined, attributeList);
@@ -18,7 +18,7 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("__tuple?: [string, string]");
   });
 
-  it("should generate interface AttributeList for declaration merging", () => {
+  test("should generate interface AttributeList for declaration merging", () => {
     const attributeMap: AttributeMapConfig = {
       role: '"MANAGER" | "STAFF"',
     };
@@ -32,7 +32,7 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("__tuple?: []");
   });
 
-  it("should generate AttributeMap interface", () => {
+  test("should generate AttributeMap interface", () => {
     const attributeMap: AttributeMapConfig = {
       role: '"MANAGER" | "STAFF"',
       isActive: "boolean",
@@ -45,7 +45,7 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("isActive: boolean");
   });
 
-  it("should generate empty AttributeMap when no attributes", () => {
+  test("should generate empty AttributeMap when no attributes", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
     expect(result).toContain("interface AttributeMap {}");
@@ -53,7 +53,7 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("__tuple?: []");
   });
 
-  it("should include proper file header and structure", () => {
+  test("should include proper file header and structure", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
     expect(result).toContain("// This file is auto-generated");
@@ -61,7 +61,7 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("export {};");
   });
 
-  it("should generate Env interface with literal types", () => {
+  test("should generate Env interface with literal types", () => {
     const env = {
       hoge: 1,
       fuga: "hello",
@@ -76,19 +76,19 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("piyo: true;");
   });
 
-  it("should generate empty Env interface when no env provided", () => {
+  test("should generate empty Env interface when no env provided", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
     expect(result).toContain("interface Env {}");
   });
 
-  it("should generate empty MachineUserNameRegistry when no machine users provided", () => {
+  test("should generate empty MachineUserNameRegistry when no machine users provided", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
     expect(result).toContain("interface MachineUserNameRegistry {}");
   });
 
-  it("should generate MachineUserNameRegistry with machine user names", () => {
+  test("should generate MachineUserNameRegistry with machine user names", () => {
     const result = generateTypeDefinition(undefined, undefined, undefined, [
       "manager-machine-user",
       "kiosk",
@@ -102,13 +102,13 @@ describe("generateTypeDefinition", () => {
     expect(result).not.toContain('"kiosk": true;');
   });
 
-  it("should generate empty IdpNameRegistry when no idps provided", () => {
+  test("should generate empty IdpNameRegistry when no idps provided", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
     expect(result).toContain("interface IdpNameRegistry {}");
   });
 
-  it("should generate IdpNameRegistry with idp names", () => {
+  test("should generate IdpNameRegistry with idp names", () => {
     const result = generateTypeDefinition(undefined, undefined, undefined, undefined, [
       "primary-idp",
       "backoffice",
@@ -135,18 +135,18 @@ describe("resolveTypeDefinitionPath", () => {
     }
   });
 
-  it("should default to tailor.d.ts next to config file", () => {
+  test("should default to tailor.d.ts next to config file", () => {
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe(path.resolve("/project", "tailor.d.ts"));
   });
 
-  it("should use TAILOR_PLATFORM_SDK_DTS_PATH when set to an absolute path", () => {
+  test("should use TAILOR_PLATFORM_SDK_DTS_PATH when set to an absolute path", () => {
     process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "/custom/output/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe("/custom/output/types.d.ts");
   });
 
-  it("should resolve TAILOR_PLATFORM_SDK_DTS_PATH relative to cwd when relative", () => {
+  test("should resolve TAILOR_PLATFORM_SDK_DTS_PATH relative to cwd when relative", () => {
     process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "custom/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe(path.resolve("custom/types.d.ts"));
@@ -154,7 +154,7 @@ describe("resolveTypeDefinitionPath", () => {
 });
 
 describe("extractAttributesFromConfig + generateTypeDefinition", () => {
-  it("renders machineUserAttributes into AttributeMap", () => {
+  test("renders machineUserAttributes into AttributeMap", () => {
     const config = {
       name: "test-app",
       auth: defineAuth("auth", {
@@ -183,7 +183,7 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain("tags: string[];");
   });
 
-  it("extracts machine user names into MachineUserNameRegistry", () => {
+  test("extracts machine user names into MachineUserNameRegistry", () => {
     const config = {
       name: "test-app",
       auth: defineAuth("auth", {
@@ -206,7 +206,7 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain("worker: true;");
   });
 
-  it("extracts idp names into IdpNameRegistry", () => {
+  test("extracts idp names into IdpNameRegistry", () => {
     const config = {
       name: "test-app",
       idp: [{ name: "primary-idp" } as never, { name: "backoffice" } as never],
@@ -221,7 +221,7 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain("backoffice: true;");
   });
 
-  it("de-duplicates idp names so the registry has unique keys", () => {
+  test("de-duplicates idp names so the registry has unique keys", () => {
     const config = {
       name: "test-app",
       idp: [

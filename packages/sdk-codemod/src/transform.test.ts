@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import type { TransformFn } from "./runner";
 
 const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
@@ -52,46 +52,43 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
     const inputPath = path.join(c.caseDir, c.inputFile);
     const input = await fs.promises.readFile(inputPath, "utf-8");
     const result = await transform(input, inputPath);
-
-    if (c.expectedFile) {
-      const expected = await fs.promises.readFile(path.join(c.caseDir, c.expectedFile), "utf-8");
-      expect(result, `${codemodPath}/${c.caseName}`).toBe(expected);
-    } else {
-      expect(result, `${codemodPath}/${c.caseName} (no expected.* → expect no change)`).toBeNull();
-    }
+    const expected = c.expectedFile
+      ? await fs.promises.readFile(path.join(c.caseDir, c.expectedFile), "utf-8")
+      : null;
+    expect(result).toBe(expected);
   }
 }
 
 describe("codemod transforms", () => {
-  it("v2/define-generators-to-plugins transforms correctly", async () => {
-    await runFixtureCases("v2/define-generators-to-plugins");
+  test("v2/define-generators-to-plugins transforms correctly", async () => {
+    await expect(runFixtureCases("v2/define-generators-to-plugins")).resolves.toBeUndefined();
   });
 
-  it("v2/test-run-arg-input transforms correctly", async () => {
-    await runFixtureCases("v2/test-run-arg-input");
+  test("v2/test-run-arg-input transforms correctly", async () => {
+    await expect(runFixtureCases("v2/test-run-arg-input")).resolves.toBeUndefined();
   });
 
-  it("v2/sdk-skills-shim transforms correctly", async () => {
-    await runFixtureCases("v2/sdk-skills-shim");
+  test("v2/sdk-skills-shim transforms correctly", async () => {
+    await expect(runFixtureCases("v2/sdk-skills-shim")).resolves.toBeUndefined();
   });
 
-  it("v2/principal-unify transforms correctly", async () => {
-    await runFixtureCases("v2/principal-unify");
+  test("v2/principal-unify transforms correctly", async () => {
+    await expect(runFixtureCases("v2/principal-unify")).resolves.toBeUndefined();
   });
 
-  it("v2/apply-to-deploy transforms correctly", async () => {
-    await runFixtureCases("v2/apply-to-deploy");
+  test("v2/apply-to-deploy transforms correctly", async () => {
+    await expect(runFixtureCases("v2/apply-to-deploy")).resolves.toBeUndefined();
   });
 
-  it("v2/cli-rename transforms correctly", async () => {
-    await runFixtureCases("v2/cli-rename");
+  test("v2/cli-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/cli-rename")).resolves.toBeUndefined();
   });
 
-  it("v2/auth-invoker-unwrap transforms correctly", async () => {
-    await runFixtureCases("v2/auth-invoker-unwrap");
+  test("v2/auth-invoker-unwrap transforms correctly", async () => {
+    await expect(runFixtureCases("v2/auth-invoker-unwrap")).resolves.toBeUndefined();
   });
 
-  it("v2/tailordb-namespace transforms correctly", async () => {
-    await runFixtureCases("v2/tailordb-namespace");
+  test("v2/tailordb-namespace transforms correctly", async () => {
+    await expect(runFixtureCases("v2/tailordb-namespace")).resolves.toBeUndefined();
   });
 });

@@ -21,9 +21,10 @@ describe("AppConfigSchema", () => {
       name: "my-app",
     });
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0]?.path).toEqual(["id"]);
+    if (result.success) {
+      throw new Error("Expected AppConfigSchema parsing to fail");
     }
+    expect(result.error.issues[0]?.path).toEqual(["id"]);
   });
 
   test("rejects when name is missing", () => {

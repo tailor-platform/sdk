@@ -1,4 +1,5 @@
-import { describe, it } from "vitest";
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import { describe, test } from "vitest";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
 import { type GetWorkflowOptions, type GetWorkflowTypedOptions } from "./get";
 
@@ -13,7 +14,7 @@ const myWorkflow = createWorkflow({
 });
 
 describe("getWorkflow API types", () => {
-  it("accepts typed options with workflow definition", () => {
+  test("accepts typed options with workflow definition", () => {
     const acceptsOptions = (_options: GetWorkflowTypedOptions<typeof myWorkflow>): void => {};
 
     acceptsOptions({
@@ -27,7 +28,7 @@ describe("getWorkflow API types", () => {
     });
   });
 
-  it("works with default generic when GetWorkflowTypedOptions generic is omitted", () => {
+  test("works with default generic when GetWorkflowTypedOptions generic is omitted", () => {
     const acceptsDefaultOptions = (_options: GetWorkflowTypedOptions): void => {};
 
     acceptsDefaultOptions({
@@ -39,7 +40,7 @@ describe("getWorkflow API types", () => {
     });
   });
 
-  it("rejects legacy options shape in typed overload", () => {
+  test("rejects legacy options shape in typed overload", () => {
     const acceptsTypedOptions = (_options: GetWorkflowTypedOptions): void => {};
 
     acceptsTypedOptions({
@@ -48,7 +49,7 @@ describe("getWorkflow API types", () => {
     });
   });
 
-  it("keeps deprecated GetWorkflowOptions shape available", () => {
+  test("keeps deprecated GetWorkflowOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: GetWorkflowOptions): void => {};
 
     acceptsDeprecatedOptions({

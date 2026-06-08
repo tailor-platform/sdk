@@ -208,7 +208,7 @@ describe("query", () => {
         machineUser: "bot",
         query: "   ",
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Unexpected end of input");
   });
 
   test("throws helpful error when SQL namespace cannot be inferred", async () => {
@@ -239,21 +239,19 @@ describe("query", () => {
       error: "sqlaccess error: failed to parse: expected token at line 1",
     });
 
-    try {
-      await query({
+    await expect(
+      query({
         workspaceId: "workspace-1",
         configPath: "tailor.config.ts",
         engine: "sql",
         machineUser: "bot",
         query: "select 1",
-      });
-      throw new Error("expected query() to throw");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).name).toBe("CLIError");
-      expect((error as Error).message).toBe("SQL parse error.");
-      expect((error as { suggestion?: string }).suggestion).toBe("expected token at line 1");
-    }
+      }),
+    ).rejects.toMatchObject({
+      name: "CLIError",
+      message: "SQL parse error.",
+      suggestion: "expected token at line 1",
+    });
   });
 
   test("splits multiple SQL statements and passes queries array to executeScript", async () => {

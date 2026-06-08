@@ -165,7 +165,7 @@ describe("planExecutor", () => {
       tailorDBServices,
       resolverServices,
       idpServices,
-      authService: options?.authName ? { parsedConfig: { name: options.authName } } : undefined,
+      authService: options?.authName ? { config: { name: options.authName } } : undefined,
     } as unknown as Application;
   }
 

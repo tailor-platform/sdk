@@ -48,14 +48,15 @@ describe("createCacheManager", () => {
         sdkVersion: "1.0.0",
       });
 
-      // Should not throw
-      manager.bundleCache.save({
-        kind: "resolver",
-        name: "test",
-        sourceFile: "/tmp/src.ts",
-        content: "bundled output",
-        dependencyPaths: [],
-      });
+      expect(() =>
+        manager.bundleCache.save({
+          kind: "resolver",
+          name: "test",
+          sourceFile: "/tmp/src.ts",
+          content: "bundled output",
+          dependencyPaths: [],
+        }),
+      ).not.toThrow();
     });
 
     test("finalize is a no-op", () => {
