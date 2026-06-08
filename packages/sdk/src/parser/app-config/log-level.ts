@@ -1,13 +1,5 @@
-import type { LogLevel } from "@/types/app-config";
+export const LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR", "SILENT"] as const;
 
-export const LOG_LEVELS = [
-  "DEBUG",
-  "INFO",
-  "WARN",
-  "ERROR",
-  "SILENT",
-] as const satisfies readonly LogLevel[];
-
-export function isLogLevel(value: string): value is LogLevel {
+export function isLogLevel(value: string): value is (typeof LOG_LEVELS)[number] {
   return (LOG_LEVELS as readonly string[]).includes(value);
 }
