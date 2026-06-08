@@ -26,7 +26,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@clack/prompts": "1.5.0",
+    "@clack/prompts": "1.5.1",
     "execa": "9.6.1",
     "picocolors": "1.1.1",
     "pkg-types": "2.3.1",
