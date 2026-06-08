@@ -4,6 +4,7 @@ import { resolveTSConfig } from "pkg-types";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
+import { findOmittedPermitRules } from "@/parser/service/tailordb/permission";
 import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import type { PluginManager } from "@/plugin/manager";
@@ -59,6 +60,22 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     }
 
     types = parseTypes(allTypes, namespace, typeSourceInfo);
+  };
+
+  // Warn about object-format permission rules that omit `permit`. Those default
+  // to "deny" (unlike the array shorthand, which defaults to "allow"), an easy
+  // way to accidentally lock out access the rule was meant to grant.
+  const warnOmittedPermit = (): void => {
+    for (const fileTypes of Object.values(rawTypes)) {
+      for (const [typeName, type] of Object.entries(fileTypes)) {
+        const locations = findOmittedPermitRules(type.metadata.permissions ?? {});
+        if (locations.length > 0) {
+          logger.warn(
+            `TailorDB type "${typeName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+          );
+        }
+      }
+    }
   };
 
   /**
@@ -208,6 +225,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             await Promise.all(typeFiles.map((typeFile) => loadTypeFile(typeFile, tsconfig)));
           }
           doParseTypes();
+          warnOmittedPermit();
           return types;
         })();
       }
