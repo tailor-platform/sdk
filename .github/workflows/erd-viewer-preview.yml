@@ -59,3 +59,47 @@ jobs:
           if-no-files-found: error
           archive: false
           retention-days: 7
+
+  comment:
+    name: Post preview links
+    needs: preview
+    # Skip on fork PRs, whose read-only token cannot post comments.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Upsert sticky preview comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER: ${{ github.server_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MARKER: "<!-- erd-viewer-preview -->"
+        run: |
+          set -euo pipefail
+
+          # Build the comment body from this run's ERD preview artifacts.
+          body="$MARKER"$'\n'"### 🗺️ ERD viewer preview"$'\n\n'
+          body+="Self-contained HTML built for this run — open the artifact, then view it in your browser:"$'\n'
+          while IFS=$'\t' read -r name id; do
+            [ -z "$name" ] && continue
+            ns=${name#erd-viewer-preview-}
+            body+=$'\n'"- **$ns**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
+          done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+            --jq '.artifacts[] | select(.name | startswith("erd-viewer-preview-")) | [.name, (.id|tostring)] | @tsv')
+
+          # Upsert: update the existing sticky comment if present, else create one.
+          existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" >/dev/null
+            echo "Updated sticky comment $existing"
+          else
+            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
+            echo "Created sticky comment"
+          fi
