@@ -20,6 +20,7 @@ const SHOW_MODE_OPTIONS = [
 ];
 
 const elements = {
+  main: document.querySelector(".main"),
   namespace: document.getElementById("namespace"),
   revision: document.getElementById("revision"),
   search: document.getElementById("search"),
@@ -47,7 +48,9 @@ let layout;
 let selectedTable;
 let searchText = "";
 let viewport = { x: 32, y: 32, z: 1 };
-let hasViewportFromHash = false;
+let hasZoomFromHash = false;
+let userAdjustedViewport = false;
+let hashUpdatesDisabled = false;
 let showMode = DEFAULT_SHOW_MODE;
 let activeCardDrag;
 let activeCanvasPan;
@@ -99,30 +102,55 @@ function readHashState() {
   for (const tableName of (params.get("hidden") || "").split(",")) {
     if (tableName) hiddenTableNames.add(tableName);
   }
-  const x = Number(params.get("x"));
-  const y = Number(params.get("y"));
   const z = Number(params.get("z"));
-  const hasViewportParams = params.has("x") && params.has("y") && params.has("z");
-  if (hasViewportParams && Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
-    viewport = { x, y, z: clamp(z, MIN_ZOOM, MAX_ZOOM) };
-    hasViewportFromHash = true;
+  if (params.has("z") && Number.isFinite(z)) {
+    viewport = { ...viewport, z: clamp(z, MIN_ZOOM, MAX_ZOOM) };
+    hasZoomFromHash = true;
   }
 }
 
 function writeHashState() {
+  if (hashUpdatesDisabled) return;
   const params = new URLSearchParams();
   if (selectedTable) params.set("table", selectedTable);
   if (showMode !== DEFAULT_SHOW_MODE) params.set("show", showMode);
   if (hiddenTableNames.size > 0) {
     params.set("hidden", [...hiddenTableNames].sort((a, b) => a.localeCompare(b)).join(","));
   }
-  params.set("x", String(Math.round(viewport.x)));
-  params.set("y", String(Math.round(viewport.y)));
   params.set("z", viewport.z.toFixed(3));
-  history.replaceState(null, "", `#${params.toString()}`);
+  try {
+    history.replaceState(null, "", `#${params.toString()}`);
+  } catch {
+    // Disable further hash writes once they fail (e.g. sandboxed artifact
+    // preview) so panning/zooming does not throw on every frame.
+    hashUpdatesDisabled = true;
+  }
+}
+
+let embeddedSchemaResolved = false;
+let embeddedSchemaValue;
+
+// Read the schema embedded by the standalone (`--inline`) build, if present.
+// Returns undefined for the multi-file dev build, which fetches schema.json.
+function embeddedSchema() {
+  if (embeddedSchemaResolved) return embeddedSchemaValue;
+  embeddedSchemaResolved = true;
+  if (typeof document !== "undefined") {
+    const element = document.getElementById("erd-schema");
+    if (element) {
+      try {
+        embeddedSchemaValue = JSON.parse(element.textContent);
+      } catch {
+        // Leave undefined and fall back to fetching schema.json.
+      }
+    }
+  }
+  return embeddedSchemaValue;
 }
 
 async function fetchSchema() {
+  const embedded = embeddedSchema();
+  if (embedded) return embedded;
   const response = await fetch(`./schema.json?t=${Date.now()}`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Failed to load schema.json (${response.status})`);
@@ -438,6 +466,7 @@ function moveTableCard(tableName, card, x, y) {
   const node = layout.nodes.get(tableName);
   if (!node) return;
 
+  userAdjustedViewport = true;
   node.x = Math.round(x);
   node.y = Math.round(y);
   manualNodePositions.set(tableName, { x: node.x, y: node.y });
@@ -620,17 +649,14 @@ function columnPills(column) {
 function renderDetails() {
   const table = selectedTable ? tableByName(selectedTable) : undefined;
   if (!table) {
-    elements.details.innerHTML = `
-      <div class="details-inner">
-        <section>
-          <h2><span class="table-icon" aria-hidden="true"></span>${escapeHtml(schema.namespace)}</h2>
-          <p>${schema.tables.length} tables, ${schema.relations.length} relations</p>
-        </section>
-      </div>
-    `;
+    elements.details.hidden = true;
+    elements.details.innerHTML = "";
+    elements.main.classList.add("is-details-collapsed");
     return;
   }
 
+  elements.details.hidden = false;
+  elements.main.classList.remove("is-details-collapsed");
   elements.details.innerHTML = `
     <div class="details-inner">
       <section>
@@ -756,6 +782,7 @@ function toggleTableVisibility(tableName) {
   } else {
     hiddenTableNames.add(tableName);
   }
+  clearSelectionIfHidden();
   renderAll({ center: false });
 }
 
@@ -767,7 +794,14 @@ function setAllTableVisibility(hidden) {
       hiddenTableNames.add(table.name);
     }
   }
+  clearSelectionIfHidden();
   renderAll({ center: false });
+}
+
+function clearSelectionIfHidden() {
+  if (selectedTable && isTableHidden(selectedTable)) {
+    selectedTable = undefined;
+  }
 }
 
 function toggleAllTableVisibility() {
@@ -858,6 +892,38 @@ function fitView() {
   applyTransform();
 }
 
+function centerVisibleBounds() {
+  if (!layout || visibleTables().length === 0) return;
+  const bounds = visibleLayoutBounds();
+  const rect = elements.canvas.getBoundingClientRect();
+  viewport = {
+    z: viewport.z,
+    x: Math.round((rect.width - bounds.width * viewport.z) / 2 - bounds.x * viewport.z),
+    y: Math.round((rect.height - bounds.height * viewport.z) / 2 - bounds.y * viewport.z),
+  };
+  applyTransform();
+}
+
+// Determine the on-load viewport from URL state: focus the selected table, fall
+// back to the persisted zoom, and otherwise fit the whole diagram. Pan offsets
+// are intentionally not persisted in the URL.
+function applyInitialView() {
+  if (selectedTable && !isTableHidden(selectedTable)) {
+    const nextViewport = centeredViewportForTable(selectedTable);
+    if (nextViewport) {
+      cancelViewportAnimation();
+      viewport = nextViewport;
+      applyTransform();
+      return;
+    }
+  }
+  if (hasZoomFromHash) {
+    centerVisibleBounds();
+    return;
+  }
+  fitView();
+}
+
 function renderAll(options = {}) {
   layout = computeLayout(schema);
   applyManualNodePositions();
@@ -899,6 +965,7 @@ function selectTable(tableName, options = {}) {
   }
 
   selectedTable = tableName;
+  userAdjustedViewport = true;
   renderAll({ center: options.center !== false, smooth: options.smooth !== false });
 }
 
@@ -910,6 +977,7 @@ function clearTableSelection() {
 
 function zoomAt(nextZoom, clientX, clientY) {
   cancelViewportAnimation();
+  userAdjustedViewport = true;
   const rect = elements.canvas.getBoundingClientRect();
   const worldX = (clientX - rect.left - viewport.x) / viewport.z;
   const worldY = (clientY - rect.top - viewport.y) / viewport.z;
@@ -924,6 +992,7 @@ function zoomAt(nextZoom, clientX, clientY) {
 
 function panBy(deltaX, deltaY) {
   cancelViewportAnimation();
+  userAdjustedViewport = true;
   viewport = {
     ...viewport,
     x: viewport.x - deltaX,
@@ -960,6 +1029,7 @@ function moveCanvasPan(event) {
 
   event.preventDefault();
   activeCanvasPan.moved = true;
+  userAdjustedViewport = true;
   elements.canvas.classList.add("is-panning");
   viewport = {
     ...viewport,
@@ -1054,7 +1124,7 @@ function wireInteractions() {
     if (event.key === "Escape") setShowModeMenuOpen(false);
   });
   window.addEventListener("resize", () => {
-    if (!hasViewportFromHash) fitView();
+    if (!userAdjustedViewport) applyInitialView();
   });
 }
 
@@ -1069,6 +1139,7 @@ function showStatus(message, danger = false) {
 }
 
 function startPolling() {
+  if (embeddedSchema()) return;
   const params = new URLSearchParams(location.search);
   if (params.get("watch") !== "1") return;
 
@@ -1080,6 +1151,7 @@ function startPolling() {
         if (selectedTable && !tableByName(selectedTable)) {
           selectedTable = undefined;
         }
+        clearSelectionIfHidden();
         renderAll();
         showStatus("Schema updated");
       }
@@ -1097,7 +1169,9 @@ async function main() {
     if (selectedTable && !tableByName(selectedTable)) {
       selectedTable = undefined;
     }
-    renderAll({ fit: !hasViewportFromHash });
+    clearSelectionIfHidden();
+    renderAll();
+    applyInitialView();
     startPolling();
   } catch (error) {
     elements.namespace.textContent = "TailorDB ERD";

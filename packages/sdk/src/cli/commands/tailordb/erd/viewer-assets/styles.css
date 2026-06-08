@@ -160,6 +160,10 @@ button:hover {
   grid-template-columns: 240px minmax(0, 1fr) 360px;
 }
 
+.main.is-details-collapsed {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
 .table-nav,
 .details {
   min-width: 0;
@@ -709,6 +713,11 @@ button:hover {
     grid-template-columns: 220px minmax(0, 1fr);
   }
 
+  .main.is-details-collapsed {
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
   .details {
     grid-column: 1 / -1;
     border-top: 1px solid var(--line);
@@ -755,6 +764,11 @@ button:hover {
   .main {
     min-height: auto;
     grid-template-rows: auto minmax(520px, 64vh) auto;
+    grid-template-columns: 1fr;
+  }
+
+  .main.is-details-collapsed {
+    grid-template-rows: auto minmax(520px, 64vh);
     grid-template-columns: 1fr;
   }
 
