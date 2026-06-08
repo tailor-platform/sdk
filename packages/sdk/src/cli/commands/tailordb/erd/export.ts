@@ -45,7 +45,8 @@ interface ErdBuildsFromContextOptions {
 export interface ErdBuildResult {
   namespace: string;
   erdSite?: string;
-  schemaOutputPath: string;
+  /** Path to the written schema.json, or undefined for inline builds that embed it. */
+  schemaOutputPath?: string;
   distDir: string;
 }
 
@@ -137,7 +138,8 @@ function prepareErdBuild(target: ErdTarget, inline?: boolean): ErdBuildResult {
   return {
     namespace: target.namespaceData.namespace,
     erdSite: target.erdSite,
-    schemaOutputPath: target.schemaOutputPath,
+    // Inline builds embed the schema, so no schema.json is written.
+    schemaOutputPath: inline ? undefined : target.schemaOutputPath,
     distDir: target.distDir,
   };
 }
@@ -220,15 +222,14 @@ export const erdExportCommand = defineAppCommand({
         results.map((result) => ({
           namespace: result.namespace,
           distDir: result.distDir,
-          // Inline builds emit only index.html, so there is no schema.json path.
-          ...(args.inline ? {} : { schemaOutputPath: result.schemaOutputPath }),
+          ...(result.schemaOutputPath ? { schemaOutputPath: result.schemaOutputPath } : {}),
         })),
       );
     } else {
       for (const result of results) {
         logger.out(`Exported ERD for namespace "${result.namespace}"`);
         logger.out(`  - ERD viewer dist: ${result.distDir}`);
-        if (!args.inline) {
+        if (result.schemaOutputPath) {
           logger.out(`  - TailorDB ERD schema: ${result.schemaOutputPath}`);
         }
       }
