@@ -63,9 +63,13 @@ export function buildStandaloneViewerHtml(options: BuildStandaloneViewerHtmlOpti
     throw new Error("ERD viewer index.html is missing expected asset references for inlining.");
   }
 
-  // Escape "<" so values like "</script>" inside the schema cannot terminate the
-  // embedding <script> element early.
-  const schemaJson = JSON.stringify(options.schema).replaceAll("<", "\\u003c");
+  // Escape characters that are valid in JSON but unsafe inside a <script> tag:
+  // "<" (so "</script>" cannot terminate the element early) and the line/
+  // paragraph separators U+2028/U+2029 (invalid in older JS string literals).
+  const schemaJson = JSON.stringify(options.schema)
+    .replaceAll("<", "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
   const embedScript = `<script>window.__ERD_SCHEMA__ = ${schemaJson};</script>`;
   // Escape any "</script" in the inlined module so it cannot terminate the
   // <script> element early. "<\/script" is equivalent JS (\/ === /).

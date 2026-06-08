@@ -48,4 +48,29 @@ describe("buildStandaloneViewerHtml", () => {
     expect(html).not.toContain("</script><img src=x>");
     expect(html).toContain("\\u003c/script>\\u003cimg src=x>");
   });
+
+  test("escapes U+2028/U+2029 so they cannot break the embedding script literal", () => {
+    const lineSep = String.fromCharCode(0x2028);
+    const paraSep = String.fromCharCode(0x2029);
+    const html = buildStandaloneViewerHtml({
+      schema: buildSchema({
+        tables: [
+          {
+            name: "User",
+            pluralForm: "users",
+            description: `line${lineSep}para${paraSep}end`,
+            columns: [],
+            indexes: [],
+            forwardRelationships: [],
+            backwardRelationships: [],
+          },
+        ],
+      }),
+    });
+
+    expect(html).not.toContain(lineSep);
+    expect(html).not.toContain(paraSep);
+    expect(html).toContain("\\u2028");
+    expect(html).toContain("\\u2029");
+  });
 });
