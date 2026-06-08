@@ -25,17 +25,27 @@ function buildSchema(overrides: Partial<TailorDbErdSchema> = {}): TailorDbErdSch
   };
 }
 
+// Extract and parse the embedded schema JSON the same way the viewer (and any
+// external tooling such as a future ERD diff) would.
+function extractEmbeddedSchema(html: string): unknown {
+  const match = html.match(/<script type="application\/json" id="erd-schema">([\s\S]*?)<\/script>/);
+  if (!match) throw new Error("embedded schema block not found");
+  return JSON.parse(match[1]);
+}
+
 describe("buildStandaloneViewerHtml", () => {
-  test("inlines CSS/JS and embeds the schema without external asset links", () => {
+  test("inlines CSS/JS and embeds the schema as a parseable data block", () => {
     const html = buildStandaloneViewerHtml({ schema: buildSchema() });
 
     expect(html).not.toContain('href="./styles.css"');
     expect(html).not.toContain('src="./app.js"');
     expect(html).toContain("<style>");
     expect(html).toContain('<script type="module">');
-    expect(html).toContain("window.__ERD_SCHEMA__");
-    expect(html).toContain('"namespace":"tailordb"');
-    // Only the embed script and the inlined module may close a <script> element;
+    expect(html).toContain('<script type="application/json" id="erd-schema">');
+    // Embedded as JSON data, not an executable global assignment.
+    expect(html).not.toContain("window.__ERD_SCHEMA__");
+    expect(extractEmbeddedSchema(html)).toMatchObject({ namespace: "tailordb" });
+    // Only the data block and the inlined module may close a <script> element;
     // any "</script" leaking from the inlined JS must be escaped.
     expect(html.match(/<\/script>/g)).toHaveLength(2);
   });
@@ -47,18 +57,21 @@ describe("buildStandaloneViewerHtml", () => {
 
     expect(html).not.toContain("</script><img src=x>");
     expect(html).toContain("\\u003c/script>\\u003cimg src=x>");
+    // The escaped value round-trips back to the original via JSON.parse.
+    expect(extractEmbeddedSchema(html)).toMatchObject({ namespace: "</script><img src=x>" });
   });
 
-  test("escapes U+2028/U+2029 so they cannot break the embedding script literal", () => {
+  test("preserves U+2028/U+2029 in embedded values via JSON round-trip", () => {
     const lineSep = String.fromCharCode(0x2028);
     const paraSep = String.fromCharCode(0x2029);
+    const description = `line${lineSep}para${paraSep}end`;
     const html = buildStandaloneViewerHtml({
       schema: buildSchema({
         tables: [
           {
             name: "User",
             pluralForm: "users",
-            description: `line${lineSep}para${paraSep}end`,
+            description,
             columns: [],
             indexes: [],
             forwardRelationships: [],
@@ -68,9 +81,7 @@ describe("buildStandaloneViewerHtml", () => {
       }),
     });
 
-    expect(html).not.toContain(lineSep);
-    expect(html).not.toContain(paraSep);
-    expect(html).toContain("\\u2028");
-    expect(html).toContain("\\u2029");
+    const parsed = extractEmbeddedSchema(html) as TailorDbErdSchema;
+    expect(parsed.tables[0]?.description).toBe(description);
   });
 });

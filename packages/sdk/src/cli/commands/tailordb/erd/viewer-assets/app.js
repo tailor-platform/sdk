@@ -127,8 +127,25 @@ function writeHashState() {
   }
 }
 
+let embeddedSchemaResolved = false;
+let embeddedSchemaValue;
+
+// Read the schema embedded by the standalone (`--inline`) build, if present.
+// Returns undefined for the multi-file dev build, which fetches schema.json.
 function embeddedSchema() {
-  return typeof window !== "undefined" ? window.__ERD_SCHEMA__ : undefined;
+  if (embeddedSchemaResolved) return embeddedSchemaValue;
+  embeddedSchemaResolved = true;
+  if (typeof document !== "undefined") {
+    const element = document.getElementById("erd-schema");
+    if (element) {
+      try {
+        embeddedSchemaValue = JSON.parse(element.textContent);
+      } catch {
+        // Leave undefined and fall back to fetching schema.json.
+      }
+    }
+  }
+  return embeddedSchemaValue;
 }
 
 async function fetchSchema() {
