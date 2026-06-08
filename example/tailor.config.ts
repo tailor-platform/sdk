@@ -101,6 +101,7 @@ export default defineConfig({
   // SDK-managed app id — do not edit, except when copying this config to a separate app.
   id: "d0a3398a-f79c-4c2e-be1e-b81469bb0a43",
   name: "my-app",
+  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
   env: {
     foo: 1,
     bar: "hello",
@@ -127,6 +128,9 @@ export default defineConfig({
   executor: { files: ["./executors/*.ts"] },
   workflow: {
     files: ["./workflows/**/*.ts"],
+  },
+  httpAdapter: {
+    files: ["./adapters/**/*.ts"],
   },
   staticWebsites: [website, erdSite],
 });

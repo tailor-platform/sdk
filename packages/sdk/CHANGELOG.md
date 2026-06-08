@@ -1,5 +1,67 @@
 # @tailor-platform/sdk
 
+## 1.56.0
+
+### Minor Changes
+
+- [#1341](https://github.com/tailor-platform/sdk/pull/1341) [`64b07b4`](https://github.com/tailor-platform/sdk/commit/64b07b4c6f1db868abf2e1ebb9097e0e2f2f3cc6) Thanks [@dqn](https://github.com/dqn)! - Add a `logLevel` config option to remove lower-level `console.*` calls from bundled deployment functions.
+
+### Patch Changes
+
+- [#1345](https://github.com/tailor-platform/sdk/pull/1345) [`ec863f1`](https://github.com/tailor-platform/sdk/commit/ec863f13e7a3ca43e40ad413c1bbe47cd5567c95) Thanks [@dqn](https://github.com/dqn)! - Fix `seed --truncate` deleting only the first page of Built-In IdP `_User` records. The generated truncation script used incorrect pagination keys, so projects with more than one page of users were left with the remaining pages while the command still reported success. All pages are now deleted.
+
+- [#1344](https://github.com/tailor-platform/sdk/pull/1344) [`d3f22da`](https://github.com/tailor-platform/sdk/commit/d3f22da5a9bcd44ca9659ac35a68a20a2cbc1c2a) Thanks [@dqn](https://github.com/dqn)! - Fix CLI auth config losing keyring-stored logins. Running any command without `TAILOR_USE_KEYRING` no longer downgrades `config.yaml` in a way that drops `storage: keyring` users (and dangles their `current_user` reference), which previously logged keyring users out. Configs containing keyring users now stay in V2 format; file-only configs still downgrade to V1 for backward compatibility.
+
+## 1.55.2
+
+### Patch Changes
+
+- [#1190](https://github.com/tailor-platform/sdk/pull/1190) [`6f891e8`](https://github.com/tailor-platform/sdk/commit/6f891e8a0f948ca2b58bb7e1d4ad19efc31cc38c) Thanks [@toiroakr](https://github.com/toiroakr)! - Validate auth service configuration during `deploy` / `generate`, consistent with how IdP, TailorDB, and static websites are already handled. Configs that set both `userProfile` and `machineUserAttributes` now fail with a clearer message: "Specify either `userProfile` or `machineUserAttributes`, not both."
+
+- [#1332](https://github.com/tailor-platform/sdk/pull/1332) [`aa898b7`](https://github.com/tailor-platform/sdk/commit/aa898b7f369c441077973848a92a09152f6bed4f) Thanks [@dqn](https://github.com/dqn)! - Fix `executor get --json` to include typed event trigger metadata such as event types, namespaces, target names, and conditions.
+
+## 1.55.1
+
+### Patch Changes
+
+- [#1333](https://github.com/tailor-platform/sdk/pull/1333) [`46a0f78`](https://github.com/tailor-platform/sdk/commit/46a0f78481f4718a470a2cb5a15298db8015f452) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk api` injecting a duplicate `workspaceId` when `--body` supplies the field in snake_case. The auto-injection guard only checked the camelCase key, so a body such as `{"workspace_id": "..."}` slipped past it and the SDK appended a second `workspaceId`, which the server rejected with a duplicate-field error. Body keys are now converged to each field's canonical (camelCase) name before injection, so snake_case and JSON aliases are recognized.
+
+- [#1325](https://github.com/tailor-platform/sdk/pull/1325) [`8bd51e6`](https://github.com/tailor-platform/sdk/commit/8bd51e64143a2877dcdc821a57b8b6b82cf61363) Thanks [@dqn](https://github.com/dqn)! - Fix `--json` output for CLI commands that returned human-readable text or empty stdout instead of parseable JSON.
+
+- [#1276](https://github.com/tailor-platform/sdk/pull/1276) [`f1536d6`](https://github.com/tailor-platform/sdk/commit/f1536d64d182c9456692165397a74ad8c0257d30) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1312](https://github.com/tailor-platform/sdk/pull/1312) [`00c9b07`](https://github.com/tailor-platform/sdk/commit/00c9b07fdec9b6fa59026f6d4451d43f04114c55) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer to v8.5.2
+
+- [#1316](https://github.com/tailor-platform/sdk/pull/1316) [`b7f0389`](https://github.com/tailor-platform/sdk/commit/b7f0389270573ba5cf6accca31acdea027974c8d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.4
+
+- [#1318](https://github.com/tailor-platform/sdk/pull/1318) [`c48aeb6`](https://github.com/tailor-platform/sdk/commit/c48aeb6e72a644b056a48e57d39799cae386461e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.7.0
+
+- [#1328](https://github.com/tailor-platform/sdk/pull/1328) [`8473a4d`](https://github.com/tailor-platform/sdk/commit/8473a4d284cea998759584c151e12c6cb9b7bc67) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.1
+
+## 1.55.0
+
+### Minor Changes
+
+- [#1173](https://github.com/tailor-platform/sdk/pull/1173) [`4d8010d`](https://github.com/tailor-platform/sdk/commit/4d8010ddf93edd1e9e7344b7e868b7e6efc3fddf) Thanks [@Mistat](https://github.com/Mistat)! - Add `createHttpAdapter()` for declaring HTTP adapters that translate HTTP requests into GraphQL queries and reshape the responses. Adapter files are discovered via the new `httpAdapter.files` glob in `defineConfig()`.
+
+### Patch Changes
+
+- [#1320](https://github.com/tailor-platform/sdk/pull/1320) [`977c200`](https://github.com/tailor-platform/sdk/commit/977c2007eb6ac28507d6eac1c391448ab91caa2a) Thanks [@remiposo](https://github.com/remiposo)! - `createKyselyMock`: assert what a write wrote as a `{ column: value }` map instead of positional SQL parameters. On a recorded query:
+
+  - `insertValues()` / `insertRows()` — the values a single- / multi-row insert wrote
+  - `updateValues()` — the values an update's SET clause wrote
+  - `node` — the raw Kysely operation node, for anything the helpers don't cover
+
+  Also adds `withTx(fn)` to run `fn` inside a real `Transaction`.
+
+- [#1314](https://github.com/tailor-platform/sdk/pull/1314) [`e423765`](https://github.com/tailor-platform/sdk/commit/e4237652c4ac65074e2bcd1da56adc1841bc71cd) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix generated migrate.ts templates for enum value removal: removed enum values were compared by object identity (so unchanged values were also treated as removed) and rendered as `[object Object]` in the generated migration script.
+
+## 1.54.3
+
+### Patch Changes
+
+- [#1293](https://github.com/tailor-platform/sdk/pull/1293) [`1f9991d`](https://github.com/tailor-platform/sdk/commit/1f9991dc089763b9a3dbf95e26742c7100f9dd24) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `db.fields.timestamps()` to respect user-specified `createdAt` / `updatedAt` values instead of always overwriting them with the current time. When a value is provided (e.g. seeding historical records), it is now used; when omitted, the current time is still applied as before.
+
 ## 1.54.2
 
 ### Patch Changes

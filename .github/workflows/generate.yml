@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -29,10 +29,18 @@ jobs:
       - name: Run generate
         run: pnpm -r run generate
 
+      # The "expected" generator fixtures come from a separate config
+      # (tailor.config.expected.ts) that `pnpm generate` and CI tests don't
+      # cover; regenerate them so the commit step below catches any drift.
+      - name: Update generator expected fixtures
+        run: pnpm --filter example run test:generator:update-expects
+
       - name: Get changed files
         id: changes
         run: |
-          files=$(git diff --name-only | tr '\n' ' ')
+          # Include untracked files too, so newly generated fixtures (e.g. a
+          # schema for a new type) are committed and not silently dropped.
+          files=$( { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u | tr '\n' ' ')
           echo "files=${files}" >> "$GITHUB_OUTPUT"
 
       - name: Commit changes
@@ -65,7 +73,7 @@ jobs:
         run: git config --global core.autocrlf false
 
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 

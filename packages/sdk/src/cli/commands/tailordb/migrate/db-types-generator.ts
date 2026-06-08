@@ -48,8 +48,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
 
   for (const change of diff.changes) {
     if (change.kind === "field_modified" && change.fieldName) {
-      const before = change.before as SnapshotFieldConfig | undefined;
-      const after = change.after as SnapshotFieldConfig | undefined;
+      const { before, after } = change;
 
       // Check if this is an optional -> required change
       if (before && after && !before.required && after.required) {
@@ -87,7 +86,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         }
       }
     } else if (change.kind === "field_added" && change.fieldName) {
-      const after = change.after as SnapshotFieldConfig | undefined;
+      const { after } = change;
 
       // Required field added is a breaking change - add it as optional in db.ts
       // so migration script can set values for existing records

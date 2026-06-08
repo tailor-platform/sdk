@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutput } from "@/utils/test/internal";
@@ -13,7 +13,7 @@ function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
 
 describe("Kysely TypeProcessor", () => {
   describe("basic types", () => {
-    it("should handle string types", async () => {
+    test("should handle string types", async () => {
       const type = db.type("User", {
         name: db.string(),
         nickname: db.string({ optional: true }),
@@ -26,7 +26,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("nickname: string | null;");
     });
 
-    it("should handle number types", async () => {
+    test("should handle number types", async () => {
       const type = db.type("Product", {
         quantity: db.int(),
         price: db.float(),
@@ -40,7 +40,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("discount: number | null;");
     });
 
-    it("should handle boolean types", async () => {
+    test("should handle boolean types", async () => {
       const type = db.type("Feature", {
         enabled: db.bool(),
         beta: db.bool({ optional: true }),
@@ -52,7 +52,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("beta: boolean | null;");
     });
 
-    it("should handle date and datetime types", async () => {
+    test("should handle date and datetime types", async () => {
       const type = db.type("Event", {
         startDate: db.date(),
         endDate: db.datetime(),
@@ -66,7 +66,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("cancelledAt: Timestamp | null;");
     });
 
-    it("should handle uuid types", async () => {
+    test("should handle uuid types", async () => {
       const type = db.type("Session", {
         userId: db.uuid(),
         deviceId: db.uuid({ optional: true }),
@@ -80,7 +80,7 @@ describe("Kysely TypeProcessor", () => {
   });
 
   describe("array types", () => {
-    it("should handle array fields", async () => {
+    test("should handle array fields", async () => {
       const type = db.type("Post", {
         tags: db.string({ array: true }),
         scores: db.int({ array: true, optional: true }),
@@ -92,7 +92,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("scores: number[] | null;");
     });
 
-    it("should use ArrayColumnType for datetime array fields", async () => {
+    test("should use ArrayColumnType for datetime array fields", async () => {
       const type = db.type("Event", {
         eventDates: db.datetime({ array: true }),
         optionalDates: db.date({ array: true, optional: true }),
@@ -106,7 +106,7 @@ describe("Kysely TypeProcessor", () => {
   });
 
   describe("enum types", () => {
-    it("should handle enum types", async () => {
+    test("should handle enum types", async () => {
       const type = db.type("User", {
         role: db.enum([{ value: "admin" }, { value: "user" }]),
         status: db.enum([{ value: "active" }, { value: "inactive" }], {
@@ -120,7 +120,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain('status: "active" | "inactive" | null;');
     });
 
-    it("should handle enum array types", async () => {
+    test("should handle enum array types", async () => {
       const type = db.type("Article", {
         categories: db.enum(["tech", "health", "finance"], { array: true }),
         authors: db.enum(["alice", "bob"], { array: true, optional: true }),
@@ -134,7 +134,7 @@ describe("Kysely TypeProcessor", () => {
   });
 
   describe("nested objects", () => {
-    it("should handle single level nested objects", async () => {
+    test("should handle single level nested objects", async () => {
       const simpleNestedType = db.type("SimpleUser", {
         profile: db.object({
           name: db.string(),
@@ -152,7 +152,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("email?: string | null");
     });
 
-    it("should handle multi-level nested objects", async () => {
+    test("should handle multi-level nested objects", async () => {
       const deepNestedType = db.type("Company", {
         details: db.object({
           // @ts-expect-error: Nested objects have complex type inference
@@ -181,7 +181,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("phone?: string | null");
     });
 
-    it("should use Date | string instead of Timestamp for date fields inside nested objects", async () => {
+    test("should use Date | string instead of Timestamp for date fields inside nested objects", async () => {
       const type = db.type("Receipt", {
         receiptDate: db.date(),
         dueSchedule: db.object({
@@ -200,7 +200,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.usedUtilityTypes.Timestamp).toBe(true);
     });
 
-    it("should wrap nested object arrays with ArrayColumnType<ObjectColumnType<>>", async () => {
+    test("should wrap nested object arrays with ArrayColumnType<ObjectColumnType<>>", async () => {
       const type = db.type("Profile", {
         metadata: db.object(
           {
@@ -218,7 +218,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("version: number");
     });
 
-    it("should handle optional nested object arrays", async () => {
+    test("should handle optional nested object arrays", async () => {
       const type = db.type("Profile", {
         tags: db.object(
           {
@@ -235,7 +235,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("| null");
     });
 
-    it("should use plain array syntax for nested objects without ColumnType fields", async () => {
+    test("should use plain array syntax for nested objects without ColumnType fields", async () => {
       const type = db.type("Profile", {
         tags: db.object(
           {
@@ -253,7 +253,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).not.toContain("ArrayColumnType");
     });
 
-    it("should handle optional nested objects", async () => {
+    test("should handle optional nested objects", async () => {
       const type = db.type("User", {
         settings: db.object(
           {
@@ -272,7 +272,7 @@ describe("Kysely TypeProcessor", () => {
   });
 
   describe("special fields", () => {
-    it("should process timestamp fields through normal field processing", async () => {
+    test("should process timestamp fields through normal field processing", async () => {
       const typeWithTimestamps = db.type("UserWithTimestamp", {
         name: db.string(),
         ...db.fields.timestamps(),
@@ -287,7 +287,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 
-    it("should always include Generated<string> for id field", async () => {
+    test("should always include Generated<string> for id field", async () => {
       const type = db.type("User", {
         name: db.string(),
       });
@@ -297,7 +297,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("id: Generated<string>;");
     });
 
-    it("should correctly track used utility types - basic types only", async () => {
+    test("should correctly track used utility types - basic types only", async () => {
       const type = db.type("User", {
         name: db.string(),
         age: db.int(),
@@ -309,7 +309,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.usedUtilityTypes.Serial).toBe(false);
     });
 
-    it("should correctly track used utility types - Timestamp", async () => {
+    test("should correctly track used utility types - Timestamp", async () => {
       const type = db.type("User", {
         name: db.string(),
         ...db.fields.timestamps(),
@@ -321,7 +321,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.usedUtilityTypes.Serial).toBe(false);
     });
 
-    it("should correctly track used utility types - Serial", async () => {
+    test("should correctly track used utility types - Serial", async () => {
       const type = db.type("Invoice", {
         invoiceNumber: db.string().serial({ start: 1000 }),
       });
@@ -332,7 +332,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.usedUtilityTypes.Serial).toBe(true);
     });
 
-    it("should correctly track used utility types - both", async () => {
+    test("should correctly track used utility types - both", async () => {
       const type = db.type("Order", {
         orderNumber: db.string().serial({ start: 1000 }),
         ...db.fields.timestamps(),

@@ -1,9 +1,12 @@
+import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { resolveWorkflow } from "./get";
-import { startWorkflow } from "./start";
+import { startCommand, startWorkflow } from "./start";
 
 vi.mock("@/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -87,5 +90,16 @@ describe("startWorkflow runtime overload", () => {
         workflowId: "id:legacy-workflow",
       }),
     );
+  });
+
+  test("start command with jsonMode emits only parseable JSON to stdout", async () => {
+    using stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(startCommand, ["legacy-workflow", "--machine-user", "legacy-user"]);
+
+    expect(JSON.parse(stdout.output)).toEqual({ executionId: "execution-1" });
+    expect(stderr.output).not.toBe("");
   });
 });

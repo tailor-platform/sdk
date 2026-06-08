@@ -128,5 +128,5 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 
 ## Environment
 
-- Linting is oxlint-only (`oxlint --type-aware .` everywhere).
+- Linting is oxlint-only, with standard (`oxlint --type-aware .`) and Vitest-specific (`oxlint --config oxlint.vitest.json .`) passes.
 - Lefthook runs pre-commit checks (lint, format, typecheck) and post-commit signature verification.

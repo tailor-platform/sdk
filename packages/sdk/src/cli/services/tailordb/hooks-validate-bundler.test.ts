@@ -1,7 +1,7 @@
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
+import { describe, expect, test, beforeAll, afterAll } from "vitest";
 import {
   findUndefinedReferences,
   collectSourceBindings,
@@ -19,39 +19,39 @@ const extractFreeVariables = (fnSource: string) =>
   findUndefinedReferences(`const __fn = ${fnSource};`);
 
 describe("findUndefinedReferences", () => {
-  it("returns empty set for self-contained function", () => {
+  test("returns empty set for self-contained function", () => {
     const vars = extractFreeVariables("({ value }) => value.length > 5");
     expect(vars.size).toBe(0);
   });
 
-  it("detects a single free variable", () => {
+  test("detects a single free variable", () => {
     const vars = extractFreeVariables("({ value }) => value.length < MAX_LENGTH");
     expect(vars).toEqual(new Set(["MAX_LENGTH"]));
   });
 
-  it("detects multiple free variables", () => {
+  test("detects multiple free variables", () => {
     const vars = extractFreeVariables("({ data }) => formatAddress(data, PREFIX)");
     expect(vars).toEqual(new Set(["formatAddress", "PREFIX"]));
   });
 
-  it("does not treat destructured parameters as free variables", () => {
+  test("does not treat destructured parameters as free variables", () => {
     const vars = extractFreeVariables("({ value, data, user }) => value + data.name + user.id");
     expect(vars.size).toBe(0);
   });
 
-  it("does not treat local variables as free variables", () => {
+  test("does not treat local variables as free variables", () => {
     const vars = extractFreeVariables("({ value }) => { const x = 1; return value + x; }");
     expect(vars.size).toBe(0);
   });
 
-  it("detects free variables in function body with local variables", () => {
+  test("detects free variables in function body with local variables", () => {
     const vars = extractFreeVariables(
       "({ value }) => { const x = helper(value); return x + OFFSET; }",
     );
     expect(vars).toEqual(new Set(["helper", "OFFSET"]));
   });
 
-  it("handles regular function syntax", () => {
+  test("handles regular function syntax", () => {
     const vars = extractFreeVariables("function({ data }) { return compute(data); }");
     expect(vars).toEqual(new Set(["compute"]));
   });
@@ -68,7 +68,7 @@ describe("collectSourceBindings", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("collects import specifiers", () => {
+  test("collects import specifiers", () => {
     const filePath = join(tempDir, "imports.ts");
     writeFileSync(
       filePath,
@@ -85,7 +85,7 @@ describe("collectSourceBindings", () => {
     expect(bindings.get("defaultExport")?.kind).toBe("import");
   });
 
-  it("collects namespace imports", () => {
+  test("collects namespace imports", () => {
     const filePath = join(tempDir, "namespace.ts");
     writeFileSync(filePath, `import * as utils from "./utils";\n`);
 
@@ -95,7 +95,7 @@ describe("collectSourceBindings", () => {
     expect(bindings.get("utils")?.kind).toBe("import");
   });
 
-  it("collects top-level variable declarations", () => {
+  test("collects top-level variable declarations", () => {
     const filePath = join(tempDir, "vars.ts");
     writeFileSync(filePath, `const MAX_LENGTH = 100;\nconst PREFIX = "ADDR";\nlet counter = 0;\n`);
 
@@ -107,7 +107,7 @@ describe("collectSourceBindings", () => {
     expect(bindings.has("counter")).toBe(true);
   });
 
-  it("collects top-level function declarations", () => {
+  test("collects top-level function declarations", () => {
     const filePath = join(tempDir, "funcs.ts");
     writeFileSync(filePath, `function compute(x) { return x * 2; }\n`);
 
@@ -117,7 +117,7 @@ describe("collectSourceBindings", () => {
     expect(bindings.get("compute")?.kind).toBe("declaration");
   });
 
-  it("collects exported declarations", () => {
+  test("collects exported declarations", () => {
     const filePath = join(tempDir, "exports.ts");
     writeFileSync(
       filePath,
@@ -132,7 +132,7 @@ describe("collectSourceBindings", () => {
     expect(bindings.get("calcTotal")?.kind).toBe("declaration");
   });
 
-  it("does not include builder chain as free variable binding", () => {
+  test("does not include builder chain as free variable binding", () => {
     const filePath = join(tempDir, "type.ts");
     writeFileSync(
       filePath,
@@ -160,7 +160,7 @@ describe("collectSourceBindings", () => {
 });
 
 describe("resolveNeededBindings", () => {
-  it("resolves import bindings for free variables", () => {
+  test("resolves import bindings for free variables", () => {
     const sourceBindings = new Map<string, SourceBinding>([
       [
         "formatAddress",
@@ -189,7 +189,7 @@ describe("resolveNeededBindings", () => {
     expect(result.declarations).toHaveLength(0);
   });
 
-  it("resolves declaration bindings for free variables", () => {
+  test("resolves declaration bindings for free variables", () => {
     const sourceBindings = new Map<string, SourceBinding>([
       [
         "MAX_LENGTH",
@@ -209,7 +209,7 @@ describe("resolveNeededBindings", () => {
     expect(result.declarations[0]).toBe("const MAX_LENGTH = 100;");
   });
 
-  it("recursively resolves declaration dependencies", () => {
+  test("recursively resolves declaration dependencies", () => {
     const sourceBindings = new Map<string, SourceBinding>([
       [
         "config",
@@ -238,7 +238,7 @@ describe("resolveNeededBindings", () => {
     expect(result.declarations[1]).toBe("const MAX_LENGTH = config.max;");
   });
 
-  it("recursively resolves dependencies through TypeScript-typed declarations", () => {
+  test("recursively resolves dependencies through TypeScript-typed declarations", () => {
     const sourceBindings = new Map<string, SourceBinding>([
       [
         "LOCAL_PREFIX",
@@ -270,7 +270,7 @@ describe("resolveNeededBindings", () => {
     expect(result.unresolved).toHaveLength(0);
   });
 
-  it("resolves mixed imports and declarations", () => {
+  test("resolves mixed imports and declarations", () => {
     const sourceBindings = new Map<string, SourceBinding>([
       [
         "format",
@@ -311,7 +311,7 @@ describe("resolveNeededBindings", () => {
     );
   });
 
-  it("returns empty when no free variables", () => {
+  test("returns empty when no free variables", () => {
     const sourceBindings = new Map<string, SourceBinding>();
     const freeVars = extractFreeVariables(`({ value }) => value > 5`);
     const result = resolveNeededBindings(freeVars, sourceBindings);
@@ -321,7 +321,7 @@ describe("resolveNeededBindings", () => {
     expect(result.unresolved).toHaveLength(0);
   });
 
-  it("reports unresolved free variables", () => {
+  test("reports unresolved free variables", () => {
     const sourceBindings = new Map<string, SourceBinding>([
       [
         "MAX_LENGTH",
@@ -344,7 +344,7 @@ describe("resolveNeededBindings", () => {
 });
 
 describe("buildMinimalEntryFromResolved", () => {
-  it("resolves relative import paths to absolute", () => {
+  test("resolves relative import paths to absolute", () => {
     const entry = buildMinimalEntryFromResolved(
       [`import { formatAddress } from "./helpers";`],
       [],
@@ -357,7 +357,7 @@ describe("buildMinimalEntryFromResolved", () => {
     expect(entry).toContain("export function main(input)");
   });
 
-  it("includes declarations in entry", () => {
+  test("includes declarations in entry", () => {
     const entry = buildMinimalEntryFromResolved(
       [],
       [`const MAX_LENGTH = 100;`],
@@ -369,7 +369,7 @@ describe("buildMinimalEntryFromResolved", () => {
     expect(entry).toContain("export function main(input)");
   });
 
-  it("builds entry with no imports or declarations", () => {
+  test("builds entry with no imports or declarations", () => {
     const entry = buildMinimalEntryFromResolved(
       [],
       [],
@@ -380,7 +380,7 @@ describe("buildMinimalEntryFromResolved", () => {
     expect(entry).toBe(`export function main(input) { return (({ value }) => value > 5)(input); }`);
   });
 
-  it("does not rewrite non-relative import paths", () => {
+  test("does not rewrite non-relative import paths", () => {
     const entry = buildMinimalEntryFromResolved(
       [`import { db } from "@tailor-platform/sdk";`],
       [],

@@ -2,9 +2,11 @@ locale: en
 repository: ${GITHUB_REPOSITORY}/packages/sdk
 
 # Coverage metrics
+# SDK Metrics shards coverage across parallel runners. Each shard emits one
+# lcov report, and octocov merges them by path.
 coverage:
   paths:
-    - coverage/lcov.info
+    - coverage/lcov-*.info
 
 codeToTestRatio:
   code:
@@ -33,7 +35,6 @@ comment:
 # Always generate summary
 summary:
   if: true
-
 # Custom metrics are specified via environment variables:
 # - OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: diagnostics.json
 # - OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: bundle-size.json

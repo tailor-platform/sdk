@@ -16,13 +16,15 @@
     "agent:rules:check": "node scripts/sync-agent-rules.mjs --check",
     "check": "pnpm run build && pnpm --filter @tailor-platform/sdk --filter example run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
-    "check:lint": "pnpm -r run lint:fix",
+    "check:lint": "pnpm -r run lint:fix && pnpm run lint:vitest",
     "check:typecheck": "pnpm -r run typecheck:go",
     "check:knip": "pnpm -r run knip",
     "check:publint": "pnpm -r run publint",
     "check:jsdoc": "pnpm -r run check:public-api-jsdoc",
-    "lint": "pnpm run build && pnpm -r run lint",
-    "lint:fix": "pnpm run build && pnpm -r run lint:fix",
+    "lint": "pnpm run build && pnpm -r run lint && pnpm run lint:vitest",
+    "lint:fix": "pnpm run build && pnpm -r run lint:fix && pnpm run lint:vitest:fix",
+    "lint:vitest": "oxlint --config oxlint.vitest.json .",
+    "lint:vitest:fix": "oxlint --config oxlint.vitest.json . --fix",
     "knip": "pnpm run build && pnpm -r run knip",
     "publint": "pnpm run build && pnpm -r run publint",
     "typecheck:go": "pnpm run build && pnpm --filter @tailor-platform/sdk --filter example run generate && pnpm -r run typecheck:go",
@@ -37,16 +39,17 @@
     "@changesets/cli": "2.31.0",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.12.4",
-    "knip": "6.14.2",
+    "knip": "6.15.0",
     "lefthook": "2.1.9",
-    "oxfmt": "0.52.0",
+    "oxfmt": "0.53.0",
+    "oxlint": "1.68.0",
     "pkg-pr-new": "0.0.75",
     "publint": "0.3.21",
-    "tsx": "4.22.3",
+    "tsx": "4.22.4",
     "typescript": "5.9.3"
   },
   "engines": {
     "node": ">= 22.14.0"
   },
-  "packageManager": "pnpm@11.5.0"
+  "packageManager": "pnpm@11.5.1"
 }

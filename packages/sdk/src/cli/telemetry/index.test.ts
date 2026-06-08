@@ -117,7 +117,6 @@ describe("telemetry", () => {
   test("shutdownTelemetry is a no-op when telemetry is disabled", async () => {
     const { initTelemetry, shutdownTelemetry } = await import("./index");
     await initTelemetry();
-    // Should not throw
-    await shutdownTelemetry();
+    await expect(shutdownTelemetry()).resolves.toBeUndefined();
   });
 });

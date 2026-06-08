@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, beforeEach, afterAll } from "vitest";
 import {
   createSnapshotFromLocalTypes,
   loadSnapshot,
@@ -24,7 +24,7 @@ import {
   formatMigrationNumber,
   type SchemaSnapshot,
 } from "./snapshot";
-import type { MigrationDiff } from "./diff-calculator";
+import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
 import type { ParsedField, TailorDBType } from "@/types/tailordb";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
@@ -103,7 +103,7 @@ describe("snapshot", () => {
   // createSnapshotFromLocalTypes
   // ==========================================================================
   describe("createSnapshotFromLocalTypes", () => {
-    it("creates snapshot with correct structure", () => {
+    test("creates snapshot with correct structure", () => {
       const mockTypes: Record<string, TailorDBType> = {
         User: createMockType("User", {
           id: { name: "id", config: { type: "uuid", required: true } },
@@ -122,7 +122,7 @@ describe("snapshot", () => {
       expect(snapshot.types.User.fields.name).toBeDefined();
     });
 
-    it("captures field attributes", () => {
+    test("captures field attributes", () => {
       const mockTypes: Record<string, TailorDBType> = {
         Product: createMockType("Product", {
           id: { name: "id", config: { type: "uuid", required: true } },
@@ -144,7 +144,7 @@ describe("snapshot", () => {
       expect(snapshot.types.Product.fields.tags.array).toBe(true);
     });
 
-    it("captures foreign key relationships", () => {
+    test("captures foreign key relationships", () => {
       const mockTypes: Record<string, TailorDBType> = {
         Order: createMockType("Order", {
           id: { name: "id", config: { type: "uuid", required: true } },
@@ -168,7 +168,7 @@ describe("snapshot", () => {
       expect(snapshot.types.Order.fields.customerId.foreignKeyField).toBe("id");
     });
 
-    it("captures enum fields with allowedValues", () => {
+    test("captures enum fields with allowedValues", () => {
       const mockTypes: Record<string, TailorDBType> = {
         Task: createMockType("Task", {
           id: { name: "id", config: { type: "uuid", required: true } },
@@ -193,7 +193,7 @@ describe("snapshot", () => {
       ]);
     });
 
-    it("handles empty types object", () => {
+    test("handles empty types object", () => {
       const mockTypes: Record<string, TailorDBType> = {};
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
@@ -213,7 +213,7 @@ describe("snapshot", () => {
       types: {},
     });
 
-    it("detects type addition", () => {
+    test("detects type addition", () => {
       const previous = createEmptySnapshot();
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
@@ -234,7 +234,7 @@ describe("snapshot", () => {
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
-    it("detects type removal (non-breaking)", () => {
+    test("detects type removal (non-breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -262,7 +262,7 @@ describe("snapshot", () => {
       ]);
     });
 
-    it("detects field addition (optional - non-breaking)", () => {
+    test("detects field addition (optional - non-breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -289,12 +289,11 @@ describe("snapshot", () => {
 
       const diff = compareSnapshots(previous, current);
 
-      expect(diff.changes[0].kind).toBe("field_added");
-      expect(diff.changes[0].fieldName).toBe("email");
+      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "email" });
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
-    it("detects field addition (required - breaking change)", () => {
+    test("detects field addition (required - breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -325,7 +324,7 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toBe("Required field added");
     });
 
-    it("detects field removal (non-breaking)", () => {
+    test("detects field removal (non-breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -365,7 +364,7 @@ describe("snapshot", () => {
       ]);
     });
 
-    it("detects field type change (breaking change)", () => {
+    test("detects field type change (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -400,7 +399,7 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("Field type changed");
     });
 
-    it("normalizes decimal scale at compare entry so missing scale matches platform default", () => {
+    test("normalizes decimal scale at compare entry so missing scale matches platform default", () => {
       // Reproduces the production scenario where one snapshot was loaded from
       // an older file that omitted `scale` and the other was produced by
       // `createSnapshotType` (which materializes the platform default of 6).
@@ -435,7 +434,7 @@ describe("snapshot", () => {
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
-    it("detects required flag change (optional to required - breaking)", () => {
+    test("detects required flag change (optional to required - breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -469,7 +468,7 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("optional to required");
     });
 
-    it("detects array to single value change (breaking change)", () => {
+    test("detects array to single value change (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -503,7 +502,7 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("array to single value");
     });
 
-    it("detects unique constraint addition (breaking change)", () => {
+    test("detects unique constraint addition (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -537,7 +536,7 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("Unique constraint");
     });
 
-    it("detects enum values removal (breaking change)", () => {
+    test("detects enum values removal (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -585,7 +584,7 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("CANCELLED");
     });
 
-    it("does not detect change when enum values are reordered", () => {
+    test("does not detect change when enum values are reordered", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -628,7 +627,7 @@ describe("snapshot", () => {
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
-    it("detects change when enum values are added (regardless of order)", () => {
+    test("detects change when enum values are added (regardless of order)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -672,7 +671,7 @@ describe("snapshot", () => {
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
-    it("returns empty diff when no changes", () => {
+    test("returns empty diff when no changes", () => {
       const snapshot: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -689,7 +688,7 @@ describe("snapshot", () => {
       expect(diff.changes.length).toBe(0);
     });
 
-    it("includes relationshipType in relationship_added changes", () => {
+    test("includes relationshipType in relationship_added changes", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -749,10 +748,12 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       const forwardChange = diff.changes.find(
-        (c) => c.kind === "relationship_added" && c.relationshipName === "author",
+        (c): c is RelationshipAddedChange =>
+          c.kind === "relationship_added" && c.relationshipName === "author",
       );
       const backwardChange = diff.changes.find(
-        (c) => c.kind === "relationship_added" && c.relationshipName === "posts",
+        (c): c is RelationshipAddedChange =>
+          c.kind === "relationship_added" && c.relationshipName === "posts",
       );
 
       expect(forwardChange?.relationshipType).toBe("forward");
@@ -764,7 +765,7 @@ describe("snapshot", () => {
   // compareLocalTypesWithSnapshot
   // ==========================================================================
   describe("compareLocalTypesWithSnapshot", () => {
-    it("compares local types with existing snapshot", () => {
+    test("compares local types with existing snapshot", () => {
       const previousSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -789,8 +790,7 @@ describe("snapshot", () => {
       const diff = compareLocalTypesWithSnapshot(previousSnapshot, snapshotTypes, namespace);
 
       expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0].kind).toBe("field_added");
-      expect(diff.changes[0].fieldName).toBe("email");
+      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "email" });
     });
   });
 
@@ -798,7 +798,7 @@ describe("snapshot", () => {
   // getMigrationFiles
   // ==========================================================================
   describe("getMigrationFiles", () => {
-    it("returns sorted list of migration files (directory structure)", () => {
+    test("returns sorted list of migration files (directory structure)", () => {
       const schemaContent = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -829,7 +829,7 @@ describe("snapshot", () => {
       expect(files[2].number).toBe(2);
     });
 
-    it("identifies schema vs diff files correctly (directory structure)", () => {
+    test("identifies schema vs diff files correctly (directory structure)", () => {
       const schemaContent = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -857,7 +857,7 @@ describe("snapshot", () => {
       expect(files[1].type).toBe("diff");
     });
 
-    it("ignores invalid directories", () => {
+    test("ignores invalid directories", () => {
       const schemaContent = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -875,7 +875,7 @@ describe("snapshot", () => {
       expect(files.length).toBe(1);
     });
 
-    it("returns empty array for non-existent directory", () => {
+    test("returns empty array for non-existent directory", () => {
       const nonExistent = path.join(testDir, "does-not-exist");
       const files = getMigrationFiles(nonExistent);
       expect(files).toEqual([]);
@@ -886,12 +886,12 @@ describe("snapshot", () => {
   // getNextMigrationNumber / getLatestMigrationNumber
   // ==========================================================================
   describe("getNextMigrationNumber", () => {
-    it("returns INITIAL_SCHEMA_NUMBER (0) for empty directory", () => {
+    test("returns INITIAL_SCHEMA_NUMBER (0) for empty directory", () => {
       const nextNum = getNextMigrationNumber(testDir);
       expect(nextNum).toBe(INITIAL_SCHEMA_NUMBER);
     });
 
-    it("returns next number after latest (directory structure)", () => {
+    test("returns next number after latest (directory structure)", () => {
       const schemaContent = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -920,12 +920,12 @@ describe("snapshot", () => {
   });
 
   describe("getLatestMigrationNumber", () => {
-    it("returns 0 for empty directory", () => {
+    test("returns 0 for empty directory", () => {
       const latestNum = getLatestMigrationNumber(testDir);
       expect(latestNum).toBe(0);
     });
 
-    it("returns highest migration number (directory structure)", () => {
+    test("returns highest migration number (directory structure)", () => {
       const schemaContent = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -957,7 +957,7 @@ describe("snapshot", () => {
   // loadSnapshot / loadDiff / writeSnapshot / writeDiff
   // ==========================================================================
   describe("loadSnapshot", () => {
-    it("loads snapshot from file", () => {
+    test("loads snapshot from file", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -982,12 +982,18 @@ describe("snapshot", () => {
   });
 
   describe("loadDiff", () => {
-    it("loads diff from file", () => {
+    test("loads diff from file", () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        changes: [{ kind: "type_added", typeName: "NewType" }],
+        changes: [
+          {
+            kind: "type_added",
+            typeName: "NewType",
+            after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
+          },
+        ],
         hasBreakingChanges: false,
         breakingChanges: [],
         hasWarnings: false,
@@ -1004,14 +1010,20 @@ describe("snapshot", () => {
       expect(loaded.changes[0].kind).toBe("type_added");
     });
 
-    it("backfills warnings fields for legacy diff.json", () => {
+    test("backfills warnings fields for legacy diff.json", () => {
       // Legacy diff.json written before warning-tier support shipped. The file
       // has no warnings/hasWarnings keys at all.
       const legacyDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        changes: [{ kind: "type_added", typeName: "NewType" }],
+        changes: [
+          {
+            kind: "type_added",
+            typeName: "NewType",
+            after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
+          },
+        ],
         hasBreakingChanges: false,
         breakingChanges: [],
         requiresMigrationScript: false,
@@ -1027,7 +1039,7 @@ describe("snapshot", () => {
       expect(loaded.changes.length).toBe(1);
     });
 
-    it("derives hasWarnings from warnings array regardless of stored flag", () => {
+    test("derives hasWarnings from warnings array regardless of stored flag", () => {
       // A hand-edited diff.json could end up with mismatched warnings and
       // hasWarnings; the loader must reconcile to the array.
       const inconsistentDiff = {
@@ -1059,7 +1071,7 @@ describe("snapshot", () => {
   });
 
   describe("writeSnapshot", () => {
-    it("writes snapshot to directory structure with correct name", () => {
+    test("writes snapshot to directory structure with correct name", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1080,7 +1092,7 @@ describe("snapshot", () => {
   });
 
   describe("writeDiff", () => {
-    it("writes diff to directory structure with correct name", () => {
+    test("writes diff to directory structure with correct name", () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1104,7 +1116,7 @@ describe("snapshot", () => {
   // reconstructSnapshotFromMigrations
   // ==========================================================================
   describe("reconstructSnapshotFromMigrations", () => {
-    it("reconstructs from initial schema only (directory structure)", () => {
+    test("reconstructs from initial schema only (directory structure)", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1131,7 +1143,7 @@ describe("snapshot", () => {
       expect(reconstructed?.types.User.fields.name).toBeDefined();
     });
 
-    it("applies single diff to schema (directory structure)", () => {
+    test("applies single diff to schema (directory structure)", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1173,7 +1185,7 @@ describe("snapshot", () => {
       expect(reconstructed?.types.User.fields.email).toBeDefined();
     });
 
-    it("applies multiple diffs sequentially (directory structure)", () => {
+    test("applies multiple diffs sequentially (directory structure)", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1236,7 +1248,7 @@ describe("snapshot", () => {
       expect(reconstructed?.types.User.fields.email).toBeDefined();
     });
 
-    it("handles type addition in diff (directory structure)", () => {
+    test("handles type addition in diff (directory structure)", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1285,7 +1297,7 @@ describe("snapshot", () => {
       expect(reconstructed?.types.Post.fields.title).toBeDefined();
     });
 
-    it("handles type removal in diff (directory structure)", () => {
+    test("handles type removal in diff (directory structure)", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1335,12 +1347,12 @@ describe("snapshot", () => {
       expect(reconstructed?.types.OldType).toBeUndefined();
     });
 
-    it("returns null for empty directory", () => {
+    test("returns null for empty directory", () => {
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
       expect(reconstructed).toBeNull();
     });
 
-    it("correctly reconstructs backward relationships from diff", () => {
+    test("correctly reconstructs backward relationships from diff", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1378,6 +1390,7 @@ describe("snapshot", () => {
               targetField: "id",
               sourceField: "authorId",
               isArray: false,
+              description: "",
             },
           },
           {
@@ -1390,6 +1403,7 @@ describe("snapshot", () => {
               targetField: "authorId",
               sourceField: "id",
               isArray: true,
+              description: "",
             },
           },
         ],
@@ -1420,17 +1434,17 @@ describe("snapshot", () => {
   // validateMigrationFiles / assertValidMigrationFiles
   // ==========================================================================
   describe("validateMigrationFiles", () => {
-    it("returns empty array for non-existent directory", () => {
+    test("returns empty array for non-existent directory", () => {
       const errors = validateMigrationFiles(path.join(testDir, "does-not-exist"));
       expect(errors).toEqual([]);
     });
 
-    it("returns empty array for empty directory", () => {
+    test("returns empty array for empty directory", () => {
       const errors = validateMigrationFiles(testDir);
       expect(errors).toEqual([]);
     });
 
-    it("returns empty array for valid single schema file (directory structure)", () => {
+    test("returns empty array for valid single schema file (directory structure)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1443,7 +1457,7 @@ describe("snapshot", () => {
       expect(errors).toEqual([]);
     });
 
-    it("returns empty array for valid schema + diff sequence (directory structure)", () => {
+    test("returns empty array for valid schema + diff sequence (directory structure)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1470,7 +1484,7 @@ describe("snapshot", () => {
       expect(errors).toEqual([]);
     });
 
-    it("detects missing initial schema snapshot (directory structure)", () => {
+    test("detects missing initial schema snapshot (directory structure)", () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1494,7 +1508,7 @@ describe("snapshot", () => {
       });
     });
 
-    it("detects gap in migration sequence (directory structure)", () => {
+    test("detects gap in migration sequence (directory structure)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1525,7 +1539,7 @@ describe("snapshot", () => {
       });
     });
 
-    it("detects schema file at wrong position (directory structure)", () => {
+    test("detects schema file at wrong position (directory structure)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1547,7 +1561,7 @@ describe("snapshot", () => {
       });
     });
 
-    it("detects missing diff file for migration > 0 (directory structure)", () => {
+    test("detects missing diff file for migration > 0 (directory structure)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1569,7 +1583,7 @@ describe("snapshot", () => {
   });
 
   describe("assertValidMigrationFiles", () => {
-    it("does not throw for valid migrations (directory structure)", () => {
+    test("does not throw for valid migrations (directory structure)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1581,7 +1595,7 @@ describe("snapshot", () => {
       expect(() => assertValidMigrationFiles(testDir, "test")).not.toThrow();
     });
 
-    it("throws for invalid migrations with detailed error message (directory structure)", () => {
+    test("throws for invalid migrations with detailed error message (directory structure)", () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1651,7 +1665,7 @@ describe("snapshot", () => {
       } as unknown as ProtoTailorDBType;
     }
 
-    it("returns empty array when remote and snapshot match exactly", () => {
+    test("returns empty array when remote and snapshot match exactly", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1679,7 +1693,7 @@ describe("snapshot", () => {
       expect(drifts).toEqual([]);
     });
 
-    it("detects type missing in remote", () => {
+    test("detects type missing in remote", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1710,7 +1724,7 @@ describe("snapshot", () => {
       expect(drifts[0].typeName).toBe("Post");
     });
 
-    it("detects type missing in snapshot (unexpected type in remote)", () => {
+    test("detects type missing in snapshot (unexpected type in remote)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1739,7 +1753,7 @@ describe("snapshot", () => {
       expect(drifts[0].typeName).toBe("ExtraType");
     });
 
-    it("detects field missing in remote", () => {
+    test("detects field missing in remote", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1768,7 +1782,7 @@ describe("snapshot", () => {
       expect(drifts[0].fieldName).toBe("email");
     });
 
-    it("detects field missing in snapshot (unexpected field in remote)", () => {
+    test("detects field missing in snapshot (unexpected field in remote)", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1797,7 +1811,7 @@ describe("snapshot", () => {
       expect(drifts[0].fieldName).toBe("extraField");
     });
 
-    it("detects field type mismatch", () => {
+    test("detects field type mismatch", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1828,7 +1842,7 @@ describe("snapshot", () => {
       expect(drifts[0].details).toContain("type");
     });
 
-    it("detects required flag mismatch", () => {
+    test("detects required flag mismatch", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1858,7 +1872,7 @@ describe("snapshot", () => {
       expect(drifts[0].details).toContain("required");
     });
 
-    it("detects array flag mismatch", () => {
+    test("detects array flag mismatch", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1888,7 +1902,7 @@ describe("snapshot", () => {
       expect(drifts[0].details).toContain("array");
     });
 
-    it("detects enum allowedValues mismatch", () => {
+    test("detects enum allowedValues mismatch", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1926,7 +1940,7 @@ describe("snapshot", () => {
       expect(drifts[0].details).toContain("allowedValues");
     });
 
-    it("normalizes decimal scale at compare entry so missing scale matches remote default", () => {
+    test("normalizes decimal scale at compare entry so missing scale matches remote default", () => {
       // The snapshot is written from disk without an explicit scale (legacy /
       // user-authored form). compareRemoteWithSnapshot normalizes the snapshot
       // at entry so it becomes equivalent to a remote that has materialized
@@ -1964,7 +1978,7 @@ describe("snapshot", () => {
       expect(drifts).toEqual([]);
     });
 
-    it("detects drift when decimal scale differs from snapshot", () => {
+    test("detects drift when decimal scale differs from snapshot", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1994,7 +2008,7 @@ describe("snapshot", () => {
       expect(drifts[0].details).toContain("scale: remote=2, expected=6");
     });
 
-    it("handles empty remote types list", () => {
+    test("handles empty remote types list", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -2013,7 +2027,7 @@ describe("snapshot", () => {
       expect(drifts[0].kind).toBe("type_missing_remote");
     });
 
-    it("handles empty snapshot types", () => {
+    test("handles empty snapshot types", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -2037,12 +2051,12 @@ describe("snapshot", () => {
   // formatSchemaDrifts
   // ==========================================================================
   describe("formatSchemaDrifts", () => {
-    it("returns 'No schema drifts detected.' for empty array", () => {
+    test("returns 'No schema drifts detected.' for empty array", () => {
       const result = formatSchemaDrifts([]);
       expect(result).toBe("No schema drifts detected.");
     });
 
-    it("formats drifts grouped by type", () => {
+    test("formats drifts grouped by type", () => {
       const drifts = [
         {
           typeName: "User",

@@ -11,7 +11,8 @@ import {
   type WithLabel,
 } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase } from "@/cli/commands/deploy/deploy";
+import type { BundledScripts, FunctionEntry } from "./function-registry-types";
+import type { ApplyPhase } from "./phase";
 import type { Application } from "@/cli/services/application";
 import type { CollectedJob } from "@/cli/services/workflow/service";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -21,14 +22,9 @@ import type {
 } from "@tailor-proto/tailor/v1/function_registry_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
-const CHUNK_SIZE = 64 * 1024; // 64KB
+export type { BundledScripts, FunctionEntry } from "./function-registry-types";
 
-export type FunctionEntry = {
-  name: string;
-  scriptContent: string;
-  contentHash: string;
-  description: string;
-};
+const CHUNK_SIZE = 64 * 1024; // 64KB
 
 type CreateFunction = {
   name: string;
@@ -166,16 +162,6 @@ export function splitFunctionRegistryChanges<
 export function authHookFunctionName(authName: string, hookPoint: string): string {
   return `auth-hook--${authName}--${hookPoint}`;
 }
-
-/**
- * In-memory bundled scripts organized by kind.
- */
-export type BundledScripts = {
-  resolvers: Map<string, string>;
-  executors: Map<string, string>;
-  workflowJobs: Map<string, string>;
-  authHooks: Map<string, string>;
-};
 
 /**
  * Collect all function entries from in-memory bundled scripts for all services.

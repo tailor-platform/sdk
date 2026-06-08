@@ -1,4 +1,4 @@
-import { describe, it, assertType, expectTypeOf } from "vitest";
+import { describe, test, assertType, expectTypeOf } from "vitest";
 import type {
   Generated,
   ObjectColumnType,
@@ -10,7 +10,7 @@ import type {
 
 // Sanity check: verify typecheck catches errors
 describe("typecheck sanity", () => {
-  it("string is not assignable to number", () => {
+  test("string is not assignable to number", () => {
     // @ts-expect-error string is not assignable to number
     assertType<number>("hello");
   });
@@ -43,7 +43,7 @@ type TestNamespace = {
 };
 
 describe("NamespaceInsertable", () => {
-  it("should accept Date and string for nested datetime on insert", () => {
+  test("should accept Date and string for nested datetime on insert", () => {
     type ReceiptInsertable = NamespaceInsertable<TestNamespace, "Receipt">;
 
     assertType<ReceiptInsertable>({
@@ -67,7 +67,7 @@ describe("NamespaceInsertable", () => {
 });
 
 describe("NamespaceSelectable", () => {
-  it("should return Date for both top-level and nested datetime", () => {
+  test("should return Date for both top-level and nested datetime", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
     expectTypeOf<ReceiptSelectable["receiptDate"]>().toEqualTypeOf<Date>();
@@ -76,7 +76,7 @@ describe("NamespaceSelectable", () => {
     expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<Date | null>();
   });
 
-  it("should return array of resolved objects for ObjectArrayColumnType", () => {
+  test("should return array of resolved objects for ObjectArrayColumnType", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
     expectTypeOf<ReceiptSelectable["metadata"]>().toEqualTypeOf<
@@ -85,7 +85,7 @@ describe("NamespaceSelectable", () => {
     expectTypeOf<ReceiptSelectable["metadata"][0]["created"]>().toEqualTypeOf<Date>();
   });
 
-  it("should return Date[] for timestamp array", () => {
+  test("should return Date[] for timestamp array", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
     expectTypeOf<ReceiptSelectable["eventDates"]>().toEqualTypeOf<Date[]>();

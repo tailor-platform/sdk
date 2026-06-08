@@ -1,4 +1,3 @@
-import { type ApplyPhase } from "@/cli/commands/deploy/deploy";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
@@ -9,14 +8,14 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, sdkNameLabelKey } from "./label";
 import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { ApplyPhase } from "./phase";
 import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -313,28 +312,20 @@ export async function planWorkflow(
   const resourceOwners = new Set<string>();
   const unchangedWorkflowJobNames = new Set<string>();
 
-  // Fetch existing workflows from API
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    const response = await client.listWorkflows({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [response.workflows, response.nextPageToken];
-  });
-  const existingWorkflows: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      const { metadata } = await client.getMetadata({
-        trn: workflowTrn(workspaceId, resource.name),
+  const existingWorkflows = await fetchExistingResourcesWithLabels({
+    client,
+    workspaceId,
+    fetchPage: async (pageToken, pageSize) => {
+      const response = await client.listWorkflows({
+        workspaceId,
+        pageToken,
+        pageSize,
       });
-      existingWorkflows[resource.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
+      return [response.workflows, response.nextPageToken];
+    },
+    getName: (resource) => resource.name,
+    getTrn: workflowTrn,
+  });
 
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
@@ -357,21 +348,16 @@ export async function planWorkflow(
     }
 
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Workflow",
-            resourceName: workflow.name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "Workflow",
-            resourceName: workflow.name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "Workflow",
+        resourceName: workflow.name,
+        conflicts,
+        unmanaged,
+      });
 
       if (
         owned &&
@@ -412,11 +398,13 @@ export async function planWorkflow(
     if (!existing) {
       return;
     }
-    const label = existing.label;
-    const owned = isOwnedByApp(existing.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: existing.allLabels,
+      ownerLabel: existing.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name: existing.resource.name,

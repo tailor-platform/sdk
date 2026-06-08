@@ -4,7 +4,9 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
+import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
 import {
   createTriggerTransformPlugin,
@@ -12,6 +14,7 @@ import {
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
+import type { LogLevel } from "@/types/app-config";
 
 /**
  * Options for bundling auth hooks
@@ -31,6 +34,8 @@ export interface BundleAuthHooksOptions {
   cache?: BundleCache;
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
+  /** Controls which console calls are kept in bundled code */
+  bundleLogLevel?: LogLevel;
 }
 
 /**
@@ -53,6 +58,7 @@ export async function bundleAuthHooks(
     triggerContext,
     cache,
     inlineSourcemap,
+    bundleLogLevel = "DEBUG",
   } = options;
 
   logger.newline();
@@ -84,6 +90,7 @@ export async function bundleAuthHooks(
     serializedTriggerContext,
     tsconfig,
     inlineSourcemap,
+    bundleLogLevel,
     prefix: sortedEnvPrefix,
   });
 
@@ -127,11 +134,14 @@ export async function bundleAuthHooks(
         },
         tsconfig,
         plugins,
-        treeshake: {
-          moduleSideEffects: false,
-          annotations: true,
-          unknownGlobalSideEffects: false,
+        transform: {
+          define: {
+            "process.env.LOG_LEVEL": JSON.stringify(bundleLogLevel),
+          },
         },
+        treeshake: composeFunctionTreeshakeOptions([
+          createLogLevelTreeshakeOptions(bundleLogLevel),
+        ]),
         logLevel: "silent",
       } as rolldown.BuildOptions);
 

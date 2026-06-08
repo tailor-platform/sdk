@@ -10,197 +10,63 @@ on:
       - .github/workflows/pkg-pr-new.yml
 
 jobs:
-  notify-start:
-    if: >-
-      github.event_name == 'pull_request' &&
-      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Post publishing status
-        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-        with:
-          header: pkg-pr-new
-          message: |
-            ## ⚡ pkg.pr.new
-
-            > ⏳ **Publishing** commit: ${{ env.SHA }} …
-
-            ### @tailor-platform/sdk
-
-            ```
-            pnpm add https://pkg.pr.new/@tailor-platform/sdk@${{ env.PR_NUMBER }}
-            ```
-
-            ```
-            pnpm dlx https://pkg.pr.new/@tailor-platform/sdk@${{ env.PR_NUMBER }} --help
-            ```
-
-            ### @tailor-platform/create-sdk
-
-            ```
-            pnpm add https://pkg.pr.new/@tailor-platform/create-sdk@${{ env.PR_NUMBER }}
-            ```
-
-            ```
-            pnpm dlx https://pkg.pr.new/@tailor-platform/create-sdk@${{ env.PR_NUMBER }} my-app
-            ```
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-sdk:
+  publish:
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: write
     outputs:
-      sdk_url: ${{ steps.extract.outputs.sdk_url }}
-      sdk_template_url: ${{ steps.extract.outputs.sdk_template_url }}
+      sdk_url: ${{ steps.urls.outputs.sdk_url }}
+      create_sdk_url: ${{ steps.urls.outputs.create_sdk_url }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Build SDK
-        run: pnpm --filter @tailor-platform/sdk run build
-
-      - name: Publish SDK to pkg.pr.new
-        id: publish
-        run: pnpm dlx pkg-pr-new publish --pnpm --comment=off --json /tmp/sdk-output.json "packages/sdk"
-
-      - name: Extract SDK URLs
-        id: extract
+      # pkg.pr.new --compact URLs are deterministic from the abbreviated (7-char)
+      # head SHA, so they can be computed BEFORE publishing. This lets us embed
+      # the SDK preview URL into create-sdk's templates without publishing the
+      # SDK first — both packages go out in a single `pkg-pr-new publish` call,
+      # whereas separate publishes would each rewrite the PR comment (last wins).
+      - name: Compute preview URLs
+        id: urls
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          SDK_URL=$(jq -r '.packages[] | select(.name == "@tailor-platform/sdk") | .url' /tmp/sdk-output.json)
-          SDK_TEMPLATE_URL=$(jq -r '.templates[0].url // ""' /tmp/sdk-output.json)
-          echo "sdk_url=$SDK_URL" >> "$GITHUB_OUTPUT"
-          echo "sdk_template_url=$SDK_TEMPLATE_URL" >> "$GITHUB_OUTPUT"
-          echo "Published SDK at: $SDK_URL"
-          echo "Template URL: $SDK_TEMPLATE_URL"
-
-  publish-create-sdk:
-    needs: publish-sdk
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      create_sdk_url: ${{ steps.extract.outputs.create_sdk_url }}
-      create_sdk_template_url: ${{ steps.extract.outputs.create_sdk_template_url }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Install deps
-        uses: ./.github/actions/install-deps
+          SHORT_SHA="${SHA:0:7}"
+          SDK_URL="https://pkg.pr.new/@tailor-platform/sdk@${SHORT_SHA}"
+          CREATE_SDK_URL="https://pkg.pr.new/@tailor-platform/create-sdk@${SHORT_SHA}"
+          {
+            echo "sdk_url=$SDK_URL"
+            echo "create_sdk_url=$CREATE_SDK_URL"
+          } >> "$GITHUB_OUTPUT"
+          echo "SDK preview: $SDK_URL"
+          echo "create-sdk preview: $CREATE_SDK_URL"
 
       # `prepare-templates.js` rewrites template manifests but leaves the
       # lockfile untouched; pnpm 11's default `verifyDepsBeforeRun: install`
-      # would then auto-install the pkg.pr.new tarball before the build and
-      # hang the job. The build itself only needs create-sdk's own deps.
+      # would then auto-install the pkg.pr.new tarball (not published yet) before
+      # the build and hang the job. The build itself only needs create-sdk's own deps.
       - name: Build create-sdk with pkg.pr.new SDK
         env:
-          TAILOR_SDK_VERSION: ${{ needs.publish-sdk.outputs.sdk_url }}
+          TAILOR_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
         run: |
           node packages/create-sdk/scripts/prepare-templates.js
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
-      - name: Publish create-sdk to pkg.pr.new
-        id: publish
-        run: pnpm dlx pkg-pr-new publish --pnpm --comment=off --json /tmp/create-sdk-output.json ./packages/create-sdk
-
-      - name: Extract create-sdk URLs
-        id: extract
-        run: |
-          CREATE_SDK_URL=$(jq -r '.packages[] | select(.name == "@tailor-platform/create-sdk") | .url' /tmp/create-sdk-output.json)
-          CREATE_SDK_TEMPLATE_URL=$(jq -r '.templates[0].url // ""' /tmp/create-sdk-output.json)
-          echo "create_sdk_url=$CREATE_SDK_URL" >> "$GITHUB_OUTPUT"
-          echo "create_sdk_template_url=$CREATE_SDK_TEMPLATE_URL" >> "$GITHUB_OUTPUT"
-          echo "Published create-sdk at: $CREATE_SDK_URL"
-          echo "Template URL: $CREATE_SDK_TEMPLATE_URL"
-
-  update-comment:
-    if: >-
-      github.event_name == 'pull_request' &&
-      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
-    needs: [publish-sdk, publish-create-sdk]
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Build comment body
-        id: comment
-        env:
-          SDK_URL: ${{ needs.publish-sdk.outputs.sdk_url }}
-          SDK_TEMPLATE_URL: ${{ needs.publish-sdk.outputs.sdk_template_url }}
-          CREATE_SDK_URL: ${{ needs.publish-create-sdk.outputs.create_sdk_url }}
-          CREATE_SDK_TEMPLATE_URL: ${{ needs.publish-create-sdk.outputs.create_sdk_template_url }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          {
-            echo 'body<<COMMENT_EOF'
-
-            echo '## ⚡ pkg.pr.new'
-            echo ''
-            echo '### @tailor-platform/sdk'
-            echo ''
-            echo '```'
-            echo "pnpm add $SDK_URL"
-            echo '```'
-            echo ''
-            echo '```'
-            echo "pnpm dlx $SDK_URL --help"
-            echo '```'
-            echo ''
-            if [ -n "$SDK_TEMPLATE_URL" ]; then
-              echo "[Open in StackBlitz]($SDK_TEMPLATE_URL)"
-              echo ''
-            fi
-            echo '### @tailor-platform/create-sdk'
-            echo ''
-            echo '```'
-            echo "pnpm add $CREATE_SDK_URL"
-            echo '```'
-            echo ''
-            echo '```'
-            echo "pnpm dlx $CREATE_SDK_URL my-app"
-            echo '```'
-            echo ''
-            if [ -n "$CREATE_SDK_TEMPLATE_URL" ]; then
-              echo "[Open in StackBlitz]($CREATE_SDK_TEMPLATE_URL)"
-              echo ''
-            fi
-            echo "> commit: $SHA"
-
-            echo 'COMMENT_EOF'
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Update PR comment
-        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
-        with:
-          header: pkg-pr-new
-          message: ${{ steps.comment.outputs.body }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish to pkg.pr.new
+        run: pnpm dlx pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk"
 
   init-smoke:
-    needs: [publish-sdk, publish-create-sdk]
+    needs: [publish]
     strategy:
       fail-fast: false
       matrix:
@@ -230,7 +96,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -266,7 +132,7 @@ jobs:
       - name: Scaffold project
         run: |
           cd /tmp
-          npx --yes --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
+          npx --yes --package=${{ needs.publish.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
         env:
           CREATE_SDK_NO_INSTALL: "1"
 
@@ -280,7 +146,7 @@ jobs:
         run: |
           SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/sdk"]' /tmp/test-init-app/package.json)
           echo "SDK version in generated project: $SDK_VERSION"
-          EXPECTED_SDK_URL="${{ needs.publish-sdk.outputs.sdk_url }}"
+          EXPECTED_SDK_URL="${{ needs.publish.outputs.sdk_url }}"
           echo "Expected SDK URL: $EXPECTED_SDK_URL"
           if [[ "$SDK_VERSION" != "$EXPECTED_SDK_URL" ]]; then
             echo "Error: SDK dependency should be '$EXPECTED_SDK_URL' but got '$SDK_VERSION'"

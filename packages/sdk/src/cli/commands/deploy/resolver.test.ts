@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
-import type { PlanContext } from "./deploy";
+import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
 import type { ResolverService } from "@/cli/services/resolver/service";

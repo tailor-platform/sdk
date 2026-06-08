@@ -4,7 +4,7 @@ import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
-import type { ProfileInfo } from ".";
+import type { ProfileInfo } from "./types";
 
 export const updateCommand = defineAppCommand({
   name: "update",

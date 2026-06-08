@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
-import type { PlanContext } from "./deploy";
+import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -165,7 +165,7 @@ describe("planExecutor", () => {
       tailorDBServices,
       resolverServices,
       idpServices,
-      authService: options?.authName ? { parsedConfig: { name: options.authName } } : undefined,
+      authService: options?.authName ? { config: { name: options.authName } } : undefined,
     } as unknown as Application;
   }
 

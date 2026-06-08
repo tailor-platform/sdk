@@ -12,6 +12,7 @@ export const listCommand = defineAppCommand({
   description: "List all personal access tokens.",
   args: z.object({ ...paginationArgs() }).strict(),
   run: async (args) => {
+    const jsonOutput = logger.jsonMode;
     const config = await readPlatformConfig();
 
     if (!config.current_user) {
@@ -37,21 +38,19 @@ export const listCommand = defineAppCommand({
       { limit: args.limit },
     );
 
-    if (pats.length === 0 && !args.json) {
+    if (pats.length === 0) {
       logger.info(ml`
         No personal access tokens found.
         Please create a token using 'tailor-sdk user pat create' command.
       `);
-      return;
+      if (!jsonOutput) {
+        return;
+      }
     }
 
     const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
-    if (args.json) {
+    if (jsonOutput) {
       logger.out(patInfos);
-      return;
-    }
-
-    if (pats.length === 0) {
       return;
     }
 

@@ -5,7 +5,13 @@ import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { CacheStore } from "./store";
 import type { Plugin } from "rolldown";
 
-type BundleKind = "resolver" | "executor" | "workflow-job" | "auth-hook";
+type BundleKind =
+  | "resolver"
+  | "executor"
+  | "workflow-job"
+  | "auth-hook"
+  | "http-adapter-input"
+  | "http-adapter-output";
 
 type BundleCacheRestoreParams = {
   kind: BundleKind;
@@ -49,6 +55,7 @@ type ComputeBundlerContextHashParams = {
   serializedTriggerContext: string;
   tsconfig?: string;
   inlineSourcemap?: boolean;
+  bundleLogLevel?: string;
   prefix?: string;
 };
 
@@ -56,19 +63,27 @@ type ComputeBundlerContextHashParams = {
  * Compute a context hash for cache invalidation across bundlers.
  *
  * Combines the source file path, serialized trigger context, tsconfig hash,
- * sourcemap mode, and an optional prefix (e.g., serialized env variables)
- * into a single SHA-256 hash.
+ * sourcemap mode, bundle log level, and an optional prefix (e.g., serialized
+ * env variables) into a single SHA-256 hash.
  * @param params - Context hash computation parameters
  * @returns SHA-256 hex digest of the combined context
  */
 function computeBundlerContextHash(params: ComputeBundlerContextHashParams): string {
-  const { sourceFile, serializedTriggerContext, tsconfig, inlineSourcemap, prefix } = params;
+  const {
+    sourceFile,
+    serializedTriggerContext,
+    tsconfig,
+    inlineSourcemap,
+    bundleLogLevel,
+    prefix,
+  } = params;
   return hashContent(
     (prefix ?? "") +
       path.resolve(sourceFile) +
       serializedTriggerContext +
       (tsconfig ? hashFile(tsconfig) : "") +
-      String(inlineSourcemap ?? false),
+      String(inlineSourcemap ?? false) +
+      (bundleLogLevel ?? ""),
   );
 }
 

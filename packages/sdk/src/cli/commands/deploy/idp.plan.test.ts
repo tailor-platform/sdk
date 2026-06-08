@@ -1,7 +1,7 @@
 import { IdPLang, IdPPermissionPermit } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { planIdP } from "./idp";
-import type { PlanContext } from "./deploy";
+import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 

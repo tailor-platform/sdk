@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { SKILL_NAME, buildSkillsAddArgs, runSkillsInstaller } from "./skills-installer";
 
 const TEST_SOURCE = "/fake/sdk/skills";
@@ -38,7 +38,7 @@ const createMockChildProcess = () => {
 };
 
 describe("skills-installer", () => {
-  it("builds skills add arguments with the provided source and --copy", () => {
+  test("builds skills add arguments with the provided source and --copy", () => {
     expect(buildSkillsAddArgs({ source: TEST_SOURCE })).toEqual([
       "skills",
       "add",
@@ -49,7 +49,7 @@ describe("skills-installer", () => {
     ]);
   });
 
-  it("prefers TAILOR_SDK_SKILLS_SOURCE env var over the passed source", () => {
+  test("prefers TAILOR_SDK_SKILLS_SOURCE env var over the passed source", () => {
     vi.stubEnv("TAILOR_SDK_SKILLS_SOURCE", "/override/skills");
     try {
       expect(buildSkillsAddArgs({ source: TEST_SOURCE })[2]).toBe("/override/skills");
@@ -58,13 +58,13 @@ describe("skills-installer", () => {
     }
   });
 
-  it("appends --agent and --yes when provided", () => {
+  test("appends --agent and --yes when provided", () => {
     expect(
       buildSkillsAddArgs({ source: TEST_SOURCE, agent: "codex", yes: true }).slice(-3),
     ).toEqual(["--agent", "codex", "--yes"]);
   });
 
-  it("runs npx with generated arguments and returns exit code", async () => {
+  test("runs npx with generated arguments and returns exit code", async () => {
     const mock = createMockChildProcess();
     const spawnFn = vi.fn(() => mock.process);
 
@@ -84,7 +84,7 @@ describe("skills-installer", () => {
     await expect(promise).resolves.toBe(0);
   });
 
-  it("returns 1 when child process exits without status code", async () => {
+  test("returns 1 when child process exits without status code", async () => {
     const mock = createMockChildProcess();
     const spawnFn = vi.fn(() => mock.process);
     const promise = runSkillsInstaller({ source: TEST_SOURCE, spawnFn });
@@ -93,7 +93,7 @@ describe("skills-installer", () => {
     await expect(promise).resolves.toBe(1);
   });
 
-  it("rejects when npx execution fails", async () => {
+  test("rejects when npx execution fails", async () => {
     const mock = createMockChildProcess();
     const spawnFn = vi.fn(() => mock.process);
     const promise = runSkillsInstaller({ source: TEST_SOURCE, spawnFn });

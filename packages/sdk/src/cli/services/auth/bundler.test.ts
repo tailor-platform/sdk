@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { bundleAuthHooks } from "./bundler";
 
 describe("bundleAuthHooks", () => {
@@ -33,7 +33,7 @@ export default {
     return configFile;
   }
 
-  it("injects the config env into the before-login hook args", async () => {
+  test("injects the config env into the before-login hook args", async () => {
     const configFile = writeConfig();
 
     const bundled = await bundleAuthHooks({
@@ -50,7 +50,7 @@ export default {
     expect(code).toContain("ENVIRONMENT");
   });
 
-  it("injects an empty env object when none is provided", async () => {
+  test("injects an empty env object when none is provided", async () => {
     const configFile = writeConfig();
 
     const bundled = await bundleAuthHooks({
@@ -63,5 +63,32 @@ export default {
     expect(code).toBeDefined();
     // The wrapper always defines an env binding, even when empty
     expect(code).toContain("env");
+  });
+
+  test("inlines LOG_LEVEL references from config during bundling", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-test-")));
+    const configFile = path.join(tmpDir, "tailor.config.ts");
+    fs.writeFileSync(
+      configFile,
+      `
+const handler = async () => ({ ok: true });
+
+export default {
+  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  auth: { hooks: { beforeLogin: { handler } } },
+};
+`,
+    );
+
+    const bundled = await bundleAuthHooks({
+      configPath: configFile,
+      authName: "my-auth",
+      handlerAccessPath: "auth.hooks.beforeLogin.handler",
+      bundleLogLevel: "WARN",
+    });
+
+    const code = bundled.get("auth-hook--my-auth--before-login");
+    expect(code).toBeDefined();
+    expect(code).not.toContain("process.env.LOG_LEVEL");
   });
 });
