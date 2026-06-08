@@ -220,7 +220,8 @@ export const erdExportCommand = defineAppCommand({
         results.map((result) => ({
           namespace: result.namespace,
           distDir: result.distDir,
-          schemaOutputPath: result.schemaOutputPath,
+          // Inline builds emit only index.html, so there is no schema.json path.
+          ...(args.inline ? {} : { schemaOutputPath: result.schemaOutputPath }),
         })),
       );
     } else {

@@ -67,7 +67,10 @@ export function buildStandaloneViewerHtml(options: BuildStandaloneViewerHtmlOpti
   // embedding <script> element early.
   const schemaJson = JSON.stringify(options.schema).replaceAll("<", "\\u003c");
   const embedScript = `<script>window.__ERD_SCHEMA__ = ${schemaJson};</script>`;
-  const inlineScript = `<script type="module">\n${appJs}\n</script>`;
+  // Escape any "</script" in the inlined module so it cannot terminate the
+  // <script> element early. "<\/script" is equivalent JS (\/ === /).
+  const safeAppJs = appJs.replace(/<\/script/gi, "<\\/script");
+  const inlineScript = `<script type="module">\n${safeAppJs}\n</script>`;
 
   return html
     .replace(STYLES_LINK, `<style>\n${css}\n</style>`)

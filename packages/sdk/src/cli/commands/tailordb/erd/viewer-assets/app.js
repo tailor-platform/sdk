@@ -50,6 +50,7 @@ let searchText = "";
 let viewport = { x: 32, y: 32, z: 1 };
 let hasZoomFromHash = false;
 let userAdjustedViewport = false;
+let hashUpdatesDisabled = false;
 let showMode = DEFAULT_SHOW_MODE;
 let activeCardDrag;
 let activeCanvasPan;
@@ -109,6 +110,7 @@ function readHashState() {
 }
 
 function writeHashState() {
+  if (hashUpdatesDisabled) return;
   const params = new URLSearchParams();
   if (selectedTable) params.set("table", selectedTable);
   if (showMode !== DEFAULT_SHOW_MODE) params.set("show", showMode);
@@ -119,7 +121,9 @@ function writeHashState() {
   try {
     history.replaceState(null, "", `#${params.toString()}`);
   } catch {
-    // Ignore history failures (e.g. sandboxed artifact preview).
+    // Disable further hash writes once they fail (e.g. sandboxed artifact
+    // preview) so panning/zooming does not throw on every frame.
+    hashUpdatesDisabled = true;
   }
 }
 

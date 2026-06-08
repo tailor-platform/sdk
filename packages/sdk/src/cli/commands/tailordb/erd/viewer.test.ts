@@ -35,6 +35,9 @@ describe("buildStandaloneViewerHtml", () => {
     expect(html).toContain('<script type="module">');
     expect(html).toContain("window.__ERD_SCHEMA__");
     expect(html).toContain('"namespace":"tailordb"');
+    // Only the embed script and the inlined module may close a <script> element;
+    // any "</script" leaking from the inlined JS must be escaped.
+    expect(html.match(/<\/script>/g)).toHaveLength(2);
   });
 
   test("escapes < so embedded schema content cannot break out of the script tag", () => {
