@@ -414,12 +414,11 @@ tailor-sdk tailordb erd export [options]
 
 **Options**
 
-| Option                    | Alias | Description                                                                                             | Required | Default              | Env                               |
-| ------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                                                                 | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                           | No       | -                    | -                                 |
-| `--output <OUTPUT>`       | `-o`  | Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`)          | No       | `".tailor-sdk/erd"`  | -                                 |
-| `--inline`                | -     | Emit a single self-contained index.html (inlined CSS/JS and embedded schema) instead of multi-file dist | No       | `false`              | -                                 |
+| Option                    | Alias | Description                                                                                    | Required | Default              | Env                               |
+| ------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                                                        | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                  | No       | -                    | -                                 |
+| `--output <OUTPUT>`       | `-o`  | Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`) | No       | `".tailor-sdk/erd"`  | -                                 |
 
 <!-- politty:command:tailordb erd export:options:end -->
 

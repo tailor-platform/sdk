@@ -127,35 +127,34 @@ function writeHashState() {
   }
 }
 
-let embeddedSchemaResolved = false;
-let embeddedSchemaValue;
+const SCHEMA_BLOCK_PATTERN =
+  /<script type="application\/json" id="erd-schema">([\s\S]*?)<\/script>/;
 
-// Read the schema embedded by the standalone (`--inline`) build, if present.
-// Returns undefined for the multi-file dev build, which fetches schema.json.
+// Read the schema from the embedded `#erd-schema` data block in the current
+// document (the viewer is always a self-contained HTML).
 function embeddedSchema() {
-  if (embeddedSchemaResolved) return embeddedSchemaValue;
-  embeddedSchemaResolved = true;
-  if (typeof document !== "undefined") {
-    const element = document.getElementById("erd-schema");
-    if (element) {
-      try {
-        embeddedSchemaValue = JSON.parse(element.textContent);
-      } catch {
-        // Leave undefined and fall back to fetching schema.json.
-      }
-    }
+  if (typeof document === "undefined") return undefined;
+  const element = document.getElementById("erd-schema");
+  if (!element) return undefined;
+  try {
+    return JSON.parse(element.textContent);
+  } catch {
+    return undefined;
   }
-  return embeddedSchemaValue;
 }
 
-async function fetchSchema() {
-  const embedded = embeddedSchema();
-  if (embedded) return embedded;
-  const response = await fetch(`./schema.json?t=${Date.now()}`, { cache: "no-store" });
+// Re-fetch the served HTML and extract its embedded schema. Used by watch mode
+// to pick up rebuilds without a separate schema.json.
+async function fetchServedSchema() {
+  const response = await fetch(`./?t=${Date.now()}`, { cache: "no-store" });
   if (!response.ok) {
-    throw new Error(`Failed to load schema.json (${response.status})`);
+    throw new Error(`Failed to load ERD (${response.status})`);
   }
-  return response.json();
+  const match = SCHEMA_BLOCK_PATTERN.exec(await response.text());
+  if (!match) {
+    throw new Error("ERD schema block not found.");
+  }
+  return JSON.parse(match[1]);
 }
 
 function isKeyColumn(column) {
@@ -1139,13 +1138,12 @@ function showStatus(message, danger = false) {
 }
 
 function startPolling() {
-  if (embeddedSchema()) return;
   const params = new URLSearchParams(location.search);
   if (params.get("watch") !== "1") return;
 
   setInterval(async () => {
     try {
-      const nextSchema = await fetchSchema();
+      const nextSchema = await fetchServedSchema();
       if (nextSchema.revision !== schema.revision) {
         schema = nextSchema;
         if (selectedTable && !tableByName(selectedTable)) {
@@ -1165,7 +1163,7 @@ async function main() {
   readHashState();
   wireInteractions();
   try {
-    schema = await fetchSchema();
+    schema = embeddedSchema() ?? (await fetchServedSchema());
     if (selectedTable && !tableByName(selectedTable)) {
       selectedTable = undefined;
     }

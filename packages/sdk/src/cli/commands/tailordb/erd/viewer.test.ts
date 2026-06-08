@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildStandaloneViewerHtml } from "./viewer";
+import { buildViewerHtml } from "./viewer";
 import type { TailorDbErdSchema } from "./types";
 
 function buildSchema(overrides: Partial<TailorDbErdSchema> = {}): TailorDbErdSchema {
@@ -33,9 +33,9 @@ function extractEmbeddedSchema(html: string): unknown {
   return JSON.parse(match[1]);
 }
 
-describe("buildStandaloneViewerHtml", () => {
+describe("buildViewerHtml", () => {
   test("inlines CSS/JS and embeds the schema as a parseable data block", () => {
-    const html = buildStandaloneViewerHtml({ schema: buildSchema() });
+    const html = buildViewerHtml({ schema: buildSchema() });
 
     expect(html).not.toContain('href="./styles.css"');
     expect(html).not.toContain('src="./app.js"');
@@ -51,7 +51,7 @@ describe("buildStandaloneViewerHtml", () => {
   });
 
   test("escapes < so embedded schema content cannot break out of the script tag", () => {
-    const html = buildStandaloneViewerHtml({
+    const html = buildViewerHtml({
       schema: buildSchema({ namespace: "</script><img src=x>" }),
     });
 
@@ -65,7 +65,7 @@ describe("buildStandaloneViewerHtml", () => {
     const lineSep = String.fromCharCode(0x2028);
     const paraSep = String.fromCharCode(0x2029);
     const description = `line${lineSep}para${paraSep}end`;
-    const html = buildStandaloneViewerHtml({
+    const html = buildViewerHtml({
       schema: buildSchema({
         tables: [
           {

@@ -46,7 +46,6 @@ interface FreshErdExportOptions {
 interface ErdExportJsonResult {
   namespace: string;
   distDir: string;
-  schemaOutputPath: string;
 }
 
 interface OpenStaticFileResult {
@@ -252,17 +251,12 @@ function parseFreshErdExportResults(stdout: string): ErdBuildResult[] {
       if (!Array.isArray(parsed)) continue;
       return parsed.map((entry): ErdBuildResult => {
         const result = entry as Partial<ErdExportJsonResult>;
-        if (
-          typeof result.namespace !== "string" ||
-          typeof result.distDir !== "string" ||
-          typeof result.schemaOutputPath !== "string"
-        ) {
+        if (typeof result.namespace !== "string" || typeof result.distDir !== "string") {
           throw new Error("Invalid ERD export JSON output.");
         }
         return {
           namespace: result.namespace,
           distDir: result.distDir,
-          schemaOutputPath: result.schemaOutputPath,
         };
       });
     } catch {
@@ -481,7 +475,6 @@ export const erdServeCommand = defineAppCommand({
         namespace: primary.namespace,
         url: watchUrl,
         distDir: primary.distDir,
-        schemaOutputPath: primary.schemaOutputPath,
       });
     } else {
       logger.success("ERD server started.");

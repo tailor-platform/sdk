@@ -39,8 +39,8 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # `erd export --inline` is fully local (no platform login/network needed)
-      # and emits a single self-contained index.html per namespace. Rename it to
+      # `erd export` is fully local (no platform login/network needed) and emits
+      # a single self-contained index.html per namespace. Rename it to
       # "<namespace>.html" so the artifacts REST API (which reports a non-zipped
       # artifact's name as the file basename) stays identifiable per namespace.
       - name: Build ERD viewer (self-contained HTML)
@@ -48,7 +48,7 @@ jobs:
         env:
           NAMESPACE: ${{ matrix.namespace }}
         run: |
-          pnpm exec tailor-sdk tailordb erd export --inline --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
+          pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
           mkdir -p "$RUNNER_TEMP/erd-preview"
           cp "$RUNNER_TEMP/erd-export/$NAMESPACE/dist/index.html" "$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
 
