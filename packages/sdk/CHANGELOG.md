@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.56.0
+
+### Minor Changes
+
+- [#1341](https://github.com/tailor-platform/sdk/pull/1341) [`64b07b4`](https://github.com/tailor-platform/sdk/commit/64b07b4c6f1db868abf2e1ebb9097e0e2f2f3cc6) Thanks [@dqn](https://github.com/dqn)! - Add a `logLevel` config option to remove lower-level `console.*` calls from bundled deployment functions.
+
+### Patch Changes
+
+- [#1345](https://github.com/tailor-platform/sdk/pull/1345) [`ec863f1`](https://github.com/tailor-platform/sdk/commit/ec863f13e7a3ca43e40ad413c1bbe47cd5567c95) Thanks [@dqn](https://github.com/dqn)! - Fix `seed --truncate` deleting only the first page of Built-In IdP `_User` records. The generated truncation script used incorrect pagination keys, so projects with more than one page of users were left with the remaining pages while the command still reported success. All pages are now deleted.
+
+- [#1344](https://github.com/tailor-platform/sdk/pull/1344) [`d3f22da`](https://github.com/tailor-platform/sdk/commit/d3f22da5a9bcd44ca9659ac35a68a20a2cbc1c2a) Thanks [@dqn](https://github.com/dqn)! - Fix CLI auth config losing keyring-stored logins. Running any command without `TAILOR_USE_KEYRING` no longer downgrades `config.yaml` in a way that drops `storage: keyring` users (and dangles their `current_user` reference), which previously logged keyring users out. Configs containing keyring users now stay in V2 format; file-only configs still downgrade to V1 for backward compatibility.
+
 ## 1.55.2
 
 ### Patch Changes
