@@ -1,16 +1,12 @@
+import type { LogLevelEnum } from "./app-config.generated";
 import type { AuthConfig } from "./auth";
 import type { IdPConfig } from "./idp";
 import type { SecretsConfig } from "./secrets-config";
 import type { StaticWebsiteConfig } from "./staticwebsite-config";
 import type { TailorDBServiceInput } from "./tailordb";
 
-export const LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR", "SILENT"] as const;
-export type LogLevel = (typeof LOG_LEVELS)[number];
+export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});
-
-export function isLogLevel(value: string): value is LogLevel {
-  return (LOG_LEVELS as readonly string[]).includes(value);
-}
 
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;

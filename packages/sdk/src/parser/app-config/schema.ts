@@ -1,10 +1,15 @@
 import { z } from "zod";
-import { isLogLevel, LOG_LEVELS } from "@/types/app-config";
+import { LOG_LEVELS } from "./log-level";
 
 const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
-const logLevelSchema = z.string().refine((value) => isLogLevel(value.trim().toUpperCase()), {
-  message: `'logLevel' must be one of: ${LOG_LEVELS.join(", ")}.`,
-});
+
+export const LogLevelSchema = z.enum(LOG_LEVELS);
+
+const logLevelSchema = z
+  .string()
+  .refine((value) => LogLevelSchema.safeParse(value.trim().toUpperCase()).success, {
+    message: `'logLevel' must be one of: ${LOG_LEVELS.join(", ")}.`,
+  });
 
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
