@@ -933,7 +933,7 @@ function toFileStream(value: unknown): FileStream {
   }
   if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
     throw new TypeError(
-      "mockFile.openDownloadStream expects an iterable of StreamValue items " +
+      "openDownloadStream expects an iterable of StreamValue items " +
         '(e.g. [{ type: "chunk", data, position }, { type: "complete" }]); ' +
         "got raw bytes. Wrap the bytes in a structured chunk first.",
     );
@@ -978,20 +978,20 @@ function toFileStream(value: unknown): FileStream {
 function assertStreamValue(v: unknown): void {
   if (v === null || typeof v !== "object") {
     throw new TypeError(
-      'mockFile.openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
+      'openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
         `got ${typeof v === "object" ? "null" : typeof v}.`,
     );
   }
   if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
     throw new TypeError(
-      "mockFile.openDownloadStream expected a StreamValue item, got raw bytes. " +
+      "openDownloadStream expected a StreamValue item, got raw bytes. " +
         'Wrap the bytes in a structured chunk first (e.g. { type: "chunk", data, position }).',
     );
   }
   const type = (v as { type?: unknown }).type;
   if (type !== "metadata" && type !== "chunk" && type !== "complete") {
     throw new TypeError(
-      'mockFile.openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
+      'openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
         `got ${JSON.stringify(type)}.`,
     );
   }

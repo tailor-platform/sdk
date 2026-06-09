@@ -1,6 +1,6 @@
 /**
  * Typed accessors for the test-time globalThis slot used to pass `env` from
- * `mockWorkflow.setEnv()` (in `@tailor-platform/sdk/vitest`) to
+ * `mockWorkflow().setEnv()` (in `@tailor-platform/sdk/vitest`) to
  * `createWorkflowJob().trigger()` bodies. The slot key is private to this
  * module; callers go through the get/set/clear functions below so both sides
  * share the same access path.
