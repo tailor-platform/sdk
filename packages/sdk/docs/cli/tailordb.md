@@ -511,8 +511,8 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Notes:**
 
 - ERD commands build from the local TailorDB schema, including plugin-generated TailorDB types.
-- `tailordb erd export` writes a static viewer to `<output>/<namespace>/dist`.
-- `tailordb erd serve` watches the config file and TailorDB type files, then refreshes the browser viewer when `schema.json` changes.
+- `tailordb erd export` writes a self-contained `index.html` viewer to `<output>/<namespace>/dist`.
+- `tailordb erd serve` watches the config file and TailorDB type files, then reloads the browser viewer when the rebuilt `index.html` reports a new embedded schema revision.
 - `tailordb erd deploy` still requires `erdSite` in `tailor.config.ts` because it uploads the generated viewer to a configured Static Website.
 
 **Usage Examples:**
