@@ -27,6 +27,7 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
@@ -225,10 +226,6 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteIdPServiceRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
-}
-
 type ComparableIdPService = {
   authorization: string | undefined;
   lang: IdPLang;
@@ -386,7 +383,7 @@ async function planServices(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.namespace.name),
+        trn: resourceTrn(workspaceId, "idp", resource.namespace.name),
       });
       existingServices[resource.namespace.name] = {
         resource,
@@ -400,7 +397,7 @@ async function planServices(
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, namespaceName),
+      trn: resourceTrn(workspaceId, "idp", namespaceName),
       appName,
       appId,
     });

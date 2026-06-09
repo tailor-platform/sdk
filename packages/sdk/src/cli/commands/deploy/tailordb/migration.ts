@@ -24,7 +24,7 @@ import { type OperatorClient } from "@/cli/shared/client";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
 import { spinner } from "@/cli/shared/spinner";
-import { trnPrefix } from "../label";
+import { resourceTrn } from "../label";
 import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 
 // ============================================================================
@@ -75,7 +75,7 @@ async function getCurrentMigrationNumber(
   namespace: string,
 ): Promise<number> {
   try {
-    const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+    const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
     const { metadata } = await client.getMetadata({ trn });
 
@@ -220,7 +220,7 @@ export async function updateMigrationLabel(
   namespace: string,
   migrationNumber: number,
 ): Promise<void> {
-  const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+  const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
   // Get existing metadata
   const { metadata } = await client.getMetadata({ trn });

@@ -54,7 +54,7 @@ import {
   type NamespaceAction,
 } from "./grouped-display";
 import { applyIdP, planIdP } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
@@ -74,46 +74,6 @@ export interface DeployOptions {
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
-}
-
-function applicationTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:application:${name}`;
-}
-
-function functionRegistryTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
-}
-
-function pipelineTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:pipeline:${name}`;
-}
-
-function idpTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
-}
-
-function authTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
-}
-
-function executorTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
-}
-
-function workflowTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
-}
-
-function staticWebsiteTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
-}
-
-function tailorDBTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:tailordb:${name}`;
-}
-
-function vaultTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
 }
 
 /**
@@ -149,7 +109,7 @@ async function shouldForceApplyAll(
 ) {
   const desiredLabels = (
     await buildMetaRequest({
-      trn: applicationTrn(workspaceId, application.name),
+      trn: resourceTrn(workspaceId, "application", application.name),
       appName: application.name,
       appId: application.id,
     })
@@ -157,34 +117,34 @@ async function shouldForceApplyAll(
   const candidateTrns = new Set<string>();
 
   if (application.subgraphs.length > 0) {
-    candidateTrns.add(applicationTrn(workspaceId, application.name));
+    candidateTrns.add(resourceTrn(workspaceId, "application", application.name));
   }
   application.staticWebsiteServices.forEach((website) => {
-    candidateTrns.add(staticWebsiteTrn(workspaceId, website.name));
+    candidateTrns.add(resourceTrn(workspaceId, "staticwebsite", website.name));
   });
   application.resolverServices.forEach((pipeline) => {
-    candidateTrns.add(pipelineTrn(workspaceId, pipeline.namespace));
+    candidateTrns.add(resourceTrn(workspaceId, "pipeline", pipeline.namespace));
   });
   application.idpServices.forEach((idp) => {
-    candidateTrns.add(idpTrn(workspaceId, idp.name));
+    candidateTrns.add(resourceTrn(workspaceId, "idp", idp.name));
   });
   if (application.authService) {
-    candidateTrns.add(authTrn(workspaceId, application.authService.config.name));
+    candidateTrns.add(resourceTrn(workspaceId, "auth", application.authService.config.name));
   }
   Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
-    candidateTrns.add(executorTrn(workspaceId, executor.name));
+    candidateTrns.add(resourceTrn(workspaceId, "executor", executor.name));
   });
   Object.values(application.workflowService?.workflows ?? {}).forEach((workflow) => {
-    candidateTrns.add(workflowTrn(workspaceId, workflow.name));
+    candidateTrns.add(resourceTrn(workspaceId, "workflow", workflow.name));
   });
   application.tailorDBServices.forEach((service) => {
-    candidateTrns.add(tailorDBTrn(workspaceId, service.namespace));
+    candidateTrns.add(resourceTrn(workspaceId, "tailordb", service.namespace));
   });
   application.secrets.forEach((vault) => {
-    candidateTrns.add(vaultTrn(workspaceId, vault.vaultName));
+    candidateTrns.add(resourceTrn(workspaceId, "vault", vault.vaultName));
   });
   functionEntries.forEach((entry) => {
-    candidateTrns.add(functionRegistryTrn(workspaceId, entry.name));
+    candidateTrns.add(resourceTrn(workspaceId, "function_registry", entry.name));
   });
 
   for (const trn of candidateTrns) {

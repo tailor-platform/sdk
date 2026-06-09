@@ -7,7 +7,7 @@ import {
 import { type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -77,10 +77,6 @@ type ComparableStaticWebsiteInput = {
   allowedIpAddresses?: readonly string[];
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
-}
-
 function normalizeComparableStaticWebsiteShape(
   input: Pick<ComparableStaticWebsite, "description" | "allowedIpAddresses">,
 ): ComparableStaticWebsite {
@@ -135,7 +131,7 @@ export async function planStaticWebsite(context: PlanContext) {
       return [staticwebsites, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: trn,
+    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "staticwebsite", name),
   });
 
   const staticWebsiteServices = forRemoval ? [] : application.staticWebsiteServices;
@@ -144,7 +140,7 @@ export async function planStaticWebsite(context: PlanContext) {
     const name = websiteService.name;
     const existing = existingWebsites[name];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, name),
+      trn: resourceTrn(workspaceId, "staticwebsite", name),
       appName: application.name,
       appId: application.id,
     });

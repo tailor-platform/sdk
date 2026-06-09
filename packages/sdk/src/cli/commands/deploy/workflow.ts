@@ -8,7 +8,13 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, sdkNameLabelKey } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  resourceTrn,
+  sdkNameLabelKey,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -191,7 +197,7 @@ async function registerJobFunctions(
         // Set metadata to mark this JobFunction as owned by this app
         await client.setMetadata(
           await buildMetaRequest({
-            trn: jobFunctionTrn(workspaceId, jobName),
+            trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
             appName,
             appId,
           }),
@@ -215,13 +221,13 @@ async function registerJobFunctions(
   await Promise.all(
     unusedJobFunctions.map(async (jobName) => {
       const { metadata } = await client.getMetadata({
-        trn: jobFunctionTrn(workspaceId, jobName),
+        trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
       });
 
       // Only remove metadata if owned by this app
       if (isOwnedByApp(metadata?.labels, appName, appId)) {
         await client.setMetadata({
-          trn: jobFunctionTrn(workspaceId, jobName),
+          trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
           labels: { [sdkNameLabelKey]: "" }, // Remove ownership
         });
       }
@@ -278,14 +284,6 @@ function toConcurrencyPolicy(
   };
 }
 
-function workflowTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
-}
-
-function jobFunctionTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:workflow_job_function:${name}`;
-}
-
 /**
  * Plan workflow changes and job functions based on current and desired state.
  * @param client - Operator client instance
@@ -324,13 +322,13 @@ export async function planWorkflow(
       return [response.workflows, response.nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: workflowTrn,
+    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "workflow", name),
   });
 
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
     const metaRequest = await buildMetaRequest({
-      trn: workflowTrn(workspaceId, workflow.name),
+      trn: resourceTrn(workspaceId, "workflow", workflow.name),
       appName,
       appId,
     });
