@@ -40,6 +40,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   // Auth connections (read-only)
   "authconnection/index.ts",
   "authconnection/list.ts",
+  "authconnection/open.ts",
   // Crash report (local file ops + reporting endpoint, not workspace state)
   "crashreport/index.ts",
   "crashreport/list.ts",
