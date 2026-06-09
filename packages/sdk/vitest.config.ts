@@ -40,32 +40,46 @@ const sdkSourceAliases = Object.entries(packageJson.exports).map(([exportName, t
   };
 });
 
+// Shared with the "integration" project definition below.
+const integrationTestIncludes = [
+  "src/cli/commands/deploy/__test_fixtures__/**/*.test.ts",
+  "src/plugin/compat.test.ts",
+];
+
 // Split unit tests by whether they mock modules (`vi.mock`/`vi.doMock`). With
 // `isolate: false` a worker shares one module registry across files, so per-file
 // partial module mocks (e.g. `vi.mock("node:fs", ...)`) collide between files.
 // Tests that mock modules therefore keep per-file isolation; the rest reuse
 // module evaluation across files, which roughly halves their import time.
 // Classification is by file content so new tests are routed automatically.
-const isExcludedUnitTest = (file: string): boolean =>
-  file.includes("/__test_fixtures__/") ||
-  file === "src/plugin/compat.test.ts" ||
-  file.startsWith("src/vitest/integration/");
+const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
+  const integrationTestFiles = new Set(globSync(integrationTestIncludes, { cwd: __dirname }));
+  const isExcludedUnitTest = (file: string): boolean =>
+    file.includes("/node_modules/") ||
+    file.includes("/__test_fixtures__/") ||
+    integrationTestFiles.has(file) ||
+    // Self-contained nested vitest project with its own config.
+    file.startsWith("src/vitest/integration/");
 
-const mocksModules = (file: string): boolean =>
-  /\bvi\.(mock|doMock)\s*\(/.test(readFileSync(path.resolve(__dirname, file), "utf8"));
+  const mocksModules = (file: string): boolean =>
+    /\bvi\.(mock|doMock)\s*\(/.test(readFileSync(path.resolve(__dirname, file), "utf8"));
 
-const unitTestFiles = globSync(
-  ["src/**/*.test.ts", "src/**/*.spec.ts", "scripts/**/*.test.ts", "scripts/**/*.spec.ts"],
-  { cwd: __dirname },
-)
-  .filter((file) => !isExcludedUnitTest(file))
-  .sort();
+  const isolated: string[] = [];
+  const shared: string[] = [];
+  for (const file of globSync(["src/**/*.{test,spec}.ts", "scripts/**/*.{test,spec}.ts"], {
+    cwd: __dirname,
+  })) {
+    if (isExcludedUnitTest(file)) continue;
+    (mocksModules(file) ? isolated : shared).push(file);
+  }
+  return { isolated, shared };
+};
 
-const isolatedUnitTests: string[] = [];
-const sharedUnitTests: string[] = [];
-for (const file of unitTestFiles) {
-  (mocksModules(file) ? isolatedUnitTests : sharedUnitTests).push(file);
-}
+// This config module is re-evaluated once per `extends: true` project (each in
+// the same process), so cache the file scan on globalThis to run it only once.
+const globalCache = globalThis as { __sdkUnitTestSplit?: ReturnType<typeof classifyUnitTests> };
+const { isolated: isolatedUnitTests, shared: sharedUnitTests } = (globalCache.__sdkUnitTestSplit ??=
+  classifyUnitTests());
 
 export default defineConfig({
   plugins: [{ name: "yaml-text", load: loadYamlText }],
@@ -84,8 +98,9 @@ export default defineConfig({
         extends: true,
         test: {
           // Tests that mock modules keep per-file isolation (see split above).
-          // The only `*.test-d.ts` type test is mock-free and runs in
-          // "unit-core", so typecheck has nothing to collect here.
+          // Type tests (`*.test-d.ts`) are collected via `typecheck.include`
+          // independently of `include`; disable here so they run only once
+          // (in "unit-core").
           name: "unit",
           include: isolatedUnitTests,
           typecheck: { enabled: false },
@@ -105,10 +120,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "integration",
-          include: [
-            "src/cli/commands/deploy/__test_fixtures__/**/*.test.ts",
-            "src/plugin/compat.test.ts",
-          ],
+          include: integrationTestIncludes,
           testTimeout: 60000,
         },
       },
