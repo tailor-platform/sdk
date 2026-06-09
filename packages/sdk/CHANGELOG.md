@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.57.0
+
+### Minor Changes
+
+- [#1319](https://github.com/tailor-platform/sdk/pull/1319) [`77754c2`](https://github.com/tailor-platform/sdk/commit/77754c264f3a18ccea2fb2ee2a144da4768b09a9) Thanks [@dqn](https://github.com/dqn)! - Replace the Liam-based `tailordb erd` beta commands with a TailorDB-specific ERD viewer generated from local TailorDB schema. `tailordb erd export` writes a single self-contained `index.html` under `<output>/<namespace>/dist` (CSS, JS, and the schema are inlined as separately extractable blocks), `tailordb erd serve` runs a built-in local server with watch reload and `--port` / `--open`, and `tailordb erd deploy` uploads the generated viewer while keeping the existing `erdSite` requirement.
+
+### Patch Changes
+
+- [#1309](https://github.com/tailor-platform/sdk/pull/1309) [`9e4c726`](https://github.com/tailor-platform/sdk/commit/9e4c726c1a84ac70ba7bc74aaf4765173562ed0e) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): track auth connection ownership via platform labels
+
+  `deploy` now tags auth connections with SDK ownership labels and uses them to decide which connections to manage, matching every other auth resource. Connections that are not labeled by the SDK are treated as unowned: they are surfaced in the unmanaged-resource confirmation prompt rather than silently deleted, and once you confirm adoption the SDK label is written even when the connection is otherwise unchanged, so later deploys recognize it as owned. Auth connection deletions are also shown in the deletion confirmation prompt.
+
 ## 1.56.1
 
 ### Patch Changes
