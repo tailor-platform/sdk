@@ -15,6 +15,8 @@ jobs:
       github.actor == 'renovate[bot]'
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    env:
+      REVIEW_BODY_FILE: ${{ github.workspace }}/dependency-review.md
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -30,7 +32,19 @@ jobs:
 
             **PR**: https://github.com/${{ github.repository }}/pull/${{ github.event.number }}
 
-            Please investigate and analyze the dependency updates in this PR following the steps below, then post a review comment.
+            Please investigate and analyze the dependency updates in this PR
+            following the steps below, then write a review report **to a file**.
+            A later workflow step posts the comment for you.
+
+            ## Note on contributor handles
+
+            Release notes and changelogs often contain contributor handles
+            (e.g. `Thanks @octocat`, "New Contributors: @foo, @bar"). These add
+            no review value, so prefer linking to the release notes URL over
+            pasting raw "New Contributors" / "Thanks to" sections. You do not
+            need to manually escape handles: a deterministic post-processing step
+            neutralizes every `@mention` before the comment is posted, so no
+            unrelated user is ever notified regardless of what you write.
 
             ## Investigation Steps
 
@@ -85,6 +99,40 @@ jobs:
             **Explanation Guidelines**:
             - Minimize technical jargon; provide brief explanations when using it
             - Explain in plain language that engineers unfamiliar with the library can understand
+
+            ### 5. Security Assessment
+
+            Dependency updates are a common supply-chain attack vector. Assess
+            the security posture of this update — this is a required step.
+
+            #### 5.1 Known Vulnerabilities (CVE / GHSA)
+            - Use WebSearch / WebFetch to determine whether the **old** version
+              has known advisories that this update fixes, and whether the
+              **new** version has any newly disclosed advisories.
+            - Sources: GitHub Advisory Database (`https://github.com/advisories`),
+              the npm advisory page, OSV (`https://osv.dev`), and the project's
+              security releases / `SECURITY.md`.
+            - If the update resolves a known vulnerability, call it out clearly
+              as a reason to merge promptly (include the CVE/GHSA id).
+
+            #### 5.2 Supply-chain Red Flags
+            Use `pnpm view <pkg> ...` together with the release notes to look for:
+            - **Maintainer / ownership changes**: new publishers, transferred
+              repositories, or a package that recently changed hands.
+            - **Suspicious lifecycle scripts**: newly added or changed
+              `postinstall` / `preinstall` / `install` scripts
+              (`pnpm view <pkg> scripts`).
+            - **Unexpected new dependencies**, especially ones that execute code
+              or access the network/filesystem at install time.
+            - **Abnormal version jumps**, republished/duplicated versions, or a
+              very fresh release adopted unusually quickly.
+            - **Obfuscated or pre-bundled source** shipped in a package that is
+              not expected to ship build output.
+
+            #### 5.3 Risk Rating
+            Rate the security risk of merging as 🟢 Low / 🟡 Medium / 🔴 High and
+            briefly justify it. If nothing concerning is found, state that
+            explicitly rather than omitting the section.
 
             ### 6. Analyze Impact on Existing Code
 
@@ -238,9 +286,16 @@ jobs:
             - [ ] Included **all usage locations** in the report (no omissions)
             - [ ] Verified dependencies in package.json
 
-            ## Post Review Comment
+            ## Write the Review Report
 
-            Compile investigation results in the following format and post using the `gh pr comment` command:
+            Compile your investigation results into the markdown format below and
+            **write it to the file `${{ env.REVIEW_BODY_FILE }}` using the Write
+            tool**.
+
+            Do **not** post a comment yourself — you have no tools to do so. A
+            later workflow step reads this file, neutralizes any `@mentions`, and
+            posts (or updates) the comment for you. Your only deliverable is the
+            file.
 
             ```markdown
             ## 🤖 Claude Dependency Review
@@ -252,6 +307,11 @@ jobs:
 
             ### 📝 Release Notes
             {Release notes URL}
+
+            ### 🔐 Security Assessment
+            - **Risk**: {🟢 Low / 🟡 Medium / 🔴 High}
+            - **Known vulnerabilities**: {CVE/GHSA fixed or introduced, or "None found"}
+            - **Supply-chain notes**: {maintainer/script/dependency red flags, or "None"}
 
             ### 🚨 Breaking Changes
             {Only include if there are breaking changes}
@@ -269,37 +329,62 @@ jobs:
             <!-- dependencies-claude-review -->
             ```
 
-            **Comment Posting Notes**:
-            If an existing comment exists, update it; otherwise, create a new one. Follow these steps:
-
-            1. **Search for existing comment ID**:
-               ```bash
-               COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.number }}/comments \
-                 --jq '.[] | select(.body | contains("<!-- dependencies-claude-review -->")) | .id' | head -n 1)
-               ```
-
-            2. **Post or update comment**:
-               ```bash
-               COMMENT_BODY="...comment content..."
-
-               if [ -n "$COMMENT_ID" ]; then
-                 # Update existing comment
-                 gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
-                   -f body="$COMMENT_BODY"
-               else
-                 # Create new comment
-                 gh pr comment ${{ github.event.number }} --body "$COMMENT_BODY"
-               fi
-               ```
-
-            3. Always include the identifier `<!-- dependencies-claude-review -->` in the comment
+            Always include the identifier `<!-- dependencies-claude-review -->`
+            at the end so the post step can de-duplicate the comment.
 
             ## Notes
             - The PR branch is already checked out
-            - Do not display as Claude's conversational response; always post to the PR using the `gh pr comment` command
+            - Do not produce a conversational response; your output is the file
+              `${{ env.REVIEW_BODY_FILE }}`
             - If unsure or uncertain about anything, honestly state so
             - If multiple libraries are being updated, investigate each one
 
           claude_args: |
             --model claude-sonnet-4-5-20250929
-            --allowedTools "Bash(gh pr:*),Bash(gh api:*),Bash(pnpm view:*),WebSearch,WebFetch,Read,Glob,Grep"
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(pnpm view:*),WebSearch,WebFetch,Read,Glob,Grep,Write"
+
+      - name: Post dependency review comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.number }}
+          REPO: ${{ github.repository }}
+          MARKER: "<!-- dependencies-claude-review -->"
+        run: |
+          if [ ! -s "$REVIEW_BODY_FILE" ]; then
+            echo "No review body was produced; nothing to post."
+            exit 0
+          fi
+
+          # --- Static mention guard (deterministic, not AI-dependent) ----------
+          # Insert a zero-width space (U+200B) right after EVERY '@'. The text
+          # renders identically, but GitHub no longer parses it as a mention, so
+          # unrelated contributors quoted from release notes are never notified.
+          # We deliberately do not try to match only "real" handles: ZWSP is
+          # invisible, so over-inserting is harmless, while missing one would
+          # notify someone. Node is guaranteed present (the Claude action runs
+          # on it).
+          node -e '
+            const fs = require("fs");
+            const file = process.argv[1];
+            let text = fs.readFileSync(file, "utf8");
+            text = text.replace(/@/g, "@\u200b");
+            fs.writeFileSync(file, text);
+          ' "$REVIEW_BODY_FILE"
+
+          # Guarantee the upsert marker is present even if the model omitted it.
+          if ! grep -qF "$MARKER" "$REVIEW_BODY_FILE"; then
+            printf '\n\n%s\n' "$MARKER" >> "$REVIEW_BODY_FILE"
+          fi
+
+          # --- Upsert the comment ----------------------------------------------
+          COMMENT_ID=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n 1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$COMMENT_ID" \
+              -F body=@"$REVIEW_BODY_FILE"
+          else
+            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" \
+              -F body=@"$REVIEW_BODY_FILE"
+          fi
