@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import { defineConfig } from "vitest/config";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
@@ -40,6 +40,33 @@ const sdkSourceAliases = Object.entries(packageJson.exports).map(([exportName, t
   };
 });
 
+// Split unit tests by whether they mock modules (`vi.mock`/`vi.doMock`). With
+// `isolate: false` a worker shares one module registry across files, so per-file
+// partial module mocks (e.g. `vi.mock("node:fs", ...)`) collide between files.
+// Tests that mock modules therefore keep per-file isolation; the rest reuse
+// module evaluation across files, which roughly halves their import time.
+// Classification is by file content so new tests are routed automatically.
+const isExcludedUnitTest = (file: string): boolean =>
+  file.includes("/__test_fixtures__/") ||
+  file === "src/plugin/compat.test.ts" ||
+  file.startsWith("src/vitest/integration/");
+
+const mocksModules = (file: string): boolean =>
+  /\bvi\.(mock|doMock)\s*\(/.test(readFileSync(path.resolve(__dirname, file), "utf8"));
+
+const unitTestFiles = globSync(
+  ["src/**/*.test.ts", "src/**/*.spec.ts", "scripts/**/*.test.ts", "scripts/**/*.spec.ts"],
+  { cwd: __dirname },
+)
+  .filter((file) => !isExcludedUnitTest(file))
+  .sort();
+
+const isolatedUnitTests: string[] = [];
+const sharedUnitTests: string[] = [];
+for (const file of unitTestFiles) {
+  (mocksModules(file) ? isolatedUnitTests : sharedUnitTests).push(file);
+}
+
 export default defineConfig({
   plugins: [{ name: "yaml-text", load: loadYamlText }],
   resolve: {
@@ -56,16 +83,22 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          // Tests that mock modules keep per-file isolation (see split above).
+          // The only `*.test-d.ts` type test is mock-free and runs in
+          // "unit-core", so typecheck has nothing to collect here.
           name: "unit",
-          include: ["**/?(*.)+(spec|test).ts"],
-          exclude: [
-            "**/node_modules/**",
-            "**/dist/**",
-            "e2e/**",
-            "**/__test_fixtures__/**",
-            "src/plugin/compat.test.ts",
-            "src/vitest/integration/**",
-          ],
+          include: isolatedUnitTests,
+          typecheck: { enabled: false },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          // Mock-free tests share module evaluation across files (isolate:false)
+          // to cut module-import time. Safe because no `vi.mock` is involved.
+          name: "unit-core",
+          isolate: false,
+          include: sharedUnitTests,
         },
       },
       {
