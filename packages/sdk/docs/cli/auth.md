@@ -206,6 +206,14 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:authconnection revoke:global-options-link:end -->
 
+<!-- politty:command:authconnection revoke:notes:start -->
+
+**Notes**
+
+Revoke invalidates the connection's active session and tokens but keeps the connection and its stored credentials, so it can be re-authorized later. Use `delete` to remove the connection entirely.
+
+<!-- politty:command:authconnection revoke:notes:end -->
+
 <!-- politty:command:machineuser:heading:start -->
 
 ## machineuser
