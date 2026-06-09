@@ -9,12 +9,9 @@ import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import { connectionNameArgs } from "./args";
 
-export const revokeAuthConnectionCommand = defineAppCommand({
-  name: "revoke",
-  description:
-    "Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it).",
-  notes:
-    "On platforms that do not yet split revoke and delete, revoke still removes the connection entirely.",
+export const deleteAuthConnectionCommand = defineAppCommand({
+  name: "delete",
+  description: "Delete an auth connection entirely.",
   args: z
     .object({
       ...workspaceArgs,
@@ -36,20 +33,17 @@ export const revokeAuthConnectionCommand = defineAppCommand({
 
     if (!args.yes) {
       const confirmation = await prompt.text({
-        message: `Enter the connection name to confirm revocation ("${args.name}"):`,
+        message: `Enter the connection name to confirm deletion ("${args.name}"):`,
       });
 
       if (confirmation !== args.name) {
-        logger.info("Auth connection revocation cancelled.");
+        logger.info("Auth connection deletion cancelled.");
         return;
       }
     }
 
     try {
-      await client.revokeAuthConnection({
-        workspaceId,
-        connectionName: args.name,
-      });
+      await client.deleteAuthConnection({ workspaceId, connectionName: args.name });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         throw new Error(`Auth connection "${args.name}" not found.`, { cause: error });
@@ -57,6 +51,6 @@ export const revokeAuthConnectionCommand = defineAppCommand({
       throw error;
     }
 
-    logger.success(`Auth connection "${args.name}" revoked.`);
+    logger.success(`Auth connection "${args.name}" deleted.`);
   },
 });
