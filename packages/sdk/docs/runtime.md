@@ -68,6 +68,53 @@ Or register the entry in `tsconfig.json`:
 }
 ```
 
+## WebAssembly (`.wasm`)
+
+The function runtime exposes the standard `WebAssembly` API, but the sandbox **cannot fetch `.wasm` files at runtime** — the path emscripten-style glue uses by default fails with `RuntimeError: Aborted(both async and sync fetching of the wasm failed)`. Instead, import the `.wasm` module statically. The SDK bundler inlines it into your function as a `Uint8Array`, the same model single-bundle runtimes (Cloudflare Workers, Vercel Edge, Deno) use:
+
+```ts
+import wasmBytes from "./add.wasm"; // inlined as a Uint8Array at build time
+
+const { instance } = await WebAssembly.instantiate(wasmBytes, {});
+const add = instance.exports.add as (a: number, b: number) => number;
+add(2, 3); // 5
+```
+
+### Using emscripten-generated libraries
+
+Most prebuilt wasm libraries ship emscripten glue that fetches a separate `.wasm` file at runtime — which fails in the sandbox. Two ways to make them work:
+
+1. **`instantiateWasm` hook (no rebuild).** Import the `.wasm` bytes and hand them to the glue's `Module.instantiateWasm` hook so it instantiates from memory instead of fetching:
+
+   ```ts
+   import { wasm } from "@tailor-platform/sdk/runtime";
+   import wasmBytes from "./module.wasm";
+   import createModule from "./module.js"; // emscripten glue
+
+   const mod = await createModule({
+     instantiateWasm: wasm.instantiateWasmFromBytes(wasmBytes),
+   });
+   ```
+
+2. **Build the library as a single file.** If you control the build, emscripten's `-sSINGLE_FILE` flag embeds the wasm as base64 inside the glue JS, removing the runtime fetch entirely.
+
+### Constraints
+
+- **Runtime fetch is not supported.** `fetch("./mod.wasm")` / `WebAssembly.instantiateStreaming(fetch(...))` against a separate file does not work; the `.wasm` must be reachable through a static `import` so the bundler can inline it.
+- **Size & memory.** Inlining adds ~33% to the encoded module size, and it counts against the function memory limit (Function 32 MB / Job Function 256 MB). Large rasterizers/codecs may not fit a 32 MB function.
+- **No threads / WASI.** Modules that require `SharedArrayBuffer` + Workers, WASI, or host filesystem access are not supported by the sandbox.
+
+### Type support
+
+At build time the bundler resolves a `.wasm` import to a `Uint8Array`, but TypeScript needs an ambient declaration to type the import (the same one-liner Vite/webpack projects add for `*.svg`/`*.css`). Add it once anywhere in your project, e.g. in a `wasm.d.ts`:
+
+```ts
+declare module "*.wasm" {
+  const bytes: Uint8Array;
+  export default bytes;
+}
+```
+
 ## Namespaces
 
 The runtime entry re-exports the following namespaces. Detailed signatures, parameters, and return types live in the JSDoc next to each export — hover the symbol in your IDE or browse the source.
@@ -79,6 +126,7 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `workflow` — workflow & job control (`triggerWorkflow`, `triggerJobFunction`, `wait`, `resolve`)
 - `context` — execution context (`getInvoker`)
 - `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`, `openDownloadStream` _(deprecated)_)
+- `wasm` — WebAssembly helpers (`instantiateWasmFromBytes`)
 
 ## Testing
 

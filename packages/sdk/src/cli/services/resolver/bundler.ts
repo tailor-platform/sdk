@@ -16,6 +16,7 @@ import {
   serializeTriggerContext,
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
+import { FUNCTION_WASM_MODULE_TYPES } from "@/cli/shared/wasm";
 import ml from "@/utils/multiline";
 import { loadResolver } from "./loader";
 import type { LogLevel } from "@/types/app-config";
@@ -195,6 +196,7 @@ async function bundleSingleResolver(
         },
         tsconfig,
         plugins,
+        moduleTypes: FUNCTION_WASM_MODULE_TYPES,
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),

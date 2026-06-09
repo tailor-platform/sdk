@@ -29,6 +29,7 @@ export * as idp from "./idp";
 export * as workflow from "./workflow";
 export * as context from "./context";
 export * as file from "./file";
+export * as wasm from "./wasm";
 
 /** SQL command type recorded on a {@link TailordbQueryResult}. */
 export type TailordbCommandType =

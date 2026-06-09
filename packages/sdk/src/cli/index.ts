@@ -36,6 +36,7 @@ import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 import { isNativeTypeScriptRuntime } from "./shared/runtime";
+import { registerWasmModuleLoader } from "./shared/wasm";
 
 // Register tsx for TypeScript loading on Node.js.
 // Bun and Deno handle TypeScript natively, so registration is skipped.
@@ -44,6 +45,9 @@ import { isNativeTypeScriptRuntime } from "./shared/runtime";
 if (!isNativeTypeScriptRuntime()) {
   const { register } = await import("tsx/esm/api");
   register();
+  // Let `await import()` of user source that statically imports `.wasm` resolve
+  // to the module bytes instead of failing to parse the binary as JavaScript.
+  registerWasmModuleLoader();
 }
 
 // Runs before globalArgs effects load --env-file, so env file overrides for

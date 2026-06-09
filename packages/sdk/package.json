@@ -132,6 +132,11 @@
       "types": "./dist/runtime/file.d.mts",
       "import": "./dist/runtime/file.mjs",
       "default": "./dist/runtime/file.mjs"
+    },
+    "./runtime/wasm": {
+      "types": "./dist/runtime/wasm.d.mts",
+      "import": "./dist/runtime/wasm.mjs",
+      "default": "./dist/runtime/wasm.mjs"
     }
   },
   "scripts": {

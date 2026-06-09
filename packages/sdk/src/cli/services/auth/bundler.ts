@@ -13,6 +13,7 @@ import {
   serializeTriggerContext,
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
+import { FUNCTION_WASM_MODULE_TYPES } from "@/cli/shared/wasm";
 import ml from "@/utils/multiline";
 import type { LogLevel } from "@/types/app-config";
 
@@ -134,6 +135,7 @@ export async function bundleAuthHooks(
         },
         tsconfig,
         plugins,
+        moduleTypes: FUNCTION_WASM_MODULE_TYPES,
         transform: {
           define: {
             "process.env.LOG_LEVEL": JSON.stringify(bundleLogLevel),

@@ -3,6 +3,7 @@ import { parseSync } from "oxc-parser";
 import { join, resolve } from "pathe";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { FUNCTION_WASM_MODULE_TYPES } from "@/cli/shared/wasm";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { ES_BUILTINS } from "./es-builtins";
@@ -477,6 +478,7 @@ async function bundleScriptTarget(args: {
       codeSplitting: false,
     },
     tsconfig,
+    moduleTypes: FUNCTION_WASM_MODULE_TYPES,
     treeshake: {
       moduleSideEffects: false,
       annotations: true,

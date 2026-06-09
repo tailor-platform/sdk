@@ -11,6 +11,7 @@ import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake
 import { logger, styles } from "@/cli/shared/logger";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "@/cli/shared/trigger-context";
+import { FUNCTION_WASM_MODULE_TYPES } from "@/cli/shared/wasm";
 import ml from "@/utils/multiline";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
@@ -411,6 +412,7 @@ async function bundleSingleJob(
         },
         tsconfig,
         plugins,
+        moduleTypes: FUNCTION_WASM_MODULE_TYPES,
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),

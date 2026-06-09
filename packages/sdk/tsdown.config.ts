@@ -78,6 +78,7 @@ export default defineConfig({
     "src/runtime/workflow.ts",
     "src/runtime/context.ts",
     "src/runtime/file.ts",
+    "src/runtime/wasm.ts",
   ],
   format: ["esm"],
   target: "node22",

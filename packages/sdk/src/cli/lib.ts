@@ -1,5 +1,6 @@
 // CLI API exports for programmatic usage
 import { isNativeTypeScriptRuntime } from "./shared/runtime";
+import { registerWasmModuleLoader } from "./shared/wasm";
 
 // Register tsx to handle TypeScript files when using CLI API programmatically.
 // Bun and Deno handle TypeScript natively, so registration is skipped.
@@ -8,6 +9,9 @@ import { isNativeTypeScriptRuntime } from "./shared/runtime";
 if (!isNativeTypeScriptRuntime()) {
   const { register } = await import("tsx/esm/api");
   register();
+  // Let `await import()` of user source that statically imports `.wasm` resolve
+  // to the module bytes instead of failing to parse the binary as JavaScript.
+  registerWasmModuleLoader();
 }
 
 export { deploy, deploy as apply } from "./commands/deploy/deploy";

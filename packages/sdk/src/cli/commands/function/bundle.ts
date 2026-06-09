@@ -18,6 +18,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
+import { FUNCTION_WASM_MODULE_TYPES } from "@/cli/shared/wasm";
 import ml from "@/utils/multiline";
 import type { DetectedFunction } from "./detect";
 import type { LogLevelInput } from "@/types/app-config";
@@ -108,6 +109,7 @@ export async function bundleForTestRun(
       dir: process.cwd(),
     },
     tsconfig,
+    moduleTypes: FUNCTION_WASM_MODULE_TYPES,
     treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(bundleLogLevel)]),
     logLevel: "silent",
   } as rolldown.BuildOptions);

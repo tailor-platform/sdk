@@ -65,6 +65,45 @@ export default function(input: any) {
       expect(typeof mod.main).toBe("function");
     });
 
+    test("inlines an imported .wasm module and runs it without fetching", async () => {
+      // Minimal valid wasm module exporting `add(i32, i32): i32`.
+      const addWasm = new Uint8Array([
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f,
+        0x01, 0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00,
+        0x0a, 0x09, 0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b,
+      ]);
+      fs.writeFileSync(path.join(testDir, "add.wasm"), addWasm);
+
+      const sourceFile = path.join(testDir, "wasm-fn.ts");
+      fs.writeFileSync(
+        sourceFile,
+        `
+import wasmBytes from "./add.wasm";
+export default async function () {
+  const { instance } = await WebAssembly.instantiate(wasmBytes, {});
+  const add = instance.exports.add as (a: number, b: number) => number;
+  return { ctor: (wasmBytes as Uint8Array).constructor.name, sum: add(2, 3) };
+}
+`,
+      );
+
+      const detected: DetectedFunction = { type: "plain", name: "wasm-fn" };
+      const result = await bundleForTestRun({
+        detected,
+        sourceFile,
+        machineUser: defaultMachineUser,
+        workspaceId: defaultWorkspaceId,
+      });
+
+      // The wasm must be inlined into the single chunk, never fetched at runtime.
+      expect(result.bundledCode).not.toContain("fetch(");
+
+      const tempFile = path.join(testDir, "verify-wasm.mjs");
+      fs.writeFileSync(tempFile, result.bundledCode);
+      const mod = await import(pathToFileURL(tempFile).href);
+      await expect(mod.main()).resolves.toEqual({ ctor: "Uint8Array", sum: 5 });
+    });
+
     test("bundles a named-exported main function", async () => {
       const sourceFile = path.join(testDir, "named-main.ts");
       fs.writeFileSync(

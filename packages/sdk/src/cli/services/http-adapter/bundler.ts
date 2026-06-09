@@ -10,6 +10,7 @@ import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
+import { FUNCTION_WASM_MODULE_TYPES } from "@/cli/shared/wasm";
 import { HTTP_METHODS, type HttpMethodKey } from "@/parser/service/http-adapter";
 import type { LogLevel } from "@/types/app-config";
 
@@ -165,6 +166,7 @@ async function bundleAdapterScript(
           },
           tsconfig,
           plugins,
+          moduleTypes: FUNCTION_WASM_MODULE_TYPES,
           // es2017 on purpose: async/await must survive downleveling so
           // rejectAsyncInBundle can reject it (lower targets rewrite it into
           // generator+Promise code that evades the check and breaks on Sobek).
