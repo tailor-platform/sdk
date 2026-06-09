@@ -30,7 +30,7 @@ import { resolveResolverArg } from "../src/cli/commands/function/test-run";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
-import { trackWorkspace } from "./globalSetup";
+import { resolveE2EWorkspaceRegion, trackWorkspace } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -121,8 +121,7 @@ describe.sequential("E2E: function test-run", () => {
     // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken({ useProfile: false });
     client = await initOperatorClient(accessToken);
-    const regionsResp = await client.listAvailableWorkspaceRegions({});
-    const region = regionsResp.regions[0];
+    const region = await resolveE2EWorkspaceRegion(client);
 
     console.log(`Creating workspace "${testWorkspaceName}" in region "${region}"...`);
     const createResp = await client.createWorkspace({
