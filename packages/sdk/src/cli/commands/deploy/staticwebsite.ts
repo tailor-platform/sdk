@@ -82,7 +82,7 @@ function normalizeComparableStaticWebsiteShape(
 ): ComparableStaticWebsite {
   return {
     description: input.description,
-    allowedIpAddresses: [...input.allowedIpAddresses].sort(),
+    allowedIpAddresses: input.allowedIpAddresses.toSorted(),
   };
 }
 

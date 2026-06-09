@@ -562,7 +562,7 @@ function normalizeComparableWorkflowJobNames(
   jobFunctions: Record<string, string | bigint> | readonly string[] | undefined,
 ) {
   return Array.isArray(jobFunctions)
-    ? [...jobFunctions].sort()
+    ? jobFunctions.toSorted()
     : Object.keys(jobFunctions ?? {}).sort();
 }
 

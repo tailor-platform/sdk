@@ -208,7 +208,7 @@ async function analyzeMinifiedSizes(transformedPath: string): Promise<MinifiedRe
 function printResults(results: MinifiedResult[], fileName: string) {
   console.log(`=== ${fileName} ===`);
 
-  results.sort((a, b) => b.minifiedSize - a.minifiedSize);
+  const sorted = results.toSorted((a, b) => b.minifiedSize - a.minifiedSize);
 
   const totalOriginal = results.reduce((sum, r) => sum + r.originalSize, 0);
   const totalMinified = results.reduce((sum, r) => sum + r.minifiedSize, 0);
@@ -234,7 +234,7 @@ function printResults(results: MinifiedResult[], fileName: string) {
   );
   console.log("─".repeat(totalWidth));
 
-  for (const result of results) {
+  for (const result of sorted) {
     const percentage = ((result.minifiedSize / totalMinified) * 100).toFixed(2);
 
     console.log(

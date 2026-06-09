@@ -12,7 +12,7 @@ export function orderAndLimitCrashReports(
   options: { order?: Order; limit?: number },
 ): string[] {
   const sorted = entries.filter((f) => f.endsWith(CRASH_LOG_EXTENSION)).sort();
-  const ordered = options.order === "asc" ? sorted : sorted.reverse();
+  const ordered = options.order === "asc" ? sorted : sorted.toReversed();
   return options.limit && options.limit > 0 ? ordered.slice(0, options.limit) : ordered;
 }
 
