@@ -173,6 +173,9 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
       });
 
       server.on("error", (err) => {
+        // A listen failure never emits "close", so clear the pending timeout
+        // here to avoid keeping the process alive after the command has failed.
+        clearTimeout(timeout);
         // Any error here means the local callback server could not be started.
         // Guide the user to the Console-based flow as a fallback.
         const code = (err as NodeJS.ErrnoException).code;
@@ -190,7 +193,11 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
 
       server.listen(args.port, async () => {
         const authorizeUrl = authUrl.toString();
-        logger.info(`Opening browser for authorization:\n\n${authorizeUrl}\n`);
+        logger.info(
+          args["no-browser"]
+            ? `Open this URL in your browser to authorize:\n\n${authorizeUrl}\n`
+            : `Opening browser for authorization:\n\n${authorizeUrl}\n`,
+        );
         logger.info(
           `If this flow doesn't complete, you can authorize via the Console instead:\n` +
             `  tailor-sdk authconnection open`,
