@@ -7,8 +7,8 @@ import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
-  trnPrefix,
   type WithLabel,
 } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
@@ -39,10 +39,6 @@ type DeleteConnection = {
   name: string;
   request: MessageInitShape<typeof RevokeAuthConnectionRequestSchema>;
 };
-
-function connectionTrn(workspaceId: string, name: string) {
-  return `${trnPrefix(workspaceId)}:auth-connection:${name}`;
-}
 
 function buildConnectionRequest(
   workspaceId: string,
@@ -169,7 +165,7 @@ export async function planAuthConnections(
     existingList.map(async (resource) => {
       try {
         const { metadata } = await client.getMetadata({
-          trn: connectionTrn(workspaceId, resource.name),
+          trn: resourceTrn(workspaceId, "auth-connection", resource.name),
         });
         existingConnections[resource.name] = {
           resource,
@@ -197,7 +193,7 @@ export async function planAuthConnections(
     const existing = existingConnections[name];
     const metaRequest = metadataSupported
       ? await buildMetaRequest({
-          trn: connectionTrn(workspaceId, name),
+          trn: resourceTrn(workspaceId, "auth-connection", name),
           appName,
           appId,
         })

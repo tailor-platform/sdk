@@ -33,7 +33,13 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { buildMetaRequest, isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  isOwnedByApp,
+  resourceTrn,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "@/types/auth";
@@ -367,10 +373,6 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteAuthServiceRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
-}
-
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -406,7 +408,7 @@ async function planServices(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.namespace.name),
+        trn: resourceTrn(workspaceId, "auth", resource.namespace.name),
       });
       existingServices[resource.namespace.name] = {
         resource,
@@ -420,7 +422,7 @@ async function planServices(
     const { config } = auth;
     const existing = existingServices[config.name];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, config.name),
+      trn: resourceTrn(workspaceId, "auth", config.name),
       appName,
       appId,
     });

@@ -1,4 +1,4 @@
-import { sdkNameLabelKey, trnPrefix } from "@/cli/commands/deploy/label";
+import { resourceTrn, sdkNameLabelKey } from "@/cli/commands/deploy/label";
 import { logger } from "@/cli/shared/logger";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -24,7 +24,7 @@ export async function checkVaultManaged(
   params: CheckVaultManagedParams,
 ): Promise<CheckVaultManagedResult> {
   const { client, workspaceId, vaultName } = params;
-  const trn = `${trnPrefix(workspaceId)}:vault:${vaultName}`;
+  const trn = resourceTrn(workspaceId, "vault", vaultName);
   const notManaged = { isManaged: false, trn, existingLabels: {} };
 
   let owner: string | undefined;

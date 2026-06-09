@@ -32,6 +32,7 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
@@ -167,10 +168,6 @@ type DeleteService = {
   request: MessageInitShape<typeof DeletePipelineServiceRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:pipeline:${name}`;
-}
-
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -207,7 +204,7 @@ async function planServices(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.namespace.name),
+        trn: resourceTrn(workspaceId, "pipeline", resource.namespace.name),
       });
       existingServices[resource.namespace.name] = {
         resource,
@@ -220,7 +217,7 @@ async function planServices(
   for (const pipeline of pipelines) {
     const existing = existingServices[pipeline.namespace];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, pipeline.namespace),
+      trn: resourceTrn(workspaceId, "pipeline", pipeline.namespace),
       appName,
       appId,
     });
