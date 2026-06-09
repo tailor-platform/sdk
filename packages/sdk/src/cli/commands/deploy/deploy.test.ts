@@ -55,6 +55,7 @@ function emptyResults(): PlanResults {
     },
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
+      customDomainChangeSet: createChangeSet("CustomDomains"),
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
