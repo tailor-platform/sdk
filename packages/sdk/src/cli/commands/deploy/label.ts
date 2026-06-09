@@ -31,7 +31,7 @@ export type ResourceKind =
   | "pipeline"
   | "idp"
   | "auth"
-  | "auth-connection"
+  | "auth_connection"
   | "executor"
   | "workflow"
   | "workflow_job_function"

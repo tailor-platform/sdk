@@ -16,6 +16,11 @@ import type { z } from "zod";
  */
 export type LoadedConfig = AppConfig & { path: string };
 
+export interface LoadConfigOptions {
+  /** Import cache-busting value for watch-mode reloads. */
+  importNonce?: string;
+}
+
 // Generator schema for custom CodeGenerator objects (builtin generators are handled as plugins)
 const GeneratorConfigSchema = CodeGeneratorSchema.brand("CodeGenerator");
 
@@ -24,10 +29,12 @@ export type Generator = z.output<typeof GeneratorConfigSchema>;
 /**
  * Load Tailor configuration file and associated generators and plugins.
  * @param configPath - Optional explicit config path
+ * @param options - Optional module import behavior.
  * @returns Loaded config, generators, plugins, and config path
  */
 export async function loadConfig(
   configPath?: string,
+  options: LoadConfigOptions = {},
 ): Promise<{ config: LoadedConfig; generators: Generator[]; plugins: Plugin[] }> {
   installCliTailordbStub();
   const foundPath = loadConfigPath(configPath);
@@ -42,7 +49,11 @@ export async function loadConfig(
     throw new Error(`Configuration file not found: ${configPath}`);
   }
 
-  const configModule = await import(pathToFileURL(resolvedPath).href);
+  const configUrl = pathToFileURL(resolvedPath);
+  if (options.importNonce) {
+    configUrl.searchParams.set("tailorImportNonce", options.importNonce);
+  }
+  const configModule = await import(configUrl.href);
   if (!configModule || !configModule.default) {
     throw new Error("Invalid Tailor config module: default export not found");
   }

@@ -632,6 +632,12 @@ export async function deploy(options?: DeployOptions) {
           resourceName: replace.name,
         });
       }
+      for (const del of auth.changeSet.connection.deletes) {
+        importantDeletions.push({
+          resourceType: "Auth connection",
+          resourceName: del.name,
+        });
+      }
       for (const del of secretManager.vaultChangeSet.deletes) {
         importantDeletions.push({
           resourceType: "Secret Manager vault",

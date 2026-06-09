@@ -6,7 +6,7 @@ import { logger } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { prepareErdBuilds } from "./export";
-import { initErdContext } from "./utils";
+import { initErdDeployContext } from "./utils";
 
 export const erdDeployCommand = defineAppCommand({
   name: "deploy",
@@ -23,11 +23,9 @@ export const erdDeployCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const { client, workspaceId, config } = await initErdContext(args);
+    const { client, workspaceId } = await initErdDeployContext(args);
     const buildResults = await prepareErdBuilds({
-      client,
-      workspaceId,
-      config,
+      configPath: args.config,
       namespace: args.namespace,
       requireErdSite: true,
     });

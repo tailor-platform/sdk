@@ -25,14 +25,19 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 type CreateConnection = {
   name: string;
   request: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  metaRequest?: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+};
+
+type UpdateConnection = {
+  name: string;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type ReplaceConnection = {
   name: string;
   revokeRequest: MessageInitShape<typeof RevokeAuthConnectionRequestSchema>;
   createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  metaRequest?: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteConnection = {
@@ -65,11 +70,6 @@ function buildConnectionRequest(
   };
 }
 
-/**
- * Compute a hash of the full connection config for change detection.
- * @param config - Auth connection config
- * @returns SHA-256 hex digest
- */
 function hashConnectionConfig(config: AuthConnectionConfig): string {
   const serialized = JSON.stringify({
     type: config.type,
@@ -83,12 +83,6 @@ function hashConnectionConfig(config: AuthConnectionConfig): string {
   return hashValue(serialized);
 }
 
-/**
- * Check whether the non-secret fields of an existing connection differ from the desired config.
- * @param existing - Existing connection from the server
- * @param desired - Desired connection config
- * @returns true if any non-secret field has changed
- */
 function hasNonSecretFieldChanged(
   existing: AuthConnection,
   desired: AuthConnectionConfig,
@@ -122,14 +116,16 @@ export async function planAuthConnections(
   appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
-  const changeSet = createChangeSet<CreateConnection, never, DeleteConnection, ReplaceConnection>(
-    "Auth connections",
-  );
+  const changeSet = createChangeSet<
+    CreateConnection,
+    UpdateConnection,
+    DeleteConnection,
+    ReplaceConnection
+  >("Auth connections");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  // Collect all desired connections from auth services
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
   for (const auth of auths) {
     if (auth.connections) {
@@ -139,7 +135,6 @@ export async function planAuthConnections(
     }
   }
 
-  // Fetch existing connections
   const existingList = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { connections, nextPageToken } = await client.listAuthConnections({
@@ -156,67 +151,47 @@ export async function planAuthConnections(
     }
   });
 
-  // Build existing map with labels
-  // Note: metadata/labels for auth connections may not be supported yet by the platform.
-  // When getMetadata fails with InvalidArgument, we skip label-based ownership tracking.
   const existingConnections: WithLabel<AuthConnection> = {};
-  let metadataSupported = true;
   await Promise.all(
     existingList.map(async (resource) => {
-      try {
-        const { metadata } = await client.getMetadata({
-          trn: resourceTrn(workspaceId, "auth-connection", resource.name),
-        });
-        existingConnections[resource.name] = {
-          resource,
-          label: metadata?.labels[sdkNameLabelKey],
-          allLabels: metadata?.labels,
-        };
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-          metadataSupported = false;
-          existingConnections[resource.name] = {
-            resource,
-            label: undefined,
-          };
-        } else {
-          throw error;
-        }
-      }
+      const { metadata } = await client.getMetadata({
+        trn: resourceTrn(workspaceId, "auth_connection", resource.name),
+      });
+      existingConnections[resource.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
+      };
     }),
   );
 
   const state = loadSecretsState();
 
-  // Diff desired vs existing
   for (const [name, config] of Object.entries(desiredConnections)) {
     const existing = existingConnections[name];
-    const metaRequest = metadataSupported
-      ? await buildMetaRequest({
-          trn: resourceTrn(workspaceId, "auth-connection", name),
-          appName,
-          appId,
-        })
-      : undefined;
+    const metaRequest = await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "auth_connection", name),
+      appName,
+      appId,
+    });
 
     if (existing) {
       const owned = isOwnedByApp(existing.allLabels, appName, appId);
       if (!owned) {
-        if (metadataSupported && !existing.label) {
-          unmanaged.push({
-            resourceType: "Auth connection",
-            resourceName: name,
-          });
-        } else if (existing.label) {
+        if (existing.label) {
           conflicts.push({
             resourceType: "Auth connection",
             resourceName: name,
             currentOwner: existing.label,
           });
+        } else {
+          unmanaged.push({
+            resourceType: "Auth connection",
+            resourceName: name,
+          });
         }
       }
 
-      // Check if config has changed
       const currentHash = hashConnectionConfig(config);
       const storedHash = state.connections?.[name];
       const nonSecretChanged = hasNonSecretFieldChanged(existing.resource, config);
@@ -229,6 +204,12 @@ export async function planAuthConnections(
           createRequest: buildConnectionRequest(workspaceId, name, config),
           metaRequest,
         });
+      } else if (!existing.label) {
+        // The connection itself is unchanged, but it carries no SDK label
+        // (e.g. it was just adopted via the unmanaged-resource confirmation,
+        // or created by an older SDK that predates ownership labels). Write
+        // the label now so the next deploy recognizes it as owned.
+        changeSet.updates.push({ name, metaRequest });
       } else {
         changeSet.unchanged.push({ name });
       }
@@ -242,7 +223,6 @@ export async function planAuthConnections(
     }
   }
 
-  // Remaining existing connections owned by this app should be deleted
   for (const [name, entry] of Object.entries(existingConnections)) {
     if (!entry) continue;
     const owned = isOwnedByApp(entry.allLabels, appName, appId);
@@ -250,8 +230,10 @@ export async function planAuthConnections(
       resourceOwners.add(entry.label);
       continue;
     }
-    // Delete if owned by this app, or if metadata is not supported (no ownership tracking)
-    if (owned || !metadataSupported) {
+    // Only delete connections we own. Connections without our label are
+    // treated as unowned and left untouched, even if the local secrets-state
+    // happens to track them.
+    if (owned) {
       changeSet.deletes.push({
         name,
         request: { workspaceId, connectionName: name },
@@ -260,26 +242,6 @@ export async function planAuthConnections(
   }
 
   return { changeSet, conflicts, unmanaged, resourceOwners };
-}
-
-/**
- * Attempt to set metadata, silently ignoring InvalidArgument errors
- * when the platform does not yet support auth-connection TRNs.
- * @param client - Operator client instance
- * @param metaRequest - Metadata request to send
- */
-async function trySetMetadata(
-  client: OperatorClient,
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>,
-): Promise<void> {
-  try {
-    await client.setMetadata(metaRequest);
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-      return;
-    }
-    throw error;
-  }
 }
 
 function extractOAuth2Config(
@@ -314,26 +276,27 @@ export async function applyAuthConnections(
   const { changeSet } = result;
 
   if (phase === "create-update") {
-    // Creates
     await Promise.all(
       changeSet.creates.map(async (create) => {
         await client.createAuthConnection(create.request);
-        if (create.metaRequest) {
-          await trySetMetadata(client, create.metaRequest);
-        }
+        await client.setMetadata(create.metaRequest);
       }),
     );
 
-    // Replaces (revoke then create, sequentially per connection)
     for (const replace of changeSet.replaces) {
       await client.revokeAuthConnection(replace.revokeRequest);
       await client.createAuthConnection(replace.createRequest);
-      if (replace.metaRequest) {
-        await trySetMetadata(client, replace.metaRequest);
-      }
+      await client.setMetadata(replace.metaRequest);
     }
 
-    // Save hashes for all created/replaced connections
+    // Metadata-only updates: backfill the SDK ownership label on connections
+    // whose configuration is otherwise unchanged.
+    await Promise.all(
+      changeSet.updates.map(async (update) => {
+        await client.setMetadata(update.metaRequest);
+      }),
+    );
+
     const state = loadSecretsState();
     if (!state.connections) {
       state.connections = {};
@@ -352,14 +315,12 @@ export async function applyAuthConnections(
     }
     saveSecretsState(state);
   } else if (phase === "delete-resources" || phase === "delete") {
-    // Revoke deleted connections
     await Promise.all(
       changeSet.deletes.map(async (del) => {
         await client.revokeAuthConnection(del.request);
       }),
     );
 
-    // Remove hashes for deleted connections
     if (changeSet.deletes.length > 0) {
       const state = loadSecretsState();
       if (state.connections) {
