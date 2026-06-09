@@ -5,7 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { initOperatorClient } from "../src/cli/shared/client";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 
 const TRACKING_DIR = path.join(os.tmpdir(), "e2e-workspaces");
@@ -29,6 +29,25 @@ export function trackTempDir(tempDir: string): void {
   // Use base64 to encode path as filename
   const encoded = Buffer.from(tempDir).toString("base64url");
   fs.writeFileSync(path.join(TEMPDIR_TRACKING_DIR, encoded), tempDir);
+}
+
+/**
+ * Resolve the workspace region for e2e tests.
+ * @param client - Operator client
+ * @returns Workspace region
+ */
+export async function resolveE2EWorkspaceRegion(client: OperatorClient): Promise<string> {
+  const configuredRegion = process.env.TAILOR_PLATFORM_WORKSPACE_REGION;
+  if (configuredRegion) {
+    return configuredRegion;
+  }
+
+  const regionsResp = await client.listAvailableWorkspaceRegions({});
+  const region = regionsResp.regions[0];
+  if (!region) {
+    throw new Error("No available regions found");
+  }
+  return region;
 }
 
 /**
