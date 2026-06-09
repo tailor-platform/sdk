@@ -25,14 +25,19 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 type CreateConnection = {
   name: string;
   request: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  metaRequest?: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+};
+
+type UpdateConnection = {
+  name: string;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type ReplaceConnection = {
   name: string;
   revokeRequest: MessageInitShape<typeof RevokeAuthConnectionRequestSchema>;
   createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  metaRequest?: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteConnection = {
@@ -115,9 +120,12 @@ export async function planAuthConnections(
   appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
-  const changeSet = createChangeSet<CreateConnection, never, DeleteConnection, ReplaceConnection>(
-    "Auth connections",
-  );
+  const changeSet = createChangeSet<
+    CreateConnection,
+    UpdateConnection,
+    DeleteConnection,
+    ReplaceConnection
+  >("Auth connections");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -148,29 +156,16 @@ export async function planAuthConnections(
   });
 
   const existingConnections: WithLabel<AuthConnection> = {};
-  let metadataSupported = true;
   await Promise.all(
     existingList.map(async (resource) => {
-      try {
-        const { metadata } = await client.getMetadata({
-          trn: connectionTrn(workspaceId, resource.name),
-        });
-        existingConnections[resource.name] = {
-          resource,
-          label: metadata?.labels[sdkNameLabelKey],
-          allLabels: metadata?.labels,
-        };
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-          metadataSupported = false;
-          existingConnections[resource.name] = {
-            resource,
-            label: undefined,
-          };
-        } else {
-          throw error;
-        }
-      }
+      const { metadata } = await client.getMetadata({
+        trn: connectionTrn(workspaceId, resource.name),
+      });
+      existingConnections[resource.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
+      };
     }),
   );
 
@@ -178,27 +173,25 @@ export async function planAuthConnections(
 
   for (const [name, config] of Object.entries(desiredConnections)) {
     const existing = existingConnections[name];
-    const metaRequest = metadataSupported
-      ? await buildMetaRequest({
-          trn: connectionTrn(workspaceId, name),
-          appName,
-          appId,
-        })
-      : undefined;
+    const metaRequest = await buildMetaRequest({
+      trn: connectionTrn(workspaceId, name),
+      appName,
+      appId,
+    });
 
     if (existing) {
       const owned = isOwnedByApp(existing.allLabels, appName, appId);
       if (!owned) {
-        if (metadataSupported && !existing.label) {
-          unmanaged.push({
-            resourceType: "Auth connection",
-            resourceName: name,
-          });
-        } else if (existing.label) {
+        if (existing.label) {
           conflicts.push({
             resourceType: "Auth connection",
             resourceName: name,
             currentOwner: existing.label,
+          });
+        } else {
+          unmanaged.push({
+            resourceType: "Auth connection",
+            resourceName: name,
           });
         }
       }
@@ -215,6 +208,12 @@ export async function planAuthConnections(
           createRequest: buildConnectionRequest(workspaceId, name, config),
           metaRequest,
         });
+      } else if (!existing.label) {
+        // The connection itself is unchanged, but it carries no SDK label
+        // (e.g. it was just adopted via the unmanaged-resource confirmation,
+        // or created by an older SDK that predates ownership labels). Write
+        // the label now so the next deploy recognizes it as owned.
+        changeSet.updates.push({ name, metaRequest });
       } else {
         changeSet.unchanged.push({ name });
       }
@@ -235,8 +234,10 @@ export async function planAuthConnections(
       resourceOwners.add(entry.label);
       continue;
     }
-    const shouldDelete = metadataSupported ? owned : state.connections?.[name] !== undefined;
-    if (shouldDelete) {
+    // Only delete connections we own. Connections without our label are
+    // treated as unowned and left untouched, even if the local secrets-state
+    // happens to track them.
+    if (owned) {
       changeSet.deletes.push({
         name,
         request: { workspaceId, connectionName: name },
@@ -245,20 +246,6 @@ export async function planAuthConnections(
   }
 
   return { changeSet, conflicts, unmanaged, resourceOwners };
-}
-
-async function trySetMetadata(
-  client: OperatorClient,
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>,
-): Promise<void> {
-  try {
-    await client.setMetadata(metaRequest);
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-      return;
-    }
-    throw error;
-  }
 }
 
 function extractOAuth2Config(
@@ -296,19 +283,23 @@ export async function applyAuthConnections(
     await Promise.all(
       changeSet.creates.map(async (create) => {
         await client.createAuthConnection(create.request);
-        if (create.metaRequest) {
-          await trySetMetadata(client, create.metaRequest);
-        }
+        await client.setMetadata(create.metaRequest);
       }),
     );
 
     for (const replace of changeSet.replaces) {
       await client.revokeAuthConnection(replace.revokeRequest);
       await client.createAuthConnection(replace.createRequest);
-      if (replace.metaRequest) {
-        await trySetMetadata(client, replace.metaRequest);
-      }
+      await client.setMetadata(replace.metaRequest);
     }
+
+    // Metadata-only updates: backfill the SDK ownership label on connections
+    // whose configuration is otherwise unchanged.
+    await Promise.all(
+      changeSet.updates.map(async (update) => {
+        await client.setMetadata(update.metaRequest);
+      }),
+    );
 
     const state = loadSecretsState();
     if (!state.connections) {
