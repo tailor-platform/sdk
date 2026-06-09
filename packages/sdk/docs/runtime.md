@@ -110,7 +110,9 @@ At build time the bundler resolves a `.wasm` import to a `Uint8Array`, but TypeS
 
 ```ts
 declare module "*.wasm" {
-  const bytes: Uint8Array;
+  // `Uint8Array<ArrayBuffer>` (not bare `Uint8Array`) so the bytes satisfy
+  // `BufferSource` on TypeScript >= 5.7, where typed arrays became generic.
+  const bytes: Uint8Array<ArrayBuffer>;
   export default bytes;
 }
 ```

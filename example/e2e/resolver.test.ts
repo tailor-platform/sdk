@@ -26,7 +26,7 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(8);
+    expect(pipelineResolvers.length).toBe(9);
 
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
@@ -429,6 +429,17 @@ describe("dataplane", () => {
         envBaz: true,
       },
     });
+  });
+
+  test("wasmAdd runs a bundled WebAssembly module", async () => {
+    const query = gql`
+      query {
+        wasmAdd(a: 2, b: 3)
+      }
+    `;
+    const result = await graphQLClient.rawRequest(query);
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({ wasmAdd: 5 });
   });
 
   describe("triggerOrderProcessing", () => {
