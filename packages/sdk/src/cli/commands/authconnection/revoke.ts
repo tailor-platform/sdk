@@ -14,7 +14,7 @@ export const revokeAuthConnectionCommand = defineAppCommand({
   description:
     "Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it).",
   notes:
-    "On platforms that do not yet split revoke and delete, revoke still removes the connection entirely.",
+    "Revoke invalidates the connection's active session and tokens but keeps the connection and its stored credentials, so it can be re-authorized later. Use `delete` to remove the connection entirely.",
   args: z
     .object({
       ...workspaceArgs,
