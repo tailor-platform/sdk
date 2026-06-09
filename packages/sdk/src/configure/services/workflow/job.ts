@@ -58,9 +58,9 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
 }
 
 /**
- * Env-var fallback read by `.trigger()` when `mockWorkflow.setEnv()` is unset.
+ * Env-var fallback read by `.trigger()` when `mockWorkflow().setEnv()` is unset.
  * Kept for backward compatibility.
- * @deprecated Use `mockWorkflow.setEnv()` from `@tailor-platform/sdk/vitest`.
+ * @deprecated Use `mockWorkflow().setEnv()` from `@tailor-platform/sdk/vitest`.
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
@@ -111,7 +111,7 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
     {
       name: config.name,
       trigger: async (args?: unknown) => {
-        // Read env from mockWorkflow.setEnv() with deprecated env-var fallback.
+        // Read env from mockWorkflow().setEnv() with deprecated env-var fallback.
         // Shallow-copy to isolate against cross-trigger mutation.
         const fromGlobal = readWorkflowTestEnv();
         const env = (

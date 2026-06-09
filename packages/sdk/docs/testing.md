@@ -126,7 +126,7 @@ test("content-based mock", async () => {
 
 ### Workflow Mock
 
-The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `mockWorkflow()` to configure job responses:
+Acquire `mockWorkflow()` to install `tailor.workflow` and configure job responses:
 
 ```typescript
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
@@ -708,18 +708,17 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `mockWorkflow.setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
+To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `mockWorkflow().setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
 
 ```typescript
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
-import { afterEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
-  afterEach(() => mockWorkflow.reset());
-
   test("mainJob.trigger() executes all jobs", async () => {
-    mockWorkflow.setEnv({ PAYMENT_GATEWAY: "stripe" });
+    using wf = mockWorkflow();
+    wf.setEnv({ PAYMENT_GATEWAY: "stripe" });
 
     const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
 
