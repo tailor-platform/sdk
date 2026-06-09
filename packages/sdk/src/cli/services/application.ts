@@ -108,7 +108,11 @@ function defineTailorDB(
     } else {
       // Parse config through schema to normalize gqlOperations
       const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
-      const tailorDB = createTailorDBService({ namespace, config: parsedConfig, pluginManager });
+      const tailorDB = createTailorDBService({
+        namespace,
+        config: parsedConfig,
+        pluginManager,
+      });
       tailorDBServices.push(tailorDB);
     }
     subgraphs.push({ Type: "tailordb", Name: namespace });

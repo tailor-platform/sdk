@@ -5,7 +5,7 @@ import { erdServeCommand } from "./serve";
 
 export const erdCommand = defineCommand({
   name: "erd",
-  description: "Generate ERD artifacts for TailorDB namespaces using Liam ERD. (beta)",
+  description: "Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)",
   subCommands: {
     export: erdExportCommand,
     serve: erdServeCommand,
