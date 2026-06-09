@@ -32,6 +32,14 @@ export function trackTempDir(tempDir: string): void {
 }
 
 /**
+ * Resolve the run id prefix for e2e test workspace names.
+ * @returns Run id prefix
+ */
+export function resolveE2ERunId(): string {
+  return process.env.TAILOR_PLATFORM_E2E_RUN_ID ?? process.env.GITHUB_RUN_ID ?? "";
+}
+
+/**
  * Resolve the workspace region for e2e tests.
  * @param client - Operator client
  * @returns Workspace region

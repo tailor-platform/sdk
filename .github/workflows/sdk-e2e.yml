@@ -58,7 +58,7 @@ jobs:
         working-directory: packages/sdk
         run: pnpm run test --project e2e
         env:
-          GITHUB_RUN_ID: ${{ github.run_id }}-sdk
+          TAILOR_PLATFORM_E2E_RUN_ID: ${{ github.run_id }}-sdk
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
           TAILOR_PLATFORM_WORKSPACE_REGION: us-west

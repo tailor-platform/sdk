@@ -20,13 +20,18 @@ import { describe, test, expect, beforeAll } from "vitest";
 import { deploy } from "../src/cli/commands/deploy/deploy";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
-import { resolveE2EWorkspaceRegion, trackWorkspace, trackTempDir } from "./globalSetup";
+import {
+  resolveE2ERunId,
+  resolveE2EWorkspaceRegion,
+  trackWorkspace,
+  trackTempDir,
+} from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Generate unique test identifiers (include GITHUB_RUN_ID in CI to avoid cross-run cleanup conflicts)
-const ciRunId = process.env.GITHUB_RUN_ID ?? "";
+// Generate unique test identifiers (include run id in CI to avoid cross-run cleanup conflicts)
+const ciRunId = resolveE2ERunId();
 const testRunId = Date.now().toString(36);
 const testAppName = `e2e-test-${testRunId}`;
 const testWorkspaceName = `e2e-ws-${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;

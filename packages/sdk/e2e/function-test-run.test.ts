@@ -30,13 +30,13 @@ import { resolveResolverArg } from "../src/cli/commands/function/test-run";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
-import { resolveE2EWorkspaceRegion, trackWorkspace } from "./globalSetup";
+import { resolveE2ERunId, resolveE2EWorkspaceRegion, trackWorkspace } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const E2E_WORKSPACE_PREFIX = "e2e-ws-";
-const ciRunId = process.env.GITHUB_RUN_ID ?? "";
+const ciRunId = resolveE2ERunId();
 const testRunId = Date.now().toString(36);
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 
