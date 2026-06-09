@@ -28,11 +28,12 @@ tailor-sdk authconnection [command]
 
 **Commands**
 
-| Command                                                 | Description                                   |
-| ------------------------------------------------------- | --------------------------------------------- |
-| [`authconnection authorize`](#authconnection-authorize) | Authorize an auth connection via OAuth2 flow. |
-| [`authconnection list`](#authconnection-list)           | List all auth connections.                    |
-| [`authconnection revoke`](#authconnection-revoke)       | Revoke an auth connection.                    |
+| Command                                                 | Description                                                    |
+| ------------------------------------------------------- | -------------------------------------------------------------- |
+| [`authconnection authorize`](#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.                  |
+| [`authconnection list`](#authconnection-list)           | List all auth connections.                                     |
+| [`authconnection open`](#authconnection-open)           | Open the auth connections page in the Tailor Platform Console. |
+| [`authconnection revoke`](#authconnection-revoke)       | Revoke an auth connection.                                     |
 
 <!-- politty:command:authconnection:subcommands:end -->
 
@@ -124,6 +125,45 @@ tailor-sdk authconnection list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:authconnection list:global-options-link:end -->
+<!-- politty:command:authconnection open:heading:start -->
+
+### authconnection open
+
+<!-- politty:command:authconnection open:heading:end -->
+
+<!-- politty:command:authconnection open:description:start -->
+
+Open the auth connections page in the Tailor Platform Console.
+
+<!-- politty:command:authconnection open:description:end -->
+
+<!-- politty:command:authconnection open:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk authconnection open [options]
+```
+
+<!-- politty:command:authconnection open:usage:end -->
+
+<!-- politty:command:authconnection open:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+<!-- politty:command:authconnection open:options:end -->
+
+<!-- politty:command:authconnection open:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection open:global-options-link:end -->
+
 <!-- politty:command:authconnection revoke:heading:start -->
 
 ### authconnection revoke

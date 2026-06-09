@@ -369,6 +369,18 @@ Auth connections enable OAuth2 authentication with external providers (Google, M
 
 For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
 
+> [!WARNING]
+> **Managing connections through `tailor.config.ts` does not work today (known bug).**
+> Every `tailor-sdk deploy` revokes and recreates the connection, which discards the token obtained via `authconnection authorize`. A config-managed connection therefore never stays authorized.
+>
+> Until this is fixed, **create the connection and its token from the Console** instead. You can jump to the connections page with:
+>
+> ```bash
+> tailor-sdk authconnection open
+> ```
+>
+> The `connections` field in `defineAuth()` and the `authconnection authorize` flow are documented below for reference, but should not be relied on for now.
+
 ### Setup Flow
 
 Setting up an auth connection requires two steps:
@@ -424,6 +436,9 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 
 The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
 
+> [!WARNING]
+> Revoking and recreating a connection discards the token stored by `authconnection authorize`. Because of this, config-managed connections lose their authorization on deploy and do not work in practice (see the warning at the top of this section). Manage the connection and create its token from the Console (`tailor-sdk authconnection open`) instead.
+
 ### `auth.getConnectionToken()`
 
 `auth.getConnectionToken()` retrieves connection tokens at runtime by calling `tailor.authconnection.getConnectionToken()` internally. When `connections` is defined in `defineAuth()`, the connection name is type-checked and autocompleted against the defined keys:
@@ -449,6 +464,9 @@ See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-inter
 Auth connections can also be managed via the CLI:
 
 ```bash
+# Open the connections page in the Console (recommended for creating connections/tokens)
+tailor-sdk authconnection open
+
 # Authorize (opens browser for OAuth2 flow)
 tailor-sdk authconnection authorize --name google-connection
 
@@ -459,7 +477,7 @@ tailor-sdk authconnection list
 tailor-sdk authconnection revoke --name google-connection
 ```
 
-Connection creation is handled by `tailor-sdk deploy` via the config.
+Connection creation is handled by `tailor-sdk deploy` via the config, but this path is currently broken (see the warning at the top of this section) — create connections and tokens from the Console (`tailor-sdk authconnection open`) instead.
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 

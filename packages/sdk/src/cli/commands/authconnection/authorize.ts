@@ -173,12 +173,28 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
       });
 
       server.on("error", (err) => {
+        // Any error here means the local callback server could not be started.
+        // Guide the user to the Console-based flow as a fallback.
+        const code = (err as NodeJS.ErrnoException).code;
+        const portHint =
+          code === "EADDRINUSE" || code === "EACCES"
+            ? `Try a different port with --port, or authorize via the Console instead:`
+            : `Authorize via the Console instead:`;
+        logger.warn(
+          `Could not start the local callback server on port ${args.port}${code ? ` (${code})` : ""}.\n` +
+            `${portHint}\n` +
+            `  tailor-sdk authconnection open`,
+        );
         reject(err);
       });
 
       server.listen(args.port, async () => {
         const authorizeUrl = authUrl.toString();
         logger.info(`Opening browser for authorization:\n\n${authorizeUrl}\n`);
+        logger.info(
+          `If this flow doesn't complete, you can authorize via the Console instead:\n` +
+            `  tailor-sdk authconnection open`,
+        );
         if (!args["no-browser"]) {
           try {
             await open(authorizeUrl);
