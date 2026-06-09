@@ -97,7 +97,7 @@ test("encodes via iconv", () => {
 
   expect(out).toEqual(new Uint8Array([0x82, 0xa0]));
   expect(iconvM.calls[0]?.method).toBe("convert");
-}); // iconvM.reset() runs here automatically
+}); // iconvM disposed here — the iconv mock is removed (previous state restored)
 
 test("reads from a vault", async () => {
   using sm = mockSecretmanager();

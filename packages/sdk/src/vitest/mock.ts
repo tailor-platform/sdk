@@ -320,9 +320,10 @@ export function mockTailordb() {
  * ```typescript
  * import { mockWorkflow } from "@tailor-platform/sdk/vitest";
  *
- * test("job handler", () => {
+ * test("job handler", async () => {
  *   using wf = mockWorkflow();
  *   wf.setJobHandler((name) => (name === "validate" ? { valid: true } : null));
+ *   await runWorkflowUnderTest(); // calls tailor.workflow.triggerJobFunction("validate", {})
  *   expect(wf.triggerJobFunction).toHaveBeenCalledWith("validate", {});
  * });
  * ```
@@ -583,18 +584,24 @@ export function mockSecretmanager() {
     },
 
     get calls(): SecretCall[] {
-      return [
-        ...getSecret.mock.calls.map(([vault, name]) => ({
-          method: "getSecret" as const,
-          vault: vault as string,
-          name: name as string,
+      // Merge both methods' calls back into chronological order via vi.fn's
+      // global invocationCallOrder, so a test mixing getSecret/getSecrets sees
+      // them in the order they actually ran (not all getSecret, then all getSecrets).
+      const entries: { order: number; call: SecretCall }[] = [
+        ...getSecret.mock.calls.map((args, i) => ({
+          order: getSecret.mock.invocationCallOrder[i] ?? 0,
+          call: { method: "getSecret" as const, vault: args[0] as string, name: args[1] as string },
         })),
-        ...getSecrets.mock.calls.map(([vault, names]) => ({
-          method: "getSecrets" as const,
-          vault: vault as string,
-          names: names as readonly string[],
+        ...getSecrets.mock.calls.map((args, i) => ({
+          order: getSecrets.mock.invocationCallOrder[i] ?? 0,
+          call: {
+            method: "getSecrets" as const,
+            vault: args[0] as string,
+            names: args[1] as readonly string[],
+          },
         })),
       ];
+      return entries.sort((a, b) => a.order - b.order).map((e) => e.call);
     },
 
     reset(): void {

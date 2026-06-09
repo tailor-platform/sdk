@@ -19,7 +19,7 @@ Helpers under `@tailor-platform/sdk/test`:
 
 - `unauthenticatedTailorUser` — default `user` value for resolver contexts
 
-Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
+Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
 - `mockTailordb` — TailorDB query stubs and call recording
 - `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
@@ -82,7 +82,7 @@ The mock functions are also exposed directly (e.g. `db.queryObject`, `wf.trigger
 
 ### TailorDB Mock
 
-The environment auto-injects a mock `tailordb.Client`. Use `mockTailordb()` to configure responses and assert on executed queries:
+Acquire `mockTailordb()` to install the mock `tailordb.Client`, configure responses, and assert on executed queries:
 
 ```typescript
 import { mockTailordb } from "@tailor-platform/sdk/vitest";
