@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 10
     env:
       PR_NUMBER: ${{ github.event.number }}
+      REVIEW_BODY_FILE: ${{ github.workspace }}/docs-consistency-review.md
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -90,17 +91,18 @@ jobs:
             - If documentation was changed, verify the implementation matches
             - Look for docs describing features that don't exist yet or have been removed
 
-            ### 4. Post Results
+            ### 4. Write the Review Report
 
-            Search for an existing review summary and update it, or create a new review.
+            Compile your findings into one of the markdown formats below and
+            **write it to the file `${{ env.REVIEW_BODY_FILE }}` using the Write
+            tool**.
 
-            ```bash
-            REVIEW_ID=$(gh api --paginate repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews \
-              --jq '.[] | select((.body // "") | contains("<!-- docs-consistency-check -->")) | select(.state != "DISMISSED") | .id' \
-              | tail -n 1)
-            ```
+            Do **not** post a review yourself — you have no tools to do so. A
+            later workflow step reads this file, neutralizes any `@mentions`, and
+            posts (or updates) the PR review for you. Your only deliverable is
+            the file.
 
-            **If inconsistencies are found**, post a review summary in this format:
+            **If inconsistencies are found**, write a review summary in this format:
 
             ```markdown
             ## 📖 Docs Consistency Check
@@ -141,33 +143,66 @@ jobs:
             <!-- docs-consistency-check -->
             ```
 
-            Store the selected markdown in `REVIEW_BODY`. Use `gh api --method PUT` to
-            update if `REVIEW_ID` is set. Otherwise use `gh api --method POST` with
-            `event=COMMENT` to create a new pull request review. Use `COMMENT` so the
-            review does not affect PR mergeability. Do not use `APPROVE`,
-            `REQUEST_CHANGES`, or `gh pr comment`.
-
-            ```bash
-            if [ -n "$REVIEW_ID" ]; then
-              gh api --method PUT "repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews/$REVIEW_ID" \
-                -f body="$REVIEW_BODY"
-            else
-              gh api --method POST "repos/${{ github.repository }}/pulls/${{ env.PR_NUMBER }}/reviews" \
-                -f event=COMMENT \
-                -f body="$REVIEW_BODY"
-            fi
-            ```
+            Always keep the `<!-- docs-consistency-check -->` marker at the end
+            so the post step can de-duplicate the review.
 
             ## Important Notes
             - The PR branch is already checked out
-            - Always post results as a pull request review summary using `gh` commands, not as a conversational response
+            - Do not produce a conversational response; your output is the file
+              `${{ env.REVIEW_BODY_FILE }}`
             - Be specific: include file paths and line numbers for every inconsistency
             - Only flag real inconsistencies, not stylistic differences
             - If unsure whether something is an inconsistency, mention it with a note that it may be intentional
 
           claude_args: |
             --model claude-sonnet-4-5-20250929
-            --allowedTools "Bash(gh pr:*),Bash(gh api:*),Read,Glob,Grep"
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Read,Glob,Grep,Write"
+
+      - name: Post docs consistency review
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          REPO: ${{ github.repository }}
+          MARKER: "<!-- docs-consistency-check -->"
+        run: |
+          if [ ! -s "$REVIEW_BODY_FILE" ]; then
+            echo "No review body was produced; nothing to post."
+            exit 0
+          fi
+
+          # --- Static mention guard (deterministic, not AI-dependent) ----------
+          # Insert a zero-width space (U+200B) right after EVERY '@' so the text
+          # renders identically but GitHub never parses it as a mention. We do
+          # not try to match only "real" handles: ZWSP is invisible, so
+          # over-inserting is harmless, while missing one would notify someone.
+          # Node is guaranteed present (the Claude action runs on it).
+          node -e '
+            const fs = require("fs");
+            const file = process.argv[1];
+            let text = fs.readFileSync(file, "utf8");
+            text = text.replace(/@/g, "@\u200b");
+            fs.writeFileSync(file, text);
+          ' "$REVIEW_BODY_FILE"
+
+          # Guarantee the upsert marker is present even if the model omitted it.
+          if ! grep -qF "$MARKER" "$REVIEW_BODY_FILE"; then
+            printf '\n\n%s\n' "$MARKER" >> "$REVIEW_BODY_FILE"
+          fi
+
+          # --- Upsert the review (event=COMMENT so it never blocks merge) ------
+          REVIEW_ID=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/reviews" \
+            --jq ".[] | select((.body // \"\") | contains(\"$MARKER\")) | select(.state != \"DISMISSED\") | .id" \
+            | tail -n 1)
+
+          if [ -n "$REVIEW_ID" ]; then
+            gh api --method PUT "repos/$REPO/pulls/$PR_NUMBER/reviews/$REVIEW_ID" \
+              -F body=@"$REVIEW_BODY_FILE"
+          else
+            gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/reviews" \
+              -f event=COMMENT \
+              -F body=@"$REVIEW_BODY_FILE"
+          fi
 
       - name: Remove trigger label
         if: always() && github.event.action == 'labeled' && github.event.label.name == 'docs-check'
