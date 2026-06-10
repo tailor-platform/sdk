@@ -1,4 +1,5 @@
-import { Code, ConnectError } from "@connectrpc/connect";
+import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
+import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { afterEach, describe, test, expect, vi } from "vitest";
 import {
   createTransport,
@@ -8,6 +9,7 @@ import {
   MAX_PAGE_SIZE,
   parseMethodName,
   resolveStaticWebsiteUrls,
+  retryInterceptor,
   type OperatorClient,
 } from "./client";
 import { logger } from "./logger";
@@ -102,6 +104,111 @@ describe("fetchPaged", () => {
 
     expect(items).toEqual(["only"]);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("retryInterceptor", () => {
+  /**
+   * Build a minimal unary request bound to a real OperatorService method so the
+   * interceptor can read `method.name`/`method.output`/`method.idempotency`.
+   * @param method - OperatorService method descriptor to bind the request to
+   * @returns A minimal unary request usable by the interceptor under test
+   */
+  function makeUnaryReq(
+    method: (typeof OperatorService.method)[keyof typeof OperatorService.method],
+  ) {
+    return {
+      stream: false,
+      service: OperatorService,
+      method,
+      header: new Headers(),
+      message: {},
+    } as unknown as UnaryRequest;
+  }
+
+  const okResponse = { stream: false, message: {} };
+
+  test("retries on Unavailable then succeeds", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await retryInterceptor()(next)(
+      makeUnaryReq(OperatorService.method.createTailorDBType),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("treats AlreadyExists after a retry as success for Create methods", async () => {
+    // #1350: prior attempt landed server-side but came back Unavailable; the
+    // identical retry then hits already_exists on the _file metadata table.
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+
+    const res = await retryInterceptor()(next)(
+      makeUnaryReq(OperatorService.method.createTailorDBType),
+    );
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(res.stream).toBe(false);
+    // A synthesized empty output message stands in for the already-applied state.
+    expect((res as { message: unknown }).message).toBeTruthy();
+  });
+
+  test("does not swallow a first-attempt AlreadyExists (genuine conflict)", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
+
+    await expect(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+    ).rejects.toThrow("already exists");
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not treat AlreadyExists as success for non-Create methods", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
+
+    await expect(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType)),
+    ).rejects.toThrow("already exists");
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not swallow AlreadyExists for Create methods outside the allowlist", async () => {
+    // createIdPClient consumes its response body (clientSecret), so an empty
+    // synthesized response would corrupt downstream state — it must surface.
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
+
+    await expect(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createIdPClient)),
+    ).rejects.toThrow("already exists");
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry streaming requests", async () => {
+    const streamRes = { stream: true };
+    const next = vi.fn().mockResolvedValueOnce(streamRes);
+
+    const req = {
+      stream: true,
+      method: OperatorService.method.createTailorDBType,
+    } as unknown as UnaryRequest;
+    const res = await retryInterceptor()(next)(req);
+
+    expect(res).toBe(streamRes);
+    expect(next).toHaveBeenCalledTimes(1);
   });
 });
 
