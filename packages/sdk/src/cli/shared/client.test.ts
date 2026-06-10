@@ -141,12 +141,23 @@ describe("retryInterceptor", () => {
   /**
    * Drive the interceptor promise to completion under fake timers by flushing all
    * pending backoff timers (and the microtasks they unblock).
+   *
+   * A handler is attached synchronously (before advancing timers) so a rejection
+   * that lands while timers are flushing is never momentarily unhandled — vitest
+   * fails the run on unhandled rejections, and `settle` is used by tests that
+   * expect rejection. The original error is rethrown so `.rejects` still works.
    * @param promise - The pending interceptor result
    * @returns The settled interceptor result
    */
   async function settle<T>(promise: Promise<T>): Promise<T> {
+    const guarded = promise.then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
     await vi.runAllTimersAsync();
-    return promise;
+    const result = await guarded;
+    if (result.ok) return result.value;
+    throw result.error;
   }
 
   const okResponse = { stream: false, message: {} };
