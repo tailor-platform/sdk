@@ -24,6 +24,13 @@
 
 import { type Mock, vi } from "vitest";
 import {
+  getRegisteredJob,
+  getRegisteredWorkflow,
+  TRIGGER_DEFAULT,
+} from "@/configure/services/workflow/registry";
+import { platformSerialize } from "@/utils/test/platform-serialize";
+import {
+  buildJobContext,
   clearWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
@@ -305,8 +312,6 @@ export function mockTailordb() {
 // Workflow Mock
 // ---------------------------------------------------------------------------
 
-const TRIGGER_DEFAULT = "mock-execution-id";
-
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
@@ -315,9 +320,10 @@ const TRIGGER_DEFAULT = "mock-execution-id";
  * ```typescript
  * import { mockWorkflow } from "@tailor-platform/sdk/vitest";
  *
- * test("job handler", () => {
+ * test("job handler", async () => {
  *   using wf = mockWorkflow();
  *   wf.setJobHandler((name) => (name === "validate" ? { valid: true } : null));
+ *   await runWorkflowUnderTest(); // calls tailor.workflow.triggerJobFunction("validate", {})
  *   expect(wf.triggerJobFunction).toHaveBeenCalledWith("validate", {});
  * });
  * ```
@@ -326,14 +332,27 @@ export function mockWorkflow() {
   const root = tailorRoot();
   const prev = root.workflow;
 
-  const triggerJobFunction = vi.fn((_jobName: string, _args?: unknown): unknown => null);
-  const triggerWorkflow = vi.fn(
-    async (
-      _workflowName: string,
-      _args?: unknown,
-      _options?: TriggerWorkflowOptions,
-    ): Promise<string> => TRIGGER_DEFAULT,
-  );
+  // Default impls (also restored by reset): run the registered body by name so a
+  // `.trigger()` with no handler/result executes the real job locally.
+  const defaultTriggerJob = (jobName: string, args?: unknown): unknown => {
+    const body = getRegisteredJob(jobName);
+    return body ? body(args, buildJobContext()) : null;
+  };
+  const defaultTriggerWorkflow = async (
+    workflowName: string,
+    args?: unknown,
+    _options?: TriggerWorkflowOptions,
+  ): Promise<string> => {
+    const wf = getRegisteredWorkflow(workflowName);
+    if (wf) await installedTriggerJobFunction(wf.mainJobName, args);
+    return TRIGGER_DEFAULT;
+  };
+
+  // Inner vi.fns hold the overridable behavior + call recording; the installed
+  // shims below cross the platform JSON boundary (serialize args + results) once
+  // so every path (default body, setJobHandler, enqueueResult) is covered.
+  const triggerJobFunction = vi.fn(defaultTriggerJob);
+  const triggerWorkflow = vi.fn(defaultTriggerWorkflow);
   const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
   const resolve = vi.fn(
     async (
@@ -343,7 +362,28 @@ export function mockWorkflow() {
     ): Promise<void> => {},
   );
 
-  root.workflow = { triggerJobFunction, triggerWorkflow, wait, resolve };
+  const installedTriggerJobFunction = (jobName: string, args?: unknown): unknown => {
+    const out = triggerJobFunction(jobName, platformSerialize(args));
+    return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
+  };
+
+  root.workflow = {
+    triggerJobFunction: installedTriggerJobFunction,
+    // Preserve arity so a forwarded third `options` arg — even `undefined` — is
+    // recorded, matching the real `.trigger(args, options)` call shape.
+    triggerWorkflow: (...call: [string, unknown?, TriggerWorkflowOptions?]) =>
+      call.length >= 3
+        ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
+        : triggerWorkflow(call[0], platformSerialize(call[1])),
+    wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
+    resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
+      resolve(executionId, key, (payload: unknown) => {
+        const out = callback(payload);
+        return out instanceof Promise
+          ? out.then((v) => platformSerialize(v))
+          : platformSerialize(out);
+      }),
+  };
 
   const facade = {
     /** The `triggerJobFunction` `vi.fn`. */
@@ -395,7 +435,7 @@ export function mockWorkflow() {
 
     /**
      * Configure what `triggerWorkflow` returns. Pass a string (same id every
-     * call) or `(name, args, options) => string`. Default: `"mock-execution-id"`.
+     * call) or `(name, args, options) => string`. Default: a placeholder UUID.
      * @param handler - Static execution ID or a function returning one
      */
     setTriggerHandler(handler: string | TriggerHandlerFn): void {
@@ -461,9 +501,9 @@ export function mockWorkflow() {
     /** Reset all workflow responses and recorded calls (keeps the mock installed). */
     reset(): void {
       triggerJobFunction.mockReset();
-      triggerJobFunction.mockImplementation(() => null);
+      triggerJobFunction.mockImplementation(defaultTriggerJob);
       triggerWorkflow.mockReset();
-      triggerWorkflow.mockImplementation(async () => TRIGGER_DEFAULT);
+      triggerWorkflow.mockImplementation(defaultTriggerWorkflow);
       wait.mockReset();
       wait.mockImplementation(() => null);
       resolve.mockReset();
@@ -544,18 +584,24 @@ export function mockSecretmanager() {
     },
 
     get calls(): SecretCall[] {
-      return [
-        ...getSecret.mock.calls.map(([vault, name]) => ({
-          method: "getSecret" as const,
-          vault: vault as string,
-          name: name as string,
+      // Merge both methods' calls back into chronological order via vi.fn's
+      // global invocationCallOrder, so a test mixing getSecret/getSecrets sees
+      // them in the order they actually ran (not all getSecret, then all getSecrets).
+      const entries: { order: number; call: SecretCall }[] = [
+        ...getSecret.mock.calls.map((args, i) => ({
+          order: getSecret.mock.invocationCallOrder[i] ?? 0,
+          call: { method: "getSecret" as const, vault: args[0] as string, name: args[1] as string },
         })),
-        ...getSecrets.mock.calls.map(([vault, names]) => ({
-          method: "getSecrets" as const,
-          vault: vault as string,
-          names: names as readonly string[],
+        ...getSecrets.mock.calls.map((args, i) => ({
+          order: getSecrets.mock.invocationCallOrder[i] ?? 0,
+          call: {
+            method: "getSecrets" as const,
+            vault: args[0] as string,
+            names: args[1] as readonly string[],
+          },
         })),
       ];
+      return entries.sort((a, b) => a.order - b.order).map((e) => e.call);
     },
 
     reset(): void {
