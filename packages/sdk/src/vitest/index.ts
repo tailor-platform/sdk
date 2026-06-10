@@ -21,8 +21,8 @@ import type { Plugin } from "vitest/config";
  *    via beforeEach/afterEach since Vitest needs it during initialization.
  *
  * 3. **Platform API mocks** (environment) — All platform APIs are auto-injected with
- *    control objects: `tailordbMock`, `workflowMock`, `secretmanagerMock`,
- *    `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`. Each
+ *    control objects: `mockTailordb`, `mockWorkflow`, `mockSecretmanager`,
+ *    `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`. Each
  *    provides response configuration, call recording, and reset.
  *
  * 4. **Environment resolution** — Rewrites `environment: "tailor-runtime"` to the
@@ -37,7 +37,7 @@ import type { Plugin } from "vitest/config";
  * ## Options
  *
  * - **`config`** — Path to `tailor.config.ts`. Loads `defineSecretManager()` values
- *   into `secretmanagerMock` so `getSecret()` returns the configured values.
+ *   into `mockSecretmanager` so `getSecret()` returns the configured values.
  * @example
  * ```typescript
  * // vitest.config.ts
@@ -60,13 +60,13 @@ export function tailorRuntime(options?: { config?: string }): Plugin[] {
 }
 
 export {
-  tailordbMock,
-  workflowMock,
-  secretmanagerMock,
-  authconnectionMock,
-  idpMock,
-  fileMock,
-  iconvMock,
+  mockTailordb,
+  mockWorkflow,
+  mockSecretmanager,
+  mockAuthconnection,
+  mockIdp,
+  mockFile,
+  mockIconv,
 } from "./mock";
 
 export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";

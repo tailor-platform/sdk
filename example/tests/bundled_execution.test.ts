@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { tailordbMock, workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockTailordb, mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -35,11 +35,6 @@ describe("bundled execution tests", () => {
 
   afterAll(() => {
     vi.useRealTimers();
-  });
-
-  beforeEach(() => {
-    tailordbMock.reset();
-    workflowMock.reset();
   });
 
   const importActualMain = createImportMain(actualDir);
@@ -117,7 +112,8 @@ describe("bundled execution tests", () => {
     });
 
     test("resolvers/stepChain.js returns result with summary", async () => {
-      tailordbMock.setQueryResolver((query) => {
+      using db = mockTailordb();
+      db.setQueryResolver((query) => {
         const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
         if (normalizedQuery.includes("SELECT NAME FROM USER ORDER BY CREATEDAT DESC")) {
           return [{ name: "Alice" }];
@@ -156,7 +152,8 @@ describe("bundled execution tests", () => {
 
   describe("executors", () => {
     test("executors/user-created.js uses the tailordb client", async () => {
-      tailordbMock.setQueryResolver((query) => {
+      using db = mockTailordb();
+      db.setQueryResolver((query) => {
         if (query.includes("select * from User where id = $1")) {
           return [
             {
@@ -173,20 +170,21 @@ describe("bundled execution tests", () => {
       const result = await main(payload);
 
       expect(result).toBeUndefined();
-      expect(tailordbMock.executedQueries).toEqual([
+      expect(db.executedQueries).toEqual([
         { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
         {
           query: 'insert into "UserLog" ("userID", "message") values ($1, $2)',
           params: ["user-1", "User created: undefined (undefined)"],
         },
       ]);
-      expect(tailordbMock.createdClients).toMatchObject([{ namespace: "tailordb" }]);
+      expect(db.createdClients).toMatchObject([{ namespace: "tailordb" }]);
     });
   });
 
   describe("workflow-jobs", () => {
     test("workflow-jobs/process-order.js calls dependent jobs correctly", async () => {
-      workflowMock.setJobHandler((jobName, args) => {
+      using wf = mockWorkflow();
+      wf.setJobHandler((jobName, args) => {
         if (jobName === "fetch-customer") {
           const { customerId } = args as { customerId: string };
           return { id: customerId, email: "customer@example.com" };
@@ -211,7 +209,7 @@ describe("bundled execution tests", () => {
         processedAt: "2025-01-01 12:00:00",
       });
 
-      expect(workflowMock.triggeredJobs).toEqual([
+      expect(wf.triggeredJobs).toEqual([
         { jobName: "fetch-customer", args: { customerId: "customer-456" } },
         {
           jobName: "send-notification",
@@ -224,7 +222,8 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/process-order.js throws error when customer not found", async () => {
-      workflowMock.setJobHandler(() => null);
+      using wf = mockWorkflow();
+      wf.setJobHandler(() => null);
 
       const main = await importActualMain("workflow-jobs/process-order.js");
 
@@ -264,7 +263,8 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/validate-order.js triggers check-inventory job", async () => {
-      workflowMock.setJobHandler((jobName) => {
+      using wf = mockWorkflow();
+      wf.setJobHandler((jobName) => {
         if (jobName === "check-inventory") {
           return formatExpectation;
         }
@@ -279,7 +279,7 @@ describe("bundled execution tests", () => {
         paymentResult: null,
       });
 
-      expect(workflowMock.triggeredJobs).toEqual([
+      expect(wf.triggeredJobs).toEqual([
         { jobName: "check-inventory", args: undefined },
         { jobName: "process-payment", args: undefined },
       ]);

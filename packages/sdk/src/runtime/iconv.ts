@@ -3,7 +3,7 @@
  *
  * Thin typed wrapper around the platform-provided `tailor.iconv` runtime API.
  * At runtime this delegates to `globalThis.tailor.iconv`, which is provided by
- * the Tailor Platform Function runtime. Use `iconvMock` from
+ * the Tailor Platform Function runtime. Use `mockIconv` from
  * `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
  * @example
  * import { iconv } from "@tailor-platform/sdk/runtime";

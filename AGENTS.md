@@ -84,7 +84,7 @@ Key files:
 - Job names must be unique across the entire project
 - `.trigger()` returns a `Promise<Awaited<Output>>` — typically `await` it to read the value
 - `defineWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
-- Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; use `workflowMock.setWaitHandler` / `workflowMock.setResolveHandler` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
+- Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; acquire the mock with `using wf = mockWorkflow()` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) and use `wf.setWaitHandler` / `wf.setResolveHandler` to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
 - Use `wps.key.wait()` for namespaced access, or `export const { key } = defineWaitPoints(...)` for destructured 2-level access
 
 ### Executors

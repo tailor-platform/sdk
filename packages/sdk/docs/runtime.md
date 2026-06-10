@@ -82,29 +82,26 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 
 ## Testing
 
-`@tailor-platform/sdk/vitest` ships mock controllers for every runtime namespace. Pair them with the `tailor-runtime` Vitest environment so your unit tests run against the same wrappers your production code does.
+`@tailor-platform/sdk/vitest` ships mock controllers for every runtime namespace. Pair them with the `tailor-runtime` Vitest environment so your unit tests run against the same wrappers your production code does. Each controller is a factory — acquire it with a `using` declaration and its state is reset automatically when the test scope exits (no `beforeEach(() => mock.reset())` needed). Requires TypeScript ≥ 5.2 and a runtime with `Symbol.dispose` (Node ≥ 20.4; the SDK targets Node ≥ 22).
 
 ```ts
 import { iconv, secretmanager } from "@tailor-platform/sdk/runtime";
-import { iconvMock, secretmanagerMock } from "@tailor-platform/sdk/vitest";
-import { beforeEach, expect, test } from "vitest";
-
-beforeEach(() => {
-  iconvMock.reset();
-  secretmanagerMock.reset();
-});
+import { mockIconv, mockSecretmanager } from "@tailor-platform/sdk/vitest";
+import { expect, test } from "vitest";
 
 test("encodes via iconv", () => {
-  iconvMock.setResolver(() => new Uint8Array([0x82, 0xa0]));
+  using iconvM = mockIconv();
+  iconvM.setResolver(() => new Uint8Array([0x82, 0xa0]));
 
   const out = iconv.convert("あ", "UTF-8", "Shift_JIS");
 
   expect(out).toEqual(new Uint8Array([0x82, 0xa0]));
-  expect(iconvMock.calls[0]?.method).toBe("convert");
-});
+  expect(iconvM.calls[0]?.method).toBe("convert");
+}); // iconvM disposed here — the iconv mock is removed (previous state restored)
 
 test("reads from a vault", async () => {
-  secretmanagerMock.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
+  using sm = mockSecretmanager();
+  sm.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
 
   await expect(secretmanager.getSecret("my-vault", "API_KEY")).resolves.toBe("sk-123");
 });

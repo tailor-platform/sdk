@@ -3,12 +3,11 @@
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as workflow from "@/runtime/workflow";
-import { cleanupMocks, injectMocks, workflowMock } from "@/vitest/mock";
+import { cleanupMocks, injectMocks, mockWorkflow } from "@/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
   beforeEach(() => {
     injectMocks(globalThis);
-    workflowMock.reset();
   });
 
   afterEach(() => {
@@ -16,18 +15,18 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
   });
 
   test("triggerWorkflow forwards args and returns Promise<string>", async () => {
-    workflowMock.setTriggerHandler("exec-42");
+    using wf = mockWorkflow();
+    wf.setTriggerHandler("exec-42");
 
     const promise = workflow.triggerWorkflow("my-workflow", { a: 1 });
 
     expectTypeOf(promise).toEqualTypeOf<Promise<string>>();
     await expect(promise).resolves.toBe("exec-42");
-    expect(workflowMock.calls).toEqual([
-      { method: "triggerWorkflow", args: ["my-workflow", { a: 1 }, undefined] },
-    ]);
+    expect(wf.triggerWorkflow.mock.calls).toEqual([["my-workflow", { a: 1 }]]);
   });
 
   test("triggerWorkflow forwards options", async () => {
+    using wf = mockWorkflow();
     await workflow.triggerWorkflow(
       "my-workflow",
       { a: 1 },
@@ -36,37 +35,40 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
       },
     );
 
-    expect(workflowMock.calls[0]?.args[2]).toEqual({
+    expect(wf.triggerWorkflow.mock.calls[0]?.[2]).toEqual({
       authInvoker: { namespace: "ns", machineUserName: "mu" },
     });
   });
 
   test("triggerJobFunction forwards and returns enqueued result", () => {
-    workflowMock.enqueueResult({ ok: true });
+    using wf = mockWorkflow();
+    wf.enqueueResult({ ok: true });
 
     const result = workflow.triggerJobFunction("my-job", { id: 1 });
 
     expect(result).toEqual({ ok: true });
-    expect(workflowMock.triggeredJobs).toEqual([{ jobName: "my-job", args: { id: 1 } }]);
+    expect(wf.triggeredJobs).toEqual([{ jobName: "my-job", args: { id: 1 } }]);
   });
 
   test("wait records the call and returns the configured result", () => {
-    workflowMock.setWaitHandler({ resumed: true });
+    using wf = mockWorkflow();
+    wf.setWaitHandler({ resumed: true });
 
     const result = workflow.wait("key-1", { p: 1 });
 
     expect(result).toEqual({ resumed: true });
-    expect(workflowMock.calls).toEqual([{ method: "wait", args: ["key-1", { p: 1 }] }]);
+    expect(wf.waitCalls).toEqual([{ key: "key-1", payload: { p: 1 } }]);
   });
 
   test("resolve records the call without invoking the callback", async () => {
+    using wf = mockWorkflow();
     let invoked = false;
     await workflow.resolve("exec-1", "key-1", () => {
       invoked = true;
     });
 
     expect(invoked).toBe(false);
-    expect(workflowMock.calls).toHaveLength(1);
-    expect(workflowMock.calls[0]?.method).toBe("resolve");
+    expect(wf.resolve).toHaveBeenCalledTimes(1);
+    expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "key-1" }]);
   });
 });
