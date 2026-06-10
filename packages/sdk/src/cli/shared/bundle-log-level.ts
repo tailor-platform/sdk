@@ -3,7 +3,6 @@ import type { LogLevel, LogLevelInput } from "@/types/app-config";
 import type { TreeshakingOptions } from "rolldown";
 
 const INFO_LEVEL_CONSOLE_METHODS = [
-  "console.log",
   "console.info",
   "console.table",
   "console.dir",
@@ -19,7 +18,10 @@ const INFO_LEVEL_CONSOLE_METHODS = [
   "console.clear",
 ] as const;
 
-const DEBUG_LEVEL_CONSOLE_METHODS = ["console.debug", "console.trace"] as const;
+// `console.log` is treated as a DEBUG-level method to stay consistent with the
+// platform's OpenTelemetry severity mapping, where the deployment runtime emits
+// `console.log` at DEBUG severity rather than INFO.
+const DEBUG_LEVEL_CONSOLE_METHODS = ["console.debug", "console.log", "console.trace"] as const;
 
 const WARN_LEVEL_CONSOLE_METHODS = ["console.warn"] as const;
 

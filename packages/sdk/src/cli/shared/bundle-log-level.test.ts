@@ -23,6 +23,12 @@ describe("bundle-log-level", () => {
     );
   });
 
+  test("treats console.log as DEBUG level, dropping it at INFO", () => {
+    expect(manualPureFunctionsForLogLevel("INFO")).toContain("console.log");
+    expect(manualPureFunctionsForLogLevel("INFO")).not.toContain("console.info");
+    expect(manualPureFunctionsForLogLevel("DEBUG")).not.toContain("console.log");
+  });
+
   test("maps WARN to console calls below warn", () => {
     expect(manualPureFunctionsForLogLevel("WARN")).toEqual(
       expect.arrayContaining(["console.debug", "console.log", "console.info", "console.trace"]),
