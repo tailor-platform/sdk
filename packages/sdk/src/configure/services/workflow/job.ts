@@ -1,5 +1,5 @@
 import { brandValue } from "@/utils/brand";
-import { readWorkflowTestEnv } from "./test-env-key";
+import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
@@ -57,12 +57,7 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
-/**
- * Env-var fallback read by `.trigger()` when `mockWorkflow().setEnv()` is unset.
- * Kept for backward compatibility.
- * @deprecated Use `mockWorkflow().setEnv()` from `@tailor-platform/sdk/vitest`.
- */
-export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
+export { WORKFLOW_TEST_ENV_KEY } from "./test-env-key";
 
 interface CreateWorkflowJobConfig<Name extends string, I, O> {
   readonly name: Name;
@@ -102,27 +97,26 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  *   },
  * });
  */
-/* @__NO_SIDE_EFFECTS__ */
 export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+
+  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
+  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
+    registerJob(config.name, body as RegisteredJobBody);
+  }
+
+  const trigger = process.env.TAILOR_PLATFORM_BUNDLE
+    ? async () => {
+        throw new Error(
+          "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
+        );
+      }
+    : async (args?: unknown) => (await dispatchTriggerJob(config.name, args)) as Awaited<O>;
+
   return brandValue(
-    {
-      name: config.name,
-      trigger: async (args?: unknown) => {
-        // Read env from mockWorkflow().setEnv() with deprecated env-var fallback.
-        // Shallow-copy to isolate against cross-trigger mutation.
-        const fromGlobal = readWorkflowTestEnv();
-        const env = (
-          fromGlobal !== undefined
-            ? { ...fromGlobal }
-            : JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}")
-        ) as TailorEnv;
-        return await body(args as I, { env, invoker: null });
-      },
-      body,
-    } as WorkflowJob<Name, I, Awaited<O>>,
+    { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,
     "workflow-job",
   );
 }

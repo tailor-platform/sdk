@@ -101,6 +101,16 @@ export default createWorkflow({
       expect(callerCode).toContain("triggerWorkflow");
       // The raw simpleWorkflow.trigger() should NOT remain in the bundle
       expect(callerCode).not.toContain("simpleWorkflow.trigger");
+
+      // The platform bundle must fold away the TAILOR_PLATFORM_BUNDLE gate and
+      // tree-shake every test-only symbol; otherwise an unsubstituted process.env.*
+      // reaches the Platform Web runtime (no `process`) and crashes.
+      for (const code of result.bundledCode.values()) {
+        expect(code).not.toContain("process.env.TAILOR_PLATFORM_BUNDLE");
+        expect(code).not.toContain("job-registry");
+        expect(code).not.toContain("registerJob");
+        expect(code).not.toContain("platformSerialize");
+      }
     });
 
     test("transforms workflow.trigger() in .mts dependency files", async () => {

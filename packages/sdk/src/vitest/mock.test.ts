@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } from "../configure/services/workflow/job";
+import { createWorkflow } from "../configure/services/workflow/workflow";
 import {
   mockTailordb,
   mockWorkflow,
@@ -215,6 +216,56 @@ describe("mock", () => {
 
         expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
       });
+
+      test("throws when the env-var is valid JSON but not an object", async () => {
+        using _wf = mockWorkflow();
+        const captureEnv = createWorkflowJob({
+          name: "capture-env-compat-nonobject",
+          body: (_input: undefined, ctx) => ctx.env,
+        });
+
+        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, "42");
+
+        await expect(captureEnv.trigger()).rejects.toThrow(/must be a JSON object/);
+      });
+    });
+  });
+
+  describe("default workflow runtime (no mockWorkflow needed)", () => {
+    test("a job's .trigger() runs its real body", async () => {
+      const double = createWorkflowJob({
+        name: "default-runtime-double",
+        body: (input: { n: number }) => ({ doubled: input.n * 2 }),
+      });
+
+      expect(await double.trigger({ n: 21 })).toEqual({ doubled: 42 });
+    });
+
+    test("workflow.mainJob.trigger() runs the whole chain", async () => {
+      const inner = createWorkflowJob({
+        name: "default-runtime-inner",
+        body: (input: { n: number }) => ({ n: input.n + 1 }),
+      });
+      const main = createWorkflowJob({
+        name: "default-runtime-main",
+        body: async (input: { n: number }) => {
+          const a = await inner.trigger({ n: input.n });
+          const b = await inner.trigger({ n: a.n });
+          return { total: b.n };
+        },
+      });
+      const workflow = createWorkflow({ name: "default-runtime-wf", mainJob: main });
+
+      expect(await workflow.mainJob.trigger({ n: 0 })).toEqual({ total: 2 });
+    });
+
+    test("the JSON boundary rejects a non-serializable trigger result", async () => {
+      const bad = createWorkflowJob({
+        name: "default-runtime-bad",
+        body: () => ({ when: new Date() }) as never,
+      });
+
+      await expect(bad.trigger()).rejects.toThrow(/Date instance/);
     });
   });
 
@@ -618,6 +669,12 @@ describe("mock", () => {
       expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }]]);
     });
 
+    test("preserves a forwarded third options arg even when undefined", async () => {
+      using wf = mockWorkflow();
+      await (globalThis as any).tailor.workflow.triggerWorkflow("wf-1", { key: "val" }, undefined);
+      expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }, undefined]]);
+    });
+
     test("setTriggerHandler with string controls triggerWorkflow response", async () => {
       using wf = mockWorkflow();
       wf.setTriggerHandler("exec-123");
@@ -719,14 +776,15 @@ describe("mock", () => {
       expect((globalThis as any).TailorErrors).toBeTypeOf("function");
     });
 
-    test("acquiring a mock installs its namespace and dispose restores it", () => {
-      expect((globalThis as any).tailor.workflow).toBeUndefined();
+    test("a mock overlays the default workflow runner and dispose restores it", () => {
+      const base = (globalThis as any).tailor.workflow;
+      expect(base.triggerJobFunction).toBeTypeOf("function");
       {
         using _wf = mockWorkflow();
+        expect((globalThis as any).tailor.workflow).not.toBe(base);
         expect((globalThis as any).tailor.workflow.triggerJobFunction).toBeTypeOf("function");
       }
-      // dispose restored the (absent) previous value.
-      expect((globalThis as any).tailor.workflow).toBeUndefined();
+      expect((globalThis as any).tailor.workflow).toBe(base);
     });
   });
 });

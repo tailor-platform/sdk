@@ -19,7 +19,7 @@ Helpers under `@tailor-platform/sdk/test`:
 
 - `unauthenticatedTailorUser` — default `user` value for resolver contexts
 
-Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
+Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
 - `mockTailordb` — TailorDB query stubs and call recording
 - `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
@@ -82,7 +82,7 @@ The mock functions are also exposed directly (e.g. `db.queryObject`, `wf.trigger
 
 ### TailorDB Mock
 
-The environment auto-injects a mock `tailordb.Client`. Use `mockTailordb()` to configure responses and assert on executed queries:
+Acquire `mockTailordb()` to install the mock `tailordb.Client`, configure responses, and assert on executed queries:
 
 ```typescript
 import { mockTailordb } from "@tailor-platform/sdk/vitest";
@@ -126,7 +126,7 @@ test("content-based mock", async () => {
 
 ### Workflow Mock
 
-Acquire `mockWorkflow()` to install `tailor.workflow` and configure job responses:
+`.trigger()` runs the real job bodies locally out of the box (see [Running a full workflow locally](#running-a-full-workflow-locally)). Acquire `mockWorkflow()` when you want to override responses with `setJobHandler` / `enqueueResult` or assert on `triggeredJobs`:
 
 ```typescript
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
@@ -708,24 +708,22 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain with real job bodies, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Use `mockWorkflow().setEnv()` to control the env value that triggered jobs receive in their context (defaults to `{}`):
+To exercise the full chain with real job bodies, just call `workflow.mainJob.trigger()` — no `mockWorkflow()` needed. Dependent jobs run their real `.body()` functions, and trigger args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
 
 ```typescript
-import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
   test("mainJob.trigger() executes all jobs", async () => {
-    using wf = mockWorkflow();
-    wf.setEnv({ PAYMENT_GATEWAY: "stripe" });
-
     const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
 
     expect(result).toMatchObject({ confirmed: true, paymentStatus: "completed" });
   });
 });
 ```
+
+Acquire `mockWorkflow()` only when you need to override a dependent job with `wf.setJobHandler(...)` / `wf.enqueueResult(...)` (the rest still run their real bodies), control the env via `wf.setEnv(...)`, or assert on `wf.triggeredJobs`.
 
 **Use when:** you want to verify orchestration end to end without the cost of a real deployment.
 

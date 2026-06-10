@@ -17,6 +17,7 @@ import {
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import ml from "@/utils/multiline";
 import type { DetectedFunction } from "./detect";
@@ -88,6 +89,7 @@ export async function bundleForTestRun(
   }
 
   const buildResult = await rolldown.build({
+    plugins: [platformBundleDefinePlugin],
     input: entryPath,
     write: false,
     output: {
