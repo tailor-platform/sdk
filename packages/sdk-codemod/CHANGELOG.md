@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.2.6
+
+### Patch Changes
+
+- [#1380](https://github.com/tailor-platform/sdk/pull/1380) [`2ed1344`](https://github.com/tailor-platform/sdk/commit/2ed1344e5ffff6e78d74ef3a0297fcff4a6201e7) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: replace mutating array methods (`sort`/`reverse`/`splice`) with non-mutating ES2023 equivalents (`toSorted`/`toReversed`/`toSpliced`). No user-facing behavior change.
+
 ## 0.2.5
 
 ### Patch Changes
