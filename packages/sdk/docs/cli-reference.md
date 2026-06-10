@@ -263,11 +263,13 @@ Commands for managing secrets and vaults.
 
 Commands for managing and deploying static websites.
 
-| Command                                                             | Description                                           |
-| ------------------------------------------------------------------- | ----------------------------------------------------- |
-| [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy) | Deploy a static website from a local build directory. |
-| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List all static websites in a workspace.              |
-| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a specific static website.             |
+| Command                                                                       | Description                                           |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy)           | Deploy a static website from a local build directory. |
+| [staticwebsite domain list](./cli/staticwebsite.md#staticwebsite-domain-list) | List custom domains for a static website.             |
+| [staticwebsite domain get](./cli/staticwebsite.md#staticwebsite-domain-get)   | Get details of a custom domain.                       |
+| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)               | List all static websites in a workspace.              |
+| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)                 | Get details of a specific static website.             |
 
 ### [Crash Report Commands](./cli/crashreport.md)
 

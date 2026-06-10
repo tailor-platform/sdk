@@ -281,6 +281,7 @@ function printPlanResults(results: PlanResults) {
   const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
   const authServiceActions = extractServiceActions(results.auth.changeSet.service);
   results.staticWebsite.changeSet.print();
+  results.staticWebsite.customDomainChangeSet.print();
   results.app.print();
   printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
   printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
@@ -351,6 +352,7 @@ export function summarizePlanResults(
   const nonGrouped = summarizeChangeSets([
     otherChanges,
     results.staticWebsite.changeSet,
+    results.staticWebsite.customDomainChangeSet,
     results.app,
     results.secretManager.vaultChangeSet,
     results.secretManager.secretChangeSet,
