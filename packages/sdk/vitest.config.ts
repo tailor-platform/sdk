@@ -46,11 +46,13 @@ const integrationTestIncludes = [
   "src/plugin/compat.test.ts",
 ];
 
-// Split unit tests by whether they mock modules (`vi.mock`/`vi.doMock`). With
-// `isolate: false` a worker shares one module registry across files, so per-file
-// partial module mocks (e.g. `vi.mock("node:fs", ...)`) collide between files.
-// Tests that mock modules therefore keep per-file isolation; the rest reuse
-// module evaluation across files, which roughly halves their import time.
+// Split unit tests by whether they mutate worker-global state. With
+// `isolate: false` a worker shares one module registry and one global object
+// across files, so per-file partial module mocks (e.g. `vi.mock("node:fs", ...)`)
+// collide between files, and fake timers (`vi.useFakeTimers`) left installed by
+// one file stall real-time waits in the next. Tests doing either keep per-file
+// isolation; the rest reuse module evaluation across files, which roughly
+// halves their import time.
 // Classification is by file content so new tests are routed automatically.
 const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
   const integrationTestFiles = new Set(globSync(integrationTestIncludes, { cwd: __dirname }));
@@ -61,8 +63,10 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
     // Self-contained nested vitest project with its own config.
     file.startsWith("src/vitest/integration/");
 
-  const mocksModules = (file: string): boolean =>
-    /\bvi\.(mock|doMock)\s*\(/.test(readFileSync(path.resolve(__dirname, file), "utf8"));
+  const needsIsolation = (file: string): boolean =>
+    /\bvi\.(mock|doMock|useFakeTimers)\s*\(/.test(
+      readFileSync(path.resolve(__dirname, file), "utf8"),
+    );
 
   const isolated: string[] = [];
   const shared: string[] = [];
@@ -70,7 +74,7 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
     cwd: __dirname,
   })) {
     if (isExcludedUnitTest(file)) continue;
-    (mocksModules(file) ? isolated : shared).push(file);
+    (needsIsolation(file) ? isolated : shared).push(file);
   }
   return { isolated, shared };
 };
@@ -97,7 +101,8 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          // Tests that mock modules keep per-file isolation (see split above).
+          // Tests that mutate worker-global state keep per-file isolation
+          // (see split above).
           // Type tests (`*.test-d.ts`) are collected via `typecheck.include`
           // independently of `include`; disable here so they run only once
           // (in "unit-core").
@@ -109,8 +114,9 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          // Mock-free tests share module evaluation across files (isolate:false)
-          // to cut module-import time. Safe because no `vi.mock` is involved.
+          // The remaining tests share module evaluation across files
+          // (isolate:false) to cut module-import time. Safe because no
+          // `vi.mock`/`vi.useFakeTimers` is involved.
           name: "unit-core",
           isolate: false,
           include: sharedUnitTests,
