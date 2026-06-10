@@ -1,4 +1,4 @@
-name: Docs Implementation Consistency Check
+name: Docs Quality & Consistency Check
 
 on:
   pull_request:
@@ -34,9 +34,12 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            # Documentation vs Implementation Consistency Check
+            # Documentation Quality & Consistency Check
 
-            Analyze the PR changes and verify that documentation stays consistent with the implementation.
+            Review the PR changes along two axes:
+
+            1. **Consistency** — documentation stays accurate with the implementation (no factual mismatches).
+            2. **Reader perspective** — user-facing docs describe only what an SDK *user* needs, and do not leak SDK/Platform internal implementation details.
 
             ## Target Documentation
 
@@ -47,6 +50,13 @@ jobs:
             - `AGENTS.md` - Developer guide and code patterns
             - `CLAUDE.md` - Compatibility adapter for agent instructions
             - `example/` - Working example code
+            - Published JSDoc on **exported** symbols in `packages/sdk/src/**` - shipped to users' IDEs via the package's `.d.ts` files
+
+            ### Audience scope (important)
+
+            - `packages/sdk/docs/**` ships inside the published npm package (`@tailor-platform/sdk`), `example/` is read by SDK users, and JSDoc on exported symbols reaches users through editor tooltips/autocompletion. Apply **both** the Consistency and Reader-Perspective checks to these.
+            - `AGENTS.md` / `CLAUDE.md` are developer/contributor instructions, **not** user-facing. Apply **only** the Consistency check to them; do **not** raise reader-perspective issues for them.
+            - JSDoc on non-exported / internal symbols is not user-facing — skip it for the reader-perspective check.
 
             ## Investigation Steps
 
@@ -67,30 +77,41 @@ jobs:
             - **Executors/Resolvers/Workflows**: Changes to creation APIs or trigger types
             - **Example code**: Changes that should reflect current best practices
 
-            ### 3. Cross-Reference Documentation
+            ### 3. Cross-Reference Documentation (Consistency)
 
             For each changed area, check the corresponding documentation:
 
-            #### 3.1 CLI Changes
+            #### CLI Changes
             - Read `packages/sdk/docs/cli-reference.md` and relevant `packages/sdk/docs/cli/*.md` files
             - Verify all CLI commands, options, and their descriptions match the implementation
             - Compare source code command definitions with docs
 
-            #### 3.2 API / Config Changes
+            #### API / Config Changes
             - Read `packages/sdk/docs/services/*.md` and `packages/sdk/docs/configuration.md`
             - Verify documented function signatures, parameters, and return types match the implementation
             - Check if new exports are documented
 
-            #### 3.3 Pattern / Example Changes
+            #### Pattern / Example Changes
             - Read relevant files in `example/` directory
             - Verify examples use current API patterns (not deprecated ones)
             - Check `AGENTS.md` "Code Patterns" and "Non-obvious Rules and Gotchas" sections
 
-            #### 3.4 Reverse Check (docs changed but implementation not updated)
+            #### Reverse Check (docs changed but implementation not updated)
             - If documentation was changed, verify the implementation matches
             - Look for docs describing features that don't exist yet or have been removed
 
-            ### 4. Post Results
+            ### 4. Reader-Perspective Review (`packages/sdk/docs/**`, `example/`, and published JSDoc)
+
+            For changed user-facing docs, check that they describe only what an SDK *user* needs and do not leak SDK/Platform internals. Flag the following:
+
+            - **Internal implementation details**: internal API / RPC / method / class names (e.g. `TestExecScript`), transport or wire-format terms the user never types (`proto` / `protobuf` / `gRPC` / `unary RPC` / `streaming method`), internal layer structure (`parser` / `configure` / `types` modules), runtime-internal delegation mechanics, internal wrapping behavior, internal on-disk layout or sanitization algorithms (e.g. how `.tailor-sdk/<id>` names are derived), and AST / code-injection internals.
+            - **JSDoc duplication (SSOT)**: detailed API reference — full interface/type definitions, exhaustive field tables — copied into prose. JSDoc/IDE autocompletion is the single source of truth; the docs should explain intent and link out, not mirror every field.
+            - **Private references**: links to or mentions of private/internal repositories or internal issue trackers (e.g. a `<org>/<private-repo>` link or an `<org>/<tracker>#NNN` reference).
+            - **Wrong-audience notes**: content addressed to someone other than the reader (e.g. a "Note for Platform developers" block inside user docs).
+
+            **Do NOT over-prune.** A reference to internal mechanics is acceptable when the reader must understand it to use the API correctly — for example, the workflow *deterministic execution* requirement, or why `migrate.ts` sees a particular schema state. Only flag descriptions that exist purely for internal convenience or naming and that a user never acts on.
+
+            ### 5. Post Results
 
             Search for an existing review summary and update it, or create a new review.
 
@@ -100,21 +121,27 @@ jobs:
               | tail -n 1)
             ```
 
-            **If inconsistencies are found**, post a review summary in this format:
+            **If any issues are found** (consistency and/or reader-perspective), post a review summary in this format. Omit a subsection if it has no findings:
 
             ```markdown
-            ## 📖 Docs Consistency Check
+            ## 📖 Docs Quality & Consistency Check
 
-            ### ⚠️ Inconsistencies Found
+            ### ⚠️ Consistency Issues
 
             | File | Issue | Suggested Fix |
             |------|-------|---------------|
-            | `path/to/doc.md` | Description of mismatch | What should be updated |
+            | `path/to/doc.md` | Description of mismatch with the implementation | What should be updated |
+
+            ### 📝 Reader-Perspective Issues
+
+            | File | Issue | Suggested Fix |
+            |------|-------|---------------|
+            | `packages/sdk/docs/...` | Internal detail / JSDoc duplication / private reference that a user does not need | What to remove or rephrase |
 
             ### Details
 
-            (For each inconsistency, explain what the implementation does vs what the documentation says,
-            with references to specific file paths and line numbers.)
+            (For each issue, explain the mismatch — what the implementation does vs what the docs say — or
+            why the flagged content is internal-only, with specific file paths and line numbers.)
 
             ### Recommended Actions
             - ...
@@ -125,12 +152,12 @@ jobs:
             <!-- docs-consistency-check -->
             ```
 
-            **If no inconsistencies are found**, post a review summary in this format:
+            **If no issues are found**, post a review summary in this format:
 
             ```markdown
-            ## 📖 Docs Consistency Check
+            ## 📖 Docs Quality & Consistency Check
 
-            ✅ No inconsistencies found between documentation and implementation.
+            ✅ Docs are consistent with the implementation and contain no user-facing internal-detail leaks.
 
             **Checked areas:**
             - (list what was checked)
@@ -161,9 +188,11 @@ jobs:
             ## Important Notes
             - The PR branch is already checked out
             - Always post results as a pull request review summary using `gh` commands, not as a conversational response
-            - Be specific: include file paths and line numbers for every inconsistency
-            - Only flag real inconsistencies, not stylistic differences
-            - If unsure whether something is an inconsistency, mention it with a note that it may be intentional
+            - Be specific: include file paths and line numbers for every issue
+            - Only flag real issues, not stylistic differences
+            - Reader-perspective issues apply **only** to user-facing documentation: `packages/sdk/docs/**`, `example/`, and published JSDoc on exported symbols in `packages/sdk/src/**`. Do **not** raise reader-perspective issues for `AGENTS.md` / `CLAUDE.md` (developer-facing) or for non-exported / internal code.
+            - Do not flag internal mechanics that a user must understand to use the API correctly (see the note in 3.5)
+            - If unsure whether something is an issue, mention it with a note that it may be intentional
 
           claude_args: |
             --model claude-sonnet-4-5-20250929

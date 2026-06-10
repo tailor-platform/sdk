@@ -11,6 +11,11 @@
       "file": ".agents/rules/cli-logging.md"
     },
     {
+      "name": "docs-authoring",
+      "paths": ["packages/sdk/docs/**"],
+      "file": ".agents/rules/docs-authoring.md"
+    },
+    {
       "name": "jsdoc",
       "paths": ["packages/sdk/src/**/*.ts"],
       "file": ".agents/rules/jsdoc.md"
