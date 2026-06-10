@@ -20,20 +20,8 @@ import {
   type TailorDBGQLPermission_PolicySchema,
   type TailorDBGQLPermissionSchema,
   type TailorDBType as ProtoTailorDBType,
-  type TailorDBType_FieldConfigSchema,
-  type TailorDBType_FileConfigSchema,
-  type TailorDBType_IndexSchema,
-  type TailorDBType_Permission_ConditionSchema,
-  type TailorDBType_Permission_OperandSchema,
-  TailorDBType_Permission_Operator,
-  TailorDBType_Permission_Permit,
-  type TailorDBType_Permission_PolicySchema,
-  type TailorDBType_PermissionSchema,
-  TailorDBType_PermitAction,
-  type TailorDBType_RelationshipConfigSchema,
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
-import * as inflection from "inflection";
 import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
@@ -61,15 +49,13 @@ import {
   getMigrationFiles,
   isSnapshotFieldRefOperand,
   type SchemaSnapshot,
-  type SnapshotFieldConfig,
   type TailorDBSnapshotType,
-  type SnapshotRecordPermission,
-  type SnapshotActionPermission,
   type SnapshotPermissionCondition,
   type SnapshotPermissionOperand,
   type SnapshotGqlPermission,
   type SnapshotGqlPermissionPolicy,
 } from "@/cli/commands/tailordb/migrate/snapshot";
+import { generateTailorDBTypeManifestFromSnapshot } from "@/cli/commands/tailordb/migrate/snapshot-manifest";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
@@ -80,8 +66,8 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
-  trnPrefix,
   type WithLabel,
 } from "../label";
 import {
@@ -97,7 +83,7 @@ import type {
   RemoteSchemaVerificationResult,
 } from "@/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { GqlOperations, TailorDBServiceConfig } from "@/types/tailordb.generated";
+import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // ============================================================================
@@ -147,7 +133,7 @@ async function getRemoteMigrationNumber(
   namespace: string,
 ): Promise<number | null> {
   try {
-    const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+    const trn = resourceTrn(workspaceId, "tailordb", namespace);
     const { metadata } = await client.getMetadata({ trn });
     const label = metadata?.labels?.["sdk-migration"];
     if (!label) return null; // No migration label means first apply
@@ -744,7 +730,10 @@ function buildSnapshotTypeManifest(
   const snapshotType = snapshot.types[typeName];
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
-  return generateTailorDBTypeManifest(snapshotType, executorUsedTypes, input?.config.gqlOperations);
+  return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+    publishRecordEvents: executorUsedTypes.has(snapshotType.name),
+    namespaceGqlOperations: input?.config.gqlOperations,
+  });
 }
 
 /**
@@ -1199,10 +1188,6 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteTailorDBServiceRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `${trnPrefix(workspaceId)}:tailordb:${name}`;
-}
-
 function normalizeComparableTailorDBService(service: {
   namespace?: string;
   defaultTimezone?: string;
@@ -1268,7 +1253,7 @@ async function planServices(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.namespace.name),
+        trn: resourceTrn(workspaceId, "tailordb", resource.namespace.name),
       });
       existingServices[resource.namespace.name] = {
         resource,
@@ -1281,7 +1266,7 @@ async function planServices(
   for (const tailordb of tailordbs) {
     const existing = existingServices[tailordb.namespace];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, tailordb.namespace),
+      trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
       appName,
       appId,
       existingLabels: existing?.allLabels,
@@ -1417,11 +1402,10 @@ async function planTypes(
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
 
     for (const typeName of Object.keys(types)) {
-      const tailordbType = generateTailorDBTypeManifest(
-        types[typeName],
-        executorUsedTypes,
-        tailordb.config.gqlOperations,
-      );
+      const tailordbType = generateTailorDBTypeManifestFromSnapshot(types[typeName], {
+        publishRecordEvents: executorUsedTypes.has(typeName),
+        namespaceGqlOperations: tailordb.config.gqlOperations,
+      });
       const existingType = existingTypesMap.get(typeName);
       if (existingType) {
         if (
@@ -1616,373 +1600,6 @@ function isNumericLikeValue(value: string | number | bigint): boolean {
   return typeof value === "number" || typeof value === "bigint" || /^-?\d+$/.test(value);
 }
 
-// TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
-// This will need refactoring later.
-/**
- * Generate a TailorDB type manifest from snapshot-shaped type
- * @param {TailorDBSnapshotType} type - Snapshot-shaped TailorDB type
- * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
- * @param {GqlOperations} [namespaceGqlOperations] - Default gqlOperations for the namespace (already normalized)
- * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
- */
-function generateTailorDBTypeManifest(
-  type: TailorDBSnapshotType,
-  executorUsedTypes: ReadonlySet<string>,
-  namespaceGqlOperations?: GqlOperations,
-): MessageInitShape<typeof TailorDBTypeSchema> {
-  // Ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList".
-  const pluralForm = inflection.camelize(type.pluralForm, true);
-
-  const defaultSettings: {
-    aggregation: boolean;
-    bulkUpsert: boolean;
-    draft: boolean;
-    defaultQueryLimitSize: bigint;
-    maxBulkUpsertSize: bigint;
-    pluralForm: string;
-    publishRecordEvents: boolean;
-    disableGqlOperations?: {
-      create: boolean;
-      update: boolean;
-      delete: boolean;
-      read: boolean;
-    };
-  } = {
-    aggregation: type.settings?.aggregation || false,
-    bulkUpsert: type.settings?.bulkUpsert || false,
-    draft: false,
-    defaultQueryLimitSize: 100n,
-    maxBulkUpsertSize: 1000n,
-    pluralForm,
-    publishRecordEvents: false,
-  };
-
-  // Determine publishRecordEvents (user-facing name: publishEvents):
-  // - If user explicitly sets a value (true or false), respect that (validation already ensures no executor conflict)
-  // - If not set, use executor detection (true if executor uses this type)
-  if (type.settings?.publishEvents !== undefined) {
-    defaultSettings.publishRecordEvents = type.settings.publishEvents;
-  } else if (executorUsedTypes.has(type.name)) {
-    defaultSettings.publishRecordEvents = true;
-  }
-
-  // Both type.settings.gqlOperations and namespaceGqlOperations are already normalized by schema
-  const ops = type.settings?.gqlOperations ?? namespaceGqlOperations;
-  if (ops) {
-    defaultSettings.disableGqlOperations = {
-      create: ops.create === false,
-      update: ops.update === false,
-      delete: ops.delete === false,
-      read: ops.read === false,
-    };
-  }
-
-  const fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
-
-  Object.keys(type.fields)
-    .filter((fieldName) => fieldName !== "id")
-    .forEach((fieldName) => {
-      const fieldConfig = type.fields[fieldName];
-      const fieldType = fieldConfig.type;
-      const fieldEntry: MessageInitShape<typeof TailorDBType_FieldConfigSchema> = {
-        type: fieldType,
-        allowedValues: fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
-        description: fieldConfig.description || "",
-        validate: toProtoFieldValidate(fieldConfig),
-        array: fieldConfig.array || false,
-        index: fieldConfig.index || false,
-        unique: fieldConfig.unique || false,
-        foreignKey: fieldConfig.foreignKey || false,
-        foreignKeyType: fieldConfig.foreignKeyType,
-        foreignKeyField: fieldConfig.foreignKeyField,
-        required: fieldConfig.required,
-        vector: fieldConfig.vector || false,
-        ...toProtoFieldHooks(fieldConfig),
-        ...(fieldConfig.serial && {
-          serial: {
-            start: fieldConfig.serial.start as unknown as bigint,
-            ...(fieldConfig.serial.maxValue && {
-              maxValue: fieldConfig.serial.maxValue as unknown as bigint,
-            }),
-            ...(fieldConfig.serial.format && {
-              format: fieldConfig.serial.format,
-            }),
-          },
-        }),
-        ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
-
-      // Handle nested fields
-      if (fieldConfig.type === "nested" && fieldConfig.fields) {
-        fieldEntry.fields = processNestedFields(fieldConfig.fields);
-      }
-
-      fields[fieldName] = fieldEntry;
-    });
-
-  const relationships: Record<
-    string,
-    MessageInitShape<typeof TailorDBType_RelationshipConfigSchema>
-  > = {};
-
-  for (const [relationName, rel] of Object.entries(type.forwardRelationships ?? {})) {
-    relationships[relationName] = {
-      refType: rel.targetType,
-      refField: rel.sourceField,
-      srcField: rel.targetField,
-      array: rel.isArray,
-      description: rel.description,
-    };
-  }
-
-  for (const [relationName, rel] of Object.entries(type.backwardRelationships ?? {})) {
-    relationships[relationName] = {
-      refType: rel.targetType,
-      refField: rel.targetField,
-      srcField: rel.sourceField,
-      array: rel.isArray,
-      description: rel.description,
-    };
-  }
-
-  // Process indexes from metadata
-  const indexes: Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>> = {};
-  if (type.indexes) {
-    Object.entries(type.indexes).forEach(([key, index]) => {
-      indexes[key] = {
-        fieldNames: index.fields,
-        unique: index.unique || false,
-      };
-    });
-  }
-
-  // Process files from metadata
-  const files: Record<string, MessageInitShape<typeof TailorDBType_FileConfigSchema>> = {};
-  if (type.files) {
-    Object.entries(type.files).forEach(([key, description]) => {
-      files[key] = { description: description || "" };
-    });
-  }
-
-  // To be secure by default, add Permission settings that reject everyone
-  // when Permission/RecordPermission is not configured.
-  const defaultPermission: MessageInitShape<typeof TailorDBType_PermissionSchema> = {
-    create: [],
-    read: [],
-    update: [],
-    delete: [],
-  };
-  const permission = type.permissions?.record
-    ? protoPermission(type.permissions.record)
-    : defaultPermission;
-
-  return {
-    name: type.name,
-    schema: {
-      description: type.description || "",
-      fields,
-      relationships: relationships,
-      settings: defaultSettings,
-      extends: false,
-      directives: [],
-      indexes,
-      files,
-      permission,
-    },
-  };
-}
-
-function toProtoFieldValidate(
-  fieldConfig: SnapshotFieldConfig,
-): MessageInitShape<typeof TailorDBType_FieldConfigSchema>["validate"] {
-  return (fieldConfig.validate || []).map((val) => ({
-    action: TailorDBType_PermitAction.DENY,
-    errorMessage: val.errorMessage || "",
-    ...(val.script && {
-      script: {
-        expr: val.script.expr ? `!${val.script.expr}` : "",
-      },
-    }),
-  }));
-}
-
-function toProtoFieldHooks(
-  fieldConfig: SnapshotFieldConfig,
-): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
-  if (!fieldConfig.hooks) {
-    return {};
-  }
-  return {
-    hooks: {
-      create: fieldConfig.hooks.create
-        ? {
-            expr: fieldConfig.hooks.create.expr || "",
-          }
-        : undefined,
-      update: fieldConfig.hooks.update
-        ? {
-            expr: fieldConfig.hooks.update.expr || "",
-          }
-        : undefined,
-    },
-  };
-}
-
-function processNestedFields(
-  fields: Record<string, SnapshotFieldConfig>,
-): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
-  const nestedFields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
-
-  Object.entries(fields).forEach(([nestedFieldName, nestedFieldConfig]) => {
-    const nestedType = nestedFieldConfig.type;
-
-    if (nestedType === "nested" && nestedFieldConfig.fields) {
-      const deepNestedFields = processNestedFields(nestedFieldConfig.fields);
-      nestedFields[nestedFieldName] = {
-        type: "nested",
-        allowedValues: nestedFieldConfig.allowedValues || [],
-        description: nestedFieldConfig.description || "",
-        validate: toProtoFieldValidate(nestedFieldConfig),
-        required: nestedFieldConfig.required,
-        array: nestedFieldConfig.array ?? false,
-        index: false,
-        unique: false,
-        foreignKey: false,
-        vector: false,
-        ...toProtoFieldHooks(nestedFieldConfig),
-        fields: deepNestedFields,
-        ...(nestedFieldConfig.scale !== undefined && {
-          scale: nestedFieldConfig.scale,
-        }),
-      };
-    } else {
-      nestedFields[nestedFieldName] = {
-        type: nestedType,
-        allowedValues: nestedType === "enum" ? nestedFieldConfig.allowedValues || [] : [],
-        description: nestedFieldConfig.description || "",
-        validate: toProtoFieldValidate(nestedFieldConfig),
-        required: nestedFieldConfig.required,
-        array: nestedFieldConfig.array ?? false,
-        index: false,
-        unique: false,
-        foreignKey: false,
-        vector: false,
-        ...toProtoFieldHooks(nestedFieldConfig),
-        ...(nestedFieldConfig.serial && {
-          serial: {
-            start: nestedFieldConfig.serial.start as unknown as bigint,
-            ...(nestedFieldConfig.serial.maxValue && {
-              maxValue: nestedFieldConfig.serial.maxValue as unknown as bigint,
-            }),
-            ...(nestedFieldConfig.serial.format && {
-              format: nestedFieldConfig.serial.format,
-            }),
-          },
-        }),
-        ...(nestedFieldConfig.scale !== undefined && {
-          scale: nestedFieldConfig.scale,
-        }),
-      };
-    }
-  });
-
-  return nestedFields;
-}
-
-function protoPermission(
-  permission: SnapshotRecordPermission,
-): MessageInitShape<typeof TailorDBType_PermissionSchema> {
-  return {
-    create: permission.create.map((policy) => protoPolicy(policy)),
-    read: permission.read.map((policy) => protoPolicy(policy)),
-    update: permission.update.map((policy) => protoPolicy(policy)),
-    delete: permission.delete.map((policy) => protoPolicy(policy)),
-  };
-}
-
-function protoPolicy(
-  policy: SnapshotActionPermission,
-): MessageInitShape<typeof TailorDBType_Permission_PolicySchema> {
-  let permit: TailorDBType_Permission_Permit;
-  switch (policy.permit) {
-    case "allow":
-      permit = TailorDBType_Permission_Permit.ALLOW;
-      break;
-    case "deny":
-      permit = TailorDBType_Permission_Permit.DENY;
-      break;
-    default:
-      throw new Error(`Unknown permission: ${policy.permit satisfies never}`);
-  }
-  return {
-    conditions: policy.conditions.map((cond) => protoCondition(cond)),
-    permit,
-    description: policy.description,
-  };
-}
-
-function protoCondition(
-  condition: SnapshotPermissionCondition,
-): MessageInitShape<typeof TailorDBType_Permission_ConditionSchema> {
-  const [left, operator, right] = condition;
-
-  const l = protoOperand(left);
-  const r = protoOperand(right);
-  let op: TailorDBType_Permission_Operator;
-  switch (operator) {
-    case "eq":
-      op = TailorDBType_Permission_Operator.EQ;
-      break;
-    case "ne":
-      op = TailorDBType_Permission_Operator.NE;
-      break;
-    case "in":
-      op = TailorDBType_Permission_Operator.IN;
-      break;
-    case "nin":
-      op = TailorDBType_Permission_Operator.NIN;
-      break;
-    case "hasAny":
-      op = TailorDBType_Permission_Operator.HAS_ANY;
-      break;
-    case "nhasAny":
-      op = TailorDBType_Permission_Operator.NHAS_ANY;
-      break;
-    default:
-      throw new Error(`Unknown operator: ${operator satisfies never}`);
-  }
-  return {
-    left: l,
-    operator: op,
-    right: r,
-  };
-}
-
-function protoOperand(
-  operand: SnapshotPermissionOperand,
-): MessageInitShape<typeof TailorDBType_Permission_OperandSchema> {
-  if (isSnapshotFieldRefOperand(operand)) {
-    if ("user" in operand) {
-      return { kind: { case: "userField", value: operand.user } };
-    }
-    if ("record" in operand) {
-      return { kind: { case: "recordField", value: operand.record } };
-    }
-    if ("newRecord" in operand) {
-      return { kind: { case: "newRecordField", value: operand.newRecord } };
-    }
-    if ("oldRecord" in operand) {
-      return { kind: { case: "oldRecordField", value: operand.oldRecord } };
-    }
-    operand satisfies never;
-    throw new Error(`Unknown field-ref operand shape: ${JSON.stringify(operand)}`);
-  }
-
-  return {
-    kind: { case: "value", value: fromJson(ValueSchema, operand) },
-  };
-}
-
 type CreateGqlPermission = {
   name: string;
   request: MessageInitShape<typeof CreateTailorDBGQLPermissionRequestSchema>;
@@ -2118,7 +1735,7 @@ function normalizeComparableGqlPermission(permission: unknown) {
   return {
     policies: (normalized?.policies ?? []).map((policy) => ({
       ...policy,
-      actions: [...(policy.actions ?? [])].sort((left, right) => left - right),
+      actions: (policy.actions ?? []).toSorted((left, right) => left - right),
     })),
   };
 }

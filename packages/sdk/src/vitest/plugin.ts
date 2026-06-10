@@ -274,7 +274,7 @@ export function createBlockPlugin(): Plugin {
       if (replacements.length === 0) return undefined;
 
       let transformed = code;
-      for (const r of replacements.sort((a, b) => b.start - a.start)) {
+      for (const r of replacements.toSorted((a, b) => b.start - a.start)) {
         transformed = transformed.slice(0, r.start) + r.replacement + transformed.slice(r.end);
       }
 

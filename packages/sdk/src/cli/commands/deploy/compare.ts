@@ -10,7 +10,7 @@ export function stableStringify(value: unknown): string {
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([key, entryValue]) => key !== "$typeName" && entryValue !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right));
+      .toSorted(([left], [right]) => left.localeCompare(right));
     return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`).join(",")}}`;
   }
   if (typeof value === "bigint") {
@@ -37,7 +37,7 @@ export function normalizeProtoConfig<T>(value: T): T {
  * @returns Sorted values
  */
 export function normalizeStringArray(values: readonly string[] | undefined): string[] {
-  return [...(values ?? [])].sort();
+  return (values ?? []).toSorted();
 }
 
 /**

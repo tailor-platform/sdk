@@ -9,6 +9,7 @@ import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
@@ -290,7 +291,7 @@ async function bundleSingleJob(
 
   // Include sorted env variables as a prefix so that env changes invalidate the cache
   const sortedEnvPrefix = JSON.stringify(
-    Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
+    Object.fromEntries(Object.entries(env).toSorted(([a], [b]) => a.localeCompare(b))),
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: job.sourceFile,
@@ -392,7 +393,11 @@ async function bundleSingleJob(
         },
       };
 
-      const plugins: rolldown.Plugin[] = [transformPlugin, ...cachePlugins];
+      const plugins: rolldown.Plugin[] = [
+        transformPlugin,
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      ];
 
       const result = await rolldown.build({
         input: entryPath,

@@ -207,9 +207,9 @@ $ tailor-sdk function logs <execution-id> --json
 
 **Notes**
 
-When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to original source files via the inline sourcemap (clickable file links and code snippets, matching `function test-run` output).
+When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function test-run` output).
 
-The download is pinned to the bundle that actually ran using the execution's content hash, so stack traces stay accurate across redeploys when the server retains old bundles. The command falls back to a plain-text error display when the pinned bundle cannot be retrieved, or when the execution was recorded before content hashes started being tracked and the function was redeployed after it ran.
+Stack traces stay accurate even after later redeploys, because the trace is resolved against the exact build that produced the execution. If that build is no longer available, the command falls back to a plain-text error display.
 
 <!-- politty:command:function logs:notes:end -->
 

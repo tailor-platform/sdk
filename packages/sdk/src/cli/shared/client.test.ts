@@ -85,7 +85,7 @@ describe("fetchPaged", () => {
   test("requests smaller pages as it approaches the limit", async () => {
     const fn = vi
       .fn()
-      .mockResolvedValueOnce([new Array(MAX_PAGE_SIZE).fill("x"), "next"])
+      .mockResolvedValueOnce([Array.from({ length: MAX_PAGE_SIZE }, () => "x"), "next"])
       .mockResolvedValueOnce([["y", "y", "y"], ""]);
 
     const items = await fetchPaged(fn, { limit: MAX_PAGE_SIZE + 5 });

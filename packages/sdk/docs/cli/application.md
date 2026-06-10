@@ -146,8 +146,8 @@ When migrations are configured (`db.tailordb.migration` in config), the `deploy`
 
 1. Detects pending migration scripts that haven't been executed
 2. Applies schema changes in a safe order (pre-migration → script execution → post-migration)
-3. Executes migration scripts via TestExecScript API
-4. Updates migration state labels in TailorDB metadata
+3. Runs the pending migration scripts
+4. Updates the migration checkpoint so the same migrations are not re-run
 
 See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details on automatic migration execution.
 
@@ -388,7 +388,7 @@ $ tailor-sdk api inspect GetApplication
 
 Use `tailor-sdk api list` to enumerate invocable methods and `tailor-sdk api inspect <endpoint>` to print an endpoint's input message tree (combine with `--json` for machine-readable output).
 
-The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from `--body`:
+The request body is inferred from the target endpoint's request schema, and commonly required fields are auto-injected so they can be omitted from `--body`:
 
 - `workspaceId` — resolved from `-w` / `TAILOR_PLATFORM_WORKSPACE_ID` / the selected profile.
 - `namespaceName` — resolved from `tailor.config.ts` based on the endpoint's service:
@@ -397,7 +397,7 @@ The request body is inferred from the proto definition of the target endpoint, a
 
 Values already present in `--body` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.
 
-Use `--field key=value` (repeatable) to set request body fields without writing JSON. Dotted keys (e.g. `application.name=foo`) build nested objects. `--field` overrides matching fields in `--body` and tab-completes from the endpoint's proto schema.
+Use `--field key=value` (repeatable) to set request body fields without writing JSON. Dotted keys (e.g. `application.name=foo`) build nested objects. `--field` overrides matching fields in `--body` and tab-completes from the endpoint's request schema.
 
 <!-- politty:command:api:notes:end -->
 <!-- politty:command:api inspect:heading:start -->
@@ -496,6 +496,6 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Only unary RPCs are listed; streaming methods are excluded because `tailor-sdk api run` issues a single JSON POST and reads one JSON response.
+Only single-request (non-streaming) methods are listed, because the CLI issues a single JSON request and reads one JSON response.
 
 <!-- politty:command:api list:notes:end -->

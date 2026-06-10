@@ -73,7 +73,7 @@ function toRelationships(
   relationships: Record<string, TailorDBType["forwardRelationships"][string]>,
 ): TailorDbErdRelationship[] {
   return Object.entries(relationships)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([name, relationship]) => ({
       name,
       targetType: relationship.targetType,
@@ -86,7 +86,7 @@ function toRelationships(
 
 function toIndexes(type: TailorDBType): TailorDbErdIndex[] {
   return Object.entries(type.indexes ?? {})
-    .sort(([a], [b]) => a.localeCompare(b))
+    .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([name, index]) => ({
       name,
       fields: [...index.fields],
@@ -241,7 +241,7 @@ function buildRelations(types: Record<string, TailorDBType>): TailorDbErdRelatio
       }
     }
   }
-  return relations.sort((a, b) => a.name.localeCompare(b.name));
+  return relations.toSorted((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
@@ -252,7 +252,7 @@ function buildRelations(types: Record<string, TailorDBType>): TailorDbErdRelatio
 export function buildTailorDbErdSchema(options: BuildTailorDbErdSchemaOptions): TailorDbErdSchema {
   const { namespaceData } = options;
   const tables = Object.values(namespaceData.types)
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .toSorted((a, b) => a.name.localeCompare(b.name))
     .map((type) => toTable(type, namespaceData.sourceInfo.get(type.name)));
 
   const schemaWithoutRevision = {

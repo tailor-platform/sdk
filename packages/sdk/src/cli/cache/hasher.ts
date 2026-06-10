@@ -30,7 +30,7 @@ function hashFile(filePath: string): string {
  * @returns Hex-encoded SHA-256 hash representing all files
  */
 function hashFiles(filePaths: string[]): string {
-  const sorted = [...filePaths].sort();
+  const sorted = filePaths.toSorted();
   const combined = sorted.map((fp) => hashFile(fp)).join("");
   return hashContent(combined);
 }

@@ -10,6 +10,7 @@ import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import {
   createTriggerTransformPlugin,
@@ -176,7 +177,7 @@ async function bundleSingleResolver(
       // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
       const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-      plugins.push(...cachePlugins);
+      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
         input: entryPath,

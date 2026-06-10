@@ -25,7 +25,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -86,10 +86,6 @@ type DeleteExecutor = {
   request: MessageInitShape<typeof DeleteExecutorExecutorRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
-}
-
 /**
  * Plan executor-related changes based on current and desired state.
  * @param context - Planning context
@@ -114,14 +110,14 @@ export async function planExecutor(context: PlanContext) {
       return [executors, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: trn,
+    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "executor", name),
   });
 
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, executor.name),
+      trn: resourceTrn(workspaceId, "executor", executor.name),
       appName: application.name,
       appId: application.id,
     });
@@ -249,7 +245,7 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
   const normalized = normalizeProtoConfig(executor) ?? {};
   const webhookHeaders =
     normalized.targetConfig?.config?.case === "webhook"
-      ? [...(normalized.targetConfig.config.value.headers ?? [])].sort((left, right) =>
+      ? (normalized.targetConfig.config.value.headers ?? []).toSorted((left, right) =>
           (left.key ?? "").localeCompare(right.key ?? ""),
         )
       : undefined;
@@ -448,24 +444,22 @@ function protoExecutor(
       triggerConfig = {
         config: {
           case: "incomingWebhook",
-          value: {
-            ...(trigger.response
-              ? {
-                  response: {
-                    ...(trigger.response.body
-                      ? {
-                          body: {
-                            expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
-                          },
-                        }
-                      : {}),
-                    ...(trigger.response.statusCode != null
-                      ? { statusCode: trigger.response.statusCode }
-                      : {}),
-                  },
-                }
-              : {}),
-          },
+          value: trigger.response
+            ? {
+                response: {
+                  ...(trigger.response.body
+                    ? {
+                        body: {
+                          expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
+                        },
+                      }
+                    : {}),
+                  ...(trigger.response.statusCode != null
+                    ? { statusCode: trigger.response.statusCode }
+                    : {}),
+                },
+              }
+            : {},
         },
       };
       break;

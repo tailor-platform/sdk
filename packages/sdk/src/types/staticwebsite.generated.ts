@@ -7,5 +7,7 @@ export type StaticWebsite = {
   description?: string | undefined;
   /** IP addresses allowed to access the website */
   allowedIpAddresses?: string[] | undefined;
+  /** Custom domains for the static website */
+  customDomains?: string[] | undefined;
 };
 export type StaticWebsiteInput = StaticWebsite;

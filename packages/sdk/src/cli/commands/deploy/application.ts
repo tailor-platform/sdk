@@ -10,7 +10,7 @@ import { symbols } from "@/cli/shared/logger";
 import { HTTP_METHODS } from "@/parser/service/http-adapter";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
 import type { HttpAdapterBundleResult } from "@/cli/services/http-adapter/bundler";
@@ -116,12 +116,8 @@ type ComparableApplication = {
   httpAdapters: ComparableHttpAdapter[];
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:application:${name}`;
-}
-
 function sortStrings(values: readonly string[] | undefined): string[] {
-  return [...(values ?? [])].sort();
+  return (values ?? []).toSorted();
 }
 
 function normalizeSubgraphs(
@@ -132,7 +128,7 @@ function normalizeSubgraphs(
       serviceType: subgraph.serviceType!,
       serviceNamespace: subgraph.serviceNamespace ?? "",
     }))
-    .sort((left, right) => {
+    .toSorted((left, right) => {
       if (left.serviceType !== right.serviceType) {
         return left.serviceType - right.serviceType;
       }
@@ -165,7 +161,7 @@ function normalizeHttpAdapters(
       enabled: adapter.enabled ?? true,
       priority: adapter.priority ?? 0,
     }))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .toSorted((left, right) => left.name.localeCompare(right.name));
 }
 
 function toComparableApplication(
@@ -330,7 +326,7 @@ export async function planApplication(
     }
   }
   const metaRequest = await buildMetaRequest({
-    trn: trn(workspaceId, application.name),
+    trn: resourceTrn(workspaceId, "application", application.name),
     appName: application.name,
     appId: application.id,
   });
@@ -429,7 +425,7 @@ async function fetchAppLabels(
 ): Promise<Record<string, string> | undefined> {
   try {
     const { metadata } = await client.getMetadata({
-      trn: trn(workspaceId, appName),
+      trn: resourceTrn(workspaceId, "application", appName),
     });
     return metadata?.labels;
   } catch (error) {
@@ -472,7 +468,7 @@ export function diffHttpAdapterDisplay(
     }
   }
   return entries
-    .sort((left, right) => left.name.localeCompare(right.name))
+    .toSorted((left, right) => left.name.localeCompare(right.name))
     .map((entry) => `${entry.symbol} ${entry.name} (httpAdapter)`);
 }
 

@@ -299,3 +299,114 @@ export declare type ListMeterEventCountsResponse_Value = Message<"tailor.v1.List
  */
 export declare const ListMeterEventCountsResponse_ValueSchema: GenMessage<ListMeterEventCountsResponse_Value>;
 
+/**
+ * @generated from message tailor.v1.ListMeterAITokenUsagesRequest
+ */
+export declare type ListMeterAITokenUsagesRequest = Message<"tailor.v1.ListMeterAITokenUsagesRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp start_time = 2;
+   */
+  startTime?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp end_time = 3;
+   */
+  endTime?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Duration step = 4;
+   */
+  step?: Duration;
+};
+
+/**
+ * Describes the message tailor.v1.ListMeterAITokenUsagesRequest.
+ * Use `create(ListMeterAITokenUsagesRequestSchema)` to create a new message.
+ */
+export declare const ListMeterAITokenUsagesRequestSchema: GenMessage<ListMeterAITokenUsagesRequest>;
+
+/**
+ * @generated from message tailor.v1.ListMeterAITokenUsagesResponse
+ */
+export declare type ListMeterAITokenUsagesResponse = Message<"tailor.v1.ListMeterAITokenUsagesResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.ListMeterAITokenUsagesResponse.TokenUsage usages = 1;
+   */
+  usages: ListMeterAITokenUsagesResponse_TokenUsage[];
+};
+
+/**
+ * Describes the message tailor.v1.ListMeterAITokenUsagesResponse.
+ * Use `create(ListMeterAITokenUsagesResponseSchema)` to create a new message.
+ */
+export declare const ListMeterAITokenUsagesResponseSchema: GenMessage<ListMeterAITokenUsagesResponse>;
+
+/**
+ * @generated from message tailor.v1.ListMeterAITokenUsagesResponse.TokenUsage
+ */
+export declare type ListMeterAITokenUsagesResponse_TokenUsage = Message<"tailor.v1.ListMeterAITokenUsagesResponse.TokenUsage"> & {
+  /**
+   * @generated from field: string aigateway_name = 1;
+   */
+  aigatewayName: string;
+
+  /**
+   * Response model name reported by the upstream provider, e.g. "gpt-5",
+   * "gemini-3-flash", "claude-sonnet-4-6".
+   *
+   * @generated from field: string model = 2;
+   */
+  model: string;
+
+  /**
+   * One of: input, output, cached_input, cache_creation_input, reasoning.
+   *
+   * @generated from field: string token_type = 3;
+   */
+  tokenType: string;
+
+  /**
+   * tokens per step
+   *
+   * @generated from field: repeated tailor.v1.ListMeterAITokenUsagesResponse.Value values = 4;
+   */
+  values: ListMeterAITokenUsagesResponse_Value[];
+};
+
+/**
+ * Describes the message tailor.v1.ListMeterAITokenUsagesResponse.TokenUsage.
+ * Use `create(ListMeterAITokenUsagesResponse_TokenUsageSchema)` to create a new message.
+ */
+export declare const ListMeterAITokenUsagesResponse_TokenUsageSchema: GenMessage<ListMeterAITokenUsagesResponse_TokenUsage>;
+
+/**
+ * @generated from message tailor.v1.ListMeterAITokenUsagesResponse.Value
+ */
+export declare type ListMeterAITokenUsagesResponse_Value = Message<"tailor.v1.ListMeterAITokenUsagesResponse.Value"> & {
+  /**
+   * @generated from field: google.protobuf.Timestamp from = 1;
+   */
+  from?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp to = 2;
+   */
+  to?: Timestamp;
+
+  /**
+   * @generated from field: int64 count = 3;
+   */
+  count: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListMeterAITokenUsagesResponse.Value.
+ * Use `create(ListMeterAITokenUsagesResponse_ValueSchema)` to create a new message.
+ */
+export declare const ListMeterAITokenUsagesResponse_ValueSchema: GenMessage<ListMeterAITokenUsagesResponse_Value>;
+

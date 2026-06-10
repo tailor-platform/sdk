@@ -8,6 +8,7 @@ import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import {
   createTriggerTransformPlugin,
   serializeTriggerContext,
@@ -83,7 +84,7 @@ export async function bundleAuthHooks(
 
   // Include sorted env variables as a prefix so that env changes invalidate the cache
   const sortedEnvPrefix = JSON.stringify(
-    Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
+    Object.fromEntries(Object.entries(env).toSorted(([a], [b]) => a.localeCompare(b))),
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: absoluteConfigPath,
@@ -115,7 +116,7 @@ export async function bundleAuthHooks(
 
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
       const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-      plugins.push(...cachePlugins);
+      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
         input: entryPath,

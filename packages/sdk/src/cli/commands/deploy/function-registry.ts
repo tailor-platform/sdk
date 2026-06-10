@@ -7,6 +7,7 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
@@ -52,10 +53,6 @@ export type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction
  */
 function computeContentHash(content: string): string {
   return crypto.createHash("sha256").update(content, "utf-8").digest("hex");
-}
-
-function functionRegistryTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
 }
 
 export const RESOLVER_PREFIX = "resolver--";
@@ -327,7 +324,7 @@ export async function planFunctionRegistry(
   await Promise.all(
     existingFunctions.map(async (func) => {
       const { metadata } = await client.getMetadata({
-        trn: functionRegistryTrn(workspaceId, func.name),
+        trn: resourceTrn(workspaceId, "function_registry", func.name),
       });
       existingMap[func.name] = {
         resource: func,
@@ -341,7 +338,7 @@ export async function planFunctionRegistry(
   for (const entry of entries) {
     const existing = existingMap[entry.name];
     const metaRequest = await buildMetaRequest({
-      trn: functionRegistryTrn(workspaceId, entry.name),
+      trn: resourceTrn(workspaceId, "function_registry", entry.name),
       appName,
       appId,
     });

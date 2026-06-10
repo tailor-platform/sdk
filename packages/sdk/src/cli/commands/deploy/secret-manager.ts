@@ -5,6 +5,7 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
@@ -91,7 +92,7 @@ export async function planSecretManager(context: PlanContext) {
   await Promise.all(
     existingVaultList.map(async (resource) => {
       const { metadata } = await client.getMetadata({
-        trn: vaultTrn(workspaceId, resource.name),
+        trn: resourceTrn(workspaceId, "vault", resource.name),
       });
       existingVaults[resource.name] = {
         resource,
@@ -111,7 +112,7 @@ export async function planSecretManager(context: PlanContext) {
 
       if (existing) {
         const metaRequest = await buildMetaRequest({
-          trn: vaultTrn(workspaceId, vaultName),
+          trn: resourceTrn(workspaceId, "vault", vaultName),
           appName: application.name,
           appId: application.id,
         });
@@ -260,10 +261,6 @@ export async function planSecretManager(context: PlanContext) {
   return { vaultChangeSet, secretChangeSet, skippedSecrets, conflicts, unmanaged, resourceOwners };
 }
 
-function vaultTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
-}
-
 /**
  * Apply secret manager changes for the given phase.
  * @param client - Operator client instance
@@ -290,7 +287,7 @@ export async function applySecretManager(
         });
         if (application) {
           const metaRequest = await buildMetaRequest({
-            trn: vaultTrn(create.workspaceId, create.name),
+            trn: resourceTrn(create.workspaceId, "vault", create.name),
             appName: application.name,
             appId: application.id,
           });
@@ -304,7 +301,7 @@ export async function applySecretManager(
       await Promise.all(
         vaultChangeSet.updates.map(async (update) => {
           const metaRequest = await buildMetaRequest({
-            trn: vaultTrn(update.workspaceId, update.name),
+            trn: resourceTrn(update.workspaceId, "vault", update.name),
             appName: application.name,
             appId: application.id,
           });

@@ -21,6 +21,7 @@ When editing files matching these globs, read and follow the linked rule documen
 
 - `.changeset/**`: [Changeset Rules](.agents/rules/changeset.md)
 - `packages/sdk/src/cli/**/*.ts`: [CLI Logging Guidelines](.agents/rules/cli-logging.md)
+- `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
 - `packages/sdk/src/**/*.ts`: [JSDoc Parameter Rules (SDK)](.agents/rules/jsdoc.md)
 - `packages/sdk/src/types/**/*.ts`, `packages/sdk/src/parser/**/schema.ts`, `packages/sdk/zinfer.config.ts`: [Schema Types](.agents/rules/schema-types.md)
 - `packages/sdk/src/configure/**/*.ts`, `packages/sdk/src/parser/**/*.ts`, `packages/sdk/src/cli/**/*.ts`, `packages/sdk/src/types/**/*.ts`: [SDK Internals](.agents/rules/sdk-internals.md)
@@ -83,7 +84,7 @@ Key files:
 - Job names must be unique across the entire project
 - `.trigger()` returns a `Promise<Awaited<Output>>` — typically `await` it to read the value
 - `defineWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
-- Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; use `workflowMock.setWaitHandler` / `workflowMock.setResolveHandler` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
+- Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; acquire the mock with `using wf = mockWorkflow()` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) and use `wf.setWaitHandler` / `wf.setResolveHandler` to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
 - Use `wps.key.wait()` for namespaced access, or `export const { key } = defineWaitPoints(...)` for destructured 2-level access
 
 ### Executors
