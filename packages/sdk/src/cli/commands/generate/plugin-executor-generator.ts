@@ -21,7 +21,7 @@ import {
   type PluginOperationConfig,
   type PluginInjectMap,
   type PluginExecutorContext,
-} from "@/types/plugin";
+} from "@/plugin/types";
 import ml from "@/utils/multiline";
 import type {
   PluginExecutorInfoExtended,

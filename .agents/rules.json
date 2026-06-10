@@ -24,6 +24,11 @@
       "name": "schema-types",
       "paths": [
         "packages/sdk/src/types/**/*.ts",
+        "packages/sdk/src/parser/**/types.ts",
+        "packages/sdk/src/configure/**/types.ts",
+        "packages/sdk/src/configure/**/*.types.ts",
+        "packages/sdk/src/plugin/types.ts",
+        "packages/sdk/src/runtime/types.ts",
         "packages/sdk/src/parser/**/schema.ts",
         "packages/sdk/zinfer.config.ts"
       ],
@@ -35,6 +40,7 @@
         "packages/sdk/src/configure/**/*.ts",
         "packages/sdk/src/parser/**/*.ts",
         "packages/sdk/src/cli/**/*.ts",
+        "packages/sdk/src/plugin/**/*.ts",
         "packages/sdk/src/types/**/*.ts"
       ],
       "file": ".agents/rules/sdk-internals.md"

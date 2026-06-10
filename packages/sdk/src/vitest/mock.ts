@@ -35,7 +35,7 @@ import {
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
 import type { User as IdpUser } from "../runtime/idp";
-import type { TailorEnv } from "../types/env";
+import type { TailorEnv } from "@/runtime/types";
 
 export { RUNTIME_FLAG_KEY } from "./globals";
 

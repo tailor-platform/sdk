@@ -8,7 +8,7 @@ import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
 import { buildTailorDbErdSchema } from "./schema";
 import { initErdCommand } from "./utils";
 import { writeViewerDist } from "./viewer";
-import type { TailorDBNamespaceData } from "@/types/plugin-generation";
+import type { TailorDBNamespaceData } from "@/plugin/types";
 
 const DEFAULT_ERD_BASE_DIR = ".tailor-sdk/erd";
 

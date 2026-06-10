@@ -1,9 +1,13 @@
-import type { LogLevelEnum } from "./app-config.generated";
-import type { AuthConfig } from "./auth";
-import type { IdPConfig } from "./idp";
-import type { SecretsConfig } from "./secrets-config";
-import type { StaticWebsiteConfig } from "./staticwebsite-config";
-import type { TailorDBServiceInput } from "./tailordb";
+import type { AuthConfig } from "@/configure/services/auth/types";
+import type { IdPConfig } from "@/configure/services/idp/types";
+import type { SecretsConfig } from "@/configure/services/secrets/types";
+import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite/types";
+import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
+// Application configuration input types for defineConfig().
+//
+// This is a pure type module: type declarations only, no zod/schema
+// references, importable type-only from any layer.
+import type { LogLevelEnum } from "@/types/app-config.generated";
 
 export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});

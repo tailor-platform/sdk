@@ -4,8 +4,8 @@ import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutput } from "@/utils/test/internal";
 import { processKyselyType } from "./type-processor";
 import { kyselyTypePlugin, KyselyGeneratorID } from "./index";
-import type { TailorDBReadyContext } from "@/types/plugin-generation";
-import type { TailorDBType } from "@/types/tailordb";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBReadyContext } from "@/plugin/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {

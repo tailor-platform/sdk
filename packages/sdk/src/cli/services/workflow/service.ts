@@ -4,7 +4,7 @@ import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import { WorkflowJobSchema, WorkflowSchema } from "@/parser/service/workflow";
 import { isSdkBranded } from "@/utils/brand";
-import type { WorkflowServiceConfig } from "@/types/app-config";
+import type { WorkflowServiceConfig } from "@/configure/config/types";
 import type { Workflow } from "@/types/workflow.generated";
 
 export interface CollectedJob {

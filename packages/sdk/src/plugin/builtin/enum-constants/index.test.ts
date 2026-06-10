@@ -6,7 +6,7 @@ import { generateUnifiedEnumConstants } from "./generate-enum-constants";
 import { processEnumType } from "./process-enum-type";
 import { enumConstantsPlugin, EnumConstantsGeneratorID } from "./index";
 import type { EnumDefinition } from "./types";
-import type { TailorDBType } from "@/types/tailordb";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {

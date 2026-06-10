@@ -3,8 +3,12 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { buildTailorDbErdSchema, writeTailorDbErdSchemaToFile } from "./schema";
-import type { TailorDBNamespaceData } from "@/types/plugin-generation";
-import type { OperatorFieldConfig, ParsedField, TailorDBType } from "@/types/tailordb";
+import type {
+  OperatorFieldConfig,
+  ParsedField,
+  TailorDBType,
+} from "@/parser/service/tailordb/types";
+import type { TailorDBNamespaceData } from "@/plugin/types";
 
 function createField(
   name: string,

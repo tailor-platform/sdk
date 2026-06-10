@@ -7,9 +7,9 @@ import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { findOmittedPermitRules } from "@/parser/service/tailordb/permission";
 import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
+import type { TypeSourceInfo, TailorDBType } from "@/parser/service/tailordb/types";
 import type { PluginManager } from "@/plugin/manager";
-import type { PluginAttachment } from "@/types/plugin";
-import type { TypeSourceInfo, TailorDBType } from "@/types/tailordb";
+import type { PluginAttachment } from "@/plugin/types";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,

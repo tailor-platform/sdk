@@ -1,11 +1,11 @@
-import {
-  isPluginGeneratedType,
-  type PluginGeneratedTypeSource,
-  type TailorDBType,
-  type TypeSourceInfoEntry,
-} from "@/types/tailordb";
+import { isPluginGeneratedType } from "@/parser/service/tailordb/type-source";
 import ml from "@/utils/multiline";
 import type { LinesDbMetadata } from "./types";
+import type {
+  PluginGeneratedTypeSource,
+  TailorDBType,
+  TypeSourceInfoEntry,
+} from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 /**

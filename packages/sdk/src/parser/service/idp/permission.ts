@@ -4,7 +4,7 @@ import type {
   StandardIdPPermissionCondition,
   IdPPermissionOperand,
   IdPUserField,
-} from "@/types/idp";
+} from "./types";
 import type { IdPPermission as RawIdPPermission } from "@/types/idp.generated";
 
 type PermissionOperator = "=" | "!=" | "in" | "not in";

@@ -31,7 +31,7 @@ import type {
   TailorDBType,
   OperatorFieldConfig,
   StandardActionPermission,
-} from "@/types/tailordb";
+} from "@/parser/service/tailordb/types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // ============================================================================
@@ -313,7 +313,7 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
 
 /**
  * Create a snapshot field config from an OperatorFieldConfig (for nested fields)
- * @param {import("@/types/tailordb").OperatorFieldConfig} fieldConfig - Field configuration
+ * @param {import("@/parser/service/tailordb/types").OperatorFieldConfig} fieldConfig - Field configuration
  * @returns {SnapshotFieldConfig} Snapshot field configuration
  */
 function createSnapshotFieldConfigFromOperatorConfig(

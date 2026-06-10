@@ -144,6 +144,8 @@
     "build": "tsdown",
     "lint": "oxlint --type-aware .",
     "check:public-api-jsdoc": "tsx scripts/check-public-api-jsdoc.ts",
+    "check:zod-isolation": "tsx scripts/check-zod-isolation.ts",
+    "check:import-cycles": "tsx scripts/check-import-cycles.ts",
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
     "typecheck:go": "tsgo",
