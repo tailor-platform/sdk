@@ -1,5 +1,60 @@
 # @tailor-platform/sdk
 
+## 1.59.0
+
+### Minor Changes
+
+- [#1282](https://github.com/tailor-platform/sdk/pull/1282) [`4660bc8`](https://github.com/tailor-platform/sdk/commit/4660bc8a0c31e52ef7e32f4c325b8aa1c2a2af3a) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(vitest)!: rename mock controllers to verb-style `mockX()` factories (Beta)
+
+  The `@tailor-platform/sdk/vitest` mock controllers are renamed from noun-style
+  singleton objects (`tailordbMock`, `workflowMock`, …) to verb-style **factory
+  functions** (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`,
+  `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`). Acquire one with a
+  `using` declaration and its state is reset automatically when the test scope
+  exits — no more `beforeEach(() => mock.reset())`.
+
+  ```diff
+  -import { tailordbMock } from "@tailor-platform/sdk/vitest";
+  -
+  -beforeEach(() => tailordbMock.reset());
+  -
+   test("...", () => {
+  -  tailordbMock.enqueueResult({ age: 30 });
+  -  expect(tailordbMock.executedQueries).toHaveLength(1);
+  +  using db = mockTailordb();
+  +  db.enqueueResult({ age: 30 });
+  +  expect(db.executedQueries).toHaveLength(1);
+   });
+  ```
+
+  This is a breaking change to the **Beta** `tailor-runtime` testing API. `using`
+  requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose`
+  (Node ≥ 20.4; the SDK already targets Node ≥ 22, and Vitest's transformer
+  downlevels the syntax).
+
+### Patch Changes
+
+- [#1384](https://github.com/tailor-platform/sdk/pull/1384) [`b5ddf76`](https://github.com/tailor-platform/sdk/commit/b5ddf762bbdbaf22f879aeabbaddb85fa0a57da6) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix flaky `already_exists` failures during `deploy`/`apply` on busy or fresh workspaces. When a resource create succeeds on the platform but its response is lost as `Unavailable`/`ResourceExhausted` under load, the SDK's automatic retry now treats the follow-up `already_exists` as success for the affected apply resource creates instead of failing the deploy. Retry backoff also starts with a longer initial delay so a retry is less likely to race an in-flight request, and the retry path now emits `debug` traces (retries and swallowed `already_exists`) to help diagnose such failures.
+
+- [#1372](https://github.com/tailor-platform/sdk/pull/1372) [`9fdb857`](https://github.com/tailor-platform/sdk/commit/9fdb85746dfb3734014056b57fb95ce1ae21d585) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB types with a `serial` field inside a nested object being reported as a change on every deploy.
+
+- [#1382](https://github.com/tailor-platform/sdk/pull/1382) [`99e1d79`](https://github.com/tailor-platform/sdk/commit/99e1d791976528d4fec9742cd473ece33a136cb0) Thanks [@toiroakr](https://github.com/toiroakr)! - Treat `console.log` as a DEBUG-level call when bundling deployment functions, matching the platform's OpenTelemetry severity mapping. With `logLevel: "INFO"` or higher, `console.log` calls are now dropped alongside `console.debug`. The default `"DEBUG"` level still keeps all console calls.
+
+- [#1380](https://github.com/tailor-platform/sdk/pull/1380) [`2ed1344`](https://github.com/tailor-platform/sdk/commit/2ed1344e5ffff6e78d74ef3a0297fcff4a6201e7) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: replace mutating array methods (`sort`/`reverse`/`splice`) with non-mutating ES2023 equivalents (`toSorted`/`toReversed`/`toSpliced`). No user-facing behavior change.
+
+- [#1379](https://github.com/tailor-platform/sdk/pull/1379) [`5299c0c`](https://github.com/tailor-platform/sdk/commit/5299c0c17c6b7ab2febddd84faae39054a234165) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.4.0
+
+- [#1308](https://github.com/tailor-platform/sdk/pull/1308) [`74015e4`](https://github.com/tailor-platform/sdk/commit/74015e47858ad7c8d7ec5d59c06a9fc1ece6504d) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(vitest): run a full workflow locally through `.trigger()` (Beta)
+
+  Calling `workflow.mainJob.trigger()` (or any job's `.trigger()`) now runs the
+  real job bodies of the whole chain — no `mockWorkflow()` needed — so you can
+  exercise end-to-end orchestration in a unit test without a deployment. Trigger
+  inputs and outputs cross the same JSON boundary the platform uses, so a
+  non-serializable payload fails the test exactly as it would in production.
+  Acquire `mockWorkflow()` only to override individual dependent jobs with
+  `wf.setJobHandler(...)` / `wf.enqueueResult(...)` (the rest still run their real
+  bodies), set the env via `wf.setEnv(...)`, or assert on `wf.triggeredJobs`.
+
 ## 1.58.0
 
 ### Minor Changes
