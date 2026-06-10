@@ -25,6 +25,7 @@ jobs:
           filters: |
             changes:
               - .github/workflows/deploy.yml
+              - .github/actions/**
               - example/**
               - packages/**
               - package.json
