@@ -23,6 +23,7 @@ import {
   compareSnapshotWithRemote,
   generateAllTypeManifestsFromSnapshot,
 } from "./snapshot-manifest";
+import { MIGRATION_LABEL_KEY, MIGRATION_LABEL_PREFIX, parseMigrationLabelNumber } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 export interface SyncOptions {
@@ -68,6 +69,37 @@ async function fetchRemoteTypes(
       throw error;
     }
   });
+}
+
+interface RemoteMigrationState {
+  /** Labels currently stored on the namespace metadata (empty when none exist) */
+  labels: Record<string, string>;
+  /** Current migration number parsed from the label, or null when unset/unparseable */
+  current: number | null;
+}
+
+/**
+ * Fetch the namespace's metadata labels and current migration number.
+ *
+ * Metadata may not exist yet for the namespace (GetMetadata returns NotFound);
+ * treat that the same as "no labels" so the sync can still proceed and set
+ * the migration label afterwards.
+ * @param client - Operator client
+ * @param trn - Namespace TRN
+ * @returns Existing labels and the parsed current migration number
+ */
+async function fetchRemoteMigrationState(
+  client: OperatorClient,
+  trn: string,
+): Promise<RemoteMigrationState> {
+  try {
+    const { metadata } = await client.getMetadata({ trn });
+    const labels = metadata?.labels ?? {};
+    const label = labels[MIGRATION_LABEL_KEY];
+    return { labels, current: label ? parseMigrationLabelNumber(label) : null };
+  } catch {
+    return { labels: {}, current: null };
+  }
 }
 
 function selectTargetNamespace(
@@ -141,12 +173,18 @@ async function sync(options: SyncOptions): Promise<void> {
     profile: options.profile,
   });
 
+  const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
+  const remoteState = await fetchRemoteMigrationState(client, trn);
   const remoteTypes = await fetchRemoteTypes(client, workspaceId, target.namespace);
   const existingTypeNames = new Set(remoteTypes.map((t) => t.name));
   const { creates, updates, deletes } = compareSnapshotWithRemote(snapshot, existingTypeNames);
 
+  const current = remoteState.current;
   logger.newline();
   logger.info(`Namespace: ${styles.bold(target.namespace)}`);
+  logger.log(
+    `  Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
+  );
   logger.log(`  Target migration: ${styles.bold(formatMigrationNumber(targetVersion))}`);
   logger.log(`  Types to create: ${styles.bold(String(creates.length))}`);
   logger.log(`  Types to update: ${styles.bold(String(updates.length))}`);
@@ -162,6 +200,24 @@ async function sync(options: SyncOptions): Promise<void> {
       "This operation will overwrite remote TailorDB types to match the selected snapshot.",
     );
     logger.warn("Existing data in deleted types will be lost.");
+    logger.newline();
+  }
+
+  if (current !== null && targetVersion < current) {
+    logger.warn(
+      `Migrations ${formatMigrationNumber(targetVersion + 1)}–${formatMigrationNumber(
+        current,
+      )} will become pending again and re-execute on the next deploy, including their migrate.ts scripts. Make sure those scripts are idempotent (safe to re-run).`,
+    );
+    logger.newline();
+  } else if (current !== null && targetVersion > current) {
+    logger.warn(
+      `Moving the migration label forwards (${formatMigrationNumber(current)} → ${formatMigrationNumber(
+        targetVersion,
+      )}): migrate.ts scripts for migrations ${formatMigrationNumber(current + 1)}–${formatMigrationNumber(
+        targetVersion,
+      )} will not run on the next deploy.`,
+    );
     logger.newline();
   }
 
@@ -205,14 +261,11 @@ async function sync(options: SyncOptions): Promise<void> {
     });
   }
 
-  const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
-  const { metadata } = await client.getMetadata({ trn });
-  const existingLabels = metadata?.labels ?? {};
   await client.setMetadata({
     trn,
     labels: {
-      ...existingLabels,
-      "sdk-migration": `m${formatMigrationNumber(targetVersion)}`,
+      ...remoteState.labels,
+      [MIGRATION_LABEL_KEY]: `${MIGRATION_LABEL_PREFIX}${formatMigrationNumber(targetVersion)}`,
     },
   });
 
