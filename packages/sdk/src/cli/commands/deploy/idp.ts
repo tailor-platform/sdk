@@ -248,7 +248,7 @@ function normalizeComparableUserAuthPolicy(
     passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
     passwordMinLength: policy?.passwordMinLength ?? 0,
     passwordMaxLength: policy?.passwordMaxLength ?? 0,
-    allowedEmailDomains: [...(policy?.allowedEmailDomains ?? [])].sort(),
+    allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,
     allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,

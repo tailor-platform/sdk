@@ -117,7 +117,7 @@ type ComparableApplication = {
 };
 
 function sortStrings(values: readonly string[] | undefined): string[] {
-  return [...(values ?? [])].sort();
+  return (values ?? []).toSorted();
 }
 
 function normalizeSubgraphs(
@@ -128,7 +128,7 @@ function normalizeSubgraphs(
       serviceType: subgraph.serviceType!,
       serviceNamespace: subgraph.serviceNamespace ?? "",
     }))
-    .sort((left, right) => {
+    .toSorted((left, right) => {
       if (left.serviceType !== right.serviceType) {
         return left.serviceType - right.serviceType;
       }
@@ -161,7 +161,7 @@ function normalizeHttpAdapters(
       enabled: adapter.enabled ?? true,
       priority: adapter.priority ?? 0,
     }))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .toSorted((left, right) => left.name.localeCompare(right.name));
 }
 
 function toComparableApplication(
@@ -468,7 +468,7 @@ export function diffHttpAdapterDisplay(
     }
   }
   return entries
-    .sort((left, right) => left.name.localeCompare(right.name))
+    .toSorted((left, right) => left.name.localeCompare(right.name))
     .map((entry) => `${entry.symbol} ${entry.name} (httpAdapter)`);
 }
 

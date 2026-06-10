@@ -36,7 +36,7 @@ vi.mock("@/cli/shared/logger", async (importOriginal) => {
   return {
     ...actual,
     logger: {
-      ...(actual.logger ?? {}),
+      ...actual.logger,
       log: vi.fn(),
       debug: vi.fn(),
       warn: vi.fn(),

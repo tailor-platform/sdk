@@ -290,7 +290,7 @@ async function bundleSingleJob(
 
   // Include sorted env variables as a prefix so that env changes invalidate the cache
   const sortedEnvPrefix = JSON.stringify(
-    Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
+    Object.fromEntries(Object.entries(env).toSorted(([a], [b]) => a.localeCompare(b))),
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: job.sourceFile,

@@ -36,7 +36,7 @@ export function createDepCollectorPlugin(): DepCollectorResult {
   };
 
   function getResult(): string[] {
-    return Array.from(collectedPaths).sort();
+    return Array.from(collectedPaths).toSorted();
   }
 
   return { plugin, getResult };

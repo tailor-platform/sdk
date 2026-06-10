@@ -115,7 +115,7 @@ function writeHashState() {
   if (selectedTable) params.set("table", selectedTable);
   if (showMode !== DEFAULT_SHOW_MODE) params.set("show", showMode);
   if (hiddenTableNames.size > 0) {
-    params.set("hidden", [...hiddenTableNames].sort((a, b) => a.localeCompare(b)).join(","));
+    params.set("hidden", [...hiddenTableNames].toSorted((a, b) => a.localeCompare(b)).join(","));
   }
   params.set("z", viewport.z.toFixed(3));
   try {
@@ -194,7 +194,7 @@ function computeRanks(tables, relations) {
 }
 
 function computeLayout(nextSchema) {
-  const tables = [...nextSchema.tables].sort((a, b) => a.name.localeCompare(b.name));
+  const tables = nextSchema.tables.toSorted((a, b) => a.name.localeCompare(b.name));
   const ranks = computeRanks(tables, nextSchema.relations);
   const layers = new Map();
   for (const table of tables) {
@@ -204,8 +204,8 @@ function computeLayout(nextSchema) {
   }
 
   const nodes = new Map();
-  for (const rank of [...layers.keys()].sort((a, b) => a - b)) {
-    const layerTables = layers.get(rank).sort((a, b) => a.name.localeCompare(b.name));
+  for (const rank of [...layers.keys()].toSorted((a, b) => a - b)) {
+    const layerTables = layers.get(rank).toSorted((a, b) => a.name.localeCompare(b.name));
     let y = 0;
     for (const table of layerTables) {
       const height = cardHeight(table);

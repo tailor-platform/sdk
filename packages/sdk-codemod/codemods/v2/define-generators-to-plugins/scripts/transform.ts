@@ -196,8 +196,8 @@ export default function transform(source: string): string | null {
       importLines.push(line);
     }
     // Sort for deterministic output and skip if all imports already present
-    importLines.sort();
-    if (importLines.length === 0) {
+    const sortedImportLines = importLines.toSorted();
+    if (sortedImportLines.length === 0) {
       return result;
     }
 
@@ -206,10 +206,11 @@ export default function transform(source: string): string | null {
     const match = sdkImportRegex.exec(result);
     if (match) {
       const insertPos = (match.index ?? 0) + match[0].length;
-      result = result.slice(0, insertPos) + "\n" + importLines.join("\n") + result.slice(insertPos);
+      result =
+        result.slice(0, insertPos) + "\n" + sortedImportLines.join("\n") + result.slice(insertPos);
     } else {
       // Fallback: prepend imports at the top of the file
-      result = importLines.join("\n") + "\n" + result;
+      result = sortedImportLines.join("\n") + "\n" + result;
     }
   }
 

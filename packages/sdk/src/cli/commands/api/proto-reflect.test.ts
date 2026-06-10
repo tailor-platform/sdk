@@ -14,7 +14,7 @@ describe("listMethodNames", () => {
     expect(names).toContain("Ping");
     expect(names).toContain("GetApplication");
     expect(names).toContain("ListWorkspaces");
-    const sorted = [...names].sort();
+    const sorted = names.toSorted();
     expect(names).toEqual(sorted);
   });
 
@@ -34,7 +34,7 @@ describe("listMethodChoices", () => {
     const choices = listMethodChoices();
     expect(choices).toContain("GetApplication");
     expect(choices).toContain("tailor.v1.OperatorService/GetApplication");
-    const sorted = [...choices].sort();
+    const sorted = choices.toSorted();
     expect(choices).toEqual(sorted);
   });
 });

@@ -130,7 +130,7 @@ export async function buildMetaRequest(
   return {
     trn,
     labels: {
-      ...(existingLabels ?? {}),
+      ...existingLabels,
       [sdkNameLabelKey]: appName,
       [sdkVersionLabelKey]: sdkVersion,
       ...(appId ? { [sdkAppIdLabelKey]: toAppIdLabelValue(appId) } : {}),

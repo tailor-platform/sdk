@@ -106,7 +106,7 @@ export async function buildTriggerContext(
 }
 
 function sortedMapToJson(m: Map<string, string>): string {
-  return JSON.stringify([...m.entries()].sort(([a], [b]) => a.localeCompare(b)));
+  return JSON.stringify([...m.entries()].toSorted(([a], [b]) => a.localeCompare(b)));
 }
 
 /**

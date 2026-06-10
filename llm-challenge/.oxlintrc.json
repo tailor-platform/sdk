@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "rules": {
+    "unicorn/no-array-reverse": "error",
+    "unicorn/no-array-sort": "error"
+  }
+}

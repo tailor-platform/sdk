@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "import", "jsdoc"],
+  "plugins": ["typescript", "import", "jsdoc", "unicorn"],
   "categories": {
     "correctness": "error"
   },
@@ -18,6 +18,8 @@
     "**/__test_fixtures__/*-compat-out/"
   ],
   "rules": {
+    "unicorn/no-array-reverse": "error",
+    "unicorn/no-array-sort": "error",
     "no-unsafe-optional-chaining": "off",
     "getter-return": "error",
     "no-unreachable": "error",

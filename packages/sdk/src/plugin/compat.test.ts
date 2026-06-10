@@ -24,7 +24,7 @@ describe("defineGenerators and definePlugins produce identical output", () => {
       }
     };
     traverse(rootDir);
-    return files.sort();
+    return files.toSorted();
   };
 
   beforeAll(async () => {

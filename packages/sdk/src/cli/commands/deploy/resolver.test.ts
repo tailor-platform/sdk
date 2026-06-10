@@ -204,7 +204,7 @@ describe("planPipeline (resolver service level)", () => {
       const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
         "resolver-1",
         "resolver-2",
       ]);
