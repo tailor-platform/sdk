@@ -601,7 +601,7 @@ export function mockSecretmanager() {
           },
         })),
       ];
-      return entries.sort((a, b) => a.order - b.order).map((e) => e.call);
+      return entries.toSorted((a, b) => a.order - b.order).map((e) => e.call);
     },
 
     reset(): void {
