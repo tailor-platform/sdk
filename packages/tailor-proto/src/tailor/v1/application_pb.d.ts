@@ -5,7 +5,7 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Application, ApplicationSchemaUpdateAttempt, Subgraph } from "./application_resource_pb";
-import type { GatewayFilter } from "./gateway_filter_resource_pb";
+import type { HttpAdapter } from "./http_adapter_resource_pb";
 import type { FieldMask, Timestamp } from "@bufbuild/protobuf/wkt";
 import type { PageDirection } from "./resource_pb";
 
@@ -68,9 +68,9 @@ export declare type CreateApplicationRequest = Message<"tailor.v1.CreateApplicat
   disabled: boolean;
 
   /**
-   * @generated from field: repeated tailor.v1.GatewayFilter filters = 10;
+   * @generated from field: repeated tailor.v1.HttpAdapter http_adapters = 10;
    */
-  filters: GatewayFilter[];
+  httpAdapters: HttpAdapter[];
 };
 
 /**
@@ -149,9 +149,9 @@ export declare type UpdateApplicationRequest = Message<"tailor.v1.UpdateApplicat
   disabled: boolean;
 
   /**
-   * @generated from field: repeated tailor.v1.GatewayFilter filters = 10;
+   * @generated from field: repeated tailor.v1.HttpAdapter http_adapters = 10;
    */
-  filters: GatewayFilter[];
+  httpAdapters: HttpAdapter[];
 
   /**
    * @generated from field: google.protobuf.FieldMask update_mask = 100;

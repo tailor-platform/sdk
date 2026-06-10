@@ -1,13 +1,21 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { applyPreMigrationFieldAdjustments } from "@/cli/commands/tailordb/migrate/pre-migration-schema";
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
-import type { PlanContext } from "../deploy";
+import type { PlanContext } from "../types";
+import type { FieldDiffChange } from "@/cli/commands/tailordb/migrate/diff-calculator";
+import type { SnapshotFieldConfig } from "@/cli/commands/tailordb/migrate/snapshot";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
 import type { TailorDBService } from "@/cli/services/tailordb/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 import type { TailorDBType } from "@/types/tailordb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {
@@ -179,7 +187,7 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
         "tailordb-1",
         "tailordb-2",
       ]);
@@ -593,6 +601,118 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(1);
       expect(result.changeSet.type.unchanged).toHaveLength(0);
     });
+
+    test("treats an omitted remote field description as unchanged against the local empty-string manifest", async () => {
+      const tailordbType: TailorDBType = {
+        name: "Event",
+        pluralForm: "Events",
+        description: "Event type",
+        fields: {
+          name: {
+            name: "name",
+            config: {
+              type: "string",
+              required: false,
+            },
+          },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [tailordbType.name]: tailordbType },
+      });
+
+      const client = {
+        listTailorDBServices: vi.fn().mockResolvedValue({
+          tailordbServices: [{ namespace: { name: "test-tailordb" } }],
+          nextPageToken: "",
+        }),
+        listTailorDBTypes: vi.fn().mockResolvedValue({
+          tailordbTypes: [
+            {
+              name: "Event",
+              schema: {
+                description: "Event type",
+                fields: {
+                  name: {
+                    type: "string",
+                    required: false,
+                    allowedValues: [],
+                    // Platform omits `description` for fields without one, while the
+                    // local manifest always emits `description: ""` (generateTailorDBTypeManifest).
+                    // These must compare as equal.
+                    validate: [],
+                    array: false,
+                    index: false,
+                    unique: false,
+                    foreignKey: false,
+                    vector: false,
+                    fields: {},
+                  },
+                },
+                relationships: {},
+                settings: {
+                  aggregation: false,
+                  bulkUpsert: false,
+                  draft: false,
+                  defaultQueryLimitSize: "100",
+                  maxBulkUpsertSize: "1000",
+                  pluralForm: "events",
+                  publishRecordEvents: false,
+                  disableGqlOperations: {
+                    create: false,
+                    update: false,
+                    delete: false,
+                    read: false,
+                  },
+                },
+                extends: false,
+                directives: [],
+                indexes: {},
+                files: {},
+                permission: {
+                  create: [],
+                  read: [],
+                  update: [],
+                  delete: [],
+                },
+              },
+            },
+          ],
+          nextPageToken: "",
+        }),
+        getMetadata: vi.fn().mockResolvedValue({
+          metadata: {
+            labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
+          },
+        }),
+        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+          permissions: [],
+          nextPageToken: "",
+        }),
+      } as unknown as OperatorClient;
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.unchanged).toEqual([{ name: "Event" }]);
+      expect(result.changeSet.type.updates).toHaveLength(0);
+    });
   });
 });
 
@@ -769,6 +889,7 @@ describe("applyTailorDB phase separation", () => {
           name: "test-app",
           tailorDBServices: [mockTailorDBService],
         } as unknown as Application,
+        tailorDBInputs: [],
         config: mockConfig,
         noSchemaCheck: true, // Skip migration checks in unit tests
       },
@@ -818,5 +939,342 @@ describe("applyTailorDB phase separation", () => {
     expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
     // Services should NOT be deleted in create-update phase
     expect(client.deleteTailorDBService).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyPreMigrationFieldAdjustments", () => {
+  type ProtoField = MessageInitShape<typeof TailorDBType_FieldConfigSchema>;
+
+  test("re-inserts removed field so migrate.ts can still read it", () => {
+    // Simulate the new schema produced by planTailorDB: the removed field
+    // has already been stripped from `fields`.
+    const fields: Record<string, ProtoField> = {
+      name: { type: "string", required: true },
+    };
+
+    const removedFieldBefore: SnapshotFieldConfig = {
+      type: "uuid",
+      required: true,
+      foreignKey: true,
+      foreignKeyType: "OldParent",
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "oldParentId",
+        {
+          kind: "field_removed",
+          typeName: "Child",
+          fieldName: "oldParentId",
+          before: removedFieldBefore,
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.oldParentId).toBeDefined();
+    expect(fields.oldParentId?.type).toBe("uuid");
+    expect(fields.oldParentId?.foreignKey).toBe(true);
+    expect(fields.oldParentId?.foreignKeyType).toBe("OldParent");
+    expect(fields.oldParentId?.required).toBe(true);
+    // Untouched fields are preserved.
+    expect(fields.name?.type).toBe("string");
+  });
+
+  test("relaxes newly-added required field to optional", () => {
+    const fields: Record<string, ProtoField> = {
+      newField: { type: "string", required: true },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "newField",
+        {
+          kind: "field_added",
+          typeName: "T",
+          fieldName: "newField",
+          after: { type: "string", required: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.newField?.required).toBe(false);
+  });
+
+  test("does not modify fields that are not in typeChanges", () => {
+    const fields: Record<string, ProtoField> = {
+      keep: { type: "string", required: true },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>();
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.keep?.required).toBe(true);
+  });
+});
+
+describe("applyTailorDB migration label reconciliation (--no-schema-check)", () => {
+  let tmpDir: string;
+  let configPath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "applyTailorDB-reconcile-"));
+    configPath = path.join(tmpDir, "tailor.config.ts");
+    // Working tree latest migration = 0 (only baseline schema.json under 0000/)
+    const baselineDir = path.join(tmpDir, "0000");
+    fs.mkdirSync(baselineDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(baselineDir, "schema.json"),
+      JSON.stringify({
+        version: 1,
+        namespace: "test-tailordb",
+        createdAt: new Date().toISOString(),
+        types: {},
+      }),
+    );
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  function makePlanResult(): Awaited<ReturnType<typeof planTailorDB>> {
+    const mockTailorDBService = {
+      namespace: "test-tailordb",
+      loadTypes: vi.fn().mockResolvedValue({}),
+      types: {},
+    } as unknown as TailorDBService;
+
+    const config = {
+      path: configPath,
+      name: "test-app",
+      db: {
+        "test-tailordb": {
+          files: [],
+          migration: { directory: "." },
+        },
+      },
+    } as unknown as LoadedConfig;
+
+    return {
+      changeSet: {
+        service: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          title: "TailorDB Services",
+          isEmpty: () => true,
+          print: () => {},
+        },
+        type: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          title: "TailorDB Types",
+          isEmpty: () => true,
+          print: () => {},
+        },
+        gqlPermission: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          title: "TailorDB GQL Permissions",
+          isEmpty: () => true,
+          print: () => {},
+        },
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+      context: {
+        workspaceId: "test-workspace",
+        application: {
+          name: "test-app",
+          tailorDBServices: [mockTailorDBService],
+        } as unknown as Application,
+        tailorDBInputs: [],
+        config,
+        noSchemaCheck: true,
+      },
+    } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
+  }
+
+  test("forces migration label to working_tree_max when label is ahead of working tree", async () => {
+    // Remote label is m0002 but the working tree only has migration 0000.
+    // Without reconciliation, the next deploy would reconstruct a snapshot at
+    // m0002 (which does not exist) and trigger a false drift error.
+    const getMetadata = vi.fn().mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0002" } },
+    });
+    const setMetadata = vi.fn().mockResolvedValue({});
+    const client = {
+      getMetadata,
+      setMetadata,
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    await applyTailorDB(client, makePlanResult(), "create-update");
+
+    expect(setMetadata).toHaveBeenCalledTimes(1);
+    expect(setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({ "sdk-migration": "m0000" }),
+      }),
+    );
+  });
+
+  test("forces migration label even when remote has no prior label", async () => {
+    const getMetadata = vi.fn().mockResolvedValue({ metadata: { labels: {} } });
+    const setMetadata = vi.fn().mockResolvedValue({});
+    const client = {
+      getMetadata,
+      setMetadata,
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    await applyTailorDB(client, makePlanResult(), "create-update");
+
+    expect(setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({ "sdk-migration": "m0000" }),
+      }),
+    );
+  });
+});
+
+describe("applyTailorDB initial migration baseline (schema check enabled)", () => {
+  let tmpDir: string;
+  let configPath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "applyTailorDB-baseline-"));
+    configPath = path.join(tmpDir, "tailor.config.ts");
+    // Working tree latest migration = 0 (only baseline schema.json under 0000/)
+    const baselineDir = path.join(tmpDir, "0000");
+    fs.mkdirSync(baselineDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(baselineDir, "schema.json"),
+      JSON.stringify({
+        version: 1,
+        namespace: "test-tailordb",
+        createdAt: new Date().toISOString(),
+        types: {},
+      }),
+    );
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  function makePlanResult(): Awaited<ReturnType<typeof planTailorDB>> {
+    const mockTailorDBService = {
+      namespace: "test-tailordb",
+      loadTypes: vi.fn().mockResolvedValue({}),
+      types: {},
+    } as unknown as TailorDBService;
+
+    const config = {
+      path: configPath,
+      name: "test-app",
+      db: {
+        "test-tailordb": {
+          files: [],
+          migration: { directory: "." },
+        },
+      },
+    } as unknown as LoadedConfig;
+
+    return {
+      changeSet: {
+        service: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          title: "TailorDB Services",
+          isEmpty: () => true,
+          print: () => {},
+        },
+        type: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          title: "TailorDB Types",
+          isEmpty: () => true,
+          print: () => {},
+        },
+        gqlPermission: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          title: "TailorDB GQL Permissions",
+          isEmpty: () => true,
+          print: () => {},
+        },
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+      context: {
+        workspaceId: "test-workspace",
+        application: {
+          name: "test-app",
+          tailorDBServices: [mockTailorDBService],
+        } as unknown as Application,
+        tailorDBInputs: [],
+        config,
+        noSchemaCheck: false,
+      },
+    } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
+  }
+
+  test("sets the migration label to 0000 on the first apply (no prior label)", async () => {
+    // Fresh project: `migration generate` created 0000/schema.json, the remote
+    // namespace has no `sdk-migration` label yet. A single `apply` should
+    // establish the baseline by setting the label to 0000 — without requiring
+    // the redundant apply/generate/apply dance.
+    const getMetadata = vi.fn().mockResolvedValue({ metadata: { labels: {} } });
+    const setMetadata = vi.fn().mockResolvedValue({});
+    const client = {
+      getMetadata,
+      setMetadata,
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    await applyTailorDB(client, makePlanResult(), "create-update");
+
+    expect(setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({ "sdk-migration": "m0000" }),
+      }),
+    );
   });
 });

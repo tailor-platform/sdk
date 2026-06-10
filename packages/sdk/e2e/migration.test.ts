@@ -35,9 +35,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect, beforeAll } from "vitest";
-import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
-import { loadAccessToken } from "../src/cli/shared/context";
-import { trackWorkspace, trackTempDir } from "./globalSetup";
 import {
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
@@ -45,6 +42,14 @@ import {
   INITIAL_SCHEMA_NUMBER,
   getMigrationFilePath,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken } from "../src/cli/shared/context";
+import {
+  resolveE2ERunId,
+  resolveE2EWorkspaceRegion,
+  trackWorkspace,
+  trackTempDir,
+} from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,8 +60,8 @@ const E2E_WORKSPACE_PREFIX = "e2e-ws-";
 // Fixture directory path
 const FIXTURE_DIR = path.join(__dirname, "fixtures", "migration");
 
-// Generate unique test identifiers (include GITHUB_RUN_ID in CI to avoid cross-run cleanup conflicts)
-const ciRunId = process.env.GITHUB_RUN_ID ?? "";
+// Generate unique test identifiers (include run id in CI to avoid cross-run cleanup conflicts)
+const ciRunId = resolveE2ERunId();
 const testRunId = Date.now().toString(36);
 const testAppName = `migration-e2e-${testRunId}`;
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
@@ -212,12 +217,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     const accessToken = await loadAccessToken({ useProfile: false });
     client = await initOperatorClient(accessToken);
 
-    // Get available regions and use the first one
-    const regionsResp = await client.listAvailableWorkspaceRegions({});
-    const region = regionsResp.regions[0];
-    if (!region) {
-      throw new Error("No available regions found");
-    }
+    const region = await resolveE2EWorkspaceRegion(client);
 
     // Create workspace dynamically
     console.log(`Creating workspace "${testWorkspaceName}" in region "${region}"...`);
@@ -414,8 +414,7 @@ export type user = typeof user;
       const diff = loadDiff(diffPath);
       expect(diff.hasBreakingChanges).toBe(false);
       expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0].kind).toBe("field_added");
-      expect(diff.changes[0].fieldName).toBe("phone");
+      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
     }, 60000);
 
     /**

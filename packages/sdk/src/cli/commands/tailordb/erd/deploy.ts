@@ -3,9 +3,10 @@ import { z } from "zod";
 import { deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { prepareErdBuilds } from "./export";
-import { initErdContext } from "./utils";
+import { initErdDeployContext } from "./utils";
 
 export const erdDeployCommand = defineAppCommand({
   name: "deploy",
@@ -21,11 +22,10 @@ export const erdDeployCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const { client, workspaceId, config } = await initErdContext(args);
+    await assertWritable({ profile: args.profile });
+    const { client, workspaceId } = await initErdDeployContext(args);
     const buildResults = await prepareErdBuilds({
-      client,
-      workspaceId,
-      config,
+      configPath: args.config,
       namespace: args.namespace,
       requireErdSite: true,
     });

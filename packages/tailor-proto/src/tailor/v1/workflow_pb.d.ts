@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { ConcurrencyPolicy, RetryPolicy, Workflow, WorkflowExecution, WorkflowJobFunction } from "./workflow_resource_pb";
+import type { ConcurrencyPolicy, RetryPolicy, Workflow, WorkflowExecution, WorkflowJobFunction, WorkflowJobFunctionExecutionPolicy } from "./workflow_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
 import type { AuthInvoker } from "./auth_resource_pb";
 
@@ -390,6 +390,39 @@ export declare type UpdateWorkflowJobFunctionResponse = Message<"tailor.v1.Updat
 export declare const UpdateWorkflowJobFunctionResponseSchema: GenMessage<UpdateWorkflowJobFunctionResponse>;
 
 /**
+ * @generated from message tailor.v1.DeleteWorkflowJobFunctionRequest
+ */
+export declare type DeleteWorkflowJobFunctionRequest = Message<"tailor.v1.DeleteWorkflowJobFunctionRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string job_function_name = 2;
+   */
+  jobFunctionName: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteWorkflowJobFunctionRequest.
+ * Use `create(DeleteWorkflowJobFunctionRequestSchema)` to create a new message.
+ */
+export declare const DeleteWorkflowJobFunctionRequestSchema: GenMessage<DeleteWorkflowJobFunctionRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteWorkflowJobFunctionResponse
+ */
+export declare type DeleteWorkflowJobFunctionResponse = Message<"tailor.v1.DeleteWorkflowJobFunctionResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteWorkflowJobFunctionResponse.
+ * Use `create(DeleteWorkflowJobFunctionResponseSchema)` to create a new message.
+ */
+export declare const DeleteWorkflowJobFunctionResponseSchema: GenMessage<DeleteWorkflowJobFunctionResponse>;
+
+/**
  * @generated from message tailor.v1.GetWorkflowJobFunctionRequest
  */
 export declare type GetWorkflowJobFunctionRequest = Message<"tailor.v1.GetWorkflowJobFunctionRequest"> & {
@@ -707,4 +740,252 @@ export declare type TestResumeWorkflowResponse = Message<"tailor.v1.TestResumeWo
  * Use `create(TestResumeWorkflowResponseSchema)` to create a new message.
  */
 export declare const TestResumeWorkflowResponseSchema: GenMessage<TestResumeWorkflowResponse>;
+
+/**
+ * @generated from message tailor.v1.CreateWorkflowJobFunctionExecutionPolicyRequest
+ */
+export declare type CreateWorkflowJobFunctionExecutionPolicyRequest = Message<"tailor.v1.CreateWorkflowJobFunctionExecutionPolicyRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string execution_policy_key = 2;
+   */
+  executionPolicyKey: string;
+
+  /**
+   * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 3;
+   */
+  concurrencyPolicy?: ConcurrencyPolicy;
+};
+
+/**
+ * Describes the message tailor.v1.CreateWorkflowJobFunctionExecutionPolicyRequest.
+ * Use `create(CreateWorkflowJobFunctionExecutionPolicyRequestSchema)` to create a new message.
+ */
+export declare const CreateWorkflowJobFunctionExecutionPolicyRequestSchema: GenMessage<CreateWorkflowJobFunctionExecutionPolicyRequest>;
+
+/**
+ * @generated from message tailor.v1.CreateWorkflowJobFunctionExecutionPolicyResponse
+ */
+export declare type CreateWorkflowJobFunctionExecutionPolicyResponse = Message<"tailor.v1.CreateWorkflowJobFunctionExecutionPolicyResponse"> & {
+  /**
+   * @generated from field: tailor.v1.WorkflowJobFunctionExecutionPolicy policy = 1;
+   */
+  policy?: WorkflowJobFunctionExecutionPolicy;
+};
+
+/**
+ * Describes the message tailor.v1.CreateWorkflowJobFunctionExecutionPolicyResponse.
+ * Use `create(CreateWorkflowJobFunctionExecutionPolicyResponseSchema)` to create a new message.
+ */
+export declare const CreateWorkflowJobFunctionExecutionPolicyResponseSchema: GenMessage<CreateWorkflowJobFunctionExecutionPolicyResponse>;
+
+/**
+ * @generated from message tailor.v1.UpdateWorkflowJobFunctionExecutionPolicyRequest
+ */
+export declare type UpdateWorkflowJobFunctionExecutionPolicyRequest = Message<"tailor.v1.UpdateWorkflowJobFunctionExecutionPolicyRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string execution_policy_key = 2;
+   */
+  executionPolicyKey: string;
+
+  /**
+   * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 3;
+   */
+  concurrencyPolicy?: ConcurrencyPolicy;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateWorkflowJobFunctionExecutionPolicyRequest.
+ * Use `create(UpdateWorkflowJobFunctionExecutionPolicyRequestSchema)` to create a new message.
+ */
+export declare const UpdateWorkflowJobFunctionExecutionPolicyRequestSchema: GenMessage<UpdateWorkflowJobFunctionExecutionPolicyRequest>;
+
+/**
+ * @generated from message tailor.v1.UpdateWorkflowJobFunctionExecutionPolicyResponse
+ */
+export declare type UpdateWorkflowJobFunctionExecutionPolicyResponse = Message<"tailor.v1.UpdateWorkflowJobFunctionExecutionPolicyResponse"> & {
+  /**
+   * @generated from field: tailor.v1.WorkflowJobFunctionExecutionPolicy policy = 1;
+   */
+  policy?: WorkflowJobFunctionExecutionPolicy;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateWorkflowJobFunctionExecutionPolicyResponse.
+ * Use `create(UpdateWorkflowJobFunctionExecutionPolicyResponseSchema)` to create a new message.
+ */
+export declare const UpdateWorkflowJobFunctionExecutionPolicyResponseSchema: GenMessage<UpdateWorkflowJobFunctionExecutionPolicyResponse>;
+
+/**
+ * @generated from message tailor.v1.DeleteWorkflowJobFunctionExecutionPolicyRequest
+ */
+export declare type DeleteWorkflowJobFunctionExecutionPolicyRequest = Message<"tailor.v1.DeleteWorkflowJobFunctionExecutionPolicyRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string id = 2;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteWorkflowJobFunctionExecutionPolicyRequest.
+ * Use `create(DeleteWorkflowJobFunctionExecutionPolicyRequestSchema)` to create a new message.
+ */
+export declare const DeleteWorkflowJobFunctionExecutionPolicyRequestSchema: GenMessage<DeleteWorkflowJobFunctionExecutionPolicyRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteWorkflowJobFunctionExecutionPolicyResponse
+ */
+export declare type DeleteWorkflowJobFunctionExecutionPolicyResponse = Message<"tailor.v1.DeleteWorkflowJobFunctionExecutionPolicyResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteWorkflowJobFunctionExecutionPolicyResponse.
+ * Use `create(DeleteWorkflowJobFunctionExecutionPolicyResponseSchema)` to create a new message.
+ */
+export declare const DeleteWorkflowJobFunctionExecutionPolicyResponseSchema: GenMessage<DeleteWorkflowJobFunctionExecutionPolicyResponse>;
+
+/**
+ * @generated from message tailor.v1.GetWorkflowJobFunctionExecutionPolicyRequest
+ */
+export declare type GetWorkflowJobFunctionExecutionPolicyRequest = Message<"tailor.v1.GetWorkflowJobFunctionExecutionPolicyRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string id = 2;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetWorkflowJobFunctionExecutionPolicyRequest.
+ * Use `create(GetWorkflowJobFunctionExecutionPolicyRequestSchema)` to create a new message.
+ */
+export declare const GetWorkflowJobFunctionExecutionPolicyRequestSchema: GenMessage<GetWorkflowJobFunctionExecutionPolicyRequest>;
+
+/**
+ * @generated from message tailor.v1.GetWorkflowJobFunctionExecutionPolicyResponse
+ */
+export declare type GetWorkflowJobFunctionExecutionPolicyResponse = Message<"tailor.v1.GetWorkflowJobFunctionExecutionPolicyResponse"> & {
+  /**
+   * @generated from field: tailor.v1.WorkflowJobFunctionExecutionPolicy policy = 1;
+   */
+  policy?: WorkflowJobFunctionExecutionPolicy;
+};
+
+/**
+ * Describes the message tailor.v1.GetWorkflowJobFunctionExecutionPolicyResponse.
+ * Use `create(GetWorkflowJobFunctionExecutionPolicyResponseSchema)` to create a new message.
+ */
+export declare const GetWorkflowJobFunctionExecutionPolicyResponseSchema: GenMessage<GetWorkflowJobFunctionExecutionPolicyResponse>;
+
+/**
+ * @generated from message tailor.v1.GetWorkflowJobFunctionExecutionPolicyByKeyRequest
+ */
+export declare type GetWorkflowJobFunctionExecutionPolicyByKeyRequest = Message<"tailor.v1.GetWorkflowJobFunctionExecutionPolicyByKeyRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string execution_policy_key = 2;
+   */
+  executionPolicyKey: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetWorkflowJobFunctionExecutionPolicyByKeyRequest.
+ * Use `create(GetWorkflowJobFunctionExecutionPolicyByKeyRequestSchema)` to create a new message.
+ */
+export declare const GetWorkflowJobFunctionExecutionPolicyByKeyRequestSchema: GenMessage<GetWorkflowJobFunctionExecutionPolicyByKeyRequest>;
+
+/**
+ * @generated from message tailor.v1.GetWorkflowJobFunctionExecutionPolicyByKeyResponse
+ */
+export declare type GetWorkflowJobFunctionExecutionPolicyByKeyResponse = Message<"tailor.v1.GetWorkflowJobFunctionExecutionPolicyByKeyResponse"> & {
+  /**
+   * @generated from field: tailor.v1.WorkflowJobFunctionExecutionPolicy policy = 1;
+   */
+  policy?: WorkflowJobFunctionExecutionPolicy;
+};
+
+/**
+ * Describes the message tailor.v1.GetWorkflowJobFunctionExecutionPolicyByKeyResponse.
+ * Use `create(GetWorkflowJobFunctionExecutionPolicyByKeyResponseSchema)` to create a new message.
+ */
+export declare const GetWorkflowJobFunctionExecutionPolicyByKeyResponseSchema: GenMessage<GetWorkflowJobFunctionExecutionPolicyByKeyResponse>;
+
+/**
+ * @generated from message tailor.v1.ListWorkflowJobFunctionExecutionPoliciesRequest
+ */
+export declare type ListWorkflowJobFunctionExecutionPoliciesRequest = Message<"tailor.v1.ListWorkflowJobFunctionExecutionPoliciesRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string page_token = 2;
+   */
+  pageToken: string;
+
+  /**
+   * @generated from field: uint32 page_size = 3;
+   */
+  pageSize: number;
+
+  /**
+   * @generated from field: tailor.v1.PageDirection page_direction = 4;
+   */
+  pageDirection: PageDirection;
+};
+
+/**
+ * Describes the message tailor.v1.ListWorkflowJobFunctionExecutionPoliciesRequest.
+ * Use `create(ListWorkflowJobFunctionExecutionPoliciesRequestSchema)` to create a new message.
+ */
+export declare const ListWorkflowJobFunctionExecutionPoliciesRequestSchema: GenMessage<ListWorkflowJobFunctionExecutionPoliciesRequest>;
+
+/**
+ * @generated from message tailor.v1.ListWorkflowJobFunctionExecutionPoliciesResponse
+ */
+export declare type ListWorkflowJobFunctionExecutionPoliciesResponse = Message<"tailor.v1.ListWorkflowJobFunctionExecutionPoliciesResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.WorkflowJobFunctionExecutionPolicy policies = 1;
+   */
+  policies: WorkflowJobFunctionExecutionPolicy[];
+
+  /**
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+
+  /**
+   * @generated from field: int64 total_count = 3;
+   */
+  totalCount: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListWorkflowJobFunctionExecutionPoliciesResponse.
+ * Use `create(ListWorkflowJobFunctionExecutionPoliciesResponseSchema)` to create a new message.
+ */
+export declare const ListWorkflowJobFunctionExecutionPoliciesResponseSchema: GenMessage<ListWorkflowJobFunctionExecutionPoliciesResponse>;
 

@@ -3,14 +3,9 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node", "vitest/globals"],
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo"
   },
-  "include": ["**/*.ts"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "problems/*/work",
-    "problems/*/solution",
-    "problems/*/scaffold"
-  ]
+  "include": ["src/**/*.ts"]
 }

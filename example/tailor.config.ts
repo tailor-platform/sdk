@@ -22,7 +22,13 @@ const erdSite = defineStaticWebSite("my-erd-site", {
 const idp = defineIdp("my-idp", {
   clients: ["default-idp-client"],
   permission: {
-    create: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
+    create: [
+      {
+        conditions: [[{ user: "role" }, "=", "MANAGER"]],
+        permit: true,
+        description: "Only managers can create users",
+      },
+    ],
     read: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
@@ -61,10 +67,12 @@ export const auth = defineAuth("my-auth", {
   },
   hooks: {
     beforeLogin: {
-      handler: async ({ claims, idpConfigName }) => {
+      handler: async ({ claims, idpConfigName, env }) => {
         // Example before login hook implementation
         console.log("Before login hook triggered with claims:", claims);
         console.log("IDP Config Name:", idpConfigName);
+        // `env` exposes the variables defined in `defineConfig({ env })`
+        console.log("Environment:", env);
         // You can perform additional checks or modifications to claims here
       },
       invoker: "manager-machine-user",
@@ -90,7 +98,10 @@ export const auth = defineAuth("my-auth", {
 });
 
 export default defineConfig({
+  // SDK-managed app id — do not edit, except when copying this config to a separate app.
+  id: "d0a3398a-f79c-4c2e-be1e-b81469bb0a43",
   name: "my-app",
+  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
   env: {
     foo: 1,
     bar: "hello",
@@ -117,6 +128,9 @@ export default defineConfig({
   executor: { files: ["./executors/*.ts"] },
   workflow: {
     files: ["./workflows/**/*.ts"],
+  },
+  httpAdapter: {
+    files: ["./adapters/**/*.ts"],
   },
   staticWebsites: [website, erdSite],
 });

@@ -12,6 +12,8 @@ export default defineConfig({
   withDescriptions: true,
   generateTests: false,
   map: {
+    AppConfigSchema: "AppConfigParsed",
+    LogLevelSchema: "LogLevelEnum",
     TailorDBTypeSettingsSchema: "TailorDBTypeParsedSettings",
     TailorDBTypeSchema: "TailorDBTypeRaw",
     SCIMSchema: "SCIMConfig",

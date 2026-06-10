@@ -17,16 +17,21 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect, beforeAll } from "vitest";
+import { deploy } from "../src/cli/commands/deploy/deploy";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
-import { deploy } from "../src/cli/commands/deploy/deploy";
-import { trackWorkspace, trackTempDir } from "./globalSetup";
+import {
+  resolveE2ERunId,
+  resolveE2EWorkspaceRegion,
+  trackWorkspace,
+  trackTempDir,
+} from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Generate unique test identifiers (include GITHUB_RUN_ID in CI to avoid cross-run cleanup conflicts)
-const ciRunId = process.env.GITHUB_RUN_ID ?? "";
+// Generate unique test identifiers (include run id in CI to avoid cross-run cleanup conflicts)
+const ciRunId = resolveE2ERunId();
 const testRunId = Date.now().toString(36);
 const testAppName = `e2e-test-${testRunId}`;
 const testWorkspaceName = `e2e-ws-${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
@@ -39,18 +44,18 @@ describe("E2E: Service deletion order", () => {
   let client: OperatorClient;
   let tempDir: string;
   let configCounter = 0;
+  // Share a single auto-generated app id across all configs created in this
+  // suite so resources keep being recognized as owned across re-applies, even
+  // though each apply targets a different config file (a workaround for
+  // Node.js module caching).
+  const sharedTestAppId = crypto.randomUUID();
 
   beforeAll(async () => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken({ useProfile: false });
     client = await initOperatorClient(accessToken);
 
-    // Get available regions and use the first one
-    const regionsResp = await client.listAvailableWorkspaceRegions({});
-    const region = regionsResp.regions[0];
-    if (!region) {
-      throw new Error("No available regions found");
-    }
+    const region = await resolveE2EWorkspaceRegion(client);
 
     // Create workspace dynamically
     console.log(`Creating workspace "${testWorkspaceName}" in region "${region}"...`);
@@ -86,7 +91,13 @@ describe("E2E: Service deletion order", () => {
   function createTestConfig(config: string): string {
     configCounter++;
     const configPath = path.join(tempDir, `config-${configCounter}.ts`);
-    fs.writeFileSync(configPath, config);
+    // Inject the shared id at the top of every defineConfig({...}) call so
+    // that follow-up applies in the same test still recognize prior resources
+    // as owned (see sharedTestAppId comment above).
+    const configWithId = config.includes("id:")
+      ? config
+      : config.replace(/defineConfig\(\{/, `defineConfig({\n  id: "${sharedTestAppId}",`);
+    fs.writeFileSync(configPath, configWithId);
     return configPath;
   }
 
@@ -587,10 +598,12 @@ export default defineConfig({
 `;
 
     const configPath = createTestConfig(cleanupConfig);
-    await deploy({
-      workspaceId,
-      configPath,
-      yes: true,
-    });
+    await expect(
+      deploy({
+        workspaceId,
+        configPath,
+        yes: true,
+      }),
+    ).resolves.toBeUndefined();
   }, 120000);
 });

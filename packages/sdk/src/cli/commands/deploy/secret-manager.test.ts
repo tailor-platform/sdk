@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
-import type { PlanContext } from "@/cli/commands/deploy/deploy";
+import type { PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -35,13 +35,16 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockImplementation(async (trn: string, appName: string) => ({
-      trn,
-      labels: {
-        "sdk-name": appName,
-        "sdk-version": "v1-0-0",
-      },
-    })),
+    buildMetaRequest: vi
+      .fn()
+      .mockImplementation(async (params: { trn: string; appName: string; appId?: string }) => ({
+        trn: params.trn,
+        labels: {
+          "sdk-name": params.appName,
+          "sdk-version": "v1-0-0",
+          ...(params.appId ? { "sdk-app-id": `app-${params.appId}` } : {}),
+        },
+      })),
   };
 });
 

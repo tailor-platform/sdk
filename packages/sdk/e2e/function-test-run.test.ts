@@ -30,13 +30,13 @@ import { resolveResolverArg } from "../src/cli/commands/function/test-run";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
-import { trackWorkspace } from "./globalSetup";
+import { resolveE2ERunId, resolveE2EWorkspaceRegion, trackWorkspace } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const E2E_WORKSPACE_PREFIX = "e2e-ws-";
-const ciRunId = process.env.GITHUB_RUN_ID ?? "";
+const ciRunId = resolveE2ERunId();
 const testRunId = Date.now().toString(36);
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 
@@ -121,8 +121,7 @@ describe.sequential("E2E: function test-run", () => {
     // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken({ useProfile: false });
     client = await initOperatorClient(accessToken);
-    const regionsResp = await client.listAvailableWorkspaceRegions({});
-    const region = regionsResp.regions[0];
+    const region = await resolveE2EWorkspaceRegion(client);
 
     console.log(`Creating workspace "${testWorkspaceName}" in region "${region}"...`);
     const createResp = await client.createWorkspace({
@@ -350,9 +349,8 @@ describe.sequential("E2E: function test-run", () => {
       expect(result.success).toBe(false);
       expect(result.logs).toContain("Log line 1");
       expect(result.logs).toContain("Log line 2");
-      if (result.error) {
-        expect(result.error).not.toContain("Log line 1");
-      }
+      expect(result.error).toBeDefined();
+      expect(result.error).not.toContain("Log line 1");
     });
   });
 });

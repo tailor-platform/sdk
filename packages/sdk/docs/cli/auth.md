@@ -28,11 +28,13 @@ tailor-sdk authconnection [command]
 
 **Commands**
 
-| Command                                                 | Description                                   |
-| ------------------------------------------------------- | --------------------------------------------- |
-| [`authconnection authorize`](#authconnection-authorize) | Authorize an auth connection via OAuth2 flow. |
-| [`authconnection list`](#authconnection-list)           | List all auth connections.                    |
-| [`authconnection revoke`](#authconnection-revoke)       | Revoke an auth connection.                    |
+| Command                                                 | Description                                                                           |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| [`authconnection authorize`](#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.                                         |
+| [`authconnection list`](#authconnection-list)           | List all auth connections.                                                            |
+| [`authconnection open`](#authconnection-open)           | Open the auth connections page in the Tailor Platform Console.                        |
+| [`authconnection revoke`](#authconnection-revoke)       | Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it). |
+| [`authconnection delete`](#authconnection-delete)       | Delete an auth connection entirely.                                                   |
 
 <!-- politty:command:authconnection:subcommands:end -->
 
@@ -83,6 +85,46 @@ tailor-sdk authconnection authorize [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:authconnection authorize:global-options-link:end -->
+<!-- politty:command:authconnection delete:heading:start -->
+
+### authconnection delete
+
+<!-- politty:command:authconnection delete:heading:end -->
+
+<!-- politty:command:authconnection delete:description:start -->
+
+Delete an auth connection entirely.
+
+<!-- politty:command:authconnection delete:description:end -->
+
+<!-- politty:command:authconnection delete:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk authconnection delete [options]
+```
+
+<!-- politty:command:authconnection delete:usage:end -->
+
+<!-- politty:command:authconnection delete:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description               | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--name <NAME>`                 | `-n`  | Auth connection name      | Yes      | -       | -                              |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` | -                              |
+
+<!-- politty:command:authconnection delete:options:end -->
+
+<!-- politty:command:authconnection delete:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection delete:global-options-link:end -->
 
 <!-- politty:command:authconnection list:heading:start -->
 
@@ -124,6 +166,45 @@ tailor-sdk authconnection list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:authconnection list:global-options-link:end -->
+<!-- politty:command:authconnection open:heading:start -->
+
+### authconnection open
+
+<!-- politty:command:authconnection open:heading:end -->
+
+<!-- politty:command:authconnection open:description:start -->
+
+Open the auth connections page in the Tailor Platform Console.
+
+<!-- politty:command:authconnection open:description:end -->
+
+<!-- politty:command:authconnection open:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk authconnection open [options]
+```
+
+<!-- politty:command:authconnection open:usage:end -->
+
+<!-- politty:command:authconnection open:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+<!-- politty:command:authconnection open:options:end -->
+
+<!-- politty:command:authconnection open:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection open:global-options-link:end -->
+
 <!-- politty:command:authconnection revoke:heading:start -->
 
 ### authconnection revoke
@@ -132,7 +213,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:authconnection revoke:description:start -->
 
-Revoke an auth connection.
+Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it).
 
 <!-- politty:command:authconnection revoke:description:end -->
 
@@ -164,6 +245,14 @@ tailor-sdk authconnection revoke [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:authconnection revoke:global-options-link:end -->
+
+<!-- politty:command:authconnection revoke:notes:start -->
+
+**Notes**
+
+Revoke invalidates the connection's active session and tokens but keeps the connection and its stored credentials, so it can be re-authorized later. Use `delete` to remove the connection entirely.
+
+<!-- politty:command:authconnection revoke:notes:end -->
 
 <!-- politty:command:machineuser:heading:start -->
 

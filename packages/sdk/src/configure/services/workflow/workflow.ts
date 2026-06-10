@@ -1,7 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "@/utils/brand";
-import type { WorkflowJob } from "./job";
+import { dispatchTriggerWorkflow, registerWorkflow } from "./registry";
 import type { AuthInvoker } from "../auth";
+import type { WorkflowJob } from "./job";
 import type { MachineUserName } from "@/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
 
@@ -62,16 +63,22 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
+  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
+  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
+    registerWorkflow(config.name, config.mainJob.name);
+  }
+
   return brandValue(
     {
       ...config,
-      // For local execution, directly call mainJob.trigger()
-      // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
-      trigger: async (args) => {
-        await config.mainJob.trigger(...([args] as unknown as []));
-        return "00000000-0000-0000-0000-000000000000";
-      },
-    },
+      trigger: process.env.TAILOR_PLATFORM_BUNDLE
+        ? async () => {
+            throw new Error(
+              "workflow.trigger() is rewritten at build time and unavailable in the bundle",
+            );
+          }
+        : async (args, options) => await dispatchTriggerWorkflow(config.name, args, options),
+    } as Workflow<Job>,
     "workflow",
   );
 }

@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
@@ -28,8 +28,16 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
+      # Install deps builds the SDK once so the CLI bin links resolve; build
+      # the remaining packages here before downstream checks.
+      - name: Build packages
+        run: pnpm -r --filter '!@tailor-platform/sdk' run build
+
       - name: Run lint
-        run: pnpm lint
+        run: pnpm -r run lint
+
+      - name: Run Vitest lint
+        run: pnpm run lint:vitest
 
       # Ensure no executable files are present
       # refs: https://github.com/changesets/action/issues/523
@@ -46,14 +54,17 @@ jobs:
       - name: Check format
         run: pnpm format:check
 
+      - name: Generate code
+        run: pnpm -r run generate
+
       - name: Check type by tsgo
-        run: pnpm typecheck:go
+        run: pnpm -r run typecheck:go
 
       - name: Check type
-        run: pnpm typecheck
+        run: pnpm -r run typecheck
 
       - name: Check unused code (knip)
-        run: pnpm run knip
+        run: pnpm -r run knip
 
       - name: Check package exports (publint)
-        run: pnpm run publint
+        run: pnpm -r run publint

@@ -246,9 +246,9 @@ export function replTransform(
       // pair (e.g. `{|}`). Expand into a three-line block with the cursor
       // on an indented middle line.
       const innerIndent = baseIndent + "  ";
-      const newLines = [...lines];
-      newLines[row] = innerIndent;
-      newLines.splice(row + 1, 0, baseIndent + lines[row].trimStart());
+      const newLines = lines
+        .with(row, innerIndent)
+        .toSpliced(row + 1, 0, baseIndent + lines[row].trimStart());
       return { lines: newLines, row, col: innerIndent.length };
     }
     if (endsWithOpen) {
@@ -257,9 +257,9 @@ export function replTransform(
       const openChar = prevLine.trimEnd().slice(-1);
       const closeChar = BRACKET_PAIRS[openChar] ?? "}";
       const indent = baseIndent + "  ";
-      const newLines = [...lines];
-      newLines[row] = indent + lines[row];
-      newLines.splice(row + 1, 0, baseIndent + closeChar);
+      const newLines = lines
+        .with(row, indent + lines[row])
+        .toSpliced(row + 1, 0, baseIndent + closeChar);
       return { lines: newLines, row, col: indent.length };
     }
     if (baseIndent && col === 0) {

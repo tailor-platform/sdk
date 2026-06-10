@@ -1,4 +1,5 @@
 import type { AuthConnectionConfig } from "./auth-connection.generated";
+import type { ValueOperand } from "./auth-value";
 import type {
   AuthInvoker,
   IdProvider as IdProviderConfig,
@@ -8,6 +9,7 @@ import type {
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
 } from "./auth.generated";
+import type { TailorEnv } from "./env";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "./field-types";
 import type { output } from "./helpers";
 import type { TailorDBInstance } from "./tailor-db-field";
@@ -30,8 +32,7 @@ export type AuthConnectionTokenResult = {
   expiry?: string;
 };
 
-// Helper types for ValueOperand
-export type ValueOperand = string | boolean | string[] | boolean[];
+export type { ValueOperand } from "./auth-value";
 export type AuthAttributeValue = ValueOperand | null | undefined;
 
 // User field type helpers
@@ -232,6 +233,8 @@ type MachineUser<
 export type BeforeLoginHookArgs = {
   claims: JsonObject;
   idpConfigName: string;
+  /** Environment variables defined in `defineConfig({ env })`. */
+  env: TailorEnv;
 };
 
 export type BeforeLoginHook<MachineUserNames extends string> = {

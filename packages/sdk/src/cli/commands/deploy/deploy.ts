@@ -5,9 +5,9 @@ import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
-import { initOperatorClient } from "@/cli/shared/client";
+import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
@@ -23,6 +23,7 @@ import {
   type HasName,
   type PlanSummary,
 } from "./change-set";
+import { ensureConfigId } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
@@ -53,14 +54,13 @@ import {
   type NamespaceAction,
 } from "./grouped-display";
 import { applyIdP, planIdP } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
+import type { PlanContext } from "./types";
 
 export interface DeployOptions {
   workspaceId?: string;
@@ -74,64 +74,6 @@ export interface DeployOptions {
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
-}
-
-export interface PlanContext {
-  client: OperatorClient;
-  workspaceId: string;
-  application: Readonly<Application>;
-  forRemoval: boolean;
-  config: LoadedConfig;
-  noSchemaCheck?: boolean;
-  forceApplyAll?: boolean;
-  /**
-   * Set of IdP names that have at least one executor with an idpUser trigger.
-   * Controls how `publishUserEvents` defaults on each IdP service. Empty when
-   * no idpUser triggers are defined.
-   */
-  idpUserTriggerTargets?: ReadonlySet<string>;
-}
-
-export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
-
-function applicationTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:application:${name}`;
-}
-
-function functionRegistryTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
-}
-
-function pipelineTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:pipeline:${name}`;
-}
-
-function idpTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
-}
-
-function authTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
-}
-
-function executorTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
-}
-
-function workflowTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
-}
-
-function staticWebsiteTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
-}
-
-function tailorDBTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:tailordb:${name}`;
-}
-
-function vaultTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
 }
 
 /**
@@ -166,39 +108,43 @@ async function shouldForceApplyAll(
   functionEntries: ReadonlyArray<{ name: string }>,
 ) {
   const desiredLabels = (
-    await buildMetaRequest(applicationTrn(workspaceId, application.name), application.name)
+    await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "application", application.name),
+      appName: application.name,
+      appId: application.id,
+    })
   ).labels;
   const candidateTrns = new Set<string>();
 
   if (application.subgraphs.length > 0) {
-    candidateTrns.add(applicationTrn(workspaceId, application.name));
+    candidateTrns.add(resourceTrn(workspaceId, "application", application.name));
   }
   application.staticWebsiteServices.forEach((website) => {
-    candidateTrns.add(staticWebsiteTrn(workspaceId, website.name));
+    candidateTrns.add(resourceTrn(workspaceId, "staticwebsite", website.name));
   });
   application.resolverServices.forEach((pipeline) => {
-    candidateTrns.add(pipelineTrn(workspaceId, pipeline.namespace));
+    candidateTrns.add(resourceTrn(workspaceId, "pipeline", pipeline.namespace));
   });
   application.idpServices.forEach((idp) => {
-    candidateTrns.add(idpTrn(workspaceId, idp.name));
+    candidateTrns.add(resourceTrn(workspaceId, "idp", idp.name));
   });
   if (application.authService) {
-    candidateTrns.add(authTrn(workspaceId, application.authService.config.name));
+    candidateTrns.add(resourceTrn(workspaceId, "auth", application.authService.config.name));
   }
   Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
-    candidateTrns.add(executorTrn(workspaceId, executor.name));
+    candidateTrns.add(resourceTrn(workspaceId, "executor", executor.name));
   });
   Object.values(application.workflowService?.workflows ?? {}).forEach((workflow) => {
-    candidateTrns.add(workflowTrn(workspaceId, workflow.name));
+    candidateTrns.add(resourceTrn(workspaceId, "workflow", workflow.name));
   });
   application.tailorDBServices.forEach((service) => {
-    candidateTrns.add(tailorDBTrn(workspaceId, service.namespace));
+    candidateTrns.add(resourceTrn(workspaceId, "tailordb", service.namespace));
   });
   application.secrets.forEach((vault) => {
-    candidateTrns.add(vaultTrn(workspaceId, vault.vaultName));
+    candidateTrns.add(resourceTrn(workspaceId, "vault", vault.vaultName));
   });
   functionEntries.forEach((entry) => {
-    candidateTrns.add(functionRegistryTrn(workspaceId, entry.name));
+    candidateTrns.add(resourceTrn(workspaceId, "function_registry", entry.name));
   });
 
   for (const trn of candidateTrns) {
@@ -219,6 +165,28 @@ async function shouldForceApplyAll(
   }
 
   return false;
+}
+
+/**
+ * Decide which renamed-away applications should be deleted. Excludes the
+ * target itself: id regeneration alone keeps the name unchanged, so deleting
+ * by name would destroy the live app.
+ * @param params - Inputs for the computation
+ * @param params.conflicts - Detected owner conflicts across all services
+ * @param params.resourceOwners - App names that still own resources we don't manage
+ * @param params.targetAppName - The application currently being deployed
+ * @returns Names of empty old applications that should be deleted
+ */
+export function computeRenamedAppDeletions(params: {
+  conflicts: ReadonlyArray<Pick<OwnerConflict, "currentOwner">>;
+  resourceOwners: ReadonlySet<string>;
+  targetAppName: string;
+}): string[] {
+  const { conflicts, resourceOwners, targetAppName } = params;
+  const conflictOwners = new Set(conflicts.map((c) => c.currentOwner));
+  return [...conflictOwners].filter(
+    (owner) => !resourceOwners.has(owner) && owner !== targetAppName,
+  );
 }
 
 type PlanResults = {
@@ -313,6 +281,7 @@ function printPlanResults(results: PlanResults) {
   const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
   const authServiceActions = extractServiceActions(results.auth.changeSet.service);
   results.staticWebsite.changeSet.print();
+  results.staticWebsite.customDomainChangeSet.print();
   results.app.print();
   printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
   printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
@@ -383,6 +352,7 @@ export function summarizePlanResults(
   const nonGrouped = summarizeChangeSets([
     otherChanges,
     results.staticWebsite.changeSet,
+    results.staticWebsite.customDomainChangeSet,
     results.app,
     results.secretManager.vaultChangeSet,
     results.secretManager.secretChangeSet,
@@ -405,74 +375,97 @@ export async function deploy(options?: DeployOptions) {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
     // Phase 0: Build
-    const { config, application, workflowBuildResult, bundledScripts, buildOnly } = await withSpan(
-      "build",
-      async () => {
-        const { config, plugins } = await withSpan("build.loadConfig", () =>
-          loadConfig(options?.configPath),
+    const {
+      config,
+      application,
+      workflowBuildResult,
+      httpAdapterBuildResult,
+      bundledScripts,
+      buildOnly,
+    } = await withSpan("build", async () => {
+      const dryRun = options?.dryRun ?? false;
+      const buildOnly =
+        options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
+
+      const { config, plugins } = await withSpan("build.loadConfig", async () => {
+        const foundPath = loadConfigPath(options?.configPath);
+        // Skip id injection in dry-run / build-only flows: those modes are
+        // expected to have no on-disk side effects.
+        if (foundPath && !dryRun && !buildOnly) {
+          const resolvedPath = path.resolve(process.cwd(), foundPath);
+          if (fs.existsSync(resolvedPath)) {
+            await ensureConfigId(resolvedPath);
+          }
+        }
+        return loadConfig(options?.configPath);
+      });
+
+      const noCache = options?.noCache ?? false;
+
+      // Initialize cache manager
+      const packageJson = await readPackageJson();
+      const cacheDir = path.resolve(getDistDir(), "cache");
+      if (options?.cleanCache) {
+        fs.rmSync(cacheDir, { recursive: true, force: true });
+        logger.info("Bundle cache cleaned");
+      }
+      const configDir = path.dirname(config.path);
+      const lockfilePath =
+        findUpSync("pnpm-lock.yaml", { cwd: configDir }) ??
+        findUpSync("package-lock.json", { cwd: configDir }) ??
+        findUpSync("yarn.lock", { cwd: configDir }) ??
+        findUpSync("bun.lock", { cwd: configDir });
+      const cacheManager = createCacheManager({
+        enabled: !noCache,
+        cacheDir,
+        sdkVersion: packageJson.version ?? "unknown",
+        lockfileHash: lockfilePath ? hashFile(lockfilePath) : undefined,
+      });
+
+      let pluginManager: PluginManager | undefined;
+      if (plugins.length > 0) {
+        pluginManager = new PluginManager(plugins);
+      }
+
+      await withSpan("build.generateUserTypes", () =>
+        generateUserTypes({ config, configPath: config.path }),
+      );
+
+      let application: Application;
+      let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+      let httpAdapterBuildResult: Awaited<
+        ReturnType<typeof loadApplication>
+      >["httpAdapterBuildResult"];
+      let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
+      try {
+        const result = await withSpan("build.loadApplication", () =>
+          loadApplication({
+            config,
+            pluginManager,
+            bundleCache: cacheManager.bundleCache,
+          }),
         );
+        application = result.application;
+        workflowBuildResult = result.workflowBuildResult;
+        httpAdapterBuildResult = result.httpAdapterBuildResult;
+        bundledScripts = result.bundledScripts;
+      } finally {
+        // Persist even on partial failure: successfully built bundles
+        // are cached so the next run only rebuilds what failed.
+        cacheManager.finalize();
+      }
 
-        const dryRun = options?.dryRun ?? false;
-        const buildOnly =
-          options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
-        const noCache = options?.noCache ?? false;
-
-        // Initialize cache manager
-        const packageJson = await readPackageJson();
-        const cacheDir = path.resolve(getDistDir(), "cache");
-        if (options?.cleanCache) {
-          fs.rmSync(cacheDir, { recursive: true, force: true });
-          logger.info("Bundle cache cleaned");
-        }
-        const configDir = path.dirname(config.path);
-        const lockfilePath =
-          findUpSync("pnpm-lock.yaml", { cwd: configDir }) ??
-          findUpSync("package-lock.json", { cwd: configDir }) ??
-          findUpSync("yarn.lock", { cwd: configDir }) ??
-          findUpSync("bun.lock", { cwd: configDir });
-        const cacheManager = createCacheManager({
-          enabled: !noCache,
-          cacheDir,
-          sdkVersion: packageJson.version ?? "unknown",
-          lockfileHash: lockfilePath ? hashFile(lockfilePath) : undefined,
-        });
-
-        let pluginManager: PluginManager | undefined;
-        if (plugins.length > 0) {
-          pluginManager = new PluginManager(plugins);
-        }
-
-        await withSpan("build.generateUserTypes", () =>
-          generateUserTypes({ config, configPath: config.path }),
-        );
-
-        let application: Application;
-        let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
-        let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
-        try {
-          const result = await withSpan("build.loadApplication", () =>
-            loadApplication({ config, pluginManager, bundleCache: cacheManager.bundleCache }),
-          );
-          application = result.application;
-          workflowBuildResult = result.workflowBuildResult;
-          bundledScripts = result.bundledScripts;
-        } finally {
-          // Persist even on partial failure: successfully built bundles
-          // are cached so the next run only rebuilds what failed.
-          cacheManager.finalize();
-        }
-
-        return {
-          config,
-          plugins,
-          application,
-          workflowBuildResult,
-          bundledScripts,
-          dryRun,
-          buildOnly,
-        };
-      },
-    );
+      return {
+        config,
+        plugins,
+        application,
+        workflowBuildResult,
+        httpAdapterBuildResult,
+        bundledScripts,
+        dryRun,
+        buildOnly,
+      };
+    });
     if (buildOnly) {
       return { bundledScripts };
     }
@@ -539,7 +532,13 @@ export async function deploy(options?: DeployOptions) {
         idpUserTriggerTargets,
       };
       const functionRegistry = await withSpan("plan.functionRegistry", () =>
-        planFunctionRegistry(client, workspaceId, application.name, functionEntries),
+        planFunctionRegistry(
+          client,
+          workspaceId,
+          application.name,
+          application.id,
+          functionEntries,
+        ),
       );
       const unchangedWorkflowJobs = new Set(
         functionRegistry.changeSet.unchanged
@@ -553,13 +552,14 @@ export async function deploy(options?: DeployOptions) {
           withSpan("plan.idp", () => planIdP(ctx)),
           withSpan("plan.auth", () => planAuth(ctx)),
           withSpan("plan.pipeline", () => planPipeline(ctx)),
-          withSpan("plan.application", () => planApplication(ctx)),
+          withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
           withSpan("plan.executor", () => planExecutor(ctx)),
           withSpan("plan.workflow", () =>
             planWorkflow(
               client,
               workspaceId,
               application.name,
+              application.id,
               workflowService?.workflows ?? {},
               workflowBuildResult?.mainJobDeps ?? {},
               unchangedWorkflowJobs,
@@ -634,6 +634,12 @@ export async function deploy(options?: DeployOptions) {
           resourceName: replace.name,
         });
       }
+      for (const del of auth.changeSet.connection.deletes) {
+        importantDeletions.push({
+          resourceType: "Auth connection",
+          resourceName: del.name,
+        });
+      }
       for (const del of secretManager.vaultChangeSet.deletes) {
         importantDeletions.push({
           resourceType: "Secret Manager vault",
@@ -660,8 +666,11 @@ export async function deploy(options?: DeployOptions) {
         ...workflow.resourceOwners,
         ...secretManager.resourceOwners,
       ]);
-      const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
-      const emptyApps = [...conflictOwners].filter((owner) => !resourceOwners.has(owner));
+      const emptyApps = computeRenamedAppDeletions({
+        conflicts: allConflicts,
+        resourceOwners,
+        targetAppName: application.name,
+      });
       for (const emptyApp of emptyApps) {
         app.deletes.push({
           name: emptyApp,

@@ -18,3 +18,4 @@ export * from "./workflow";
 export * from "./staticwebsite";
 export * from "./idp";
 export * from "./secrets";
+export * from "./http-adapter";

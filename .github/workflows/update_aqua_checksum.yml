@@ -8,11 +8,15 @@ on:
 
 jobs:
   update-aqua-checksums:
+    # Pin to v1.0.4. v1.0.5 pulls in update-checksum-action v0.2.7 which has
+    # an implicit breaking change that prevents the GitHub App token from
+    # reaching the inner commit-action, causing 403 on POST /git/trees.
+    # See https://github.com/aquaproj/update-checksum-action/issues/364
     uses: aquaproj/update-checksum-workflow/.github/workflows/update-checksum.yaml@d248abb88efce715d50eb324100d9b29a20f7d18 # v1.0.4
     permissions:
       contents: read
     with:
-      aqua_version: v2.58.1
+      aqua_version: v2.60.0
       prune: true
     secrets:
       gh_app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}

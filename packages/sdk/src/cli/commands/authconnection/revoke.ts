@@ -6,11 +6,15 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { connectionNameArgs } from "./args";
 
 export const revokeAuthConnectionCommand = defineAppCommand({
   name: "revoke",
-  description: "Revoke an auth connection.",
+  description:
+    "Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it).",
+  notes:
+    "Revoke invalidates the connection's active session and tokens but keeps the connection and its stored credentials, so it can be re-authorized later. Use `delete` to remove the connection entirely.",
   args: z
     .object({
       ...workspaceArgs,
@@ -19,6 +23,7 @@ export const revokeAuthConnectionCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,

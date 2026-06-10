@@ -1,0 +1,9 @@
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "scripts": {
+    "deploy:dev": "tailor-sdk deploy --profile dev",
+    "deploy:prod": "tailor-sdk deploy --profile prod -y",
+    "build": "tsc"
+  }
+}

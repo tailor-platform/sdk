@@ -5,10 +5,14 @@ import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { defineApplication } from "@/cli/services/application";
 import { logger } from "@/cli/shared/logger";
+import { defineConfig } from "@/configure/config";
+import { defineAuth } from "@/configure/services/auth";
+import { t } from "@/configure/types/type";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
-import type { PlanContext } from "./deploy";
+import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 
@@ -50,7 +54,7 @@ function createMockApplication(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      parsedConfig: {
+      config: {
         name: "auth-a",
         publishSessionEvents: true,
         oauth2Clients: {
@@ -89,7 +93,7 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      parsedConfig: {
+      config: {
         name: "auth-a",
         oauth2Clients: {
           sample: {
@@ -97,8 +101,9 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
             grantTypes: ["authorization_code", "refresh_token"],
             redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
             clientType: "confidential",
-            accessTokenLifetimeSeconds: 3600,
-            refreshTokenLifetimeSeconds: 7200,
+            // config holds parse output: lifetimes are Duration, not numbers.
+            accessTokenLifetimeSeconds: { seconds: 3600n, nanos: 0 },
+            refreshTokenLifetimeSeconds: { seconds: 7200n, nanos: 0 },
             requireDpop: false,
           },
         },
@@ -114,7 +119,7 @@ function createMockApplicationWithBuiltInIdP(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      parsedConfig: {
+      config: {
         name: "auth-a",
         idProvider: {
           name: "default",
@@ -426,6 +431,113 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
+  // Regression: drive planAuth through the real defineApplication pipeline (parse ->
+  // createAuthService) so oauth2 token lifetimes flow exactly as they do at deploy.
+  test("handles oauth2 token lifetimes through the real defineApplication pipeline", async () => {
+    const application = defineApplication({
+      config: {
+        ...defineConfig({
+          name: appName,
+          auth: defineAuth("auth-a", {
+            machineUserAttributes: { role: t.string() },
+            oauth2Clients: {
+              sample: {
+                description: "Sample client",
+                grantTypes: ["authorization_code", "refresh_token"],
+                redirectURIs: ["https://a.example.com/callback", "https://b.example.com/callback"],
+                clientType: "confidential",
+                accessTokenLifetimeSeconds: 3600,
+                refreshTokenLifetimeSeconds: 7200,
+                requireDpop: false,
+              },
+            },
+          }),
+        }),
+        path: "tailor.config.ts",
+      },
+    });
+
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+      oauth2Clients: [
+        {
+          name: "sample",
+          description: "Sample client",
+          grantTypes: [
+            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
+            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
+          ],
+          redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
+          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+          accessTokenLifetime: { seconds: 3600n },
+          refreshTokenLifetime: { seconds: 7200n },
+          requireDpop: false,
+        },
+      ],
+    });
+
+    const result = await planAuth({
+      client,
+      workspaceId,
+      application,
+      forRemoval: false,
+      config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    });
+
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
+    expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("marks oauth2 client unchanged when description is omitted locally and remote is empty string", async () => {
+    const app = {
+      name: appName,
+      staticWebsiteServices: [],
+      authService: {
+        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        config: {
+          name: "auth-a",
+          oauth2Clients: {
+            sample: {
+              grantTypes: ["authorization_code", "refresh_token"],
+              redirectURIs: ["https://a.example.com/callback"],
+              clientType: "confidential",
+            },
+          },
+        },
+        userProfile: undefined,
+      },
+    } as unknown as Application;
+
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+      oauth2Clients: [
+        {
+          name: "sample",
+          // Platform returns the proto default empty string when no description was set
+          description: "",
+          grantTypes: [
+            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
+            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
+          ],
+          redirectUris: ["https://a.example.com/callback"],
+          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+          accessTokenLifetime: { seconds: 86400n },
+          refreshTokenLifetime: { seconds: 604800n },
+          requireDpop: false,
+        },
+      ],
+    });
+
+    const result = await planAuth({
+      ...createContext(client),
+      application: app,
+    });
+
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
   test("marks auth service updated when remote publishSessionEvents differs", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
@@ -489,17 +601,13 @@ describe("planAuth", () => {
   });
 
   describe("OAuth2 redirect URI resolution on first deployment (issue #1030)", () => {
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
-
     function createApplicationWithStaticWebsiteRedirectURI(): Application {
       return {
         name: appName,
         staticWebsiteServices: [{ name: "my-frontend" }],
         authService: {
           resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-          parsedConfig: {
+          config: {
             name: "auth-a",
             oauth2Clients: {
               sample: {
@@ -517,7 +625,7 @@ describe("planAuth", () => {
     }
 
     test("does not warn when redirect URI references a locally-defined static website that is not yet on the platform", async () => {
-      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const baseClient = createMockClient({});
       const client = {
         ...baseClient,

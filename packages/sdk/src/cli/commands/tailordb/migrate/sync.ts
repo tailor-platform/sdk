@@ -2,7 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { trnPrefix } from "@/cli/commands/deploy/label";
+import { resourceTrn } from "@/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { fetchAll, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
@@ -11,6 +11,7 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
   formatMigrationNumber,
@@ -204,7 +205,7 @@ async function sync(options: SyncOptions): Promise<void> {
     });
   }
 
-  const trn = `${trnPrefix(workspaceId)}:tailordb:${target.namespace}`;
+  const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
   const { metadata } = await client.getMetadata({ trn });
   const existingLabels = metadata?.labels ?? {};
   await client.setMetadata({
@@ -248,6 +249,7 @@ export const syncCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     await sync({
       configPath: args.config,
       number: args.number,

@@ -1770,6 +1770,39 @@ export declare type RevokeAuthConnectionResponse = Message<"tailor.v1.RevokeAuth
 export declare const RevokeAuthConnectionResponseSchema: GenMessage<RevokeAuthConnectionResponse>;
 
 /**
+ * @generated from message tailor.v1.DeleteAuthConnectionRequest
+ */
+export declare type DeleteAuthConnectionRequest = Message<"tailor.v1.DeleteAuthConnectionRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string connection_name = 2;
+   */
+  connectionName: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteAuthConnectionRequest.
+ * Use `create(DeleteAuthConnectionRequestSchema)` to create a new message.
+ */
+export declare const DeleteAuthConnectionRequestSchema: GenMessage<DeleteAuthConnectionRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteAuthConnectionResponse
+ */
+export declare type DeleteAuthConnectionResponse = Message<"tailor.v1.DeleteAuthConnectionResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteAuthConnectionResponse.
+ * Use `create(DeleteAuthConnectionResponseSchema)` to create a new message.
+ */
+export declare const DeleteAuthConnectionResponseSchema: GenMessage<DeleteAuthConnectionResponse>;
+
+/**
  * @generated from message tailor.v1.RegisterAuthConnectionSessionRequest
  */
 export declare type RegisterAuthConnectionSessionRequest = Message<"tailor.v1.RegisterAuthConnectionSessionRequest"> & {

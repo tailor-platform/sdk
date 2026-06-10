@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import type { ContextInvoker } from "@/runtime/context";
 import type { TailorInvoker } from "@/types/user";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
@@ -34,7 +35,7 @@ interface TailordbGlobal {
       ) => Promise<void>;
     };
     context: {
-      getInvoker: () => tailor.context.Invoker | null;
+      getInvoker: () => ContextInvoker | null;
     };
   };
 }
@@ -52,7 +53,7 @@ const GlobalThis = globalThis as TailordbGlobal & TailorErrorsGlobal;
 
 /**
  * Sets up a mock for `globalThis.tailordb.Client` used in bundled resolver/executor tests.
- * @deprecated Use `tailordbMock` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
+ * @deprecated Use `mockTailordb` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  * @param resolver - Optional function to resolve query results. Defaults to returning empty arrays.
  * @returns Object containing arrays of executed queries and created clients for assertions.
  */
@@ -94,9 +95,9 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
 
 /**
  * Sets up a mock for `globalThis.tailor.workflow.triggerJobFunction` used in bundled workflow tests.
- * `wait`/`resolve` are stubbed to throw a helpful error directing to `workflowMock`,
+ * `wait`/`resolve` are stubbed to throw a helpful error directing to `mockWorkflow`,
  * so mistakenly calling wait without wait-point mocks produces a clear message instead of a TypeError.
- * @deprecated Use `workflowMock` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
+ * @deprecated Use `mockWorkflow` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  * @param handler - Function that handles triggered job calls and returns results.
  * @returns Object containing an array of triggered jobs for assertions.
  */
@@ -110,12 +111,12 @@ export function setupWorkflowMock(handler: JobHandler): {
     workflow: {
       wait: () => {
         throw new Error(
-          "tailor.workflow.wait is not mocked. Use workflowMock from @tailor-platform/sdk/vitest in tests.",
+          "tailor.workflow.wait is not mocked. Use mockWorkflow from @tailor-platform/sdk/vitest in tests.",
         );
       },
       resolve: async () => {
         throw new Error(
-          "tailor.workflow.resolve is not mocked. Use workflowMock from @tailor-platform/sdk/vitest in tests.",
+          "tailor.workflow.resolve is not mocked. Use mockWorkflow from @tailor-platform/sdk/vitest in tests.",
         );
       },
       ...GlobalThis.tailor?.workflow,
@@ -136,7 +137,7 @@ export function setupWorkflowMock(handler: JobHandler): {
  * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
  */
 export function setupInvokerMock(invoker: TailorInvoker): void {
-  const raw: tailor.context.Invoker | null = invoker
+  const raw: ContextInvoker | null = invoker
     ? {
         id: invoker.id,
         type: invoker.type,
@@ -175,7 +176,7 @@ export function setupTailorErrorsMock(): void {
  * Sets up mocks for `globalThis.tailor.workflow.wait` and `.resolve` used in bundled workflow tests.
  * `triggerJobFunction` is stubbed to throw a helpful error directing to `setupWorkflowMock()`,
  * so mistakenly triggering a job without job mocks produces a clear message instead of silently returning undefined.
- * @deprecated Use `workflowMock` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
+ * @deprecated Use `mockWorkflow` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  *   `setWaitHandler` / `setResolveHandler` cover wait/resolve, and `waitCalls` / `resolveCalls` give the same assertion shape.
  * @param config - Optional handlers for wait and resolve calls.
  * @param config.onWait - Handler called when wait is invoked.

@@ -1,4 +1,5 @@
 import { brandValue } from "@/utils/brand";
+import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
@@ -56,11 +57,7 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
-/**
- * Environment variable key for workflow testing.
- * Contains JSON-serialized TailorEnv object.
- */
-export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
+export { WORKFLOW_TEST_ENV_KEY } from "./test-env-key";
 
 interface CreateWorkflowJobConfig<Name extends string, I, O> {
   readonly name: Name;
@@ -100,19 +97,26 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  *   },
  * });
  */
-export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(
+export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
-): WorkflowJob<Name, I, Awaited<O>> => {
+): WorkflowJob<Name, I, Awaited<O>> {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+
+  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
+  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
+    registerJob(config.name, body as RegisteredJobBody);
+  }
+
+  const trigger = process.env.TAILOR_PLATFORM_BUNDLE
+    ? async () => {
+        throw new Error(
+          "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
+        );
+      }
+    : async (args?: unknown) => (await dispatchTriggerJob(config.name, args)) as Awaited<O>;
+
   return brandValue(
-    {
-      name: config.name,
-      trigger: async (args?: unknown) => {
-        const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-        return await body(args as I, { env, invoker: null });
-      },
-      body,
-    } as WorkflowJob<Name, I, Awaited<O>>,
+    { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,
     "workflow-job",
   );
-};
+}

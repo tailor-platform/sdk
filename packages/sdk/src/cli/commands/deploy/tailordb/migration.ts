@@ -24,7 +24,7 @@ import { type OperatorClient } from "@/cli/shared/client";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
 import { spinner } from "@/cli/shared/spinner";
-import { trnPrefix } from "../label";
+import { resourceTrn } from "../label";
 import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 
 // ============================================================================
@@ -35,6 +35,7 @@ export interface MigrationExecutionOptions {
   client: OperatorClient;
   workspaceId: string;
   authInvoker: AuthInvoker;
+  env: Record<string, string | number | boolean>;
 }
 
 /**
@@ -46,6 +47,7 @@ export interface MigrationContext {
   authNamespace: string;
   machineUsers: string[] | undefined;
   dbConfig: Record<string, TailorDBServiceConfig | undefined>;
+  env: Record<string, string | number | boolean>;
 }
 
 interface ExecutionResult {
@@ -73,7 +75,7 @@ async function getCurrentMigrationNumber(
   namespace: string,
 ): Promise<number> {
   try {
-    const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+    const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
     const { metadata } = await client.getMetadata({ trn });
 
@@ -122,12 +124,15 @@ export async function detectPendingMigrations(
         continue;
       }
 
-      // Load the diff to check if migration script is required
+      // Load the diff to inspect breaking/warning classification
       const diff = loadDiff(diffPath);
 
-      // Check for migration script (only required for breaking changes)
+      // The migration script is executed when migrate.ts exists on disk.
+      // Breaking changes still hard-require a script; warnings (e.g. field_removed)
+      // may optionally have one added via `tailordb migration script <num>`.
       const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
-      if (diff.requiresMigrationScript && !fs.existsSync(scriptPath)) {
+      const hasScript = fs.existsSync(scriptPath);
+      if (diff.requiresMigrationScript && !hasScript) {
         logger.warn(
           `Migration ${namespace}/${file.number} requires a script but migrate.ts not found`,
         );
@@ -136,7 +141,8 @@ export async function detectPendingMigrations(
 
       pendingMigrations.push({
         number: file.number,
-        scriptPath, // May not exist for non-breaking changes
+        scriptPath,
+        hasScript,
         diffPath,
         namespace,
         migrationsDir,
@@ -146,14 +152,12 @@ export async function detectPendingMigrations(
   }
 
   // Sort by namespace and migration number
-  pendingMigrations.sort((a, b) => {
+  return pendingMigrations.toSorted((a, b) => {
     if (a.namespace !== b.namespace) {
       return a.namespace.localeCompare(b.namespace);
     }
     return a.number - b.number;
   });
-
-  return pendingMigrations;
 }
 
 // ============================================================================
@@ -170,7 +174,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, authInvoker } = options;
+  const { client, workspaceId, authInvoker, env } = options;
 
   const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
 
@@ -179,6 +183,7 @@ async function executeSingleMigration(
     migration.scriptPath,
     migration.namespace,
     migration.number,
+    env,
   );
 
   // Execute the script using the shared script executor
@@ -213,7 +218,7 @@ export async function updateMigrationLabel(
   namespace: string,
   migrationNumber: number,
 ): Promise<void> {
-  const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+  const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
   // Get existing metadata
   const { metadata } = await client.getMetadata({ trn });
@@ -241,8 +246,9 @@ export async function executeMigrations(
   context: MigrationContext,
   migrations: PendingMigration[],
 ): Promise<void> {
-  // Filter migrations that require script execution
-  const migrationsWithScripts = migrations.filter((m) => m.diff.requiresMigrationScript);
+  // Run migrate.ts whenever the file exists on disk. Required for breaking changes,
+  // optional for warning-tier changes (e.g. field_removed).
+  const migrationsWithScripts = migrations.filter((m) => m.hasScript);
 
   if (migrationsWithScripts.length === 0) {
     return;
@@ -275,6 +281,7 @@ export async function executeMigrations(
       client: context.client,
       workspaceId: context.workspaceId,
       authInvoker,
+      env: context.env,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);

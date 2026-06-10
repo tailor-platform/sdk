@@ -108,7 +108,14 @@ describe("planWorkflow", () => {
         "main-job": ["main-job"],
       };
 
-      const result = await planWorkflow(client, workspaceId, appName, workflows, mainJobDeps);
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        workflows,
+        mainJobDeps,
+      );
 
       // "new-workflow" should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -136,7 +143,14 @@ describe("planWorkflow", () => {
         "job-a": ["job-a"],
       };
 
-      const result = await planWorkflow(client, workspaceId, appName, workflows, mainJobDeps);
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        workflows,
+        mainJobDeps,
+      );
 
       // "workflow-a" should be updated
       expect(result.changeSet.updates).toHaveLength(1);
@@ -153,10 +167,10 @@ describe("planWorkflow", () => {
         { id: "2", name: "workflow-2", label: appName },
       ]);
 
-      const result = await planWorkflow(client, workspaceId, appName, {}, {});
+      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(2);
-      expect(result.changeSet.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
         "workflow-1",
         "workflow-2",
       ]);
@@ -169,7 +183,7 @@ describe("planWorkflow", () => {
         { id: "1", name: "unmanaged-workflow" }, // No label
       ]);
 
-      const result = await planWorkflow(client, workspaceId, appName, {}, {});
+      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(0);
     });
@@ -177,7 +191,7 @@ describe("planWorkflow", () => {
     test("workflow owned by different app is NOT deleted", async () => {
       const client = createMockClient([{ id: "1", name: "other-workflow", label: "other-app" }]);
 
-      const result = await planWorkflow(client, workspaceId, appName, {}, {});
+      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(0);
       expect(result.resourceOwners.has("other-app")).toBe(true);
@@ -190,7 +204,7 @@ describe("planWorkflow", () => {
         { id: "3", name: "unmanaged-workflow" }, // No label
       ]);
 
-      const result = await planWorkflow(client, workspaceId, appName, {}, {});
+      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0].name).toBe("my-workflow");
@@ -229,6 +243,7 @@ describe("planWorkflow", () => {
         client,
         workspaceId,
         appName,
+        undefined,
         workflows,
         mainJobDeps,
         new Set(["validate-order", "check-inventory", "process-payment"]),
@@ -289,6 +304,7 @@ describe("planWorkflow", () => {
         client,
         workspaceId,
         appName,
+        undefined,
         workflows,
         mainJobDeps,
         new Set(["process-order", "fetch-customer", "send-notification"]),
@@ -335,6 +351,7 @@ describe("planWorkflow", () => {
         client,
         workspaceId,
         appName,
+        undefined,
         workflows,
         mainJobDeps,
         new Set(["run-batch"]),
@@ -381,6 +398,7 @@ describe("planWorkflow", () => {
         client,
         workspaceId,
         appName,
+        undefined,
         workflows,
         mainJobDeps,
         new Set(["run-batch"]),
@@ -441,6 +459,7 @@ describe("planWorkflow", () => {
           unmanaged: [],
           resourceOwners: new Set<string>(),
           appName,
+          appId: undefined,
           unchangedWorkflowJobNames: new Set(["keep-job"]),
         },
         "create-update",

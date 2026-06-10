@@ -56,6 +56,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = logger.jsonMode;
     const workflows = await listWorkflows({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -63,9 +64,11 @@ export const listCommand = defineAppCommand({
       limit: args.limit,
     });
 
-    if (workflows.length === 0 && !args.json) {
+    if (workflows.length === 0) {
       logger.info("No workflows found.");
-      return;
+      if (!jsonOutput) {
+        return;
+      }
     }
     logger.out(workflows);
   },

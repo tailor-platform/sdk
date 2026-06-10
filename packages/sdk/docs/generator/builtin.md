@@ -22,7 +22,7 @@ Generates a TypeScript file containing:
 
 - Type definitions for all TailorDB types
 - `getDB(namespace)` function to create Kysely instances
-- Utility types for `Timestamp`, `Serial`, and `ObjectColumnType` (wraps nested objects containing date/datetime fields to provide correct insert vs select types)
+- Utility types for `Timestamp`, `Serial`, and `ObjectColumnType` (used for nested object fields so insert and select types stay correct)
 
 ### Usage
 
@@ -183,10 +183,41 @@ Generates seed data configuration files for database initialization.
 ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "admin" }];
 ```
 
-| Option            | Type     | Description                                              |
-| ----------------- | -------- | -------------------------------------------------------- |
-| `distPath`        | `string` | Output directory path (required)                         |
-| `machineUserName` | `string` | Default machine user name (can be overridden at runtime) |
+| Option               | Type                                           | Description                                                                                                                                                       |
+| -------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `distPath`           | `string`                                       | Output directory path (required)                                                                                                                                  |
+| `machineUserName`    | `string`                                       | Default machine user name (can be overridden at runtime)                                                                                                          |
+| `disableIdpUserSync` | `{ userToIdp?: boolean; idpToUser?: boolean }` | Skip emitting individual `_User <-> userProfile` foreign keys. Both directions are emitted by default. See [IdP user synchronization](#idp-user-synchronization). |
+
+### IdP user synchronization
+
+When `auth.userProfile` is configured, the seed plugin treats the userProfile
+type (e.g. `User`) and the IdP-managed `_User` table as a pair. By default it
+emits foreign keys in both directions so that `validate` rejects any row in
+either table that does not have a matching counterpart:
+
+| Direction   | Foreign key                                    | Catches                                        |
+| ----------- | ---------------------------------------------- | ---------------------------------------------- |
+| `idpToUser` | `_User.name` → `<userProfile>.<usernameField>` | Creating an IdP credential with no profile row |
+| `userToIdp` | `<userProfile>.<usernameField>` → `_User.name` | Creating a profile row with no IdP credential  |
+
+Neither direction is enforced by the runtime. In production it is normal for
+one side to exist without the other — for example a userProfile row exists
+the moment a user is invited, but the corresponding `_User` row appears only
+after the user finishes signing up. To seed such states, set the relevant
+direction in `disableIdpUserSync` to `true`:
+
+```typescript
+// Allow seeding invited-but-not-registered userProfile rows.
+// Still rejects _User rows without a matching userProfile row.
+["@tailor-platform/seed", { distPath: "./seed", disableIdpUserSync: { userToIdp: true } }];
+
+// Allow seeding _User rows whose userProfile does not exist yet.
+// Still rejects userProfile rows without a matching _User row.
+["@tailor-platform/seed", { distPath: "./seed", disableIdpUserSync: { idpToUser: true } }];
+```
+
+Omitted directions default to `false` (FK emitted).
 
 ### Output
 
@@ -222,3 +253,5 @@ node seed/exec.mjs -m admin --truncate --yes
 The `--machine-user` option is required at runtime if `machineUserName` is not configured in the generator options.
 
 The generated files are compatible with gql-ingest for bulk data import.
+
+The `exec.mjs` is fully regenerated on every `sdk generate` and starts with an `@generated` header — do not hand-edit it. Its `--truncate` path reuses the `tailordb truncate` command, so namespaces declared with `{ external: true }` are skipped automatically and a shell app cannot wipe a sibling app's data via `seed:reset`.

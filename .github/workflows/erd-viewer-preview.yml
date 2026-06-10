@@ -1,0 +1,113 @@
+name: ERD Viewer Preview
+
+on:
+  pull_request:
+    paths:
+      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - example/tailordb/**
+      - example/tailor.config.ts
+      - .github/workflows/erd-viewer-preview.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: Build ERD viewer preview (${{ matrix.namespace }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Self-contained artifacts are uploaded one file per namespace because
+        # `archive: false` only supports a single-file upload.
+        namespace: [tailordb, analyticsdb]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      # `erd export` is fully local (no platform login/network needed) and emits
+      # a single self-contained index.html per namespace. Rename it to
+      # "<namespace>.html" so the artifacts REST API (which reports a non-zipped
+      # artifact's name as the file basename) stays identifiable per namespace.
+      - name: Build ERD viewer (self-contained HTML)
+        working-directory: example
+        env:
+          NAMESPACE: ${{ matrix.namespace }}
+        run: |
+          pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
+          mkdir -p "$RUNNER_TEMP/erd-preview"
+          cp "$RUNNER_TEMP/erd-export/$NAMESPACE/dist/index.html" "$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
+
+      # archive: false (upload-artifact v7+) keeps the file unzipped so the HTML
+      # can be viewed directly in the browser from the run's artifact list. Only
+      # a single file may be uploaded per artifact when archive is false.
+      # https://github.blog/changelog/2026-02-26-github-actions-now-supports-uploading-and-downloading-non-zipped-artifacts/
+      - name: Upload ERD viewer preview
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: erd-viewer-preview-${{ matrix.namespace }}
+          path: ${{ runner.temp }}/erd-preview/${{ matrix.namespace }}.html
+          if-no-files-found: error
+          archive: false
+          retention-days: 7
+
+  comment:
+    name: Post preview links
+    needs: preview
+    # Skip on fork PRs, whose read-only token cannot post comments.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read # required to list the run's artifacts
+
+    steps:
+      - name: Upsert sticky preview comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER: ${{ github.server_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MARKER: "<!-- erd-viewer-preview -->"
+        run: |
+          set -euo pipefail
+
+          # Build the comment body from this run's ERD preview artifacts. The
+          # artifacts REST API reports a non-zipped artifact's name as the file
+          # basename ("<namespace>.html"), so match on that.
+          body="$MARKER"$'\n'"### 🗺️ ERD viewer preview"$'\n\n'
+          body+="Self-contained HTML built for this run — open the artifact, then view it in your browser:"$'\n'
+          while IFS=$'\t' read -r name id; do
+            [ -z "$name" ] && continue
+            ns=${name%.html}
+            body+=$'\n'"- **$ns**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
+          done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+            --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv')
+
+          # Upsert: update the existing sticky comment if present, else create one.
+          existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" >/dev/null
+            echo "Updated sticky comment $existing"
+          else
+            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
+            echo "Created sticky comment"
+          fi

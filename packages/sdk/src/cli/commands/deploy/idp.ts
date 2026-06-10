@@ -20,12 +20,19 @@ import {
 } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
-import { parseIdPPermission } from "@/parser/service/idp/permission";
+import { findOmittedPermitRules, parseIdPPermission } from "@/parser/service/idp/permission";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  resourceTrn,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
   StandardIdPActionPermission,
@@ -178,6 +185,7 @@ export async function planIdP(context: PlanContext) {
     client,
     workspaceId,
     application.name,
+    application.id,
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
   );
@@ -218,10 +226,6 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteIdPServiceRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
-}
-
 type ComparableIdPService = {
   authorization: string | undefined;
   lang: IdPLang;
@@ -244,7 +248,7 @@ function normalizeComparableUserAuthPolicy(
     passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
     passwordMinLength: policy?.passwordMinLength ?? 0,
     passwordMaxLength: policy?.passwordMaxLength ?? 0,
-    allowedEmailDomains: [...(policy?.allowedEmailDomains ?? [])].sort(),
+    allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,
     allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
@@ -317,7 +321,8 @@ function normalizeComparablePermission(
       right: c.right ? { kind: c.right.kind } : undefined,
     })),
     permit: policy.permit,
-    description: policy.description,
+    // Platform returns an empty string for an unset description; treat it the same as omitted.
+    description: policy.description || undefined,
   });
   return {
     create: permission.create.map(normalizePolicy),
@@ -347,6 +352,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
+  appId: string | undefined,
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
 ) {
@@ -377,7 +383,7 @@ async function planServices(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.namespace.name),
+        trn: resourceTrn(workspaceId, "idp", resource.namespace.name),
       });
       existingServices[resource.namespace.name] = {
         resource,
@@ -390,7 +396,11 @@ async function planServices(
   for (const idp of idps) {
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, namespaceName), appName);
+    const metaRequest = await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "idp", namespaceName),
+      appName,
+      appId,
+    });
     let authorization: string | undefined;
     switch (idp.authorization) {
       case "insecure":
@@ -421,6 +431,12 @@ async function planServices(
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);
     }
+    const omittedPermitLocations = findOmittedPermitRules(idp.permission);
+    if (omittedPermitLocations.length > 0) {
+      logger.warn(
+        `IdP service "${namespaceName}" has permission rule(s) ${omittedPermitLocations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+      );
+    }
     const parsedPermission = parseIdPPermission(idp.permission);
     const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;
     const desired = normalizeComparableIdPService({
@@ -447,21 +463,23 @@ async function planServices(
     };
 
     if (existing) {
-      const isManagedByApp = existing.label === appName;
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "IdP service",
-          resourceName: idp.name,
-        });
-      } else if (existing.label !== appName) {
-        conflicts.push({
-          resourceType: "IdP service",
-          resourceName: idp.name,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, appName, appId);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "IdP service",
+            resourceName: idp.name,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "IdP service",
+            resourceName: idp.name,
+            currentOwner: existing.label,
+          });
+        }
       }
       if (
-        isManagedByApp &&
+        owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areIdPServicesEqual(existing.resource, desired)
       ) {
@@ -483,12 +501,13 @@ async function planServices(
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
-    const label = existingServices[namespaceName]?.label;
-    if (label && label !== appName) {
+    const entry = existingServices[namespaceName];
+    const label = entry?.label;
+    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete services managed by this application
-    if (label === appName) {
+    if (owned) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {

@@ -1,7 +1,7 @@
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { trnPrefix } from "@/cli/commands/deploy/label";
+import { resourceTrn } from "@/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
@@ -10,6 +10,7 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations } from "./config";
 import { formatMigrationNumber, isValidMigrationNumber } from "./snapshot";
 import { parseMigrationLabelNumber } from "./types";
@@ -88,7 +89,7 @@ async function set(options: SetOptions): Promise<void> {
   });
 
   // 6. Get current migration number
-  const trn = `${trnPrefix(workspaceId)}:tailordb:${targetNamespace}`;
+  const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
   let currentMigration: number;
   try {
     const { metadata } = await client.getMetadata({ trn });
@@ -167,6 +168,7 @@ export const setCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     await set({
       configPath: args.config,
       number: args.number,

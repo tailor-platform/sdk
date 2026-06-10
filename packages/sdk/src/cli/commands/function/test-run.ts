@@ -70,6 +70,8 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     },
   ],
   run: async (args) => {
+    const jsonOutput = logger.jsonMode;
+
     // 1. Resolve and validate file path
     const filePath = path.resolve(args.file);
     if (!fs.existsSync(filePath)) {
@@ -144,6 +146,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         sourceFile: filePath,
         env: config.env ?? {},
         inlineSourcemap: config.inlineSourcemap,
+        logLevel: config.logLevel,
         machineUser,
         workspaceId,
       }));
@@ -168,7 +171,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     });
 
     // 7. Display result
-    if (args.json) {
+    if (jsonOutput) {
       logger.out({
         success: result.success,
         scriptName,

@@ -9,6 +9,7 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import ml from "@/utils/multiline";
 
 export interface MigrationBundleResult {
@@ -28,12 +29,14 @@ export interface MigrationBundleResult {
  * @param {string} sourceFile - Path to the migration script file
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number
+ * @param {Record<string, string | number | boolean>} env - Environment variables to inject into the migration context
  * @returns {Promise<MigrationBundleResult>} Bundled migration result
  */
 export async function bundleMigrationScript(
   sourceFile: string,
   namespace: string,
   migrationNumber: number,
+  env: Record<string, string | number | boolean> = {},
 ): Promise<MigrationBundleResult> {
   // Output directory in .tailor-sdk (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
@@ -58,9 +61,10 @@ export async function bundleMigrationScript(
     }
 
     export async function main(input) {
+      const env = ${JSON.stringify(env)};
       const db = getDB("${namespace}");
       await db.transaction().execute(async (trx) => {
-        await _migrationMain(trx);
+        await _migrationMain(trx, { env });
       });
       return { success: true };
     }
@@ -76,6 +80,7 @@ export async function bundleMigrationScript(
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
   const result = await rolldown.build({
+    plugins: [platformBundleDefinePlugin],
     input: entryPath,
     write: false,
     output: {

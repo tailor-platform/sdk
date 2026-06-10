@@ -5,7 +5,14 @@
  * The actual diff calculation is performed by snapshot.ts.
  */
 
-import type { SnapshotFieldConfig } from "./snapshot";
+import type {
+  SnapshotFieldConfig,
+  SnapshotGqlPermission,
+  SnapshotIndexConfig,
+  SnapshotRecordPermission,
+  SnapshotRelationship,
+  TailorDBSnapshotType,
+} from "./snapshot-types";
 
 // ============================================================================
 // Diff Types
@@ -19,41 +26,189 @@ export const SCHEMA_SNAPSHOT_VERSION = 1 as const;
 /**
  * Change kind in migration diff
  */
-export type DiffChangeKind =
-  | "type_added"
-  | "type_removed"
-  | "type_modified"
-  | "field_added"
-  | "field_removed"
-  | "field_modified"
-  | "index_added"
-  | "index_removed"
-  | "index_modified"
-  | "file_added"
-  | "file_removed"
-  | "file_modified"
-  | "relationship_added"
-  | "relationship_removed"
-  | "relationship_modified"
-  | "permission_modified";
+export type DiffChangeKind = DiffChange["kind"];
 
 /**
- * Single change in migration diff
+ * Properties shared by all diff change variants
  */
-export interface DiffChange {
-  kind: DiffChangeKind;
+interface DiffChangeBase {
   typeName: string;
-  fieldName?: string;
-  /** Index name for index_* changes */
-  indexName?: string;
-  /** Relationship name for relationship_* changes */
-  relationshipName?: string;
-  /** Relationship type for relationship_* changes */
-  relationshipType?: "forward" | "backward";
-  before?: unknown;
-  after?: unknown;
   reason?: string;
 }
+
+/**
+ * Type-level settings patch carried by legacy `type_modified` changes.
+ * Current SDK versions no longer produce this kind, but persisted
+ * diff.json files written by older versions may still contain it.
+ */
+export interface TypeSettingsPatch {
+  indexes?: Record<string, SnapshotIndexConfig>;
+  files?: Record<string, string>;
+}
+
+/**
+ * Permission state carried by `permission_modified` changes.
+ */
+export interface SnapshotPermissionState {
+  recordPermission?: SnapshotRecordPermission;
+  gqlPermission?: SnapshotGqlPermission;
+}
+
+/** A new type was added to the schema. */
+export interface TypeAddedChange extends DiffChangeBase {
+  kind: "type_added";
+  after: TailorDBSnapshotType;
+}
+
+/** An existing type was removed from the schema. */
+export interface TypeRemovedChange extends DiffChangeBase {
+  kind: "type_removed";
+  before: TailorDBSnapshotType;
+}
+
+/**
+ * Legacy type-level settings change. Kept for backward compatibility with
+ * diff.json files written by older SDK versions; `before`/`after` may be
+ * absent in those files, hence optional.
+ */
+export interface TypeModifiedChange extends DiffChangeBase {
+  kind: "type_modified";
+  before?: TypeSettingsPatch;
+  after?: TypeSettingsPatch;
+}
+
+/** A field was added to a type. */
+export interface FieldAddedChange extends DiffChangeBase {
+  kind: "field_added";
+  fieldName: string;
+  after: SnapshotFieldConfig;
+}
+
+/** A field was removed from a type. */
+export interface FieldRemovedChange extends DiffChangeBase {
+  kind: "field_removed";
+  fieldName: string;
+  before: SnapshotFieldConfig;
+}
+
+/** A field configuration was modified. */
+export interface FieldModifiedChange extends DiffChangeBase {
+  kind: "field_modified";
+  fieldName: string;
+  before: SnapshotFieldConfig;
+  after: SnapshotFieldConfig;
+}
+
+/** An index was added to a type. */
+export interface IndexAddedChange extends DiffChangeBase {
+  kind: "index_added";
+  indexName: string;
+  after: SnapshotIndexConfig;
+}
+
+/** An index was removed from a type. */
+export interface IndexRemovedChange extends DiffChangeBase {
+  kind: "index_removed";
+  indexName: string;
+  before: SnapshotIndexConfig;
+}
+
+/** An index configuration was modified. */
+export interface IndexModifiedChange extends DiffChangeBase {
+  kind: "index_modified";
+  indexName: string;
+  before: SnapshotIndexConfig;
+  after: SnapshotIndexConfig;
+}
+
+/** A file field was added to a type. `before`/`after` hold the description. */
+export interface FileAddedChange extends DiffChangeBase {
+  kind: "file_added";
+  fieldName: string;
+  after: string;
+}
+
+/** A file field was removed from a type. */
+export interface FileRemovedChange extends DiffChangeBase {
+  kind: "file_removed";
+  fieldName: string;
+  before: string;
+}
+
+/** A file field description was modified. */
+export interface FileModifiedChange extends DiffChangeBase {
+  kind: "file_modified";
+  fieldName: string;
+  before: string;
+  after: string;
+}
+
+/**
+ * A relationship was added to a type. `relationshipType` is optional for
+ * backward compatibility: diff.json files written by older SDK versions
+ * predate the field.
+ */
+export interface RelationshipAddedChange extends DiffChangeBase {
+  kind: "relationship_added";
+  relationshipName: string;
+  relationshipType?: "forward" | "backward";
+  after: SnapshotRelationship;
+}
+
+/** A relationship was removed from a type. */
+export interface RelationshipRemovedChange extends DiffChangeBase {
+  kind: "relationship_removed";
+  relationshipName: string;
+  relationshipType?: "forward" | "backward";
+  before: SnapshotRelationship;
+}
+
+/** A relationship configuration was modified. */
+export interface RelationshipModifiedChange extends DiffChangeBase {
+  kind: "relationship_modified";
+  relationshipName: string;
+  relationshipType?: "forward" | "backward";
+  before: SnapshotRelationship;
+  after: SnapshotRelationship;
+}
+
+/**
+ * Type-level permissions were modified. `before`/`after` are optional for
+ * robustness against hand-edited or legacy diff.json files; consumers guard
+ * on their presence.
+ */
+export interface PermissionModifiedChange extends DiffChangeBase {
+  kind: "permission_modified";
+  before?: SnapshotPermissionState;
+  after?: SnapshotPermissionState;
+}
+
+/**
+ * Single change in migration diff, discriminated by `kind` so that
+ * `before`/`after` are typed per change kind.
+ */
+export type DiffChange =
+  | TypeAddedChange
+  | TypeRemovedChange
+  | TypeModifiedChange
+  | FieldAddedChange
+  | FieldRemovedChange
+  | FieldModifiedChange
+  | IndexAddedChange
+  | IndexRemovedChange
+  | IndexModifiedChange
+  | FileAddedChange
+  | FileRemovedChange
+  | FileModifiedChange
+  | RelationshipAddedChange
+  | RelationshipRemovedChange
+  | RelationshipModifiedChange
+  | PermissionModifiedChange;
+
+/**
+ * Field-level diff change (added / removed / modified).
+ */
+export type FieldDiffChange = FieldAddedChange | FieldRemovedChange | FieldModifiedChange;
 
 /**
  * Migration diff - changes between two schema versions
@@ -70,6 +225,10 @@ export interface MigrationDiff {
   hasBreakingChanges: boolean;
   /** List of breaking changes */
   breakingChanges: BreakingChangeInfo[];
+  /** Whether there are non-breaking changes that may cause data loss (e.g. field/type removal) */
+  hasWarnings: boolean;
+  /** List of non-breaking warnings */
+  warnings: WarningChangeInfo[];
   /** Whether a migration script is required to handle data migration */
   requiresMigrationScript: boolean;
 }
@@ -85,6 +244,20 @@ export interface BreakingChangeInfo {
   unsupported?: boolean;
   /** If true, show 3-step migration instructions for this unsupported change */
   showThreeStepHint?: boolean;
+}
+
+/**
+ * Warning change information in migration diff.
+ *
+ * Warnings are non-breaking changes that may still cause data loss
+ * (e.g. removing a field or type). Unlike breaking changes, a migration
+ * script is not required, but writing one is recommended if you need to
+ * preserve or transform data before the change applies.
+ */
+export interface WarningChangeInfo {
+  typeName: string;
+  fieldName?: string;
+  reason: string;
 }
 
 /**
@@ -141,19 +314,13 @@ function formatDiffChange(change: DiffChange): string {
     case "type_modified":
       return `  ~ [Type] ${change.typeName}: ${change.reason}`;
     case "field_added": {
-      const field = change.after as SnapshotFieldConfig;
-      const typeStr = formatFieldType(field);
+      const typeStr = formatFieldType(change.after);
       return `  + ${change.fieldName}: ${typeStr}`;
     }
-    case "field_removed": {
-      const field = change.before as SnapshotFieldConfig;
-      return `  - ${change.fieldName}: ${field.type}`;
-    }
-    case "field_modified": {
-      const before = change.before as SnapshotFieldConfig;
-      const after = change.after as SnapshotFieldConfig;
-      return `  ~ ${change.fieldName}: ${formatFieldModification(before, after)}`;
-    }
+    case "field_removed":
+      return `  - ${change.fieldName}: ${change.before.type}`;
+    case "field_modified":
+      return `  ~ ${change.fieldName}: ${formatFieldModification(change.before, change.after)}`;
     case "index_added":
       return `  + [Index] ${change.indexName}`;
     case "index_removed":
@@ -174,8 +341,12 @@ function formatDiffChange(change: DiffChange): string {
       return `  ~ [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}: ${change.reason ?? "modified"}`;
     case "permission_modified":
       return `  ~ [Permission] ${change.reason ?? "modified"}`;
-    default:
-      return `  ? ${change.typeName}.${change.fieldName ?? ""}`;
+    default: {
+      // Runtime fallback: diff.json is parsed without validation, so
+      // hand-edited or future-version files may carry unknown kinds.
+      const unknown = change as { typeName: string; fieldName?: string };
+      return `  ? ${unknown.typeName}.${unknown.fieldName ?? ""}`;
+    }
   }
 }
 
@@ -271,6 +442,26 @@ export function formatBreakingChanges(breakingChanges: BreakingChangeInfo[]): st
   for (const bc of breakingChanges) {
     const location = bc.fieldName ? `${bc.typeName}.${bc.fieldName}` : bc.typeName;
     lines.push(`  - ${location}: ${bc.reason}`);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Format warning changes for display
+ * @param {WarningChangeInfo[]} warnings - Warning changes to format
+ * @returns {string} Formatted warning changes string
+ */
+export function formatWarnings(warnings: WarningChangeInfo[]): string {
+  if (warnings.length === 0) {
+    return "";
+  }
+
+  const lines: string[] = ["Warning: data loss possible:", ""];
+
+  for (const w of warnings) {
+    const location = w.fieldName ? `${w.typeName}.${w.fieldName}` : w.typeName;
+    lines.push(`  - ${location}: ${w.reason}`);
   }
 
   return lines.join("\n");

@@ -1,11 +1,17 @@
+import type { LogLevelEnum } from "./app-config.generated";
 import type { AuthConfig } from "./auth";
 import type { IdPConfig } from "./idp";
 import type { SecretsConfig } from "./secrets-config";
 import type { StaticWebsiteConfig } from "./staticwebsite-config";
 import type { TailorDBServiceInput } from "./tailordb";
 
+export type LogLevel = LogLevelEnum;
+export type LogLevelInput = LogLevel | (string & {});
+
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;
+
+export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
 
 export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
 export type ResolverExternalConfig = { external: true };
@@ -40,6 +46,16 @@ export interface AppConfig<
 > {
   /** Application name (required). */
   name: string;
+  /**
+   * Stable identifier used to track the application across renames.
+   * Managed by the SDK: auto-generated and written into `tailor.config.ts`
+   * on first `deploy`. Delete this field if you want the SDK to assign a
+   * new id on the next `deploy` — typical case: `tailor.config.ts` was
+   * copied from another project and the new application should not share
+   * the original's id. Existing resources are re-tagged with the new id;
+   * data is preserved.
+   */
+  id?: string;
   /** Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies. */
   env?: Env;
   /** Allowed CORS origins. Must be an array of strings, e.g. `["https://example.com"]`. */
@@ -60,6 +76,8 @@ export interface AppConfig<
   executor?: ExecutorServiceInput;
   /** Workflow service configuration with workflow files. */
   workflow?: WorkflowServiceInput;
+  /** HTTP adapter service configuration with adapter files. */
+  httpAdapter?: HttpAdapterServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
   /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */
@@ -69,4 +87,9 @@ export interface AppConfig<
    * @default true
    */
   inlineSourcemap?: boolean;
+  /**
+   * Controls which `console.*` calls remain in bundled functions.
+   * @default "DEBUG"
+   */
+  logLevel?: LogLevelInput;
 }

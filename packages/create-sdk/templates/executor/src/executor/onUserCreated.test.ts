@@ -4,7 +4,7 @@ import * as shared from "./shared";
 
 describe("onUserCreated executor", () => {
   test("creates an audit log with the new user's name and email", async () => {
-    const createAuditLog = vi.spyOn(shared, "createAuditLog").mockResolvedValue(undefined);
+    using createAuditLog = vi.spyOn(shared, "createAuditLog").mockResolvedValue(undefined);
 
     if (onUserCreated.operation.kind !== "function") {
       throw new Error("expected function operation");

@@ -3,9 +3,17 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  resourceTrn,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase } from "@/cli/commands/deploy/deploy";
+import type { BundledScripts, FunctionEntry } from "./function-registry-types";
+import type { ApplyPhase } from "./phase";
 import type { Application } from "@/cli/services/application";
 import type { CollectedJob } from "@/cli/services/workflow/service";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -15,14 +23,9 @@ import type {
 } from "@tailor-proto/tailor/v1/function_registry_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
-const CHUNK_SIZE = 64 * 1024; // 64KB
+export type { BundledScripts, FunctionEntry } from "./function-registry-types";
 
-export type FunctionEntry = {
-  name: string;
-  scriptContent: string;
-  contentHash: string;
-  description: string;
-};
+const CHUNK_SIZE = 64 * 1024; // 64KB
 
 type CreateFunction = {
   name: string;
@@ -50,10 +53,6 @@ export type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction
  */
 function computeContentHash(content: string): string {
   return crypto.createHash("sha256").update(content, "utf-8").digest("hex");
-}
-
-function functionRegistryTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
 }
 
 export const RESOLVER_PREFIX = "resolver--";
@@ -160,16 +159,6 @@ export function splitFunctionRegistryChanges<
 export function authHookFunctionName(authName: string, hookPoint: string): string {
   return `auth-hook--${authName}--${hookPoint}`;
 }
-
-/**
- * In-memory bundled scripts organized by kind.
- */
-export type BundledScripts = {
-  resolvers: Map<string, string>;
-  executors: Map<string, string>;
-  workflowJobs: Map<string, string>;
-  authHooks: Map<string, string>;
-};
 
 /**
  * Collect all function entries from in-memory bundled scripts for all services.
@@ -285,6 +274,7 @@ type ExistingFunction = {
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param appName - Application name
+ * @param appId - Stable application id (when managed by SDK)
  * @param entries - Desired function entries
  * @returns Planned changes
  */
@@ -292,6 +282,7 @@ export async function planFunctionRegistry(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
+  appId: string | undefined,
   entries: FunctionEntry[],
 ) {
   const changeSet: FunctionRegistryChangeSet = createChangeSet<
@@ -333,7 +324,7 @@ export async function planFunctionRegistry(
   await Promise.all(
     existingFunctions.map(async (func) => {
       const { metadata } = await client.getMetadata({
-        trn: functionRegistryTrn(workspaceId, func.name),
+        trn: resourceTrn(workspaceId, "function_registry", func.name),
       });
       existingMap[func.name] = {
         resource: func,
@@ -346,29 +337,32 @@ export async function planFunctionRegistry(
   // Process desired entries
   for (const entry of entries) {
     const existing = existingMap[entry.name];
-    const metaRequest = await buildMetaRequest(
-      functionRegistryTrn(workspaceId, entry.name),
+    const metaRequest = await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "function_registry", entry.name),
       appName,
-    );
+      appId,
+    });
 
     if (existing) {
-      const isManagedByApp = existing.label === appName;
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "Function registry",
-          resourceName: entry.name,
-        });
-      } else if (existing.label !== appName) {
-        conflicts.push({
-          resourceType: "Function registry",
-          resourceName: entry.name,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, appName, appId);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "Function registry",
+            resourceName: entry.name,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "Function registry",
+            resourceName: entry.name,
+            currentOwner: existing.label,
+          });
+        }
       }
 
       if (
         existing.resource.contentHash === entry.contentHash &&
-        isManagedByApp &&
+        owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
       ) {
         changeSet.unchanged.push({
@@ -395,11 +389,11 @@ export async function planFunctionRegistry(
   for (const [name, existing] of Object.entries(existingMap)) {
     if (!existing) continue;
     const label = existing.label;
-    if (label && label !== appName) {
+    const owned = isOwnedByApp(existing.allLabels, appName, appId);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete functions managed by this application
-    if (label === appName) {
+    if (owned) {
       changeSet.deletes.push({
         name,
         workspaceId,

@@ -10,6 +10,7 @@ import ml from "@/utils/multiline";
 import { initOAuth2Client } from "./client";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
+import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
 import {
   isKeyringAvailable,
   loadKeyringTokens,
@@ -20,6 +21,7 @@ import {
 const pfProfileSchema = z.object({
   user: z.string(),
   workspace_id: z.string(),
+  readonly: z.boolean().optional(),
 });
 
 const pfUserSchemaV1 = z.object({
@@ -140,6 +142,11 @@ export async function readPlatformConfig(): Promise<PfConfig> {
 
   const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
 
+  // Legacy installs may have left the config world-readable (umask default
+  // 0o644). Tighten it here so users who only run read-only commands still
+  // get the secret-file permissions applied without waiting for a write.
+  tightenSecretFilePermissions(configPath);
+
   // Check for unsupported future versions
   const version =
     rawConfig != null && typeof rawConfig === "object" && "version" in rawConfig
@@ -198,26 +205,42 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
       token_expires_at: entry.token_expires_at,
     };
   }
+  // Clear current_user when it points at a user missing from the rebuilt v1
+  // users map, so the downgraded file never references a non-existent user.
+  const currentUser =
+    config.current_user && users[config.current_user] ? config.current_user : null;
   return {
     version: 1,
     users,
     profiles: config.profiles,
-    current_user: config.current_user,
+    current_user: currentUser,
   };
 }
 
 /**
  * Write Tailor Platform CLI configuration to disk.
- * By default, V2 configs are converted to V1 for backward compatibility.
- * Set TAILOR_USE_KEYRING to write V2 format (required for keyring storage).
+ * By default, V2 configs are converted to V1 for backward compatibility, so an
+ * older SDK can still read the file. Configs containing a keyring user are kept
+ * as V2 regardless, because the keyring storage variant is not representable in
+ * V1 and downgrading it would silently drop the user's login. Such configs are
+ * already V2 on disk (a keyring entry is only ever persisted with
+ * TAILOR_USE_KEYRING set), so keeping V2 does not regress backward compatibility.
+ * Set TAILOR_USE_KEYRING to write V2 format unconditionally.
+ *
+ * The config file may contain access/refresh tokens when the OS keyring is
+ * unavailable, so it is written via {@link writeSecretFile} so other users
+ * on the host cannot read it.
  * @param config - Platform configuration to write
  */
 export function writePlatformConfig(config: PfConfig | PfConfigV1) {
   const configPath = platformConfigPath();
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  const hasKeyringUser =
+    config.version === 2 && Object.values(config.users).some((u) => u?.storage === "keyring");
   const diskConfig =
-    config.version === 2 && !process.env.TAILOR_USE_KEYRING ? toV1ForDisk(config) : config;
-  fs.writeFileSync(configPath, stringifyYAML(diskConfig));
+    config.version === 2 && !process.env.TAILOR_USE_KEYRING && !hasKeyringUser
+      ? toV1ForDisk(config)
+      : config;
+  writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
 const tcContextConfigSchema = z.object({

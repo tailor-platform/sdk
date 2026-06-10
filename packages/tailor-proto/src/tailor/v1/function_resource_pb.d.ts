@@ -40,6 +40,32 @@ export declare type FunctionErrorInfo = Message<"tailor.v1.FunctionErrorInfo"> &
 export declare const FunctionErrorInfoSchema: GenMessage<FunctionErrorInfo>;
 
 /**
+ * @generated from message tailor.v1.FunctionLogEntry
+ */
+export declare type FunctionLogEntry = Message<"tailor.v1.FunctionLogEntry"> & {
+  /**
+   * @generated from field: string message = 1;
+   */
+  message: string;
+
+  /**
+   * @generated from field: tailor.v1.FunctionLogSeverity severity = 2;
+   */
+  severity: FunctionLogSeverity;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp timestamp = 3;
+   */
+  timestamp?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.FunctionLogEntry.
+ * Use `create(FunctionLogEntrySchema)` to create a new message.
+ */
+export declare const FunctionLogEntrySchema: GenMessage<FunctionLogEntry>;
+
+/**
  * @generated from message tailor.v1.FunctionExecution
  */
 export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> & {
@@ -102,6 +128,11 @@ export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> &
    * @generated from field: string content_hash = 12;
    */
   contentHash: string;
+
+  /**
+   * @generated from field: repeated tailor.v1.FunctionLogEntry log_entries = 13;
+   */
+  logEntries: FunctionLogEntry[];
 };
 
 /**
@@ -199,4 +230,44 @@ export enum FunctionErrorKind {
  * Describes the enum tailor.v1.FunctionErrorKind.
  */
 export declare const FunctionErrorKindSchema: GenEnum<FunctionErrorKind>;
+
+/**
+ * @generated from enum tailor.v1.FunctionLogSeverity
+ */
+export enum FunctionLogSeverity {
+  /**
+   * @generated from enum value: FUNCTION_LOG_SEVERITY_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: FUNCTION_LOG_SEVERITY_LOG = 10;
+   */
+  LOG = 10,
+
+  /**
+   * @generated from enum value: FUNCTION_LOG_SEVERITY_DEBUG = 20;
+   */
+  DEBUG = 20,
+
+  /**
+   * @generated from enum value: FUNCTION_LOG_SEVERITY_INFO = 30;
+   */
+  INFO = 30,
+
+  /**
+   * @generated from enum value: FUNCTION_LOG_SEVERITY_WARNING = 40;
+   */
+  WARNING = 40,
+
+  /**
+   * @generated from enum value: FUNCTION_LOG_SEVERITY_ERROR = 50;
+   */
+  ERROR = 50,
+}
+
+/**
+ * Describes the enum tailor.v1.FunctionLogSeverity.
+ */
+export declare const FunctionLogSeveritySchema: GenEnum<FunctionLogSeverity>;
 

@@ -1,10 +1,17 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  resourceTrn,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
 
 type CreateVault = {
@@ -85,7 +92,7 @@ export async function planSecretManager(context: PlanContext) {
   await Promise.all(
     existingVaultList.map(async (resource) => {
       const { metadata } = await client.getMetadata({
-        trn: vaultTrn(workspaceId, resource.name),
+        trn: resourceTrn(workspaceId, "vault", resource.name),
       });
       existingVaults[resource.name] = {
         resource,
@@ -104,26 +111,27 @@ export async function planSecretManager(context: PlanContext) {
       const existing = existingVaults[vaultName];
 
       if (existing) {
-        const metaRequest = await buildMetaRequest(
-          vaultTrn(workspaceId, vaultName),
-          application.name,
-        );
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Secret Manager vault",
-            resourceName: vaultName,
-          });
-        } else if (existing.label !== application.name) {
-          conflicts.push({
-            resourceType: "Secret Manager vault",
-            resourceName: vaultName,
-            currentOwner: existing.label,
-          });
+        const metaRequest = await buildMetaRequest({
+          trn: resourceTrn(workspaceId, "vault", vaultName),
+          appName: application.name,
+          appId: application.id,
+        });
+        const owned = isOwnedByApp(existing.allLabels, application.name, application.id);
+        if (!owned) {
+          if (!existing.label) {
+            unmanaged.push({
+              resourceType: "Secret Manager vault",
+              resourceName: vaultName,
+            });
+          } else {
+            conflicts.push({
+              resourceType: "Secret Manager vault",
+              resourceName: vaultName,
+              currentOwner: existing.label,
+            });
+          }
         }
-        if (
-          existing.label === application.name &&
-          hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
-        ) {
+        if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
           vaultChangeSet.unchanged.push({ name: vaultName });
         } else {
           vaultChangeSet.updates.push({
@@ -212,10 +220,11 @@ export async function planSecretManager(context: PlanContext) {
   for (const [name, entry] of Object.entries(existingVaults)) {
     if (!entry) continue;
     const label = entry.label;
-    if (label && label !== application.name) {
+    const owned = isOwnedByApp(entry.allLabels, application.name, application.id);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    if (label === application.name) {
+    if (owned) {
       // Delete secrets inside the vault before deleting the vault itself
       const secrets = await fetchAll(async (pageToken, maxPageSize) => {
         try {
@@ -252,10 +261,6 @@ export async function planSecretManager(context: PlanContext) {
   return { vaultChangeSet, secretChangeSet, skippedSecrets, conflicts, unmanaged, resourceOwners };
 }
 
-function vaultTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
-}
-
 /**
  * Apply secret manager changes for the given phase.
  * @param client - Operator client instance
@@ -281,10 +286,11 @@ export async function applySecretManager(
           secretmanagerVaultName: create.name,
         });
         if (application) {
-          const metaRequest = await buildMetaRequest(
-            vaultTrn(create.workspaceId, create.name),
-            application.name,
-          );
+          const metaRequest = await buildMetaRequest({
+            trn: resourceTrn(create.workspaceId, "vault", create.name),
+            appName: application.name,
+            appId: application.id,
+          });
           await client.setMetadata(metaRequest);
         }
       }),
@@ -294,10 +300,11 @@ export async function applySecretManager(
     if (application) {
       await Promise.all(
         vaultChangeSet.updates.map(async (update) => {
-          const metaRequest = await buildMetaRequest(
-            vaultTrn(update.workspaceId, update.name),
-            application.name,
-          );
+          const metaRequest = await buildMetaRequest({
+            trn: resourceTrn(update.workspaceId, "vault", update.name),
+            appName: application.name,
+            appId: application.id,
+          });
           await client.setMetadata(metaRequest);
         }),
       );

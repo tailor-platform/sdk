@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {
   describe("array field validation", () => {
-    it("should throw error when index is set on array field", () => {
+    test("should throw error when index is set on array field", () => {
       // Bypass type check by directly setting metadata
       const field = db.string({ array: true });
       (field as unknown as { _metadata: { index: boolean } })._metadata.index = true;
@@ -19,7 +19,7 @@ describe("parseTypes", () => {
       );
     });
 
-    it("should throw error when unique is set on array field", () => {
+    test("should throw error when unique is set on array field", () => {
       // Bypass type check by directly setting metadata
       const field = db.string({ array: true });
       (field as unknown as { _metadata: { unique: boolean } })._metadata.unique = true;
@@ -33,7 +33,7 @@ describe("parseTypes", () => {
       );
     });
 
-    it("should allow index on non-array fields", () => {
+    test("should allow index on non-array fields", () => {
       const testType = db.type("Test", {
         email: db.string().index(),
       });
@@ -42,7 +42,7 @@ describe("parseTypes", () => {
       expect(result.Test.fields.email.config.index).toBe(true);
     });
 
-    it("should allow unique on non-array fields", () => {
+    test("should allow unique on non-array fields", () => {
       const testType = db.type("Test", {
         email: db.string().unique(),
       });
@@ -53,7 +53,7 @@ describe("parseTypes", () => {
   });
 
   describe("buildBackwardRelationships", () => {
-    it("should build backward relationships correctly", () => {
+    test("should build backward relationships correctly", () => {
       const employee = db.type("Employee", {
         name: db.string(),
       });
@@ -81,7 +81,7 @@ describe("parseTypes", () => {
       });
     });
 
-    it("should throw error when backward relation names are duplicated", () => {
+    test("should throw error when backward relation names are duplicated", () => {
       const employee = db.type("Employee", {
         name: db.string(),
       });
@@ -119,7 +119,7 @@ describe("parseTypes", () => {
       ).toThrow(/Employee/);
     });
 
-    it("should not throw error when backward names are explicitly set to be unique", () => {
+    test("should not throw error when backward names are explicitly set to be unique", () => {
       const employee = db.type("Employee", {
         name: db.string(),
       });
@@ -157,7 +157,7 @@ describe("parseTypes", () => {
       });
     });
 
-    it("should include source file information in error message when available", () => {
+    test("should include source file information in error message when available", () => {
       const employee = db.type("Employee", {
         name: db.string(),
       });
@@ -189,7 +189,7 @@ describe("parseTypes", () => {
       ).toThrow(/\/path\/to\/performanceReview\.ts/);
     });
 
-    it("should generate default backward names using inflection", () => {
+    test("should generate default backward names using inflection", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -212,7 +212,7 @@ describe("parseTypes", () => {
       });
     });
 
-    it("should generate singular backward name for unique relations", () => {
+    test("should generate singular backward name for unique relations", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -238,7 +238,7 @@ describe("parseTypes", () => {
       });
     });
 
-    it("should throw error when backward name conflicts with existing field", () => {
+    test("should throw error when backward name conflicts with existing field", () => {
       // User has a field named "posts"
       const user = db.type("User", {
         name: db.string(),
@@ -258,7 +258,7 @@ describe("parseTypes", () => {
       ).toThrow(/posts/);
     });
 
-    it("should throw error when backward name conflicts with files field", () => {
+    test("should throw error when backward name conflicts with files field", () => {
       const user = db
         .type("User", {
           name: db.string(),
@@ -282,7 +282,7 @@ describe("parseTypes", () => {
   });
 
   describe("validateRelationType", () => {
-    it("should throw error when relation type is missing", () => {
+    test("should throw error when relation type is missing", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -301,7 +301,7 @@ describe("parseTypes", () => {
       expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/rawRelation/);
     });
 
-    it("should throw error when relation type is invalid", () => {
+    test("should throw error when relation type is invalid", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -319,7 +319,7 @@ describe("parseTypes", () => {
       expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/Invalid option/);
     });
 
-    it("should throw error when target type does not exist", () => {
+    test("should throw error when target type does not exist", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -337,7 +337,7 @@ describe("parseTypes", () => {
       );
     });
 
-    it("should accept valid relation types", () => {
+    test("should accept valid relation types", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -360,7 +360,7 @@ describe("parseTypes", () => {
   });
 
   describe("processRelation", () => {
-    it("should compute derived metadata for relations", () => {
+    test("should compute derived metadata for relations", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -384,7 +384,7 @@ describe("parseTypes", () => {
       expect(authorIdConfig.index).toBe(true);
     });
 
-    it("should set unique=true for oneToOne relations (relation only)", () => {
+    test("should set unique=true for oneToOne relations (relation only)", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -404,7 +404,7 @@ describe("parseTypes", () => {
       expect(result.Profile.fields.userId.config.unique).toBe(true);
     });
 
-    it("should set unique=true for oneToOne relations (unique before relation)", () => {
+    test("should set unique=true for oneToOne relations (unique before relation)", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -427,7 +427,7 @@ describe("parseTypes", () => {
       expect(result.Profile.fields.userId.config.unique).toBe(true);
     });
 
-    it("should set unique=true for oneToOne relations (unique after relation)", () => {
+    test("should set unique=true for oneToOne relations (unique after relation)", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -451,7 +451,7 @@ describe("parseTypes", () => {
       expect(result.Profile.fields.userId.config.unique).toBe(true);
     });
 
-    it("should throw error when unique is set on n-1 relation (unique before relation)", () => {
+    test("should throw error when unique is set on n-1 relation (unique before relation)", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -474,7 +474,7 @@ describe("parseTypes", () => {
       );
     });
 
-    it("should throw error when unique is set on n-1 relation (unique after relation)", () => {
+    test("should throw error when unique is set on n-1 relation (unique after relation)", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -497,7 +497,7 @@ describe("parseTypes", () => {
       );
     });
 
-    it("should handle self-referencing relations", () => {
+    test("should handle self-referencing relations", () => {
       const node = db.type("Node", {
         name: db.string(),
         parentId: db.uuid().relation({
@@ -514,7 +514,7 @@ describe("parseTypes", () => {
       expect(result.Node.fields.parentId.relation?.targetType).toBe("Node");
     });
 
-    it("should not create forward/backward relationships for keyOnly relations", () => {
+    test("should not create forward/backward relationships for keyOnly relations", () => {
       const user = db.type("User", {
         name: db.string(),
       });

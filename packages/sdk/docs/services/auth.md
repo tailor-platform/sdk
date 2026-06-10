@@ -22,6 +22,7 @@ Configure Auth service using `defineAuth()`:
 
 - **One auth per application**: Each application can have exactly one Auth service
 - **Configuration location**: Define in `tailor.config.ts` using `defineAuth()` and reference directly in the config's `auth` field
+- **`userProfile` and `machineUserAttributes` are mutually exclusive**: Specifying both fails at deploy/generate time with ``Specify either `userProfile` or `machineUserAttributes`, not both.``
 
 ```typescript
 import { defineAuth } from "@tailor-platform/sdk";
@@ -93,6 +94,16 @@ export const user = db.type("User", {
 ```
 
 **type**: The TailorDB type that stores user records.
+
+**namespace** (optional): The TailorDB namespace where the user type is defined. Usually auto-resolved from your `db` configuration, so you don't need to specify it. Required only when multiple TailorDB namespaces exist and the type lives in an external TailorDB:
+
+```typescript
+userProfile: {
+  namespace: "external-ns", // Explicitly specify the namespace
+  type: user,
+  usernameField: "email",
+},
+```
 
 **usernameField**: The field in the TailorDB type used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
 
@@ -358,6 +369,18 @@ Auth connections enable OAuth2 authentication with external providers (Google, M
 
 For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
 
+> [!WARNING]
+> **Managing connections through `tailor.config.ts` is unreliable for shared and CI deploys.**
+> A deploy revokes and recreates the connection — discarding the token obtained via `authconnection authorize` — whenever it cannot confirm the secret is unchanged. That check relies on a hash stored locally in `.tailor-sdk/secrets-state.json`, which is gitignored and therefore not shared across machines. So a deploy from CI, a clean checkout, another developer's machine, or after deleting `.tailor-sdk/` recreates the connection and drops its token. Only repeated deploys from the same machine that still holds that state keep the token.
+>
+> Because of this, prefer to **create the connection and its token from the Console**. You can jump to the connections page with:
+>
+> ```bash
+> tailor-sdk authconnection open
+> ```
+>
+> The `connections` field in `defineAuth()` and the `authconnection authorize` flow are documented below for reference.
+
 ### Setup Flow
 
 Setting up an auth connection requires two steps:
@@ -413,6 +436,9 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 
 The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
 
+> [!WARNING]
+> The secret hash lives in `.tailor-sdk/secrets-state.json`, which is gitignored and not shared across machines or CI. When that state is missing — a clean checkout, CI, another machine, or after deleting `.tailor-sdk/` — a deploy cannot confirm the secret is unchanged, so it revokes and recreates the connection and discards the token stored by `authconnection authorize`. For shared and CI workflows, manage the connection and create its token from the Console (`tailor-sdk authconnection open`) instead.
+
 ### `auth.getConnectionToken()`
 
 `auth.getConnectionToken()` retrieves connection tokens at runtime by calling `tailor.authconnection.getConnectionToken()` internally. When `connections` is defined in `defineAuth()`, the connection name is type-checked and autocompleted against the defined keys:
@@ -438,6 +464,9 @@ See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-inter
 Auth connections can also be managed via the CLI:
 
 ```bash
+# Open the connections page in the Console (recommended for creating connections/tokens)
+tailor-sdk authconnection open
+
 # Authorize (opens browser for OAuth2 flow)
 tailor-sdk authconnection authorize --name google-connection
 
@@ -448,7 +477,7 @@ tailor-sdk authconnection list
 tailor-sdk authconnection revoke --name google-connection
 ```
 
-Connection creation is handled by `tailor-sdk deploy` via the config.
+Connection creation is handled by `tailor-sdk deploy` via the config, but recreation on deploy can drop the authorized token (see the warning at the top of this section) — for shared and CI workflows, create connections and tokens from the Console (`tailor-sdk authconnection open`) instead.
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 
@@ -472,8 +501,9 @@ export const auth = defineAuth("my-auth", {
   },
   hooks: {
     beforeLogin: {
-      handler: async ({ claims, idpConfigName }) => {
+      handler: async ({ claims, idpConfigName, env }) => {
         // Provision or update user based on IdP claims
+        // `env` exposes the variables defined in `defineConfig({ env })`
       },
       invoker: "hook-invoker",
     },
@@ -481,7 +511,7 @@ export const auth = defineAuth("my-auth", {
 });
 ```
 
-**handler**: An async function that receives `{ claims, idpConfigName }` and is called before each login. `claims` contains the token claims from the identity provider, and `idpConfigName` is the name of the IdP configuration used for authentication.
+**handler**: An async function that receives `{ claims, idpConfigName, env }` and is called before each login. `claims` contains the token claims from the identity provider, `idpConfigName` is the name of the IdP configuration used for authentication, and `env` exposes the environment variables defined in `defineConfig({ env })` (the same values available via `context.env` in resolvers).
 
 **invoker**: The machine user whose permissions are used to execute the hook. Must reference a machine user defined in the same auth configuration.
 
@@ -509,14 +539,3 @@ tailor-sdk oauth2client get <name>
 ```
 
 See [Auth Resource Commands](../cli/auth.md) for full documentation.
-
-## SDK vs Platform Naming
-
-> **Note for Platform developers**: The SDK uses different names than the underlying Platform API for user attributes:
->
-> | SDK             | Platform API    | Description                      |
-> | --------------- | --------------- | -------------------------------- |
-> | `attributes`    | `attribute_map` | Key-value map of user attributes |
-> | `attributeList` | `attributes`    | Ordered list of UUID values      |
->
-> This mapping is handled automatically by the SDK. If you're reading Platform documentation or API responses, be aware of this naming difference.

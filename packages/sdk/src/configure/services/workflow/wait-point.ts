@@ -1,4 +1,5 @@
 import { brandValue } from "@/utils/brand";
+import type { TailorWorkflowAPI } from "@/runtime/workflow";
 import type { JsonCompatible } from "@/types/helpers";
 
 /**
@@ -36,22 +37,12 @@ interface WaitPointWithSetter {
 }
 
 function getPlatformWorkflow() {
-  const platform = globalThis as {
-    tailor?: {
-      workflow?: {
-        wait: (k: string, p?: unknown) => unknown;
-        resolve: (
-          e: string,
-          k: string,
-          c: (p: unknown) => unknown | Promise<unknown>,
-        ) => Promise<void>;
-      };
-    };
-  };
+  const platform = globalThis as { tailor?: { workflow?: TailorWorkflowAPI } };
   const workflow = platform.tailor?.workflow;
   if (!workflow) {
     throw new Error(
-      "tailor.workflow is not available. Use workflowMock from @tailor-platform/sdk/vitest in tests.",
+      "tailor.workflow is not available. Run tests in the `tailor-runtime` Vitest environment, " +
+        "or acquire mockWorkflow() from @tailor-platform/sdk/vitest and set a wait/resolve handler.",
     );
   }
   return workflow;
@@ -59,7 +50,7 @@ function getPlatformWorkflow() {
 
 /**
  * Create a WaitPointInstance that delegates to the platform runtime.
- * Use `workflowMock` from `@tailor-platform/sdk/vitest` to mock
+ * Use `mockWorkflow` from `@tailor-platform/sdk/vitest` to mock
  * `globalThis.tailor.workflow.wait/resolve` in tests.
  * @param initialKey - Initial key (can be updated via the returned setter)
  * @returns The instance and a setter to update the key after construction
@@ -133,6 +124,7 @@ type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointDef<Payl
  *
  * await approval.wait({ message: "Please approve" });
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function defineWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointDef<Payload, Result> {
@@ -162,6 +154,7 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
  *
  * // For 2-level access, use destructured export with JSDoc attached to the export itself.
  */
+/* @__NO_SIDE_EFFECTS__ */
 // oxlint-disable-next-line no-explicit-any
 export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
   builder: (define: DefineFn) => T,

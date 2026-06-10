@@ -18,24 +18,25 @@ pre-commit:
         - "yarn-error.log*"
         - "pnpm-debug.log*"
         - "lerna-debug.log*"
-        - ".eslintcache"
         - "coverage/**"
         - ".tailor-sdk/**"
         - "example/tests/fixtures/**"
         - "example/generated/**"
         - "example/seed/**"
         - "packages/tailor-proto/**"
+        - "packages/sdk-codemod/codemods/**/tests/**"
       run: pnpm oxfmt --check {staged_files}
 
     checks:
       glob: "*.{ts,js}"
       run: >-
-        pnpm exec turbo run build lint typecheck:go knip
-        --filter=@tailor-platform/sdk --filter=example
-        --no-update-notifier --output-logs=errors-only
-        && pnpm exec turbo run lint
-        --filter='./packages/create-sdk/templates/*'
-        --no-update-notifier --output-logs=errors-only
+        pnpm --filter=@tailor-platform/sdk run build &&
+        pnpm --filter=@tailor-platform/sdk --filter=example run generate &&
+        pnpm --filter=@tailor-platform/sdk --filter=example run lint &&
+        pnpm run lint:vitest &&
+        pnpm --filter=@tailor-platform/sdk --filter=example run typecheck:go &&
+        pnpm --filter=@tailor-platform/sdk run knip &&
+        pnpm --filter='./packages/create-sdk/templates/*' run lint
 
 post-commit:
   commands:

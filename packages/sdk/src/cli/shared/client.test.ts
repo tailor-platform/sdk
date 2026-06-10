@@ -1,5 +1,8 @@
-import { Code, ConnectError } from "@connectrpc/connect";
-import { afterEach, describe, test, expect, vi } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
+import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
 import {
   createTransport,
   fetchAll,
@@ -8,6 +11,8 @@ import {
   MAX_PAGE_SIZE,
   parseMethodName,
   resolveStaticWebsiteUrls,
+  RETRY_SAFE_CREATE_METHODS,
+  retryInterceptor,
   type OperatorClient,
 } from "./client";
 import { logger } from "./logger";
@@ -85,7 +90,7 @@ describe("fetchPaged", () => {
   test("requests smaller pages as it approaches the limit", async () => {
     const fn = vi
       .fn()
-      .mockResolvedValueOnce([new Array(MAX_PAGE_SIZE).fill("x"), "next"])
+      .mockResolvedValueOnce([Array.from({ length: MAX_PAGE_SIZE }, () => "x"), "next"])
       .mockResolvedValueOnce([["y", "y", "y"], ""]);
 
     const items = await fetchPaged(fn, { limit: MAX_PAGE_SIZE + 5 });
@@ -102,6 +107,200 @@ describe("fetchPaged", () => {
 
     expect(items).toEqual(["only"]);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("retryInterceptor", () => {
+  // Stub timers so the real backoff (500ms base) does not slow the suite or make
+  // it flaky under load; runAllTimersAsync below drives the awaited setTimeout.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Build a minimal unary request bound to a real OperatorService method so the
+   * interceptor can read `method.name`/`method.output`/`method.idempotency`.
+   * @param method - OperatorService method descriptor to bind the request to
+   * @returns A minimal unary request usable by the interceptor under test
+   */
+  function makeUnaryReq(
+    method: (typeof OperatorService.method)[keyof typeof OperatorService.method],
+  ) {
+    return {
+      stream: false,
+      service: OperatorService,
+      method,
+      header: new Headers(),
+      message: {},
+    } as unknown as UnaryRequest;
+  }
+
+  /**
+   * Drive the interceptor promise to completion under fake timers by flushing all
+   * pending backoff timers (and the microtasks they unblock).
+   *
+   * A handler is attached synchronously (before advancing timers) so a rejection
+   * that lands while timers are flushing is never momentarily unhandled — vitest
+   * fails the run on unhandled rejections, and `settle` is used by tests that
+   * expect rejection. The original error is rethrown so `.rejects` still works.
+   * @param promise - The pending interceptor result
+   * @returns The settled interceptor result
+   */
+  async function settle<T>(promise: Promise<T>): Promise<T> {
+    const guarded = promise.then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    await vi.runAllTimersAsync();
+    const result = await guarded;
+    if (result.ok) return result.value;
+    throw result.error;
+  }
+
+  const okResponse = { stream: false, message: {} };
+
+  test("retries on Unavailable then succeeds", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("treats AlreadyExists after a retry as success for Create methods", async () => {
+    // #1350: prior attempt landed server-side but came back Unavailable; the
+    // identical retry then hits already_exists on the _file metadata table.
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+    );
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(res.stream).toBe(false);
+    // A synthesized empty output message stands in for the already-applied state.
+    expect((res as { message: unknown }).message).toBeTruthy();
+  });
+
+  test("does not swallow a first-attempt AlreadyExists (genuine conflict)", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
+    ).rejects.toThrow("already exists");
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not treat AlreadyExists as success for non-Create methods", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
+    ).rejects.toThrow("already exists");
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not swallow AlreadyExists for Create methods outside the allowlist", async () => {
+    // createIdPClient consumes its response body (clientSecret), so an empty
+    // synthesized response would corrupt downstream state — it must surface.
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createIdPClient))),
+    ).rejects.toThrow("already exists");
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry streaming requests", async () => {
+    const streamRes = { stream: true };
+    const next = vi.fn().mockResolvedValueOnce(streamRes);
+
+    const req = {
+      stream: true,
+      method: OperatorService.method.createTailorDBType,
+    } as unknown as UnaryRequest;
+    const res = await settle(retryInterceptor()(next)(req));
+
+    expect(res).toBe(streamRes);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  // Drift guard: every Create RPC invoked in the deploy/apply flow must be
+  // consciously classified — either retry-safe (response unused, in
+  // RETRY_SAFE_CREATE_METHODS) or explicitly exempt below. A newly added apply
+  // create then fails this test until classified, instead of silently missing
+  // the allowlist in production.
+  test("RETRY_SAFE_CREATE_METHODS covers every deploy Create or it is explicitly exempt", () => {
+    // Creates intentionally NOT treated as retry-safe:
+    const EXEMPT_DEPLOY_CREATES = new Set([
+      "CreateIdPClient", // consumes resp.client.clientSecret
+      "CreateWorkflowJobFunction", // consumes response.jobFunction.version
+      "CreateFunctionRegistry", // client-streaming: bypasses the retry loop
+    ]);
+
+    const deployDir = path.resolve(import.meta.dirname, "../commands/deploy");
+    const tsFiles: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".ts") && !entry.name.includes(".test.")) tsFiles.push(full);
+      }
+    };
+    walk(deployDir);
+
+    const used = new Set<string>();
+    const callRe = /client\.(create[A-Z][A-Za-z0-9]*)\s*\(/g;
+    for (const file of tsFiles) {
+      const src = fs.readFileSync(file, "utf8");
+      for (const m of src.matchAll(callRe)) {
+        const local = m[1];
+        used.add(local.charAt(0).toUpperCase() + local.slice(1));
+      }
+    }
+
+    // Sanity: the scan actually found deploy creates (guards against a broken regex/path).
+    expect(used.has("CreateTailorDBType")).toBe(true);
+
+    const unclassified = [...used].filter(
+      (name) => !RETRY_SAFE_CREATE_METHODS.has(name) && !EXEMPT_DEPLOY_CREATES.has(name),
+    );
+    // On failure the diff lists the offending method(s). Each must be added to
+    // RETRY_SAFE_CREATE_METHODS (if its response body is unused) or to
+    // EXEMPT_DEPLOY_CREATES (if its response is consumed / it is streaming).
+    expect(unclassified).toEqual([]);
+  });
+
+  test("every RETRY_SAFE_CREATE_METHODS entry is a real OperatorService method", () => {
+    const realCreateNames = new Set(
+      Object.values(OperatorService.method)
+        .map((m) => m.name)
+        .filter((name) => name.startsWith("Create")),
+    );
+    // On failure the diff lists the unknown name(s) — fix the typo/rename in
+    // RETRY_SAFE_CREATE_METHODS to match the OperatorService method name.
+    const typos = [...RETRY_SAFE_CREATE_METHODS].filter((name) => !realCreateNames.has(name));
+    expect(typos).toEqual([]);
   });
 });
 
@@ -250,10 +449,6 @@ describe("formatRequestParams", () => {
 });
 
 describe("resolveStaticWebsiteUrls", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   function makeClient(
     impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
   ): OperatorClient {
@@ -280,7 +475,7 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("warns and drops entry when site is missing and not expected locally", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => {
       throw new ConnectError("not found", Code.NotFound);
     });
@@ -294,7 +489,7 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("suppresses warning and keeps original pattern when site is expected locally", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => {
       throw new ConnectError("not found", Code.NotFound);
     });
@@ -312,7 +507,7 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("still warns when URL is not assigned yet, even when site is expected locally", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
 
     const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
@@ -326,7 +521,7 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("does not suppress non-NotFound errors even when site is expected locally", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => {
       throw new ConnectError("service unavailable", Code.Unavailable);
     });

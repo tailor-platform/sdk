@@ -15,7 +15,16 @@ export type CodeGeneratorInput = CodeGenerator;
 
 export type BaseGeneratorConfig =
   | ["@tailor-platform/kysely-type", { distPath: string }]
-  | ["@tailor-platform/seed", { distPath: string; machineUserName?: string | undefined }]
+  | [
+      "@tailor-platform/seed",
+      {
+        distPath: string;
+        machineUserName?: string | undefined;
+        disableIdpUserSync?:
+          | { userToIdp?: boolean | undefined; idpToUser?: boolean | undefined }
+          | undefined;
+      },
+    ]
   | ["@tailor-platform/enum-constants", { distPath: string }]
   | ["@tailor-platform/file-utils", { distPath: string }]
   | {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { RunOutput } from "./types";
 
 vi.mock("@/cli/shared/logger", () => ({
@@ -51,7 +51,7 @@ describe("upgrade service", () => {
     vi.restoreAllMocks();
   });
 
-  it("should throw CLIError when SDK version is not detected", async () => {
+  test("should throw CLIError when SDK version is not detected", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue(null);
 
@@ -61,7 +61,7 @@ describe("upgrade service", () => {
     );
   });
 
-  it("should invoke sdk-codemod with correct arguments", async () => {
+  test("should invoke sdk-codemod with correct arguments", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
@@ -95,7 +95,7 @@ describe("upgrade service", () => {
     );
   });
 
-  it("should pass --dry-run to sdk-codemod", async () => {
+  test("should pass --dry-run to sdk-codemod", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
@@ -121,7 +121,7 @@ describe("upgrade service", () => {
     );
   });
 
-  it("should display summary from sdk-codemod output", async () => {
+  test("should display summary from sdk-codemod output", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
@@ -149,7 +149,7 @@ describe("upgrade service", () => {
     expect(infoCalls.some((c) => c.includes("1 applied"))).toBe(true);
   });
 
-  it("should throw CLIError when sdk-codemod returns errors", async () => {
+  test("should throw CLIError when sdk-codemod returns errors", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
@@ -174,7 +174,7 @@ describe("upgrade service", () => {
     );
   });
 
-  it("should throw CLIError when spawning fails", async () => {
+  test("should throw CLIError when spawning fails", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
@@ -195,7 +195,7 @@ describe("upgrade service", () => {
     );
   });
 
-  it("should forward captured stderr to process.stderr in the success path", async () => {
+  test("should forward captured stderr to process.stderr in the success path", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
@@ -216,7 +216,7 @@ describe("upgrade service", () => {
       error: undefined,
     });
 
-    const stderrWrite = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    using stderrWrite = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
     const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: true, path: "/test" });
@@ -224,7 +224,7 @@ describe("upgrade service", () => {
     expect(stderrWrite).toHaveBeenCalledWith(stderrPayload);
   });
 
-  it("should throw CLIError when stdout is not valid JSON", async () => {
+  test("should throw CLIError when stdout is not valid JSON", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 

@@ -1,50 +1,104 @@
-export interface TblsColumn {
+export type TailorDbErdSource = "local";
+
+export interface TailorDbErdTypeSource {
+  kind: "user" | "plugin";
+  exportName?: string;
+  pluginId?: string;
+  pluginImportPath?: string;
+  originalExportName?: string;
+  generatedTypeKind?: string;
+  namespace?: string;
+}
+
+export interface TailorDbErdColumnRelation {
+  targetTable: string;
+  targetColumn: string;
+  kind: "foreignKey" | "relation";
+  required: boolean;
+  relationType?: string;
+  forwardName?: string;
+  backwardName?: string;
+}
+
+export interface TailorDbErdColumn {
   name: string;
   type: string;
-  nullable: boolean;
-  comment: string;
+  required: boolean;
+  array: boolean;
+  description?: string;
+  primaryKey?: boolean;
+  unique?: boolean;
+  index?: boolean;
+  indexNames?: string[];
+  uniqueIndexNames?: string[];
+  enumValues?: string[];
+  enumValueDescriptions?: Record<string, string>;
+  vector?: boolean;
+  serial?: {
+    start: number;
+    maxValue?: number;
+    format?: string;
+  };
+  scale?: number;
+  validations?: number;
+  hooks?: {
+    create?: boolean;
+    update?: boolean;
+  };
+  fields?: TailorDbErdColumn[];
+  relation?: TailorDbErdColumnRelation;
 }
 
-export interface TblsTable {
+export interface TailorDbErdIndex {
   name: string;
-  type: string;
-  comment: string;
-  columns: TblsColumn[];
-  indexes: unknown[];
-  constraints: TblsConstraint[];
-  triggers: unknown[];
-  def: string;
-  referenced_tables: string[];
+  fields: string[];
+  unique: boolean;
 }
 
-export interface TblsRelation {
-  table: string;
-  columns: string[];
-  parent_table: string;
-  parent_columns: string[];
-  cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more";
-  parent_cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more";
-  def: string;
-}
-
-export interface TblsConstraint {
+export interface TailorDbErdRelationship {
   name: string;
-  type: "PRIMARY KEY" | "FOREIGN KEY" | string;
-  def: string;
-  table: string;
-  columns: string[];
-  referenced_table?: string;
-  referenced_columns?: string[];
+  targetType: string;
+  targetField: string;
+  sourceField: string;
+  isArray: boolean;
+  description?: string;
 }
 
-export interface TblsEnum {
+export interface TailorDbErdTable {
   name: string;
-  values: string[];
+  pluralForm: string;
+  description?: string;
+  source?: TailorDbErdTypeSource;
+  columns: TailorDbErdColumn[];
+  indexes: TailorDbErdIndex[];
+  forwardRelationships: TailorDbErdRelationship[];
+  backwardRelationships: TailorDbErdRelationship[];
 }
 
-export interface TblsSchema {
+export interface TailorDbErdRelation {
   name: string;
-  tables: TblsTable[];
-  relations: TblsRelation[];
-  enums: TblsEnum[];
+  sourceTable: string;
+  sourceColumns: string[];
+  targetTable: string;
+  targetColumns: string[];
+  required: boolean;
+  unique: boolean;
+  kind: "foreignKey" | "relation";
+  relationType?: string;
+  forwardName?: string;
+  backwardName?: string;
+}
+
+export interface TailorDbErdSchema {
+  version: 1;
+  namespace: string;
+  generatedAt: string;
+  revision: string;
+  source: TailorDbErdSource;
+  cleanRoom: {
+    implementation: "tailor-sdk";
+    notes: string[];
+  };
+  tables: TailorDbErdTable[];
+  relations: TailorDbErdRelation[];
 }

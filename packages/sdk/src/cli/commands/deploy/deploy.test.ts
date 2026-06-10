@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { createChangeSet } from "./change-set";
-import { summarizePlanResults } from "./deploy";
+import { computeRenamedAppDeletions, summarizePlanResults } from "./deploy";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
@@ -47,12 +47,15 @@ function emptyResults(): PlanResults {
       context: {
         workspaceId: "ws",
         application: {} as PlanResults["tailorDB"]["context"]["application"],
+        tailorDBInputs: [],
+        executorUsedTypes: new Set<string>(),
         config: {} as PlanResults["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
       },
     },
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
+      customDomainChangeSet: createChangeSet("CustomDomains"),
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
@@ -106,6 +109,7 @@ function emptyResults(): PlanResults {
       unmanaged: [],
       resourceOwners: new Set<string>(),
       appName: "my-app",
+      appId: undefined,
     },
     secretManager: {
       vaultChangeSet: createChangeSet("Vaults"),
@@ -199,5 +203,47 @@ describe("summarizePlanResults", () => {
       replace: 0,
       unchanged: 0,
     });
+  });
+});
+
+describe("computeRenamedAppDeletions", () => {
+  test("returns renamed-away apps whose resources have all moved", () => {
+    const result = computeRenamedAppDeletions({
+      conflicts: [{ currentOwner: "old-app" }, { currentOwner: "old-app" }],
+      resourceOwners: new Set(),
+      targetAppName: "new-app",
+    });
+
+    expect(result).toEqual(["old-app"]);
+  });
+
+  test("skips the target app itself even if its id was regenerated", () => {
+    const result = computeRenamedAppDeletions({
+      conflicts: [{ currentOwner: "my-app" }, { currentOwner: "my-app" }],
+      resourceOwners: new Set(),
+      targetAppName: "my-app",
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  test("keeps the old app when some of its resources still remain unmanaged", () => {
+    const result = computeRenamedAppDeletions({
+      conflicts: [{ currentOwner: "old-app" }],
+      resourceOwners: new Set(["old-app"]),
+      targetAppName: "new-app",
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty when there are no conflicts", () => {
+    const result = computeRenamedAppDeletions({
+      conflicts: [],
+      resourceOwners: new Set(),
+      targetAppName: "my-app",
+    });
+
+    expect(result).toEqual([]);
   });
 });

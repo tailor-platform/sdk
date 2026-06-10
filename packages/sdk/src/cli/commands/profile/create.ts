@@ -4,7 +4,7 @@ import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
-import type { ProfileInfo } from ".";
+import type { ProfileInfo } from "./types";
 
 export const createCommand = defineAppCommand({
   name: "create",
@@ -22,6 +22,10 @@ export const createCommand = defineAppCommand({
       "workspace-id": arg(z.string(), {
         alias: "w",
         description: "Workspace ID",
+      }),
+      permission: arg(z.enum(["write", "read"]).default("write"), {
+        description:
+          "Profile permission. 'read' blocks all write commands while the profile is active.",
       }),
     })
     .strict(),
@@ -55,6 +59,7 @@ export const createCommand = defineAppCommand({
     config.profiles[args.name] = {
       user: args.user,
       workspace_id: args["workspace-id"],
+      ...(args.permission === "read" ? { readonly: true } : {}),
     };
     writePlatformConfig(config);
 
@@ -67,6 +72,7 @@ export const createCommand = defineAppCommand({
       name: args.name,
       user: args.user,
       workspaceId: args["workspace-id"],
+      permission: args.permission,
     };
     logger.out(profileInfo);
   },

@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
-import type { PlanContext } from "./deploy";
+import type { PlanContext } from "./types";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
 import type { ResolverService } from "@/cli/services/resolver/service";
@@ -204,7 +204,7 @@ describe("planPipeline (resolver service level)", () => {
       const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
         "resolver-1",
         "resolver-2",
       ]);

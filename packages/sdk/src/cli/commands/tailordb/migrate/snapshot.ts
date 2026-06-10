@@ -3,13 +3,28 @@
  */
 
 import * as fs from "node:fs";
+import * as inflection from "inflection";
 import * as path from "pathe";
 import {
   type MigrationDiff,
   type DiffChange,
+  type FieldDiffChange,
   type BreakingChangeInfo,
+  type WarningChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
+import { formatMigrationNumber } from "./migration-number";
+import type {
+  SnapshotActionPermission,
+  SnapshotFieldConfig,
+  SnapshotGqlAction,
+  SnapshotGqlPermission,
+  SnapshotIndexConfig,
+  SnapshotPermissionCondition,
+  SnapshotRecordPermission,
+  SnapshotRelationship,
+  TailorDBSnapshotType,
+} from "./snapshot-types";
 import type { SchemaDrift } from "./types";
 import type {
   ParsedField,
@@ -52,204 +67,75 @@ export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
 export const DEFAULT_DECIMAL_SCALE = 6;
 
 /**
- * Resolve the effective scale of a field for comparison purposes.
- * Decimal fields without an explicit scale are stored on the platform with the
- * default scale, so we normalize unset values to the default to avoid false drift.
- * @param {SnapshotFieldConfig} field - Field configuration
- * @returns {number | undefined} Effective scale, or undefined for non-decimal fields without scale
+ * Normalize a snapshot field in place so the snapshot becomes the canonical
+ * form for comparison. Currently fills in the platform default decimal scale
+ * when omitted, which avoids false drift between local schemas (where scale
+ * may be omitted) and the platform (which always materializes a scale).
+ * @param {SnapshotFieldConfig} field - Field configuration to normalize
  */
-function getEffectiveScale(field: SnapshotFieldConfig): number | undefined {
-  if (field.scale !== undefined) return field.scale;
-  if (field.type === "decimal") return DEFAULT_DECIMAL_SCALE;
-  return undefined;
+function normalizeSnapshotField(field: SnapshotFieldConfig): void {
+  if (field.type === "decimal" && field.scale === undefined) {
+    field.scale = DEFAULT_DECIMAL_SCALE;
+  }
+  if (field.fields) {
+    for (const nested of Object.values(field.fields)) {
+      normalizeSnapshotField(nested);
+    }
+  }
+}
+
+/**
+ * Normalize a snapshot type in place to the canonical comparison shape.
+ * Currently fills:
+ *   - `pluralForm` via inflection when missing (legacy snapshots written
+ *     before `pluralForm` became required may omit it)
+ *   - per-field `scale` defaults via {@link normalizeSnapshotField}
+ *
+ * Idempotent — safe to call multiple times on the same input.
+ * @param {TailorDBSnapshotType} type - Snapshot type to normalize
+ */
+function normalizeSnapshotType(type: TailorDBSnapshotType): void {
+  // `pluralForm` is typed as required by TailorDBSnapshotType, but JSON.parse'd legacy
+  // snapshots may have it undefined at runtime — backfill from inflection.
+  if (!(type as { pluralForm?: string }).pluralForm) {
+    type.pluralForm = inflection.pluralize(type.name);
+  }
+  for (const field of Object.values(type.fields)) {
+    normalizeSnapshotField(field);
+  }
 }
 
 // Re-export SCHEMA_SNAPSHOT_VERSION for convenience
 export { SCHEMA_SNAPSHOT_VERSION };
+export { formatMigrationNumber };
 
 // ============================================================================
 // Snapshot Types
 // ============================================================================
 
-/**
- * Hook configuration in schema snapshot
- */
-export interface SnapshotHook {
-  expr: string;
-}
-
-/**
- * Validation configuration in schema snapshot
- */
-export interface SnapshotValidation {
-  script: { expr: string };
-  errorMessage: string;
-}
-
-/**
- * Serial configuration in schema snapshot
- */
-export interface SnapshotSerial {
-  start: number;
-  maxValue?: number;
-  format?: string;
-}
-
-/**
- * Enum value with optional description in schema snapshot
- */
-export interface SnapshotEnumValue {
-  value: string;
-  description?: string;
-}
-
-/**
- * Field configuration in schema snapshot
- */
-export interface SnapshotFieldConfig {
-  type: string;
-  required: boolean;
-  array?: boolean;
-  index?: boolean;
-  unique?: boolean;
-  allowedValues?: SnapshotEnumValue[];
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  description?: string;
-  vector?: boolean;
-  hooks?: {
-    create?: SnapshotHook;
-    update?: SnapshotHook;
-  };
-  validate?: SnapshotValidation[];
-  serial?: SnapshotSerial;
-  scale?: number;
-  /** Nested fields (recursive) */
-  fields?: Record<string, SnapshotFieldConfig>;
-}
-
-/**
- * Index configuration in schema snapshot
- */
-export interface SnapshotIndexConfig {
-  fields: string[];
-  unique?: boolean;
-}
-
-/**
- * Relationship configuration in schema snapshot
- */
-export interface SnapshotRelationship {
-  targetType: string;
-  targetField: string;
-  sourceField: string;
-  isArray: boolean;
-  description: string;
-}
-
-// ============================================================================
-// Permission Types
-// ============================================================================
-
-/**
- * Permission operand types
- */
-export type SnapshotPermissionOperand =
-  | { user: string }
-  | { record: string }
-  | { newRecord: string }
-  | { oldRecord: string }
-  | unknown; // ValueOperand (primitives, arrays)
-
-/**
- * Permission operators
- */
-export type SnapshotPermissionOperator = "eq" | "ne" | "in" | "nin" | "hasAny" | "nhasAny";
-
-/**
- * Permission condition tuple
- */
-export type SnapshotPermissionCondition = readonly [
+// Snapshot data-model types live in snapshot-types.ts (leaf module shared
+// with diff-calculator.ts). Re-exported here for backward compatibility.
+export { isSnapshotFieldRefOperand } from "./snapshot-types";
+export type {
+  SnapshotHook,
+  SnapshotValidation,
+  SnapshotSerial,
+  SnapshotEnumValue,
+  SnapshotFieldConfig,
+  SnapshotIndexConfig,
+  SnapshotRelationship,
+  SnapshotFieldRefOperand,
+  SnapshotValueOperand,
   SnapshotPermissionOperand,
   SnapshotPermissionOperator,
-  SnapshotPermissionOperand,
-];
-
-/**
- * Action permission policy
- */
-export interface SnapshotActionPermission {
-  conditions: readonly SnapshotPermissionCondition[];
-  description?: string;
-  permit: "allow" | "deny";
-}
-
-/**
- * Record-level permission configuration
- */
-export interface SnapshotRecordPermission {
-  create: readonly SnapshotActionPermission[];
-  read: readonly SnapshotActionPermission[];
-  update: readonly SnapshotActionPermission[];
-  delete: readonly SnapshotActionPermission[];
-}
-
-/**
- * GQL permission actions
- */
-export type SnapshotGqlAction =
-  | "read"
-  | "create"
-  | "update"
-  | "delete"
-  | "aggregate"
-  | "bulkUpsert"
-  | "all";
-
-/**
- * GQL permission policy
- */
-export interface SnapshotGqlPermissionPolicy {
-  conditions: readonly SnapshotPermissionCondition[];
-  actions: readonly SnapshotGqlAction[];
-  permit: "allow" | "deny";
-  description?: string;
-}
-
-/**
- * GQL permission configuration
- */
-export type SnapshotGqlPermission = readonly SnapshotGqlPermissionPolicy[];
-
-/**
- * Type definition in schema snapshot
- */
-export interface SnapshotType {
-  name: string;
-  pluralForm?: string;
-  description?: string;
-  fields: Record<string, SnapshotFieldConfig>;
-  settings?: {
-    aggregation?: boolean;
-    bulkUpsert?: boolean;
-    gqlOperations?: {
-      create?: boolean;
-      update?: boolean;
-      delete?: boolean;
-      read?: boolean;
-    };
-    publishEvents?: boolean;
-  };
-  indexes?: Record<string, SnapshotIndexConfig>;
-  files?: Record<string, string>;
-  forwardRelationships?: Record<string, SnapshotRelationship>;
-  backwardRelationships?: Record<string, SnapshotRelationship>;
-  permissions?: {
-    record?: SnapshotRecordPermission;
-    gql?: SnapshotGqlPermission;
-  };
-}
+  SnapshotPermissionCondition,
+  SnapshotActionPermission,
+  SnapshotRecordPermission,
+  SnapshotGqlAction,
+  SnapshotGqlPermissionPolicy,
+  SnapshotGqlPermission,
+  TailorDBSnapshotType,
+} from "./snapshot-types";
 
 /**
  * Schema snapshot - full schema state at a point in time
@@ -260,7 +146,7 @@ export interface SchemaSnapshot {
   version: typeof SCHEMA_SNAPSHOT_VERSION;
   namespace: string;
   createdAt: string;
-  types: Record<string, SnapshotType>;
+  types: Record<string, TailorDBSnapshotType>;
 }
 
 /**
@@ -295,15 +181,6 @@ export interface MigrationInfo {
  */
 export function isValidMigrationNumber(numberStr: string): boolean {
   return MIGRATION_NUMBER_PATTERN.test(numberStr);
-}
-
-/**
- * Format migration number as 4-digit string
- * @param {number} num - Migration number
- * @returns {string} 4-digit padded string (e.g., "0001")
- */
-export function formatMigrationNumber(num: number): string {
-  return num.toString().padStart(4, "0");
 }
 
 /**
@@ -430,6 +307,7 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
     }
   }
 
+  normalizeSnapshotField(config);
   return config;
 }
 
@@ -501,27 +379,28 @@ function createSnapshotFieldConfigFromOperatorConfig(
     }
   }
 
+  normalizeSnapshotField(config);
   return config;
 }
 
 /**
  * Create a snapshot type from a parsed type
  * @param {TailorDBType} type - Parsed TailorDB type definition
- * @returns {SnapshotType} Snapshot type configuration
+ * @returns {TailorDBSnapshotType} Snapshot type configuration
  */
-function createSnapshotType(type: TailorDBType): SnapshotType {
+export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   const fields: Record<string, SnapshotFieldConfig> = {};
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
     fields[fieldName] = createSnapshotFieldConfig(field);
   }
 
-  const snapshotType: SnapshotType = {
+  const snapshotType: TailorDBSnapshotType = {
     name: type.name,
+    pluralForm: type.pluralForm || inflection.pluralize(type.name),
     fields,
   };
 
-  if (type.pluralForm) snapshotType.pluralForm = type.pluralForm;
   if (type.description) snapshotType.description = type.description;
   if (type.settings) {
     snapshotType.settings = {};
@@ -644,7 +523,7 @@ export function createSnapshotFromLocalTypes(
   types: Record<string, TailorDBType>,
   namespace: string,
 ): SchemaSnapshot {
-  const snapshotTypes: Record<string, SnapshotType> = {};
+  const snapshotTypes: Record<string, TailorDBSnapshotType> = {};
 
   for (const [typeName, type] of Object.entries(types)) {
     snapshotTypes[typeName] = createSnapshotType(type);
@@ -669,7 +548,11 @@ export function createSnapshotFromLocalTypes(
  */
 export function loadSnapshot(filePath: string): SchemaSnapshot {
   const content = fs.readFileSync(filePath, "utf-8");
-  return JSON.parse(content) as SchemaSnapshot;
+  const snapshot = JSON.parse(content) as SchemaSnapshot;
+  for (const type of Object.values(snapshot.types)) {
+    normalizeSnapshotType(type);
+  }
+  return snapshot;
 }
 
 /**
@@ -679,7 +562,17 @@ export function loadSnapshot(filePath: string): SchemaSnapshot {
  */
 export function loadDiff(filePath: string): MigrationDiff {
   const content = fs.readFileSync(filePath, "utf-8");
-  return JSON.parse(content) as MigrationDiff;
+  const parsed = JSON.parse(content) as MigrationDiff;
+  // Backfill fields introduced after the initial diff.json schema so that older
+  // migrations on disk remain readable without manual edits. hasWarnings is
+  // derived from the warnings array to stay consistent even if a hand-edited
+  // diff.json sets one side without the other.
+  const warnings = parsed.warnings ?? [];
+  return {
+    ...parsed,
+    warnings,
+    hasWarnings: warnings.length > 0,
+  };
 }
 
 /**
@@ -731,8 +624,7 @@ export function getMigrationFiles(
   }
 
   // Sort by number
-  migrations.sort((a, b) => a.number - b.number);
-  return migrations;
+  return migrations.toSorted((a, b) => a.number - b.number);
 }
 
 /**
@@ -759,17 +651,14 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
   for (const change of diff.changes) {
     switch (change.kind) {
       case "type_added":
-        types[change.typeName] = change.after as SnapshotType;
+        types[change.typeName] = change.after;
         break;
       case "type_removed":
         delete types[change.typeName];
         break;
       case "type_modified":
         if (types[change.typeName] && change.after) {
-          const after = change.after as {
-            indexes?: Record<string, SnapshotIndexConfig>;
-            files?: Record<string, string>;
-          };
+          const after = change.after;
           types[change.typeName] = {
             ...types[change.typeName],
             ...(after.indexes !== undefined && { indexes: after.indexes }),
@@ -784,7 +673,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
             ...types[change.typeName],
             fields: {
               ...types[change.typeName].fields,
-              [change.fieldName]: change.after as SnapshotFieldConfig,
+              [change.fieldName]: change.after,
             },
           };
         }
@@ -805,7 +694,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
             ...types[change.typeName],
             indexes: {
               ...types[change.typeName].indexes,
-              [change.indexName]: change.after as SnapshotIndexConfig,
+              [change.indexName]: change.after,
             },
           };
         }
@@ -826,7 +715,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
             ...types[change.typeName],
             files: {
               ...types[change.typeName].files,
-              [change.fieldName]: change.after as string,
+              [change.fieldName]: change.after,
             },
           };
         }
@@ -843,7 +732,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       case "relationship_added":
       case "relationship_modified":
         if (types[change.typeName] && change.relationshipName) {
-          const rel = change.after as SnapshotRelationship;
+          const rel = change.after;
           // Use relationshipType if specified, fallback to existing logic for backwards compatibility
           const targetType =
             change.relationshipType ??
@@ -904,10 +793,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         break;
       case "permission_modified":
         if (types[change.typeName] && change.after) {
-          const after = change.after as {
-            recordPermission?: SnapshotRecordPermission;
-            gqlPermission?: SnapshotGqlPermission;
-          };
+          const after = change.after;
           types[change.typeName] = {
             ...types[change.typeName],
             permissions: {
@@ -1041,7 +927,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
     if ((oldSerial.format ?? "") !== (newSerial.format ?? "")) return true;
   }
 
-  if (getEffectiveScale(oldField) !== getEffectiveScale(newField)) return true;
+  if (oldField.scale !== newField.scale) return true;
 
   const oldFields = oldField.fields ?? {};
   const newFields = newField.fields ?? {};
@@ -1155,34 +1041,47 @@ function isBreakingFieldChange(
 }
 
 /**
- * Context for collecting diff changes and breaking changes
+ * Context for collecting diff changes, breaking changes, and warnings
  */
 interface DiffContext {
   changes: DiffChange[];
   breakingChanges: BreakingChangeInfo[];
+  warnings: WarningChangeInfo[];
 }
 
 function addChange(
   ctx: DiffContext,
-  change: DiffChange,
+  change: FieldDiffChange,
   oldField: SnapshotFieldConfig | undefined,
   newField: SnapshotFieldConfig | undefined,
 ): void {
   ctx.changes.push(change);
 
-  if (change.fieldName) {
-    const breaking = isBreakingFieldChange(change.typeName, change.fieldName, oldField, newField);
-    if (breaking) {
-      ctx.breakingChanges.push(breaking);
-    }
+  if (!change.fieldName) return;
+
+  const breaking = isBreakingFieldChange(change.typeName, change.fieldName, oldField, newField);
+  if (breaking) {
+    ctx.breakingChanges.push(breaking);
+    return;
+  }
+
+  // Non-breaking removal still risks data loss: surface as a warning so users
+  // can decide whether to add a migration script (e.g. JOIN through a
+  // soon-to-be-dropped foreign key before it disappears).
+  if (change.kind === "field_removed") {
+    ctx.warnings.push({
+      typeName: change.typeName,
+      fieldName: change.fieldName,
+      reason: "Field removed (existing data will be dropped in the post-migration phase)",
+    });
   }
 }
 
 function compareTypeFields(
   ctx: DiffContext,
   typeName: string,
-  prevType: SnapshotType,
-  currType: SnapshotType,
+  prevType: TailorDBSnapshotType,
+  currType: TailorDBSnapshotType,
 ): void {
   const prevFieldNames = new Set(Object.keys(prevType.fields));
   const currFieldNames = new Set(Object.keys(currType.fields));
@@ -1492,7 +1391,14 @@ function comparePermissions(
  * @returns {MigrationDiff} Migration diff between snapshots
  */
 export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapshot): MigrationDiff {
-  const ctx: DiffContext = { changes: [], breakingChanges: [] };
+  // Defense-in-depth: factory functions (`createSnapshotType`, `loadSnapshot`,
+  // `convertRemoteFieldsToSnapshot`) are expected to produce normalized
+  // snapshots, but a caller assembling a SchemaSnapshot literal would otherwise
+  // produce silent false drift (e.g. decimal scale 6 vs unset). Idempotent.
+  for (const type of Object.values(previous.types)) normalizeSnapshotType(type);
+  for (const type of Object.values(current.types)) normalizeSnapshotType(type);
+
+  const ctx: DiffContext = { changes: [], breakingChanges: [], warnings: [] };
 
   const previousTypeNames = new Set(Object.keys(previous.types));
   const currentTypeNames = new Set(Object.keys(current.types));
@@ -1515,6 +1421,11 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
         kind: "type_removed",
         typeName,
         before: previous.types[typeName],
+      });
+      ctx.warnings.push({
+        typeName,
+        reason:
+          "Type removed (all records of this type will be dropped in the post-migration phase)",
       });
     }
   }
@@ -1569,23 +1480,34 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
     changes: ctx.changes,
     hasBreakingChanges: ctx.breakingChanges.length > 0,
     breakingChanges: ctx.breakingChanges,
+    hasWarnings: ctx.warnings.length > 0,
+    warnings: ctx.warnings,
     requiresMigrationScript: ctx.breakingChanges.length > 0,
   };
 }
 
 /**
- * Compare local types with a snapshot and generate a diff
+ * Compare a snapshot against canonical TailorDBSnapshotType-shaped local types.
+ * Callers are expected to pre-convert TailorDBService.types to TailorDBSnapshotType via
+ * `createSnapshotType`. As a safety net, `compareSnapshots` re-runs idempotent
+ * normalization on both sides, so a caller that forgets will still get correct
+ * comparisons (no silent false drift).
  * @param {SchemaSnapshot} snapshot - Schema snapshot to compare against
- * @param {Record<string, TailorDBType>} localTypes - Local type definitions
+ * @param {Record<string, TailorDBSnapshotType>} localTypes - Local snapshot-shaped types
  * @param {string} namespace - Namespace for comparison
  * @returns {MigrationDiff} Migration diff
  */
 export function compareLocalTypesWithSnapshot(
   snapshot: SchemaSnapshot,
-  localTypes: Record<string, TailorDBType>,
+  localTypes: Record<string, TailorDBSnapshotType>,
   namespace: string,
 ): MigrationDiff {
-  const currentSnapshot = createSnapshotFromLocalTypes(localTypes, namespace);
+  const currentSnapshot: SchemaSnapshot = {
+    version: SCHEMA_SNAPSHOT_VERSION,
+    namespace,
+    createdAt: new Date().toISOString(),
+    types: localTypes,
+  };
   return compareSnapshots(snapshot, currentSnapshot);
 }
 
@@ -1703,7 +1625,7 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
   }
 
   // Get all migration numbers
-  const allNumbers = [...new Set([...schemaFiles, ...diffFiles])].sort((a, b) => a - b);
+  const allNumbers = [...new Set([...schemaFiles, ...diffFiles])].toSorted((a, b) => a - b);
 
   if (allNumbers.length === 0) {
     return errors;
@@ -1830,6 +1752,7 @@ function convertRemoteFieldsToSnapshot(
 
     // TODO: Add nested field conversion when remote API supports it
 
+    normalizeSnapshotField(config);
     fields[fieldName] = config;
   }
 
@@ -1921,10 +1844,8 @@ function compareFields(
     differences.push(`vector: remote=${remoteVector}, expected=${snapshotVector}`);
   }
 
-  const remoteScale = getEffectiveScale(remoteField);
-  const snapshotScale = getEffectiveScale(snapshotField);
-  if (remoteScale !== snapshotScale) {
-    differences.push(`scale: remote=${remoteScale}, expected=${snapshotScale}`);
+  if (remoteField.scale !== snapshotField.scale) {
+    differences.push(`scale: remote=${remoteField.scale}, expected=${snapshotField.scale}`);
   }
 
   if (differences.length > 0) {
@@ -1954,6 +1875,9 @@ export function compareRemoteWithSnapshot(
   remoteTypes: ProtoTailorDBType[],
   snapshot: SchemaSnapshot,
 ): SchemaDrift[] {
+  // Defense-in-depth normalize — matches `compareSnapshots`. Idempotent.
+  for (const type of Object.values(snapshot.types)) normalizeSnapshotType(type);
+
   const drifts: SchemaDrift[] = [];
 
   // Build maps for easy lookup

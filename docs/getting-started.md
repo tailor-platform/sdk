@@ -14,17 +14,17 @@ Guide for new SDK contributors.
 git clone https://github.com/tailor-platform/sdk.git
 cd sdk
 pnpm install
-pnpm exec turbo run build
+pnpm build
 ```
 
 ## Key Commands
 
-| Command                        | Description                   |
-| ------------------------------ | ----------------------------- |
-| `pnpm exec turbo run build`    | Build all packages            |
-| `pnpm exec turbo run test`     | Run all tests                 |
-| `pnpm exec turbo run check`    | Format, lint, typecheck, knip |
-| `pnpm exec turbo run generate` | Run code generation           |
+| Command         | Description                   |
+| --------------- | ----------------------------- |
+| `pnpm build`    | Build all packages            |
+| `pnpm test`     | Run all tests                 |
+| `pnpm check`    | Format, lint, typecheck, knip |
+| `pnpm generate` | Run code generation           |
 
 In `packages/sdk/`:
 
@@ -55,7 +55,7 @@ pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 
 1. **Build** — Rebuild SDK if `.ts` files changed
 2. **Format** — Check formatting with oxfmt
-3. **Lint** — Run oxlint + ESLint
+3. **Lint** — Run standard and Vitest-specific oxlint passes, and check public API JSDoc
 4. **Typecheck** — Run tsgo
 5. **Knip** — Detect unused dependencies and exports
 

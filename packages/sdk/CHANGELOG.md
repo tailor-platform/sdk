@@ -1,5 +1,535 @@
 # @tailor-platform/sdk
 
+## 1.60.0
+
+### Minor Changes
+
+- [#1370](https://github.com/tailor-platform/sdk/pull/1370) [`ca4e049`](https://github.com/tailor-platform/sdk/commit/ca4e0494d8f3069e91e55c0b8ccc15ed1e6b567b) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `authconnection open` command to open the auth connections page in the Tailor Platform Console. The `authconnection authorize` command now also points to this Console flow when the local callback server cannot be started, and the auth connection docs note that managing connections via `tailor.config.ts` is unreliable for shared and CI deploys (a deploy without the local `.tailor-sdk/` secret state recreates the connection and discards its token) — create connections and tokens from the Console instead.
+
+### Patch Changes
+
+- [#1386](https://github.com/tailor-platform/sdk/pull/1386) [`34aba6c`](https://github.com/tailor-platform/sdk/commit/34aba6c66fd60a2614fe37a4eee07b0252592894) Thanks [@toiroakr](https://github.com/toiroakr)! - Stabilize the `withBundleConcurrency` unit tests by driving their worker delays with fake timers instead of real `setTimeout`, so they no longer flake with a 5s timeout when a CI runner is under load. No runtime behavior changes.
+
+## 1.59.0
+
+### Minor Changes
+
+- [#1282](https://github.com/tailor-platform/sdk/pull/1282) [`4660bc8`](https://github.com/tailor-platform/sdk/commit/4660bc8a0c31e52ef7e32f4c325b8aa1c2a2af3a) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(vitest)!: rename mock controllers to verb-style `mockX()` factories (Beta)
+
+  The `@tailor-platform/sdk/vitest` mock controllers are renamed from noun-style
+  singleton objects (`tailordbMock`, `workflowMock`, …) to verb-style **factory
+  functions** (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`,
+  `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`). Acquire one with a
+  `using` declaration and its state is reset automatically when the test scope
+  exits — no more `beforeEach(() => mock.reset())`.
+
+  ```diff
+  -import { tailordbMock } from "@tailor-platform/sdk/vitest";
+  -
+  -beforeEach(() => tailordbMock.reset());
+  -
+   test("...", () => {
+  -  tailordbMock.enqueueResult({ age: 30 });
+  -  expect(tailordbMock.executedQueries).toHaveLength(1);
+  +  using db = mockTailordb();
+  +  db.enqueueResult({ age: 30 });
+  +  expect(db.executedQueries).toHaveLength(1);
+   });
+  ```
+
+  This is a breaking change to the **Beta** `tailor-runtime` testing API. `using`
+  requires TypeScript ≥ 5.2 and a runtime that provides `Symbol.dispose`
+  (Node ≥ 20.4; the SDK already targets Node ≥ 22, and Vitest's transformer
+  downlevels the syntax).
+
+### Patch Changes
+
+- [#1384](https://github.com/tailor-platform/sdk/pull/1384) [`b5ddf76`](https://github.com/tailor-platform/sdk/commit/b5ddf762bbdbaf22f879aeabbaddb85fa0a57da6) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix flaky `already_exists` failures during `deploy`/`apply` on busy or fresh workspaces. When a resource create succeeds on the platform but its response is lost as `Unavailable`/`ResourceExhausted` under load, the SDK's automatic retry now treats the follow-up `already_exists` as success for the affected apply resource creates instead of failing the deploy. Retry backoff also starts with a longer initial delay so a retry is less likely to race an in-flight request, and the retry path now emits `debug` traces (retries and swallowed `already_exists`) to help diagnose such failures.
+
+- [#1372](https://github.com/tailor-platform/sdk/pull/1372) [`9fdb857`](https://github.com/tailor-platform/sdk/commit/9fdb85746dfb3734014056b57fb95ce1ae21d585) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB types with a `serial` field inside a nested object being reported as a change on every deploy.
+
+- [#1382](https://github.com/tailor-platform/sdk/pull/1382) [`99e1d79`](https://github.com/tailor-platform/sdk/commit/99e1d791976528d4fec9742cd473ece33a136cb0) Thanks [@toiroakr](https://github.com/toiroakr)! - Treat `console.log` as a DEBUG-level call when bundling deployment functions, matching the platform's OpenTelemetry severity mapping. With `logLevel: "INFO"` or higher, `console.log` calls are now dropped alongside `console.debug`. The default `"DEBUG"` level still keeps all console calls.
+
+- [#1380](https://github.com/tailor-platform/sdk/pull/1380) [`2ed1344`](https://github.com/tailor-platform/sdk/commit/2ed1344e5ffff6e78d74ef3a0297fcff4a6201e7) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: replace mutating array methods (`sort`/`reverse`/`splice`) with non-mutating ES2023 equivalents (`toSorted`/`toReversed`/`toSpliced`). No user-facing behavior change.
+
+- [#1379](https://github.com/tailor-platform/sdk/pull/1379) [`5299c0c`](https://github.com/tailor-platform/sdk/commit/5299c0c17c6b7ab2febddd84faae39054a234165) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.4.0
+
+- [#1308](https://github.com/tailor-platform/sdk/pull/1308) [`74015e4`](https://github.com/tailor-platform/sdk/commit/74015e47858ad7c8d7ec5d59c06a9fc1ece6504d) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(vitest): run a full workflow locally through `.trigger()` (Beta)
+
+  Calling `workflow.mainJob.trigger()` (or any job's `.trigger()`) now runs the
+  real job bodies of the whole chain — no `mockWorkflow()` needed — so you can
+  exercise end-to-end orchestration in a unit test without a deployment. Trigger
+  inputs and outputs cross the same JSON boundary the platform uses, so a
+  non-serializable payload fails the test exactly as it would in production.
+  Acquire `mockWorkflow()` only to override individual dependent jobs with
+  `wf.setJobHandler(...)` / `wf.enqueueResult(...)` (the rest still run their real
+  bodies), set the env via `wf.setEnv(...)`, or assert on `wf.triggeredJobs`.
+
+## 1.58.0
+
+### Minor Changes
+
+- [#1310](https://github.com/tailor-platform/sdk/pull/1310) [`228b244`](https://github.com/tailor-platform/sdk/commit/228b244c9d2c617ac0ca7d2a354cc1cd6606327c) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(cli): add `authconnection delete` and use it during deploy
+
+  `tailor-sdk authconnection delete` removes an auth connection entirely (configuration, secret, and tokens), complementing `tailor-sdk authconnection revoke`, which only invalidates the active session and keeps the connection so it can be re-authorized. `deploy` now uses delete when it replaces or removes the auth connections it manages.
+
+- [#1367](https://github.com/tailor-platform/sdk/pull/1367) [`545f74b`](https://github.com/tailor-platform/sdk/commit/545f74b6af26fbc5d8b4c9e147af9b09fe2e4644) Thanks [@haru0017](https://github.com/haru0017)! - Add `customDomains` option to `defineStaticWebSite()` for associating custom domains with static websites, and `staticwebsite domain get` / `staticwebsite domain list` CLI commands for checking domain status and DNS CNAME targets.
+
+### Patch Changes
+
+- [#1368](https://github.com/tailor-platform/sdk/pull/1368) [`6c143bf`](https://github.com/tailor-platform/sdk/commit/6c143bfb913d8d866442edd6c8f60c02e818e6ba) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: consolidate the per-resource TRN builder functions and inline `${trnPrefix(...)}:<kind>:<name>` template literals scattered across the deploy commands into a single typed `resourceTrn(workspaceId, kind, name)` helper. No user-facing behavior change.
+
+- [#1376](https://github.com/tailor-platform/sdk/pull/1376) [`cf1d87c`](https://github.com/tailor-platform/sdk/commit/cf1d87cfb6a379bbf1d0448ea0ec306c0dae4611) Thanks [@toiroakr](https://github.com/toiroakr)! - Reword CLI `--help` text and the bundled documentation to describe user-facing behavior instead of internal implementation details. The `api` and `function logs` command notes no longer expose internal terms such as proto/RPC names, the `TestExecScript` API, or bundle sourcemap/content-hash mechanics, and the auth docs drop the internal "SDK vs Platform Naming" note. No runtime behavior changes.
+
+- [#1352](https://github.com/tailor-platform/sdk/pull/1352) [`a3bf971`](https://github.com/tailor-platform/sdk/commit/a3bf9710b337e44b505f0acd6d814821849f4c60) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.5.1
+
+- [#1353](https://github.com/tailor-platform/sdk/pull/1353) [`f0cfb61`](https://github.com/tailor-platform/sdk/commit/f0cfb61dcadb47819a8916da9bcf9b63a4ff5706) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.2
+
+## 1.57.0
+
+### Minor Changes
+
+- [#1319](https://github.com/tailor-platform/sdk/pull/1319) [`77754c2`](https://github.com/tailor-platform/sdk/commit/77754c264f3a18ccea2fb2ee2a144da4768b09a9) Thanks [@dqn](https://github.com/dqn)! - Replace the Liam-based `tailordb erd` beta commands with a TailorDB-specific ERD viewer generated from local TailorDB schema. `tailordb erd export` writes a single self-contained `index.html` under `<output>/<namespace>/dist` (CSS, JS, and the schema are inlined as separately extractable blocks), `tailordb erd serve` runs a built-in local server with watch reload and `--port` / `--open`, and `tailordb erd deploy` uploads the generated viewer while keeping the existing `erdSite` requirement.
+
+### Patch Changes
+
+- [#1309](https://github.com/tailor-platform/sdk/pull/1309) [`9e4c726`](https://github.com/tailor-platform/sdk/commit/9e4c726c1a84ac70ba7bc74aaf4765173562ed0e) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): track auth connection ownership via platform labels
+
+  `deploy` now tags auth connections with SDK ownership labels and uses them to decide which connections to manage, matching every other auth resource. Connections that are not labeled by the SDK are treated as unowned: they are surfaced in the unmanaged-resource confirmation prompt rather than silently deleted, and once you confirm adoption the SDK label is written even when the connection is otherwise unchanged, so later deploys recognize it as owned. Auth connection deletions are also shown in the deletion confirmation prompt.
+
+## 1.56.1
+
+### Patch Changes
+
+- [#1347](https://github.com/tailor-platform/sdk/pull/1347) [`6888110`](https://github.com/tailor-platform/sdk/commit/6888110fa61f9f3fd991e0fb44e86fd37f9536f3) Thanks [@dqn](https://github.com/dqn)! - Fix resolver field builders (`t.*`) leaking metadata between fields. `description()`, `typeName()`, and `validate()` now return a new field instead of mutating the original, so a field instance reused across places (for example shared between a resolver's `input` and `output`, or a record passed to `t.object`) no longer leaks its metadata into the other usages. This matches the existing `db.*` behavior.
+
+- [#1346](https://github.com/tailor-platform/sdk/pull/1346) [`0254e3c`](https://github.com/tailor-platform/sdk/commit/0254e3caff0d1eeb7407d8932385bf5bdbaf4356) Thanks [@dqn](https://github.com/dqn)! - Warn when a permission rule is written in object form without an explicit `permit`. Object-format rules (e.g. `read: [{ conditions: [...] }]`) default to `deny`, unlike the array shorthand which defaults to `allow`, so omitting `permit` can silently lock out access you meant to grant. The CLI now flags these rules during generate/deploy so you can set `permit: true` (allow) or `permit: false` (deny) explicitly. Runtime behavior is unchanged. This covers TailorDB record permissions, TailorDB GraphQL permissions, and IdP permissions.
+
+## 1.56.0
+
+### Minor Changes
+
+- [#1341](https://github.com/tailor-platform/sdk/pull/1341) [`64b07b4`](https://github.com/tailor-platform/sdk/commit/64b07b4c6f1db868abf2e1ebb9097e0e2f2f3cc6) Thanks [@dqn](https://github.com/dqn)! - Add a `logLevel` config option to remove lower-level `console.*` calls from bundled deployment functions.
+
+### Patch Changes
+
+- [#1345](https://github.com/tailor-platform/sdk/pull/1345) [`ec863f1`](https://github.com/tailor-platform/sdk/commit/ec863f13e7a3ca43e40ad413c1bbe47cd5567c95) Thanks [@dqn](https://github.com/dqn)! - Fix `seed --truncate` deleting only the first page of Built-In IdP `_User` records. The generated truncation script used incorrect pagination keys, so projects with more than one page of users were left with the remaining pages while the command still reported success. All pages are now deleted.
+
+- [#1344](https://github.com/tailor-platform/sdk/pull/1344) [`d3f22da`](https://github.com/tailor-platform/sdk/commit/d3f22da5a9bcd44ca9659ac35a68a20a2cbc1c2a) Thanks [@dqn](https://github.com/dqn)! - Fix CLI auth config losing keyring-stored logins. Running any command without `TAILOR_USE_KEYRING` no longer downgrades `config.yaml` in a way that drops `storage: keyring` users (and dangles their `current_user` reference), which previously logged keyring users out. Configs containing keyring users now stay in V2 format; file-only configs still downgrade to V1 for backward compatibility.
+
+## 1.55.2
+
+### Patch Changes
+
+- [#1190](https://github.com/tailor-platform/sdk/pull/1190) [`6f891e8`](https://github.com/tailor-platform/sdk/commit/6f891e8a0f948ca2b58bb7e1d4ad19efc31cc38c) Thanks [@toiroakr](https://github.com/toiroakr)! - Validate auth service configuration during `deploy` / `generate`, consistent with how IdP, TailorDB, and static websites are already handled. Configs that set both `userProfile` and `machineUserAttributes` now fail with a clearer message: "Specify either `userProfile` or `machineUserAttributes`, not both."
+
+- [#1332](https://github.com/tailor-platform/sdk/pull/1332) [`aa898b7`](https://github.com/tailor-platform/sdk/commit/aa898b7f369c441077973848a92a09152f6bed4f) Thanks [@dqn](https://github.com/dqn)! - Fix `executor get --json` to include typed event trigger metadata such as event types, namespaces, target names, and conditions.
+
+## 1.55.1
+
+### Patch Changes
+
+- [#1333](https://github.com/tailor-platform/sdk/pull/1333) [`46a0f78`](https://github.com/tailor-platform/sdk/commit/46a0f78481f4718a470a2cb5a15298db8015f452) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk api` injecting a duplicate `workspaceId` when `--body` supplies the field in snake_case. The auto-injection guard only checked the camelCase key, so a body such as `{"workspace_id": "..."}` slipped past it and the SDK appended a second `workspaceId`, which the server rejected with a duplicate-field error. Body keys are now converged to each field's canonical (camelCase) name before injection, so snake_case and JSON aliases are recognized.
+
+- [#1325](https://github.com/tailor-platform/sdk/pull/1325) [`8bd51e6`](https://github.com/tailor-platform/sdk/commit/8bd51e64143a2877dcdc821a57b8b6b82cf61363) Thanks [@dqn](https://github.com/dqn)! - Fix `--json` output for CLI commands that returned human-readable text or empty stdout instead of parseable JSON.
+
+- [#1276](https://github.com/tailor-platform/sdk/pull/1276) [`f1536d6`](https://github.com/tailor-platform/sdk/commit/f1536d64d182c9456692165397a74ad8c0257d30) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1312](https://github.com/tailor-platform/sdk/pull/1312) [`00c9b07`](https://github.com/tailor-platform/sdk/commit/00c9b07fdec9b6fa59026f6d4451d43f04114c55) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer to v8.5.2
+
+- [#1316](https://github.com/tailor-platform/sdk/pull/1316) [`b7f0389`](https://github.com/tailor-platform/sdk/commit/b7f0389270573ba5cf6accca31acdea027974c8d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.4
+
+- [#1318](https://github.com/tailor-platform/sdk/pull/1318) [`c48aeb6`](https://github.com/tailor-platform/sdk/commit/c48aeb6e72a644b056a48e57d39799cae386461e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.7.0
+
+- [#1328](https://github.com/tailor-platform/sdk/pull/1328) [`8473a4d`](https://github.com/tailor-platform/sdk/commit/8473a4d284cea998759584c151e12c6cb9b7bc67) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.1
+
+## 1.55.0
+
+### Minor Changes
+
+- [#1173](https://github.com/tailor-platform/sdk/pull/1173) [`4d8010d`](https://github.com/tailor-platform/sdk/commit/4d8010ddf93edd1e9e7344b7e868b7e6efc3fddf) Thanks [@Mistat](https://github.com/Mistat)! - Add `createHttpAdapter()` for declaring HTTP adapters that translate HTTP requests into GraphQL queries and reshape the responses. Adapter files are discovered via the new `httpAdapter.files` glob in `defineConfig()`.
+
+### Patch Changes
+
+- [#1320](https://github.com/tailor-platform/sdk/pull/1320) [`977c200`](https://github.com/tailor-platform/sdk/commit/977c2007eb6ac28507d6eac1c391448ab91caa2a) Thanks [@remiposo](https://github.com/remiposo)! - `createKyselyMock`: assert what a write wrote as a `{ column: value }` map instead of positional SQL parameters. On a recorded query:
+
+  - `insertValues()` / `insertRows()` — the values a single- / multi-row insert wrote
+  - `updateValues()` — the values an update's SET clause wrote
+  - `node` — the raw Kysely operation node, for anything the helpers don't cover
+
+  Also adds `withTx(fn)` to run `fn` inside a real `Transaction`.
+
+- [#1314](https://github.com/tailor-platform/sdk/pull/1314) [`e423765`](https://github.com/tailor-platform/sdk/commit/e4237652c4ac65074e2bcd1da56adc1841bc71cd) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix generated migrate.ts templates for enum value removal: removed enum values were compared by object identity (so unchanged values were also treated as removed) and rendered as `[object Object]` in the generated migration script.
+
+## 1.54.3
+
+### Patch Changes
+
+- [#1293](https://github.com/tailor-platform/sdk/pull/1293) [`1f9991d`](https://github.com/tailor-platform/sdk/commit/1f9991dc089763b9a3dbf95e26742c7100f9dd24) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `db.fields.timestamps()` to respect user-specified `createdAt` / `updatedAt` values instead of always overwriting them with the current time. When a value is provided (e.g. seeding historical records), it is now used; when omitted, the current time is still applied as before.
+
+## 1.54.2
+
+### Patch Changes
+
+- [#1303](https://github.com/tailor-platform/sdk/pull/1303) [`0881adf`](https://github.com/tailor-platform/sdk/commit/0881adf42f99ae812bb861d537e33b9b0e7192af) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(deploy): stop reporting persistent TailorDB type diffs on every `deploy`. Fields without a `description` are emitted as an empty string by the platform but omitted by the local manifest; the comparison now treats an empty-string `description` as unset (same handling as empty `expr`), so unchanged types are no longer flagged as updates on repeated applies.
+
+## 1.54.1
+
+### Patch Changes
+
+- [#1292](https://github.com/tailor-platform/sdk/pull/1292) [`0976bac`](https://github.com/tailor-platform/sdk/commit/0976bac530ecf4f7214f6f69796e98a7bedb3e38) Thanks [@dqn](https://github.com/dqn)! - Update generated shell completions so saved completion files can refresh
+  themselves after future SDK upgrades.
+
+  Existing `eval "$(tailor-sdk completion bash)"` and
+  `eval "$(tailor-sdk completion zsh)"` setups do not need to change because they
+  regenerate completions on every shell startup.
+
+  If you saved a static completion file generated by an older SDK version,
+  regenerate that file once:
+
+  ```bash
+  # bash
+  mkdir -p ~/.local/share/bash-completion/completions
+  tailor-sdk completion bash > ~/.local/share/bash-completion/completions/tailor-sdk
+
+  # zsh fpath
+  mkdir -p ~/.zsh/completions
+  tailor-sdk completion zsh > ~/.zsh/completions/_tailor-sdk
+
+  # fish
+  tailor-sdk completion fish --install
+  ```
+
+  After that one-time regeneration, saved completion files can self-refresh when
+  the `tailor-sdk` binary changes. Open a new shell, or reload your shell
+  configuration, after regenerating.
+
+- [#1294](https://github.com/tailor-platform/sdk/pull/1294) [`fd1c5cf`](https://github.com/tailor-platform/sdk/commit/fd1c5cf7f2b1512df4a2798521119658cb6a2088) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix IdP services and OAuth2 clients always being reported as changed on consecutive deployments when a description is omitted
+
+- [#1281](https://github.com/tailor-platform/sdk/pull/1281) [`9711826`](https://github.com/tailor-platform/sdk/commit/971182600b5866cc44194865ae1a308871a8c377) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): `remove` no longer deletes an application matched by name alone. Removal now verifies ownership via `sdk-app-id`/`sdk-name` labels (`isOwnedByApp`), consistent with every other resource type, so a same-named application owned by another user in a shared workspace is left untouched.
+
+- [#1299](https://github.com/tailor-platform/sdk/pull/1299) [`c10681f`](https://github.com/tailor-platform/sdk/commit/c10681fc33211ec7a92a9ea9e61e00ebf0a69862) Thanks [@k1LoW](https://github.com/k1LoW)! - fix(runtime): remove non-existent `updatedAt` field from `idp.User`. The IDP service does not return this field, so the declaration was misleading consumers into expecting an optional timestamp that was always `undefined`.
+
+## 1.54.0
+
+### Minor Changes
+
+- [#1268](https://github.com/tailor-platform/sdk/pull/1268) [`e6b2a23`](https://github.com/tailor-platform/sdk/commit/e6b2a23b99e101cb878d9570e18d9d2fcbc07ac0) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(auth): expose `env` in the `beforeLogin` hook handler
+
+  The `beforeLogin` auth hook handler now receives `env` alongside `claims` and `idpConfigName`, exposing the variables defined in `defineConfig({ env })` (the same values available via `context.env` in resolvers). This lets hooks branch on environment-specific configuration at runtime without relying on `process.env`, which is unavailable in the platform runtime.
+
+- [#1277](https://github.com/tailor-platform/sdk/pull/1277) [`8d05f86`](https://github.com/tailor-platform/sdk/commit/8d05f864bc714f12783f66453791912dae8246a3) Thanks [@remiposo](https://github.com/remiposo)! - Add `createKyselyMock` to `@tailor-platform/sdk/vitest` for unit-testing code that runs Kysely queries. It returns a real Kysely instance whose execution is mocked. You stage the rows each query returns, run your code, then assert what it did — the SQL and parameters of each query, how many `selects`/`inserts`/`updates`/`deletes` ran, and the value your code returned.
+
+  ```ts
+  import { createKyselyMock } from "@tailor-platform/sdk/vitest";
+  import type { Namespace } from "./generated/db";
+
+  const mock = createKyselyMock<Namespace["main-db"]>();
+  mock.enqueueResults([{ age: 30 }]); // the next query returns this row
+
+  const { age } = await mock.db
+    .selectFrom("User")
+    .select("age")
+    .where("email", "=", "a@b.com")
+    .executeTakeFirstOrThrow();
+  await mock.db
+    .updateTable("User")
+    .set({ age: age + 1 })
+    .where("email", "=", "a@b.com")
+    .execute();
+
+  expect(mock.updates).toHaveLength(1);
+  expect(mock.updates[0].parameters).toEqual([31, "a@b.com"]); // the actual bound values
+  expect(mock.updates[0].sql).toContain('update "User"'); // the compiled SQL
+  ```
+
+- [#1269](https://github.com/tailor-platform/sdk/pull/1269) [`a230ba6`](https://github.com/tailor-platform/sdk/commit/a230ba6a1b6861f60e6edac82ae59d333f1f3604) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(migration): expose `env` in migration scripts
+
+  The migration `main` function now receives an optional second argument `{ env }: MigrationContext` exposing the variables defined in `defineConfig({ env })` — the same values available via `context.env` in resolvers and `{ env }` in workflow jobs. The values are injected at bundle time and the `MigrationContext` type is exported from the generated `./db`. Existing `main(trx)` scripts continue to work unchanged.
+
+### Patch Changes
+
+- [#1285](https://github.com/tailor-platform/sdk/pull/1285) [`239b146`](https://github.com/tailor-platform/sdk/commit/239b1466ab4fb91d416d7cecb606703b5f9a9a33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1288](https://github.com/tailor-platform/sdk/pull/1288) [`02027b1`](https://github.com/tailor-platform/sdk/commit/02027b1d71120ca50e06dea1060d03c39bec41f7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.5.0
+
+- [#1291](https://github.com/tailor-platform/sdk/pull/1291) [`6f52e3e`](https://github.com/tailor-platform/sdk/commit/6f52e3e8b385ab00e010fd5bbc4f8bd5f15167be) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency date-fns to v4.4.0
+
+## 1.53.0
+
+### Minor Changes
+
+- [#1275](https://github.com/tailor-platform/sdk/pull/1275) [`f650615`](https://github.com/tailor-platform/sdk/commit/f6506158cd7247b4198a76702044346fbb65c669) Thanks [@haru0017](https://github.com/haru0017)! - Add downloadStream and uploadStream to file api. Mark openDownloadStream as deprecated.
+
+### Patch Changes
+
+- [#1263](https://github.com/tailor-platform/sdk/pull/1263) [`c7e065e`](https://github.com/tailor-platform/sdk/commit/c7e065e1213630e5cb77d7067907b35296f98097) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8
+
+- [#1271](https://github.com/tailor-platform/sdk/pull/1271) [`73ab0e0`](https://github.com/tailor-platform/sdk/commit/73ab0e0baf1657b1e916444c77f621823e917b52) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1274](https://github.com/tailor-platform/sdk/pull/1274) [`11b280a`](https://github.com/tailor-platform/sdk/commit/11b280a8e69feeb7973bcc9a6cbe711252ce72fd) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+## 1.52.0
+
+### Minor Changes
+
+- [#1195](https://github.com/tailor-platform/sdk/pull/1195) [`e4c3c9a`](https://github.com/tailor-platform/sdk/commit/e4c3c9a03e7711d3478a7399e1eac2c5a633baa1) Thanks [@dqn](https://github.com/dqn)! - Add `--field key=value` (`-f`) to `tailor-sdk api <endpoint>` for setting request-body fields without writing JSON. Dotted keys build nested objects (`-f application.name=foo`), `--field` overrides matching keys in `--body`, and field names tab-complete from the endpoint's proto schema (bash / zsh / fish) — including step-by-step completion of nested message fields.
+
+- [#1186](https://github.com/tailor-platform/sdk/pull/1186) [`57e00d6`](https://github.com/tailor-platform/sdk/commit/57e00d6bfc2f9602af0ac9c0235da6ec0e04b12e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `workflowMock.setEnv()` to control the `env` value passed to job bodies when `createWorkflowJob().trigger()` is invoked locally. Tests using the `tailor-runtime` Vitest environment can now configure the env through the same `workflowMock` helper they use for `setJobHandler` / `setWaitHandler`, without touching `process.env`.
+
+  ```typescript
+  import { workflowMock } from "@tailor-platform/sdk/vitest";
+
+  afterEach(() => workflowMock.reset());
+
+  test("workflow.mainJob.trigger() executes all jobs", async () => {
+    workflowMock.setEnv({ STAGE: "test" });
+    await workflow.mainJob.trigger({ orderId: "order-1", amount: 100 });
+  });
+  ```
+
+  The previous env-var-based pattern is now deprecated. A non-breaking fallback is retained, but `workflowMock.setEnv()` takes priority when both are set.
+
+### Patch Changes
+
+- [#1195](https://github.com/tailor-platform/sdk/pull/1195) [`0646e0a`](https://github.com/tailor-platform/sdk/commit/0646e0ad33142bbe89842ec323a66422d8a6a83e) Thanks [@dqn](https://github.com/dqn)! - Make `tailor-sdk api --field` tab completion faster by pre-enumerating candidates into the generated shell script. Field names, enum values, and `true`/`false` for bool fields are now resolved from a static lookup table at TAB time instead of spawning a Node process per keystroke.
+
+- [#1270](https://github.com/tailor-platform/sdk/pull/1270) [`fb540fa`](https://github.com/tailor-platform/sdk/commit/fb540fab090d8f5909804b9189aa97670c892e7b) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(tailordb): set the migration label to `0000` on the first apply
+
+  The initial schema snapshot (`0000`) is deployed through the normal
+  create-update flow and never reports itself as a pending migration, so the
+  first `tailor-sdk deploy` after `tailordb migration generate` previously left
+  the namespace without an `sdk-migration` label. This forced a redundant
+  apply/generate/apply sequence to establish the baseline. The migration label is
+  now reconciled to the latest local migration after every create-update apply, so
+  a single `migration generate` + `deploy` establishes the baseline as documented.
+
+- [#1222](https://github.com/tailor-platform/sdk/pull/1222) [`b9ac1da`](https://github.com/tailor-platform/sdk/commit/b9ac1da45365c5f16bed4f28df3920d009893f79) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.29.2
+
+- [#1237](https://github.com/tailor-platform/sdk/pull/1237) [`eb362d6`](https://github.com/tailor-platform/sdk/commit/eb362d63cc6c39b2d8d2706b67c5e38cdc5fda37) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.2
+
+- [#1250](https://github.com/tailor-platform/sdk/pull/1250) [`1a6ab51`](https://github.com/tailor-platform/sdk/commit/1a6ab51f85c5eb15fd0e9526029f9ab9e1eac759) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1257](https://github.com/tailor-platform/sdk/pull/1257) [`6b3b48e`](https://github.com/tailor-platform/sdk/commit/6b3b48e11b1b67aff9f9e15ad818f8a2587591bf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1259](https://github.com/tailor-platform/sdk/pull/1259) [`a31c292`](https://github.com/tailor-platform/sdk/commit/a31c292a65e30f150778377ab4f06f003f8eeda7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.47.0
+
+- [#1261](https://github.com/tailor-platform/sdk/pull/1261) [`f6de6cf`](https://github.com/tailor-platform/sdk/commit/f6de6cf7fbc3c9d56c75e297ef2f374b2b83337c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v6.26.0
+
+## 1.51.2
+
+### Patch Changes
+
+- [#1252](https://github.com/tailor-platform/sdk/pull/1252) [`631dfe0`](https://github.com/tailor-platform/sdk/commit/631dfe03022574c003918621c5a9395d79e6394f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk api <endpoint>` writing its JSON response to stderr instead of stdout. The response now goes to stdout (matching `api list` / `api inspect`), so `-j` output can be piped to other tools.
+
+- [#1244](https://github.com/tailor-platform/sdk/pull/1244) [`ce749ad`](https://github.com/tailor-platform/sdk/commit/ce749ad02947cacfbfaab2169e9a6522d11abc70) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency date-fns to v4.3.0
+
+- [#1245](https://github.com/tailor-platform/sdk/pull/1245) [`261a49d`](https://github.com/tailor-platform/sdk/commit/261a49de5d30d3a427a8a484956aa10ee6576abf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.1
+
+- [#1248](https://github.com/tailor-platform/sdk/pull/1248) [`a7fc33e`](https://github.com/tailor-platform/sdk/commit/a7fc33e6ce084f6a91210685b29cc9b65b9704c4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.3
+
+## 1.51.1
+
+### Patch Changes
+
+- [#1241](https://github.com/tailor-platform/sdk/pull/1241) [`4c40f74`](https://github.com/tailor-platform/sdk/commit/4c40f741318cdbc940a1b7db288751de50e8f680) Thanks [@remiposo](https://github.com/remiposo)! - `tailor-sdk deploy` now waits for the application's GraphQL schema composition to succeed before returning. Composition errors that previously only surfaced via `tailor-sdk workspace app health` are now raised by `deploy` itself.
+
+- [#1216](https://github.com/tailor-platform/sdk/pull/1216) [`7f3aa30`](https://github.com/tailor-platform/sdk/commit/7f3aa308732ac4cac4c8671ce57733a8328d37d9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.4.0
+
+- [#1219](https://github.com/tailor-platform/sdk/pull/1219) [`77bf0b7`](https://github.com/tailor-platform/sdk/commit/77bf0b71a1f92be4987be5ab344cecc9985c88a2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.6.0
+
+- [#1220](https://github.com/tailor-platform/sdk/pull/1220) [`36b3bce`](https://github.com/tailor-platform/sdk/commit/36b3bceca39899c8fb0d57b4c0d467c2f0fe491e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.0
+
+- [#1249](https://github.com/tailor-platform/sdk/pull/1249) [`2e11bc2`](https://github.com/tailor-platform/sdk/commit/2e11bc28e76fca4874b9d35454e86253ca53b920) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.4.3
+
+- [#1246](https://github.com/tailor-platform/sdk/pull/1246) [`4d3f2d4`](https://github.com/tailor-platform/sdk/commit/4d3f2d4eb7d5f1a7bdcd3a078075f89d4b2048ab) Thanks [@toiroakr](https://github.com/toiroakr)! - Cap parallel bundling of resolvers, executors, and workflow jobs to avoid OOM/SIGTERM on CI runners with many resolvers. Concurrency defaults to `os.cpus().length` and can be overridden via the `TAILOR_BUNDLE_CONCURRENCY` env var.
+
+## 1.51.0
+
+### Minor Changes
+
+- [#1131](https://github.com/tailor-platform/sdk/pull/1131) [`c62c3b0`](https://github.com/tailor-platform/sdk/commit/c62c3b0a78761cff859ccac5af23d2e8dd0f996a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `@tailor-platform/sdk/runtime` — typed wrappers for the Tailor Platform Function runtime APIs (`tailor.iconv`, `tailor.secretmanager`, `tailor.authconnection`, `tailor.idp`, `tailor.workflow`, `tailor.context`, and `tailordb.file`). The wrappers and their types are fully self-contained, so you can use them without activating any ambient globals.
+
+  ```ts
+  import {
+    iconv,
+    secretmanager,
+    idp,
+    file,
+  } from "@tailor-platform/sdk/runtime";
+
+  const utf8 = iconv.convert(sjisBuffer, "Shift_JIS", "UTF-8");
+  const apiKey = await secretmanager.getSecret("my-vault", "API_KEY");
+  const client = new idp.Client({ namespace: "my-namespace" });
+  const { metadata } = await file.upload(
+    "ns",
+    "Document",
+    "attachment",
+    recordId,
+    bytes
+  );
+  ```
+
+  The SDK no longer depends on the external `@tailor-platform/function-types` package; its declarations are now vendored inside the SDK. For backwards compatibility the ambient `tailor.*` / `tailordb.*` types are still activated automatically when you import from `@tailor-platform/sdk`, so existing code keeps type-checking with no changes. This implicit activation will be removed in v2.0 — new code is encouraged to use the typed wrappers from `@tailor-platform/sdk/runtime`, or to opt into the globals explicitly via `import "@tailor-platform/sdk/runtime/globals"` (or by listing the entry in `tsconfig.json`'s `compilerOptions.types`).
+
+  The capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`) is preserved as a `@deprecated` alias of the new lowercase `tailordb.*` namespace for source-level compatibility with `@tailor-platform/function-types`. It will be removed in v2.0; run `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` to migrate. The `@tailor-platform/function-types` declarations are vendored inside the SDK and activated automatically, so you can simply remove `@tailor-platform/function-types` from your `package.json` (and from `tsconfig.json` `compilerOptions.types` if listed) once you've upgraded.
+
+  Other test-mock changes from `@tailor-platform/sdk/vitest`:
+
+  - Breaking: when an `openDownloadStream` (or `toFileStream()`) call consumes a queued mock result, raw `Uint8Array` / `ArrayBuffer` payloads are now rejected. Enqueue a structured iterable of `StreamValue` items (`{ type: "metadata" }`, `{ type: "chunk", data, position }`, `{ type: "complete" }`) so test streams stay aligned with the platform's structured stream contract. The shorthand `Uint8Array` enqueue is still accepted by `download` / `downloadAsBase64`.
+
+### Patch Changes
+
+- [#1215](https://github.com/tailor-platform/sdk/pull/1215) [`65ffd8a`](https://github.com/tailor-platform/sdk/commit/65ffd8a84c377fe91f7632784716a6322fab4c33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
+- [#1199](https://github.com/tailor-platform/sdk/pull/1199) [`1b6d0d8`](https://github.com/tailor-platform/sdk/commit/1b6d0d8678d02ed6f6ea79dad48fc3ba23978fbe) Thanks [@toiroakr](https://github.com/toiroakr)! - **Fix**: `tailor-sdk tailordb truncate` and the `exec.mjs` generated by the built-in `seedPlugin` no longer touch namespaces declared with `{ external: true }`.
+
+  - `tailor-sdk tailordb truncate --all` now only truncates namespaces the current app actually owns; namespaces declared with `{ external: true }` are skipped. This also covers the `--truncate` path of `seed/exec.mjs`, so its `seed:reset` no longer wipes a sibling app's data.
+  - `tailor-sdk tailordb truncate --namespace <name>` now rejects an external namespace with a dedicated error pointing the user to the owning app, instead of the generic "not found in config" message.
+  - The generated `seed/exec.mjs` now starts with an `@generated` header to discourage hand-edits, since the entire file is regenerated on every `sdk generate`.
+
+## 1.50.1
+
+### Patch Changes
+
+- [#1226](https://github.com/tailor-platform/sdk/pull/1226) [`d900ddc`](https://github.com/tailor-platform/sdk/commit/d900ddcba170a5effe2119fb37e3e038d5cd5935) Thanks [@remiposo](https://github.com/remiposo)! - Fix `deploy` to no longer delete the application when its `id` is regenerated
+  (e.g. CI working tree without a committed `id` in `tailor.config.ts`).
+
+## 1.50.0
+
+### Minor Changes
+
+- [#1223](https://github.com/tailor-platform/sdk/pull/1223) [`c2f078d`](https://github.com/tailor-platform/sdk/commit/c2f078d6fb82d42bcc8c040e020b34072a2d2eb6) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve `tailordb migration` handling of data-loss-possible changes:
+
+  - Removed fields (`field_removed`) and removed types (`type_removed`) are now reported as **warnings** during `tailordb migration generate`, not silent changes. They are no longer dropped before `migrate.ts` runs: the field/type stays available during the Pre-migration phase so that scripts can read it (e.g. `innerJoin` through a foreign key that is being dropped in the same migration), then the physical drop happens in the Post-migration phase.
+  - Add `tailordb migration script <number>` subcommand to add a `migrate.ts` (and `db.ts`) template to an existing migration directory. Useful for warning-tier changes where you want a custom data migration even though one was not generated automatically.
+  - `migrate.ts` is now executed whenever the file exists on disk for a pending migration, regardless of whether the diff originally required a script. Breaking changes still hard-require a script as before.
+
+### Patch Changes
+
+- [#1194](https://github.com/tailor-platform/sdk/pull/1194) [`4c227cc`](https://github.com/tailor-platform/sdk/commit/4c227cc404e51331c0514b0aaa07d96d8940c347) Thanks [@toiroakr](https://github.com/toiroakr)! - Colocate `src/vitest/` tests next to their sources (drop the
+  `src/vitest/__tests__/` directory). Vitest discovers the test files
+  via the existing `**/?(*.)+(spec|test).ts` include pattern, so the
+  `**/__tests__/**/*.ts` entry has been removed from `vitest.config.ts`.
+  The nested integration runner moves from
+  `src/vitest/__tests__/integration/` to `src/vitest/integration/`. Pure
+  refactor: no public API or behavior changes.
+
+- [#1207](https://github.com/tailor-platform/sdk/pull/1207) [`c0b392d`](https://github.com/tailor-platform/sdk/commit/c0b392d95f81bcb2a4bfd9e856183222da87ef06) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor deploy` so an intermediate migration's data script can still read fields that a later migration removes. Each migration's pre/post phase now submits the schema state reconstructed up to that migration (initial baseline + diffs through N), instead of the FINAL post-all-migrations schema. Previously, removals declared in later migrations leaked into earlier migrations' pre-phase and caused `field 'X' not found` failures at script execution time.
+
+- [#1208](https://github.com/tailor-platform/sdk/pull/1208) [`59d7e0e`](https://github.com/tailor-platform/sdk/commit/59d7e0e7c1b42dcd1571365780114d596e44350c) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(skills): rename bundled skill directory to `agent-skills/` so `gh skill install tailor-platform/sdk` resolves a single skill. `gh skill` uses a recursive `**/skills/*/SKILL.md` match and was picking up both `skills/tailor-sdk/` (the public mirror) and `packages/sdk/skills/tailor-sdk/` (the npm bundle), erroring with conflicting names. The bundled copy is now under `packages/sdk/agent-skills/` (excluded from gh's match), while the repo-root `skills/` mirror remains the single discovery target for `gh skill install` and `npx skills add <repo>`. `npx tailor-sdk skills install` continues to work via the bundled `agent-skills/` path inside the published package.
+
+- [#1217](https://github.com/tailor-platform/sdk/pull/1217) [`b827cf9`](https://github.com/tailor-platform/sdk/commit/b827cf95c0c048959c269f7ed9a31fdc81a5eb13) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/read-multiline to v0.4.1
+
+- [#1184](https://github.com/tailor-platform/sdk/pull/1184) [`dee2ad7`](https://github.com/tailor-platform/sdk/commit/dee2ad7199b2da238b7e9edea2d9bb9605033456) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor deploy` so decimal fields without an explicit `scale` no longer show spurious drift against the platform (which materializes the default `6`). Deploy now plans and applies through the same snapshot pipeline as `tailordb migrate`.
+
+## 1.49.0
+
+### Minor Changes
+
+- [#1147](https://github.com/tailor-platform/sdk/pull/1147) [`f0de80a`](https://github.com/tailor-platform/sdk/commit/f0de80ac83a3e76bcb65be7957cb3d7bd1f80ec1) Thanks [@dqn](https://github.com/dqn)! - Add `--permission <write|read>` flag to `profile create`, `profile update`, and `workspace create` (when `--profile-name` is given) so editor users can use a viewer-style profile by default. Profiles created with `--permission read` block platform-state mutations driven by the operator's bearer token (`apply`, `remove`, `workspace create/delete/restore`, `secret create/update/delete`, `tailordb migrate set`, `tailordb truncate`, `tailordb erd deploy`, `executor trigger`, `staticwebsite deploy`, `authconnection authorize/revoke`, organization / folder / PAT / workspace-user mutations, and direct `api <endpoint>` calls) with a `PROFILE_READONLY` error. Application-data operations executed under a machine user (`query`, `workflow start/resume`, `function test-run`) are not gated because the machine user's own permissions already govern those mutations. Switch profile or run `profile update <name> --permission write` to lift the restriction. Profile management itself stays available so the flag can always be cleared. `profile update` skips remote user / workspace validation when only `--permission` is changing, so the flag can be cleared offline or with an expired token.
+
+  The guard activates only when a profile is in scope: pass `--profile <name>` or set `TAILOR_PLATFORM_PROFILE`. `TAILOR_PLATFORM_TOKEN` and `--workspace-id` direct access bypass the guard by design; they are intended for machine-user / CI flows where the platform token already encodes the permitted scope.
+
+### Patch Changes
+
+- [#1204](https://github.com/tailor-platform/sdk/pull/1204) [`6b1bbcb`](https://github.com/tailor-platform/sdk/commit/6b1bbcbe843340a912a3c75c2ecdb03c5697f967) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.1
+
+- [#1196](https://github.com/tailor-platform/sdk/pull/1196) [`c9b7d1e`](https://github.com/tailor-platform/sdk/commit/c9b7d1eae8a3cccf70191bd8c228cd11db6ed060) Thanks [@dqn](https://github.com/dqn)! - Eliminate the Node.js `DEP0205` `DeprecationWarning` (`` `module.register()` is deprecated. Use `module.registerHooks()` instead. ``) printed by every `tailor-sdk` CLI invocation on Node v26. The CLI now registers `tsx` through its own programmatic API (`tsx/esm/api`) instead of calling `node:module`'s `register("tsx", …)` directly, which on tsx 4.21.1+ routes through `module.registerHooks()` on Node ≥ 24.11.1 / 25.1 / 26 and falls back to `module.register()` on older runtimes. Bumps the bundled `tsx` from 4.21.0 to 4.21.1.
+
+- [#1179](https://github.com/tailor-platform/sdk/pull/1179) [`f72ffe1`](https://github.com/tailor-platform/sdk/commit/f72ffe1aed824eb9af5e7520529c3ebde029b5a6) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk deploy --no-schema-check` to reconcile the TailorDB migration label to the working tree's latest migration number when it completes. Previously, running `deploy --no-schema-check` from a revision whose working tree is older than the remote left the remote migration label stale; the next `deploy` then reconstructed a snapshot at a label that no longer existed in the working tree and aborted with a false "Remote schema drift detected" error.
+
+## 1.48.0
+
+### Minor Changes
+
+- [#1118](https://github.com/tailor-platform/sdk/pull/1118) [`5ef8e01`](https://github.com/tailor-platform/sdk/commit/5ef8e01fbcee428d77925662006fd2cc7f64a522) Thanks [@toiroakr](https://github.com/toiroakr)! - Detect app renames via a stable, auto-injected `id` field in `tailor.config.ts`.
+
+  The SDK now writes a generated `id: "<uuid>"` field into the
+  `defineConfig({...})` call on first `deploy`, and stamps every managed
+  resource with an `sdk-app-id` metadata label. Subsequent deploys identify
+  ownership by the stable id rather than by the app name, so renaming the
+  app (or any of its resources) cleanly removes the old resources before
+  creating the new ones. The id is a plain UUID; the SDK adds the
+  label-compatible `app-` prefix internally at the metadata boundary.
+
+  Deleting the `id` field regenerates a new UUID on the next `deploy` —
+  typically done after copying `tailor.config.ts` from another project so
+  the new application does not share the original's id. Existing
+  resources keep their data and are re-tagged in place; `deploy` shows a
+  dedicated confirmation prompt for this case ("Application id was
+  regenerated for ..."), separate from the rename/transfer confirmation.
+
+  If your `tailor.config.ts` is a wrapper that re-exports `defineConfig` from
+  another file, the SDK skips id injection on the wrapper — add the `id`
+  field manually to the file that contains the actual `defineConfig({...})`
+  call. Existing deployments without the id continue to work and migrate
+  transparently on the next `deploy` run.
+
+- [#1156](https://github.com/tailor-platform/sdk/pull/1156) [`4311e05`](https://github.com/tailor-platform/sdk/commit/4311e05d59f2e4b92d312b2a0e991f69553c741c) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `disableIdpUserSync` option to `seedPlugin` for opting out of the
+  `_User <-> userProfile` foreign keys emitted into the generated seed schema.
+
+  The seed plugin emits two foreign keys when `auth.userProfile` is configured
+  so that `validate` rejects rows on either side that lack a matching
+  counterpart:
+
+  - `_User.name → <userProfile>.<usernameField>` (`idpToUser`)
+  - `<userProfile>.<usernameField> → _User.name` (`userToIdp`)
+
+  Both are emitted by default, matching the previous behavior. Neither
+  direction is enforced by the runtime, so it can be useful to relax one when
+  seeding asymmetric production-like states such as
+  invited-but-not-registered users.
+
+  ```ts
+  // Allow seeding invited userProfile rows without a _User row
+  seedPlugin({
+    distPath: "./seed",
+    disableIdpUserSync: { userToIdp: true },
+  }),
+
+  // Allow seeding _User rows whose userProfile row does not exist yet
+  seedPlugin({
+    distPath: "./seed",
+    disableIdpUserSync: { idpToUser: true },
+  }),
+  ```
+
+### Patch Changes
+
+- [#1189](https://github.com/tailor-platform/sdk/pull/1189) [`7bcd9c1`](https://github.com/tailor-platform/sdk/commit/7bcd9c14eaed52df95b4a6523804a8a971797473) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve tree-shaking of `@tailor-platform/sdk` so applications that only import a subset of the public API ship less unused code:
+
+  - Add a selective `sideEffects` allow-list to `package.json`: only `dist/cli/*.mjs` and `dist/vitest/setup.mjs` retain side effects, the rest of `dist/` is marked side-effect-free so bundlers can drop modules whose only imports are unused.
+  - Replace the top-level `export const t = { ..._t }` spread in `configure/index.ts` with a direct alias, eliminating a side-effecting object construction that prevented elimination of unused field builders.
+  - Annotate configure-layer factories (`defineConfig`, `defineAuth`, `defineIdp`, `defineStaticWebSite`, `definePlugins`, `createResolver`, `createExecutor`, `createWorkflow`, `createWorkflowJob`, etc.) with `@__NO_SIDE_EFFECTS__` so calls whose return values are unused can be eliminated.
+
+  No public API surface changes.
+
+- [#1180](https://github.com/tailor-platform/sdk/pull/1180) [`3411070`](https://github.com/tailor-platform/sdk/commit/34110703daa5cafa40958f5b9dc6f21df5e201fb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1191](https://github.com/tailor-platform/sdk/pull/1191) [`a20354d`](https://github.com/tailor-platform/sdk/commit/a20354d47211e1955acd9086c4d25228ee2873de) Thanks [@dqn](https://github.com/dqn)! - **Security**: Harden permissions of the CLI config file (`~/.config/tailor-platform/config.yaml`) and local crash reports to `0o600`, with their parent directory at `0o700`. Previously these files inherited the user's `umask` (typically `0o644`), so on multi-user hosts or shared CI volumes other accounts could read access/refresh tokens stored in the config when the OS keyring is unavailable, as well as crash payloads.
+
+  **Action recommended**: If you have used the CLI on a multi-user host or in a shared CI environment, upgrade and run any `tailor-sdk` command once to auto-tighten existing files, or manually:
+
+  ```sh
+  chmod 700 ~/.config/tailor-platform
+  chmod 600 ~/.config/tailor-platform/config.yaml
+  ```
+
+  POSIX-only; on Windows the mode bits are best-effort and ACLs continue to govern access.
+
+## 1.47.1
+
+### Patch Changes
+
+- [#1176](https://github.com/tailor-platform/sdk/pull/1176) [`5abed20`](https://github.com/tailor-platform/sdk/commit/5abed20dff48e24f23675989143e33c8afb23845) Thanks [@toiroakr](https://github.com/toiroakr)! - Declare `undici` as a direct dependency. The SDK CLI imports `getGlobalDispatcher` from `undici`, but the package was previously available only through accidental hoisting of a transitive dependency. Strict node_modules layouts (e.g. pnpm 11 with stricter hoisting) would fail to resolve the import; declaring it directly fixes that.
+
+- [#1172](https://github.com/tailor-platform/sdk/pull/1172) [`7f37a07`](https://github.com/tailor-platform/sdk/commit/7f37a076a281fdca03d2301e1dba95668b2f7222) Thanks [@toiroakr](https://github.com/toiroakr)! - Widen `TailorEnv` fallback to `Record<string, string | number | boolean>` so it matches the values the type generator emits (string literal / number / boolean). Previously the fallback was `Record<string, string>`, which rejected number and boolean env values until `tailor.d.ts` was generated.
+
+- [#1161](https://github.com/tailor-platform/sdk/pull/1161) [`3e835c5`](https://github.com/tailor-platform/sdk/commit/3e835c55e27fbfedff94a169d1c2fb3c4f50e0a3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1165](https://github.com/tailor-platform/sdk/pull/1165) [`f4ff7bd`](https://github.com/tailor-platform/sdk/commit/f4ff7bd5318be0a1142a557c76a17896d9df193a) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix a type/runtime mismatch where calling `workflowJob.trigger()` without `await` returned a raw value at runtime even though the static type is `Promise<Awaited<Output>>`. The bundler now wraps `.trigger()` in an async IIFE (`(async () => tailor.workflow.triggerJobFunction("...", args))()`), so the returned value is always a `Promise` (including for `.then()` chains), synchronous throws from the platform surface as Promise rejections, and the platform's synchronous suspend semantics are preserved (the call site runs to completion before subsequent statements).
+
 ## 1.47.0
 
 ### Minor Changes

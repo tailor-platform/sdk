@@ -1,5 +1,4 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateExecutorExecutorRequestSchema,
   type DeleteExecutorExecutorRequestSchema,
@@ -14,7 +13,7 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { normalizeAuthInvoker } from "./auth-invoker";
@@ -26,9 +25,14 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
 import type { Executor } from "@/types/executor.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -82,10 +86,6 @@ type DeleteExecutor = {
   request: MessageInitShape<typeof DeleteExecutorExecutorRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
-}
-
 /**
  * Plan executor-related changes based on current and desired state.
  * @param context - Planning context
@@ -98,56 +98,44 @@ export async function planExecutor(context: PlanContext) {
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingExecutors = await fetchExistingResourcesWithLabels({
+    client,
+    workspaceId,
+    fetchPage: async (pageToken, pageSize) => {
       const { executors, nextPageToken } = await client.listExecutorExecutors({
         workspaceId,
         pageToken,
-        pageSize: maxPageSize,
+        pageSize,
       });
       return [executors, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.name,
+    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "executor", name),
   });
-  const existingExecutors: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.name),
-      });
-      existingExecutors[resource.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, executor.name), application.name);
+    const metaRequest = await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "executor", executor.name),
+      appName: application.name,
+      appId: application.id,
+    });
     const desiredExecutor = protoExecutor(application, executor);
     if (existing) {
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "Executor",
-          resourceName: executor.name,
-        });
-      } else if (existing.label !== application.name) {
-        conflicts.push({
-          resourceType: "Executor",
-          resourceName: executor.name,
-          currentOwner: existing.label,
-        });
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName: application.name,
+        appId: application.id,
+        resourceType: "Executor",
+        resourceName: executor.name,
+        conflicts,
+        unmanaged,
+      });
 
       if (
-        existing.label === application.name &&
+        owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areExecutorsEqual(existing.resource, desiredExecutor)
       ) {
@@ -175,12 +163,16 @@ export async function planExecutor(context: PlanContext) {
     }
   }
   Object.entries(existingExecutors).forEach(([name]) => {
-    const label = existingExecutors[name]?.label;
-    if (label && label !== application.name) {
-      resourceOwners.add(label);
-    }
-    // Only delete executors managed by this application
-    if (label === application.name) {
+    const entry = existingExecutors[name];
+    const label = entry?.label;
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: label,
+      appName: application.name,
+      appId: application.id,
+      resourceOwners,
+    });
+    if (owned) {
       changeSet.deletes.push({
         name,
         request: {
@@ -253,7 +245,7 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
   const normalized = normalizeProtoConfig(executor) ?? {};
   const webhookHeaders =
     normalized.targetConfig?.config?.case === "webhook"
-      ? [...(normalized.targetConfig.config.value.headers ?? [])].sort((left, right) =>
+      ? (normalized.targetConfig.config.value.headers ?? []).toSorted((left, right) =>
           (left.key ?? "").localeCompare(right.key ?? ""),
         )
       : undefined;
@@ -385,7 +377,7 @@ function resolveAuthNamespace(application: Readonly<Application>): string {
   if (!application.authService) {
     throw new Error("No Auth service configured");
   }
-  return application.authService.parsedConfig.name;
+  return application.authService.config.name;
 }
 
 function protoExecutor(
@@ -452,24 +444,22 @@ function protoExecutor(
       triggerConfig = {
         config: {
           case: "incomingWebhook",
-          value: {
-            ...(trigger.response
-              ? {
-                  response: {
-                    ...(trigger.response.body
-                      ? {
-                          body: {
-                            expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
-                          },
-                        }
-                      : {}),
-                    ...(trigger.response.statusCode != null
-                      ? { statusCode: trigger.response.statusCode }
-                      : {}),
-                  },
-                }
-              : {}),
-          },
+          value: trigger.response
+            ? {
+                response: {
+                  ...(trigger.response.body
+                    ? {
+                        body: {
+                          expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
+                        },
+                      }
+                    : {}),
+                  ...(trigger.response.statusCode != null
+                    ? { statusCode: trigger.response.statusCode }
+                    : {}),
+                },
+              }
+            : {},
         },
       };
       break;
@@ -501,7 +491,7 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
-  const authNamespace = application.authService?.parsedConfig.name;
+  const authNamespace = application.authService?.config.name;
   const invokerContext = `Executor "${executor.name}"`;
 
   switch (target.kind) {

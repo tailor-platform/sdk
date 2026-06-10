@@ -1,0 +1,43 @@
+{
+  "rules": [
+    {
+      "name": "changeset",
+      "paths": [".changeset/**"],
+      "file": ".agents/rules/changeset.md"
+    },
+    {
+      "name": "cli-logging",
+      "paths": ["packages/sdk/src/cli/**/*.ts"],
+      "file": ".agents/rules/cli-logging.md"
+    },
+    {
+      "name": "docs-authoring",
+      "paths": ["packages/sdk/docs/**", "packages/sdk/src/**/*.ts"],
+      "file": ".agents/rules/docs-authoring.md"
+    },
+    {
+      "name": "jsdoc",
+      "paths": ["packages/sdk/src/**/*.ts"],
+      "file": ".agents/rules/jsdoc.md"
+    },
+    {
+      "name": "schema-types",
+      "paths": [
+        "packages/sdk/src/types/**/*.ts",
+        "packages/sdk/src/parser/**/schema.ts",
+        "packages/sdk/zinfer.config.ts"
+      ],
+      "file": ".agents/rules/schema-types.md"
+    },
+    {
+      "name": "sdk-internals",
+      "paths": [
+        "packages/sdk/src/configure/**/*.ts",
+        "packages/sdk/src/parser/**/*.ts",
+        "packages/sdk/src/cli/**/*.ts",
+        "packages/sdk/src/types/**/*.ts"
+      ],
+      "file": ".agents/rules/sdk-internals.md"
+    }
+  ]
+}

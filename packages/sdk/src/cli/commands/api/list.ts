@@ -7,7 +7,7 @@ export const listCommand = defineAppCommand({
   name: "list",
   description: "List all invocable OperatorService methods.",
   notes:
-    "Only unary RPCs are listed; streaming methods are excluded because `tailor-sdk api run` issues a single JSON POST and reads one JSON response.",
+    "Only single-request (non-streaming) methods are listed, because the CLI issues a single JSON request and reads one JSON response.",
   args: z.object({}).strict(),
   run: () => {
     const names = listMethodNames();

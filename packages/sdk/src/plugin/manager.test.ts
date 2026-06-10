@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { PluginManager } from "@/plugin/manager";
 import type { Plugin } from "@/types/plugin";
 
 describe("PluginManager", () => {
-  it("collects namespace plugin-generated types", async () => {
+  test("collects namespace plugin-generated types", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
@@ -33,7 +33,7 @@ describe("PluginManager", () => {
     });
   });
 
-  it("dedupes namespace plugin-generated outputs across namespaces", async () => {
+  test("dedupes namespace plugin-generated outputs across namespaces", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
@@ -62,7 +62,7 @@ describe("PluginManager", () => {
     expect(manager.getPluginGeneratedExecutors()).toHaveLength(1);
   });
 
-  it("preserves pluralForm and plugin attachments when extending types", () => {
+  test("preserves pluralForm and plugin attachments when extending types", () => {
     const manager = new PluginManager();
     const original = db
       .type(["Person", "People"], {
@@ -83,7 +83,7 @@ describe("PluginManager", () => {
     expect(extended.plugins).toEqual([{ pluginId: "test-plugin", config: { enabled: true } }]);
   });
 
-  it("requires per-type config when typeConfigRequired is true", async () => {
+  test("requires per-type config when typeConfigRequired is true", async () => {
     const plugin: Plugin = {
       id: "requires-config",
       description: "requires per-type config",
@@ -103,12 +103,13 @@ describe("PluginManager", () => {
     });
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toContain("requires typeConfig");
+    if (result.success) {
+      throw new Error("Expected plugin attachment to fail");
     }
+    expect(result.error).toContain("requires typeConfig");
   });
 
-  it("processes type attachment without configSchema (arbitrary config)", async () => {
+  test("processes type attachment without configSchema (arbitrary config)", async () => {
     const plugin: Plugin = {
       id: "schema-less-plugin",
       description: "plugin without configSchema",
@@ -132,9 +133,10 @@ describe("PluginManager", () => {
     });
 
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.output.types).toBeDefined();
-      expect(result.output.types?.derived.name).toBe("Derived");
+    if (!result.success) {
+      throw new Error("Expected plugin attachment to succeed");
     }
+    expect(result.output.types).toBeDefined();
+    expect(result.output.types?.derived.name).toBe("Derived");
   });
 });

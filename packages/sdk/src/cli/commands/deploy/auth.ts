@@ -23,7 +23,6 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
@@ -34,14 +33,20 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  isOwnedByApp,
+  resourceTrn,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "@/types/auth";
 import type {
   BuiltinIdP,
   IdProvider as IdProviderConfig,
-  OAuth2ClientInput,
+  OAuth2Client,
   SCIMAttribute,
   SCIMConfig,
   SCIMResource,
@@ -291,7 +296,14 @@ export async function planAuth(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, auths, forceApplyAll);
+  } = await planServices(
+    client,
+    workspaceId,
+    application.name,
+    application.id,
+    auths,
+    forceApplyAll,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const expectedLocalWebsites = new Set(
     application.staticWebsiteServices.map((website) => website.name),
@@ -322,7 +334,7 @@ export async function planAuth(context: PlanContext) {
     ),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
-    planAuthConnections(client, workspaceId, application.name, auths),
+    planAuthConnections(client, workspaceId, application.name, application.id, auths),
   ]);
 
   return {
@@ -361,14 +373,11 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteAuthServiceRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
-}
-
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
+  appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
   forceApplyAll = false,
 ) {
@@ -399,43 +408,50 @@ async function planServices(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.namespace.name),
+        trn: resourceTrn(workspaceId, "auth", resource.namespace.name),
       });
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existing = existingServices[config.name];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, config.name), appName);
+    const metaRequest = await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "auth", config.name),
+      appName,
+      appId,
+    });
     const request = {
       workspaceId,
       namespaceName: config.name,
       publishSessionEvents: config.publishSessionEvents,
     };
     if (existing) {
-      const isManagedByApp = existing.label === appName;
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "Auth service",
-          resourceName: config.name,
-        });
-      } else if (existing.label !== appName) {
-        conflicts.push({
-          resourceType: "Auth service",
-          resourceName: config.name,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, appName, appId);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "Auth service",
+            resourceName: config.name,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "Auth service",
+            resourceName: config.name,
+            currentOwner: existing.label,
+          });
+        }
       }
 
       if (
         !forceApplyAll &&
         existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false) &&
-        isManagedByApp
+        owned
       ) {
         changeSet.unchanged.push({ name: config.name });
       } else {
@@ -455,12 +471,13 @@ async function planServices(
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
-    const label = existingServices[namespaceName]?.label;
-    if (label && label !== appName) {
+    const entry = existingServices[namespaceName];
+    const label = entry?.label;
+    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete services managed by this application
-    if (label === appName) {
+    if (owned) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {
@@ -522,7 +539,7 @@ async function planIdPConfigs(
   };
 
   for (const authService of auths) {
-    const { parsedConfig: config } = authService;
+    const { config } = authService;
     const existingIdPConfigs = await fetchIdPConfigs(config.name);
     const existingMap = new Map<string, (typeof existingIdPConfigs)[number]>();
     existingIdPConfigs.forEach((idpConfig) => {
@@ -651,7 +668,7 @@ function normalizeComparableAuthIdPConfig(idpConfig: {
             config: {
               case: "oidc" as const,
               value: {
-                ...(oidcValue ?? {}),
+                ...oidcValue,
                 issuerUrl:
                   oidcValue && "issuerUrl" in oidcValue
                     ? oidcValue.issuerUrl || undefined
@@ -849,7 +866,7 @@ async function planUserProfileConfigs(
   >("Auth userProfileConfigs");
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-user-profile-config`;
     try {
       const { userProfileProviderConfig } = await client.getUserProfileConfig({
@@ -979,7 +996,7 @@ async function planTenantConfigs(
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-tenant-config`;
     try {
       const { tenantProviderConfig } = await client.getTenantConfig({
@@ -1114,7 +1131,7 @@ async function planMachineUsers(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingMachineUsers = await fetchMachineUsers(config.name);
     const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
@@ -1322,8 +1339,10 @@ function normalizeComparableOAuth2Client(
 
   return normalizeProtoConfig({
     ...client,
+    // Platform returns an empty string for an unset description; treat it the same as omitted.
+    description: client.description || undefined,
     redirectUris: normalizeStringArray(client.redirectUris),
-    grantTypes: [...(client.grantTypes ?? [])].sort((left, right) => left - right),
+    grantTypes: (client.grantTypes ?? []).toSorted((left, right) => left - right),
     accessTokenLifetime: accessTokenLifetime ?? 86400,
     refreshTokenLifetime: refreshTokenLifetime ?? 604800,
     requireDpop: client.requireDpop ?? false,
@@ -1435,7 +1454,7 @@ async function planOAuth2Clients(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingOAuth2Clients = await fetchOAuth2Clients(config.name);
     const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
     existingOAuth2Clients.forEach((oauth2Client) => {
@@ -1544,15 +1563,16 @@ async function planOAuth2Clients(
 
 function protoOAuth2Client(
   oauth2ClientName: string,
-  oauth2Client: OAuth2ClientInput,
+  oauth2Client: OAuth2Client,
 ): MessageInitShape<typeof AuthOAuth2ClientSchema> {
-  // Parse to transform token lifetimes
-  const parsed = OAuth2ClientSchema.parse(oauth2Client);
-
+  // `oauth2Client` is already parsed output: AuthConfigSchema.parse (wired in
+  // application.ts) validated it and transformed the numeric token lifetimes
+  // into Duration ({ seconds, nanos }). Consume it directly instead of
+  // re-parsing, which would reject the already-transformed lifetimes.
   return {
     name: oauth2ClientName,
-    description: parsed.description,
-    grantTypes: parsed.grantTypes?.map((grantType) => {
+    description: oauth2Client.description,
+    grantTypes: oauth2Client.grantTypes.map((grantType) => {
       switch (grantType) {
         case "authorization_code":
           return AuthOAuth2Client_GrantType.AUTHORIZATION_CODE;
@@ -1562,17 +1582,17 @@ function protoOAuth2Client(
           throw new Error(`Unknown OAuth2 client grant type: ${grantType satisfies never}`);
       }
     }),
-    redirectUris: parsed.redirectURIs,
+    redirectUris: oauth2Client.redirectURIs,
     clientType: (
       {
         confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,
         public: AuthOAuth2Client_ClientType.PUBLIC,
         browser: AuthOAuth2Client_ClientType.BROWSER,
-      } satisfies Record<NonNullable<OAuth2ClientInput["clientType"]>, AuthOAuth2Client_ClientType>
-    )[parsed.clientType ?? "confidential"],
-    accessTokenLifetime: parsed.accessTokenLifetimeSeconds,
-    refreshTokenLifetime: parsed.refreshTokenLifetimeSeconds,
-    requireDpop: parsed.requireDpop,
+      } satisfies Record<NonNullable<OAuth2Client["clientType"]>, AuthOAuth2Client_ClientType>
+    )[oauth2Client.clientType ?? "confidential"],
+    accessTokenLifetime: oauth2Client.accessTokenLifetimeSeconds,
+    refreshTokenLifetime: oauth2Client.refreshTokenLifetimeSeconds,
+    requireDpop: oauth2Client.requireDpop,
   };
 }
 
@@ -1602,7 +1622,7 @@ async function planSCIMConfigs(
   );
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const name = `${config.name}-scim-config`;
     try {
       await client.getAuthSCIMConfig({
@@ -1737,7 +1757,7 @@ async function planSCIMResources(
   };
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const existingSCIMResources = await fetchSCIMResources(config.name);
     const existingNameSet = new Set<string>();
     existingSCIMResources.forEach((scimResource) => {
@@ -1968,7 +1988,7 @@ async function planAuthHooks(
   const changeSet = createChangeSet<CreateAuthHook, UpdateAuthHook, DeleteAuthHook>("Auth hooks");
 
   for (const auth of auths) {
-    const { parsedConfig: config } = auth;
+    const { config } = auth;
     const beforeLogin = config.hooks?.beforeLogin;
 
     let existingHook:

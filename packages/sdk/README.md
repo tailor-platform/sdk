@@ -60,7 +60,7 @@ npx tailor-sdk skills install -a codex -y
 ```
 
 This uses the `skills` CLI under the hood, sourcing the skill from
-`node_modules/@tailor-platform/sdk/skills` so the skill version always matches
+`node_modules/@tailor-platform/sdk/agent-skills` so the skill version always matches
 the installed SDK version. Files are copied (not symlinked) so they survive
 `pnpm install` wiping `node_modules`.
 
@@ -85,6 +85,7 @@ the installed SDK version. Files are copied (not symlinked) so they survive
 
 ### Guides
 
+- [Runtime API](./docs/runtime.md) - Typed wrappers for `tailor.iconv`, `tailor.secretmanager`, `tailor.idp`, `tailor.workflow`, `tailor.context`, `tailor.authconnection`, and `tailordb.file`
 - [Testing Guide](./docs/testing.md) - Unit and E2E testing patterns
 - [CLI Reference](./docs/cli-reference.md) - Command-line interface documentation
 
@@ -96,26 +97,3 @@ See [Create Tailor Platform SDK](https://github.com/tailor-platform/sdk/tree/mai
 
 - Node.js 22 or later (or Bun)
 - A Tailor Platform account ([request access](https://www.tailor.tech/demo))
-
-## Dependabot Noise
-
-Installing `@tailor-platform/sdk` pulls in a few transitive advisories that are **not exploitable in practice**. They are listed here so you can triage reports from `npm audit` / `pnpm audit` / Dependabot without diffing our lockfile.
-
-### valibot ReDoS ([GHSA-vqpr-j7v3-hqw9](https://github.com/advisories/GHSA-vqpr-j7v3-hqw9))
-
-- **Why it shows up**: `@liam-hq/cli@0.7.24` pins `valibot@1.1.0`, which falls in the vulnerable range (`< 1.2.0`).
-- **Why it's safe here**: `@liam-hq/cli` is invoked only by `tailor-sdk tailordb erd export` as a child process, against developer-controlled schema files. The vulnerable code path (`v.emoji()` on attacker-controlled strings) is never reached.
-- **If you want to silence it**: add an override to your project so `valibot` resolves to `>=1.2.0`. `@toiroakr/lines-db` declares `valibot` as an optional peer with range `>=1.0.0`, so forcing `1.2.0+` is safe.
-
-  ```jsonc
-  // pnpm (package.json)
-  "pnpm": { "overrides": { "valibot": ">=1.2.0" } }
-
-  // npm (package.json)
-  "overrides": { "valibot": ">=1.2.0" }
-
-  // yarn (package.json)
-  "resolutions": { "valibot": ">=1.2.0" }
-  ```
-
-  This fix has to live in your project's `package.json` — overrides in a published package do not propagate to consumers.

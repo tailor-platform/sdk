@@ -5,6 +5,7 @@ import type {
   ExecutorExecutor,
   ExecutorJob,
   ExecutorJobAttempt,
+  ExecutorTriggerEventConfig,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 
 export interface ExecutorJobListInfo {
@@ -114,8 +115,35 @@ export interface ExecutorInfo {
   triggerType: string;
   targetType: string;
   disabled: boolean;
-  triggerConfig: string;
-  targetConfig: string;
+  triggerConfig: Record<string, unknown>;
+  targetConfig: Record<string, unknown>;
+}
+
+function formatSubjectEvent(subject: string, eventTypes: readonly string[]): string {
+  const actions = eventTypes
+    .map((eventType) => eventType.split(".").at(-1) ?? eventType)
+    .join(", ");
+  return actions ? `event: ${subject} ${actions}` : `event: ${subject}`;
+}
+
+function formatTypedEventTrigger(config: ExecutorTriggerEventConfig): string | null {
+  const typedConfig = config.typedConfig;
+  if (!typedConfig || typedConfig.case === undefined) {
+    return null;
+  }
+
+  switch (typedConfig.case) {
+    case "tailordb":
+      return formatSubjectEvent(typedConfig.value.typeName, typedConfig.value.eventTypes);
+    case "pipeline":
+      return formatSubjectEvent(typedConfig.value.resolverName, typedConfig.value.eventTypes);
+    case "idp":
+      return formatSubjectEvent("idp user", typedConfig.value.eventTypes);
+    case "auth":
+      return formatSubjectEvent("auth access_token", typedConfig.value.eventTypes);
+    default:
+      return null;
+  }
 }
 
 /**
@@ -137,8 +165,16 @@ function formatTriggerType(executor: ExecutorExecutor): string {
   switch (config.case) {
     case "schedule":
       return `schedule: ${config.value.frequency} (${config.value.timezone})`;
-    case "event":
+    case "event": {
+      const typedTrigger = formatTypedEventTrigger(config.value);
+      if (typedTrigger) {
+        return typedTrigger;
+      }
+      if (!config.value.eventType) {
+        return executorTriggerTypeToString(executor.triggerType);
+      }
       return formatEventTrigger(config.value.eventType, config.value.condition?.expr);
+    }
     case "incomingWebhook":
       return "webhook";
     default:
@@ -197,16 +233,39 @@ function formatTriggerConfig(executor: ExecutorExecutor): Record<string, unknown
         frequency: config.value.frequency,
       };
     case "event":
-      return {
-        eventType: config.value.eventType,
-        condition: config.value.condition?.expr || "",
-      };
+      return formatEventTriggerConfig(config.value);
     case "incomingWebhook":
       return {
         secret: config.value.secret ? "***" : "",
       };
     default:
       return {};
+  }
+}
+
+function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<string, unknown> {
+  const typedConfig = config.typedConfig;
+  if (!typedConfig || typedConfig.case === undefined) {
+    return {
+      eventType: config.eventType,
+      condition: config.condition?.expr || "",
+    };
+  }
+
+  const base = {
+    kind: typedConfig.case,
+    eventTypes: typedConfig.value.eventTypes,
+    namespaceName: typedConfig.value.namespaceName,
+    condition: typedConfig.value.condition?.expr || "",
+  };
+
+  switch (typedConfig.case) {
+    case "tailordb":
+      return { ...base, typeName: typedConfig.value.typeName };
+    case "pipeline":
+      return { ...base, resolverName: typedConfig.value.resolverName };
+    default:
+      return base;
   }
 }
 
@@ -271,7 +330,7 @@ export function toExecutorInfo(executor: ExecutorExecutor): ExecutorInfo {
     triggerType: formatTriggerType(executor),
     targetType: executorTargetTypeToString(executor.targetType),
     disabled: executor.disabled,
-    triggerConfig: JSON.stringify(formatTriggerConfig(executor), null, 2),
-    targetConfig: JSON.stringify(formatTargetConfig(executor), null, 2),
+    triggerConfig: formatTriggerConfig(executor),
+    targetConfig: formatTargetConfig(executor),
   };
 }

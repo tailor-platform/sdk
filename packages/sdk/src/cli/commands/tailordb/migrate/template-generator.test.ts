@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, test, beforeEach, afterEach } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
 import {
   SCHEMA_FILE_NAME,
@@ -42,10 +42,11 @@ describe("template-generator", () => {
   }
 
   describe("generateSchemaFile", () => {
-    it("should generate initial schema snapshot file in directory structure", async () => {
+    test("should generate initial schema snapshot file in directory structure", async () => {
       const snapshot = createTestSnapshot({
         User: {
           name: "User",
+          pluralForm: "Users",
           fields: {
             name: { type: "string", required: true },
             email: { type: "string", required: false },
@@ -67,7 +68,7 @@ describe("template-generator", () => {
       expect(parsed.types.User.name).toBe("User");
     });
 
-    it("should create nested directories if they do not exist", async () => {
+    test("should create nested directories if they do not exist", async () => {
       const nestedDir = path.join(tempDir, "nested", "migrations");
       const snapshot = createTestSnapshot();
 
@@ -81,7 +82,7 @@ describe("template-generator", () => {
       expect(exists).toBe(true);
     });
 
-    it("should use correct directory structure", async () => {
+    test("should use correct directory structure", async () => {
       const snapshot = createTestSnapshot();
 
       const result0 = await generateSchemaFile(snapshot, tempDir, 0);
@@ -97,7 +98,7 @@ describe("template-generator", () => {
       expect(result100.filePath).toBe(path.join(tempDir, "0100", SCHEMA_FILE_NAME));
     });
 
-    it("should throw error if schema file already exists", async () => {
+    test("should throw error if schema file already exists", async () => {
       const snapshot = createTestSnapshot();
 
       // Create the file first
@@ -114,13 +115,14 @@ describe("template-generator", () => {
     const previousSnapshot = createTestSnapshot({
       User: {
         name: "User",
+        pluralForm: "Users",
         fields: {
           name: { type: "string", required: true },
         },
       },
     });
 
-    it("should generate diff file without migration script for non-breaking changes", async () => {
+    test("should generate diff file without migration script for non-breaking changes", async () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace: "tailordb",
@@ -135,6 +137,8 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -152,7 +156,7 @@ describe("template-generator", () => {
       expect(parsed.changes[0].kind).toBe("field_added");
     });
 
-    it("should generate diff file with migration script and db types for breaking changes", async () => {
+    test("should generate diff file with migration script and db types for breaking changes", async () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace: "tailordb",
@@ -173,6 +177,8 @@ describe("template-generator", () => {
             reason: "Required field added",
           },
         ],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: true,
       };
 
@@ -193,7 +199,7 @@ describe("template-generator", () => {
       expect(dbTypesContent).toContain("User");
     });
 
-    it("should include description in diff file if provided", async () => {
+    test("should include description in diff file if provided", async () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace: "tailordb",
@@ -201,6 +207,8 @@ describe("template-generator", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -217,10 +225,11 @@ describe("template-generator", () => {
       expect(parsed.description).toBe("add user email field");
     });
 
-    it("should not generate migration script for field removal", async () => {
+    test("should not generate migration script for field removal", async () => {
       const snapshotWithOldField = createTestSnapshot({
         User: {
           name: "User",
+          pluralForm: "Users",
           fields: {
             name: { type: "string", required: true },
             oldField: { type: "string", required: false },
@@ -242,6 +251,8 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -258,10 +269,11 @@ describe("template-generator", () => {
     // Note: Array to single value change is rejected as unsupported in generate.ts before reaching generateDiffFiles
     // No test needed here as the migration file will never be generated for this case
 
-    it("should generate migration script for unique constraint addition", async () => {
+    test("should generate migration script for unique constraint addition", async () => {
       const snapshotWithoutUnique = createTestSnapshot({
         User: {
           name: "User",
+          pluralForm: "Users",
           fields: {
             email: { type: "string", required: true, unique: false },
           },
@@ -289,6 +301,8 @@ describe("template-generator", () => {
             reason: "Unique constraint added to field",
           },
         ],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: true,
       };
 
@@ -301,10 +315,11 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("unique");
     });
 
-    it("should generate migration script for enum values removal", async () => {
+    test("should generate migration script for enum values removal", async () => {
       const snapshotWithAllEnumValues = createTestSnapshot({
         Task: {
           name: "Task",
+          pluralForm: "Tasks",
           fields: {
             status: {
               type: "enum",
@@ -332,12 +347,17 @@ describe("template-generator", () => {
             before: {
               type: "enum",
               required: true,
-              allowedValues: ["PENDING", "IN_PROGRESS", "DONE", "CANCELLED"],
+              allowedValues: [
+                { value: "PENDING" },
+                { value: "IN_PROGRESS" },
+                { value: "DONE" },
+                { value: "CANCELLED" },
+              ],
             },
             after: {
               type: "enum",
               required: true,
-              allowedValues: ["PENDING", "IN_PROGRESS", "DONE"],
+              allowedValues: [{ value: "PENDING" }, { value: "IN_PROGRESS" }, { value: "DONE" }],
             },
           },
         ],
@@ -349,6 +369,8 @@ describe("template-generator", () => {
             reason: "Enum values removed: CANCELLED",
           },
         ],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: true,
       };
 
@@ -362,7 +384,7 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("removed enum values");
     });
 
-    it("should throw error if diff file already exists", async () => {
+    test("should throw error if diff file already exists", async () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace: "tailordb",
@@ -370,6 +392,8 @@ describe("template-generator", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -382,7 +406,7 @@ describe("template-generator", () => {
       );
     });
 
-    it("should throw error if migrate file already exists for breaking changes", async () => {
+    test("should throw error if migrate file already exists for breaking changes", async () => {
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace: "tailordb",
@@ -403,6 +427,8 @@ describe("template-generator", () => {
             reason: "Required field added",
           },
         ],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: true,
       };
 
@@ -422,7 +448,7 @@ describe("template-generator", () => {
   });
 
   describe("migrationScriptExists", () => {
-    it("should return true if migration script exists in directory", async () => {
+    test("should return true if migration script exists in directory", async () => {
       // Create a migrate file in directory structure
       const migrationDir = getMigrationDirPath(tempDir, 2);
       await fs.mkdir(migrationDir, { recursive: true });
@@ -435,19 +461,19 @@ describe("template-generator", () => {
       expect(exists).toBe(true);
     });
 
-    it("should return false if migration script does not exist", async () => {
+    test("should return false if migration script does not exist", async () => {
       const exists = await migrationScriptExists(tempDir, 999);
       expect(exists).toBe(false);
     });
   });
 
   describe("getMigrationScriptPath", () => {
-    it("should return correct path for migration script in directory structure", () => {
+    test("should return correct path for migration script in directory structure", () => {
       const result = getMigrationScriptPath(tempDir, 2);
       expect(result).toBe(path.join(tempDir, "0002", MIGRATE_FILE_NAME));
     });
 
-    it("should handle different migration numbers", () => {
+    test("should handle different migration numbers", () => {
       expect(getMigrationScriptPath(tempDir, 1)).toBe(
         path.join(tempDir, "0001", MIGRATE_FILE_NAME),
       );

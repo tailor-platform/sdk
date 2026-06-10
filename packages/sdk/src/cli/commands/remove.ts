@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { applyApplication, planApplication } from "@/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "@/cli/commands/deploy/auth";
-import { type PlanContext } from "@/cli/commands/deploy/deploy";
 import { applyExecutor, planExecutor } from "@/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
@@ -21,7 +20,9 @@ import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import ml from "@/utils/multiline";
+import type { PlanContext } from "@/cli/commands/deploy/types";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -71,8 +72,21 @@ async function execRemove(
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
-  const workflow = await planWorkflow(client, workspaceId, application.name, {}, {});
-  const functionRegistry = await planFunctionRegistry(client, workspaceId, application.name, []);
+  const workflow = await planWorkflow(
+    client,
+    workspaceId,
+    application.name,
+    application.id,
+    {},
+    {},
+  );
+  const functionRegistry = await planFunctionRegistry(
+    client,
+    workspaceId,
+    application.name,
+    application.id,
+    [],
+  );
   const secretManager = await planSecretManager(ctx);
 
   // Print planned deletions (same order as apply dry-run)
@@ -159,6 +173,7 @@ export const removeCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const { client, workspaceId, application, config } = await loadOptions({
       workspaceId: args["workspace-id"],
       profile: args.profile,

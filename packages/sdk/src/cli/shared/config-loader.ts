@@ -1,19 +1,25 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { AppConfigSchema } from "@/parser/app-config/schema";
 import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config/schema";
 import { PluginConfigSchema } from "@/parser/plugin-config";
 import { builtinPlugins } from "@/plugin/builtin/registry";
 import { loadConfigPath } from "./context";
+import { installCliTailordbStub } from "./mock";
 import type { AppConfig } from "@/types/app-config";
 import type { Plugin } from "@/types/plugin";
 import type { z } from "zod";
-import "./mock";
 
 /**
  * Loaded configuration with resolved path
  */
 export type LoadedConfig = AppConfig & { path: string };
+
+export interface LoadConfigOptions {
+  /** Import cache-busting value for watch-mode reloads. */
+  importNonce?: string;
+}
 
 // Generator schema for custom CodeGenerator objects (builtin generators are handled as plugins)
 const GeneratorConfigSchema = CodeGeneratorSchema.brand("CodeGenerator");
@@ -23,11 +29,14 @@ export type Generator = z.output<typeof GeneratorConfigSchema>;
 /**
  * Load Tailor configuration file and associated generators and plugins.
  * @param configPath - Optional explicit config path
+ * @param options - Optional module import behavior.
  * @returns Loaded config, generators, plugins, and config path
  */
 export async function loadConfig(
   configPath?: string,
+  options: LoadConfigOptions = {},
 ): Promise<{ config: LoadedConfig; generators: Generator[]; plugins: Plugin[] }> {
+  installCliTailordbStub();
   const foundPath = loadConfigPath(configPath);
   if (!foundPath) {
     throw new Error(
@@ -40,9 +49,21 @@ export async function loadConfig(
     throw new Error(`Configuration file not found: ${configPath}`);
   }
 
-  const configModule = await import(pathToFileURL(resolvedPath).href);
+  const configUrl = pathToFileURL(resolvedPath);
+  if (options.importNonce) {
+    configUrl.searchParams.set("tailorImportNonce", options.importNonce);
+  }
+  const configModule = await import(configUrl.href);
   if (!configModule || !configModule.default) {
     throw new Error("Invalid Tailor config module: default export not found");
+  }
+
+  const validated = AppConfigSchema.safeParse(configModule.default);
+  if (!validated.success) {
+    const issues = validated.error.issues
+      .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("\n");
+    throw new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`);
   }
 
   // Collect all generator exports (generators, generators2, etc.)

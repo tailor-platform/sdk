@@ -5,8 +5,12 @@ import * as rolldown from "rolldown";
 import { type BundleCache, computeBundlerContextHash, withCache } from "@/cli/cache/bundle-cache";
 import { type FileLoadConfig, loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
+import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
+import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import {
   createTriggerTransformPlugin,
@@ -15,6 +19,7 @@ import {
 } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
 import { loadResolver } from "./loader";
+import type { LogLevel } from "@/types/app-config";
 
 interface ResolverInfo {
   name: string;
@@ -33,6 +38,7 @@ interface ResolverInfo {
  * @param triggerContext - Trigger context for workflow/job transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
+ * @param bundleLogLevel - Controls which console calls are kept in bundled code
  * @returns Map of resolver name to bundled code
  */
 export async function bundleResolvers(
@@ -41,6 +47,7 @@ export async function bundleResolvers(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
+  bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config);
@@ -86,10 +93,17 @@ export async function bundleResolvers(
     tsconfig = undefined;
   }
 
-  // Process each resolver
-  const results = await Promise.all(
-    resolvers.map((resolver) =>
-      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
+  // Process each resolver, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
+  // memory use (each rolldown.build allocates its own module graph).
+  const results = await withBundleConcurrency(resolvers, (resolver) =>
+    bundleSingleResolver(
+      resolver,
+      outputDir,
+      tsconfig,
+      triggerContext,
+      cache,
+      inlineSourcemap,
+      bundleLogLevel,
     ),
   );
 
@@ -109,6 +123,7 @@ async function bundleSingleResolver(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
+  bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<[string, string]> {
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
@@ -117,6 +132,7 @@ async function bundleSingleResolver(
     serializedTriggerContext,
     tsconfig,
     inlineSourcemap,
+    bundleLogLevel,
   });
 
   const code = await withCache({
@@ -161,7 +177,7 @@ async function bundleSingleResolver(
       // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
       const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-      plugins.push(...cachePlugins);
+      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
         input: entryPath,
@@ -180,11 +196,9 @@ async function bundleSingleResolver(
         },
         tsconfig,
         plugins,
-        treeshake: {
-          moduleSideEffects: false,
-          annotations: true,
-          unknownGlobalSideEffects: false,
-        },
+        treeshake: composeFunctionTreeshakeOptions([
+          createLogLevelTreeshakeOptions(bundleLogLevel),
+        ]),
         logLevel: "silent",
       } as rolldown.BuildOptions);
 

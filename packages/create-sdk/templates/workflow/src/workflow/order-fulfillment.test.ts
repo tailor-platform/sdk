@@ -1,5 +1,4 @@
-import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
   processPayment,
@@ -8,11 +7,6 @@ import workflow, {
 } from "./order-fulfillment";
 
 describe("order fulfillment workflow", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-  });
-
   describe("individual job tests with .body()", () => {
     test("validateOrder accepts valid order", () => {
       const result = validateOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
@@ -49,16 +43,16 @@ describe("order fulfillment workflow", () => {
 
   describe("orchestration tests with mocked triggers", () => {
     test("fulfillOrder chains all jobs", async () => {
-      vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+      using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
         valid: true,
         orderId: "order-1",
       });
-      vi.spyOn(processPayment, "trigger").mockResolvedValue({
+      using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
         transactionId: "txn-order-1",
         amount: 100,
         status: "completed" as const,
       });
-      vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+      using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
         orderId: "order-1",
         transactionId: "txn-order-1",
         confirmed: true,
@@ -87,16 +81,16 @@ describe("order fulfillment workflow", () => {
     });
 
     test("workflow.mainJob.body() chains all jobs", async () => {
-      vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+      using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
         valid: true,
         orderId: "order-2",
       });
-      vi.spyOn(processPayment, "trigger").mockResolvedValue({
+      using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
         transactionId: "txn-order-2",
         amount: 200,
         status: "completed" as const,
       });
-      vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+      using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
         orderId: "order-2",
         transactionId: "txn-order-2",
         confirmed: true,
@@ -115,8 +109,6 @@ describe("order fulfillment workflow", () => {
 
   describe("integration tests with .trigger()", () => {
     test("workflow.mainJob.trigger() executes all jobs", async () => {
-      vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({}));
-
       const result = await workflow.mainJob.trigger({
         orderId: "order-3",
         amount: 300,

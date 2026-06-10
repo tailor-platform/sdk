@@ -1,11 +1,20 @@
+nodeLinker: hoisted
+saveExact: true
+
 minimumReleaseAge: 4320 # 3 days
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
   - "@tailor-platform/*"
   - "@toiroakr/lines-db"
   - politty
   - zinfer
-  # Renovate security update: kysely@0.28.14
-  - kysely@0.28.14
+
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Pre-existing transitive version without provenance attestation.
+  - "@swc/core@1.12.11"
 
 packages:
   - packages/*
@@ -17,5 +26,14 @@ allowBuilds:
   "@swc/core": true
   esbuild: true
   lefthook: true
-  multiline-ts: true
-  oxc-resolver: true
+  # Postinstall scripts not needed for our workspace:
+  # - multiline-ts: only has `preinstall: npx only-allow pnpm` (pnpm guard for
+  #   its own dev, not us).
+  # - oxc-resolver / unrs-resolver / @prisma/engines / protobufjs: napi-style
+  #   binary packages whose top-level install hook is unused — runtime loads
+  #   the per-platform `@<scope>/binding-*` sub-package directly.
+  multiline-ts: false
+  oxc-resolver: false
+  "@prisma/engines": false
+  protobufjs: false
+  unrs-resolver: false

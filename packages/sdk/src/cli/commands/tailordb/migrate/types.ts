@@ -2,7 +2,7 @@
  * Types for TailorDB migration execution
  */
 
-import { formatMigrationNumber } from "./snapshot";
+import { formatMigrationNumber } from "./migration-number";
 import type { MigrationDiff } from "./diff-calculator";
 
 // ============================================================================
@@ -49,8 +49,10 @@ export const SCHEMA_ERROR_PATTERNS = [
 export interface PendingMigration {
   /** Migration number */
   number: number;
-  /** Path to migration script file */
+  /** Path to migration script file (may not exist on disk) */
   scriptPath: string;
+  /** Whether a migration script file exists on disk for this migration */
+  hasScript: boolean;
   /** Path to diff file */
   diffPath: string;
   /** Namespace this migration belongs to */
