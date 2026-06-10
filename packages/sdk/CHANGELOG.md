@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.60.0
+
+### Minor Changes
+
+- [#1370](https://github.com/tailor-platform/sdk/pull/1370) [`ca4e049`](https://github.com/tailor-platform/sdk/commit/ca4e0494d8f3069e91e55c0b8ccc15ed1e6b567b) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `authconnection open` command to open the auth connections page in the Tailor Platform Console. The `authconnection authorize` command now also points to this Console flow when the local callback server cannot be started, and the auth connection docs note that managing connections via `tailor.config.ts` is unreliable for shared and CI deploys (a deploy without the local `.tailor-sdk/` secret state recreates the connection and discards its token) — create connections and tokens from the Console instead.
+
+### Patch Changes
+
+- [#1386](https://github.com/tailor-platform/sdk/pull/1386) [`34aba6c`](https://github.com/tailor-platform/sdk/commit/34aba6c66fd60a2614fe37a4eee07b0252592894) Thanks [@toiroakr](https://github.com/toiroakr)! - Stabilize the `withBundleConcurrency` unit tests by driving their worker delays with fake timers instead of real `setTimeout`, so they no longer flake with a 5s timeout when a CI runner is under load. No runtime behavior changes.
+
 ## 1.59.0
 
 ### Minor Changes
