@@ -1,5 +1,25 @@
 # @tailor-platform/sdk
 
+## 1.58.0
+
+### Minor Changes
+
+- [#1310](https://github.com/tailor-platform/sdk/pull/1310) [`228b244`](https://github.com/tailor-platform/sdk/commit/228b244c9d2c617ac0ca7d2a354cc1cd6606327c) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(cli): add `authconnection delete` and use it during deploy
+
+  `tailor-sdk authconnection delete` removes an auth connection entirely (configuration, secret, and tokens), complementing `tailor-sdk authconnection revoke`, which only invalidates the active session and keeps the connection so it can be re-authorized. `deploy` now uses delete when it replaces or removes the auth connections it manages.
+
+- [#1367](https://github.com/tailor-platform/sdk/pull/1367) [`545f74b`](https://github.com/tailor-platform/sdk/commit/545f74b6af26fbc5d8b4c9e147af9b09fe2e4644) Thanks [@haru0017](https://github.com/haru0017)! - Add `customDomains` option to `defineStaticWebSite()` for associating custom domains with static websites, and `staticwebsite domain get` / `staticwebsite domain list` CLI commands for checking domain status and DNS CNAME targets.
+
+### Patch Changes
+
+- [#1368](https://github.com/tailor-platform/sdk/pull/1368) [`6c143bf`](https://github.com/tailor-platform/sdk/commit/6c143bfb913d8d866442edd6c8f60c02e818e6ba) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: consolidate the per-resource TRN builder functions and inline `${trnPrefix(...)}:<kind>:<name>` template literals scattered across the deploy commands into a single typed `resourceTrn(workspaceId, kind, name)` helper. No user-facing behavior change.
+
+- [#1376](https://github.com/tailor-platform/sdk/pull/1376) [`cf1d87c`](https://github.com/tailor-platform/sdk/commit/cf1d87cfb6a379bbf1d0448ea0ec306c0dae4611) Thanks [@toiroakr](https://github.com/toiroakr)! - Reword CLI `--help` text and the bundled documentation to describe user-facing behavior instead of internal implementation details. The `api` and `function logs` command notes no longer expose internal terms such as proto/RPC names, the `TestExecScript` API, or bundle sourcemap/content-hash mechanics, and the auth docs drop the internal "SDK vs Platform Naming" note. No runtime behavior changes.
+
+- [#1352](https://github.com/tailor-platform/sdk/pull/1352) [`a3bf971`](https://github.com/tailor-platform/sdk/commit/a3bf9710b337e44b505f0acd6d814821849f4c60) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.5.1
+
+- [#1353](https://github.com/tailor-platform/sdk/pull/1353) [`f0cfb61`](https://github.com/tailor-platform/sdk/commit/f0cfb61dcadb47819a8916da9bcf9b63a4ff5706) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.2
+
 ## 1.57.0
 
 ### Minor Changes
