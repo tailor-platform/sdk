@@ -1,7 +1,7 @@
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { trnPrefix } from "@/cli/commands/deploy/label";
+import { resourceTrn } from "@/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
@@ -89,7 +89,7 @@ async function set(options: SetOptions): Promise<void> {
   });
 
   // 6. Get current migration number
-  const trn = `${trnPrefix(workspaceId)}:tailordb:${targetNamespace}`;
+  const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
   let currentMigration: number;
   try {
     const { metadata } = await client.getMetadata({ trn });

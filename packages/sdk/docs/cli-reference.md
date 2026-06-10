@@ -130,8 +130,8 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration script](./cli/tailordb.md#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
 | [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
-| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export Liam ERD dist from applied TailorDB schema.                                                                        |
-| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve ERD locally (liam build + serve dist). (beta)                                                          |
+| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
+| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
 | [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
 
 ### [Query Commands](./cli/query.md)
@@ -200,15 +200,16 @@ Commands for managing workspaces and profiles.
 
 Commands for managing Auth service resources.
 
-| Command                                                            | Description                                              |
-| ------------------------------------------------------------------ | -------------------------------------------------------- |
-| [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.            |
-| [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections.                               |
-| [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection.                               |
-| [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.               |
-| [machineuser token](./cli/auth.md#machineuser-token)               | Get an access token for a machine user.                  |
-| [oauth2client list](./cli/auth.md#oauth2client-list)               | List all OAuth2 clients in the application.              |
-| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret). |
+| Command                                                            | Description                                                                           |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.                                         |
+| [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections.                                                            |
+| [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it). |
+| [authconnection delete](./cli/auth.md#authconnection-delete)       | Delete an auth connection entirely.                                                   |
+| [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.                                            |
+| [machineuser token](./cli/auth.md#machineuser-token)               | Get an access token for a machine user.                                               |
+| [oauth2client list](./cli/auth.md#oauth2client-list)               | List all OAuth2 clients in the application.                                           |
+| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret).                              |
 
 ### [Workflow Commands](./cli/workflow.md)
 
@@ -263,11 +264,13 @@ Commands for managing secrets and vaults.
 
 Commands for managing and deploying static websites.
 
-| Command                                                             | Description                                           |
-| ------------------------------------------------------------------- | ----------------------------------------------------- |
-| [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy) | Deploy a static website from a local build directory. |
-| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List all static websites in a workspace.              |
-| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a specific static website.             |
+| Command                                                                       | Description                                           |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy)           | Deploy a static website from a local build directory. |
+| [staticwebsite domain list](./cli/staticwebsite.md#staticwebsite-domain-list) | List custom domains for a static website.             |
+| [staticwebsite domain get](./cli/staticwebsite.md#staticwebsite-domain-get)   | Get details of a custom domain.                       |
+| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)               | List all static websites in a workspace.              |
+| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)                 | Get details of a specific static website.             |
 
 ### [Crash Report Commands](./cli/crashreport.md)
 

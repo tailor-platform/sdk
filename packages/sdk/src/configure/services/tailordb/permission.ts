@@ -39,6 +39,11 @@ type ActionPermission<
         | PermissionCondition<Level, User, Update, Type>
         | readonly PermissionCondition<Level, User, Update, Type>[];
       description?: string | undefined;
+      /**
+       * Whether matching records are granted (`true`) or denied (`false`).
+       * Omitting `permit` in this object form defaults to `deny` and emits a
+       * warning; set it explicitly. (The array shorthand defaults to `allow`.)
+       */
       permit?: boolean;
     }
   | readonly [...PermissionCondition<Level, User, Update, Type>, ...([] | [boolean])] // single array condition
@@ -55,6 +60,10 @@ type GqlPermissionPolicy<
 > = {
   conditions: readonly PermissionCondition<"gql", User, boolean, Type>[];
   actions: "all" | readonly GqlPermissionAction[];
+  /**
+   * Whether matching requests are granted (`true`) or denied (`false`).
+   * Omitting `permit` defaults to `deny` and emits a warning; set it explicitly.
+   */
   permit?: boolean;
   description?: string;
 };

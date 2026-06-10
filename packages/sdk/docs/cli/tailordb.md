@@ -28,11 +28,11 @@ tailor-sdk tailordb [command]
 
 **Commands**
 
-| Command                                     | Description                                                           |
-| ------------------------------------------- | --------------------------------------------------------------------- |
-| [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables.                   |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                                    |
-| [`tailordb erd`](#tailordb-erd)             | Generate ERD artifacts for TailorDB namespaces using Liam ERD. (beta) |
+| Command                                     | Description                                                               |
+| ------------------------------------------- | ------------------------------------------------------------------------- |
+| [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables.                       |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                                        |
+| [`tailordb erd`](#tailordb-erd)             | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta) |
 
 <!-- politty:command:tailordb:subcommands:end -->
 
@@ -357,7 +357,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:tailordb erd:description:start -->
 
-Generate ERD artifacts for TailorDB namespaces using Liam ERD. (beta)
+Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)
 
 <!-- politty:command:tailordb erd:description:end -->
 
@@ -375,11 +375,11 @@ tailor-sdk tailordb erd [command]
 
 **Commands**
 
-| Command                                       | Description                                                      |
-| --------------------------------------------- | ---------------------------------------------------------------- |
-| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema.               |
-| [`tailordb erd serve`](#tailordb-erd-serve)   | Generate and serve ERD locally (liam build + serve dist). (beta) |
-| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s).             |
+| Command                                       | Description                                                       |
+| --------------------------------------------- | ----------------------------------------------------------------- |
+| [`tailordb erd export`](#tailordb-erd-export) | Export TailorDB ERD static viewer from local TailorDB schema.     |
+| [`tailordb erd serve`](#tailordb-erd-serve)   | Generate and serve TailorDB ERD locally with watch reload. (beta) |
+| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s).              |
 
 <!-- politty:command:tailordb erd:subcommands:end -->
 
@@ -396,7 +396,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:tailordb erd export:description:start -->
 
-Export Liam ERD dist from applied TailorDB schema.
+Export TailorDB ERD static viewer from local TailorDB schema.
 
 <!-- politty:command:tailordb erd export:description:end -->
 
@@ -414,13 +414,11 @@ tailor-sdk tailordb erd export [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                                          | Required | Default              | Env                               |
-| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                         | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                    | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                              | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                        | No       | -                    | -                                 |
-| `--output <OUTPUT>`             | `-o`  | Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) | No       | `".tailor-sdk/erd"`  | -                                 |
+| Option                    | Alias | Description                                                                                    | Required | Default              | Env                               |
+| ------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                                                        | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                  | No       | -                    | -                                 |
+| `--output <OUTPUT>`       | `-o`  | Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`) | No       | `".tailor-sdk/erd"`  | -                                 |
 
 <!-- politty:command:tailordb erd export:options:end -->
 
@@ -437,7 +435,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:tailordb erd serve:description:start -->
 
-Generate and serve ERD locally (liam build + serve dist). (beta)
+Generate and serve TailorDB ERD locally with watch reload. (beta)
 
 <!-- politty:command:tailordb erd serve:description:end -->
 
@@ -455,12 +453,12 @@ tailor-sdk tailordb erd serve [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                               | Required | Default              | Env                               |
-| ------------------------------- | ----- | ------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                              | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                         | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | No       | -                    | -                                 |
+| Option                    | Alias | Description                                                               | Required | Default              | Env                               |
+| ------------------------- | ----- | ------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                                   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | No       | -                    | -                                 |
+| `--port <PORT>`           | -     | Local server port (0 selects a free port)                                 | No       | `0`                  | -                                 |
+| `--open`                  | -     | Open the ERD viewer in the default browser                                | No       | `false`              | -                                 |
 
 <!-- politty:command:tailordb erd serve:options:end -->
 
@@ -509,6 +507,13 @@ tailor-sdk tailordb erd deploy [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:tailordb erd deploy:global-options-link:end -->
+
+**Notes:**
+
+- ERD commands build from the local TailorDB schema, including plugin-generated TailorDB types.
+- `tailordb erd export` writes a self-contained `index.html` viewer to `<output>/<namespace>/dist`.
+- `tailordb erd serve` watches the config file and TailorDB type files, then reloads the browser viewer when the rebuilt `index.html` reports a new embedded schema revision.
+- `tailordb erd deploy` still requires `erdSite` in `tailor.config.ts` because it uploads the generated viewer to a configured Static Website.
 
 **Usage Examples:**
 

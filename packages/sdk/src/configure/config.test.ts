@@ -10,4 +10,11 @@ describe("defineConfig", () => {
       unknownProperty: "value",
     });
   });
+
+  test("accepts logLevel from an environment variable fallback", () => {
+    defineConfig({
+      name: "my-app",
+      logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+    });
+  });
 });

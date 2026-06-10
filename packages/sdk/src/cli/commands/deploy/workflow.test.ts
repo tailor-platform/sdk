@@ -170,7 +170,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(2);
-      expect(result.changeSet.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
         "workflow-1",
         "workflow-2",
       ]);

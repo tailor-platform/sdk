@@ -34,8 +34,7 @@ async function discoverCases(codemodPath: string): Promise<FixtureCase[]> {
     });
   }
 
-  cases.sort((a, b) => a.caseName.localeCompare(b.caseName));
-  return cases;
+  return cases.toSorted((a, b) => a.caseName.localeCompare(b.caseName));
 }
 
 async function runFixtureCases(codemodPath: string): Promise<void> {

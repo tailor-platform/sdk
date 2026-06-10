@@ -11,7 +11,10 @@ import { connectionNameArgs } from "./args";
 
 export const revokeAuthConnectionCommand = defineAppCommand({
   name: "revoke",
-  description: "Revoke an auth connection.",
+  description:
+    "Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it).",
+  notes:
+    "Revoke invalidates the connection's active session and tokens but keeps the connection and its stored credentials, so it can be re-authorized later. Use `delete` to remove the connection entirely.",
   args: z
     .object({
       ...workspaceArgs,

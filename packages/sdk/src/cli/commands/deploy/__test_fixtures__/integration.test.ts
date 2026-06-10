@@ -66,7 +66,7 @@ describe("deploy command integration tests", () => {
   });
 
   test("compare directory structure", () => {
-    const actualFiles = collectGeneratedFiles(outputDir).sort();
+    const actualFiles = collectGeneratedFiles(outputDir).toSorted();
 
     // Plugin-generated files should exist on disk
     const pluginFiles = actualFiles.filter((f) => f === "db.ts" || f === "enums.ts");

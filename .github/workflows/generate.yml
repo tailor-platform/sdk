@@ -29,10 +29,18 @@ jobs:
       - name: Run generate
         run: pnpm -r run generate
 
+      # The "expected" generator fixtures come from a separate config
+      # (tailor.config.expected.ts) that `pnpm generate` and CI tests don't
+      # cover; regenerate them so the commit step below catches any drift.
+      - name: Update generator expected fixtures
+        run: pnpm --filter example run test:generator:update-expects
+
       - name: Get changed files
         id: changes
         run: |
-          files=$(git diff --name-only | tr '\n' ' ')
+          # Include untracked files too, so newly generated fixtures (e.g. a
+          # schema for a new type) are committed and not silently dropped.
+          files=$( { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u | tr '\n' ' ')
           echo "files=${files}" >> "$GITHUB_OUTPUT"
 
       - name: Commit changes

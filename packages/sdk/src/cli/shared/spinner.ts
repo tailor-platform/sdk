@@ -57,7 +57,7 @@ function installSignalHook(): void {
   // the spinner frame on the same line — by the time we got control. Running
   // first lets us tear down the spinner line cleanly first.
   const handler = (): void => {
-    for (const s of [...activeSpinners]) s.stop();
+    for (const s of activeSpinners) s.stop();
   };
   process.prependListener("SIGINT", handler);
   process.prependListener("SIGTERM", handler);

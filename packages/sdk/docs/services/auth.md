@@ -521,14 +521,3 @@ tailor-sdk oauth2client get <name>
 ```
 
 See [Auth Resource Commands](../cli/auth.md) for full documentation.
-
-## SDK vs Platform Naming
-
-> **Note for Platform developers**: The SDK uses different names than the underlying Platform API for user attributes:
->
-> | SDK             | Platform API    | Description                      |
-> | --------------- | --------------- | -------------------------------- |
-> | `attributes`    | `attribute_map` | Key-value map of user attributes |
-> | `attributeList` | `attributes`    | Ordered list of UUID values      |
->
-> This mapping is handled automatically by the SDK. If you're reading Platform documentation or API responses, be aware of this naming difference.

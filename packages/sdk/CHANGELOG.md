@@ -1,5 +1,57 @@
 # @tailor-platform/sdk
 
+## 1.58.0
+
+### Minor Changes
+
+- [#1310](https://github.com/tailor-platform/sdk/pull/1310) [`228b244`](https://github.com/tailor-platform/sdk/commit/228b244c9d2c617ac0ca7d2a354cc1cd6606327c) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(cli): add `authconnection delete` and use it during deploy
+
+  `tailor-sdk authconnection delete` removes an auth connection entirely (configuration, secret, and tokens), complementing `tailor-sdk authconnection revoke`, which only invalidates the active session and keeps the connection so it can be re-authorized. `deploy` now uses delete when it replaces or removes the auth connections it manages.
+
+- [#1367](https://github.com/tailor-platform/sdk/pull/1367) [`545f74b`](https://github.com/tailor-platform/sdk/commit/545f74b6af26fbc5d8b4c9e147af9b09fe2e4644) Thanks [@haru0017](https://github.com/haru0017)! - Add `customDomains` option to `defineStaticWebSite()` for associating custom domains with static websites, and `staticwebsite domain get` / `staticwebsite domain list` CLI commands for checking domain status and DNS CNAME targets.
+
+### Patch Changes
+
+- [#1368](https://github.com/tailor-platform/sdk/pull/1368) [`6c143bf`](https://github.com/tailor-platform/sdk/commit/6c143bfb913d8d866442edd6c8f60c02e818e6ba) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: consolidate the per-resource TRN builder functions and inline `${trnPrefix(...)}:<kind>:<name>` template literals scattered across the deploy commands into a single typed `resourceTrn(workspaceId, kind, name)` helper. No user-facing behavior change.
+
+- [#1376](https://github.com/tailor-platform/sdk/pull/1376) [`cf1d87c`](https://github.com/tailor-platform/sdk/commit/cf1d87cfb6a379bbf1d0448ea0ec306c0dae4611) Thanks [@toiroakr](https://github.com/toiroakr)! - Reword CLI `--help` text and the bundled documentation to describe user-facing behavior instead of internal implementation details. The `api` and `function logs` command notes no longer expose internal terms such as proto/RPC names, the `TestExecScript` API, or bundle sourcemap/content-hash mechanics, and the auth docs drop the internal "SDK vs Platform Naming" note. No runtime behavior changes.
+
+- [#1352](https://github.com/tailor-platform/sdk/pull/1352) [`a3bf971`](https://github.com/tailor-platform/sdk/commit/a3bf9710b337e44b505f0acd6d814821849f4c60) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.5.1
+
+- [#1353](https://github.com/tailor-platform/sdk/pull/1353) [`f0cfb61`](https://github.com/tailor-platform/sdk/commit/f0cfb61dcadb47819a8916da9bcf9b63a4ff5706) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.2
+
+## 1.57.0
+
+### Minor Changes
+
+- [#1319](https://github.com/tailor-platform/sdk/pull/1319) [`77754c2`](https://github.com/tailor-platform/sdk/commit/77754c264f3a18ccea2fb2ee2a144da4768b09a9) Thanks [@dqn](https://github.com/dqn)! - Replace the Liam-based `tailordb erd` beta commands with a TailorDB-specific ERD viewer generated from local TailorDB schema. `tailordb erd export` writes a single self-contained `index.html` under `<output>/<namespace>/dist` (CSS, JS, and the schema are inlined as separately extractable blocks), `tailordb erd serve` runs a built-in local server with watch reload and `--port` / `--open`, and `tailordb erd deploy` uploads the generated viewer while keeping the existing `erdSite` requirement.
+
+### Patch Changes
+
+- [#1309](https://github.com/tailor-platform/sdk/pull/1309) [`9e4c726`](https://github.com/tailor-platform/sdk/commit/9e4c726c1a84ac70ba7bc74aaf4765173562ed0e) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): track auth connection ownership via platform labels
+
+  `deploy` now tags auth connections with SDK ownership labels and uses them to decide which connections to manage, matching every other auth resource. Connections that are not labeled by the SDK are treated as unowned: they are surfaced in the unmanaged-resource confirmation prompt rather than silently deleted, and once you confirm adoption the SDK label is written even when the connection is otherwise unchanged, so later deploys recognize it as owned. Auth connection deletions are also shown in the deletion confirmation prompt.
+
+## 1.56.1
+
+### Patch Changes
+
+- [#1347](https://github.com/tailor-platform/sdk/pull/1347) [`6888110`](https://github.com/tailor-platform/sdk/commit/6888110fa61f9f3fd991e0fb44e86fd37f9536f3) Thanks [@dqn](https://github.com/dqn)! - Fix resolver field builders (`t.*`) leaking metadata between fields. `description()`, `typeName()`, and `validate()` now return a new field instead of mutating the original, so a field instance reused across places (for example shared between a resolver's `input` and `output`, or a record passed to `t.object`) no longer leaks its metadata into the other usages. This matches the existing `db.*` behavior.
+
+- [#1346](https://github.com/tailor-platform/sdk/pull/1346) [`0254e3c`](https://github.com/tailor-platform/sdk/commit/0254e3caff0d1eeb7407d8932385bf5bdbaf4356) Thanks [@dqn](https://github.com/dqn)! - Warn when a permission rule is written in object form without an explicit `permit`. Object-format rules (e.g. `read: [{ conditions: [...] }]`) default to `deny`, unlike the array shorthand which defaults to `allow`, so omitting `permit` can silently lock out access you meant to grant. The CLI now flags these rules during generate/deploy so you can set `permit: true` (allow) or `permit: false` (deny) explicitly. Runtime behavior is unchanged. This covers TailorDB record permissions, TailorDB GraphQL permissions, and IdP permissions.
+
+## 1.56.0
+
+### Minor Changes
+
+- [#1341](https://github.com/tailor-platform/sdk/pull/1341) [`64b07b4`](https://github.com/tailor-platform/sdk/commit/64b07b4c6f1db868abf2e1ebb9097e0e2f2f3cc6) Thanks [@dqn](https://github.com/dqn)! - Add a `logLevel` config option to remove lower-level `console.*` calls from bundled deployment functions.
+
+### Patch Changes
+
+- [#1345](https://github.com/tailor-platform/sdk/pull/1345) [`ec863f1`](https://github.com/tailor-platform/sdk/commit/ec863f13e7a3ca43e40ad413c1bbe47cd5567c95) Thanks [@dqn](https://github.com/dqn)! - Fix `seed --truncate` deleting only the first page of Built-In IdP `_User` records. The generated truncation script used incorrect pagination keys, so projects with more than one page of users were left with the remaining pages while the command still reported success. All pages are now deleted.
+
+- [#1344](https://github.com/tailor-platform/sdk/pull/1344) [`d3f22da`](https://github.com/tailor-platform/sdk/commit/d3f22da5a9bcd44ca9659ac35a68a20a2cbc1c2a) Thanks [@dqn](https://github.com/dqn)! - Fix CLI auth config losing keyring-stored logins. Running any command without `TAILOR_USE_KEYRING` no longer downgrades `config.yaml` in a way that drops `storage: keyring` users (and dangles their `current_user` reference), which previously logged keyring users out. Configs containing keyring users now stay in V2 format; file-only configs still downgrade to V1 for backward compatibility.
+
 ## 1.55.2
 
 ### Patch Changes

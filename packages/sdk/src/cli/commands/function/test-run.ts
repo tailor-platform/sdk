@@ -146,6 +146,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         sourceFile: filePath,
         env: config.env ?? {},
         inlineSourcemap: config.inlineSourcemap,
+        logLevel: config.logLevel,
         machineUser,
         workspaceId,
       }));

@@ -20,13 +20,14 @@ import {
 } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
-import { parseIdPPermission } from "@/parser/service/idp/permission";
+import { findOmittedPermitRules, parseIdPPermission } from "@/parser/service/idp/permission";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
@@ -225,10 +226,6 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteIdPServiceRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
-}
-
 type ComparableIdPService = {
   authorization: string | undefined;
   lang: IdPLang;
@@ -251,7 +248,7 @@ function normalizeComparableUserAuthPolicy(
     passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
     passwordMinLength: policy?.passwordMinLength ?? 0,
     passwordMaxLength: policy?.passwordMaxLength ?? 0,
-    allowedEmailDomains: [...(policy?.allowedEmailDomains ?? [])].sort(),
+    allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,
     allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
@@ -386,7 +383,7 @@ async function planServices(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.namespace.name),
+        trn: resourceTrn(workspaceId, "idp", resource.namespace.name),
       });
       existingServices[resource.namespace.name] = {
         resource,
@@ -400,7 +397,7 @@ async function planServices(
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, namespaceName),
+      trn: resourceTrn(workspaceId, "idp", namespaceName),
       appName,
       appId,
     });
@@ -433,6 +430,12 @@ async function planServices(
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);
+    }
+    const omittedPermitLocations = findOmittedPermitRules(idp.permission);
+    if (omittedPermitLocations.length > 0) {
+      logger.warn(
+        `IdP service "${namespaceName}" has permission rule(s) ${omittedPermitLocations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+      );
     }
     const parsedPermission = parseIdPPermission(idp.permission);
     const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;

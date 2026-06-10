@@ -44,7 +44,7 @@ jobs:
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
       - name: Run tests
-        run: pnpm -r run test --project unit
+        run: pnpm -r run test --project 'unit*'
 
   test-summary:
     needs: [test]

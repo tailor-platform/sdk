@@ -187,7 +187,7 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
         "tailordb-1",
         "tailordb-2",
       ]);

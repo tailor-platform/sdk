@@ -1,29 +1,34 @@
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
-import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import type { OperatorClient } from "@/cli/shared/client";
-import type { AppConfig } from "@/types/app-config";
 
-export interface ErdCommandContext {
+export interface ErdDeployContext {
   client: OperatorClient;
   workspaceId: string;
-  config: AppConfig;
 }
 
-type ErdCommandOptions = {
+type ErdDeployContextOptions = {
   profile?: string;
   workspaceId?: string;
-  config?: string;
 };
 
 /**
- * Initialize shared ERD command context.
- * @param args - CLI arguments.
- * @returns Initialized context.
+ * Initialize shared ERD command behavior.
  */
-export async function initErdContext(args: ErdCommandOptions): Promise<ErdCommandContext> {
+export function initErdCommand(): void {
   logBetaWarning("tailordb erd");
+}
+
+/**
+ * Initialize platform context for ERD deployment.
+ * @param args - CLI arguments.
+ * @returns Initialized deploy context.
+ */
+export async function initErdDeployContext(
+  args: ErdDeployContextOptions,
+): Promise<ErdDeployContext> {
+  initErdCommand();
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: args.profile,
@@ -33,7 +38,6 @@ export async function initErdContext(args: ErdCommandOptions): Promise<ErdComman
     workspaceId: args.workspaceId,
     profile: args.profile,
   });
-  const { config } = await loadConfig(args.config);
 
-  return { client, workspaceId, config };
+  return { client, workspaceId };
 }

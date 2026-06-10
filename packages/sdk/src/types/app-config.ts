@@ -1,8 +1,12 @@
+import type { LogLevelEnum } from "./app-config.generated";
 import type { AuthConfig } from "./auth";
 import type { IdPConfig } from "./idp";
 import type { SecretsConfig } from "./secrets-config";
 import type { StaticWebsiteConfig } from "./staticwebsite-config";
 import type { TailorDBServiceInput } from "./tailordb";
+
+export type LogLevel = LogLevelEnum;
+export type LogLevelInput = LogLevel | (string & {});
 
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;
@@ -83,4 +87,9 @@ export interface AppConfig<
    * @default true
    */
   inlineSourcemap?: boolean;
+  /**
+   * Controls which `console.*` calls remain in bundled functions.
+   * @default "DEBUG"
+   */
+  logLevel?: LogLevelInput;
 }

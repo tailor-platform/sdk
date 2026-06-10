@@ -75,7 +75,7 @@ export async function generateExpectedFiles(): Promise<void> {
 async function listGeneratedFiles(dirPath: string, depth = 0, maxDepth = 3): Promise<void> {
   if (depth > maxDepth) return;
 
-  const items = fs.readdirSync(dirPath).sort();
+  const items = fs.readdirSync(dirPath).toSorted();
 
   for (const item of items) {
     const fullPath = path.join(dirPath, item);
