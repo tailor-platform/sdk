@@ -107,7 +107,16 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
 }
 
 /**
- * Create an interceptor that retries idempotent requests with backoff.
+ * Create an interceptor that retries failed unary requests with backoff.
+ *
+ * Retries any unary method on `Unavailable`/`ResourceExhausted`, and `Internal`
+ * only for methods declared idempotent, up to 3 attempts (despite the historical
+ * "idempotent" naming, the first two codes are retried regardless of idempotency).
+ * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
+ * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
+ * success, since it means a prior attempt already committed the resource
+ * server-side. Emits `logger.debug` traces on every retry and swallow so the
+ * cause of field `already_exists` failures can be diagnosed.
  * @internal
  * @returns Retry interceptor
  */
@@ -135,10 +144,18 @@ export function retryInterceptor(): Interceptor {
         // body is unused) and to actual retries (i > 0); a first-attempt
         // AlreadyExists is a genuine conflict and still surfaces.
         if (i > 0 && isRetrySafeCreateAlreadyExists(error, req.method.name)) {
+          logger.debug(
+            `retry: ${req.method.name} returned AlreadyExists on attempt ${i + 1}; ` +
+              `treating as success (prior attempt likely committed)`,
+          );
           return synthesizeEmptyUnaryResponse(req);
         }
         if (isRetirable(error, req.method.idempotency)) {
           lastError = error;
+          logger.debug(
+            `retry: ${req.method.name} attempt ${i + 1} failed with ` +
+              `${connectCodeName(error)}; retrying`,
+          );
           continue;
         }
         throw error;
@@ -146,6 +163,15 @@ export function retryInterceptor(): Interceptor {
     }
     throw lastError;
   };
+}
+
+/**
+ * Human-readable name for the Connect status code of an error, for diagnostics.
+ * @param error - Error thrown by a request (expected to be a ConnectError)
+ * @returns The Code name (e.g., "Unavailable"), or "unknown" for non-ConnectError
+ */
+function connectCodeName(error: unknown): string {
+  return error instanceof ConnectError ? Code[error.code] : "unknown";
 }
 
 /**
@@ -168,8 +194,13 @@ export function retryInterceptor(): Interceptor {
  *
  * An allowlist miss is safe: the resource simply loses race protection and an
  * `already_exists` surfaces loudly, as before — never a silent empty response.
+ *
+ * A drift guard (see client.test.ts) fails CI if any `client.create*` used in the
+ * deploy flow is neither listed here nor explicitly classified as response-consuming,
+ * so a newly added apply create cannot silently miss this list.
+ * @internal
  */
-const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
+export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
   "CreateApplication",
   "CreateAuthConnection",
   "CreateAuthHook",

@@ -1,6 +1,8 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
-import { afterEach, describe, test, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
 import {
   createTransport,
   fetchAll,
@@ -9,6 +11,7 @@ import {
   MAX_PAGE_SIZE,
   parseMethodName,
   resolveStaticWebsiteUrls,
+  RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
   type OperatorClient,
 } from "./client";
@@ -108,6 +111,15 @@ describe("fetchPaged", () => {
 });
 
 describe("retryInterceptor", () => {
+  // Stub timers so the real backoff (500ms base) does not slow the suite or make
+  // it flaky under load; runAllTimersAsync below drives the awaited setTimeout.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   /**
    * Build a minimal unary request bound to a real OperatorService method so the
    * interceptor can read `method.name`/`method.output`/`method.idempotency`.
@@ -126,6 +138,17 @@ describe("retryInterceptor", () => {
     } as unknown as UnaryRequest;
   }
 
+  /**
+   * Drive the interceptor promise to completion under fake timers by flushing all
+   * pending backoff timers (and the microtasks they unblock).
+   * @param promise - The pending interceptor result
+   * @returns The settled interceptor result
+   */
+  async function settle<T>(promise: Promise<T>): Promise<T> {
+    await vi.runAllTimersAsync();
+    return promise;
+  }
+
   const okResponse = { stream: false, message: {} };
 
   test("retries on Unavailable then succeeds", async () => {
@@ -134,8 +157,8 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
       .mockResolvedValueOnce(okResponse);
 
-    const res = await retryInterceptor()(next)(
-      makeUnaryReq(OperatorService.method.createTailorDBType),
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
     );
 
     expect(res).toBe(okResponse);
@@ -150,8 +173,8 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
       .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
-    const res = await retryInterceptor()(next)(
-      makeUnaryReq(OperatorService.method.createTailorDBType),
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
     );
 
     expect(next).toHaveBeenCalledTimes(2);
@@ -166,7 +189,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
 
     await expect(
-      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(1);
   });
@@ -178,7 +201,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
 
     await expect(
-      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType)),
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(2);
   });
@@ -192,7 +215,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
 
     await expect(
-      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createIdPClient)),
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createIdPClient))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(2);
   });
@@ -205,10 +228,68 @@ describe("retryInterceptor", () => {
       stream: true,
       method: OperatorService.method.createTailorDBType,
     } as unknown as UnaryRequest;
-    const res = await retryInterceptor()(next)(req);
+    const res = await settle(retryInterceptor()(next)(req));
 
     expect(res).toBe(streamRes);
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  // Drift guard: every Create RPC invoked in the deploy/apply flow must be
+  // consciously classified — either retry-safe (response unused, in
+  // RETRY_SAFE_CREATE_METHODS) or explicitly exempt below. A newly added apply
+  // create then fails this test until classified, instead of silently missing
+  // the allowlist in production.
+  test("RETRY_SAFE_CREATE_METHODS covers every deploy Create or it is explicitly exempt", () => {
+    // Creates intentionally NOT treated as retry-safe:
+    const EXEMPT_DEPLOY_CREATES = new Set([
+      "CreateIdPClient", // consumes resp.client.clientSecret
+      "CreateWorkflowJobFunction", // consumes response.jobFunction.version
+      "CreateFunctionRegistry", // client-streaming: bypasses the retry loop
+    ]);
+
+    const deployDir = path.resolve(import.meta.dirname, "../commands/deploy");
+    const tsFiles: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".ts") && !entry.name.includes(".test.")) tsFiles.push(full);
+      }
+    };
+    walk(deployDir);
+
+    const used = new Set<string>();
+    const callRe = /client\.(create[A-Z][A-Za-z0-9]*)\s*\(/g;
+    for (const file of tsFiles) {
+      const src = fs.readFileSync(file, "utf8");
+      for (const m of src.matchAll(callRe)) {
+        const local = m[1];
+        used.add(local.charAt(0).toUpperCase() + local.slice(1));
+      }
+    }
+
+    // Sanity: the scan actually found deploy creates (guards against a broken regex/path).
+    expect(used.has("CreateTailorDBType")).toBe(true);
+
+    const unclassified = [...used].filter(
+      (name) => !RETRY_SAFE_CREATE_METHODS.has(name) && !EXEMPT_DEPLOY_CREATES.has(name),
+    );
+    // On failure the diff lists the offending method(s). Each must be added to
+    // RETRY_SAFE_CREATE_METHODS (if its response body is unused) or to
+    // EXEMPT_DEPLOY_CREATES (if its response is consumed / it is streaming).
+    expect(unclassified).toEqual([]);
+  });
+
+  test("every RETRY_SAFE_CREATE_METHODS entry is a real OperatorService method", () => {
+    const realCreateNames = new Set(
+      Object.values(OperatorService.method)
+        .map((m) => m.name)
+        .filter((name) => name.startsWith("Create")),
+    );
+    // On failure the diff lists the unknown name(s) — fix the typo/rename in
+    // RETRY_SAFE_CREATE_METHODS to match the OperatorService method name.
+    const typos = [...RETRY_SAFE_CREATE_METHODS].filter((name) => !realCreateNames.has(name));
+    expect(typos).toEqual([]);
   });
 });
 
