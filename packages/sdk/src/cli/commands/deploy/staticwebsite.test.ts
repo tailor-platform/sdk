@@ -272,7 +272,7 @@ describe("planStaticWebsite", () => {
 
     expect(result.customDomainChangeSet.creates).toHaveLength(0);
     expect(result.customDomainChangeSet.deletes).toHaveLength(2);
-    expect(result.customDomainChangeSet.deletes.map((d) => d.name).sort()).toEqual([
+    expect(result.customDomainChangeSet.deletes.map((d) => d.name).toSorted()).toEqual([
       "another.example.com",
       "old.example.com",
     ]);
