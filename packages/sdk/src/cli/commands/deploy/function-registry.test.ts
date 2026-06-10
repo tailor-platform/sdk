@@ -148,7 +148,7 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.changeSet.creates).toHaveLength(3);
-      expect(result.changeSet.creates.map((c) => c.name).sort()).toEqual([
+      expect(result.changeSet.creates.map((c) => c.name).toSorted()).toEqual([
         "executor/user-created",
         "resolver/ns/getUser",
         "workflow-job/process-order",
@@ -259,7 +259,7 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(2);
-      expect(result.changeSet.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
         "executor/my-executor",
         "resolver/ns/getUser",
       ]);

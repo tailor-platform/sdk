@@ -296,7 +296,7 @@ describe("planExecutor", () => {
 
       // All should be deleted
       expect(result.changeSet.deletes).toHaveLength(3);
-      expect(result.changeSet.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
         "executor-1",
         "executor-2",
         "executor-3",

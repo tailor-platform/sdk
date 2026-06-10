@@ -668,7 +668,7 @@ function normalizeComparableAuthIdPConfig(idpConfig: {
             config: {
               case: "oidc" as const,
               value: {
-                ...(oidcValue ?? {}),
+                ...oidcValue,
                 issuerUrl:
                   oidcValue && "issuerUrl" in oidcValue
                     ? oidcValue.issuerUrl || undefined
@@ -1342,7 +1342,7 @@ function normalizeComparableOAuth2Client(
     // Platform returns an empty string for an unset description; treat it the same as omitted.
     description: client.description || undefined,
     redirectUris: normalizeStringArray(client.redirectUris),
-    grantTypes: [...(client.grantTypes ?? [])].sort((left, right) => left - right),
+    grantTypes: (client.grantTypes ?? []).toSorted((left, right) => left - right),
     accessTokenLifetime: accessTokenLifetime ?? 86400,
     refreshTokenLifetime: refreshTokenLifetime ?? 604800,
     requireDpop: client.requireDpop ?? false,

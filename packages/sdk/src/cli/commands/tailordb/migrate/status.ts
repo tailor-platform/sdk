@@ -87,7 +87,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     const availableNumbers = migrationFiles
       .map((f) => f.number)
       .filter((n, i, arr) => arr.indexOf(n) === i) // deduplicate
-      .sort((a, b) => a - b);
+      .toSorted((a, b) => a - b);
     const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
 
     const pendingMigrations = pendingNumbers.map((num) => {

@@ -624,8 +624,7 @@ export function getMigrationFiles(
   }
 
   // Sort by number
-  migrations.sort((a, b) => a.number - b.number);
-  return migrations;
+  return migrations.toSorted((a, b) => a.number - b.number);
 }
 
 /**
@@ -1626,7 +1625,7 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
   }
 
   // Get all migration numbers
-  const allNumbers = [...new Set([...schemaFiles, ...diffFiles])].sort((a, b) => a - b);
+  const allNumbers = [...new Set([...schemaFiles, ...diffFiles])].toSorted((a, b) => a - b);
 
   if (allNumbers.length === 0) {
     return errors;

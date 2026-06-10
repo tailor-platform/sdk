@@ -152,14 +152,12 @@ export async function detectPendingMigrations(
   }
 
   // Sort by namespace and migration number
-  pendingMigrations.sort((a, b) => {
+  return pendingMigrations.toSorted((a, b) => {
     if (a.namespace !== b.namespace) {
       return a.namespace.localeCompare(b.namespace);
     }
     return a.number - b.number;
   });
-
-  return pendingMigrations;
 }
 
 // ============================================================================

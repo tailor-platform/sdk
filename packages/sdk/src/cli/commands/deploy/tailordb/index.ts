@@ -2114,7 +2114,7 @@ function normalizeComparableGqlPermission(permission: unknown) {
   return {
     policies: (normalized?.policies ?? []).map((policy) => ({
       ...policy,
-      actions: [...(policy.actions ?? [])].sort((left, right) => left - right),
+      actions: (policy.actions ?? []).toSorted((left, right) => left - right),
     })),
   };
 }

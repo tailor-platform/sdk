@@ -245,7 +245,7 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
   const normalized = normalizeProtoConfig(executor) ?? {};
   const webhookHeaders =
     normalized.targetConfig?.config?.case === "webhook"
-      ? [...(normalized.targetConfig.config.value.headers ?? [])].sort((left, right) =>
+      ? (normalized.targetConfig.config.value.headers ?? []).toSorted((left, right) =>
           (left.key ?? "").localeCompare(right.key ?? ""),
         )
       : undefined;
@@ -444,24 +444,22 @@ function protoExecutor(
       triggerConfig = {
         config: {
           case: "incomingWebhook",
-          value: {
-            ...(trigger.response
-              ? {
-                  response: {
-                    ...(trigger.response.body
-                      ? {
-                          body: {
-                            expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
-                          },
-                        }
-                      : {}),
-                    ...(trigger.response.statusCode != null
-                      ? { statusCode: trigger.response.statusCode }
-                      : {}),
-                  },
-                }
-              : {}),
-          },
+          value: trigger.response
+            ? {
+                response: {
+                  ...(trigger.response.body
+                    ? {
+                        body: {
+                          expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
+                        },
+                      }
+                    : {}),
+                  ...(trigger.response.statusCode != null
+                    ? { statusCode: trigger.response.statusCode }
+                    : {}),
+                },
+              }
+            : {},
         },
       };
       break;

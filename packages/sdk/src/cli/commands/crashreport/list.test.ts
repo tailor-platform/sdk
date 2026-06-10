@@ -42,8 +42,8 @@ describe("crashreport list command", () => {
     const files = fs
       .readdirSync(config.localDir!)
       .filter((f) => f.endsWith(".crash.log"))
-      .sort()
-      .reverse();
+      .toSorted()
+      .toReversed();
 
     expect(files).toEqual(["2026-03-02T00-00-00.crash.log", "2026-03-01T00-00-00.crash.log"]);
   });

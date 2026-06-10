@@ -563,7 +563,7 @@ function normalizeComparableWorkflowJobNames(
 ) {
   return Array.isArray(jobFunctions)
     ? jobFunctions.toSorted()
-    : Object.keys(jobFunctions ?? {}).sort();
+    : Object.keys(jobFunctions ?? {}).toSorted();
 }
 
 function getExistingWorkflowJobNames(existing: {
@@ -574,7 +574,7 @@ function getExistingWorkflowJobNames(existing: {
   if (existing.mainJobFunctionName) {
     jobNames.add(existing.mainJobFunctionName);
   }
-  return [...jobNames].sort();
+  return [...jobNames].toSorted();
 }
 
 function normalizeRetryPolicyForCompare(policy: {
