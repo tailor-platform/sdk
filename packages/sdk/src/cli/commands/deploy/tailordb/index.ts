@@ -80,8 +80,8 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
-  trnPrefix,
   type WithLabel,
 } from "../label";
 import {
@@ -147,7 +147,7 @@ async function getRemoteMigrationNumber(
   namespace: string,
 ): Promise<number | null> {
   try {
-    const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+    const trn = resourceTrn(workspaceId, "tailordb", namespace);
     const { metadata } = await client.getMetadata({ trn });
     const label = metadata?.labels?.["sdk-migration"];
     if (!label) return null; // No migration label means first apply
@@ -1199,10 +1199,6 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteTailorDBServiceRequestSchema>;
 };
 
-function trn(workspaceId: string, name: string) {
-  return `${trnPrefix(workspaceId)}:tailordb:${name}`;
-}
-
 function normalizeComparableTailorDBService(service: {
   namespace?: string;
   defaultTimezone?: string;
@@ -1268,7 +1264,7 @@ async function planServices(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.namespace.name),
+        trn: resourceTrn(workspaceId, "tailordb", resource.namespace.name),
       });
       existingServices[resource.namespace.name] = {
         resource,
@@ -1281,7 +1277,7 @@ async function planServices(
   for (const tailordb of tailordbs) {
     const existing = existingServices[tailordb.namespace];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, tailordb.namespace),
+      trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
       appName,
       appId,
       existingLabels: existing?.allLabels,

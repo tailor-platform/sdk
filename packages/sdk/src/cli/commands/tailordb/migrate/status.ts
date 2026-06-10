@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { trnPrefix } from "@/cli/commands/deploy/label";
+import { resourceTrn } from "@/cli/commands/deploy/label";
 import { deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
@@ -73,7 +73,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
   const statuses: MigrationStatusInfo[] = [];
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
-    const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+    const trn = resourceTrn(workspaceId, "tailordb", namespace);
     let currentMigration: number;
     try {
       const { metadata } = await client.getMetadata({ trn });

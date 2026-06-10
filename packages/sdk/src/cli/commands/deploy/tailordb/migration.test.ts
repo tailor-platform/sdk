@@ -23,9 +23,10 @@ import type { NamespaceWithMigrations } from "@/cli/commands/tailordb/migrate/co
 import type { PendingMigration } from "@/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "@/cli/shared/client";
 
-// Mock label.ts for trnPrefix
+// Mock label.ts for resourceTrn
 vi.mock("../label", () => ({
-  trnPrefix: (workspaceId: string) => `trn:v1:workspace:${workspaceId}`,
+  resourceTrn: (workspaceId: string, kind: string, name: string) =>
+    `trn:v1:workspace:${workspaceId}:${kind}:${name}`,
 }));
 
 // Mock logger to suppress output during tests
