@@ -12,8 +12,12 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { PluginManager } from "@/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
+import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import {
+  compareLocalTypesWithSnapshot,
+  createSnapshotFromLocalTypes,
   formatMigrationNumber,
   isValidMigrationNumber,
   reconstructSnapshotFromMigrations,
@@ -69,6 +73,71 @@ async function fetchRemoteTypes(
       throw error;
     }
   });
+}
+
+/**
+ * Verify that replaying the full migration history reproduces the current
+ * local type definitions, before anything is sent to the remote.
+ *
+ * Sync force-applies a snapshot reconstructed from the migration history, so
+ * the history itself must be trustworthy. When the reconstruction at the
+ * latest migration does not match the schema defined in the local type files,
+ * either the migration files were edited incorrectly or a schema change has
+ * not been recorded as a migration yet — and overwriting the remote with an
+ * unverified snapshot could destroy data. Fails before any RPC is issued.
+ * @param loaded - Result of `loadConfig` (config and plugins)
+ * @param target - Namespace whose migration history is being synced
+ */
+async function assertMigrationsReproduceLocalTypes(
+  loaded: Awaited<ReturnType<typeof loadConfig>>,
+  target: NamespaceWithMigrations,
+): Promise<void> {
+  const { config, plugins } = loaded;
+  const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
+  const { defineApplication } = await import("@/cli/services/application");
+  const application = defineApplication({ config, pluginManager });
+
+  const tailordbService = application.tailorDBServices.find(
+    (s) => s.namespace === target.namespace,
+  );
+  if (!tailordbService) {
+    throw new Error(`No TailorDB service found for namespace "${target.namespace}"`);
+  }
+  await tailordbService.loadTypes();
+  await tailordbService.processNamespacePlugins();
+
+  const latestSnapshot = reconstructSnapshotFromMigrations(target.migrationsDir);
+  if (!latestSnapshot) {
+    return; // No migrations at all — reported by the caller's snapshot check.
+  }
+  const currentSnapshot = createSnapshotFromLocalTypes(tailordbService.types, target.namespace);
+  const diff = compareLocalTypesWithSnapshot(
+    latestSnapshot,
+    currentSnapshot.types,
+    target.namespace,
+  );
+  if (!hasChanges(diff)) {
+    return;
+  }
+
+  logger.error(
+    `Migration history does not reproduce the current local schema for namespace ${styles.bold(target.namespace)}:`,
+  );
+  logger.log(formatMigrationDiff(diff));
+  logger.newline();
+  logger.info("This usually means one of the following:");
+  logger.info(
+    "  - Migration files were edited and replaying them no longer matches the type definitions — fix the migration files.",
+    { mode: "plain" },
+  );
+  logger.info(
+    "  - Type definitions changed without a new migration — run 'tailor-sdk tailordb migration generate' first.",
+    { mode: "plain" },
+  );
+  logger.newline();
+  throw new Error(
+    "Refusing to sync: the migration history must reproduce the current local schema before it can be applied to the remote.",
+  );
 }
 
 interface RemoteMigrationState {
@@ -131,7 +200,9 @@ function selectTargetNamespace(
  *
  * Reconstructs the schema state at `<number>` from `0000/schema.json` + diffs,
  * then issues create/update/delete RPCs so the remote matches that snapshot.
- * Updates the migration label to `<number>` on success.
+ * Updates the migration label to `<number>` on success. Before any remote
+ * mutation, verifies that the migration history reproduces the current local
+ * type definitions (see {@link assertMigrationsReproduceLocalTypes}).
  *
  * Intended for recovering from drift introduced by `deploy --no-schema-check`
  * runs against an older revision: instead of having to `git checkout` that
@@ -144,7 +215,8 @@ async function sync(options: SyncOptions): Promise<void> {
 
   const targetVersion = parseMigrationNumberArg(options.number);
 
-  const { config } = await loadConfig(options.configPath);
+  const loaded = await loadConfig(options.configPath);
+  const { config } = loaded;
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   const target = selectTargetNamespace(namespacesWithMigrations, options.namespace);
@@ -162,6 +234,8 @@ async function sync(options: SyncOptions): Promise<void> {
       `No initial schema snapshot found in ${target.migrationsDir}. Expected 0000/schema.json.`,
     );
   }
+
+  await assertMigrationsReproduceLocalTypes(loaded, target);
 
   const accessToken = await loadAccessToken({
     useProfile: false,

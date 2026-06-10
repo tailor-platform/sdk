@@ -12,6 +12,7 @@ import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
+  localTypes: {} as Record<string, unknown>,
   listTailorDBTypes: vi.fn(),
   createTailorDBType: vi.fn(),
   updateTailorDBType: vi.fn(),
@@ -41,6 +42,37 @@ vi.mock("@/cli/shared/readonly-guard", () => ({
 vi.mock("@/cli/shared/prompt", () => ({
   prompt: { confirm: vi.fn() },
 }));
+
+vi.mock("@/cli/services/application", () => ({
+  defineApplication: vi.fn(() => ({
+    tailorDBServices: [
+      {
+        namespace: "tailordb",
+        loadTypes: vi.fn().mockResolvedValue(undefined),
+        processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+        get types() {
+          return state.localTypes;
+        },
+      },
+    ],
+  })),
+}));
+
+// Parsed-type shape consumed by createSnapshotFromLocalTypes; produces the
+// same snapshot type as snapshotType() below.
+function parsedType(name: string): unknown {
+  return {
+    name,
+    pluralForm: `${name}s`,
+    fields: {
+      id: { config: { type: "uuid", required: true } },
+      name: { config: { type: "string", required: true } },
+    },
+    forwardRelationships: {},
+    backwardRelationships: {},
+    permissions: {},
+  };
+}
 
 function snapshotType(name: string): TailorDBSnapshotType {
   return {
@@ -94,6 +126,7 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
       db,
     },
+    plugins: [],
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
 }
 
@@ -109,6 +142,9 @@ describe("tailordb migration sync", () => {
     writeDiff(1, [{ kind: "type_added", typeName: "Post", after: snapshotType("Post") }]);
     writeDiff(2, []);
     mockConfig();
+    // Local types matching reconstruct(latest) so the pre-apply consistency
+    // check passes by default.
+    state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
 
     state.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [{ name: "User" }, { name: "Stale" }],
@@ -220,6 +256,22 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes", "--namespace", "nope"]);
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/not found or does not have migrations configured/);
+  });
+
+  test("refuses to apply when the migration history does not reproduce local types", async () => {
+    // Local types lack Post, but reconstruct(latest) contains it — the
+    // history (or the working tree) is inconsistent and nothing may be sent.
+    state.localTypes = { User: parsedType("User") };
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/must reproduce the current local schema/);
+    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(state.createTailorDBType).not.toHaveBeenCalled();
+    expect(state.updateTailorDBType).not.toHaveBeenCalled();
+    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
   test("makes no changes when the confirmation prompt is declined", async () => {
