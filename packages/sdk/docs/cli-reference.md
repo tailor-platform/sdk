@@ -200,15 +200,16 @@ Commands for managing workspaces and profiles.
 
 Commands for managing Auth service resources.
 
-| Command                                                            | Description                                              |
-| ------------------------------------------------------------------ | -------------------------------------------------------- |
-| [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.            |
-| [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections.                               |
-| [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection.                               |
-| [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.               |
-| [machineuser token](./cli/auth.md#machineuser-token)               | Get an access token for a machine user.                  |
-| [oauth2client list](./cli/auth.md#oauth2client-list)               | List all OAuth2 clients in the application.              |
-| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret). |
+| Command                                                            | Description                                                                           |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.                                         |
+| [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections.                                                            |
+| [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it). |
+| [authconnection delete](./cli/auth.md#authconnection-delete)       | Delete an auth connection entirely.                                                   |
+| [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.                                            |
+| [machineuser token](./cli/auth.md#machineuser-token)               | Get an access token for a machine user.                                               |
+| [oauth2client list](./cli/auth.md#oauth2client-list)               | List all OAuth2 clients in the application.                                           |
+| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret).                              |
 
 ### [Workflow Commands](./cli/workflow.md)
 

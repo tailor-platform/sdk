@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { planAuthConnections } from "./auth-connection";
+import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import type { AuthService } from "@/cli/services/auth/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
@@ -93,6 +93,8 @@ function createMockClient(opts: { connections: ConnectionFixture[] }): OperatorC
       };
     }),
     setMetadata: vi.fn().mockResolvedValue({}),
+    createAuthConnection: vi.fn().mockResolvedValue({}),
+    deleteAuthConnection: vi.fn().mockResolvedValue({}),
   } as unknown as OperatorClient;
 }
 
@@ -195,5 +197,49 @@ describe("planAuthConnections", () => {
     expect(changeSet.unchanged.map((u) => u.name)).toEqual(["owned-connection"]);
     expect(changeSet.updates.map((u) => u.name)).toEqual([]);
     expect(unmanaged.map((u) => u.resourceName)).toEqual([]);
+  });
+});
+
+describe("applyAuthConnections", () => {
+  beforeEach(() => {
+    mockLoadSecretsState.mockReset();
+    mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
+  });
+
+  test("delete phase removes connections via deleteAuthConnection", async () => {
+    const client = createMockClient({
+      connections: [{ name: "owned-connection", ownerLabel: appName }],
+    });
+    const result = await planAuthConnections(client, workspaceId, appName, undefined, emptyAuths);
+    expect(result.changeSet.deletes.map((d) => d.name)).toEqual(["owned-connection"]);
+
+    await applyAuthConnections(client, result, "delete-resources");
+
+    expect(client.deleteAuthConnection).toHaveBeenCalledWith({
+      workspaceId,
+      connectionName: "owned-connection",
+    });
+  });
+
+  test("replace deletes then recreates the connection", async () => {
+    const client = createMockClient({
+      connections: [{ name: "conn", ownerLabel: appName }],
+    });
+    const result = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      undefined,
+      authsWith(["conn"]),
+    );
+    expect(result.changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
+
+    await applyAuthConnections(client, result, "create-update");
+
+    expect(client.deleteAuthConnection).toHaveBeenCalledWith({
+      workspaceId,
+      connectionName: "conn",
+    });
+    expect(client.createAuthConnection).toHaveBeenCalled();
   });
 });

@@ -17,7 +17,7 @@ import type { ApplyPhase } from "./phase";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type {
   CreateAuthConnectionRequestSchema,
-  RevokeAuthConnectionRequestSchema,
+  DeleteAuthConnectionRequestSchema,
 } from "@tailor-proto/tailor/v1/auth_pb";
 import type { AuthConnection } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -35,14 +35,14 @@ type UpdateConnection = {
 
 type ReplaceConnection = {
   name: string;
-  revokeRequest: MessageInitShape<typeof RevokeAuthConnectionRequestSchema>;
+  deleteRequest: MessageInitShape<typeof DeleteAuthConnectionRequestSchema>;
   createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteConnection = {
   name: string;
-  request: MessageInitShape<typeof RevokeAuthConnectionRequestSchema>;
+  request: MessageInitShape<typeof DeleteAuthConnectionRequestSchema>;
 };
 
 function buildConnectionRequest(
@@ -200,7 +200,7 @@ export async function planAuthConnections(
       if (nonSecretChanged || secretChanged) {
         changeSet.replaces.push({
           name,
-          revokeRequest: { workspaceId, connectionName: name },
+          deleteRequest: { workspaceId, connectionName: name },
           createRequest: buildConnectionRequest(workspaceId, name, config),
           metaRequest,
         });
@@ -284,7 +284,7 @@ export async function applyAuthConnections(
     );
 
     for (const replace of changeSet.replaces) {
-      await client.revokeAuthConnection(replace.revokeRequest);
+      await client.deleteAuthConnection(replace.deleteRequest);
       await client.createAuthConnection(replace.createRequest);
       await client.setMetadata(replace.metaRequest);
     }
@@ -317,7 +317,7 @@ export async function applyAuthConnections(
   } else if (phase === "delete-resources" || phase === "delete") {
     await Promise.all(
       changeSet.deletes.map(async (del) => {
-        await client.revokeAuthConnection(del.request);
+        await client.deleteAuthConnection(del.request);
       }),
     );
 
