@@ -12,7 +12,7 @@
     },
     {
       "name": "docs-authoring",
-      "paths": ["packages/sdk/docs/**"],
+      "paths": ["packages/sdk/docs/**", "packages/sdk/src/**/*.ts"],
       "file": ".agents/rules/docs-authoring.md"
     },
     {

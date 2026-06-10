@@ -22,3 +22,7 @@ Never link to or mention private/internal repositories or internal issue tracker
 ## CLI docs are generated
 
 CLI reference content inside `<!-- politty:... -->` markers is generated from command definitions. Edit the `notes` / `description` strings in `packages/sdk/src/cli/**` and run `pnpm docs:update`; do not hand-edit generated regions.
+
+## Keep this rule and the CI check in sync
+
+The same principles are enforced in CI by `.github/workflows/docs-consistency-check.yml` (the "Reader-Perspective Review" section of its prompt). When you change the guidance here, update that workflow to match — and vice versa — so the rule humans read and the check CI runs do not drift apart.
