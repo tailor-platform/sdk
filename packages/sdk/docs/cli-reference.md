@@ -22,6 +22,18 @@ tailor-sdk <command> [options]
 
 <!-- politty:global-options:end -->
 
+### JSON Output
+
+For commands that return structured results, passing `--json` writes one parseable JSON document
+to stdout on success. Empty successful result sets are emitted as JSON values such as `[]`, not as
+human-readable text or empty stdout.
+
+Commands that only perform side effects and do not define a structured result may leave stdout empty
+even when `--json` is passed.
+
+Errors, warnings, progress, and diagnostic messages are written to stderr. On failure, check the
+non-zero exit code and read stderr; stdout is not guaranteed to contain a JSON error object.
+
 ## Common Options
 
 The following options are available for most commands:
@@ -53,22 +65,23 @@ tailor-sdk deploy --env-file .env --env-file .env.production
 
 You can use environment variables to configure workspace and authentication:
 
-| Variable                                     | Description                                                                  |
-| -------------------------------------------- | ---------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                         |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                    |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                |
-| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                |
-| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                          |
-| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                       |
-| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                      |
-| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                 |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                         |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                     |
-| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run` |
-| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)  |
-| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                             |
-| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                   |
+| Variable                                     | Description                                                                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                                              |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                         |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                     |
+| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                     |
+| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                                               |
+| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                            |
+| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                                           |
+| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                                      |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                              |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                          |
+| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`                      |
+| `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count |
+| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                       |
+| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                  |
+| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                        |
 
 ### Authentication Token Priority
 

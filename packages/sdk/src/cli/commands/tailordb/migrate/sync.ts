@@ -235,18 +235,29 @@ async function sync(options: SyncOptions): Promise<void> {
 
   const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
 
-  for (const typeName of creates) {
-    const tailordbType = manifests.get(typeName);
-    if (!tailordbType) continue;
+  // Resolve all manifests before issuing any RPC: a missing manifest
+  // indicates an internal inconsistency, and skipping or failing midway
+  // would leave the remote schema partially synced.
+  const manifestFor = (typeName: string) => {
+    const manifest = manifests.get(typeName);
+    if (!manifest) {
+      throw new Error(
+        `Internal error: no manifest generated for type "${typeName}". No changes were applied.`,
+      );
+    }
+    return manifest;
+  };
+  const createManifests = creates.map((typeName) => manifestFor(typeName));
+  const updateManifests = updates.map((typeName) => manifestFor(typeName));
+
+  for (const tailordbType of createManifests) {
     await client.createTailorDBType({
       workspaceId,
       namespaceName: target.namespace,
       tailordbType,
     });
   }
-  for (const typeName of updates) {
-    const tailordbType = manifests.get(typeName);
-    if (!tailordbType) continue;
+  for (const tailordbType of updateManifests) {
     await client.updateTailorDBType({
       workspaceId,
       namespaceName: target.namespace,
