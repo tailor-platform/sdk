@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "politty";
+import { defineCommand } from "politty";
 import { domainGetCommand } from "./get";
 import { domainListCommand } from "./list";
 
@@ -8,8 +8,5 @@ export const domainCommand = defineCommand({
   subCommands: {
     list: domainListCommand,
     get: domainGetCommand,
-  },
-  async run() {
-    await runCommand(domainListCommand, []);
   },
 });
