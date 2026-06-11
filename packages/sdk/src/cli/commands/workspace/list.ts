@@ -4,7 +4,11 @@ import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
-import { workspaceInfo, type WorkspaceInfo } from "./transform";
+import {
+  displayWorkspaceName,
+  workspaceInfosWithFolderNames,
+  type WorkspaceInfo,
+} from "./transform";
 
 export interface ListWorkspacesOptions {
   order?: Order;
@@ -33,7 +37,7 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
     { limit: options?.limit },
   );
 
-  return workspaces.map(workspaceInfo);
+  return workspaceInfosWithFolderNames(client, workspaces);
 }
 
 export const listCommand = defineAppCommand({
@@ -49,6 +53,8 @@ export const listCommand = defineAppCommand({
       order: args.order,
       limit: args.limit,
     });
-    logger.out(workspaces, { display: { updatedAt: null } });
+    logger.out(workspaces, {
+      display: { name: displayWorkspaceName, folderName: null, updatedAt: null },
+    });
   },
 });
