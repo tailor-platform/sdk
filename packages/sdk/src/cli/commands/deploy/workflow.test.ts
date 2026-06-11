@@ -63,13 +63,54 @@ describe("planWorkflow", () => {
       resource?: Record<string, unknown>;
       sdkVersion?: string;
     }>,
+    jobFunctionLabels?: Record<string, { label?: string; sdkVersion?: string }>,
   ): OperatorClient {
+    const inferredJobFunctionLabels: Record<string, { label?: string; sdkVersion?: string }> = {};
+    for (const workflow of existingWorkflows) {
+      const resource = workflow.resource;
+      if (!resource) {
+        continue;
+      }
+      const jobFunctions = resource.jobFunctions;
+      if (jobFunctions && typeof jobFunctions === "object" && !Array.isArray(jobFunctions)) {
+        for (const jobName of Object.keys(jobFunctions)) {
+          inferredJobFunctionLabels[jobName] = {
+            label: workflow.label,
+            sdkVersion: workflow.sdkVersion,
+          };
+        }
+      }
+      if (typeof resource.mainJobFunctionName === "string") {
+        inferredJobFunctionLabels[resource.mainJobFunctionName] = {
+          label: workflow.label,
+          sdkVersion: workflow.sdkVersion,
+        };
+      }
+    }
+    const labelsByJobFunction = { ...inferredJobFunctionLabels, ...jobFunctionLabels };
+
     return {
       listWorkflows: vi.fn().mockResolvedValue({
         workflows: existingWorkflows.map((w) => w.resource ?? { id: w.id, name: w.name }),
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+        const jobFunctionPrefix = `trn:v1:workspace:${workspaceId}:workflow_job_function:`;
+        if (trn.startsWith(jobFunctionPrefix)) {
+          const name = trn.slice(jobFunctionPrefix.length);
+          const jobFunction = labelsByJobFunction[name];
+          return {
+            metadata: {
+              labels: jobFunction?.label
+                ? {
+                    [sdkNameLabelKey]: jobFunction.label,
+                    "sdk-version": jobFunction.sdkVersion ?? "v1-0-0",
+                  }
+                : {},
+            },
+          };
+        }
+
         const name = trn.split(":").pop();
         const workflow = existingWorkflows.find((w) => w.name === name);
         return {
@@ -310,6 +351,35 @@ describe("planWorkflow", () => {
       expect(result.changeSet.deletes[0].name).toBe("removed-workflow");
       expect(result.changeSet.deletes[0]).toHaveProperty("deletableJobNames", []);
       expect(result.resourceOwners.has("other-app")).toBe(true);
+    });
+
+    test("job functions owned by another app are not deleted", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "removed-workflow",
+            label: appName,
+            resource: {
+              id: "1",
+              name: "removed-workflow",
+              mainJobFunctionName: "foreign-job",
+              jobFunctions: {
+                "foreign-job": "1",
+              },
+            },
+          },
+        ],
+        {
+          "foreign-job": { label: "other-app" },
+        },
+      );
+
+      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
+
+      expect(result.changeSet.deletes).toHaveLength(1);
+      expect(result.changeSet.deletes[0].name).toBe("removed-workflow");
+      expect(result.changeSet.deletes[0]).toHaveProperty("deletableJobNames", []);
     });
   });
 

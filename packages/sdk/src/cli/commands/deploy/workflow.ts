@@ -448,11 +448,21 @@ export async function planWorkflow(
     }
   });
 
+  const ownedDeletableJobNames = await fetchOwnedWorkflowJobNames({
+    client,
+    workspaceId,
+    appName,
+    appId,
+    jobNames: deleteWorkflows.flatMap((del) =>
+      del.usedJobNames.filter((jobName) => !retainedWorkflowJobNames.has(jobName)),
+    ),
+  });
+
   for (const del of deleteWorkflows) {
     changeSet.deletes.push({
       ...del,
       deletableJobNames: del.usedJobNames.filter(
-        (jobName) => !retainedWorkflowJobNames.has(jobName),
+        (jobName) => !retainedWorkflowJobNames.has(jobName) && ownedDeletableJobNames.has(jobName),
       ),
     });
   }
@@ -466,6 +476,28 @@ export async function planWorkflow(
     appId,
     unchangedWorkflowJobNames,
   };
+}
+
+type FetchOwnedWorkflowJobNamesParams = {
+  client: OperatorClient;
+  workspaceId: string;
+  appName: string;
+  appId: string | undefined;
+  jobNames: readonly string[];
+};
+
+async function fetchOwnedWorkflowJobNames(params: FetchOwnedWorkflowJobNamesParams) {
+  const { client, workspaceId, appName, appId, jobNames } = params;
+  const uniqueJobNames = [...new Set(jobNames)];
+  const ownership = await Promise.all(
+    uniqueJobNames.map(async (jobName) => {
+      const { metadata } = await client.getMetadata({
+        trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
+      });
+      return isOwnedByApp(metadata?.labels, appName, appId) ? jobName : undefined;
+    }),
+  );
+  return new Set(ownership.filter((jobName): jobName is string => jobName !== undefined));
 }
 
 type WorkflowDisplayEntry = GroupedDisplayEntry;
