@@ -375,6 +375,24 @@ async function sync(options: SyncOptions): Promise<void> {
       }),
     ),
   ]);
+  // Delete GQL permissions first, then types, mirroring deploy: an orphaned
+  // permission can block the type deletion. NotFound just means the type
+  // never had a GQL permission.
+  await Promise.all(
+    deletes.map(async (typeName) => {
+      try {
+        await client.deleteTailorDBGQLPermission({
+          workspaceId,
+          namespaceName: target.namespace,
+          typeName,
+        });
+      } catch (error) {
+        if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
+          throw error;
+        }
+      }
+    }),
+  );
   await Promise.all(
     deletes.map((typeName) =>
       client.deleteTailorDBType({
