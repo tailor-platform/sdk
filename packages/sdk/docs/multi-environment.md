@@ -14,7 +14,7 @@ For one-off commands, pass the workspace explicitly:
 tailor-sdk deploy -w <staging-workspace-id>
 ```
 
-For environments you switch between regularly, create a named profile per environment and select it with `--profile` (`-p`) or `TAILOR_PLATFORM_PROFILE`:
+For environments you switch between regularly, create a named profile per environment with the [profile commands](./cli/workspace.md#profile-create) and select it with `--profile` (`-p`) or `TAILOR_PLATFORM_PROFILE`:
 
 ```bash
 tailor-sdk profile create staging -u you@example.com -w <staging-workspace-id>
@@ -65,7 +65,7 @@ See [Environment Variables](./configuration.md#environment-variables) for how `e
 
 ## Settings that belong to a single environment
 
-Some settings reference resources that can exist in only one environment at a time. Custom domains are an example: a domain is globally unique, so the same `customDomains` value cannot be deployed from two workspaces. Set such values only in the environment that owns the resource:
+Some settings reference resources that can exist in only one environment at a time. The static website [customDomains](./services/staticwebsite.md#customdomains) option is an example: a domain is globally unique, so the same `customDomains` value cannot be deployed from two workspaces. Set such values only in the environment that owns the resource:
 
 ```typescript
 defineStaticWebSite("my-website", {
