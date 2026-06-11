@@ -30,7 +30,7 @@ export function parseTypes(
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
 ): Record<string, TailorDBType> {
-  const types: Record<string, TailorDBType> = {};
+  const types = createRecord<TailorDBType>();
   const allTypeNames = new Set(Object.keys(rawTypes));
 
   for (const [typeName, type] of Object.entries(rawTypes)) {
@@ -58,8 +58,8 @@ function parseTailorDBType(
   const metadata = type.metadata;
   const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
 
-  const fields: Record<string, ParsedField> = {};
-  const forwardRelationships: Record<string, ParsedRelationship> = {};
+  const fields = createRecord<ParsedField>();
+  const forwardRelationships = createRecord<ParsedRelationship>();
 
   for (const [fieldName, fieldDef] of Object.entries(type.fields) as [
     string,
@@ -126,7 +126,7 @@ function parseTailorDBType(
     description: metadata.description,
     fields,
     forwardRelationships,
-    backwardRelationships: {},
+    backwardRelationships: createRecord<ParsedRelationship>(),
     settings: metadata.settings || {},
     permissions: parsePermissions(metadata.permissions || {}),
     indexes: metadata.indexes,
@@ -151,11 +151,14 @@ function buildBackwardRelationships(
   const backwardNameSources: Record<
     string,
     Record<string, { sourceType: string; fieldName: string }[]>
-  > = {};
+  > = Object.create(null);
 
   // Initialize tracking for all types
   for (const typeName of Object.keys(types)) {
-    backwardNameSources[typeName] = {};
+    backwardNameSources[typeName] = Object.create(null) as Record<
+      string,
+      { sourceType: string; fieldName: string }[]
+    >;
   }
 
   // Build backward relationships and track sources
@@ -199,7 +202,7 @@ function buildBackwardRelationships(
 
   for (const [targetTypeName, backwardNames] of Object.entries(backwardNameSources)) {
     const targetType = types[targetTypeName];
-    const targetTypeSourceInfo = typeSourceInfo?.[targetTypeName];
+    const targetTypeSourceInfo = getTypeSourceInfo(typeSourceInfo, targetTypeName);
     const targetLocation = targetTypeSourceInfo
       ? isPluginGeneratedType(targetTypeSourceInfo)
         ? ` (plugin: ${targetTypeSourceInfo.pluginId})`
@@ -211,7 +214,7 @@ function buildBackwardRelationships(
       if (sources.length > 1) {
         const sourceList = sources
           .map((s) => {
-            const sourceInfo = typeSourceInfo?.[s.sourceType];
+            const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.sourceType);
             const location = sourceInfo
               ? isPluginGeneratedType(sourceInfo)
                 ? ` (plugin: ${sourceInfo.pluginId})`
@@ -227,9 +230,9 @@ function buildBackwardRelationships(
       }
 
       // Check for conflict with existing fields
-      if (backwardName in targetType.fields) {
+      if (Object.hasOwn(targetType.fields, backwardName)) {
         const source = sources[0];
-        const sourceInfo = typeSourceInfo?.[source.sourceType];
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
         const sourceLocation = sourceInfo
           ? isPluginGeneratedType(sourceInfo)
             ? ` (plugin: ${sourceInfo.pluginId})`
@@ -243,9 +246,9 @@ function buildBackwardRelationships(
       }
 
       // Check for conflict with files fields
-      if (targetType.files && backwardName in targetType.files) {
+      if (targetType.files && Object.hasOwn(targetType.files, backwardName)) {
         const source = sources[0];
-        const sourceInfo = typeSourceInfo?.[source.sourceType];
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
         const sourceLocation = sourceInfo
           ? isPluginGeneratedType(sourceInfo)
             ? ` (plugin: ${sourceInfo.pluginId})`
@@ -359,4 +362,8 @@ function getTypeSourceInfo(
   return typeSourceInfo && Object.hasOwn(typeSourceInfo, typeName)
     ? typeSourceInfo[typeName]
     : undefined;
+}
+
+function createRecord<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>;
 }

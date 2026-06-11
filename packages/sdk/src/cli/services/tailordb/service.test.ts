@@ -80,6 +80,28 @@ export const objectPrototype = db.type("toString", {
     expect(Object.hasOwn(types ?? {}, "toString")).toBe(true);
   });
 
+  test("allows __proto__ as a type name", async () => {
+    const typeFile = writeTypeFile(
+      "proto.ts",
+      `
+import { db } from "@tailor-platform/sdk";
+export const proto = db.type("__proto__", {
+  value: db.string(),
+});
+`,
+    );
+
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [typeFile] },
+    });
+
+    using _logger = silenceLogger("error", "log");
+    const types = await service.loadTypes();
+    expect(Object.hasOwn(types ?? {}, "__proto__")).toBe(true);
+    expect(Object.hasOwn(service.typeSourceInfo, "__proto__")).toBe(true);
+  });
+
   test("loads the same matched file only once", async () => {
     const userFile = writeTypeFile(
       "overlapping-glob.ts",

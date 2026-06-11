@@ -6,6 +6,16 @@ import {
   fetchExternalTailorDBTypeNameSources,
 } from "./type-name-validation";
 
+type ListTailorDBTypesArgs = {
+  namespaceName: string;
+  pageToken?: string;
+};
+
+type ListTailorDBTypesResult = {
+  tailordbTypes: Array<{ name: string }>;
+  nextPageToken?: string;
+};
+
 function localService(namespace: string, typeNames: string[]) {
   return {
     namespace,
@@ -71,6 +81,55 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
       { namespace: "shared", typeName: "Order", kind: "external" },
     ]);
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(2);
+  });
+
+  test("fetches external namespaces concurrently while keeping each namespace paginated", async () => {
+    const pending = new Map<string, (result: ListTailorDBTypesResult) => void>();
+    const client = {
+      listTailorDBTypes: vi.fn((args: ListTailorDBTypesArgs) => {
+        const key = `${args.namespaceName}:${args.pageToken ?? ""}`;
+        return new Promise<ListTailorDBTypesResult>((resolve) => {
+          pending.set(key, resolve);
+        });
+      }),
+    };
+
+    const promise = fetchExternalTailorDBTypeNameSources({
+      client,
+      workspaceId: "workspace-id",
+      externalTailorDBNamespaces: ["shared-a", "shared-b"],
+    });
+
+    await vi.waitFor(() => {
+      expect(pending.has("shared-a:")).toBe(true);
+      expect(pending.has("shared-b:")).toBe(true);
+    });
+    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(2);
+
+    pending.get("shared-a:")?.({
+      tailordbTypes: [{ name: "User" }],
+      nextPageToken: "next",
+    });
+
+    await vi.waitFor(() => {
+      expect(pending.has("shared-a:next")).toBe(true);
+    });
+    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(3);
+
+    pending.get("shared-a:next")?.({
+      tailordbTypes: [{ name: "Order" }],
+      nextPageToken: "",
+    });
+    pending.get("shared-b:")?.({
+      tailordbTypes: [{ name: "Event" }],
+      nextPageToken: "",
+    });
+
+    await expect(promise).resolves.toEqual([
+      { namespace: "shared-a", typeName: "User", kind: "external" },
+      { namespace: "shared-a", typeName: "Order", kind: "external" },
+      { namespace: "shared-b", typeName: "Event", kind: "external" },
+    ]);
   });
 
   test("treats a missing external namespace as empty for validation", async () => {

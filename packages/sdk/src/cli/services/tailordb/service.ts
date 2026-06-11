@@ -46,9 +46,11 @@ export interface CreateTailorDBServiceParams {
 export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
   const { namespace, config, pluginManager } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
-  const rawTypes: Record<string, TailorDBTypesByName> = {};
+  const createRawTypesByName = (): TailorDBTypesByName =>
+    Object.create(null) as TailorDBTypesByName;
+  const rawTypes = Object.create(null) as Record<string, TailorDBTypesByName>;
   let types: Record<string, TailorDBType> = {};
-  const typeSourceInfo: TypeSourceInfo = {};
+  const typeSourceInfo = Object.create(null) as TypeSourceInfo;
   const pluginAttachments: Map<string, PluginAttachment[]> = new Map();
   let loadPromise: Promise<Record<string, TailorDBType> | undefined> | undefined;
 
@@ -76,7 +78,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   };
 
   const doParseTypes = (): void => {
-    const allTypes: TailorDBTypesByName = {};
+    const allTypes = createRawTypesByName();
     for (const fileTypes of Object.values(rawTypes)) {
       for (const [typeName, type] of Object.entries(fileTypes)) {
         allTypes[typeName] = type;
@@ -156,8 +158,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     typeFile: string,
     tsconfig: string | undefined,
   ): Promise<TailorDBTypesByName> => {
-    rawTypes[typeFile] = {};
-    const loadedTypes: TailorDBTypesByName = {};
+    rawTypes[typeFile] = createRawTypesByName();
+    const loadedTypes = createRawTypesByName();
     try {
       const module = await import(pathToFileURL(typeFile).href);
 
@@ -268,12 +270,14 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       });
 
       const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
+      const hadPreviousGeneratedTypes =
+        previousGeneratedTypes !== undefined && Object.keys(previousGeneratedTypes).length > 0;
       if (previousGeneratedTypes) {
         for (const typeName of Object.keys(previousGeneratedTypes)) {
           delete typeSourceInfo[typeName];
         }
       }
-      rawTypes[pluginGeneratedKey] = {};
+      rawTypes[pluginGeneratedKey] = createRawTypesByName();
 
       let hasGeneratedTypes = false;
       for (const { pluginId, config, output } of successfulResults) {
@@ -304,7 +308,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
 
       // Re-parse types to include namespace plugin types
-      if (hasGeneratedTypes || previousGeneratedTypes) {
+      if (hasGeneratedTypes || hadPreviousGeneratedTypes) {
         doParseTypes();
       }
     },

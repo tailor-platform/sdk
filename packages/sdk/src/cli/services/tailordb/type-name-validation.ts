@@ -117,36 +117,39 @@ export function collectLocalTailorDBTypeNameSources(
 export async function fetchExternalTailorDBTypeNameSources(
   args: FetchExternalTailorDBTypeNameSourcesArgs,
 ): Promise<TailorDBTypeNameSource[]> {
-  const sources: TailorDBTypeNameSource[] = [];
-
-  for (const namespace of args.externalTailorDBNamespaces) {
-    const tailordbTypes = await fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { tailordbTypes, nextPageToken } = await args.client.listTailorDBTypes({
-          workspaceId: args.workspaceId,
-          namespaceName: namespace,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [tailordbTypes, nextPageToken ?? ""];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
+  const sourcesByNamespace = await Promise.all(
+    args.externalTailorDBNamespaces.map(async (namespace) => {
+      const sources: TailorDBTypeNameSource[] = [];
+      const tailordbTypes = await fetchAll(async (pageToken, maxPageSize) => {
+        try {
+          const { tailordbTypes, nextPageToken } = await args.client.listTailorDBTypes({
+            workspaceId: args.workspaceId,
+            namespaceName: namespace,
+            pageToken,
+            pageSize: maxPageSize,
+          });
+          return [tailordbTypes, nextPageToken ?? ""];
+        } catch (error) {
+          if (error instanceof ConnectError && error.code === Code.NotFound) {
+            return [[], ""];
+          }
+          throw error;
         }
-        throw error;
-      }
-    });
-
-    for (const type of tailordbTypes) {
-      sources.push({
-        namespace,
-        typeName: type.name,
-        kind: "external",
       });
-    }
-  }
 
-  return sources;
+      for (const type of tailordbTypes) {
+        sources.push({
+          namespace,
+          typeName: type.name,
+          kind: "external",
+        });
+      }
+
+      return sources;
+    }),
+  );
+
+  return sourcesByNamespace.flat();
 }
 
 /**

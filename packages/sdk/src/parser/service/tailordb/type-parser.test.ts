@@ -14,6 +14,19 @@ describe("parseTypes", () => {
     expect(Object.hasOwn(result, "toString")).toBe(true);
   });
 
+  test("allows __proto__ as a type name", () => {
+    const testType = db.type("__proto__", {
+      value: db.string(),
+    });
+
+    const result = parseTypes(
+      toSchemaOutputs(Object.fromEntries([["__proto__", testType]])),
+      "test-namespace",
+    );
+
+    expect(Object.hasOwn(result, "__proto__")).toBe(true);
+  });
+
   describe("array field validation", () => {
     test("should throw error when index is set on array field", () => {
       // Bypass type check by directly setting metadata
