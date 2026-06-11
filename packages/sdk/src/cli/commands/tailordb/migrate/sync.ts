@@ -311,10 +311,11 @@ async function sync(options: SyncOptions): Promise<void> {
   logger.log(`  Types to delete: ${styles.bold(String(deletes.length))}`);
   logger.newline();
 
-  const totalChanges = creates.length + updates.length + deletes.length;
-  if (totalChanges === 0) {
-    // Even with no schema changes, the label may be stale, so still update it.
-    logger.info("Remote schema already matches the target snapshot.");
+  const totalOps = creates.length + updates.length + deletes.length;
+  if (totalOps === 0) {
+    // Reachable only when both snapshot and remote hold no types; the label
+    // may still be stale, so the sync proceeds to update it.
+    logger.info("No types to apply; only the migration label will be updated.");
   } else {
     logger.warn(
       "This operation will overwrite remote TailorDB types to match the selected snapshot.",
