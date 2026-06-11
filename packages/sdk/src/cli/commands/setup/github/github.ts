@@ -76,6 +76,17 @@ function resolveConfigPath(outputDir: string, dir: string): string {
   if (path.isAbsolute(dir) || rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error(`--dir must be a relative path inside the repository (got "${dir}").`);
   }
+  // Also catch symlinked subdirectories that point outside the repository.
+  if (fs.existsSync(appDir)) {
+    const realAppDir = path.normalize(fs.realpathSync(appDir));
+    const realOutputDir = path.normalize(fs.realpathSync(outputDir));
+    const realRel = path.relative(realOutputDir, realAppDir);
+    if (realRel.startsWith("..") || path.isAbsolute(realRel)) {
+      throw new Error(
+        `--dir must resolve to a directory inside the repository (got "${dir}", which links outside it).`,
+      );
+    }
+  }
   const configPath = path.join(appDir, "tailor.config.ts");
   if (!fs.existsSync(configPath)) {
     throw new Error(
@@ -318,8 +329,9 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
     throw new Error(`${resolved.file}: ${decision.reason}`);
   }
 
-  // Inject the app id only once the run is known to succeed, so a failed run
-  // leaves tailor.config.ts untouched.
+  // Inject the app id only after reconciliation has ruled out conflicts, so
+  // validation failures leave tailor.config.ts untouched (later filesystem
+  // errors can still occur after injection).
   const idResult = await ensureConfigId(resolved.configPath);
   if (idResult === null) {
     logger.warn(
