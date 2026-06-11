@@ -104,7 +104,7 @@ describe("planAIGateway", () => {
     const result = await planAIGateway(createContext(client));
 
     expect(result.changeSet.unchanged).toHaveLength(1);
-    expect(result.changeSet.unchanged[0].name).toBe("gateway-a");
+    expect(result.changeSet.unchanged[0]!.name).toBe("gateway-a");
     expect(result.changeSet.updates).toHaveLength(0);
   });
 

@@ -5,6 +5,7 @@ import {
   type UpdateAIGatewayRequestSchema,
 } from "@tailor-proto/tailor/v1/aigateway_pb";
 import { resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
@@ -36,7 +37,7 @@ export async function applyAIGateway(
       ...changeSet.creates.map(async (create) => {
         create.request.cors = await resolveStaticWebsiteUrls(
           client,
-          create.request.workspaceId!,
+          assertDefined(create.request.workspaceId, "request missing workspaceId"),
           create.request.cors,
           "AIGateway CORS",
         );
@@ -46,7 +47,7 @@ export async function applyAIGateway(
       ...changeSet.updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
           client,
-          update.request.workspaceId!,
+          assertDefined(update.request.workspaceId, "request missing workspaceId"),
           update.request.cors,
           "AIGateway CORS",
         );
@@ -54,7 +55,7 @@ export async function applyAIGateway(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
+  } else {
     await Promise.all(changeSet.deletes.map((del) => client.deleteAIGateway(del.request)));
   }
 }
@@ -91,7 +92,7 @@ function normalizeComparableAIGatewayShape(
 ): ComparableAIGateway {
   return {
     authNamespace: input.authNamespace,
-    cors: [...input.cors].sort(),
+    cors: input.cors.toSorted(),
   };
 }
 
