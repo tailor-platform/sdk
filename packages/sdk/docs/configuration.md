@@ -204,7 +204,7 @@ export default defineConfig({
   env: {
     foo: Number(process.env.FOO ?? "1"),
     bar: process.env.BAR ?? "hello",
-    baz: process.env.BAZ === "true",
+    baz: (process.env.BAZ ?? "true") === "true",
   },
 });
 ```
