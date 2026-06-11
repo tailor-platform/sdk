@@ -30,9 +30,6 @@ type LintResult = { ok: boolean; output: string };
 function runActionlint(workflowPath: string): LintResult {
   const result = spawnSync("actionlint", ["-color", workflowPath], {
     encoding: "utf-8",
-    // actionlint treats tailor-platform actions as unknown; tell it to ignore
-    // unknown action inputs so the test focuses on YAML / expression errors.
-    env: { ...process.env },
   });
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
   return { ok: result.status === 0, output };

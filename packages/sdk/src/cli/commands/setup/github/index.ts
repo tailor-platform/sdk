@@ -8,23 +8,23 @@ export const githubCommand = defineAppCommand({
   description: "Generate a GitHub Actions deploy workflow. (beta)",
   args: z
     .object({
-      "workspace-name": arg(z.string().optional(), {
+      "workspace-name": arg(z.string().min(1).optional(), {
         alias: "n",
         description: "Workspace name (defaults to the config 'name')",
       }),
-      "workspace-region": arg(z.string(), {
+      "workspace-region": arg(z.string().min(1), {
         alias: "r",
         description: "Workspace region",
       }),
-      "organization-id": arg(z.string(), {
+      "organization-id": arg(z.string().min(1), {
         alias: "o",
         description: "Organization ID",
       }),
-      "folder-id": arg(z.string().optional(), {
+      "folder-id": arg(z.string().min(1).optional(), {
         alias: "f",
         description: "Folder ID",
       }),
-      branch: arg(z.string().optional(), {
+      branch: arg(z.string().min(1).optional(), {
         description:
           "Branch target: deploy trigger branch (defaults to the detected default branch). " +
           "Tag target: tag-reachability guard branch (no guard when omitted)",
@@ -32,16 +32,16 @@ export const githubCommand = defineAppCommand({
       tag: arg(z.boolean().default(false), {
         description: "Generate a tag target (deploy on tag push)",
       }),
-      "tag-pattern": arg(z.string().optional(), {
+      "tag-pattern": arg(z.string().min(1).optional(), {
         description: "Tag glob to match (requires --tag; defaults to v*)",
       }),
-      environment: arg(z.string().optional(), {
+      environment: arg(z.string().min(1).optional(), {
         description: "GitHub Environment for the deploy job",
       }),
       "no-plan": arg(z.boolean().default(false), {
         description: "Disable the plan job for a branch target (cannot be combined with --tag)",
       }),
-      dir: arg(z.string().default("."), {
+      dir: arg(z.string().min(1).default("."), {
         alias: "d",
         description: "App directory (for monorepo setups)",
       }),

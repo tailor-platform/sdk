@@ -133,7 +133,17 @@ async function readConfigId(configPath: string): Promise<{ id: string | null } |
   const { program } = parseSync(configPath, source);
   const calls: ConfigCallSite[] = [];
   findDefineConfigCalls(program, calls);
-  if (calls.length !== 1 || !calls[0].configObj) return null;
+  if (calls.length === 0) return null;
+  // Mirror ensureConfigId's shape validation so CI fails loudly on config
+  // shapes whose id it cannot reliably read.
+  if (calls.length > 1) {
+    throw new Error(`Multiple defineConfig() calls found in ${configPath}. Only one is supported.`);
+  }
+  if (!calls[0].configObj) {
+    throw new Error(
+      `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
+    );
+  }
   const idProp = findIdProperty(calls[0].configObj);
   if (!idProp || idProp.value.type !== "Literal") return { id: null };
   const value = (idProp.value as { value?: unknown }).value;

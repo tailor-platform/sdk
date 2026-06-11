@@ -76,6 +76,17 @@ describe("ensureConfigIdForDeploy", () => {
     ).resolves.toBeUndefined();
   });
 
+  test("CI + multiple defineConfig calls: throws instead of bypassing the check", async () => {
+    const filePath = await writeConfig(`import { defineConfig } from "@tailor-platform/sdk";
+const a = defineConfig({ name: "a" });
+export default defineConfig({ name: "b" });
+`);
+    const { ensureConfigIdForDeploy } = await load(true);
+    await expect(
+      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
+    ).rejects.toThrow(/Only one is supported/);
+  });
+
   test("CI + non-UUID id: throws", async () => {
     const filePath = await writeConfig(`import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({

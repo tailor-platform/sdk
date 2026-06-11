@@ -72,7 +72,8 @@ function validateWorkspaceName(name: string): void {
  */
 function resolveConfigPath(outputDir: string, dir: string): string {
   const appDir = path.resolve(outputDir, dir);
-  if (path.isAbsolute(dir) || (appDir !== outputDir && !appDir.startsWith(`${outputDir}/`))) {
+  const rel = path.relative(outputDir, appDir);
+  if (path.isAbsolute(dir) || rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error(`--dir must be a relative path inside the repository (got "${dir}").`);
   }
   const configPath = path.join(appDir, "tailor.config.ts");
