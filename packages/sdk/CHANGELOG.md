@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.60.1
+
+### Patch Changes
+
+- [#1356](https://github.com/tailor-platform/sdk/pull/1356) [`be55e45`](https://github.com/tailor-platform/sdk/commit/be55e45ba2a9eeac0d02633aa793a212c8651acf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1404](https://github.com/tailor-platform/sdk/pull/1404) [`0aa76e9`](https://github.com/tailor-platform/sdk/commit/0aa76e9c25c41b619433838d0848e8e010e2078a) Thanks [@remiposo](https://github.com/remiposo)! - Fix `db.fields.timestamps()` so `updatedAt` is updated on every record update. Since update hooks receive the stored value merged with the input, the previous `value ?? new Date()` fallback froze `updatedAt` at its first value. `createdAt` still respects a user-specified value on create.
+
 ## 1.60.0
 
 ### Minor Changes
