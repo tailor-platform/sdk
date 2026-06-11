@@ -18,12 +18,12 @@ For environments you switch between regularly, create a named profile per enviro
 
 ```bash
 tailor-sdk profile create staging -u you@example.com -w <staging-workspace-id>
-tailor-sdk profile create production -u you@example.com -w <production-workspace-id>
+tailor-sdk profile create production -u you@example.com -w <production-workspace-id> --permission read
 
 tailor-sdk deploy -p staging
 ```
 
-Profiles are created with `write` permission by default. For an environment you normally only inspect, add `--permission read` when creating its profile: write commands such as `deploy` are blocked while a read profile is active, which protects the workspace from accidental changes.
+Profiles are created with `write` permission by default. The production profile above opts into `--permission read`, which blocks write commands such as `deploy` while the profile is active — a guard against deploying to production by accident. To deploy to production deliberately, pass the workspace explicitly with `-w`, or use a separate profile created with `write` permission.
 
 ## Varying config values per environment
 
@@ -36,7 +36,7 @@ LOG_LEVEL=WARN
 ```
 
 ```bash
-tailor-sdk deploy -p production --env-file .env.production
+tailor-sdk deploy -w <production-workspace-id> --env-file .env.production
 ```
 
 ```typescript
