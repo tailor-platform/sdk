@@ -189,9 +189,9 @@ Use `env` in `defineConfig()` for non-secret values that application code needs 
 export default defineConfig({
   name: "my-app",
   env: {
-    STAGE: "dev",
-    PUBLIC_API_URL: "https://api.example.com",
-    ENABLE_BETA: false,
+    foo: 1,
+    bar: "hello",
+    baz: true,
   },
 });
 ```
@@ -202,9 +202,9 @@ export default defineConfig({
 export default defineConfig({
   name: "my-app",
   env: {
-    STAGE: process.env.STAGE ?? "dev",
-    PUBLIC_API_URL: process.env.PUBLIC_API_URL ?? "https://api.example.com",
-    ENABLE_BETA: process.env.ENABLE_BETA === "true",
+    foo: Number(process.env.FOO ?? "1"),
+    bar: process.env.BAR ?? "hello",
+    baz: process.env.BAZ === "true",
   },
 });
 ```
@@ -213,40 +213,41 @@ If the same config defines an auth before-login hook, make sure the config modul
 
 When the SDK deploys application code or runs detected service code with `function test-run`, it passes the resolved values as the `env` argument. Do not read `process.env` from deployed resolvers, executors, workflow jobs, auth hooks, or migration scripts; Node-side environment variables are not available there. Put sensitive values in [Secret Manager](./services/secret.md) instead of `env`.
 
-| Code location             | Runtime access                                                                                                                               |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resolver body             | `body: ({ env }) => ...`                                                                                                                     |
-| Executor callbacks        | `body: ({ env }) => ...`, `url: ({ env }) => env.PUBLIC_API_URL`, `variables: ({ env }) => ({ stage: env.STAGE })`, or similar callback args |
-| Workflow job body         | `body: (input, { env }) => ...`                                                                                                              |
-| Auth before-login hook    | `handler: async ({ env }) => ...`                                                                                                            |
-| TailorDB migration script | `main(trx, { env }: MigrationContext)`                                                                                                       |
-| `function test-run`       | Same `env` argument shape as the detected resolver, executor, or workflow job                                                                |
+| Code location             | Runtime access                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolver body             | `body: ({ env }) => ...`                                                                                                                  |
+| Executor callbacks        | `body: ({ env }) => ...`, `url: ({ env }) => String(env.bar)`, `variables: ({ env }) => ({ enabled: env.baz })`, or similar callback args |
+| Workflow job body         | `body: (input, { env }) => ...`                                                                                                           |
+| Auth before-login hook    | `handler: async ({ env }) => ...`                                                                                                         |
+| TailorDB migration script | `main(trx, { env }: MigrationContext)`                                                                                                    |
+| `function test-run`       | Same `env` argument shape as the detected resolver, executor, or workflow job                                                             |
 
 ```typescript
 // In resolvers
 body: ({ input, env }) => {
   return {
-    url: `${env.PUBLIC_API_URL}/orders/${input.orderId}`,
-    enabled: env.ENABLE_BETA,
+    result: input.multiplier * env.foo,
+    message: env.bar,
+    enabled: env.baz,
   };
 };
 
 // In executors
 body: ({ newRecord, env }) => {
-  console.log(`Stage: ${env.STAGE}, User: ${newRecord.name}`);
+  console.log(`Environment: ${env.bar}, User: ${newRecord.name}`);
 };
 
 // In workflow jobs
 body: (input, { env }) => {
-  console.log(`Stage: ${env.STAGE}`);
-  return { stage: env.STAGE };
+  console.log(`Environment: ${env.bar}`);
+  return { value: env.foo };
 };
 
 // In auth before-login hooks
 hooks: {
   beforeLogin: {
     handler: async ({ claims, idpConfigName, env }) => {
-      console.log(`Stage: ${env.STAGE}`);
+      console.log(`Environment: ${env.bar}`);
     },
     invoker: "hook-invoker",
   },
@@ -254,8 +255,8 @@ hooks: {
 
 // In TailorDB migration scripts
 export async function main(trx: Transaction, { env }: MigrationContext): Promise<void> {
-  if (env.STAGE === "dev") return;
-  await trx.updateTable("User").set({ stage: env.STAGE }).execute();
+  if (!env.baz) return;
+  await trx.updateTable("User").set({ stage: env.bar }).execute();
 }
 ```
 

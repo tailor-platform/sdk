@@ -213,7 +213,7 @@ createExecutor({
   operation: {
     kind: "function",
     body: async ({ newRecord, env }) => {
-      console.log(`New record created in ${env.STAGE}:`, newRecord);
+      console.log(`New record created in ${env.bar}:`, newRecord);
     },
   },
 });
