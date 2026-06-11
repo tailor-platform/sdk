@@ -630,9 +630,17 @@ export function createGenerationManager(params: {
             }
           });
         }
-        assertUniqueLocalTailorDBTypeNames({
-          tailorDBServices: app.tailorDBServices,
-        });
+        try {
+          assertUniqueLocalTailorDBTypeNames({
+            tailorDBServices: app.tailorDBServices,
+          });
+        } catch (error) {
+          logger.error("Error validating TailorDB type names");
+          logger.error(String(error));
+          if (!watch) {
+            throw error;
+          }
+        }
       });
 
       // Generate plugin type and executor files
