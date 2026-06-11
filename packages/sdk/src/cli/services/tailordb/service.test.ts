@@ -72,7 +72,29 @@ export const objectPrototype = db.type("toString", {
       config: { files: [typeFile] },
     });
 
+    using _logger = silenceLogger("error", "log");
     const types = await service.loadTypes();
     expect(Object.hasOwn(types ?? {}, "toString")).toBe(true);
+  });
+
+  test("loads the same matched file only once", async () => {
+    const userFile = writeTypeFile(
+      "overlapping-glob.ts",
+      `
+import { db } from "@tailor-platform/sdk";
+export const user = db.type("User", {
+  name: db.string(),
+});
+`,
+    );
+
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [userFile, userFile] },
+    });
+
+    using _logger = silenceLogger("error", "log");
+    const types = await service.loadTypes();
+    expect(Object.hasOwn(types ?? {}, "User")).toBe(true);
   });
 });

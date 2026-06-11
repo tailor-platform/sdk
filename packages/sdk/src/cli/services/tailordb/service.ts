@@ -225,7 +225,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             return undefined;
           }
 
-          const typeFiles = loadFilesWithIgnores(config);
+          const typeFiles = [...new Set(loadFilesWithIgnores(config))];
 
           let tsconfig: string | undefined;
           try {
