@@ -7,9 +7,10 @@ import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { findOmittedPermitRules } from "@/parser/service/tailordb/permission";
 import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
+import { formatTailorDBTypeSourceInfo } from "./type-name-validation";
 import type { PluginManager } from "@/plugin/manager";
 import type { PluginAttachment } from "@/types/plugin";
-import type { TypeSourceInfo, TailorDBType } from "@/types/tailordb";
+import type { TypeSourceInfo, TypeSourceInfoEntry, TailorDBType } from "@/types/tailordb";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,
@@ -45,14 +46,39 @@ export interface CreateTailorDBServiceParams {
 export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
   const { namespace, config, pluginManager } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
-  const rawTypes: Record<string, TailorDBTypesByName> = {};
+  const createRawTypesByName = (): TailorDBTypesByName =>
+    Object.create(null) as TailorDBTypesByName;
+  const rawTypes = Object.create(null) as Record<string, TailorDBTypesByName>;
   let types: Record<string, TailorDBType> = {};
-  const typeSourceInfo: TypeSourceInfo = {};
+  const typeSourceInfo = Object.create(null) as TypeSourceInfo;
   const pluginAttachments: Map<string, PluginAttachment[]> = new Map();
   let loadPromise: Promise<Record<string, TailorDBType> | undefined> | undefined;
 
+  const registerRawType = (
+    rawTypesKey: string,
+    typeName: string,
+    type: TailorDBTypeSchemaOutput,
+    sourceInfo: TypeSourceInfoEntry,
+  ): void => {
+    const existingSourceInfo = Object.hasOwn(typeSourceInfo, typeName)
+      ? typeSourceInfo[typeName]
+      : undefined;
+    if (existingSourceInfo) {
+      const firstSource = formatTailorDBTypeSourceInfo(existingSourceInfo) ?? "unknown source";
+      const secondSource = formatTailorDBTypeSourceInfo(sourceInfo) ?? "unknown source";
+      throw new Error(
+        `Duplicate TailorDB type name "${typeName}" detected in TailorDB service "${namespace}". ` +
+          `First: ${firstSource}. Second: ${secondSource}. ` +
+          "TailorDB type names must be unique across all TailorDB files in a service.",
+      );
+    }
+
+    rawTypes[rawTypesKey][typeName] = type;
+    typeSourceInfo[typeName] = sourceInfo;
+  };
+
   const doParseTypes = (): void => {
-    const allTypes: TailorDBTypesByName = {};
+    const allTypes = createRawTypesByName();
     for (const fileTypes of Object.values(rawTypes)) {
       for (const [typeName, type] of Object.entries(fileTypes)) {
         allTypes[typeName] = type;
@@ -103,8 +129,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     for (const gen of generatedTypes) {
       // Plugin-generated types don't have a source file.
       // Generators that need to import these types should generate their own type files.
-      rawTypes[sourceFilePath][gen.typeName] = gen.type;
-      typeSourceInfo[gen.typeName] = {
+      const sourceInfo: TypeSourceInfoEntry = {
         exportName: gen.typeName,
         pluginId: gen.pluginId,
         pluginImportPath: gen.pluginImportPath,
@@ -114,6 +139,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         pluginConfig: gen.pluginConfig,
         namespace,
       };
+      registerRawType(sourceFilePath, gen.typeName, gen.type, sourceInfo);
     }
     for (const ev of events) {
       if (ev.kind === "extended") {
@@ -132,8 +158,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     typeFile: string,
     tsconfig: string | undefined,
   ): Promise<TailorDBTypesByName> => {
-    rawTypes[typeFile] = {};
-    const loadedTypes: TailorDBTypesByName = {};
+    rawTypes[typeFile] = createRawTypesByName();
+    const loadedTypes = createRawTypesByName();
     try {
       const module = await import(pathToFileURL(typeFile).href);
 
@@ -153,13 +179,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
         await precompileTailorDBTypeScripts(result.data, typeFile, tsconfig);
-        rawTypes[typeFile][result.data.name] = result.data;
         loadedTypes[result.data.name] = result.data;
-        // Store source info mapping
-        typeSourceInfo[result.data.name] = {
+        registerRawType(typeFile, result.data.name, result.data, {
           filePath: typeFile,
           exportName,
-        };
+        });
 
         // Process plugins if any
         if (
@@ -203,7 +227,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             return undefined;
           }
 
-          const typeFiles = loadFilesWithIgnores(config);
+          const typeFiles = [...new Set(loadFilesWithIgnores(config))];
 
           let tsconfig: string | undefined;
           try {
@@ -237,25 +261,29 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       const results = await pluginManager.processNamespacePlugins(namespace);
       const pluginGeneratedKey = "__plugin_generated__";
 
-      if (!rawTypes[pluginGeneratedKey]) {
-        rawTypes[pluginGeneratedKey] = {};
-      }
-
-      let hasGeneratedTypes = false;
-      for (const { pluginId, config, result } of results) {
+      const successfulResults = results.map(({ pluginId, config, result }) => {
         if (!result.success) {
           logger.error(result.error);
           throw new Error(result.error);
         }
+        return { pluginId, config, output: result.output };
+      });
 
-        const output = result.output;
+      const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
+      const hadPreviousGeneratedTypes =
+        previousGeneratedTypes !== undefined && Object.keys(previousGeneratedTypes).length > 0;
+      if (previousGeneratedTypes) {
+        for (const typeName of Object.keys(previousGeneratedTypes)) {
+          delete typeSourceInfo[typeName];
+        }
+      }
+      rawTypes[pluginGeneratedKey] = createRawTypesByName();
 
+      let hasGeneratedTypes = false;
+      for (const { pluginId, config, output } of successfulResults) {
         // Add generated types to rawTypes
         for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
-          rawTypes[pluginGeneratedKey][generatedType.name] =
-            generatedType as TailorDBTypeSchemaOutput;
-          hasGeneratedTypes = true;
-          typeSourceInfo[generatedType.name] = {
+          const sourceInfo: TypeSourceInfoEntry = {
             exportName: generatedType.name,
             pluginId,
             pluginImportPath: pluginManager.getPluginImportPath(pluginId) ?? "",
@@ -265,6 +293,13 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             pluginConfig: config,
             namespace,
           };
+          registerRawType(
+            pluginGeneratedKey,
+            generatedType.name,
+            generatedType as TailorDBTypeSchemaOutput,
+            sourceInfo,
+          );
+          hasGeneratedTypes = true;
 
           logger.log(
             `  Generated: ${styles.success(generatedType.name)} by namespace plugin ${styles.info(pluginId)}`,
@@ -273,7 +308,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
 
       // Re-parse types to include namespace plugin types
-      if (hasGeneratedTypes) {
+      if (hasGeneratedTypes || hadPreviousGeneratedTypes) {
         doParseTypes();
       }
     },
