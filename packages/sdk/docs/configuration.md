@@ -200,14 +200,14 @@ export default defineConfig({
 
 When the SDK deploys application code or runs detected service code with `function test-run`, it passes the resolved values as the `env` argument. Do not read `process.env` from deployed resolvers, executors, workflow jobs, auth hooks, or migration scripts; Node-side environment variables are not available there. Put sensitive values in [Secret Manager](./services/secret.md) instead of `env`.
 
-| Code location             | Runtime access                                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Resolver body             | `body: ({ env }) => ...`                                                                                                                               |
-| Executor callbacks        | `body: ({ env }) => ...`, `variables: (args) => args.env`, `url: (args) => args.env`, `requestBody: (args) => args.env`, or `args: (args) => args.env` |
-| Workflow job body         | `body: (input, { env }) => ...`                                                                                                                        |
-| Auth before-login hook    | `handler: async ({ env }) => ...`                                                                                                                      |
-| TailorDB migration script | `main(trx, { env }: MigrationContext)`                                                                                                                 |
-| `function test-run`       | Same `env` argument shape as the detected resolver, executor, or workflow job                                                                          |
+| Code location             | Runtime access                                                                                                                               |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolver body             | `body: ({ env }) => ...`                                                                                                                     |
+| Executor callbacks        | `body: ({ env }) => ...`, `url: ({ env }) => env.PUBLIC_API_URL`, `variables: ({ env }) => ({ stage: env.STAGE })`, or similar callback args |
+| Workflow job body         | `body: (input, { env }) => ...`                                                                                                              |
+| Auth before-login hook    | `handler: async ({ env }) => ...`                                                                                                            |
+| TailorDB migration script | `main(trx, { env }: MigrationContext)`                                                                                                       |
+| `function test-run`       | Same `env` argument shape as the detected resolver, executor, or workflow job                                                                |
 
 ```typescript
 // In resolvers
