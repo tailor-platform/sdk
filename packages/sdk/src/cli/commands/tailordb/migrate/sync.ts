@@ -41,17 +41,24 @@ export interface SyncOptions {
   profile?: string;
 }
 
+// Accept either the canonical 4-digit form ("0000") or a bare integer
+// ("0"–"9999"), mirroring `migration script`. Reject non-digit input,
+// integer forms with leading zeros ("01"), and anything outside the
+// 0000-9999 directory range that the migrations system supports.
 function parseMigrationNumberArg(numberStr: string): number {
   if (isValidMigrationNumber(numberStr)) {
     return parseInt(numberStr, 10);
   }
-  const parsed = parseInt(numberStr, 10);
-  if (isNaN(parsed) || parsed < 0 || String(parsed) !== numberStr.trimStart().replace(/^0+/, "0")) {
-    throw new Error(
-      `Invalid migration number format: ${numberStr}. Expected 4-digit format (e.g., 0001) or integer (e.g., 1).`,
-    );
+  if (/^(0|[1-9]\d*)$/.test(numberStr)) {
+    const parsed = parseInt(numberStr, 10);
+    if (parsed > 9999) {
+      throw new Error(`Migration number ${numberStr} is out of range. Expected 0-9999.`);
+    }
+    return parsed;
   }
-  return parsed;
+  throw new Error(
+    `Invalid migration number format: ${numberStr}. Expected 4-digit format (e.g., 0001) or integer 0-9999 (e.g., 1).`,
+  );
 }
 
 async function fetchRemoteTypes(
@@ -410,7 +417,8 @@ export const syncCommand = defineAppCommand({
       ...confirmationArgs,
       number: arg(z.string(), {
         positional: true,
-        description: "Migration number to sync to (e.g., 0001 or 1)",
+        description:
+          "Migration number to sync to (e.g., 0001 or 1; 0 targets the baseline snapshot)",
       }),
       namespace: arg(z.string().optional(), {
         alias: "n",

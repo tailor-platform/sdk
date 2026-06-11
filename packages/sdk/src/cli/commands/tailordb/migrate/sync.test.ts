@@ -271,6 +271,25 @@ describe("tailordb migration sync", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("rejects integer forms with leading zeros", async () => {
+    for (const input of ["00", "01"]) {
+      const result = await runCommand(syncCommand, [input, "--yes"]);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toMatch(/Invalid migration number format/);
+    }
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("accepts 0 for the baseline snapshot", async () => {
+    const result = await runCommand(syncCommand, ["0", "--yes"]);
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({ "sdk-migration": "m0000" }),
+      }),
+    );
+  });
+
   test("rejects when the migration directory has a gap", async () => {
     fs.rmSync(path.join(state.migrationsDir, "0001"), { recursive: true, force: true });
 

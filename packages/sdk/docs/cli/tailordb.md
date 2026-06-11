@@ -375,9 +375,9 @@ tailor-sdk tailordb migration sync [options] <number>
 
 **Arguments**
 
-| Argument | Description                                   | Required |
-| -------- | --------------------------------------------- | -------- |
-| `number` | Migration number to sync to (e.g., 0001 or 1) | Yes      |
+| Argument | Description                                                                    | Required |
+| -------- | ------------------------------------------------------------------------------ | -------- |
+| `number` | Migration number to sync to (e.g., 0001 or 1; 0 targets the baseline snapshot) | Yes      |
 
 <!-- politty:command:tailordb migration sync:arguments:end -->
 
