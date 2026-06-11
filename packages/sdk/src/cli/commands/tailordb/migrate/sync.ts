@@ -288,7 +288,6 @@ async function sync(options: SyncOptions): Promise<void> {
   const manifestOptions = await assertMigrationsReproduceLocalTypes(loaded, target);
 
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
