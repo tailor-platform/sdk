@@ -5,46 +5,72 @@ import { setupGitHub } from "./github";
 
 export const githubCommand = defineAppCommand({
   name: "github",
-  description: "Generate GitHub Actions workflow for deployment. (beta)",
+  description: "Generate a GitHub Actions deploy workflow. (beta)",
   args: z
     .object({
-      "workspace-name": arg(z.string(), {
+      "workspace-name": arg(z.string().optional(), {
         alias: "n",
-        description: "Workspace name",
+        description: "Workspace name (defaults to the config 'name')",
       }),
       "workspace-region": arg(z.string(), {
         alias: "r",
         description: "Workspace region",
       }),
-      // Required here because the generated workflow uses these for workspace creation.
-      // Could be made optional in the future if we add conditional template rendering.
       "organization-id": arg(z.string(), {
         alias: "o",
         description: "Organization ID",
       }),
-      "folder-id": arg(z.string(), {
+      "folder-id": arg(z.string().optional(), {
         alias: "f",
         description: "Folder ID",
+      }),
+      branch: arg(z.string().optional(), {
+        description:
+          "Branch target: deploy trigger branch (defaults to the detected default branch). " +
+          "Tag target: tag-reachability guard branch (no guard when omitted)",
+      }),
+      tag: arg(z.boolean().default(false), {
+        description: "Generate a tag target (deploy on tag push)",
+      }),
+      "tag-pattern": arg(z.string().default("v*"), {
+        description: "Tag glob to match (requires --tag)",
+      }),
+      environment: arg(z.string().optional(), {
+        description: "GitHub Environment for the deploy job",
+      }),
+      "no-plan": arg(z.boolean().default(false), {
+        description: "Disable the plan job for a branch target (cannot be combined with --tag)",
       }),
       dir: arg(z.string().default("."), {
         alias: "d",
         description: "App directory (for monorepo setups)",
       }),
-      "with-plan": arg(z.boolean().default(false), {
-        alias: "p",
-        description: "Include plan job for PR previews",
+      force: arg(z.boolean().default(false), {
+        description: "Discard hand edits / take over unmanaged files and regenerate",
       }),
     })
     .strict(),
-  run: (args) => {
-    setupGitHub({
+  run: async (args) => {
+    if (args["tag-pattern"] !== "v*" && !args.tag) {
+      throw new Error("--tag-pattern requires --tag.");
+    }
+    if (args["no-plan"] && args.tag) {
+      throw new Error("--no-plan cannot be combined with --tag.");
+    }
+
+    await setupGitHub({
       workspaceName: args["workspace-name"],
       workspaceRegion: args["workspace-region"],
       organizationId: args["organization-id"],
       folderId: args["folder-id"],
+      branch: args.branch,
+      tag: args.tag,
+      tagPattern: args["tag-pattern"],
+      environment: args.environment,
+      plan: !args["no-plan"],
       dir: args.dir,
+      force: args.force,
       outputDir: process.cwd(),
-      withPlan: args["with-plan"],
     });
   },
 });

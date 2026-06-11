@@ -1,0 +1,204 @@
+/**
+ * Actionlint validation for generated GitHub Actions workflows.
+ *
+ * Each rendered workflow is written to a temp directory and validated with
+ * `actionlint`. The test suite is skipped when the `actionlint` binary is not
+ * available on PATH (e.g. a machine without aqua installed), so it never
+ * causes false negatives in environments that have not run `aqua i`.
+ *
+ * Locally: run `aqua i` first, then this suite will execute as normal tests.
+ */
+
+import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { renderBranchWorkflow, renderTagWorkflow, type PackageManager } from "./templates";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function isActionlintAvailable(): boolean {
+  const result = spawnSync("actionlint", ["--version"], { encoding: "utf-8" });
+  return result.status === 0;
+}
+
+type LintResult = { ok: boolean; output: string };
+
+function runActionlint(workflowPath: string): LintResult {
+  const result = spawnSync("actionlint", ["-color", workflowPath], {
+    encoding: "utf-8",
+    // actionlint treats tailor-platform actions as unknown; tell it to ignore
+    // unknown action inputs so the test focuses on YAML / expression errors.
+    env: { ...process.env },
+  });
+  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+  return { ok: result.status === 0, output };
+}
+
+// ---------------------------------------------------------------------------
+// Fixture: temp directory for generated files
+// ---------------------------------------------------------------------------
+
+let tmpDir: string;
+
+beforeAll(() => {
+  tmpDir = fs.mkdtempSync(path.join(path.resolve("/tmp"), "workflow-lint-"));
+  fs.mkdirSync(path.join(tmpDir, ".github", "workflows"), { recursive: true });
+});
+
+afterAll(() => {
+  if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// Common params
+// ---------------------------------------------------------------------------
+
+const COMMON = {
+  workspaceName: "my-app",
+  workspaceRegion: "asia-northeast",
+  organizationId: "org-123",
+};
+
+const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
+
+// ---------------------------------------------------------------------------
+// Utility: write + lint a workflow
+// ---------------------------------------------------------------------------
+
+function writeAndLint(name: string, content: string): LintResult {
+  const filePath = path.join(tmpDir, ".github", "workflows", `${name}.yml`);
+  fs.writeFileSync(filePath, content, "utf-8");
+  return runActionlint(filePath);
+}
+
+// ---------------------------------------------------------------------------
+// Tests (skipped when actionlint is not on PATH)
+// ---------------------------------------------------------------------------
+
+// Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
+const actionlintAvailable = isActionlintAvailable();
+
+describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWorkflow", () => {
+  // All four package managers, plan=true, no optional fields
+  for (const pm of ALL_PM) {
+    test(`branch / ${pm} / plan=true / minimal`, () => {
+      const { content } = renderBranchWorkflow({
+        ...COMMON,
+        branch: "main",
+        packageManager: pm,
+        plan: true,
+      });
+      const { ok, output } = writeAndLint(`branch-${pm}-plan`, content);
+      expect(ok, `actionlint errors for branch/${pm}/plan=true:\n${output}`).toBe(true);
+    });
+  }
+
+  // plan=false (drops plan job, pull_request trigger, dispatch inputs)
+  for (const pm of ALL_PM) {
+    test(`branch / ${pm} / plan=false / minimal`, () => {
+      const { content } = renderBranchWorkflow({
+        ...COMMON,
+        branch: "main",
+        packageManager: pm,
+        plan: false,
+      });
+      const { ok, output } = writeAndLint(`branch-${pm}-noplan`, content);
+      expect(ok, `actionlint errors for branch/${pm}/plan=false:\n${output}`).toBe(true);
+    });
+  }
+
+  // workingDirectory: present
+  test("branch / pnpm / plan=true / with workingDirectory", () => {
+    const { content } = renderBranchWorkflow({
+      ...COMMON,
+      branch: "main",
+      packageManager: "pnpm",
+      plan: true,
+      workingDirectory: "apps/backend",
+    });
+    const { ok, output } = writeAndLint("branch-pnpm-plan-dir", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+
+  // folderId + environment
+  test("branch / pnpm / plan=true / with folderId + environment", () => {
+    const { content } = renderBranchWorkflow({
+      ...COMMON,
+      branch: "main",
+      packageManager: "pnpm",
+      plan: true,
+      folderId: "folder-1",
+      environment: "production",
+    });
+    const { ok, output } = writeAndLint("branch-pnpm-plan-folder-env", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+
+  // plan=false + workingDirectory + environment
+  test("branch / npm / plan=false / with workingDirectory + environment", () => {
+    const { content } = renderBranchWorkflow({
+      ...COMMON,
+      branch: "develop",
+      packageManager: "npm",
+      plan: false,
+      workingDirectory: "apps/api",
+      environment: "staging",
+    });
+    const { ok, output } = writeAndLint("branch-npm-noplan-dir-env", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+});
+
+describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflow", () => {
+  // All four package managers, no guard
+  for (const pm of ALL_PM) {
+    test(`tag / ${pm} / no guard / minimal`, () => {
+      const { content } = renderTagWorkflow({ ...COMMON, tagPattern: "v*", packageManager: pm });
+      const { ok, output } = writeAndLint(`tag-${pm}-noguard`, content);
+      expect(ok, `actionlint errors for tag/${pm}/no-guard:\n${output}`).toBe(true);
+    });
+  }
+
+  // All four package managers, with branch guard
+  for (const pm of ALL_PM) {
+    test(`tag / ${pm} / with branch guard`, () => {
+      const { content } = renderTagWorkflow({
+        ...COMMON,
+        tagPattern: "v*",
+        packageManager: pm,
+        branch: "main",
+      });
+      const { ok, output } = writeAndLint(`tag-${pm}-guard`, content);
+      expect(ok, `actionlint errors for tag/${pm}/guard:\n${output}`).toBe(true);
+    });
+  }
+
+  // Custom tag pattern + workingDirectory + environment
+  test("tag / pnpm / with guard + workingDirectory + environment", () => {
+    const { content } = renderTagWorkflow({
+      ...COMMON,
+      tagPattern: "release-*",
+      packageManager: "pnpm",
+      branch: "main",
+      workingDirectory: "apps/backend",
+      environment: "production",
+    });
+    const { ok, output } = writeAndLint("tag-pnpm-guard-dir-env", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+
+  // folderId
+  test("tag / bun / no guard / with folderId", () => {
+    const { content } = renderTagWorkflow({
+      ...COMMON,
+      tagPattern: "v*",
+      packageManager: "bun",
+      folderId: "folder-42",
+    });
+    const { ok, output } = writeAndLint("tag-bun-noguard-folder", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+});

@@ -286,9 +286,9 @@ Commands for managing crash reports.
 
 Commands for setting up project infrastructure.
 
-| Command                                     | Description                                             |
-| ------------------------------------------- | ------------------------------------------------------- |
-| [setup github](./cli/setup.md#setup-github) | Generate GitHub Actions workflow for deployment. (beta) |
+| Command                                     | Description                                       |
+| ------------------------------------------- | ------------------------------------------------- |
+| [setup github](./cli/setup.md#setup-github) | Generate a GitHub Actions deploy workflow. (beta) |
 
 ### [Upgrade Commands](./cli/upgrade.md)
 
