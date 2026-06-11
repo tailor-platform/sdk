@@ -4,6 +4,16 @@ import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {
+  test("allows type names that match Object prototype properties", () => {
+    const testType = db.type("toString", {
+      value: db.string(),
+    });
+
+    const result = parseTypes(toSchemaOutputs({ toString: testType }), "test-namespace");
+
+    expect(Object.hasOwn(result, "toString")).toBe(true);
+  });
+
   describe("array field validation", () => {
     test("should throw error when index is set on array field", () => {
       // Bypass type check by directly setting metadata

@@ -290,7 +290,7 @@ function validatePluralFormUniqueness(
     const pluralQuery = inflection.camelize(parsedType.pluralForm, true);
 
     if (singularQuery === pluralQuery) {
-      const sourceInfo = typeSourceInfo?.[parsedType.name];
+      const sourceInfo = getTypeSourceInfo(typeSourceInfo, parsedType.name);
       const location = sourceInfo
         ? isPluginGeneratedType(sourceInfo)
           ? ` (plugin: ${sourceInfo.pluginId})`
@@ -304,37 +304,35 @@ function validatePluralFormUniqueness(
   }
 
   // Check 2: All query names must be unique across types
-  const queryNameToSource: Record<string, { typeName: string; kind: string }[]> = {};
+  const queryNameToSource = new Map<string, { typeName: string; kind: string }[]>();
 
   for (const parsedType of Object.values(types)) {
     const singularQuery = inflection.camelize(parsedType.name, true);
     const pluralQuery = inflection.camelize(parsedType.pluralForm, true);
 
-    if (!queryNameToSource[singularQuery]) {
-      queryNameToSource[singularQuery] = [];
-    }
-    queryNameToSource[singularQuery].push({
+    const singularSources = queryNameToSource.get(singularQuery) ?? [];
+    singularSources.push({
       typeName: parsedType.name,
       kind: "singular",
     });
+    queryNameToSource.set(singularQuery, singularSources);
 
     if (singularQuery !== pluralQuery) {
-      if (!queryNameToSource[pluralQuery]) {
-        queryNameToSource[pluralQuery] = [];
-      }
-      queryNameToSource[pluralQuery].push({
+      const pluralSources = queryNameToSource.get(pluralQuery) ?? [];
+      pluralSources.push({
         typeName: parsedType.name,
         kind: "plural",
       });
+      queryNameToSource.set(pluralQuery, pluralSources);
     }
   }
 
-  const duplicates = Object.entries(queryNameToSource).filter(([, sources]) => sources.length > 1);
+  const duplicates = [...queryNameToSource].filter(([, sources]) => sources.length > 1);
 
   for (const [queryName, sources] of duplicates) {
     const sourceList = sources
       .map((s) => {
-        const sourceInfo = typeSourceInfo?.[s.typeName];
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.typeName);
         const location = sourceInfo
           ? isPluginGeneratedType(sourceInfo)
             ? ` (plugin: ${sourceInfo.pluginId})`
@@ -352,4 +350,13 @@ function validatePluralFormUniqueness(
         `${errors.map((e) => `  - ${e}`).join("\n")}`,
     );
   }
+}
+
+function getTypeSourceInfo(
+  typeSourceInfo: TypeSourceInfo | undefined,
+  typeName: string,
+): TypeSourceInfo[string] | undefined {
+  return typeSourceInfo && Object.hasOwn(typeSourceInfo, typeName)
+    ? typeSourceInfo[typeName]
+    : undefined;
 }

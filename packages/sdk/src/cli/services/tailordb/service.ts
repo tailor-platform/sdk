@@ -58,7 +58,9 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     type: TailorDBTypeSchemaOutput,
     sourceInfo: TypeSourceInfoEntry,
   ): void => {
-    const existingSourceInfo = typeSourceInfo[typeName];
+    const existingSourceInfo = Object.hasOwn(typeSourceInfo, typeName)
+      ? typeSourceInfo[typeName]
+      : undefined;
     if (existingSourceInfo) {
       const firstSource = formatTailorDBTypeSourceInfo(existingSourceInfo) ?? "unknown source";
       const secondSource = formatTailorDBTypeSourceInfo(sourceInfo) ?? "unknown source";

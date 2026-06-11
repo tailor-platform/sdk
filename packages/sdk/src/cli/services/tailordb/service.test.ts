@@ -55,4 +55,24 @@ export const account = db.type("User", {
       /Duplicate TailorDB type name "User" detected in TailorDB service "main"/,
     );
   });
+
+  test("allows type names that match Object prototype properties", async () => {
+    const typeFile = writeTypeFile(
+      "object-prototype.ts",
+      `
+import { db } from "@tailor-platform/sdk";
+export const objectPrototype = db.type("toString", {
+  value: db.string(),
+});
+`,
+    );
+
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [typeFile] },
+    });
+
+    const types = await service.loadTypes();
+    expect(Object.hasOwn(types ?? {}, "toString")).toBe(true);
+  });
 });
