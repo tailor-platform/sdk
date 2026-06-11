@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "runtime-config-defined",
+      "kind": "content-match",
+      "glob": "**/tailor.config.ts",
+      "pattern": "\\benv\\s*:",
+      "description": "top-level Tailor config defines runtime configuration values"
+    },
+    {
+      "id": "runtime-config-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "\\benv\\.",
+      "flags": "i",
+      "description": "runtime-facing TypeScript source reads values from the SDK-provided env object"
+    },
+    {
+      "id": "auth-hook-included",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "beforeLogin|authentication hook|auth hook",
+      "flags": "i",
+      "description": "source includes an authentication hook or clearly named hook implementation"
+    },
+    {
+      "id": "explanation-note-created",
+      "kind": "file-glob",
+      "glob": "**/*.md",
+      "minCount": 1,
+      "description": "workspace includes the requested note about runtime configuration"
+    }
+  ]
+}
