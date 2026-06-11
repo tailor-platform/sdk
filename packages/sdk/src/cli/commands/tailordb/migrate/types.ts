@@ -90,8 +90,10 @@ export function sanitizeMigrationLabel(migrationNumber: number): string {
 export function parseMigrationLabelNumber(label: string): number | null {
   if (!label.startsWith(MIGRATION_LABEL_PREFIX)) return null;
   const numStr = label.slice(MIGRATION_LABEL_PREFIX.length);
-  const num = parseInt(numStr, 10);
-  return isNaN(num) ? null : num;
+  // Strict digits-only match: a malformed label (e.g. "m0001-extra") must
+  // read as unset, not as migration 1.
+  if (!/^\d+$/.test(numStr)) return null;
+  return parseInt(numStr, 10);
 }
 
 // ============================================================================
