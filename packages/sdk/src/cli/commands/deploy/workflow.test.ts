@@ -163,8 +163,33 @@ describe("planWorkflow", () => {
 
     test("all workflows are deleted when config is empty", async () => {
       const client = createMockClient([
-        { id: "1", name: "workflow-1", label: appName },
-        { id: "2", name: "workflow-2", label: appName },
+        {
+          id: "1",
+          name: "workflow-1",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "workflow-1",
+            mainJobFunctionName: "main-job-1",
+            jobFunctions: {
+              "main-job-1": "1",
+              "child-job-1": "1",
+            },
+          },
+        },
+        {
+          id: "2",
+          name: "workflow-2",
+          label: appName,
+          resource: {
+            id: "2",
+            name: "workflow-2",
+            mainJobFunctionName: "main-job-2",
+            jobFunctions: {
+              "main-job-2": "1",
+            },
+          },
+        },
       ]);
 
       const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
@@ -174,6 +199,117 @@ describe("planWorkflow", () => {
         "workflow-1",
         "workflow-2",
       ]);
+      expect(result.changeSet.deletes.find((d) => d.name === "workflow-1")).toHaveProperty(
+        "deletableJobNames",
+        ["child-job-1", "main-job-1"],
+      );
+      expect(result.changeSet.deletes.find((d) => d.name === "workflow-2")).toHaveProperty(
+        "deletableJobNames",
+        ["main-job-2"],
+      );
+    });
+
+    test("job functions still referenced by retained workflows are not deleted", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "removed-workflow",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "removed-workflow",
+            mainJobFunctionName: "removed-job",
+            jobFunctions: {
+              "removed-job": "1",
+              "shared-job": "1",
+            },
+          },
+        },
+        {
+          id: "2",
+          name: "kept-workflow",
+          label: appName,
+          resource: {
+            id: "2",
+            name: "kept-workflow",
+            mainJobFunctionName: "shared-job",
+            jobFunctions: {
+              "shared-job": "1",
+            },
+          },
+        },
+        {
+          id: "3",
+          name: "other-workflow",
+          label: "other-app",
+          resource: {
+            id: "3",
+            name: "other-workflow",
+            mainJobFunctionName: "other-shared-job",
+            jobFunctions: {
+              "other-shared-job": "1",
+              "other-only-job": "1",
+            },
+          },
+        },
+      ]);
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        {
+          "kept-workflow": createMockWorkflow("kept-workflow", "shared-job"),
+        },
+        {
+          "shared-job": ["shared-job"],
+        },
+      );
+
+      expect(result.changeSet.deletes).toHaveLength(1);
+      expect(result.changeSet.deletes[0].name).toBe("removed-workflow");
+      expect(result.changeSet.deletes[0].usedJobNames).toEqual(["removed-job", "shared-job"]);
+      expect(result.changeSet.deletes[0]).toHaveProperty("deletableJobNames", ["removed-job"]);
+      expect(result.resourceOwners.has("other-app")).toBe(true);
+    });
+
+    test("job functions referenced by other owners are not deleted", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "removed-workflow",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "removed-workflow",
+            mainJobFunctionName: "shared-job",
+            jobFunctions: {
+              "shared-job": "1",
+            },
+          },
+        },
+        {
+          id: "2",
+          name: "other-workflow",
+          label: "other-app",
+          resource: {
+            id: "2",
+            name: "other-workflow",
+            mainJobFunctionName: "shared-job",
+            jobFunctions: {
+              "shared-job": "1",
+            },
+          },
+        },
+      ]);
+
+      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
+
+      expect(result.changeSet.deletes).toHaveLength(1);
+      expect(result.changeSet.deletes[0].name).toBe("removed-workflow");
+      expect(result.changeSet.deletes[0]).toHaveProperty("deletableJobNames", []);
+      expect(result.resourceOwners.has("other-app")).toBe(true);
     });
   });
 
@@ -448,6 +584,7 @@ describe("planWorkflow", () => {
                 workspaceId,
                 workflowId: "workflow-1",
                 usedJobNames: ["removed-job"],
+                deletableJobNames: ["removed-job"],
               },
             ],
             replaces: [],
@@ -475,6 +612,61 @@ describe("planWorkflow", () => {
         trn: `trn:v1:workspace:${workspaceId}:workflow_job_function:orphaned-job`,
         labels: { [sdkNameLabelKey]: "" },
       });
+    });
+  });
+
+  describe("apply phase separation", () => {
+    test("delete phase deletes job functions after their workflows", async () => {
+      const deleteWorkflow = vi.fn().mockResolvedValue({});
+      const deleteWorkflowJobFunction = vi.fn().mockResolvedValue({});
+      const client = {
+        deleteWorkflow,
+        deleteWorkflowJobFunction,
+      } as unknown as OperatorClient;
+
+      await applyWorkflow(
+        client,
+        {
+          changeSet: {
+            title: "Workflows",
+            creates: [],
+            updates: [],
+            deletes: [
+              {
+                name: "removed-workflow",
+                workspaceId,
+                workflowId: "workflow-1",
+                usedJobNames: ["removed-job", "shared-job"],
+                deletableJobNames: ["removed-job"],
+              },
+            ],
+            replaces: [],
+            unchanged: [],
+            isEmpty: () => false,
+            print: () => {},
+          },
+          conflicts: [],
+          unmanaged: [],
+          resourceOwners: new Set<string>(),
+          appName,
+          appId: undefined,
+          unchangedWorkflowJobNames: new Set<string>(),
+        } as unknown as Awaited<ReturnType<typeof planWorkflow>>,
+        "delete",
+      );
+
+      expect(deleteWorkflow).toHaveBeenCalledWith({
+        workspaceId,
+        workflowId: "workflow-1",
+      });
+      expect(deleteWorkflowJobFunction).toHaveBeenCalledTimes(1);
+      expect(deleteWorkflowJobFunction).toHaveBeenCalledWith({
+        workspaceId,
+        jobFunctionName: "removed-job",
+      });
+      expect(deleteWorkflow.mock.invocationCallOrder[0]).toBeLessThan(
+        deleteWorkflowJobFunction.mock.invocationCallOrder[0],
+      );
     });
   });
 });
@@ -554,6 +746,7 @@ describe("formatWorkflowChangeEntries", () => {
             workspaceId: "ws",
             workflowId: "workflow-1",
             usedJobNames: ["process-order", "send-notification"],
+            deletableJobNames: ["process-order", "send-notification"],
           },
         ],
         replaces: [],
@@ -587,6 +780,7 @@ describe("formatWorkflowChangeEntries", () => {
             workspaceId: "ws",
             workflowId: "workflow-1",
             usedJobNames: ["process-order"],
+            deletableJobNames: ["process-order"],
           },
         ],
         replaces: [],
