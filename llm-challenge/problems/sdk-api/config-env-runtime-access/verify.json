@@ -9,20 +9,36 @@
       "description": "top-level Tailor config defines runtime configuration values"
     },
     {
-      "id": "runtime-config-used",
+      "id": "resolver-env-used",
       "kind": "content-match",
       "glob": "**/*.ts",
-      "pattern": "\\benv\\.",
+      "pattern": "createResolver[\\s\\S]*\\benv\\.",
       "flags": "i",
-      "description": "runtime-facing TypeScript source reads values from the SDK-provided env object"
+      "description": "resolver-style source reads values from the SDK-provided env object"
     },
     {
-      "id": "auth-hook-included",
+      "id": "executor-env-used",
       "kind": "content-match",
       "glob": "**/*.ts",
-      "pattern": "beforeLogin|authentication hook|auth hook",
+      "pattern": "createExecutor[\\s\\S]*\\benv\\.",
       "flags": "i",
-      "description": "source includes an authentication hook or clearly named hook implementation"
+      "description": "executor-style source reads values from the SDK-provided env object"
+    },
+    {
+      "id": "workflow-env-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "createWorkflowJob[\\s\\S]*\\benv\\.",
+      "flags": "i",
+      "description": "workflow job source reads values from the SDK-provided env object"
+    },
+    {
+      "id": "auth-hook-env-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "beforeLogin[\\s\\S]*\\benv\\.",
+      "flags": "i",
+      "description": "authentication hook source reads values from the SDK-provided env object"
     },
     {
       "id": "explanation-note-created",
