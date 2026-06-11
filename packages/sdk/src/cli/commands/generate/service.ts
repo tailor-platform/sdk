@@ -16,6 +16,7 @@ import {
   type Application,
 } from "@/cli/services/application";
 import { createExecutorService } from "@/cli/services/executor/service";
+import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
 import { loadConfig, type LoadedConfig, type Generator } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
@@ -629,6 +630,9 @@ export function createGenerationManager(params: {
             }
           });
         }
+        assertUniqueLocalTailorDBTypeNames({
+          tailorDBServices: app.tailorDBServices,
+        });
       });
 
       // Generate plugin type and executor files
