@@ -91,9 +91,11 @@ export function parseMigrationLabelNumber(label: string): number | null {
   if (!label.startsWith(MIGRATION_LABEL_PREFIX)) return null;
   const numStr = label.slice(MIGRATION_LABEL_PREFIX.length);
   // Strict digits-only match: a malformed label (e.g. "m0001-extra") must
-  // read as unset, not as migration 1.
+  // read as unset, not as migration 1. Same for numbers outside the
+  // 0000-9999 directory range the migrations system supports.
   if (!/^\d+$/.test(numStr)) return null;
-  return parseInt(numStr, 10);
+  const num = parseInt(numStr, 10);
+  return num > 9999 ? null : num;
 }
 
 // ============================================================================
