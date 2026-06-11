@@ -271,6 +271,16 @@ describe("tailordb migration sync", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("rejects when the migration directory has a gap", async () => {
+    fs.rmSync(path.join(state.migrationsDir, "0001"), { recursive: true, force: true });
+
+    const result = await runCommand(syncCommand, ["2", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/Migration file validation failed/);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("rejects a migration number beyond the working tree's latest", async () => {
     const result = await runCommand(syncCommand, ["3", "--yes"]);
     expect(result.success).toBe(false);

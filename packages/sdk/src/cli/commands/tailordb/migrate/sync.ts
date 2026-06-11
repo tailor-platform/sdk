@@ -16,6 +16,7 @@ import { PluginManager } from "@/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import {
+  assertValidMigrationFiles,
   compareLocalTypesWithSnapshot,
   createSnapshotFromLocalTypes,
   formatMigrationNumber,
@@ -244,6 +245,8 @@ async function sync(options: SyncOptions): Promise<void> {
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   const target = selectTargetNamespace(namespacesWithMigrations, options.namespace);
 
+  assertValidMigrationFiles(target.migrationsDir, target.namespace);
+
   const latest = getLatestMigrationNumber(target.migrationsDir);
   if (targetVersion > latest) {
     throw new Error(
@@ -261,7 +264,7 @@ async function sync(options: SyncOptions): Promise<void> {
   const manifestOptions = await assertMigrationsReproduceLocalTypes(loaded, target);
 
   const accessToken = await loadAccessToken({
-    useProfile: false,
+    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -296,7 +299,9 @@ async function sync(options: SyncOptions): Promise<void> {
     logger.warn(
       "This operation will overwrite remote TailorDB types to match the selected snapshot.",
     );
-    logger.warn("Existing data in deleted types will be lost.");
+    if (deletes.length > 0) {
+      logger.warn("Existing data in deleted types will be lost.");
+    }
     logger.newline();
   }
 
@@ -347,27 +352,31 @@ async function sync(options: SyncOptions): Promise<void> {
   const createManifests = creates.map((typeName) => manifestFor(typeName));
   const updateManifests = updates.map((typeName) => manifestFor(typeName));
 
-  for (const tailordbType of createManifests) {
-    await client.createTailorDBType({
-      workspaceId,
-      namespaceName: target.namespace,
-      tailordbType,
-    });
-  }
-  for (const tailordbType of updateManifests) {
-    await client.updateTailorDBType({
-      workspaceId,
-      namespaceName: target.namespace,
-      tailordbType,
-    });
-  }
-  for (const typeName of deletes) {
-    await client.deleteTailorDBType({
-      workspaceId,
-      namespaceName: target.namespace,
-      tailordbTypeName: typeName,
-    });
-  }
+  await Promise.all([
+    ...createManifests.map((tailordbType) =>
+      client.createTailorDBType({
+        workspaceId,
+        namespaceName: target.namespace,
+        tailordbType,
+      }),
+    ),
+    ...updateManifests.map((tailordbType) =>
+      client.updateTailorDBType({
+        workspaceId,
+        namespaceName: target.namespace,
+        tailordbType,
+      }),
+    ),
+  ]);
+  await Promise.all(
+    deletes.map((typeName) =>
+      client.deleteTailorDBType({
+        workspaceId,
+        namespaceName: target.namespace,
+        tailordbTypeName: typeName,
+      }),
+    ),
+  );
 
   await client.setMetadata({
     trn,
