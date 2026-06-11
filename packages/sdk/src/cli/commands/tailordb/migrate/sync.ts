@@ -26,6 +26,7 @@ import {
 import {
   compareSnapshotWithRemote,
   generateAllTypeManifestsFromSnapshot,
+  type GenerateAllManifestsOptions,
 } from "./snapshot-manifest";
 import { MIGRATION_LABEL_KEY, MIGRATION_LABEL_PREFIX, parseMigrationLabelNumber } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
@@ -85,13 +86,18 @@ async function fetchRemoteTypes(
  * either the migration files were edited incorrectly or a schema change has
  * not been recorded as a migration yet — and overwriting the remote with an
  * unverified snapshot could destroy data. Fails before any RPC is issued.
+ *
+ * Returns the manifest generation options deploy would use for this
+ * namespace (executor-driven publishRecordEvents and namespace
+ * gqlOperations), so the synced manifests match what deploy produces.
  * @param loaded - Result of `loadConfig` (config and plugins)
  * @param target - Namespace whose migration history is being synced
+ * @returns Options for `generateAllTypeManifestsFromSnapshot`
  */
 async function assertMigrationsReproduceLocalTypes(
   loaded: Awaited<ReturnType<typeof loadConfig>>,
   target: NamespaceWithMigrations,
-): Promise<void> {
+): Promise<GenerateAllManifestsOptions> {
   const { config, plugins } = loaded;
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
   const { defineApplication } = await import("@/cli/services/application");
@@ -106,9 +112,21 @@ async function assertMigrationsReproduceLocalTypes(
   await tailordbService.loadTypes();
   await tailordbService.processNamespacePlugins();
 
+  const executors = Object.values((await application.executorService?.loadExecutors()) ?? {});
+  const executorUsedTypes = new Set<string>();
+  for (const executor of executors) {
+    if (executor.trigger.kind === "tailordb") {
+      executorUsedTypes.add(executor.trigger.typeName);
+    }
+  }
+  const manifestOptions: GenerateAllManifestsOptions = {
+    executorUsedTypes,
+    namespaceGqlOperations: tailordbService.config.gqlOperations,
+  };
+
   const latestSnapshot = reconstructSnapshotFromMigrations(target.migrationsDir);
   if (!latestSnapshot) {
-    return; // No migrations at all — reported by the caller's snapshot check.
+    return manifestOptions; // No migrations at all — reported by the caller's snapshot check.
   }
   const currentSnapshot = createSnapshotFromLocalTypes(tailordbService.types, target.namespace);
   const diff = compareLocalTypesWithSnapshot(
@@ -117,7 +135,7 @@ async function assertMigrationsReproduceLocalTypes(
     target.namespace,
   );
   if (!hasChanges(diff)) {
-    return;
+    return manifestOptions;
   }
 
   logger.error(
@@ -150,9 +168,11 @@ interface RemoteMigrationState {
 /**
  * Fetch the namespace's metadata labels and current migration number.
  *
- * Metadata may not exist yet for the namespace (GetMetadata returns NotFound);
- * treat that the same as "no labels" so the sync can still proceed and set
- * the migration label afterwards.
+ * Only GetMetadata NotFound is treated as "metadata does not exist yet".
+ * Any other failure aborts the sync (which has not mutated anything at this
+ * point): the fetched labels are written back verbatim at the end, so
+ * proceeding with empty labels after a transient error would wipe the
+ * namespace's existing metadata.
  * @param client - Operator client
  * @param trn - Namespace TRN
  * @returns Existing labels and the parsed current migration number
@@ -166,8 +186,11 @@ async function fetchRemoteMigrationState(
     const labels = metadata?.labels ?? {};
     const label = labels[MIGRATION_LABEL_KEY];
     return { labels, current: label ? parseMigrationLabelNumber(label) : null };
-  } catch {
-    return { labels: {}, current: null };
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.NotFound) {
+      return { labels: {}, current: null };
+    }
+    throw error;
   }
 }
 
@@ -235,7 +258,7 @@ async function sync(options: SyncOptions): Promise<void> {
     );
   }
 
-  await assertMigrationsReproduceLocalTypes(loaded, target);
+  const manifestOptions = await assertMigrationsReproduceLocalTypes(loaded, target);
 
   const accessToken = await loadAccessToken({
     useProfile: false,
@@ -307,7 +330,7 @@ async function sync(options: SyncOptions): Promise<void> {
     logger.newline();
   }
 
-  const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
+  const manifests = generateAllTypeManifestsFromSnapshot(snapshot, manifestOptions);
 
   // Resolve all manifests before issuing any RPC: a missing manifest
   // indicates an internal inconsistency, and skipping or failing midway

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -13,6 +14,7 @@ import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
 const state = vi.hoisted(() => ({
   migrationsDir: "",
   localTypes: {} as Record<string, unknown>,
+  executors: {} as Record<string, unknown>,
   listTailorDBTypes: vi.fn(),
   createTailorDBType: vi.fn(),
   updateTailorDBType: vi.fn(),
@@ -48,6 +50,7 @@ vi.mock("@/cli/services/application", () => ({
     tailorDBServices: [
       {
         namespace: "tailordb",
+        config: {},
         loadTypes: vi.fn().mockResolvedValue(undefined),
         processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
         get types() {
@@ -55,6 +58,9 @@ vi.mock("@/cli/services/application", () => ({
         },
       },
     ],
+    executorService: {
+      loadExecutors: vi.fn(() => Promise.resolve(state.executors)),
+    },
   })),
 }));
 
@@ -145,6 +151,7 @@ describe("tailordb migration sync", () => {
     // Local types matching reconstruct(latest) so the pre-apply consistency
     // check passes by default.
     state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
+    state.executors = {};
 
     state.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [{ name: "User" }, { name: "Stale" }],
@@ -219,7 +226,7 @@ describe("tailordb migration sync", () => {
   });
 
   test("still sets the label when namespace metadata does not exist yet", async () => {
-    state.getMetadata.mockRejectedValue(new Error("not found"));
+    state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
@@ -229,6 +236,32 @@ describe("tailordb migration sync", () => {
         labels: { "sdk-migration": "m0001" },
       }),
     );
+  });
+
+  test("aborts before mutating when reading metadata fails with a non-NotFound error", async () => {
+    state.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(state.createTailorDBType).not.toHaveBeenCalled();
+    expect(state.updateTailorDBType).not.toHaveBeenCalled();
+    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("enables publishRecordEvents for types used by executor record triggers", async () => {
+    state.executors = { onUser: { trigger: { kind: "tailordb", typeName: "User" } } };
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.updateTailorDBType.mock.calls[0][0]).toMatchObject({
+      tailordbType: { name: "User", schema: { settings: { publishRecordEvents: true } } },
+    });
+    expect(state.createTailorDBType.mock.calls[0][0]).toMatchObject({
+      tailordbType: { name: "Post", schema: { settings: { publishRecordEvents: false } } },
+    });
   });
 
   test("rejects an invalid migration number format", async () => {
