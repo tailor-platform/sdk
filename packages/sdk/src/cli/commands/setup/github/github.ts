@@ -49,12 +49,21 @@ async function defaultLoadConfigName(configPath: string): Promise<string | undef
   return config.name;
 }
 
-const WORKSPACE_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+// Kept in sync with the `workspace create` schema (cli/commands/workspace/create.ts)
+// so a name accepted here cannot fail workspace creation on the first deploy.
+const WORKSPACE_NAME_RE = /^[a-z0-9-]+$/;
 
 function validateWorkspaceName(name: string): void {
-  if (name.length > 63 || !WORKSPACE_NAME_RE.test(name)) {
+  if (
+    name.length < 3 ||
+    name.length > 63 ||
+    !WORKSPACE_NAME_RE.test(name) ||
+    name.startsWith("-") ||
+    name.endsWith("-")
+  ) {
     throw new Error(
-      `Invalid workspace name "${name}". Names must match /^[a-z0-9][a-z0-9-]*$/ and be at most 63 characters. ` +
+      `Invalid workspace name "${name}". Names must be 3-63 characters of lowercase ` +
+        "letters, numbers, and hyphens, and cannot start or end with a hyphen. " +
         "Pass a valid name with --workspace-name.",
     );
   }

@@ -151,16 +151,45 @@ async function readConfigId(configPath: string): Promise<{ id: string | null } |
 }
 
 /**
+ * Read-only CI check: the config must already carry a valid app id.
+ * Wrapper/re-export configs (no inline defineConfig call) are exempt,
+ * mirroring the local behavior where {@link ensureConfigId} no-ops.
+ * @param configPath - Absolute path to the config file
+ */
+async function assertConfigIdInCI(configPath: string): Promise<void> {
+  const result = await readConfigId(configPath);
+  if (result === null) {
+    return;
+  }
+  if (!result.id) {
+    throw new Error(
+      `tailor.config.ts is missing an 'id'. CI does not auto-generate one ` +
+        `(each run would be treated as a separate app and break resource ownership). ` +
+        `Run 'tailor-sdk setup github' or 'tailor-sdk apply' locally and commit the injected id.`,
+    );
+  }
+  // Keep CI and local behavior aligned: ensureConfigId() enforces the same
+  // format when injecting locally.
+  if (!uuidRegex.test(result.id)) {
+    throw new Error(
+      `'id' in ${configPath} must be a UUID. To use this config for a separate app, delete it.`,
+    );
+  }
+}
+
+/**
  * Ensure the config has an app id for a deploy run.
  *
  * Locally, the id is auto-injected when missing (via {@link ensureConfigId}).
  * In CI, the id is never auto-injected — a missing id is a hard error, because
  * generating one per run would create a fresh app each time and break resource
- * ownership. Ephemeral pipelines that intentionally deploy a fresh app per run
- * (such as e2e harnesses) can opt back into injection with
- * `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true`. Dry-run and build-only
- * flows skip both injection and the check (no on-disk side effects are
- * expected).
+ * ownership. CI dry-runs (plan) perform the same check read-only, so a
+ * forgotten id fails at PR time instead of at deploy. Ephemeral pipelines that
+ * intentionally deploy a fresh app per run (such as e2e harnesses) can opt
+ * back into injection with `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true`.
+ * Local dry-run and build-only flows skip both injection and the check (no
+ * on-disk side effects are expected, and build-only never talks to the
+ * platform).
  * @param obj - Inputs
  * @param obj.configPath - Absolute path to the config file
  * @param obj.dryRun - Whether this is a dry-run
@@ -172,31 +201,21 @@ export async function ensureConfigIdForDeploy(obj: {
   buildOnly: boolean;
 }): Promise<void> {
   const { configPath, dryRun, buildOnly } = obj;
-  if (dryRun || buildOnly) return;
+  if (buildOnly) return;
 
   const allowCIInjection =
     parseBoolean(process.env.TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION) === true;
-  if (isCI && !allowCIInjection) {
-    const result = await readConfigId(configPath);
-    if (result === null) {
-      // Wrapper/re-export config: defineConfig lives in another file. Mirror
-      // the local behavior (ensureConfigId no-ops) instead of failing.
-      return;
+  const strictCI = isCI && !allowCIInjection;
+
+  if (dryRun) {
+    if (strictCI) {
+      await assertConfigIdInCI(configPath);
     }
-    if (!result.id) {
-      throw new Error(
-        `tailor.config.ts is missing an 'id'. CI does not auto-generate one ` +
-          `(each run would be treated as a separate app and break resource ownership). ` +
-          `Run 'tailor-sdk setup github' or 'tailor-sdk apply' locally and commit the injected id.`,
-      );
-    }
-    // Keep CI and local behavior aligned: ensureConfigId() enforces the same
-    // format when injecting locally.
-    if (!uuidRegex.test(result.id)) {
-      throw new Error(
-        `'id' in ${configPath} must be a UUID. To use this config for a separate app, delete it.`,
-      );
-    }
+    return;
+  }
+
+  if (strictCI) {
+    await assertConfigIdInCI(configPath);
     return;
   }
 
@@ -212,6 +231,13 @@ function insertIdProperty(source: string, configObj: ObjectExpression, id: strin
     const firstProp = configObj.properties[0];
     const lineStart = source.lastIndexOf("\n", firstProp.start - 1) + 1;
     const indent = source.slice(lineStart, firstProp.start);
+    if (!/^[\t ]*$/.test(indent)) {
+      // The first property shares its line with other code (single-line
+      // object literal): insert inline, where a `//` comment would swallow
+      // the rest of the line and reusing the prefix as indent would
+      // duplicate it.
+      return source.slice(0, firstProp.start) + `${idLiteral}, ` + source.slice(firstProp.start);
+    }
     const insertion = `${idComment}\n${indent}${idLiteral},\n${indent}`;
     return source.slice(0, firstProp.start) + insertion + source.slice(firstProp.start);
   }

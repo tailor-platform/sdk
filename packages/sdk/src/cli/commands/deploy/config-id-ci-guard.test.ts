@@ -108,12 +108,32 @@ export default defineConfig({
     expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
   });
 
-  test("CI + dry-run: skips the check entirely", async () => {
+  test("CI + dry-run + missing id: throws so plan fails at PR time", async () => {
     const filePath = await writeConfig(configWithoutId);
     const { ensureConfigIdForDeploy } = await load(true);
     await expect(
       ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
+    ).rejects.toThrow(/missing an 'id'/);
+    // Read-only: nothing is injected on a dry-run.
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
+  });
+
+  test("CI + dry-run + existing id: passes without mutating the file", async () => {
+    const filePath = await writeConfig(configWithId);
+    const { ensureConfigIdForDeploy } = await load(true);
+    await expect(
+      ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
     ).resolves.toBeUndefined();
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithId);
+  });
+
+  test("local + dry-run + missing id: skips the check (no side effects)", async () => {
+    const filePath = await writeConfig(configWithoutId);
+    const { ensureConfigIdForDeploy } = await load(false);
+    await expect(
+      ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
+    ).resolves.toBeUndefined();
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
   });
 
   test("CI + build-only: skips the check entirely", async () => {
