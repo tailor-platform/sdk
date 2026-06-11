@@ -51,6 +51,16 @@ describe("workspace transform", () => {
     expect(mockClient.getOrganizationFolder).not.toHaveBeenCalled();
   });
 
+  test("falls back to the workspace name when the folder lookup fails", async () => {
+    const mockClient = {
+      getOrganizationFolder: vi.fn().mockRejectedValue(new Error("permission denied")),
+    } as unknown as OperatorClient;
+    const info = await workspaceInfoWithFolderName(mockClient, workspace());
+
+    expect(info.folderName).toBe("");
+    expect(workspaceDisplayName(info)).toBe("sample-space");
+  });
+
   test("caches folder lookup across workspaces in the same folder", async () => {
     const mockClient = client("stg");
     const infos = await workspaceInfosWithFolderNames(mockClient, [

@@ -43,12 +43,14 @@ export async function resolveWorkspaceFolderName(
 ): Promise<string> {
   if (!workspace.organizationId || !workspace.folderId) return "";
 
-  const response = await client.getOrganizationFolder({
-    organizationId: workspace.organizationId,
-    folderId: workspace.folderId,
-  });
+  const response = await client
+    .getOrganizationFolder({
+      organizationId: workspace.organizationId,
+      folderId: workspace.folderId,
+    })
+    .catch(() => undefined);
 
-  return response.folder?.name ?? "";
+  return response?.folder?.name ?? "";
 }
 
 export function createWorkspaceFolderNameResolver(client: OperatorClient) {
