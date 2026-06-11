@@ -1,6 +1,6 @@
 # Multi-Environment Configuration
 
-A project typically runs in more than one environment — for example each developer's own workspace, a staging workspace, and a production workspace. The SDK has no separate "environment" concept: an environment is a workspace you deploy to, and all environments share the same `tailor.config.ts`. This guide shows how to switch the deployment target and how to vary configuration values per environment.
+A project typically runs in more than one environment — for example, each developer's own workspace, a staging workspace, and a production workspace. The SDK has no separate "environment" concept: an environment is a workspace you deploy to, and all environments share the same `tailor.config.ts`. This guide shows how to switch the deployment target and how to vary configuration values per environment.
 
 The auto-managed `id` in `defineConfig()` identifies the application, not an environment. Keep the same committed `id` when deploying the same config to multiple workspaces; see [Application Settings](./configuration.md#application-settings).
 
@@ -18,10 +18,12 @@ For environments you switch between regularly, create a named profile per enviro
 
 ```bash
 tailor-sdk profile create staging -u you@example.com -w <staging-workspace-id>
-tailor-sdk profile create production -u you@example.com -w <production-workspace-id> --permission read
+tailor-sdk profile create production -u you@example.com -w <production-workspace-id>
 
 tailor-sdk deploy -p staging
 ```
+
+Profiles are created with `write` permission by default. For an environment you normally only inspect, add `--permission read` when creating its profile: write commands such as `deploy` are blocked while a read profile is active, which protects the workspace from accidental changes.
 
 ## Varying config values per environment
 
