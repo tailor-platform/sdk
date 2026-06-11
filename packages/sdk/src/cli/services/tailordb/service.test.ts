@@ -2,7 +2,10 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
+import { db } from "@/configure/services/tailordb";
+import { PluginManager } from "@/plugin/manager";
 import { createTailorDBService } from "./service";
+import type { Plugin } from "@/types/plugin";
 
 describe("createTailorDBService.loadTypes", () => {
   let tmpDir: string | undefined;
@@ -96,5 +99,32 @@ export const user = db.type("User", {
     using _logger = silenceLogger("error", "log");
     const types = await service.loadTypes();
     expect(Object.hasOwn(types ?? {}, "User")).toBe(true);
+  });
+
+  test("allows namespace plugin-generated types to be processed repeatedly", async () => {
+    const plugin: Plugin = {
+      id: "namespace-plugin",
+      description: "namespace generator",
+      importPath: "@example/namespace",
+      onNamespaceLoaded: () => ({
+        types: {
+          auditLog: db.type("AuditLog", {
+            message: db.string(),
+          }),
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [] },
+      pluginManager,
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await service.loadTypes();
+    await service.processNamespacePlugins();
+    await expect(service.processNamespacePlugins()).resolves.toBeUndefined();
+    expect(Object.hasOwn(service.types, "AuditLog")).toBe(true);
   });
 });

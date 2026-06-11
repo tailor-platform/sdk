@@ -259,19 +259,24 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       const results = await pluginManager.processNamespacePlugins(namespace);
       const pluginGeneratedKey = "__plugin_generated__";
 
-      if (!rawTypes[pluginGeneratedKey]) {
-        rawTypes[pluginGeneratedKey] = {};
-      }
-
-      let hasGeneratedTypes = false;
-      for (const { pluginId, config, result } of results) {
+      const successfulResults = results.map(({ pluginId, config, result }) => {
         if (!result.success) {
           logger.error(result.error);
           throw new Error(result.error);
         }
+        return { pluginId, config, output: result.output };
+      });
 
-        const output = result.output;
+      const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
+      if (previousGeneratedTypes) {
+        for (const typeName of Object.keys(previousGeneratedTypes)) {
+          delete typeSourceInfo[typeName];
+        }
+      }
+      rawTypes[pluginGeneratedKey] = {};
 
+      let hasGeneratedTypes = false;
+      for (const { pluginId, config, output } of successfulResults) {
         // Add generated types to rawTypes
         for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
           const sourceInfo: TypeSourceInfoEntry = {
@@ -299,7 +304,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
 
       // Re-parse types to include namespace plugin types
-      if (hasGeneratedTypes) {
+      if (hasGeneratedTypes || previousGeneratedTypes) {
         doParseTypes();
       }
     },
