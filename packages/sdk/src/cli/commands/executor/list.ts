@@ -20,7 +20,6 @@ export interface ListExecutorsOptions {
  */
 export async function listExecutors(options?: ListExecutorsOptions): Promise<ExecutorListInfo[]> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

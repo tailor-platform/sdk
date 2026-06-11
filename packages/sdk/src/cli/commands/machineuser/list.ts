@@ -54,7 +54,6 @@ export async function listMachineUsers(
 ): Promise<MachineUserInfo[]> {
   // Load and validate options
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

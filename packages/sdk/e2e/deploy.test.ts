@@ -52,7 +52,7 @@ describe("E2E: Service deletion order", () => {
 
   beforeAll(async () => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
-    const accessToken = await loadAccessToken({ useProfile: false });
+    const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
 
     const region = await resolveE2EWorkspaceRegion(client);

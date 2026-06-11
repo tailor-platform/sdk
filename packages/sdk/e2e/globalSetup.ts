@@ -8,6 +8,10 @@ import * as path from "node:path";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 
+// e2e must authenticate as the machine user from `tailor-sdk login --machineuser`,
+// never as the developer's locally configured profile.
+delete process.env.TAILOR_PLATFORM_PROFILE;
+
 const TRACKING_DIR = path.join(os.tmpdir(), "e2e-workspaces");
 const TEMPDIR_TRACKING_DIR = path.join(os.tmpdir(), "e2e-tempdirs");
 
@@ -88,7 +92,7 @@ export async function teardown(): Promise<void> {
   fs.rmSync(TRACKING_DIR, { recursive: true, force: true });
 
   console.log(`[globalTeardown] Cleaning up ${ids.length} workspace(s)...`);
-  const token = await loadAccessToken({ useProfile: false });
+  const token = await loadAccessToken();
   const client = await initOperatorClient(token);
 
   for (const id of ids) {

@@ -271,7 +271,6 @@ async function startWorkflowByName(
   options: StartWorkflowOptions,
 ): Promise<StartWorkflowResultWithWait> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -322,7 +321,6 @@ export async function startWorkflow<W extends WorkflowLike>(
   }
 
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
