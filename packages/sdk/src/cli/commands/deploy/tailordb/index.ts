@@ -1,5 +1,4 @@
-import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
-import { ValueSchema } from "@bufbuild/protobuf/wkt";
+import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
@@ -12,13 +11,6 @@ import {
   type UpdateTailorDBTypeRequestSchema,
 } from "@tailor-proto/tailor/v1/tailordb_pb";
 import {
-  TailorDBGQLPermission_Action,
-  type TailorDBGQLPermission_ConditionSchema,
-  type TailorDBGQLPermission_OperandSchema,
-  TailorDBGQLPermission_Operator,
-  TailorDBGQLPermission_Permit,
-  type TailorDBGQLPermission_PolicySchema,
-  type TailorDBGQLPermissionSchema,
   type TailorDBType as ProtoTailorDBType,
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
@@ -47,15 +39,13 @@ import {
   createSnapshotType,
   getLatestMigrationNumber,
   getMigrationFiles,
-  isSnapshotFieldRefOperand,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
-  type SnapshotPermissionCondition,
-  type SnapshotPermissionOperand,
-  type SnapshotGqlPermission,
-  type SnapshotGqlPermissionPolicy,
 } from "@/cli/commands/tailordb/migrate/snapshot";
-import { generateTailorDBTypeManifestFromSnapshot } from "@/cli/commands/tailordb/migrate/snapshot-manifest";
+import {
+  generateTailorDBTypeManifestFromSnapshot,
+  protoGqlPermission,
+} from "@/cli/commands/tailordb/migrate/snapshot-manifest";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
@@ -1737,124 +1727,6 @@ function normalizeComparableGqlPermission(permission: unknown) {
       ...policy,
       actions: (policy.actions ?? []).toSorted((left, right) => left - right),
     })),
-  };
-}
-
-/**
- * Convert snapshot GQL permission policies to the proto request shape.
- * @param permission - Snapshot GQL permission policies
- * @returns Proto GQL permission
- */
-export function protoGqlPermission(
-  permission: SnapshotGqlPermission,
-): MessageInitShape<typeof TailorDBGQLPermissionSchema> {
-  return {
-    policies: permission.map((policy) => protoGqlPolicy(policy)),
-  };
-}
-
-function protoGqlPolicy(
-  policy: SnapshotGqlPermissionPolicy,
-): MessageInitShape<typeof TailorDBGQLPermission_PolicySchema> {
-  const actions: TailorDBGQLPermission_Action[] = [];
-  for (const action of policy.actions) {
-    switch (action) {
-      case "all":
-        actions.push(TailorDBGQLPermission_Action.ALL);
-        break;
-      case "create":
-        actions.push(TailorDBGQLPermission_Action.CREATE);
-        break;
-      case "read":
-        actions.push(TailorDBGQLPermission_Action.READ);
-        break;
-      case "update":
-        actions.push(TailorDBGQLPermission_Action.UPDATE);
-        break;
-      case "delete":
-        actions.push(TailorDBGQLPermission_Action.DELETE);
-        break;
-      case "aggregate":
-        actions.push(TailorDBGQLPermission_Action.AGGREGATE);
-        break;
-      case "bulkUpsert":
-        actions.push(TailorDBGQLPermission_Action.BULK_UPSERT);
-        break;
-      default:
-        throw new Error(`Unknown action: ${action satisfies never}`);
-    }
-  }
-  let permit: TailorDBGQLPermission_Permit;
-  switch (policy.permit) {
-    case "allow":
-      permit = TailorDBGQLPermission_Permit.ALLOW;
-      break;
-    case "deny":
-      permit = TailorDBGQLPermission_Permit.DENY;
-      break;
-    default:
-      throw new Error(`Unknown permission: ${policy.permit satisfies never}`);
-  }
-  return {
-    conditions: policy.conditions.map((cond) => protoGqlCondition(cond)),
-    actions,
-    permit,
-    description: policy.description,
-  };
-}
-
-function protoGqlCondition(
-  condition: SnapshotPermissionCondition,
-): MessageInitShape<typeof TailorDBGQLPermission_ConditionSchema> {
-  const [left, operator, right] = condition;
-
-  const l = protoGqlOperand(left);
-  const r = protoGqlOperand(right);
-  let op: TailorDBGQLPermission_Operator;
-  switch (operator) {
-    case "eq":
-      op = TailorDBGQLPermission_Operator.EQ;
-      break;
-    case "ne":
-      op = TailorDBGQLPermission_Operator.NE;
-      break;
-    case "in":
-      op = TailorDBGQLPermission_Operator.IN;
-      break;
-    case "nin":
-      op = TailorDBGQLPermission_Operator.NIN;
-      break;
-    case "hasAny":
-      op = TailorDBGQLPermission_Operator.HAS_ANY;
-      break;
-    case "nhasAny":
-      op = TailorDBGQLPermission_Operator.NHAS_ANY;
-      break;
-    default:
-      throw new Error(`Unknown operator: ${operator satisfies never}`);
-  }
-  return {
-    left: l,
-    operator: op,
-    right: r,
-  };
-}
-
-function protoGqlOperand(
-  operand: SnapshotPermissionOperand,
-): MessageInitShape<typeof TailorDBGQLPermission_OperandSchema> {
-  if (isSnapshotFieldRefOperand(operand)) {
-    if ("user" in operand) {
-      return { kind: { case: "userField", value: operand.user } };
-    }
-    throw new Error(
-      `Unsupported field-ref operand in GQL permission: ${JSON.stringify(operand)} ` +
-        `— GQL permissions only support { user } field references`,
-    );
-  }
-
-  return {
-    kind: { case: "value", value: fromJson(ValueSchema, operand) },
   };
 }
 

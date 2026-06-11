@@ -3,7 +3,6 @@ import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
 import { resourceTrn } from "@/cli/commands/deploy/label";
-import { protoGqlPermission } from "@/cli/commands/deploy/tailordb";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { fetchAll, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
@@ -28,6 +27,7 @@ import {
 import {
   compareSnapshotWithRemote,
   generateAllTypeManifestsFromSnapshot,
+  protoGqlPermission,
   type GenerateAllManifestsOptions,
 } from "./snapshot-manifest";
 import { MIGRATION_LABEL_KEY, MIGRATION_LABEL_PREFIX, parseMigrationLabelNumber } from "./types";
