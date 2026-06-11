@@ -90,9 +90,8 @@ async function fetchRemoteTypes(
       return [tailordbTypes, nextPageToken];
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        // Sync recovers an existing namespace; it cannot create one.
         throw new Error(
-          `TailorDB namespace "${namespace}" does not exist on the remote, so there is nothing to sync. Run 'tailor-sdk deploy' to create it from the local definitions instead.`,
+          `Cannot sync: TailorDB namespace "${namespace}" has not been deployed yet.`,
           { cause: error },
         );
       }

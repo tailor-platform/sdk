@@ -297,7 +297,7 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/nothing to sync/);
+    expect(String(result.error)).toMatch(/has not been deployed yet/);
     expect(state.createTailorDBType).not.toHaveBeenCalled();
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
