@@ -62,12 +62,20 @@ function validateWorkspaceName(name: string): void {
 
 /**
  * Resolve the config file path for the given app directory.
+ *
+ * `--dir` must stay inside the repository: the value is embedded in workflow
+ * `paths:` filters and the config under it gets mutated (id injection), so
+ * absolute paths and `..` traversal are rejected.
  * @param outputDir - Repository root (cwd)
  * @param dir - App directory relative to the repo root
  * @returns Absolute path to tailor.config.ts
  */
 function resolveConfigPath(outputDir: string, dir: string): string {
-  const configPath = path.join(outputDir, dir, "tailor.config.ts");
+  const appDir = path.resolve(outputDir, dir);
+  if (path.isAbsolute(dir) || (appDir !== outputDir && !appDir.startsWith(`${outputDir}/`))) {
+    throw new Error(`--dir must be a relative path inside the repository (got "${dir}").`);
+  }
+  const configPath = path.join(appDir, "tailor.config.ts");
   if (!fs.existsSync(configPath)) {
     throw new Error(
       `tailor.config.ts not found at ${configPath}. ` +
@@ -85,7 +93,7 @@ type Resolved = {
   render: RenderResult;
   inputs: LockInputs;
   file: string;
-  idInjected: boolean;
+  configPath: string;
 };
 
 /**
@@ -103,15 +111,6 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   }
 
   const configPath = resolveConfigPath(options.outputDir, options.dir);
-
-  const idResult = await ensureConfigId(configPath);
-  if (idResult === null) {
-    logger.warn(
-      "Could not find a defineConfig() call to confirm an app id. " +
-        "The CI deploy will fail unless your config resolves to one with an 'id'.",
-    );
-  }
-  const idInjected = idResult?.injected ?? false;
 
   const loadName = options.loadConfigName ?? defaultLoadConfigName;
   const workspaceName = options.workspaceName ?? (await loadName(configPath));
@@ -170,7 +169,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     plan: kind === "branch" ? options.plan : true,
   };
 
-  return { kind, workspaceName, branch, packageManager, render, inputs, file, idInjected };
+  return { kind, workspaceName, branch, packageManager, render, inputs, file, configPath };
 }
 
 type Decision =
@@ -318,6 +317,17 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
     throw new Error(`${resolved.file}: ${decision.reason}`);
   }
 
+  // Inject the app id only once the run is known to succeed, so a failed run
+  // leaves tailor.config.ts untouched.
+  const idResult = await ensureConfigId(resolved.configPath);
+  if (idResult === null) {
+    logger.warn(
+      "Could not find a defineConfig() call to confirm an app id. " +
+        "The CI deploy will fail unless your config resolves to one with an 'id'.",
+    );
+  }
+  const idInjected = idResult?.injected ?? false;
+
   fs.mkdirSync(path.dirname(absFile), { recursive: true });
   fs.writeFileSync(absFile, resolved.render.content, "utf-8");
 
@@ -353,5 +363,5 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
     logger.success(`Generated ${styles.path(resolved.file)}`);
   }
 
-  printNextSteps({ environment: options.environment, idInjected: resolved.idInjected });
+  printNextSteps({ environment: options.environment, idInjected });
 }
