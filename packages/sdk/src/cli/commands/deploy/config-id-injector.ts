@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import { isCI } from "std-env";
 import { logger } from "@/cli/shared/logger";
+import { parseBoolean } from "@/cli/shared/parse-boolean";
 import type { CallExpression, ObjectExpression, ObjectProperty } from "@oxc-project/types";
 
 export interface EnsureConfigIdResult {
@@ -144,8 +145,11 @@ async function readConfigId(configPath: string): Promise<string | null> {
  * Locally, the id is auto-injected when missing (via {@link ensureConfigId}).
  * In CI, the id is never auto-injected — a missing id is a hard error, because
  * generating one per run would create a fresh app each time and break resource
- * ownership. Dry-run and build-only flows skip both injection and the check
- * (no on-disk side effects are expected).
+ * ownership. Ephemeral pipelines that intentionally deploy a fresh app per run
+ * (such as e2e harnesses) can opt back into injection with
+ * `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true`. Dry-run and build-only
+ * flows skip both injection and the check (no on-disk side effects are
+ * expected).
  * @param obj - Inputs
  * @param obj.configPath - Absolute path to the config file
  * @param obj.dryRun - Whether this is a dry-run
@@ -159,7 +163,9 @@ export async function ensureConfigIdForDeploy(obj: {
   const { configPath, dryRun, buildOnly } = obj;
   if (dryRun || buildOnly) return;
 
-  if (isCI) {
+  const allowCIInjection =
+    parseBoolean(process.env.TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION) === true;
+  if (isCI && !allowCIInjection) {
     const id = await readConfigId(configPath);
     if (!id) {
       throw new Error(

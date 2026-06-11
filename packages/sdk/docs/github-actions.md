@@ -122,6 +122,11 @@ deploy` refuses to inject a new id — if the id were assigned fresh on each CI
 run, every deploy would create a brand-new application and lose ownership of
 previously deployed resources.
 
+If your pipeline intentionally deploys a fresh, throwaway application on every
+run (for example an end-to-end test harness that creates and deletes its own
+workspace), set `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true` to opt back
+into automatic id injection for that pipeline.
+
 ## Secrets
 
 The generated workflow reads two secrets:

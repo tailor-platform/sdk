@@ -27,6 +27,7 @@ describe("ensureConfigIdForDeploy", () => {
     await fs.promises.rm(tempDir, { recursive: true, force: true });
     vi.resetModules();
     vi.doUnmock("std-env");
+    vi.unstubAllEnvs();
   });
 
   async function writeConfig(source: string): Promise<string> {
@@ -62,6 +63,14 @@ describe("ensureConfigIdForDeploy", () => {
   test("local + missing id: injects an id", async () => {
     const filePath = await writeConfig(configWithoutId);
     const { ensureConfigIdForDeploy } = await load(false);
+    await ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false });
+    expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
+  });
+
+  test("CI + missing id + TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION: injects an id", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION", "true");
+    const filePath = await writeConfig(configWithoutId);
+    const { ensureConfigIdForDeploy } = await load(true);
     await ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false });
     expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
   });

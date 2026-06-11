@@ -14,6 +14,7 @@ export const auth = defineAuth("migration-auth", {
 });
 
 export default defineConfig({
+  id: "de2efacb-1a8a-4acc-bf61-9037db3e0238",
   name: "migration-e2e",
   auth,
   db: {
