@@ -332,10 +332,17 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
     contentHash: hashContent(resolved.render.content),
   };
 
-  const targets = (lock?.targets ?? []).filter(
-    (t) => !(t.kind === newTarget.kind && t.workspaceName === newTarget.workspaceName),
+  // Replace in place to keep the lock diff minimal when re-running setup for
+  // one of several targets.
+  const targets = [...(lock?.targets ?? [])];
+  const index = targets.findIndex(
+    (t) => t.kind === newTarget.kind && t.workspaceName === newTarget.workspaceName,
   );
-  targets.push(newTarget);
+  if (index === -1) {
+    targets.push(newTarget);
+  } else {
+    targets[index] = newTarget;
+  }
   writeLock(options.outputDir, { version: LOCK_VERSION, targets });
 
   if (decision.action === "restore") {

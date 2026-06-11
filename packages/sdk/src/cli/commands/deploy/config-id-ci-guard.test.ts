@@ -67,6 +67,15 @@ describe("ensureConfigIdForDeploy", () => {
     expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
   });
 
+  test("CI + wrapper config (no inline defineConfig): skips the check", async () => {
+    const filePath = await writeConfig(`export { default } from "./base.config";
+`);
+    const { ensureConfigIdForDeploy } = await load(true);
+    await expect(
+      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
+    ).resolves.toBeUndefined();
+  });
+
   test("CI + non-UUID id: throws", async () => {
     const filePath = await writeConfig(`import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({

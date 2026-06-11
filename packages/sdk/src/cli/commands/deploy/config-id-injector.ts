@@ -122,21 +122,22 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
 
 /**
  * Read the resolved `defineConfig({...})` `id` from a config file without
- * mutating it. Returns null when the file has no `defineConfig()` call (wrapper
- * config) or no `id` property.
+ * mutating it. Returns null when the file has no inline `defineConfig()` call
+ * (wrapper/re-export config), and `{ id: null }` when the call exists but has
+ * no usable `id` property.
  * @param configPath - Absolute path to the config file
- * @returns The existing id, or null
+ * @returns The existing id (or null when absent), or null for wrapper configs
  */
-async function readConfigId(configPath: string): Promise<string | null> {
+async function readConfigId(configPath: string): Promise<{ id: string | null } | null> {
   const source = await fs.promises.readFile(configPath, "utf-8");
   const { program } = parseSync(configPath, source);
   const calls: ConfigCallSite[] = [];
   findDefineConfigCalls(program, calls);
   if (calls.length !== 1 || !calls[0].configObj) return null;
   const idProp = findIdProperty(calls[0].configObj);
-  if (!idProp || idProp.value.type !== "Literal") return null;
+  if (!idProp || idProp.value.type !== "Literal") return { id: null };
   const value = (idProp.value as { value?: unknown }).value;
-  return typeof value === "string" && value !== "" ? value : null;
+  return { id: typeof value === "string" && value !== "" ? value : null };
 }
 
 /**
@@ -166,8 +167,13 @@ export async function ensureConfigIdForDeploy(obj: {
   const allowCIInjection =
     parseBoolean(process.env.TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION) === true;
   if (isCI && !allowCIInjection) {
-    const id = await readConfigId(configPath);
-    if (!id) {
+    const result = await readConfigId(configPath);
+    if (result === null) {
+      // Wrapper/re-export config: defineConfig lives in another file. Mirror
+      // the local behavior (ensureConfigId no-ops) instead of failing.
+      return;
+    }
+    if (!result.id) {
       throw new Error(
         `tailor.config.ts is missing an 'id'. CI does not auto-generate one ` +
           `(each run would be treated as a separate app and break resource ownership). ` +
@@ -176,7 +182,7 @@ export async function ensureConfigIdForDeploy(obj: {
     }
     // Keep CI and local behavior aligned: ensureConfigId() enforces the same
     // format when injecting locally.
-    if (!uuidRegex.test(id)) {
+    if (!uuidRegex.test(result.id)) {
       throw new Error(
         `'id' in ${configPath} must be a UUID. To use this config for a separate app, delete it.`,
       );
