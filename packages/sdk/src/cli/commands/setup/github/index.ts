@@ -32,8 +32,8 @@ export const githubCommand = defineAppCommand({
       tag: arg(z.boolean().default(false), {
         description: "Generate a tag target (deploy on tag push)",
       }),
-      "tag-pattern": arg(z.string().default("v*"), {
-        description: "Tag glob to match (requires --tag)",
+      "tag-pattern": arg(z.string().optional(), {
+        description: "Tag glob to match (requires --tag; defaults to v*)",
       }),
       environment: arg(z.string().optional(), {
         description: "GitHub Environment for the deploy job",
@@ -51,7 +51,7 @@ export const githubCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    if (args["tag-pattern"] !== "v*" && !args.tag) {
+    if (args["tag-pattern"] !== undefined && !args.tag) {
       throw new Error("--tag-pattern requires --tag.");
     }
     if (args["no-plan"] && args.tag) {
@@ -65,7 +65,7 @@ export const githubCommand = defineAppCommand({
       folderId: args["folder-id"],
       branch: args.branch,
       tag: args.tag,
-      tagPattern: args["tag-pattern"],
+      tagPattern: args["tag-pattern"] ?? "v*",
       environment: args.environment,
       plan: !args["no-plan"],
       dir: args.dir,
