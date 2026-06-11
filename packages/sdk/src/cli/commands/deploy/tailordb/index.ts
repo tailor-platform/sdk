@@ -46,6 +46,7 @@ import {
   generateTailorDBTypeManifestFromSnapshot,
   protoGqlPermission,
 } from "@/cli/commands/tailordb/migrate/snapshot-manifest";
+import { handleOptionalToRequiredError } from "@/cli/commands/tailordb/migrate/types";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
@@ -579,28 +580,6 @@ export async function applyTailorDB(
 // ============================================================================
 // Error Handling Helpers
 // ============================================================================
-
-/**
- * Handle optional-to-required field change error with helpful message
- * @param {unknown} error - Error to handle
- * @param {string[]} messages - Additional messages to display
- */
-function handleOptionalToRequiredError(error: unknown, messages: string[]): never {
-  if (
-    error instanceof ConnectError &&
-    error.code === Code.FailedPrecondition &&
-    error.message.includes("cannot be updated from non-required to required when records exist")
-  ) {
-    logger.error(
-      "Schema change failed: Cannot change field from optional to required when records exist.",
-    );
-    logger.newline();
-    for (const message of messages) {
-      logger.info(message);
-    }
-  }
-  throw error;
-}
 
 // ============================================================================
 // Migration Execution Helpers

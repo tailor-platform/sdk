@@ -15,12 +15,12 @@ import { assertWritable } from "@/cli/shared/readonly-guard";
 import { PluginManager } from "@/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
+import { parseMigrationNumberArg } from "./migration-number";
 import {
   assertValidMigrationFiles,
   compareLocalTypesWithSnapshot,
   createSnapshotFromLocalTypes,
   formatMigrationNumber,
-  isValidMigrationNumber,
   reconstructSnapshotFromMigrations,
   getLatestMigrationNumber,
 } from "./snapshot";
@@ -30,7 +30,12 @@ import {
   protoGqlPermission,
   type GenerateAllManifestsOptions,
 } from "./snapshot-manifest";
-import { MIGRATION_LABEL_KEY, MIGRATION_LABEL_PREFIX, parseMigrationLabelNumber } from "./types";
+import {
+  handleOptionalToRequiredError,
+  MIGRATION_LABEL_KEY,
+  MIGRATION_LABEL_PREFIX,
+  parseMigrationLabelNumber,
+} from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 export interface SyncOptions {
@@ -40,27 +45,6 @@ export interface SyncOptions {
   yes?: boolean;
   workspaceId?: string;
   profile?: string;
-}
-
-// Accept either the canonical 4-digit form ("0000") or a bare integer
-// ("0"–"9999"), mirroring `migration script`'s validation except that a
-// bare 0 is accepted here because sync can target the baseline snapshot.
-// Reject non-digit input, integer forms with leading zeros ("01"), and
-// anything outside the 0000-9999 directory range.
-function parseMigrationNumberArg(numberStr: string): number {
-  if (isValidMigrationNumber(numberStr)) {
-    return parseInt(numberStr, 10);
-  }
-  if (/^(0|[1-9]\d*)$/.test(numberStr)) {
-    const parsed = parseInt(numberStr, 10);
-    if (parsed > 9999) {
-      throw new Error(`Migration number ${numberStr} is out of range. Expected 0-9999.`);
-    }
-    return parsed;
-  }
-  throw new Error(
-    `Invalid migration number format: ${numberStr}. Expected 4-digit format (e.g., 0001) or integer 0-9999 (e.g., 1).`,
-  );
 }
 
 type RemoteGqlPermission = Awaited<
@@ -388,22 +372,29 @@ async function sync(options: SyncOptions): Promise<void> {
   const createManifests = creates.map((typeName) => manifestFor(typeName));
   const updateManifests = updates.map((typeName) => manifestFor(typeName));
 
-  await Promise.all([
-    ...createManifests.map((tailordbType) =>
-      client.createTailorDBType({
-        workspaceId,
-        namespaceName: target.namespace,
-        tailordbType,
-      }),
-    ),
-    ...updateManifests.map((tailordbType) =>
-      client.updateTailorDBType({
-        workspaceId,
-        namespaceName: target.namespace,
-        tailordbType,
-      }),
-    ),
-  ]);
+  try {
+    await Promise.all([
+      ...createManifests.map((tailordbType) =>
+        client.createTailorDBType({
+          workspaceId,
+          namespaceName: target.namespace,
+          tailordbType,
+        }),
+      ),
+      ...updateManifests.map((tailordbType) =>
+        client.updateTailorDBType({
+          workspaceId,
+          namespaceName: target.namespace,
+          tailordbType,
+        }),
+      ),
+    ]);
+  } catch (error) {
+    handleOptionalToRequiredError(error, [
+      "The target snapshot marks a field as required, but existing remote records have no value for it.",
+      "Populate those records first (e.g. with a migration script applied via 'tailor-sdk deploy'), then re-run the sync.",
+    ]);
+  }
   // Reconcile GQL permissions with the snapshot, mirroring deploy: upsert
   // permissions for snapshot types, then delete the rest (including those
   // of deleted types — an orphaned permission can block the type deletion).

@@ -2,6 +2,8 @@
  * Types for TailorDB migration execution
  */
 
+import { Code, ConnectError } from "@connectrpc/connect";
+import { logger } from "@/cli/shared/logger";
 import { formatMigrationNumber } from "./migration-number";
 import type { MigrationDiff } from "./diff-calculator";
 
@@ -104,6 +106,28 @@ export function parseMigrationLabelNumber(label: string): number | null {
 export function isSchemaError(errorMessage: string): boolean {
   const lowerMessage = errorMessage.toLowerCase();
   return SCHEMA_ERROR_PATTERNS.some((pattern) => lowerMessage.includes(pattern));
+}
+
+/**
+ * Handle optional-to-required field change error with helpful message
+ * @param {unknown} error - Error to handle
+ * @param {string[]} messages - Additional messages to display
+ */
+export function handleOptionalToRequiredError(error: unknown, messages: string[]): never {
+  if (
+    error instanceof ConnectError &&
+    error.code === Code.FailedPrecondition &&
+    error.message.includes("cannot be updated from non-required to required when records exist")
+  ) {
+    logger.error(
+      "Schema change failed: Cannot change field from optional to required when records exist.",
+    );
+    logger.newline();
+    for (const message of messages) {
+      logger.info(message);
+    }
+  }
+  throw error;
 }
 
 // ============================================================================
