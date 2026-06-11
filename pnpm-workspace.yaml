@@ -39,4 +39,4 @@ allowBuilds:
   unrs-resolver: false
 
 overrides:
-  valibot@>=0.31.0 <1.2.0: ^1.2.0
+  valibot@>=0.31.0 <1.2.0: 1.4.1
