@@ -1740,7 +1740,12 @@ function normalizeComparableGqlPermission(permission: unknown) {
   };
 }
 
-function protoGqlPermission(
+/**
+ * Convert snapshot GQL permission policies to the proto request shape.
+ * @param permission - Snapshot GQL permission policies
+ * @returns Proto GQL permission
+ */
+export function protoGqlPermission(
   permission: SnapshotGqlPermission,
 ): MessageInitShape<typeof TailorDBGQLPermissionSchema> {
   return {

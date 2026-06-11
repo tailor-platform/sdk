@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
 import { resourceTrn } from "@/cli/commands/deploy/label";
+import { protoGqlPermission } from "@/cli/commands/deploy/tailordb";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { fetchAll, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
@@ -42,9 +43,10 @@ export interface SyncOptions {
 }
 
 // Accept either the canonical 4-digit form ("0000") or a bare integer
-// ("0"–"9999"), mirroring `migration script`. Reject non-digit input,
-// integer forms with leading zeros ("01"), and anything outside the
-// 0000-9999 directory range that the migrations system supports.
+// ("0"–"9999"), mirroring `migration script`'s validation except that a
+// bare 0 is accepted here because sync can target the baseline snapshot.
+// Reject non-digit input, integer forms with leading zeros ("01"), and
+// anything outside the 0000-9999 directory range.
 function parseMigrationNumberArg(numberStr: string): number {
   if (isValidMigrationNumber(numberStr)) {
     return parseInt(numberStr, 10);
@@ -59,6 +61,33 @@ function parseMigrationNumberArg(numberStr: string): number {
   throw new Error(
     `Invalid migration number format: ${numberStr}. Expected 4-digit format (e.g., 0001) or integer 0-9999 (e.g., 1).`,
   );
+}
+
+type RemoteGqlPermission = Awaited<
+  ReturnType<OperatorClient["listTailorDBGQLPermissions"]>
+>["permissions"][number];
+
+async function fetchRemoteGqlPermissions(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<RemoteGqlPermission[]> {
+  return fetchAll(async (pageToken, maxPageSize) => {
+    try {
+      const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
+        workspaceId,
+        namespaceName: namespace,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [permissions, nextPageToken];
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        return [[], ""];
+      }
+      throw error;
+    }
+  });
 }
 
 async function fetchRemoteTypes(
@@ -375,23 +404,39 @@ async function sync(options: SyncOptions): Promise<void> {
       }),
     ),
   ]);
-  // Delete GQL permissions first, then types, mirroring deploy: an orphaned
-  // permission can block the type deletion. NotFound just means the type
-  // never had a GQL permission.
+  // Reconcile GQL permissions with the snapshot, mirroring deploy: upsert
+  // permissions for snapshot types, then delete the rest (including those
+  // of deleted types — an orphaned permission can block the type deletion).
+  const remoteGqlPermissions = await fetchRemoteGqlPermissions(
+    client,
+    workspaceId,
+    target.namespace,
+  );
+  const remoteGqlPermissionTypes = new Set(remoteGqlPermissions.map((p) => p.typeName));
+  const desiredGqlPermissions = Object.entries(snapshot.types).flatMap(([typeName, snapshotType]) =>
+    snapshotType.permissions?.gql
+      ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]
+      : [],
+  );
   await Promise.all(
-    deletes.map(async (typeName) => {
-      try {
-        await client.deleteTailorDBGQLPermission({
+    desiredGqlPermissions.map(({ typeName, permission }) => {
+      const request = { workspaceId, namespaceName: target.namespace, typeName, permission };
+      return remoteGqlPermissionTypes.has(typeName)
+        ? client.updateTailorDBGQLPermission(request)
+        : client.createTailorDBGQLPermission(request);
+    }),
+  );
+  const desiredGqlPermissionTypes = new Set(desiredGqlPermissions.map((p) => p.typeName));
+  await Promise.all(
+    remoteGqlPermissions
+      .filter((p) => !desiredGqlPermissionTypes.has(p.typeName))
+      .map((p) =>
+        client.deleteTailorDBGQLPermission({
           workspaceId,
           namespaceName: target.namespace,
-          typeName,
-        });
-      } catch (error) {
-        if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
-          throw error;
-        }
-      }
-    }),
+          typeName: p.typeName,
+        }),
+      ),
   );
   await Promise.all(
     deletes.map((typeName) =>

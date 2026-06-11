@@ -19,6 +19,9 @@ const state = vi.hoisted(() => ({
   createTailorDBType: vi.fn(),
   updateTailorDBType: vi.fn(),
   deleteTailorDBType: vi.fn(),
+  listTailorDBGQLPermissions: vi.fn(),
+  createTailorDBGQLPermission: vi.fn(),
+  updateTailorDBGQLPermission: vi.fn(),
   deleteTailorDBGQLPermission: vi.fn(),
   getMetadata: vi.fn(),
   setMetadata: vi.fn(),
@@ -161,6 +164,9 @@ describe("tailordb migration sync", () => {
     state.createTailorDBType.mockResolvedValue({});
     state.updateTailorDBType.mockResolvedValue({});
     state.deleteTailorDBType.mockResolvedValue({});
+    state.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
+    state.createTailorDBGQLPermission.mockResolvedValue({});
+    state.updateTailorDBGQLPermission.mockResolvedValue({});
     state.deleteTailorDBGQLPermission.mockResolvedValue({});
     state.getMetadata.mockResolvedValue({
       metadata: {
@@ -173,6 +179,9 @@ describe("tailordb migration sync", () => {
       createTailorDBType: state.createTailorDBType,
       updateTailorDBType: state.updateTailorDBType,
       deleteTailorDBType: state.deleteTailorDBType,
+      listTailorDBGQLPermissions: state.listTailorDBGQLPermissions,
+      createTailorDBGQLPermission: state.createTailorDBGQLPermission,
+      updateTailorDBGQLPermission: state.updateTailorDBGQLPermission,
       deleteTailorDBGQLPermission: state.deleteTailorDBGQLPermission,
       getMetadata: state.getMetadata,
       setMetadata: state.setMetadata,
@@ -185,6 +194,9 @@ describe("tailordb migration sync", () => {
     state.createTailorDBType.mockReset();
     state.updateTailorDBType.mockReset();
     state.deleteTailorDBType.mockReset();
+    state.listTailorDBGQLPermissions.mockReset();
+    state.createTailorDBGQLPermission.mockReset();
+    state.updateTailorDBGQLPermission.mockReset();
     state.deleteTailorDBGQLPermission.mockReset();
     state.getMetadata.mockReset();
     state.setMetadata.mockReset();
@@ -212,12 +224,10 @@ describe("tailordb migration sync", () => {
       namespaceName: "tailordb",
       tailordbTypeName: "Stale",
     });
-    // GQL permission for the deleted type is removed before the type itself.
-    expect(state.deleteTailorDBGQLPermission).toHaveBeenCalledTimes(1);
-    expect(state.deleteTailorDBGQLPermission.mock.calls[0][0]).toMatchObject({
-      namespaceName: "tailordb",
-      typeName: "Stale",
-    });
+    // No remote GQL permissions exist, so none are touched.
+    expect(state.deleteTailorDBGQLPermission).not.toHaveBeenCalled();
+    expect(state.createTailorDBGQLPermission).not.toHaveBeenCalled();
+    expect(state.updateTailorDBGQLPermission).not.toHaveBeenCalled();
     expect(state.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
@@ -225,15 +235,35 @@ describe("tailordb migration sync", () => {
     );
   });
 
-  test("tolerates NotFound when a deleted type has no GQL permission", async () => {
-    state.deleteTailorDBGQLPermission.mockRejectedValue(
-      new ConnectError("permission not found", Code.NotFound),
-    );
+  test("reconciles GQL permissions with the snapshot", async () => {
+    const gqlPolicy = { conditions: [], actions: ["read"], permit: "allow" };
+    writeInitialSchema({
+      User: { ...snapshotType("User"), permissions: { gql: [gqlPolicy] } } as ReturnType<
+        typeof snapshotType
+      >,
+    });
+    state.localTypes = {
+      User: { ...(parsedType("User") as object), permissions: { gql: [gqlPolicy] } },
+      Post: parsedType("Post"),
+    };
+    // Remote: a stale permission for a type absent from the snapshot.
+    state.listTailorDBGQLPermissions.mockResolvedValue({
+      permissions: [{ typeName: "Stale" }],
+      nextPageToken: "",
+    });
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.deleteTailorDBType).toHaveBeenCalledTimes(1);
+    // User's permission exists in the snapshot but not remotely → created.
+    expect(state.createTailorDBGQLPermission).toHaveBeenCalledWith(
+      expect.objectContaining({ namespaceName: "tailordb", typeName: "User" }),
+    );
+    expect(state.updateTailorDBGQLPermission).not.toHaveBeenCalled();
+    // Stale's permission has no snapshot counterpart → deleted before the type.
+    expect(state.deleteTailorDBGQLPermission).toHaveBeenCalledWith(
+      expect.objectContaining({ namespaceName: "tailordb", typeName: "Stale" }),
+    );
   });
 
   test("accepts 4-digit migration numbers", async () => {
