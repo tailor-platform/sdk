@@ -170,8 +170,10 @@ there.
 
 You can trigger the workflow manually from **Actions → Run workflow**. The
 `dry-run` input (boolean, default `false`) runs the plan job without
-proceeding to deploy. Use this to preview what would change before executing
-a rollback or an out-of-band deploy.
+deploying. Use this to preview what would change before executing a rollback
+or an out-of-band deploy. With `dry-run` off, a branch-target dispatch goes
+straight to deploy (like a push), while a tag-target dispatch runs plan first
+and then deploys.
 
 For tag targets, you can select any branch or tag when dispatching manually. The tag-guard check is skipped for manual dispatches, so
 you can deploy any commit regardless of branch membership.

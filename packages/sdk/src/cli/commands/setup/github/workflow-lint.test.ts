@@ -11,6 +11,7 @@
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { renderBranchWorkflow, renderTagWorkflow, type PackageManager } from "./templates";
@@ -44,7 +45,7 @@ function runActionlint(workflowPath: string): LintResult {
 let tmpDir: string;
 
 beforeAll(() => {
-  tmpDir = fs.mkdtempSync(path.join(path.resolve("/tmp"), "workflow-lint-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-lint-"));
   fs.mkdirSync(path.join(tmpDir, ".github", "workflows"), { recursive: true });
 });
 

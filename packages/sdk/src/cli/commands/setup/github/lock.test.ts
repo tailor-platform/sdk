@@ -72,6 +72,17 @@ describe("readLock / writeLock", () => {
     writeLock(testDir, lock);
     expect(() => readLock(testDir)).toThrow(/newer SDK/);
   });
+
+  test("throws with restore guidance when the version field is missing", () => {
+    const lock = makeLock() as unknown as Record<string, unknown>;
+    delete lock.version;
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.writeFileSync(
+      path.join(testDir, ".github/tailor-sdk.lock"),
+      `${JSON.stringify(lock, null, 2)}\n`,
+    );
+    expect(() => readLock(testDir)).toThrow(/no valid 'version'/);
+  });
 });
 
 describe("findTarget", () => {

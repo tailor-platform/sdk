@@ -83,7 +83,13 @@ export function readLock(outputDir: string): LockFile | null {
       { cause },
     );
   }
-  if (typeof parsed.version !== "number" || parsed.version > LOCK_VERSION) {
+  if (typeof parsed.version !== "number") {
+    throw new Error(
+      `${LOCK_FILENAME} has no valid 'version' field. The lock file is machine-owned; ` +
+        "restore it from git (git checkout -- .github/tailor-sdk.lock) and re-run setup.",
+    );
+  }
+  if (parsed.version > LOCK_VERSION) {
     throw new Error(
       `${LOCK_FILENAME} was written by a newer SDK (lock version ${String(parsed.version)}). ` +
         "Update the SDK to continue: pnpm update @tailor-platform/sdk",

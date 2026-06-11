@@ -67,6 +67,19 @@ describe("ensureConfigIdForDeploy", () => {
     expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
   });
 
+  test("CI + non-UUID id: throws", async () => {
+    const filePath = await writeConfig(`import { defineConfig } from "@tailor-platform/sdk";
+export default defineConfig({
+  id: "not-a-uuid",
+  name: "my-app",
+});
+`);
+    const { ensureConfigIdForDeploy } = await load(true);
+    await expect(
+      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
+    ).rejects.toThrow(/must be a UUID/);
+  });
+
   test("CI + missing id + TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION: injects an id", async () => {
     vi.stubEnv("TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION", "true");
     const filePath = await writeConfig(configWithoutId);

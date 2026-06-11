@@ -174,6 +174,13 @@ export async function ensureConfigIdForDeploy(obj: {
           `Run 'tailor-sdk setup github' or 'tailor-sdk apply' locally and commit the injected id.`,
       );
     }
+    // Keep CI and local behavior aligned: ensureConfigId() enforces the same
+    // format when injecting locally.
+    if (!uuidRegex.test(id)) {
+      throw new Error(
+        `'id' in ${configPath} must be a UUID. To use this config for a separate app, delete it.`,
+      );
+    }
     return;
   }
 

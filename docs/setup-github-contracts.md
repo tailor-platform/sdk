@@ -398,12 +398,18 @@ on:
         default: false
 ```
 
-Behaviour:
+Behaviour (per target kind):
 
-- `dry-run: true` runs the plan job and skips the deploy job.
-- `dry-run: false` (default) runs both plan and deploy.
+- Branch target: `dry-run: true` runs the plan job only; `dry-run: false`
+  (default) runs the deploy job only. Plan and deploy are independent jobs on
+  branch targets — deploys (including push deploys) are not gated on a plan,
+  which is a PR-time check.
+- Tag target: the plan job always runs; `dry-run: true` stops before the
+  deploy job, `dry-run: false` (default) continues to deploy after the
+  environment approval (if any).
 - When `--no-plan` is set on a branch target, the `workflow_dispatch` trigger
-  is still generated but `inputs:` is omitted (there is no plan job to run).
+  is still generated but `inputs:` is omitted (there is no plan job to run);
+  every dispatch deploys.
 
 ---
 
