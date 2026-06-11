@@ -289,6 +289,19 @@ describe("tailordb migration sync", () => {
     );
   });
 
+  test("refuses to sync when the namespace does not exist remotely", async () => {
+    state.listTailorDBTypes.mockRejectedValue(
+      new ConnectError("namespace not found", Code.NotFound),
+    );
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/nothing to sync/);
+    expect(state.createTailorDBType).not.toHaveBeenCalled();
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("aborts before mutating when reading metadata fails with a non-NotFound error", async () => {
     state.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
 

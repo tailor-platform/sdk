@@ -90,7 +90,11 @@ async function fetchRemoteTypes(
       return [tailordbTypes, nextPageToken];
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
+        // Sync recovers an existing namespace; it cannot create one.
+        throw new Error(
+          `TailorDB namespace "${namespace}" does not exist on the remote, so there is nothing to sync. Run 'tailor-sdk deploy' to create it from the local definitions instead.`,
+          { cause: error },
+        );
       }
       throw error;
     }
@@ -299,6 +303,26 @@ async function sync(options: SyncOptions): Promise<void> {
   const existingTypeNames = new Set(remoteTypes.map((t) => t.name));
   const { creates, updates, deletes } = compareSnapshotWithRemote(snapshot, existingTypeNames);
 
+  // GQL permissions are reconciled alongside types: upsert the ones defined
+  // in the snapshot, delete remote ones with no snapshot counterpart
+  // (including those of deleted types — an orphaned permission can block
+  // the type deletion).
+  const remoteGqlPermissions = await fetchRemoteGqlPermissions(
+    client,
+    workspaceId,
+    target.namespace,
+  );
+  const remoteGqlPermissionTypes = new Set(remoteGqlPermissions.map((p) => p.typeName));
+  const desiredGqlPermissions = Object.entries(snapshot.types).flatMap(([typeName, snapshotType]) =>
+    snapshotType.permissions?.gql
+      ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]
+      : [],
+  );
+  const desiredGqlPermissionTypes = new Set(desiredGqlPermissions.map((p) => p.typeName));
+  const gqlPermissionDeletes = remoteGqlPermissions.filter(
+    (p) => !desiredGqlPermissionTypes.has(p.typeName),
+  );
+
   const current = remoteState.current;
   logger.newline();
   logger.info(`Namespace: ${styles.bold(target.namespace)}`);
@@ -309,9 +333,16 @@ async function sync(options: SyncOptions): Promise<void> {
   logger.log(`  Types to create: ${styles.bold(String(creates.length))}`);
   logger.log(`  Types to update: ${styles.bold(String(updates.length))}`);
   logger.log(`  Types to delete: ${styles.bold(String(deletes.length))}`);
+  logger.log(`  GQL permissions to set: ${styles.bold(String(desiredGqlPermissions.length))}`);
+  logger.log(`  GQL permissions to delete: ${styles.bold(String(gqlPermissionDeletes.length))}`);
   logger.newline();
 
-  const totalOps = creates.length + updates.length + deletes.length;
+  const totalOps =
+    creates.length +
+    updates.length +
+    deletes.length +
+    desiredGqlPermissions.length +
+    gqlPermissionDeletes.length;
   if (totalOps === 0) {
     // Reachable only when both snapshot and remote hold no types; the label
     // may still be stale, so the sync proceeds to update it.
@@ -396,20 +427,6 @@ async function sync(options: SyncOptions): Promise<void> {
       "Populate those records first (e.g. with a migration script applied via 'tailor-sdk deploy'), then re-run the sync.",
     ]);
   }
-  // Reconcile GQL permissions with the snapshot, mirroring deploy: upsert
-  // permissions for snapshot types, then delete the rest (including those
-  // of deleted types — an orphaned permission can block the type deletion).
-  const remoteGqlPermissions = await fetchRemoteGqlPermissions(
-    client,
-    workspaceId,
-    target.namespace,
-  );
-  const remoteGqlPermissionTypes = new Set(remoteGqlPermissions.map((p) => p.typeName));
-  const desiredGqlPermissions = Object.entries(snapshot.types).flatMap(([typeName, snapshotType]) =>
-    snapshotType.permissions?.gql
-      ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]
-      : [],
-  );
   await Promise.all(
     desiredGqlPermissions.map(({ typeName, permission }) => {
       const request = { workspaceId, namespaceName: target.namespace, typeName, permission };
@@ -418,17 +435,14 @@ async function sync(options: SyncOptions): Promise<void> {
         : client.createTailorDBGQLPermission(request);
     }),
   );
-  const desiredGqlPermissionTypes = new Set(desiredGqlPermissions.map((p) => p.typeName));
   await Promise.all(
-    remoteGqlPermissions
-      .filter((p) => !desiredGqlPermissionTypes.has(p.typeName))
-      .map((p) =>
-        client.deleteTailorDBGQLPermission({
-          workspaceId,
-          namespaceName: target.namespace,
-          typeName: p.typeName,
-        }),
-      ),
+    gqlPermissionDeletes.map((p) =>
+      client.deleteTailorDBGQLPermission({
+        workspaceId,
+        namespaceName: target.namespace,
+        typeName: p.typeName,
+      }),
+    ),
   );
   await Promise.all(
     deletes.map((typeName) =>
