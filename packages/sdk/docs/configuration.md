@@ -185,7 +185,18 @@ export default defineConfig({
 
 Use `env` in `defineConfig()` for non-secret values that application code needs at runtime, such as environment names, feature flags, and public service URLs. Values must be strings, numbers, or booleans.
 
-`tailor.config.ts` runs locally when an SDK command loads the config. If values come from your shell or an env file, read `process.env` in the config file and assign the resolved values to `env`. The global [`--env-file`](./cli-reference.md#environment-file-loading) and `--env-file-if-exists` options load files before the config is evaluated.
+```typescript
+export default defineConfig({
+  name: "my-app",
+  env: {
+    STAGE: "dev",
+    PUBLIC_API_URL: "https://api.example.com",
+    ENABLE_BETA: false,
+  },
+});
+```
+
+`tailor.config.ts` runs locally when an SDK command loads the config. If values come from your shell or an env file, SDK commands can load them before config evaluation with the global [`--env-file`](./cli-reference.md#environment-file-loading) and `--env-file-if-exists` options:
 
 ```typescript
 export default defineConfig({
@@ -197,6 +208,8 @@ export default defineConfig({
   },
 });
 ```
+
+If the same config defines an auth before-login hook, make sure the config module can be evaluated without Node-only globals in the platform runtime. Avoid arbitrary `process.env` reads in that module; pass literal values, or values generated into a config module before deployment, and read them from the hook's `env` argument.
 
 When the SDK deploys application code or runs detected service code with `function test-run`, it passes the resolved values as the `env` argument. Do not read `process.env` from deployed resolvers, executors, workflow jobs, auth hooks, or migration scripts; Node-side environment variables are not available there. Put sensitive values in [Secret Manager](./services/secret.md) instead of `env`.
 
