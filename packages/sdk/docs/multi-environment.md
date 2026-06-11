@@ -23,13 +23,13 @@ tailor-sdk profile create production -u you@example.com -w <production-workspace
 tailor-sdk deploy -p staging
 ```
 
-Profiles are created with `write` permission by default. The production profile above opts into `--permission read`, which blocks write commands such as `deploy` while the profile is active — a guard against deploying to production by accident. To deploy to production deliberately, pass the workspace explicitly with `-w`, or use a separate profile created with `write` permission.
+Profiles are created with `write` permission by default. The production profile above opts into `--permission read`, which blocks write commands such as `deploy` while the profile is active — a guard against deploying to production by accident. To deploy to production deliberately, pass the workspace explicitly with `-w` without selecting the profile — the guard applies only while a profile is selected via `-p` or `TAILOR_PLATFORM_PROFILE` — or use a separate profile created with `write` permission.
 
 ## Varying config values per environment
 
-`tailor.config.ts` is a TypeScript module evaluated locally each time an SDK command loads it, so any value can branch on `process.env`. Keep one env file per environment and load it with the global [`--env-file`](./cli-reference.md#environment-file-loading) option:
+`tailor.config.ts` is a TypeScript module evaluated locally each time an SDK command loads it, so any value can branch on `process.env`. If the config also defines an auth before-login hook, mind the `process.env` caveat in [Environment Variables](./configuration.md#environment-variables). Keep one env file per environment and load it with the global [`--env-file`](./cli-reference.md#environment-file-loading) option:
 
-```bash
+```ini
 # .env.production
 APP_ENV=production
 LOG_LEVEL=WARN
