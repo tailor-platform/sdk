@@ -140,7 +140,8 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
       if (callee.type === "MemberExpression") {
         const memberExpr = callee as unknown as StaticMemberExpression;
         if (
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- callee may be a ComputedMemberExpression at runtime
+          // callee may be a ComputedMemberExpression at runtime
+          // oxlint-disable-next-line typescript/no-unnecessary-condition
           !memberExpr.computed &&
           memberExpr.object.type === "Identifier" &&
           memberExpr.property.name === "trigger"
@@ -150,7 +151,8 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
           let argsText = "";
           if (callExpr.arguments.length > 0) {
             const firstArg = callExpr.arguments[0];
-            // oxlint-disable-next-line typescript/no-unnecessary-condition -- callee may be a ComputedMemberExpression at runtime
+            // callee may be a ComputedMemberExpression at runtime
+            // oxlint-disable-next-line typescript/no-unnecessary-condition
             if (firstArg && "start" in firstArg && "end" in firstArg) {
               argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
             }

@@ -728,7 +728,8 @@ function buildSnapshotTypeManifest(
 ): MessageInitShape<typeof TailorDBTypeSchema> | undefined {
   const snapshot = migrationSnapshotCache.load(migration);
   const snapshotType = snapshot.types[typeName];
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- index access may be undefined without noUncheckedIndexedAccess
+  // index access may be undefined without noUncheckedIndexedAccess
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
   return generateTailorDBTypeManifestFromSnapshot(snapshotType, {

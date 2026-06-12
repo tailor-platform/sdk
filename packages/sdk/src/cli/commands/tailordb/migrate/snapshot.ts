@@ -402,7 +402,8 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   };
 
   if (type.description) snapshotType.description = type.description;
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+  // snapshot JSON is parsed without validation
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (type.settings) {
     snapshotType.settings = {};
     if (type.settings.aggregation !== undefined) {
@@ -568,7 +569,8 @@ export function loadDiff(filePath: string): MigrationDiff {
   // migrations on disk remain readable without manual edits. hasWarnings is
   // derived from the warnings array to stay consistent even if a hand-edited
   // diff.json sets one side without the other.
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+  // snapshot JSON is parsed without validation
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   const warnings = parsed.warnings ?? [];
   return {
     ...parsed,
@@ -659,7 +661,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         delete types[change.typeName];
         break;
       case "type_modified":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.after) {
           const after = change.after;
           types[change.typeName] = {
@@ -671,7 +674,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         break;
       case "field_added":
       case "field_modified":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.fieldName) {
           types[change.typeName] = {
             ...types[change.typeName],
@@ -683,7 +687,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         }
         break;
       case "field_removed":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.fieldName) {
           const { [change.fieldName]: _, ...remainingFields } = types[change.typeName].fields;
           types[change.typeName] = {
@@ -694,7 +699,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         break;
       case "index_added":
       case "index_modified":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.indexName) {
           types[change.typeName] = {
             ...types[change.typeName],
@@ -706,7 +712,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         }
         break;
       case "index_removed":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.indexName && types[change.typeName].indexes) {
           const { [change.indexName]: _, ...remainingIndexes } = types[change.typeName].indexes!;
           types[change.typeName] = {
@@ -717,7 +724,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         break;
       case "file_added":
       case "file_modified":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.fieldName) {
           types[change.typeName] = {
             ...types[change.typeName],
@@ -729,7 +737,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         }
         break;
       case "file_removed":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.fieldName && types[change.typeName].files) {
           const { [change.fieldName]: _, ...remainingFiles } = types[change.typeName].files!;
           types[change.typeName] = {
@@ -740,7 +749,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         break;
       case "relationship_added":
       case "relationship_modified":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.relationshipName) {
           const rel = change.after;
           // Use relationshipType if specified, fallback to existing logic for backwards compatibility
@@ -772,7 +782,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         }
         break;
       case "relationship_removed":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.relationshipName) {
           const type = types[change.typeName];
           // Use relationshipType if specified
@@ -803,7 +814,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         }
         break;
       case "permission_modified":
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- snapshot JSON is parsed without validation
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (types[change.typeName] && change.after) {
           const after = change.after;
           types[change.typeName] = {
@@ -947,7 +959,8 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   const newFieldNames = Object.keys(newFields);
   if (oldFieldNames.length !== newFieldNames.length) return true;
   for (const fieldName of oldFieldNames) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- index access may be undefined without noUncheckedIndexedAccess
+    // index access may be undefined without noUncheckedIndexedAccess
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!newFields[fieldName]) return true;
     if (areFieldsDifferent(oldFields[fieldName], newFields[fieldName])) return true;
   }
@@ -1726,7 +1739,8 @@ function convertRemoteFieldsToSnapshot(
       if (remoteField.foreignKeyType) config.foreignKeyType = remoteField.foreignKeyType;
       if (remoteField.foreignKeyField) config.foreignKeyField = remoteField.foreignKeyField;
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
+    // platform response may omit the field
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (remoteField.allowedValues && remoteField.allowedValues.length > 0) {
       config.allowedValues = remoteField.allowedValues.map((v) => ({
         value: v.value,
@@ -1747,7 +1761,8 @@ function convertRemoteFieldsToSnapshot(
       }
     }
 
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
+    // platform response may omit the field
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (remoteField.validate && remoteField.validate.length > 0) {
       config.validate = remoteField.validate.map((v) => ({
         script: { expr: v.script?.expr ?? "" },

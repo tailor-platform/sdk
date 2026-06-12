@@ -113,7 +113,8 @@ function parseTailorDBType(
         targetField: fieldName,
         sourceField: relationInfo.key,
         isArray: false,
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- index access may be undefined without noUncheckedIndexedAccess
+        // index access may be undefined without noUncheckedIndexedAccess
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         description: targetType?.metadata?.description || "",
       };
     }
@@ -177,7 +178,8 @@ function buildBackwardRelationships(
           }
 
           // Track the source of this backward name
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- index access may be undefined without noUncheckedIndexedAccess
+          // index access may be undefined without noUncheckedIndexedAccess
+          // oxlint-disable-next-line typescript/no-unnecessary-condition
           if (!backwardNameSources[typeName][backwardName]) {
             backwardNameSources[typeName][backwardName] = [];
           }

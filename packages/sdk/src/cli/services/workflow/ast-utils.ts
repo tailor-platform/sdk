@@ -55,7 +55,8 @@ export function getImportSource(node: Expression | null | undefined): string | n
     if (callExpr.callee.type === "Identifier" && callExpr.callee.name === "require") {
       const arg = callExpr.arguments[0];
       if (
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- callee may be a ComputedMemberExpression at runtime
+        // callee may be a ComputedMemberExpression at runtime
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         arg &&
         "type" in arg &&
         arg.type === "Literal" &&

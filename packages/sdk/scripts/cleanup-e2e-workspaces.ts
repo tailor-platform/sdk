@@ -27,7 +27,8 @@ async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> 
   const allWorkspaces: Workspace[] = [];
   let pageToken = "";
 
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- loop exits when the platform stops returning a page token
+  // loop exits when the platform stops returning a page token
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const response = await client.listWorkspaces({
       pageToken: pageToken || undefined,

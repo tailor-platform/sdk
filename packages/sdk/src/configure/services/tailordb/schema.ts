@@ -471,7 +471,8 @@ function createTailorDBField<
 
       case "nested":
         // Validate nested object fields
-        // oxlint-disable typescript/no-unnecessary-condition -- runtime value may not match the declared type
+        // runtime value may not match the declared type
+        // oxlint-disable typescript/no-unnecessary-condition
         if (
           typeof value !== "object" ||
           value === null ||

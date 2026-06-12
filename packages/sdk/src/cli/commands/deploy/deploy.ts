@@ -151,7 +151,8 @@ async function shouldForceApplyAll(
   for (const trn of candidateTrns) {
     try {
       const { metadata } = await client.getMetadata({ trn });
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
+      // platform response may omit the field
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (metadata?.labels?.[sdkNameLabelKey] !== application.name) {
         continue;
       }

@@ -293,7 +293,8 @@ function detectExtendedTriggerCalls(
       if (callee.type === "MemberExpression") {
         const memberExpr = callee as unknown as StaticMemberExpression;
 
-        // oxlint-disable typescript/no-unnecessary-condition -- callee may be a ComputedMemberExpression at runtime
+        // callee may be a ComputedMemberExpression at runtime
+        // oxlint-disable typescript/no-unnecessary-condition
         const identifierName =
           !memberExpr.computed && memberExpr.object.type === "Identifier"
             ? (memberExpr.object as IdentifierReference).name
@@ -310,7 +311,8 @@ function detectExtendedTriggerCalls(
             let argsText = "";
             if (argCount > 0) {
               const firstArg = callExpr.arguments[0];
-              // oxlint-disable-next-line typescript/no-unnecessary-condition -- callee may be a ComputedMemberExpression at runtime
+              // callee may be a ComputedMemberExpression at runtime
+              // oxlint-disable-next-line typescript/no-unnecessary-condition
               if (firstArg && "start" in firstArg && "end" in firstArg) {
                 argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
               }

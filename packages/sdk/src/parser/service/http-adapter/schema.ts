@@ -12,7 +12,8 @@ const inputHandlersSchema = z
     delete: functionSchema.optional().describe("Handler for DELETE requests"),
   })
   .refine(
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- optional fields become undefined after zod parses them
+    // optional fields become undefined after zod parses them
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     (val) => Object.values(val).some((v) => v !== undefined),
     "input must declare at least one HTTP method handler",
   )

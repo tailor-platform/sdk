@@ -9,7 +9,8 @@ export default createResolver({
       id: context.user.id,
       type: context.user.type,
       workspaceId: context.user.workspaceId,
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
+      // platform response may omit the field
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       role: (context.user.attributes?.role as string) ?? "ADMIN",
     };
   },
