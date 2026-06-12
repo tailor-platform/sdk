@@ -1,4 +1,6 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { logger } from "@/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -125,7 +127,7 @@ describe("planWorkflow", () => {
         };
       }),
       listWorkflowJobFunctions: vi.fn().mockResolvedValue({
-        jobFunctions: [],
+        jobFunctions: Object.keys(labelsByJobFunction).map((name) => ({ name })),
         nextPageToken: "",
       }),
     } as unknown as OperatorClient;
@@ -615,7 +617,7 @@ describe("planWorkflow", () => {
       expect(result.changeSet.updates[0].name).toBe("batch-processing");
     });
 
-    test("removes metadata from orphaned job functions even when remaining workflows are unchanged", async () => {
+    test("plans owned orphaned job functions for deletion even when remaining workflows are unchanged", async () => {
       const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
         jobFunctions: [{ name: "keep-job" }, { name: "orphaned-job" }],
         nextPageToken: "",
@@ -631,45 +633,37 @@ describe("planWorkflow", () => {
           },
         };
       });
-      const setMetadata = vi.fn().mockResolvedValue(undefined);
 
       const client = {
+        listWorkflows: vi.fn().mockResolvedValue({
+          workflows: [
+            {
+              id: "workflow-1",
+              name: "kept-workflow",
+              mainJobFunctionName: "keep-job",
+              jobFunctions: {
+                "keep-job": "1",
+              },
+            },
+          ],
+          nextPageToken: "",
+        }),
         listWorkflowJobFunctions,
         getMetadata,
-        setMetadata,
-        createWorkflowJobFunction: vi.fn(),
-        updateWorkflowJobFunction: vi.fn(),
       } as unknown as OperatorClient;
 
-      await applyWorkflow(
+      const result = await planWorkflow(
         client,
+        workspaceId,
+        appName,
+        undefined,
         {
-          changeSet: {
-            title: "Workflows",
-            creates: [],
-            updates: [],
-            deletes: [
-              {
-                name: "removed-workflow",
-                workspaceId,
-                workflowId: "workflow-1",
-                usedJobNames: ["removed-job"],
-                deletableJobNames: ["removed-job"],
-              },
-            ],
-            replaces: [],
-            unchanged: [{ name: "kept-workflow" }],
-            isEmpty: () => false,
-            print: () => {},
-          },
-          conflicts: [],
-          unmanaged: [],
-          resourceOwners: new Set<string>(),
-          appName,
-          appId: undefined,
-          unchangedWorkflowJobNames: new Set(["keep-job"]),
+          "kept-workflow": createMockWorkflow("kept-workflow", "keep-job"),
         },
-        "create-update",
+        {
+          "keep-job": ["keep-job"],
+        },
+        new Set(["keep-job"]),
       );
 
       expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
@@ -677,11 +671,7 @@ describe("planWorkflow", () => {
         pageToken: "",
         pageSize: 1000,
       });
-      expect(setMetadata).toHaveBeenCalledTimes(1);
-      expect(setMetadata).toHaveBeenCalledWith({
-        trn: `trn:v1:workspace:${workspaceId}:workflow_job_function:orphaned-job`,
-        labels: { [sdkNameLabelKey]: "" },
-      });
+      expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "orphaned-job" }]);
     });
   });
 
@@ -737,6 +727,73 @@ describe("planWorkflow", () => {
       expect(deleteWorkflow.mock.invocationCallOrder[0]).toBeLessThan(
         deleteWorkflowJobFunction.mock.invocationCallOrder[0],
       );
+    });
+
+    test("delete phase continues deletions and tolerates terminal platform states", async () => {
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const deleteWorkflow = vi
+        .fn()
+        .mockRejectedValueOnce(new ConnectError("gone", Code.NotFound))
+        .mockResolvedValueOnce({});
+      const deleteWorkflowJobFunction = vi
+        .fn()
+        .mockRejectedValueOnce(new ConnectError("still referenced", Code.FailedPrecondition))
+        .mockRejectedValueOnce(new ConnectError("gone", Code.NotFound))
+        .mockResolvedValueOnce({});
+      const client = {
+        deleteWorkflow,
+        deleteWorkflowJobFunction,
+      } as unknown as OperatorClient;
+
+      await applyWorkflow(
+        client,
+        {
+          changeSet: {
+            title: "Workflows",
+            creates: [],
+            updates: [],
+            deletes: [
+              {
+                name: "removed-a",
+                workspaceId,
+                workflowId: "workflow-a",
+                usedJobNames: ["job-a"],
+                deletableJobNames: ["job-a"],
+              },
+              {
+                name: "removed-b",
+                workspaceId,
+                workflowId: "workflow-b",
+                usedJobNames: ["job-b"],
+                deletableJobNames: ["job-b"],
+              },
+            ],
+            replaces: [],
+            unchanged: [],
+            isEmpty: () => false,
+            print: () => {},
+          },
+          jobFunctionDeletes: [
+            { workspaceId, jobFunctionName: "job-a" },
+            { workspaceId, jobFunctionName: "job-b" },
+            { workspaceId, jobFunctionName: "job-c" },
+          ],
+          conflicts: [],
+          unmanaged: [],
+          resourceOwners: new Set<string>(),
+          appName,
+          appId: undefined,
+          unchangedWorkflowJobNames: new Set<string>(),
+        } as unknown as Awaited<ReturnType<typeof planWorkflow>>,
+        "delete",
+      );
+
+      expect(deleteWorkflow).toHaveBeenCalledTimes(2);
+      expect(deleteWorkflowJobFunction).toHaveBeenCalledTimes(3);
+      expect(warn).toHaveBeenCalledWith(
+        'Skipped deleting workflow job function "job-a" because it is still referenced.',
+      );
+      warn.mockRestore();
     });
   });
 });
