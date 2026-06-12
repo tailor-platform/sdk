@@ -89,7 +89,7 @@ export function readLock(outputDir: string): LockFile | null {
   if (parsed.version > LOCK_VERSION) {
     throw new Error(
       `${LOCK_FILENAME} was written by a newer SDK (lock version ${String(parsed.version)}). ` +
-        "Update the SDK to continue: pnpm update @tailor-platform/sdk",
+        "Update @tailor-platform/sdk to continue (e.g. pnpm update @tailor-platform/sdk).",
     );
   }
   if (!Array.isArray(parsed.targets)) {

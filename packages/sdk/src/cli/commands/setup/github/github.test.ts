@@ -427,6 +427,12 @@ describe("setupGitHub (integration)", () => {
     ).rejects.toThrow(/Invalid tag pattern/);
   });
 
+  test("rejects an environment name with YAML-unsafe characters", async () => {
+    await expect(
+      setupGitHub(baseOptions({ workspaceName: "my-app", environment: "prod: evil" })),
+    ).rejects.toThrow(/Invalid environment name/);
+  });
+
   test("errors when the config is missing", async () => {
     fs.rmSync(path.join(testDir, "tailor.config.ts"));
     await expect(setupGitHub(baseOptions({ workspaceName: "my-app" }))).rejects.toThrow(

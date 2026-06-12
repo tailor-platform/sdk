@@ -104,12 +104,9 @@ The lock file is JSON, 2-space indented, with a trailing newline. It is
       "file": ".github/workflows/tailor-my-app-stg.yml", // repo-root-relative, POSIX separators
       "templateVersion": 1, // internal constant TEMPLATE_VERSION
       "inputs": {
-        "workspaceRegion": "...",
-        "organizationId": "...",
-        "folderId": null, // null when omitted
         "branch": "main", // null for tag target with no --branch
         "tagPattern": null, // non-null for tag target only
-        "environment": null, // non-null when --environment is passed
+        "environment": "my-app-stg", // always set (defaults to the workspace name)
         "dir": ".",
         "packageManager": "pnpm", // "npm" | "pnpm" | "yarn" | "bun"
         "plan": true, // false when --no-plan

@@ -89,6 +89,17 @@ function validateTagPattern(pattern: string): void {
   }
 }
 
+// The environment name is embedded into workflow YAML as a plain scalar.
+const ENVIRONMENT_RE = /^[A-Za-z0-9._/-]+$/;
+
+function validateEnvironment(environment: string): void {
+  if (!ENVIRONMENT_RE.test(environment)) {
+    throw new Error(
+      `Invalid environment name "${environment}". Only letters, numbers, ".", "_", "/", and "-" are supported.`,
+    );
+  }
+}
+
 // `rel` is "" for the root itself, ".." or "../foo" for an escape. Guard on
 // the path segment so a sibling-prefixed name like "..foo" is not rejected.
 function escapesRoot(rel: string): boolean {
@@ -173,12 +184,16 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   validateWorkspaceName(workspaceName);
 
   const kind: TargetKind = options.tag ? "tag" : "branch";
-  const workingDirectory = options.dir !== "." ? options.dir : undefined;
+  // Normalize to POSIX separators: the value is embedded into workflow YAML
+  // (paths filters / working-directory), which always uses "/".
+  const dir = options.dir.replaceAll("\\", "/");
+  const workingDirectory = dir !== "." ? dir : undefined;
   const packageManager = detectPackageManager(options.outputDir);
   // The env-scoped TAILOR_PLATFORM_WORKSPACE_ID variable is only readable by a
   // job that declares `environment:`, so every plan/deploy job sets one. When
   // --environment is omitted it defaults to the workspace name.
   const environment = options.environment ?? workspaceName;
+  validateEnvironment(environment);
 
   if (kind === "tag") {
     validateTagPattern(options.tagPattern);
@@ -217,7 +232,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     branch,
     tagPattern: kind === "tag" ? options.tagPattern : null,
     environment,
-    dir: options.dir,
+    dir,
     packageManager,
     plan: kind === "branch" ? options.plan : true,
   };
