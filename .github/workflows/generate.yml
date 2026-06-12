@@ -138,22 +138,27 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          GENERATE_RESULT: ${{ needs.generate.result }}
+          GENERATE_CROSS_PLATFORM_RESULT: ${{ needs.generate-cross-platform.result }}
         run: |
           # Fail closed: if the paths-filter job itself failed, should_run is
           # empty and must not be mistaken for "no relevant changes".
-          if [[ "${{ needs.changes.result }}" != "success" ]]; then
-            echo "Changes job did not succeed (result=${{ needs.changes.result }})"
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
             exit 1
           fi
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.generate.result }}" != "success" ]]; then
+          if [[ "$GENERATE_RESULT" != "success" ]]; then
             echo "Generate job failed"
             exit 1
           fi
-          if [[ "${{ needs.generate-cross-platform.result }}" != "success" ]]; then
+          if [[ "$GENERATE_CROSS_PLATFORM_RESULT" != "success" ]]; then
             echo "Cross-platform generate jobs failed"
             exit 1
           fi

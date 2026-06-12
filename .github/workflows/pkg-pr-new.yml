@@ -63,7 +63,7 @@ jobs:
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
       - name: Publish to pkg.pr.new
-        run: pnpm dlx pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk"
+        run: pnpm dlx pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk" # zizmor: ignore[use-trusted-publishing]
 
   init-smoke:
     needs: [publish]
@@ -130,11 +130,12 @@ jobs:
       # CREATE_SDK_NO_INSTALL skips create-sdk's internal install step;
       # the "Install dependencies" step below tests resolution with the matrix PM.
       - name: Scaffold project
+        env:
+          CREATE_SDK_URL: ${{ needs.publish.outputs.create_sdk_url }}
+          CREATE_SDK_NO_INSTALL: "1"
         run: |
           cd /tmp
-          npx --yes --package=${{ needs.publish.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
-        env:
-          CREATE_SDK_NO_INSTALL: "1"
+          npx --yes --package="$CREATE_SDK_URL" create-sdk test-init-app --template hello-world
 
       - name: Verify generated files
         run: |
@@ -143,10 +144,11 @@ jobs:
           test -f /tmp/test-init-app/tsconfig.json
 
       - name: Verify SDK dependency uses pkg.pr.new URL
+        env:
+          EXPECTED_SDK_URL: ${{ needs.publish.outputs.sdk_url }}
         run: |
           SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/sdk"]' /tmp/test-init-app/package.json)
           echo "SDK version in generated project: $SDK_VERSION"
-          EXPECTED_SDK_URL="${{ needs.publish.outputs.sdk_url }}"
           echo "Expected SDK URL: $EXPECTED_SDK_URL"
           if [[ "$SDK_VERSION" != "$EXPECTED_SDK_URL" ]]; then
             echo "Error: SDK dependency should be '$EXPECTED_SDK_URL' but got '$SDK_VERSION'"
