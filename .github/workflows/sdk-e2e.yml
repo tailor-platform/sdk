@@ -111,7 +111,9 @@ jobs:
 
   sdk-e2e-result:
     needs: [changes, sdk-e2e, template-workflow-e2e]
-    if: always()
+    if: >-
+      always() &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
