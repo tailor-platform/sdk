@@ -27,8 +27,11 @@ jobs:
           filters: |
             changes:
               - .github/workflows/sdk-e2e.yml
+              - .github/actions/**
               - packages/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   sdk-e2e:

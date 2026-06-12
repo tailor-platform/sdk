@@ -25,9 +25,12 @@ jobs:
           filters: |
             changes:
               - .github/workflows/deploy.yml
+              - .github/actions/**
               - example/**
               - packages/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   deploy:
@@ -146,6 +149,12 @@ jobs:
     steps:
       - name: Check result
         run: |
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "${{ needs.changes.result }}" != "success" ]]; then
+            echo "Changes job did not succeed (result=${{ needs.changes.result }})"
+            exit 1
+          fi
           if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
