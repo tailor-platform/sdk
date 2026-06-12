@@ -117,8 +117,8 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * generated proto descriptors.
  *
  * Collections not validated: workflow, app, auth idpConfig/connection, idp client,
- * tailorDB gqlPermission, secretManager, functionRegistry — either assembled at apply time
- * or lacking buf.validate annotations.
+ * tailorDB gqlPermission, staticWebsite customDomain, secretManager, functionRegistry —
+ * either assembled at apply time or lacking buf.validate annotations.
  *
  * @param input - Plan results from the plan phase
  */
