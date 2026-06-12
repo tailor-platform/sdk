@@ -6,7 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
-import { resolveWorkspaceFolderName, workspaceDisplayName } from "./workspace/transform";
+import { createWorkspaceNameTransformer, resolveWorkspaceFolderName } from "./workspace/transform";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface ShowOptions {
@@ -18,7 +18,7 @@ export interface ShowOptions {
 export interface WorkspaceInfo {
   workspaceId: string;
   workspaceName: string;
-  workspaceFolderName: string;
+  workspaceFolderName?: string;
   workspaceRegion?: string;
 }
 
@@ -85,23 +85,16 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
     name,
     workspaceId,
     workspaceName: workspace?.name ?? "",
-    workspaceFolderName,
+    ...(workspaceFolderName ? { workspaceFolderName } : {}),
     workspaceRegion: workspace?.region ?? "",
     ...appInfo,
   };
 }
 
-function displayShowWorkspaceName(value: unknown, item: object): string {
-  const showInfo = item as Partial<WorkspaceInfo>;
-  if (typeof showInfo.workspaceName === "string") {
-    return workspaceDisplayName({
-      name: showInfo.workspaceName,
-      folderName:
-        typeof showInfo.workspaceFolderName === "string" ? showInfo.workspaceFolderName : "",
-    });
-  }
-  return String(value ?? "");
-}
+const showWorkspaceNameTransformer = createWorkspaceNameTransformer(
+  "workspaceName",
+  "workspaceFolderName",
+);
 
 export const showCommand = defineAppCommand({
   name: "show",
@@ -120,7 +113,7 @@ export const showCommand = defineAppCommand({
     });
 
     logger.out(appInfo, {
-      display: { workspaceName: displayShowWorkspaceName, workspaceFolderName: null },
+      display: { workspaceName: showWorkspaceNameTransformer, workspaceFolderName: null },
     });
   },
 });

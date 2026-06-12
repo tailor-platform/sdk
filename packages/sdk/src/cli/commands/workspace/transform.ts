@@ -1,11 +1,14 @@
+import { Code, ConnectError } from "@connectrpc/connect";
+import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
 import { formatTimestamp } from "@/cli/shared/format";
+import { logger, type FieldTransformer } from "@/cli/shared/logger";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
 
 export interface WorkspaceInfo {
   id: string;
   name: string;
-  folderName: string;
+  folderName?: string;
   region: string;
   createdAt: Date | null;
   updatedAt: Date | null;
@@ -17,18 +20,18 @@ export interface WorkspaceDetails extends WorkspaceInfo {
   folderId: string;
 }
 
-export const workspaceInfo = (workspace: Workspace, folderName = ""): WorkspaceInfo => {
-  return {
+export const workspaceInfo = (workspace: Workspace, folderName?: string): WorkspaceInfo => {
+  const info = {
     id: workspace.id,
     name: workspace.name,
-    folderName,
     region: workspace.region,
     createdAt: formatTimestamp(workspace.createTime),
     updatedAt: formatTimestamp(workspace.updateTime),
   };
+  return folderName ? { ...info, folderName } : info;
 };
 
-export const workspaceDetails = (workspace: Workspace, folderName = ""): WorkspaceDetails => {
+export const workspaceDetails = (workspace: Workspace, folderName?: string): WorkspaceDetails => {
   return {
     ...workspaceInfo(workspace, folderName),
     deleteProtection: workspace.deleteProtection,
@@ -40,24 +43,33 @@ export const workspaceDetails = (workspace: Workspace, folderName = ""): Workspa
 export async function resolveWorkspaceFolderName(
   client: OperatorClient,
   workspace: Workspace,
-): Promise<string> {
-  if (!workspace.organizationId || !workspace.folderId) return "";
+): Promise<string | undefined> {
+  if (!workspace.organizationId || !workspace.folderId) return undefined;
 
-  const response = await client
-    .getOrganizationFolder({
+  try {
+    const response = await client.getOrganizationFolder({
       organizationId: workspace.organizationId,
       folderId: workspace.folderId,
-    })
-    .catch(() => undefined);
+    });
 
-  return response?.folder?.name ?? "";
+    return response.folder?.name || undefined;
+  } catch (error) {
+    if (
+      error instanceof ConnectError &&
+      (error.code === Code.NotFound || error.code === Code.PermissionDenied)
+    ) {
+      return undefined;
+    }
+    logger.warn(`Failed to resolve workspace folder name: ${error}`);
+    return undefined;
+  }
 }
 
 export function createWorkspaceFolderNameResolver(client: OperatorClient) {
-  const cache = new Map<string, Promise<string>>();
+  const cache = new Map<string, Promise<string | undefined>>();
 
-  return (workspace: Workspace): Promise<string> => {
-    if (!workspace.organizationId || !workspace.folderId) return Promise.resolve("");
+  return (workspace: Workspace): Promise<string | undefined> => {
+    if (!workspace.organizationId || !workspace.folderId) return Promise.resolve(undefined);
 
     const cacheKey = `${workspace.organizationId}/${workspace.folderId}`;
     const cached = cache.get(cacheKey);
@@ -90,10 +102,8 @@ export async function workspaceInfosWithFolderNames(
   workspaces: Workspace[],
 ): Promise<WorkspaceInfo[]> {
   const resolveFolderName = createWorkspaceFolderNameResolver(client);
-  return Promise.all(
-    workspaces.map(async (workspace) =>
-      workspaceInfo(workspace, await resolveFolderName(workspace)),
-    ),
+  return withBundleConcurrency(workspaces, async (workspace) =>
+    workspaceInfo(workspace, await resolveFolderName(workspace)),
   );
 }
 
@@ -101,10 +111,19 @@ export function workspaceDisplayName(workspace: Pick<WorkspaceInfo, "name" | "fo
   return workspace.folderName ? `${workspace.folderName}/${workspace.name}` : workspace.name;
 }
 
-export function displayWorkspaceName(value: unknown, item: object): string {
-  const workspace = item as Partial<Pick<WorkspaceInfo, "name" | "folderName">>;
-  if (typeof workspace.name === "string" && typeof workspace.folderName === "string") {
-    return workspaceDisplayName({ name: workspace.name, folderName: workspace.folderName });
-  }
-  return String(value ?? "");
+export function createWorkspaceNameTransformer(
+  nameKey: string,
+  folderNameKey: string,
+): NonNullable<FieldTransformer> {
+  return (value: unknown, item: object): string => {
+    const workspace = item as Record<string, unknown>;
+    const name = workspace[nameKey];
+    const folderName = workspace[folderNameKey];
+    if (typeof name === "string" && typeof folderName === "string") {
+      return workspaceDisplayName({ name, folderName });
+    }
+    return String(value ?? "");
+  };
 }
+
+export const workspaceNameTransformer = createWorkspaceNameTransformer("name", "folderName");

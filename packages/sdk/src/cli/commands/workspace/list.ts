@@ -5,8 +5,8 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import {
-  displayWorkspaceName,
   workspaceInfosWithFolderNames,
+  workspaceNameTransformer,
   type WorkspaceInfo,
 } from "./transform";
 
@@ -54,7 +54,7 @@ export const listCommand = defineAppCommand({
       limit: args.limit,
     });
     logger.out(workspaces, {
-      display: { name: displayWorkspaceName, folderName: null, updatedAt: null },
+      display: { name: workspaceNameTransformer, folderName: null, updatedAt: null },
     });
   },
 });

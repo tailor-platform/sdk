@@ -6,8 +6,8 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
 import {
-  displayWorkspaceName,
   workspaceDetailsWithFolderName,
+  workspaceNameTransformer,
   type WorkspaceDetails,
 } from "./transform";
 
@@ -78,6 +78,8 @@ export const getCommand = defineAppCommand({
           updatedAt: humanizeRelativeTime(workspace.updatedAt),
         };
 
-    logger.out(formattedWorkspace, { display: { name: displayWorkspaceName, folderName: null } });
+    logger.out(formattedWorkspace, {
+      display: { name: workspaceNameTransformer, folderName: null },
+    });
   },
 });

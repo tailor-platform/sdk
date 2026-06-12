@@ -6,9 +6,9 @@ import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/
 import { logger } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import {
-  displayWorkspaceName,
   workspaceDisplayName,
   workspaceInfoWithFolderName,
+  workspaceNameTransformer,
   type WorkspaceInfo,
 } from "./transform";
 import type { ProfileInfo } from "../profile";
@@ -173,7 +173,7 @@ export const createCommand = defineAppCommand({
       return;
     }
 
-    logger.out(workspace, { display: { name: displayWorkspaceName, folderName: null } });
+    logger.out(workspace, { display: { name: workspaceNameTransformer, folderName: null } });
     if (profileInfo) {
       logger.out("Profile:");
       logger.out(profileInfo);
