@@ -5,7 +5,11 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
-import { workspaceDetails, type WorkspaceDetails } from "./transform";
+import {
+  workspaceDetailsWithFolderName,
+  workspaceNameTransformer,
+  type WorkspaceDetails,
+} from "./transform";
 
 const getWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
@@ -49,7 +53,7 @@ export async function getWorkspace(options: GetWorkspaceOptions): Promise<Worksp
     throw new Error(`Workspace "${workspaceId}" not found.`);
   }
 
-  return workspaceDetails(response.workspace);
+  return workspaceDetailsWithFolderName(client, response.workspace);
 }
 
 export const getCommand = defineAppCommand({
@@ -74,6 +78,8 @@ export const getCommand = defineAppCommand({
           updatedAt: humanizeRelativeTime(workspace.updatedAt),
         };
 
-    logger.out(formattedWorkspace);
+    logger.out(formattedWorkspace, {
+      display: { name: workspaceNameTransformer, folderName: null },
+    });
   },
 });
