@@ -8,6 +8,7 @@ import {
 import {
   CreateAuthConnectionRequestSchema,
   CreateAuthHookRequestSchema,
+  CreateAuthIDPConfigRequestSchema,
   CreateAuthMachineUserRequestSchema,
   CreateAuthOAuth2ClientRequestSchema,
   CreateAuthSCIMConfigRequestSchema,
@@ -16,6 +17,7 @@ import {
   CreateTenantConfigRequestSchema,
   CreateUserProfileConfigRequestSchema,
   UpdateAuthHookRequestSchema,
+  UpdateAuthIDPConfigRequestSchema,
   UpdateAuthMachineUserRequestSchema,
   UpdateAuthOAuth2ClientRequestSchema,
   UpdateAuthSCIMConfigRequestSchema,
@@ -39,6 +41,12 @@ import {
   UpdatePipelineServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/pipeline_pb";
 import {
+  CreateSecretManagerSecretRequestSchema,
+  CreateSecretManagerVaultRequestSchema,
+  UpdateSecretManagerSecretRequestSchema,
+} from "@tailor-proto/tailor/v1/secret_manager_pb";
+import {
+  AddCustomDomainRequestSchema,
   CreateStaticWebsiteRequestSchema,
   UpdateStaticWebsiteRequestSchema,
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
@@ -48,6 +56,7 @@ import {
   UpdateTailorDBTypeRequestSchema,
 } from "@tailor-proto/tailor/v1/tailordb_pb";
 import {
+  CreateWorkflowJobFunctionRequestSchema,
   CreateWorkflowRequestSchema,
   UpdateWorkflowRequestSchema,
 } from "@tailor-proto/tailor/v1/workflow_pb";
@@ -126,17 +135,21 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * Validate all plan-time create/update requests against buf.validate constraints embedded in the
  * generated proto descriptors.
  *
- * Collections not validated: auth idpConfig, idp client, tailorDB gqlPermission,
- * staticWebsite customDomain, secretManager, functionRegistry — no buf.validate annotations.
+ * Collections not validated: idp client, tailorDB gqlPermission, functionRegistry — no
+ * buf.validate annotations.
  * Application cors is excluded: static-website URL placeholders are resolved at apply time
  * and a bare cors array carries no constraint that would false-positive when omitted.
- * Workflow jobFunctions excluded: versions are registered at apply time (registerJobFunctions)
- * and the map field carries no min_items constraint.
+ * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
+ * and the map field carries no min_items constraint. Job names are validated separately via
+ * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
+ * auth idpConfig.config (provider oneof) is absent at plan time for BuiltInIdP but carries no
+ * required constraint — the request is validated as-is from the changeset.
  *
  * @param input - Plan results from the plan phase
  */
 export async function validatePlan(input: ValidatePlanInput): Promise<void> {
-  const { tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow } = input;
+  const { tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager } =
+    input;
 
   const validator = createValidator();
   const violations: ViolationEntry[] = [];
@@ -217,6 +230,11 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "StaticWebsite",
     staticWebsite.changeSet.updates as HasRequest[],
   );
+  creates(
+    AddCustomDomainRequestSchema,
+    "StaticWebsite custom domain",
+    staticWebsite.customDomainChangeSet.creates as HasRequest[],
+  );
 
   creates(
     CreateIdPServiceRequestSchema,
@@ -238,6 +256,17 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     UpdateAuthServiceRequestSchema,
     "Auth service",
     auth.changeSet.service.updates as HasRequest[],
+  );
+
+  creates(
+    CreateAuthIDPConfigRequestSchema,
+    "Auth IDP config",
+    auth.changeSet.idpConfig.creates as HasRequest[],
+  );
+  updates(
+    UpdateAuthIDPConfigRequestSchema,
+    "Auth IDP config",
+    auth.changeSet.idpConfig.updates as HasRequest[],
   );
 
   creates(
@@ -368,6 +397,65 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     workflow.changeSet.updates.map((item) => ({
       name: item.name,
       request: buildWorkflowValidationShape(item.workspaceId, item.workflow),
+    })),
+  );
+
+  // Validate job function names using the first workspace that defines them.
+  const workflowJobNameWorkspaceId =
+    workflow.changeSet.creates[0]?.workspaceId ?? workflow.changeSet.updates[0]?.workspaceId ?? "";
+  if (workflowJobNameWorkspaceId) {
+    const allJobNames = new Set<string>();
+    for (const item of [...workflow.changeSet.creates, ...workflow.changeSet.updates]) {
+      for (const jobName of item.usedJobNames) {
+        allJobNames.add(jobName);
+      }
+    }
+    creates(
+      CreateWorkflowJobFunctionRequestSchema,
+      "Workflow job function",
+      [...allJobNames].map((jobName) => ({
+        name: jobName,
+        request: {
+          workspaceId: workflowJobNameWorkspaceId,
+          jobFunctionName: jobName,
+          scriptRef: jobName,
+        },
+      })),
+    );
+  }
+
+  creates(
+    CreateSecretManagerVaultRequestSchema,
+    "Secret Manager vault",
+    secretManager.vaultChangeSet.creates.map((item) => ({
+      name: item.name,
+      request: { workspaceId: item.workspaceId, secretmanagerVaultName: item.name },
+    })),
+  );
+  creates(
+    CreateSecretManagerSecretRequestSchema,
+    "Secret Manager secret",
+    secretManager.secretChangeSet.creates.map((item) => ({
+      name: item.name,
+      request: {
+        workspaceId: item.workspaceId,
+        secretmanagerVaultName: item.vaultName,
+        secretmanagerSecretName: item.secretName,
+        secretmanagerSecretValue: item.value,
+      },
+    })),
+  );
+  updates(
+    UpdateSecretManagerSecretRequestSchema,
+    "Secret Manager secret",
+    secretManager.secretChangeSet.updates.map((item) => ({
+      name: item.name,
+      request: {
+        workspaceId: item.workspaceId,
+        secretmanagerVaultName: item.vaultName,
+        secretmanagerSecretName: item.secretName,
+        secretmanagerSecretValue: item.value,
+      },
     })),
   );
 

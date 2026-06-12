@@ -250,6 +250,133 @@ describe("validatePlan", () => {
     await expect(validatePlan(input)).resolves.toBeUndefined();
   });
 
+  test("(h) custom domain with invalid name is rejected", async () => {
+    const input = emptyInput();
+    input.staticWebsite.customDomainChangeSet.creates.push({
+      name: "INVALID_DOMAIN",
+      request: {
+        workspaceId: WS_ID,
+        staticWebsiteName: "my-site",
+        domain: "INVALID_DOMAIN",
+      },
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+
+    await expect(validatePlan(input)).rejects.toThrow(
+      /\d+ validation error\(s\) found in 1 resource\(s\)/,
+    );
+  });
+
+  test("(h2) valid custom domain passes", async () => {
+    const input = emptyInput();
+    input.staticWebsite.customDomainChangeSet.creates.push({
+      name: "example.com",
+      request: {
+        workspaceId: WS_ID,
+        staticWebsiteName: "my-site",
+        domain: "example.com",
+      },
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+  });
+
+  test("(i) secret manager vault with invalid name is rejected", async () => {
+    const input = emptyInput();
+    input.secretManager.vaultChangeSet.creates.push({
+      name: "INVALID_VAULT",
+      workspaceId: WS_ID,
+    } as never);
+
+    await expect(validatePlan(input)).rejects.toThrow(
+      /\d+ validation error\(s\) found in 1 resource\(s\)/,
+    );
+  });
+
+  test("(i2) secret manager secret with invalid name is rejected", async () => {
+    const input = emptyInput();
+    input.secretManager.secretChangeSet.creates.push({
+      name: "my-vault/INVALID_SECRET",
+      secretName: "INVALID_SECRET",
+      workspaceId: WS_ID,
+      vaultName: "my-vault",
+      value: "my-value",
+    } as never);
+
+    await expect(validatePlan(input)).rejects.toThrow(
+      /\d+ validation error\(s\) found in 1 resource\(s\)/,
+    );
+  });
+
+  test("(j) auth IDP config with invalid name is rejected", async () => {
+    const input = emptyInput();
+    input.auth.changeSet.idpConfig.creates.push({
+      name: "INVALID_IDP",
+      idpConfig: { kind: "BuiltInIdP" },
+      request: {
+        workspaceId: WS_ID,
+        namespaceName: "my-auth",
+        idpConfig: { name: "INVALID_IDP" },
+      },
+    } as never);
+
+    await expect(validatePlan(input)).rejects.toThrow(
+      /\d+ validation error\(s\) found in 1 resource\(s\)/,
+    );
+  });
+
+  test("(j2) auth IDP config with valid name and absent config passes", async () => {
+    const input = emptyInput();
+    input.auth.changeSet.idpConfig.creates.push({
+      name: "my-idp",
+      idpConfig: { kind: "BuiltInIdP" },
+      request: {
+        workspaceId: WS_ID,
+        namespaceName: "my-auth",
+        idpConfig: { name: "my-idp" },
+      },
+    } as never);
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+  });
+
+  test("(k) workflow job with camelCase name is rejected", async () => {
+    const input = emptyInput();
+    input.workflow.changeSet.creates.push({
+      name: "my-workflow",
+      workspaceId: WS_ID,
+      workflow: {
+        name: "my-workflow",
+        mainJob: { name: "myMainJob" },
+      },
+      usedJobNames: ["myMainJob"],
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+
+    // Both the Workflow (mainJobFunctionName) and the Workflow job function (jobFunctionName)
+    // carry the invalid name, so 2 resources fail.
+    await expect(validatePlan(input)).rejects.toThrow(
+      /\d+ validation error\(s\) found in 2 resource\(s\)/,
+    );
+  });
+
+  test("(k2) workflow job with valid lowercase-hyphen name passes", async () => {
+    const input = emptyInput();
+    input.workflow.changeSet.creates.push({
+      name: "my-workflow",
+      workspaceId: WS_ID,
+      workflow: {
+        name: "my-workflow",
+        mainJob: { name: "my-main-job" },
+      },
+      usedJobNames: ["my-main-job"],
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+  });
+
   test("(e) violations from multiple resources are aggregated into one error", async () => {
     const input = emptyInput();
 
