@@ -61,6 +61,7 @@ import {
   UpdateWorkflowRequestSchema,
 } from "@tailor-proto/tailor/v1/workflow_pb";
 import { logger, styles } from "@/cli/shared/logger";
+import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildWorkflowValidationShape } from "./workflow";
 import type { planApplication } from "./application";
 import type { planAuth } from "./auth";
@@ -247,6 +248,44 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     idp.changeSet.service.updates as HasRequest[],
   );
 
+  // Validate Secret Manager vault/secret names derived from IdP client creates and updates.
+  // The client name itself may be valid while the derived vault/secret name exceeds 63 chars.
+  const idpClientVaultItems = [
+    ...idp.changeSet.client.creates.map((c) => ({
+      clientName: c.request.client?.name ?? "",
+      namespaceName: c.request.namespaceName ?? "",
+      workspaceId: c.request.workspaceId ?? "",
+    })),
+    ...idp.changeSet.client.updates.map((u) => ({
+      clientName: u.name,
+      namespaceName: u.namespaceName,
+      workspaceId: u.workspaceId,
+    })),
+  ];
+  creates(
+    CreateSecretManagerVaultRequestSchema,
+    "IdP client secret",
+    idpClientVaultItems.map((item) => ({
+      name: item.clientName,
+      request: {
+        workspaceId: item.workspaceId,
+        secretmanagerVaultName: idpClientVaultName(item.namespaceName, item.clientName),
+      },
+    })),
+  );
+  creates(
+    CreateSecretManagerSecretRequestSchema,
+    "IdP client secret",
+    idpClientVaultItems.map((item) => ({
+      name: item.clientName,
+      request: {
+        workspaceId: item.workspaceId,
+        secretmanagerVaultName: idpClientVaultName(item.namespaceName, item.clientName),
+        secretmanagerSecretName: idpClientSecretName(item.namespaceName, item.clientName),
+      },
+    })),
+  );
+
   creates(
     CreateAuthServiceRequestSchema,
     "Auth service",
@@ -409,6 +448,9 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
       for (const jobName of item.usedJobNames) {
         allJobNames.add(jobName);
       }
+    }
+    for (const jobName of workflow.unchangedWorkflowJobNames) {
+      allJobNames.add(jobName);
     }
     creates(
       CreateWorkflowJobFunctionRequestSchema,

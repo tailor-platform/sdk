@@ -377,6 +377,62 @@ describe("validatePlan", () => {
     await expect(validatePlan(input)).resolves.toBeUndefined();
   });
 
+  test("(l) IdP client whose derived secret vault name exceeds 63 chars is rejected", async () => {
+    const input = emptyInput();
+    // namespace "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" (31 chars) + client "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" (31 chars)
+    // vault name: "idp-" (4) + 31 + "-" (1) + 31 = 67 chars — exceeds 63
+    const namespace = "a".repeat(31);
+    const clientName = "b".repeat(31);
+    input.idp.changeSet.client.creates.push({
+      name: clientName,
+      request: {
+        workspaceId: WS_ID,
+        namespaceName: namespace,
+        client: { name: clientName },
+      },
+    } as never);
+
+    await expect(validatePlan(input)).rejects.toThrow(/validation error/);
+  });
+
+  test("(l2) IdP client with short names whose derived vault/secret names are valid passes", async () => {
+    const input = emptyInput();
+    input.idp.changeSet.client.creates.push({
+      name: "my-client",
+      request: {
+        workspaceId: WS_ID,
+        namespaceName: "my-idp",
+        client: { name: "my-client" },
+      },
+    } as never);
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+  });
+
+  test("(m) invalid name in unchangedWorkflowJobNames is rejected when a workflow create exists", async () => {
+    const input = emptyInput();
+    input.workflow.changeSet.creates.push({
+      name: "my-workflow",
+      workspaceId: WS_ID,
+      workflow: {
+        name: "my-workflow",
+        mainJob: { name: "my-main-job" },
+      },
+      usedJobNames: ["my-main-job"],
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+    input.workflow.unchangedWorkflowJobNames.add("camelCaseJobFromUnchanged");
+
+    await expect(validatePlan(input)).rejects.toThrow(/validation error/);
+  });
+
+  test("(m2) invalid name in unchangedWorkflowJobNames is NOT validated when there are no workflow creates/updates", async () => {
+    const input = emptyInput();
+    input.workflow.unchangedWorkflowJobNames.add("camelCaseJobFromUnchanged");
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+  });
+
   test("(e) violations from multiple resources are aggregated into one error", async () => {
     const input = emptyInput();
 
