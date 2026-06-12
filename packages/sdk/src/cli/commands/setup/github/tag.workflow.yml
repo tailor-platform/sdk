@@ -75,7 +75,7 @@ jobs:
 
   tailor-deploy:
     needs: tailor-plan
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry-run) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs['dry-run']) }}
     environment: __ENVIRONMENT__
     runs-on: ubuntu-latest
     timeout-minutes: 30

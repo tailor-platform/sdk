@@ -27,7 +27,7 @@ jobs:
   tailor-plan:
     if: >-
       github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && inputs.dry-run)
+      (github.event_name == 'workflow_dispatch' && inputs['dry-run'])
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: __ENVIRONMENT__

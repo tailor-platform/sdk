@@ -389,9 +389,10 @@ export async function deploy(options?: DeployOptions) {
 
       const { config, plugins } = await withSpan("build.loadConfig", async () => {
         const foundPath = loadConfigPath(options?.configPath);
-        // Locally inject a missing app id; in CI require an existing id instead
-        // of auto-generating one. Skipped entirely for dry-run / build-only,
-        // which have no on-disk side effects.
+        // Locally inject a missing app id; in CI require an existing id
+        // instead of auto-generating one. CI dry-runs still run the check
+        // read-only (so a forgotten id fails the PR plan); local dry-run and
+        // build-only skip it. See ensureConfigIdForDeploy.
         if (foundPath) {
           const resolvedPath = path.resolve(process.cwd(), foundPath);
           if (fs.existsSync(resolvedPath)) {

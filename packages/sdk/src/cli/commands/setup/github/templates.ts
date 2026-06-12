@@ -175,7 +175,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     out,
     "DEPLOY_IF",
     plan
-      ? `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs.dry-run)`
+      ? `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs['dry-run'])`
       : undefined,
   );
   out = line(

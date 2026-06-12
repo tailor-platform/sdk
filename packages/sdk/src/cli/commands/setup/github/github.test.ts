@@ -106,6 +106,14 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("label: my-app");
   });
 
+  test("references the dry-run dispatch input with bracket notation", () => {
+    // `inputs.dry-run` is ambiguous to readers/tools; the bracket form is
+    // unambiguous for a hyphenated input name.
+    const { content } = renderBranchWorkflow(branchBase);
+    expect(content).toContain("inputs['dry-run']");
+    expect(content).not.toMatch(/inputs\.dry-run/);
+  });
+
   test("includes the fork guard on the plan step", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain(
