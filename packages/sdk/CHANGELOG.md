@@ -1,5 +1,31 @@
 # @tailor-platform/sdk
 
+## 1.60.2
+
+### Patch Changes
+
+- [#1399](https://github.com/tailor-platform/sdk/pull/1399) [`4b1c61c`](https://github.com/tailor-platform/sdk/commit/4b1c61c51a2c8367ab50b3cd8144a0bfb9074fc1) Thanks [@dqn](https://github.com/dqn)! - Reject duplicate TailorDB type names across application namespaces, including deployed external TailorDB namespaces checked at deploy time. Projects that currently reuse a type name across namespaces will fail validation on the next `generate` or `deploy`; rename the duplicated types before upgrading.
+
+- [#1406](https://github.com/tailor-platform/sdk/pull/1406) [`a10389f`](https://github.com/tailor-platform/sdk/commit/a10389f7498f9817f7dbf235a64496e83e024a85) Thanks [@dqn](https://github.com/dqn)! - Clarify how non-secret runtime `env` values defined in `defineConfig()` are passed to resolvers, executors, workflow jobs, auth hooks, TailorDB migrations, and `function test-run`.
+
+## 1.60.1
+
+### Patch Changes
+
+- [#1356](https://github.com/tailor-platform/sdk/pull/1356) [`be55e45`](https://github.com/tailor-platform/sdk/commit/be55e45ba2a9eeac0d02633aa793a212c8651acf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1404](https://github.com/tailor-platform/sdk/pull/1404) [`0aa76e9`](https://github.com/tailor-platform/sdk/commit/0aa76e9c25c41b619433838d0848e8e010e2078a) Thanks [@remiposo](https://github.com/remiposo)! - Fix `db.fields.timestamps()` so `updatedAt` is updated on every record update. Since update hooks receive the stored value merged with the input, the previous `value ?? new Date()` fallback froze `updatedAt` at its first value. `createdAt` still respects a user-specified value on create.
+
+## 1.60.0
+
+### Minor Changes
+
+- [#1370](https://github.com/tailor-platform/sdk/pull/1370) [`ca4e049`](https://github.com/tailor-platform/sdk/commit/ca4e0494d8f3069e91e55c0b8ccc15ed1e6b567b) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `authconnection open` command to open the auth connections page in the Tailor Platform Console. The `authconnection authorize` command now also points to this Console flow when the local callback server cannot be started, and the auth connection docs note that managing connections via `tailor.config.ts` is unreliable for shared and CI deploys (a deploy without the local `.tailor-sdk/` secret state recreates the connection and discards its token) — create connections and tokens from the Console instead.
+
+### Patch Changes
+
+- [#1386](https://github.com/tailor-platform/sdk/pull/1386) [`34aba6c`](https://github.com/tailor-platform/sdk/commit/34aba6c66fd60a2614fe37a4eee07b0252592894) Thanks [@toiroakr](https://github.com/toiroakr)! - Stabilize the `withBundleConcurrency` unit tests by driving their worker delays with fake timers instead of real `setTimeout`, so they no longer flake with a 5s timeout when a CI runner is under load. No runtime behavior changes.
+
 ## 1.59.0
 
 ### Minor Changes

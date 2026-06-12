@@ -369,6 +369,18 @@ Auth connections enable OAuth2 authentication with external providers (Google, M
 
 For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
 
+> [!WARNING]
+> **Managing connections through `tailor.config.ts` is unreliable for shared and CI deploys.**
+> A deploy revokes and recreates the connection — discarding the token obtained via `authconnection authorize` — whenever it cannot confirm the secret is unchanged. That check relies on a hash stored locally in `.tailor-sdk/secrets-state.json`, which is gitignored and therefore not shared across machines. So a deploy from CI, a clean checkout, another developer's machine, or after deleting `.tailor-sdk/` recreates the connection and drops its token. Only repeated deploys from the same machine that still holds that state keep the token.
+>
+> Because of this, prefer to **create the connection and its token from the Console**. You can jump to the connections page with:
+>
+> ```bash
+> tailor-sdk authconnection open
+> ```
+>
+> The `connections` field in `defineAuth()` and the `authconnection authorize` flow are documented below for reference.
+
 ### Setup Flow
 
 Setting up an auth connection requires two steps:
@@ -424,6 +436,9 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 
 The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
 
+> [!WARNING]
+> The secret hash lives in `.tailor-sdk/secrets-state.json`, which is gitignored and not shared across machines or CI. When that state is missing — a clean checkout, CI, another machine, or after deleting `.tailor-sdk/` — a deploy cannot confirm the secret is unchanged, so it revokes and recreates the connection and discards the token stored by `authconnection authorize`. For shared and CI workflows, manage the connection and create its token from the Console (`tailor-sdk authconnection open`) instead.
+
 ### `auth.getConnectionToken()`
 
 `auth.getConnectionToken()` retrieves connection tokens at runtime by calling `tailor.authconnection.getConnectionToken()` internally. When `connections` is defined in `defineAuth()`, the connection name is type-checked and autocompleted against the defined keys:
@@ -449,6 +464,9 @@ See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-inter
 Auth connections can also be managed via the CLI:
 
 ```bash
+# Open the connections page in the Console (recommended for creating connections/tokens)
+tailor-sdk authconnection open
+
 # Authorize (opens browser for OAuth2 flow)
 tailor-sdk authconnection authorize --name google-connection
 
@@ -459,7 +477,7 @@ tailor-sdk authconnection list
 tailor-sdk authconnection revoke --name google-connection
 ```
 
-Connection creation is handled by `tailor-sdk deploy` via the config.
+Connection creation is handled by `tailor-sdk deploy` via the config, but recreation on deploy can drop the authorized token (see the warning at the top of this section) — for shared and CI workflows, create connections and tokens from the Console (`tailor-sdk authconnection open`) instead.
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 

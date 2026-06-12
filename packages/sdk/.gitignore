@@ -14,3 +14,6 @@ src/cli/commands/deploy/__test_fixtures__/dist/
 src/cli/commands/deploy/__test_fixtures__/generated/
 src/cli/commands/deploy/__test_fixtures__/generators-compat-out/
 src/cli/commands/deploy/__test_fixtures__/plugins-compat-out/
+
+# Bundler test output
+src/**/__test_bundler__/

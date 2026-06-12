@@ -204,6 +204,7 @@ Commands for managing Auth service resources.
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.                                         |
 | [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections.                                                            |
+| [authconnection open](./cli/auth.md#authconnection-open)           | Open the auth connections page in the Tailor Platform Console.                        |
 | [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it). |
 | [authconnection delete](./cli/auth.md#authconnection-delete)       | Delete an auth connection entirely.                                                   |
 | [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.                                            |
