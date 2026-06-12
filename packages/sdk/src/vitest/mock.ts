@@ -28,6 +28,7 @@ import {
   getRegisteredWorkflow,
   TRIGGER_DEFAULT,
 } from "@/configure/services/workflow/registry";
+import { assertDefined } from "@/utils/assert";
 import { platformSerialize } from "@/utils/test/platform-serialize";
 import {
   buildJobContext,
@@ -570,7 +571,7 @@ export function mockSecretmanager() {
       const result: Record<string, string> = {};
       for (const name of names) {
         if (name in vaultData) {
-          result[name] = vaultData[name]!;
+          result[name] = assertDefined(vaultData[name], `vault entry missing for: ${name}`);
         }
       }
       return result as Partial<Record<T[number], string>>;

@@ -10,6 +10,7 @@ import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import { resolveTypeNamespaces } from "@/cli/shared/tailordb-namespace";
+import { assertDefined } from "@/utils/assert";
 
 export interface TruncateOptions {
   workspaceId?: string;
@@ -125,7 +126,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
 
   // Handle --namespace flag
   if (hasNamespace) {
-    const namespace = options.namespace!;
+    const namespace = assertDefined(options.namespace, "namespace option missing");
 
     // Validate namespace exists in config and is not external
     if (!namespaces.includes(namespace)) {
@@ -157,7 +158,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
 
   // Handle specific types
   if (hasTypes) {
-    const typeNames = options.types!;
+    const typeNames = assertDefined(options.types, "types option missing");
 
     // Validate all types exist and get their namespaces before confirmation
     const typeNamespaceMap = await resolveTypeNamespaces({

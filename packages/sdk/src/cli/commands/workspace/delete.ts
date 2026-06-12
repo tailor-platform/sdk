@@ -7,6 +7,7 @@ import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 
 const deleteWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
@@ -18,7 +19,7 @@ async function loadOptions(options: DeleteWorkspaceOptions) {
   // Validate options with zod schema
   const result = deleteWorkspaceOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0]!.message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();

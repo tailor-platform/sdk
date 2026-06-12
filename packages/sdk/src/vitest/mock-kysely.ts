@@ -28,6 +28,7 @@ import {
   ValueNode,
   ValuesNode,
 } from "kysely";
+import { assertDefined } from "@/utils/assert";
 
 function unwrapValue(node: OperationNode): unknown {
   return ValueNode.is(node) ? node.value : node;
@@ -62,7 +63,7 @@ function insertValues(node: OperationNode): Record<string, unknown> {
       `insertValues: query inserts ${rows.length} rows; use insertRows() for multi-row inserts`,
     );
   }
-  return rows[0]!;
+  return assertDefined(rows[0], "insertValues: first row missing");
 }
 
 function updateValues(node: OperationNode): Record<string, unknown> {

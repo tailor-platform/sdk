@@ -6,6 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 const updateOrganizationOptionsSchema = z.object({
@@ -25,7 +26,7 @@ export async function updateOrganization(
 ): Promise<OrganizationInfo> {
   const result = updateOrganizationOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0]!.message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();

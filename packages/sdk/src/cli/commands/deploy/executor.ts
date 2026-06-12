@@ -16,6 +16,7 @@ import {
 import { type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
 import { stringifyFunction } from "@/parser/service/tailordb";
+import { assertDefined } from "@/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
@@ -370,7 +371,7 @@ function resolveIdpNamespace(
         `(${available}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
     );
   }
-  return application.idpServices[0]!.name;
+  return assertDefined(application.idpServices[0], "idp service missing").name;
 }
 
 function resolveAuthNamespace(application: Readonly<Application>): string {

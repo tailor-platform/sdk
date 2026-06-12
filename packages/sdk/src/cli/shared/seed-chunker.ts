@@ -5,6 +5,8 @@
  * into multiple chunks at type boundaries (or record boundaries for large types).
  */
 
+import { assertDefined } from "@/utils/assert";
+
 /**
  * Seed data keyed by type name, with an array of records per type.
  */
@@ -66,7 +68,7 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
   }
 
   // Filter to types that have data
-  const typesWithData = order.filter((type) => data[type] && data[type]!.length > 0);
+  const typesWithData = order.filter((type) => (data[type]?.length ?? 0) > 0);
 
   if (typesWithData.length === 0) {
     return [];
@@ -84,7 +86,7 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
   let currentOrder: string[] = [];
 
   for (const type of typesWithData) {
-    const typeRecords = data[type]!;
+    const typeRecords = assertDefined(data[type], `seed data missing for type: ${type}`);
 
     // Check if the type fits in the current chunk
     if (currentOrder.length > 0) {

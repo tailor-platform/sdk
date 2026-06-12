@@ -4,6 +4,7 @@ import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
+import { assertDefined } from "@/utils/assert";
 import { logger } from "./logger";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -34,8 +35,10 @@ export const durationArg = z
   })
   .refine(
     (val) => {
-      const match = val.match(durationPattern)!;
-      return parseInt(match[1]!, 10) > 0;
+      const match = val.match(durationPattern);
+      if (!match) return false;
+      const digits = match[1];
+      return digits !== undefined && parseInt(digits, 10) > 0;
     },
     { message: "Duration must be greater than 0" },
   );
@@ -46,9 +49,12 @@ export const durationArg = z
  * @returns Duration in milliseconds
  */
 export function parseDuration(duration: string): number {
-  const match = duration.match(durationPattern)!;
-  const value = parseInt(match[1]!, 10);
-  const unit = match[2]! as DurationUnit;
+  const match = assertDefined(
+    duration.match(durationPattern),
+    `invalid duration format: ${duration}`,
+  );
+  const value = parseInt(assertDefined(match[1], "duration digits group missing"), 10);
+  const unit = assertDefined(match[2], "duration unit group missing") as DurationUnit;
   return value * unitToMs[unit];
 }
 

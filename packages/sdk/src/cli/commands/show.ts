@@ -6,6 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface ShowOptions {
@@ -75,7 +76,9 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
       applicationName: config.name,
     }),
   ]);
-  const { name, ...appInfo } = applicationInfo(resp.application!);
+  const { name, ...appInfo } = applicationInfo(
+    assertDefined(resp.application, `application "${config.name}" not found in workspace`),
+  );
 
   return {
     name,

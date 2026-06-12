@@ -10,6 +10,7 @@ import * as path from "pathe";
 import { ExecutorSchema } from "@/parser/service/executor";
 import { ResolverSchema } from "@/parser/service/resolver";
 import { WorkflowJobSchema } from "@/parser/service/workflow";
+import { assertDefined } from "@/utils/assert";
 
 export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 
@@ -148,7 +149,13 @@ function detectWorkflowJob(
   }
 
   if (jobs.length === 1) {
-    return { type: "workflow-job", name: jobs[0]!.name, exportName: jobs[0]!.exportName };
+    const [jobEntry] = jobs;
+    const job = assertDefined(jobEntry, "workflow job missing");
+    return {
+      type: "workflow-job",
+      name: job.name,
+      exportName: job.exportName,
+    };
   }
 
   const available = jobs.map((j) => `  - "${j.name}" (export: ${j.exportName})`).join("\n");

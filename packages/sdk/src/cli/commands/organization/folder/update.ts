@@ -6,6 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
 const updateFolderOptionsSchema = z.object({
@@ -24,7 +25,7 @@ export type UpdateFolderOptions = z.input<typeof updateFolderOptionsSchema>;
 export async function updateFolder(options: UpdateFolderOptions): Promise<FolderInfo> {
   const result = updateFolderOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0]!.message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();

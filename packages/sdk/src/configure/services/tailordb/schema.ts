@@ -949,8 +949,11 @@ function createTailorDBType<
       // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
       // oxlint-disable-next-line no-explicit-any
       Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] =
-          this.fields[fieldName]!.hooks(fieldHooks);
+        const field = this.fields[fieldName];
+        if (field === undefined) throw new Error(`field not found: ${fieldName}`);
+        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = (
+          field as TailorAnyDBField
+        ).hooks(fieldHooks);
       });
       return this;
     },
@@ -1032,10 +1035,11 @@ function createTailorDBType<
     pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options?: Opt) {
       const result = {} as Record<K, TailorAnyDBField>;
       for (const key of keys) {
+        const field = this.fields[key] as TailorAnyDBField;
         if (options) {
-          result[key] = this.fields[key]!.clone(options);
+          result[key] = field.clone(options);
         } else {
-          result[key] = this.fields[key]!;
+          result[key] = field;
         }
       }
       // oxlint-disable-next-line no-explicit-any
@@ -1047,7 +1051,7 @@ function createTailorDBType<
       const result = {} as Record<string, TailorAnyDBField>;
       for (const key in this.fields) {
         if (Object.hasOwn(this.fields, key) && !keysSet.has(key as unknown as K)) {
-          result[key] = this.fields[key]!;
+          result[key] = this.fields[key] as TailorAnyDBField;
         }
       }
       return result as Omit<Fields, K>;

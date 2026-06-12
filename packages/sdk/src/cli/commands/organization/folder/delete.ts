@@ -6,6 +6,7 @@ import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 
 const deleteFolderOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
@@ -22,7 +23,7 @@ export type DeleteFolderOptions = z.input<typeof deleteFolderOptionsSchema>;
 export async function deleteFolder(options: DeleteFolderOptions): Promise<void> {
   const result = deleteFolderOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0]!.message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();

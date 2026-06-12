@@ -1,5 +1,6 @@
 import { GraphQLError, Lexer, Source, TokenKind } from "graphql";
 import { getSegments } from "sql-highlight";
+import { assertDefined } from "@/utils/assert";
 import type { TransformEvent, TransformState } from "@toiroakr/read-multiline";
 
 // ANSI colour sequences. Kept inline (rather than going through `node:util`
@@ -212,13 +213,13 @@ export function replTransform(
 
   if (event.type === "insert" && event.char in BRACKET_PAIRS) {
     const close = BRACKET_PAIRS[event.char];
-    const line = lines[row]!;
+    const line = assertDefined(lines[row], `line at row ${row} missing`);
     const newLine = line.slice(0, col) + close + line.slice(col);
     return { lines: lines.with(row, newLine), row, col };
   }
 
   if (event.type === "insert" && CLOSE_BRACKETS.has(event.char)) {
-    const line = lines[row]!;
+    const line = assertDefined(lines[row], `line at row ${row} missing`);
     if (line[col] === event.char) {
       const newLine = line.slice(0, col) + line.slice(col + 1);
       return { lines: lines.with(row, newLine), row, col };
@@ -226,7 +227,7 @@ export function replTransform(
   }
 
   if (event.type === "backspace") {
-    const line = lines[row]!;
+    const line = assertDefined(lines[row], `line at row ${row} missing`);
     const beforeCursor = line.slice(0, col);
     if (beforeCursor.length >= 1 && /^ +$/.test(beforeCursor)) {
       const newIndent = beforeCursor.slice(0, -1);
@@ -236,10 +237,11 @@ export function replTransform(
   }
 
   if (event.type === "newline" && row > 0) {
-    const prevLine = lines[row - 1]!;
+    const prevLine = assertDefined(lines[row - 1], `line at row ${row - 1} missing`);
     const baseIndent = prevLine.match(/^(\s*)/)?.[1] ?? "";
     const endsWithOpen = /[{([]$/.test(prevLine.trimEnd());
-    const startsWithClose = /^[}\])]/.test(lines[row]!.trimStart());
+    const currentLine = assertDefined(lines[row], `line at row ${row} missing`);
+    const startsWithClose = /^[}\])]/.test(currentLine.trimStart());
 
     if (endsWithOpen && startsWithClose) {
       // Bracket expansion: the cursor sits between a matching open/close
@@ -248,7 +250,7 @@ export function replTransform(
       const innerIndent = baseIndent + "  ";
       const newLines = lines
         .with(row, innerIndent)
-        .toSpliced(row + 1, 0, baseIndent + lines[row]!.trimStart());
+        .toSpliced(row + 1, 0, baseIndent + currentLine.trimStart());
       return { lines: newLines, row, col: innerIndent.length };
     }
     if (endsWithOpen) {
@@ -258,12 +260,12 @@ export function replTransform(
       const closeChar = BRACKET_PAIRS[openChar] ?? "}";
       const indent = baseIndent + "  ";
       const newLines = lines
-        .with(row, indent + lines[row]!)
+        .with(row, indent + currentLine)
         .toSpliced(row + 1, 0, baseIndent + closeChar);
       return { lines: newLines, row, col: indent.length };
     }
     if (baseIndent && col === 0) {
-      return { lines: lines.with(row, baseIndent + lines[row]), row, col: baseIndent.length };
+      return { lines: lines.with(row, baseIndent + currentLine), row, col: baseIndent.length };
     }
   }
 

@@ -59,6 +59,7 @@ import { generateTailorDBTypeManifestFromSnapshot } from "@/cli/commands/tailord
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
@@ -138,7 +139,9 @@ async function getRemoteMigrationNumber(
     const label = metadata?.labels["sdk-migration"];
     if (!label) return null; // No migration label means first apply
     const match = label.match(/^m(\d+)$/);
-    return match ? parseInt(match[1]!, 10) : null;
+    return match
+      ? parseInt(assertDefined(match[1], "migration label capture group missing"), 10)
+      : null;
   } catch {
     return null;
   }

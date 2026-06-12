@@ -7,6 +7,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 
 const removeUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
@@ -19,7 +20,7 @@ export type RemoveUserOptions = z.input<typeof removeUserOptionsSchema>;
 async function loadOptions(options: RemoveUserOptions) {
   const result = removeUserOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0]!.message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const accessToken = await loadAccessToken({ useProfile: true, profile: result.data.profile });

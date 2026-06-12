@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
@@ -133,7 +134,7 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
     if (result.status === "fulfilled") {
       return;
     }
-    const operation = operations[index]!;
+    const operation = assertDefined(operations[index], "operation missing at index");
     const error = result.reason;
     if (error instanceof ConnectError && error.code === Code.NotFound) {
       return;

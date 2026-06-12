@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as inflection from "inflection";
 import * as path from "pathe";
+import { assertDefined } from "@/utils/assert";
 import {
   type MigrationDiff,
   type DiffChange,
@@ -191,7 +192,11 @@ export function isValidMigrationNumber(numberStr: string): boolean {
 export function parseMigrationNumber(fileName: string): number | null {
   const match = fileName.match(/^(\d{4})_/);
   if (!match) return null;
-  const num = parseInt(match[1]!, 10);
+  const [, digits] = match;
+  const num = parseInt(
+    assertDefined(digits, "parseMigrationNumber: regex capture group missing"),
+    10,
+  );
   return isNaN(num) ? null : num;
 }
 
@@ -957,8 +962,10 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   const newValidate = newField.validate ?? [];
   if (oldValidate.length !== newValidate.length) return true;
   for (let i = 0; i < oldValidate.length; i++) {
-    if (oldValidate[i]!.script.expr !== newValidate[i]!.script.expr) return true;
-    if (oldValidate[i]!.errorMessage !== newValidate[i]!.errorMessage) return true;
+    const oldV = assertDefined(oldValidate[i], `oldValidate missing index ${i}`);
+    const newV = assertDefined(newValidate[i], `newValidate missing index ${i}`);
+    if (oldV.script.expr !== newV.script.expr) return true;
+    if (oldV.errorMessage !== newV.errorMessage) return true;
   }
 
   const oldSerial = oldField.serial;
@@ -981,7 +988,10 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
     const oldF = oldFields[fieldName];
     const newF = newFields[fieldName];
     if (!newF) return true;
-    if (areFieldsDifferent(oldF!, newF)) return true;
+    if (
+      areFieldsDifferent(assertDefined(oldF, `field "${fieldName}" missing from oldFields`), newF)
+    )
+      return true;
   }
 
   return false;
@@ -1134,7 +1144,10 @@ function compareTypeFields(
   // Check for added fields
   for (const fieldName of currFieldNames) {
     if (!prevFieldNames.has(fieldName)) {
-      const currField = currType.fields[fieldName]!;
+      const currField = assertDefined(
+        currType.fields[fieldName],
+        `field "${fieldName}" missing from currType`,
+      );
       addChange(
         ctx,
         {
@@ -1152,7 +1165,10 @@ function compareTypeFields(
   // Check for removed fields
   for (const fieldName of prevFieldNames) {
     if (!currFieldNames.has(fieldName)) {
-      const prevField = prevType.fields[fieldName]!;
+      const prevField = assertDefined(
+        prevType.fields[fieldName],
+        `field "${fieldName}" missing from prevType`,
+      );
       addChange(
         ctx,
         {
@@ -1171,8 +1187,14 @@ function compareTypeFields(
   for (const fieldName of currFieldNames) {
     if (!prevFieldNames.has(fieldName)) continue;
 
-    const prevField = prevType.fields[fieldName]!;
-    const currField = currType.fields[fieldName]!;
+    const prevField = assertDefined(
+      prevType.fields[fieldName],
+      `field "${fieldName}" missing from prevType`,
+    );
+    const currField = assertDefined(
+      currType.fields[fieldName],
+      `field "${fieldName}" missing from currType`,
+    );
 
     if (areFieldsDifferent(prevField, currField)) {
       addChange(
@@ -1235,7 +1257,10 @@ function compareIndexes(
   // Index modified
   for (const [indexName, newIndex] of Object.entries(newIndexes ?? {})) {
     if (oldKeys.has(indexName)) {
-      const oldIndex = oldIndexes![indexName]!;
+      const oldIndex = assertDefined(
+        assertDefined(oldIndexes, "oldIndexes is undefined when oldKeys has entry")[indexName],
+        `index "${indexName}" missing from oldIndexes`,
+      );
 
       const oldFieldsStr = JSON.stringify(oldIndex.fields.toSorted());
       const newFieldsStr = JSON.stringify(newIndex.fields.toSorted());
@@ -1301,7 +1326,10 @@ function compareFiles(
   // File field modified (description changed)
   for (const [fileName, newDesc] of Object.entries(newFiles ?? {})) {
     if (oldKeys.has(fileName)) {
-      const oldDesc = oldFiles![fileName]!;
+      const oldDesc = assertDefined(
+        assertDefined(oldFiles, "oldFiles is undefined when oldKeys has entry")[fileName],
+        `file "${fileName}" missing from oldFiles`,
+      );
       if (oldDesc !== newDesc) {
         ctx.changes.push({
           kind: "file_modified",
@@ -1364,7 +1392,12 @@ function compareRelationships(
   // Relationship modified
   for (const [relName, newRel] of Object.entries(newRelationships ?? {})) {
     if (oldKeys.has(relName)) {
-      const oldRel = oldRelationships![relName]!;
+      const oldRel = assertDefined(
+        assertDefined(oldRelationships, "oldRelationships is undefined when oldKeys has entry")[
+          relName
+        ],
+        `relationship "${relName}" missing from oldRelationships`,
+      );
 
       const reasons: string[] = [];
       if (oldRel.targetType !== newRel.targetType) reasons.push("targetType changed");
@@ -1480,8 +1513,14 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
   for (const typeName of currentTypeNames) {
     if (!previousTypeNames.has(typeName)) continue;
 
-    const prevType = previous.types[typeName]!;
-    const currType = current.types[typeName]!;
+    const prevType = assertDefined(
+      previous.types[typeName],
+      `type "${typeName}" missing from previous snapshot`,
+    );
+    const currType = assertDefined(
+      current.types[typeName],
+      `type "${typeName}" missing from current snapshot`,
+    );
 
     // Compare fields
     compareTypeFields(ctx, typeName, prevType, currType);
@@ -1965,8 +2004,14 @@ export function compareRemoteWithSnapshot(
   for (const typeName of snapshotTypeNames) {
     if (!remoteTypeNames.has(typeName)) continue;
 
-    const remoteType = remoteTypeMap.get(typeName)!;
-    const snapshotType = snapshot.types[typeName]!;
+    const remoteType = assertDefined(
+      remoteTypeMap.get(typeName),
+      `type "${typeName}" missing from remoteTypeMap`,
+    );
+    const snapshotType = assertDefined(
+      snapshot.types[typeName],
+      `type "${typeName}" missing from snapshot`,
+    );
 
     const remoteFields = convertRemoteFieldsToSnapshot(remoteType);
     const snapshotFields = snapshotType.fields;
@@ -2010,8 +2055,11 @@ export function compareRemoteWithSnapshot(
       const drift = compareFields(
         typeName,
         fieldName,
-        remoteFields[fieldName]!,
-        snapshotFields[fieldName]!,
+        assertDefined(remoteFields[fieldName], `field "${fieldName}" missing from remoteFields`),
+        assertDefined(
+          snapshotFields[fieldName],
+          `field "${fieldName}" missing from snapshotFields`,
+        ),
       );
       if (drift) {
         drifts.push(drift);
