@@ -154,28 +154,45 @@ The lock file is JSON, 2-space indented, with a trailing newline. It is
   Full dual-key matching (trigger-primary, path-secondary) is P2.
 - **`ejectedIds`**: populated in P1+ when eject semantics are fully
   implemented. In P0, the field is present but always `[]`.
+- **No workspace id in the lock**: the lock is the target manifest only. The
+  resolved workspace id is **not** stored here — it lives in the
+  `TAILOR_PLATFORM_WORKSPACE_ID` Environment variable (Contracts 3 and 9), so
+  there is a single source of truth and no drift between the lock and the
+  variable.
 
 ---
 
 ## Contract 3 — Secrets and variables naming
 
-### Status: P0 implemented
+### Status: P0 implemented (secret names); Design confirmed, implementation reworking (workspace-id variable)
+
+**Secrets**
 
 | Name                                         | Scope                            | Description                      |
 | -------------------------------------------- | -------------------------------- | -------------------------------- |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Repository or Environment secret | Machine user OAuth client ID     |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Repository or Environment secret | Machine user OAuth client secret |
 
+**Variables**
+
+| Name                           | Scope                                         | Description                                                                                                                                                                              |
+| ------------------------------ | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_WORKSPACE_ID` | Environment variable (per target environment) | The workspace id that `deploy`/`plan` target. The source of truth for which workspace a target deploys to. Written at provisioning time (Terraform / GitHub App / manual); not a secret. |
+
 Rules:
 
 - The prefix `TAILOR_PLATFORM_` is reserved for all SDK-related secrets and
-  variables.
+  variables. (The workspace-id variable is therefore `TAILOR_PLATFORM_WORKSPACE_ID`,
+  not `TAILOR_WORKSPACE_ID`.)
 - Names are **fixed**. App-specific or environment-specific suffixes (e.g.,
-  `_PRODUCTION`) are not used. Environment isolation is expressed through
-  GitHub Environments (environment-scoped secrets), not name variants.
-- `TAILOR_PLATFORM_WORKSPACE_ID` (used in the pre-P0 beta) is **removed**.
-  Workspace resolution now uses `workspace-name` + `workspace-region` inputs
-  at plan/deploy time, eliminating the chicken-and-egg problem.
+  `_PRODUCTION`) are not used. Per-environment isolation is expressed through
+  GitHub Environments (environment-scoped secret/variable values), not name
+  variants.
+- `TAILOR_PLATFORM_WORKSPACE_ID` is the workspace-id store (see Contract 9):
+  `deploy`/`plan` read it and operate by id; they never resolve a workspace by
+  name or create one. (This supersedes the short-lived name+region resolution
+  approach explored during the rewrite, in which this variable was temporarily
+  removed.)
 - The deprecated `PLATFORM_MACHINE_USER_*` names (pre-P0 beta) are no longer
   generated.
 
@@ -318,7 +335,15 @@ inline comments so editors can identify them without consulting the lock.
 
 ## Contract 7 — CLI flag semantics
 
-### Status: P0 implemented
+### Status: P0 implemented (pre-rework); flag set under review for id-by-variable
+
+> **Note (id-by-variable rework).** The table below reflects the pre-rework flag
+> set, in which the generated workflow created the workspace by name+region.
+> Under Contract 9 (id-by-variable), the generated `deploy`/`plan` target the
+> workspace by `TAILOR_PLATFORM_WORKSPACE_ID` and never create it, so the flags
+> that fed creation (`--workspace-region`, `--organization-id`, `--folder-id`)
+> move to **provisioning** rather than the deploy workflow. The exact flag set
+> after the rework is decided alongside the code changes.
 
 | Flag                 | Alias | Required | Default                    | Semantics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | -------------------- | ----- | -------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -367,28 +392,68 @@ Rules:
 
 ---
 
-## Contract 9 — Workspace resolution modes
+## Contract 9 — Workspace resolution (id-by-variable) and provisioning
 
-### Status: P0 implemented (auto-create); Design confirmed, P1+ implementation (`--workspace-id`)
+### Status: Design confirmed; implementation reworking #19/#1403 (replaces the name+region auto-create model)
 
-**P0 — auto-create mode (name + region):**
-`tailor-platform/actions/plan@v1` and `tailor-platform/actions/deploy@v1`
-receive `workspace-name` and `workspace-region` as inputs and resolve the
-workspace at runtime. The two actions differ on a miss: `deploy` creates the
-workspace, while `plan` does **not** create it and falls back to build-only
-validation (reporting that it will be created on the first deploy). This
-eliminates the pre-P0 chicken-and-egg problem where
-`TAILOR_PLATFORM_WORKSPACE_ID` was unavailable until after the first deploy.
+**Resolution (steady state).** `deploy` and `plan` target the workspace by
+**id**, read from the `TAILOR_PLATFORM_WORKSPACE_ID` Environment variable
+(Contract 3). They **never resolve by name and never create** a workspace.
 
-`organization-id` and `folder-id` are **optional** and consumed only when the
-deploy action creates the workspace (matching the optional fields on
-`workspace create`); steady-state deploys to an existing workspace ignore them.
+- `deploy`: if the variable is unset → hard error ("not provisioned"). Never
+  creates. Deploys are rename-proof (a console rename does not change the id)
+  and can run with workspace-level permission only.
+- `plan`: reads the same id; if unset → reports "not provisioned yet" instead
+  of running a dry-run.
 
-**P1 — `--workspace-id` direct mode:**
-A `--workspace-id` CLI flag will allow targeting a pre-existing workspace by
-ID. The generated `with:` block will include `workspace-id` instead of
-`workspace-name` + `workspace-region`. Use this for workspaces that must not
-be auto-created.
+**Provisioning.** Creating the workspace and writing its id into the variable
+is a separate, deliberate step — the only place a workspace is created. Two
+**independent** axes (pick one from each; the id flows 取得 → 設定):
+
+- **取得 (obtain the id):**
+  - **A1 — Terraform** `tailor_workspace` resource; the id is a computed
+    attribute held in tfstate (rename-resilient: terraform reconciles name
+    drift rather than duplicating). Needs org-level create permission.
+  - **A2 — CI provision workflow** (Control Plane Machine User); creates at
+    runtime when org-create permission exists only in CI.
+  - **A3 — CLI**; an operator with org-create permission runs
+    `tailor-sdk workspace create` locally.
+  - **A4 — Console (manual)**; read an existing workspace's id from the
+    console. **Not a `setup github` feature** — documented fallback only.
+- **設定 (write the id into GitHub):**
+  - **B1 — Terraform** (`github_actions_environment_variable`); also writes the
+    machine-user secrets, so no GitHub App is needed.
+  - **B2 — GitHub App**; the provision workflow writes the variable via an App
+    token.
+  - **B3 — Manual**; an operator sets the variable (`gh variable set --env` / UI).
+
+Same tool/actor for 取得 and 設定 = direct (no handoff); different = the id must
+be handed off (terraform reads it, or it is pasted in).
+
+**Why id-by-variable (not name+region find-or-create).** Workspace `name` has
+no uniqueness constraint, `workspace create` is not idempotent, and a console
+rename keeps the id while changing the name (all confirmed in
+`platform-core-services`). A name-based find-or-create can therefore silently
+create a duplicate (after a rename) or match the wrong workspace (multi-match).
+Targeting by a provisioned id removes this class of footgun, which is why
+`deploy` never name-resolves or creates. (Because there is no name resolution
+in `deploy`/`plan`, a multi-match guard is **not** needed there.)
+
+**Terraform ownership boundary.** Terraform manages only the `tailor_workspace`
+shell; the in-workspace resources (TailorDB types, auth, executors, …) are
+owned by the SDK (`tailor-sdk apply`). The same resource must not be managed by
+both.
+
+**Caveat (B2 GitHub App).** The App needs the `Environments: write` permission,
+which is monolithic in GitHub: it also grants read/write of Environment
+**secrets** and protection rules — there is no per-environment or
+variables-only scoping. This must be documented wherever the App path is
+described.
+
+**No name+region stepping stone.** The name+region auto-create model (where the
+deploy action created the workspace on first deploy) is **not** shipped as an
+interim. #19/#1403 are reworked to id-by-variable directly so users never see
+the footgun-prone model.
 
 ---
 
@@ -498,18 +563,18 @@ check fails, the action will emit a clear error message such as:
 
 ## Appendix: Contract-to-implementation mapping
 
-| Contract                | User guide section       | Lock field(s)                               | CLI flag(s)                  | Action input/output                            |
-| ----------------------- | ------------------------ | ------------------------------------------- | ---------------------------- | ---------------------------------------------- |
-| #1 Reserved ids         | Ownership rules          | `generatedIds`, `ejectedIds`                | —                            | job/step ids                                   |
-| #2 Lock schema          | Generated files          | entire file                                 | —                            | —                                              |
-| #3 Secrets naming       | Secrets                  | `inputs.{organizationId,...}`               | —                            | `platform-client-id`, `platform-client-secret` |
-| #4 File naming          | Generated files          | `file`, `workspaceName`                     | `-n`                         | —                                              |
-| #5 Composite actions    | — (developer doc)        | `templateVersion`                           | —                            | action refs                                    |
-| #6 Ownership model      | Ownership rules          | `generatedIds`, `ejectedIds`, `contentHash` | `--force`                    | —                                              |
-| #7 CLI flags            | Usage examples           | `inputs.*`                                  | all flags                    | `workspace-name`, `workspace-region`, etc.     |
-| #8 Environments         | GitHub Environments      | `inputs.environment`                        | `--environment`              | —                                              |
-| #9 Workspace resolution | — (developer doc)        | `inputs.workspaceRegion`                    | `--workspace-region`         | `workspace-name`, `workspace-region`           |
-| #10 `workflow_dispatch` | Manual runs              | `inputs.plan`                               | `--no-plan`                  | `dry-run` input                                |
-| #11 Static site slots   | — (not in P0 user guide) | future `slots` field                        | future `--site`              | `api-url` input, `TAILOR_SITE_DIST_*` env      |
-| #12 Preview naming      | — (not in P0 user guide) | future preview entry                        | `--preview`, `--name-prefix` | preview-comment                                |
-| #13 Semver + compat     | — (developer doc)        | `templateVersion`                           | —                            | min-sdk-version check                          |
+| Contract                | User guide section       | Lock field(s)                               | CLI flag(s)                  | Action input/output                                  |
+| ----------------------- | ------------------------ | ------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
+| #1 Reserved ids         | Ownership rules          | `generatedIds`, `ejectedIds`                | —                            | job/step ids                                         |
+| #2 Lock schema          | Generated files          | entire file                                 | —                            | —                                                    |
+| #3 Secrets naming       | Secrets                  | `inputs.{organizationId,...}`               | —                            | `platform-client-id`, `platform-client-secret`       |
+| #4 File naming          | Generated files          | `file`, `workspaceName`                     | `-n`                         | —                                                    |
+| #5 Composite actions    | — (developer doc)        | `templateVersion`                           | —                            | action refs                                          |
+| #6 Ownership model      | Ownership rules          | `generatedIds`, `ejectedIds`, `contentHash` | `--force`                    | —                                                    |
+| #7 CLI flags            | Usage examples           | `inputs.*`                                  | all flags                    | `workspace-name`, `workspace-region`, etc.           |
+| #8 Environments         | GitHub Environments      | `inputs.environment`                        | `--environment`              | —                                                    |
+| #9 Workspace resolution | — (developer doc)        | (id not in lock)                            | provisioning flags           | `workspace-id` (from `TAILOR_PLATFORM_WORKSPACE_ID`) |
+| #10 `workflow_dispatch` | Manual runs              | `inputs.plan`                               | `--no-plan`                  | `dry-run` input                                      |
+| #11 Static site slots   | — (not in P0 user guide) | future `slots` field                        | future `--site`              | `api-url` input, `TAILOR_SITE_DIST_*` env            |
+| #12 Preview naming      | — (not in P0 user guide) | future preview entry                        | `--preview`, `--name-prefix` | preview-comment                                      |
+| #13 Semver + compat     | — (developer doc)        | `templateVersion`                           | —                            | min-sdk-version check                                |
