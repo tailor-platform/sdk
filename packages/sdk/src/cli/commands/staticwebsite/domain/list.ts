@@ -44,7 +44,7 @@ export const domainListCommand = defineAppCommand({
 
       const formatted = customDomains.map((d) => ({
         domain: d.domain,
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform may return enum values newer than this SDK
         status: statusLabels[d.status] ?? "unknown",
         trafficCnameTarget: d.trafficCnameTarget,
         certificateCnameTarget: d.certificateCnameTarget,

@@ -48,7 +48,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
           }
           // import sdk from "@tailor-platform/sdk" → sdk.createWorkflowJob
           // import * as sdk from "@tailor-platform/sdk" → sdk.createWorkflowJob
-          // oxlint-disable typescript/no-unnecessary-condition
+          // oxlint-disable typescript/no-unnecessary-condition -- callee may be a ComputedMemberExpression at runtime
           else if (
             specifier.type === "ImportDefaultSpecifier" ||
             specifier.type === "ImportNamespaceSpecifier"
@@ -144,7 +144,7 @@ export function isSdkFunctionCall(
   // Note: oxc uses MemberExpression with computed: false for static member access
   if (callee.type === "MemberExpression") {
     const memberExpr = callee as unknown as StaticMemberExpression;
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- callee may be a ComputedMemberExpression at runtime
     if (!memberExpr.computed) {
       const object = memberExpr.object;
       const property = memberExpr.property;

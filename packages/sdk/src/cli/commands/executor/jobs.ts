@@ -327,7 +327,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
 
     // Phase 1: Wait for executor job to complete
     let job: Awaited<ReturnType<typeof client.getExecutorJob>>["job"];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- loop exits when the executor job reaches a terminal status
     while (true) {
       const response = await client.getExecutorJob({
         workspaceId,
@@ -376,7 +376,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
     };
 
     const latestAttempt = attemptInfos[0];
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- index access may be undefined without noUncheckedIndexedAccess
     const operationReference = latestAttempt?.operationReference;
 
     // Phase 2: Based on target type, wait for the downstream execution
@@ -443,7 +443,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
             sp.start(`Waiting for function execution ${operationReference}...`);
 
             try {
-              // oxlint-disable-next-line typescript/no-unnecessary-condition
+              // oxlint-disable-next-line typescript/no-unnecessary-condition -- loop exits when the function execution reaches a terminal status
               while (true) {
                 const { execution } = await client.getFunctionExecution({
                   workspaceId,

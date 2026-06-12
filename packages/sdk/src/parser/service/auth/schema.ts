@@ -273,9 +273,9 @@ export const AuthConfigSchema = z
     ],
     {
       error: (iss) => {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- zod may report error codes not covered by its type definitions
         if (iss.code !== "invalid_union") return undefined;
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- zod may report error codes not covered by its type definitions
         if (iss.errors.length < 2) return undefined;
         const isOnlyMutexViolation = iss.errors.every((variantErrors) =>
           variantErrors.every(

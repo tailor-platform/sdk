@@ -20,7 +20,7 @@ export const processOrder = createWorkflowJob({
   name: "process-order",
   body: async (input: { orderId: string; userEmail: string }) => {
     const details = await fetchDetails.trigger({ orderId: input.orderId });
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- trigger return may be undefined when the upstream job produces no value
     if (!details) {
       throw new Error(`Order ${input.orderId} not found`);
     }

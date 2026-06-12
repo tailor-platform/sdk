@@ -251,13 +251,13 @@ function extractOAuth2Config(
   const v = config.value;
   return {
     type: "oauth2",
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
     providerUrl: (v.providerUrl as string) ?? "",
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
     issuerUrl: (v.issuerUrl as string) ?? "",
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
     clientId: (v.clientId as string) ?? "",
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
     clientSecret: (v.clientSecret as string) ?? "",
     authUrl: (v.authUrl as string) || undefined,
     tokenUrl: (v.tokenUrl as string) || undefined,

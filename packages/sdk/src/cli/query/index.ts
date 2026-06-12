@@ -522,7 +522,7 @@ async function runRepl(
   logger.info(`Entering ${options.engine.toUpperCase()} REPL mode.`);
   logger.info("Type \\help for usage, \\q to quit.");
 
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- loop exits when the user types the quit command
   while (true) {
     const [value, error] = await prompt(`${options.engine}> `);
 

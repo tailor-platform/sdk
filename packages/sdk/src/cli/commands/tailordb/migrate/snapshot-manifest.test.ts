@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/no-unnecessary-condition */
+/* oxlint-disable typescript/no-unnecessary-condition -- MessageInitShape makes every proto field optional */
 import { describe, expect, test } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {

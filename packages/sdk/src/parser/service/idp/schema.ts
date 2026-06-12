@@ -261,7 +261,7 @@ export const IdPSchema = z
     clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),
     lang: IdPLangSchema.optional().describe("UI language for IdP pages"),
     userAuthPolicy: IdPUserAuthPolicySchema.transform((input) =>
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- transform input may be undefined before schema parse
       IdPUserAuthPolicySchema.parse(input ?? {}),
     )
       .optional()

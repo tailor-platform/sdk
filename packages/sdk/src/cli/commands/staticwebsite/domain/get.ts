@@ -45,7 +45,7 @@ export const domainGetCommand = defineAppCommand({
 
       const info = {
         domain: customDomain.domain,
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform may return enum values newer than this SDK
         status: statusLabels[customDomain.status] ?? "unknown",
         trafficCnameTarget: customDomain.trafficCnameTarget,
         certificateCnameTarget: customDomain.certificateCnameTarget,

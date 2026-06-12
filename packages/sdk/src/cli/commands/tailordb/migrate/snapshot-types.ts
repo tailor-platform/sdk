@@ -137,7 +137,7 @@ export type SnapshotPermissionCondition = readonly [
 export function isSnapshotFieldRefOperand(
   operand: SnapshotPermissionOperand,
 ): operand is SnapshotFieldRefOperand {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- operand type is widened by MessageInitShape at call sites
   return typeof operand === "object" && operand !== null && !Array.isArray(operand);
 }
 

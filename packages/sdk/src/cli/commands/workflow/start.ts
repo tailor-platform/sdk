@@ -125,7 +125,7 @@ export async function waitForExecution(
     : null;
 
   try {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- loop exits when the workflow execution reaches a terminal status
     while (true) {
       const { execution } = await client.getWorkflowExecution({
         workspaceId,

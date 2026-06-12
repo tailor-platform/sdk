@@ -50,7 +50,7 @@ export function validateRelationConfig(
   rawRelation: RawRelationConfig,
   context: RelationProcessingContext,
 ): void {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- platform response may omit the field
   if (!rawRelation.type) {
     throw new Error(
       `${fieldRef(context)} has a relation but is missing the required 'type' property. ` +

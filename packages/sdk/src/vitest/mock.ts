@@ -250,7 +250,7 @@ export function mockTailordb() {
     setQueryResolver(resolver: QueryResolver): void {
       queryObject.mockImplementation(
         async (query: string, params: unknown[] = []) =>
-          // oxlint-disable-next-line typescript/no-unnecessary-condition
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- user resolvers may return undefined
           new MockQueryResult(resolver(query, params) ?? []),
       );
     },
@@ -282,7 +282,7 @@ export function mockTailordb() {
     get executedQueries(): ExecutedQuery[] {
       return queryObject.mock.calls.map(([query, params]) => ({
         query: query as string,
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- vitest records an omitted argument as undefined
         params: (params as unknown[]) ?? [],
       }));
     },
@@ -551,7 +551,7 @@ export function mockSecretmanager() {
   const prev = root.secretmanager;
 
   const holder: { store: Record<string, Record<string, string>> } = {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- prior mock state may be absent
     store: structuredClone((prev?.[SECRET_STORE]?.store as typeof holder.store) ?? {}),
   };
 
