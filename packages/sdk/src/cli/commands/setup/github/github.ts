@@ -100,6 +100,19 @@ function validateEnvironment(environment: string): void {
   }
 }
 
+// `--dir` is embedded into workflow YAML (paths filters / working-directory).
+// Restrict it to POSIX path characters so it cannot break the YAML or smuggle
+// in a ${{ }} expression. Checked after backslashes are normalized to "/".
+const DIR_RE = /^[A-Za-z0-9._/-]+$/;
+
+function validateDir(dir: string): void {
+  if (!DIR_RE.test(dir)) {
+    throw new Error(
+      `Invalid --dir "${dir}". Only letters, numbers, ".", "_", "/", and "-" are supported.`,
+    );
+  }
+}
+
 // `rel` is "" for the root itself, ".." or "../foo" for an escape. Guard on
 // the path segment so a sibling-prefixed name like "..foo" is not rejected.
 function escapesRoot(rel: string): boolean {
@@ -171,7 +184,13 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     );
   }
 
-  const configPath = resolveConfigPath(options.outputDir, options.dir);
+  // Normalize to POSIX separators and validate before any filesystem use: the
+  // value is embedded into workflow YAML (paths filters / working-directory).
+  const dir = options.dir.replaceAll("\\", "/");
+  validateDir(dir);
+  const workingDirectory = dir !== "." ? dir : undefined;
+
+  const configPath = resolveConfigPath(options.outputDir, dir);
 
   const loadName = options.loadConfigName ?? defaultLoadConfigName;
   const workspaceName = options.workspaceName ?? (await loadName(configPath));
@@ -184,10 +203,6 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   validateWorkspaceName(workspaceName);
 
   const kind: TargetKind = options.tag ? "tag" : "branch";
-  // Normalize to POSIX separators: the value is embedded into workflow YAML
-  // (paths filters / working-directory), which always uses "/".
-  const dir = options.dir.replaceAll("\\", "/");
-  const workingDirectory = dir !== "." ? dir : undefined;
   const packageManager = detectPackageManager(options.outputDir);
   // The env-scoped TAILOR_PLATFORM_WORKSPACE_ID variable is only readable by a
   // job that declares `environment:`, so every plan/deploy job sets one. When
