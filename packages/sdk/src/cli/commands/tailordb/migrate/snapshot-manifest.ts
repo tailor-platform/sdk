@@ -192,9 +192,7 @@ export function convertFieldConfigToProto(
     foreignKey: config.foreignKey ?? false,
     foreignKeyType: config.foreignKeyType,
     foreignKeyField: config.foreignKeyField,
-    // snapshot JSON is parsed without validation
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    required: config.required ?? true,
+    required: config.required,
     vector: config.vector ?? false,
     ...toProtoSnapshotFieldHooks(config),
     ...(config.serial && {
@@ -225,13 +223,9 @@ function toProtoSnapshotFieldValidate(
   return (config.validate ?? []).map((val) => ({
     action: TailorDBType_PermitAction.DENY,
     errorMessage: val.errorMessage || "",
-    // snapshot JSON is parsed without validation
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    ...(val.script && {
-      script: {
-        expr: val.script.expr ? `!${val.script.expr}` : "",
-      },
-    }),
+    script: {
+      expr: val.script.expr ? `!${val.script.expr}` : "",
+    },
   }));
 }
 
@@ -275,9 +269,7 @@ function processNestedFieldsFromSnapshot(
         allowedValues: fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [],
         description: fieldConfig.description || "",
         validate: toProtoSnapshotFieldValidate(fieldConfig),
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        required: fieldConfig.required ?? true,
+        required: fieldConfig.required,
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,
@@ -296,9 +288,7 @@ function processNestedFieldsFromSnapshot(
             : [],
         description: fieldConfig.description || "",
         validate: toProtoSnapshotFieldValidate(fieldConfig),
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        required: fieldConfig.required ?? true,
+        required: fieldConfig.required,
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,

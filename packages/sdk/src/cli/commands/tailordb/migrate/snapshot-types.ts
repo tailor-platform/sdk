@@ -219,3 +219,16 @@ export interface TailorDBSnapshotType {
     gql?: SnapshotGqlPermission;
   };
 }
+
+/**
+ * Schema snapshot - full schema state at a point in time.
+ * Stored as XXXX/schema.json. Defined here (leaf module) so that
+ * snapshot-schema.ts can reference it without importing snapshot.ts.
+ */
+export interface SchemaSnapshot {
+  /** Format version for future compatibility */
+  version: 1;
+  namespace: string;
+  createdAt: string;
+  types: Record<string, TailorDBSnapshotType>;
+}

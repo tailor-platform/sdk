@@ -48,13 +48,11 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
 
   for (const change of diff.changes) {
-    if (change.kind === "field_modified" && change.fieldName) {
+    if (change.kind === "field_modified") {
       const { before, after } = change;
 
       // Check if this is an optional -> required change
-      // snapshot JSON is parsed without validation
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      if (before && after && !before.required && after.required) {
+      if (!before.required && after.required) {
         if (!optionalToRequired.has(change.typeName)) {
           optionalToRequired.set(change.typeName, new Set());
         }
@@ -66,12 +64,6 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
 
       // Check if this is an enum value change
       if (
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        before &&
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        after &&
         before.type === "enum" &&
         after.type === "enum" &&
         before.allowedValues &&
@@ -98,14 +90,12 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
           });
         }
       }
-    } else if (change.kind === "field_added" && change.fieldName) {
+    } else if (change.kind === "field_added") {
       const { after } = change;
 
       // Required field added is a breaking change - add it as optional in db.ts
       // so migration script can set values for existing records
-      // snapshot JSON is parsed without validation
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      if (after && after.required) {
+      if (after.required) {
         if (!addedRequiredFields.has(change.typeName)) {
           addedRequiredFields.set(change.typeName, new Map());
         }

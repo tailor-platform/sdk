@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as inflection from "inflection";
 import * as path from "pathe";
+import { z } from "zod";
 import { assertDefined } from "@/utils/assert";
 import {
   type MigrationDiff,
@@ -15,7 +16,9 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import { formatMigrationNumber } from "./migration-number";
+import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
 import type {
+  SchemaSnapshot,
   SnapshotActionPermission,
   SnapshotFieldConfig,
   SnapshotGqlAction,
@@ -136,19 +139,8 @@ export type {
   SnapshotGqlPermissionPolicy,
   SnapshotGqlPermission,
   TailorDBSnapshotType,
+  SchemaSnapshot,
 } from "./snapshot-types";
-
-/**
- * Schema snapshot - full schema state at a point in time
- * Stored as XXXX/schema.json (e.g., 0000/schema.json for initial snapshot)
- */
-export interface SchemaSnapshot {
-  /** Format version for future compatibility */
-  version: typeof SCHEMA_SNAPSHOT_VERSION;
-  namespace: string;
-  createdAt: string;
-  types: Record<string, TailorDBSnapshotType>;
-}
 
 /**
  * Migration file type
@@ -555,7 +547,11 @@ export function createSnapshotFromLocalTypes(
  */
 export function loadSnapshot(filePath: string): SchemaSnapshot {
   const content = fs.readFileSync(filePath, "utf-8");
-  const snapshot = JSON.parse(content) as SchemaSnapshot;
+  const result = schemaSnapshotSchema.safeParse(JSON.parse(content));
+  if (!result.success) {
+    throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`);
+  }
+  const snapshot = result.data;
   for (const type of Object.values(snapshot.types)) {
     normalizeSnapshotType(type);
   }
@@ -569,12 +565,16 @@ export function loadSnapshot(filePath: string): SchemaSnapshot {
  */
 export function loadDiff(filePath: string): MigrationDiff {
   const content = fs.readFileSync(filePath, "utf-8");
-  const parsed = JSON.parse(content) as MigrationDiff;
+  const result = migrationDiffSchema.safeParse(JSON.parse(content));
+  if (!result.success) {
+    throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`);
+  }
+  const parsed = result.data;
   // Backfill fields introduced after the initial diff.json schema so that older
   // migrations on disk remain readable without manual edits. hasWarnings is
   // derived from the warnings array to stay consistent even if a hand-edited
   // diff.json sets one side without the other.
-  // snapshot JSON is parsed without validation
+  // `warnings` is optional in the schema (backcompat) but cast to required; guard for safety
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   const warnings = parsed.warnings ?? [];
   return {
@@ -667,8 +667,6 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
         break;
       case "type_modified": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (existing && change.after) {
           const after = change.after;
           types[change.typeName] = {
@@ -682,9 +680,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       case "field_added":
       case "field_modified": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (existing && change.fieldName) {
+        if (existing) {
           types[change.typeName] = {
             ...existing,
             fields: {
@@ -697,9 +693,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       }
       case "field_removed": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (existing && change.fieldName) {
+        if (existing) {
           const { [change.fieldName]: _, ...remainingFields } = existing.fields;
           types[change.typeName] = {
             ...existing,
@@ -711,9 +705,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       case "index_added":
       case "index_modified": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (existing && change.indexName) {
+        if (existing) {
           types[change.typeName] = {
             ...existing,
             indexes: {
@@ -726,9 +718,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       }
       case "index_removed": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (existing && change.indexName && existing.indexes) {
+        if (existing && existing.indexes) {
           const { [change.indexName]: _, ...remainingIndexes } = existing.indexes;
           types[change.typeName] = {
             ...existing,
@@ -740,9 +730,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       case "file_added":
       case "file_modified": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (existing && change.fieldName) {
+        if (existing) {
           types[change.typeName] = {
             ...existing,
             files: {
@@ -755,9 +743,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       }
       case "file_removed": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (existing && change.fieldName && existing.files) {
+        if (existing && existing.files) {
           const { [change.fieldName]: _, ...remainingFiles } = existing.files;
           types[change.typeName] = {
             ...existing,
@@ -769,9 +755,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       case "relationship_added":
       case "relationship_modified": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (existing && change.relationshipName) {
+        if (existing) {
           const rel = change.after;
           // Use relationshipType if specified, fallback to existing logic for backwards compatibility
           const targetType =
@@ -804,9 +788,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       }
       case "relationship_removed": {
         const type = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (type && change.relationshipName) {
+        if (type) {
           // Use relationshipType if specified
           const targetType =
             change.relationshipType ??
@@ -837,8 +819,6 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       }
       case "permission_modified": {
         const existing = types[change.typeName];
-        // snapshot JSON is parsed without validation
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (existing && change.after) {
           const after = change.after;
           types[change.typeName] = {

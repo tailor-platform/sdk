@@ -1052,9 +1052,9 @@ describe("snapshot", () => {
         hasWarnings: false,
         warnings: [
           {
-            kind: "field_removed",
             typeName: "Product",
             fieldName: "legacyCode",
+            reason: "Field was removed",
           },
         ],
         requiresMigrationScript: false,
@@ -1067,6 +1067,107 @@ describe("snapshot", () => {
 
       expect(loaded.warnings.length).toBe(1);
       expect(loaded.hasWarnings).toBe(true);
+    });
+  });
+
+  describe("loadSnapshot validation", () => {
+    test("throws with file path when JSON is not an object", () => {
+      const filePath = path.join(testDir, "corrupt_schema.json");
+      fs.writeFileSync(filePath, JSON.stringify("not an object"));
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
+    test("throws with file path when a required field has wrong type", () => {
+      const filePath = path.join(testDir, "bad_type_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({ version: 1, namespace: 42, createdAt: "t", types: {} }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
+    test("loads a legacy snapshot missing newer optional fields", () => {
+      // Older snapshots may omit pluralForm and settings on a type.
+      const legacySnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Product: {
+            name: "Product",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const filePath = path.join(testDir, "legacy_schema.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacySnapshot, null, 2));
+
+      const loaded = loadSnapshot(filePath);
+      expect(loaded.types.Product?.name).toBe("Product");
+      // pluralForm is backfilled from inflection
+      expect(loaded.types.Product?.pluralForm).toBe("Products");
+    });
+
+    test("unknown extra keys survive loadSnapshot → writeSnapshot round-trip", () => {
+      // A snapshot written by a newer CLI may include unknown fields; they
+      // must not be silently dropped on load/save.
+      const snapshotWithExtra = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        futureTopLevelField: "keep-me",
+        types: {
+          Widget: {
+            name: "Widget",
+            pluralForm: "Widgets",
+            futurTypeField: "also-keep",
+            fields: {
+              id: { type: "uuid", required: true, futureFieldProp: true },
+            },
+          },
+        },
+      };
+      const loadPath = path.join(testDir, "future_schema.json");
+      fs.writeFileSync(loadPath, JSON.stringify(snapshotWithExtra, null, 2));
+
+      const loaded = loadSnapshot(loadPath);
+      const savedPath = writeSnapshot(loaded, testDir, 99);
+      const saved = JSON.parse(fs.readFileSync(savedPath, "utf-8")) as Record<string, unknown>;
+
+      expect(saved.futureTopLevelField).toBe("keep-me");
+      const widget = (saved.types as Record<string, unknown>).Widget as Record<string, unknown>;
+      expect(widget.futurTypeField).toBe("also-keep");
+      const idField = (widget.fields as Record<string, unknown>).id as Record<string, unknown>;
+      expect(idField.futureFieldProp).toBe(true);
+    });
+  });
+
+  describe("loadDiff validation", () => {
+    test("throws with file path when JSON is not an object", () => {
+      const filePath = path.join(testDir, "corrupt_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify([1, 2, 3]));
+
+      expect(() => loadDiff(filePath)).toThrow(filePath);
+    });
+
+    test("throws with file path when a required field has wrong type", () => {
+      const filePath = path.join(testDir, "bad_type_diff.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: "t",
+          changes: "not-an-array",
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          requiresMigrationScript: false,
+        }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow(filePath);
     });
   });
 
