@@ -16,7 +16,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const sdkRoot = resolve(here, "..");
 
 interface PackageExports {
-  [key: string]: string | { types?: string; import?: string; default?: string } | PackageExports;
+  [key: string]:
+    | string
+    | null
+    | { types?: string; import?: string; default?: string }
+    | PackageExports;
 }
 
 const pkg = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"), "utf8")) as {
@@ -26,7 +30,12 @@ const pkg = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"), "utf8")) a
 function entryPoints(): string[] {
   const points: string[] = [];
   for (const [key, value] of Object.entries(pkg.exports)) {
-    if (typeof value !== "object" || !("types" in value) || typeof value.types !== "string") {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("types" in value) ||
+      typeof value.types !== "string"
+    ) {
       continue;
     }
     const types = value.types;
