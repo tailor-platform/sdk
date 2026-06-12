@@ -10,6 +10,7 @@ import {
   loadWorkspaceId,
   writePlatformConfig,
 } from "./context";
+import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { resetKeyringState } from "./token-store";
 
@@ -362,6 +363,70 @@ describe("loadMachineUserName", () => {
     });
     const result = await loadMachineUserName();
     expect(result).toBe("env-profile-bot");
+  });
+
+  describe("machine_user_override: deny", () => {
+    beforeEach(() => {
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {},
+        profiles: {
+          locked: {
+            user: "u",
+            workspace_id: validUUID,
+            machine_user: "profile-bot",
+            machine_user_override: "deny",
+          },
+        },
+        current_user: null,
+      });
+    });
+
+    test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when opts.machineUser differs", async () => {
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        profile: "locked",
+      }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+    });
+
+    test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when env var differs", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "other-bot");
+      const err = await loadMachineUserName({ profile: "locked" }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+    });
+
+    test("resolves when opts.machineUser matches profile's machine_user", async () => {
+      const result = await loadMachineUserName({ machineUser: "profile-bot", profile: "locked" });
+      expect(result).toBe("profile-bot");
+    });
+
+    test("resolves to profile's machine_user when nothing explicit is provided", async () => {
+      const result = await loadMachineUserName({ profile: "locked" });
+      expect(result).toBe("profile-bot");
+    });
+  });
+
+  test("explicit value wins over profile when profile has machine_user but no override (regression guard)", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" },
+      },
+      current_user: null,
+    });
+    const result = await loadMachineUserName({ machineUser: "explicit-bot", profile: "myprofile" });
+    expect(result).toBe("explicit-bot");
+  });
+
+  test("explicit value returned when profile in scope does not exist", async () => {
+    const result = await loadMachineUserName({ machineUser: "explicit-bot", profile: "missing" });
+    expect(result).toBe("explicit-bot");
   });
 });
 

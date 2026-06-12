@@ -30,7 +30,12 @@ export const listCommand = defineAppCommand({
       user: profile!.user,
       workspaceId: profile!.workspace_id,
       permission: profile!.readonly === true ? "read" : "write",
-      ...(profile!.machine_user ? { machineUser: profile!.machine_user } : {}),
+      ...(profile!.machine_user
+        ? {
+            machineUser: profile!.machine_user,
+            machineUserOverride: profile!.machine_user_override ?? "allow",
+          }
+        : {}),
     }));
     logger.out(profileInfos);
   },

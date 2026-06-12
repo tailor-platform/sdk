@@ -8,6 +8,7 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import ml from "@/utils/multiline";
 import { initOAuth2Client } from "./client";
+import { CLIError } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
@@ -23,6 +24,7 @@ const pfProfileSchema = z.object({
   workspace_id: z.string(),
   readonly: z.boolean().optional(),
   machine_user: z.string().optional(),
+  machine_user_override: z.enum(["allow", "deny"]).optional(),
 });
 
 const pfUserSchemaV1 = z.object({
@@ -363,32 +365,39 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
 /**
  * Load machine user name from command options, environment variables, or platform config.
  * In CLI context, env fallback is also handled by politty's arg env option.
- * Priority: opts/machineUser > env/TAILOR_PLATFORM_MACHINE_USER_NAME > opts/profile (profile default) > undefined
+ * Priority: opts/machineUser > env/TAILOR_PLATFORM_MACHINE_USER_NAME > opts/profile (profile default) > undefined.
+ * When the active profile has `machine_user_override: "deny"`, an explicit value that differs from the profile's machine user throws a CLIError with code `PROFILE_MACHINE_USER_OVERRIDE_DENIED`.
  * @param opts - Machine user and profile options
  * @returns Resolved machine user name, or undefined if not set
  */
 export async function loadMachineUserName(
   opts?: LoadMachineUserNameOptions,
 ): Promise<string | undefined> {
-  if (opts?.machineUser) {
-    return opts.machineUser;
-  }
-
-  if (process.env.TAILOR_PLATFORM_MACHINE_USER_NAME) {
-    return process.env.TAILOR_PLATFORM_MACHINE_USER_NAME;
-  }
+  const explicit = opts?.machineUser || process.env.TAILOR_PLATFORM_MACHINE_USER_NAME || undefined;
 
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
-  if (profile) {
-    const pfConfig = await readPlatformConfig();
-    const profileEntry = pfConfig.profiles[profile];
-    if (!profileEntry) {
-      throw new Error(`Profile "${profile}" not found`);
-    }
-    return profileEntry.machine_user;
+  if (!profile) return explicit;
+
+  const pfConfig = await readPlatformConfig();
+  const entry = pfConfig.profiles[profile];
+  if (!entry) {
+    if (explicit) return explicit;
+    throw new Error(`Profile "${profile}" not found`);
   }
 
-  return undefined;
+  if (entry.machine_user && entry.machine_user_override === "deny") {
+    if (explicit && explicit !== entry.machine_user) {
+      throw CLIError({
+        code: "PROFILE_MACHINE_USER_OVERRIDE_DENIED",
+        message: `Profile "${profile}" denies overriding the machine user.`,
+        details: `This profile fixes the machine user to "${entry.machine_user}" for application-data commands.`,
+        suggestion: `Omit the machine user option, or run 'tailor-sdk profile update ${profile} --machine-user-override allow'.`,
+      });
+    }
+    return entry.machine_user;
+  }
+
+  return explicit || entry.machine_user;
 }
 
 /**
