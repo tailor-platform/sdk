@@ -79,9 +79,7 @@ jobs:
       - name: Destroy workspace
         if: always()
         working-directory: example
-        env:
-          WORKSPACE_ID: ${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}
-        run: pnpm tailor-sdk workspace delete --workspace-id "$WORKSPACE_ID" --yes
+        run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   migration-result:
     needs: [changes, migration]
