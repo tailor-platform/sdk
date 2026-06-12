@@ -399,7 +399,7 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   };
 
   if (type.description) snapshotType.description = type.description;
-  // snapshot JSON is parsed without validation
+  // raw user definitions may omit settings the parsed type marks required
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (type.settings) {
     snapshotType.settings = {};
