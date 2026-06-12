@@ -138,7 +138,7 @@ jobs:
       - name: Destroy workspace
         if: always() && runner.os != 'Windows'
         working-directory: example
-        run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
+        run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   deploy-result:
     needs: [changes, deploy]
@@ -148,18 +148,22 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
         run: |
           # Fail closed: if the paths-filter job itself failed, should_run is
           # empty and must not be mistaken for "no relevant changes".
-          if [[ "${{ needs.changes.result }}" != "success" ]]; then
-            echo "Changes job did not succeed (result=${{ needs.changes.result }})"
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
             exit 1
           fi
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.deploy.result }}" != "success" ]]; then
+          if [[ "$DEPLOY_RESULT" != "success" ]]; then
             echo "Deploy jobs failed"
             exit 1
           fi

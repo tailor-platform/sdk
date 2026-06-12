@@ -117,16 +117,20 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          SDK_E2E_RESULT: ${{ needs.sdk-e2e.result }}
+          TEMPLATE_WORKFLOW_E2E_RESULT: ${{ needs.template-workflow-e2e.result }}
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.sdk-e2e.result }}" != "success" ]]; then
+          if [[ "$SDK_E2E_RESULT" != "success" ]]; then
             echo "SDK package e2e job failed"
             exit 1
           fi
-          if [[ "${{ needs.template-workflow-e2e.result }}" != "success" ]]; then
+          if [[ "$TEMPLATE_WORKFLOW_E2E_RESULT" != "success" ]]; then
             echo "Template workflow e2e job failed"
             exit 1
           fi

@@ -79,7 +79,9 @@ jobs:
       - name: Destroy workspace
         if: always()
         working-directory: example
-        run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
+        env:
+          WORKSPACE_ID: ${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}
+        run: pnpm tailor-sdk workspace delete --workspace-id "$WORKSPACE_ID" --yes
 
   migration-result:
     needs: [changes, migration]
@@ -89,12 +91,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          MIGRATION_RESULT: ${{ needs.migration.result }}
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.migration.result }}" != "success" ]]; then
+          if [[ "$MIGRATION_RESULT" != "success" ]]; then
             echo "Migration job failed"
             exit 1
           fi
