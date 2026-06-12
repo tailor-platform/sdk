@@ -250,7 +250,8 @@ export function mockTailordb() {
     setQueryResolver(resolver: QueryResolver): void {
       queryObject.mockImplementation(
         async (query: string, params: unknown[] = []) =>
-          new MockQueryResult(resolver(query, params)),
+          // oxlint-disable-next-line typescript/no-unnecessary-condition
+          new MockQueryResult(resolver(query, params) ?? []),
       );
     },
 
@@ -281,7 +282,8 @@ export function mockTailordb() {
     get executedQueries(): ExecutedQuery[] {
       return queryObject.mock.calls.map(([query, params]) => ({
         query: query as string,
-        params: params as unknown[],
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
+        params: (params as unknown[]) ?? [],
       }));
     },
 

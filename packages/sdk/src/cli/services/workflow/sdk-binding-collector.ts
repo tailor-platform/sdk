@@ -48,7 +48,12 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
           }
           // import sdk from "@tailor-platform/sdk" → sdk.createWorkflowJob
           // import * as sdk from "@tailor-platform/sdk" → sdk.createWorkflowJob
-          else {
+          // oxlint-disable typescript/no-unnecessary-condition
+          else if (
+            specifier.type === "ImportDefaultSpecifier" ||
+            specifier.type === "ImportNamespaceSpecifier"
+            // oxlint-enable typescript/no-unnecessary-condition
+          ) {
             const spec = specifier as ImportDefaultSpecifier | ImportNamespaceSpecifier;
             // Store namespace/default with special prefix to track member access
             bindings.add(`__namespace__:${spec.local.name}`);
@@ -139,14 +144,17 @@ export function isSdkFunctionCall(
   // Note: oxc uses MemberExpression with computed: false for static member access
   if (callee.type === "MemberExpression") {
     const memberExpr = callee as unknown as StaticMemberExpression;
-    const object = memberExpr.object;
-    const property = memberExpr.property;
-    if (
-      object.type === "Identifier" &&
-      bindings.has(`__namespace__:${(object as IdentifierReference).name}`) &&
-      property.name === functionName
-    ) {
-      return true;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    if (!memberExpr.computed) {
+      const object = memberExpr.object;
+      const property = memberExpr.property;
+      if (
+        object.type === "Identifier" &&
+        bindings.has(`__namespace__:${(object as IdentifierReference).name}`) &&
+        property.name === functionName
+      ) {
+        return true;
+      }
     }
   }
 

@@ -293,11 +293,13 @@ function detectExtendedTriggerCalls(
       if (callee.type === "MemberExpression") {
         const memberExpr = callee as unknown as StaticMemberExpression;
 
+        // oxlint-disable typescript/no-unnecessary-condition
         const identifierName =
-          memberExpr.object.type === "Identifier"
+          !memberExpr.computed && memberExpr.object.type === "Identifier"
             ? (memberExpr.object as IdentifierReference).name
             : null;
-        const propertyName = memberExpr.property.name;
+        const propertyName = !memberExpr.computed ? memberExpr.property.name : null;
+        // oxlint-enable typescript/no-unnecessary-condition
 
         if (identifierName && propertyName === "trigger") {
           const isWorkflow = workflowNames.has(identifierName);
@@ -308,7 +310,10 @@ function detectExtendedTriggerCalls(
             let argsText = "";
             if (argCount > 0) {
               const firstArg = callExpr.arguments[0];
-              argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
+              // oxlint-disable-next-line typescript/no-unnecessary-condition
+              if (firstArg && "start" in firstArg && "end" in firstArg) {
+                argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
+              }
             }
 
             if (isWorkflow && argCount >= 2) {
