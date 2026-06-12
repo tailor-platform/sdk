@@ -41,3 +41,6 @@ jobs:
 
       - name: Run ghalint actions
         run: ghalint run-action
+
+      - name: Run zizmor
+        run: zizmor --no-progress .github/workflows/ .github/actions/
