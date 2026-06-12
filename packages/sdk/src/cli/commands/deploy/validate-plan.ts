@@ -106,9 +106,8 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
         });
       }
     } else if (result.kind === "error") {
-      logger.warn(
-        `Validation error for ${kind} "${item.name}" (${action}): ${result.error.message}`,
-      );
+      // Evaluator failures must not block deploys; the platform stays the authoritative validator.
+      logger.warn(`Could not validate ${kind} "${item.name}" (${action}): ${result.error.message}`);
     }
   }
 }
@@ -117,8 +116,9 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * Validate all plan-time create/update requests against buf.validate constraints embedded in the
  * generated proto descriptors.
  *
- * Collections whose proto requests are assembled at apply time (workflow, app, auth idpConfig/connection,
- * secretManager, functionRegistry) are not validated here.
+ * Collections not validated: workflow, app, auth idpConfig/connection, idp client,
+ * tailorDB gqlPermission, secretManager, functionRegistry — either assembled at apply time
+ * or lacking buf.validate annotations.
  *
  * @param input - Plan results from the plan phase
  */
@@ -167,7 +167,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     tailorDB.changeSet.service.creates as HasRequest[],
   );
 
-  // TailorDB types
   creates(
     CreateTailorDBTypeRequestSchema,
     "TailorDB type",
@@ -179,7 +178,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     tailorDB.changeSet.type.updates as HasRequest[],
   );
 
-  // Static websites
   creates(
     CreateStaticWebsiteRequestSchema,
     "StaticWebsite",
@@ -191,7 +189,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     staticWebsite.changeSet.updates as HasRequest[],
   );
 
-  // IdP services (UpdateClient has no request — only creates validated)
   creates(
     CreateIdPServiceRequestSchema,
     "IdP service",
@@ -203,7 +200,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     idp.changeSet.service.updates as HasRequest[],
   );
 
-  // Auth services
   creates(
     CreateAuthServiceRequestSchema,
     "Auth service",
@@ -215,7 +211,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     auth.changeSet.service.updates as HasRequest[],
   );
 
-  // Auth user profile configs
   creates(
     CreateUserProfileConfigRequestSchema,
     "Auth user profile config",
@@ -227,7 +222,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     auth.changeSet.userProfileConfig.updates as HasRequest[],
   );
 
-  // Auth tenant configs
   creates(
     CreateTenantConfigRequestSchema,
     "Auth tenant config",
@@ -239,7 +233,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     auth.changeSet.tenantConfig.updates as HasRequest[],
   );
 
-  // Auth machine users
   creates(
     CreateAuthMachineUserRequestSchema,
     "Auth machine user",
@@ -251,7 +244,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     auth.changeSet.machineUser.updates as HasRequest[],
   );
 
-  // Auth hooks
   creates(
     CreateAuthHookRequestSchema,
     "Auth hook",
@@ -263,7 +255,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     auth.changeSet.authHook.updates as HasRequest[],
   );
 
-  // Auth SCIM configs
   creates(
     CreateAuthSCIMConfigRequestSchema,
     "Auth SCIM config",
@@ -275,7 +266,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     auth.changeSet.scim.updates as HasRequest[],
   );
 
-  // Auth SCIM resources
   creates(
     CreateAuthSCIMResourceRequestSchema,
     "Auth SCIM resource",
@@ -287,7 +277,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     auth.changeSet.scimResource.updates as HasRequest[],
   );
 
-  // Auth OAuth2 clients (redirectUris resolved at apply time; other fields validated here)
   creates(
     CreateAuthOAuth2ClientRequestSchema,
     "OAuth2 client",
@@ -308,7 +297,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     violations,
   });
 
-  // Pipeline services and resolvers
   creates(
     CreatePipelineServiceRequestSchema,
     "Pipeline service",
@@ -330,7 +318,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     pipeline.changeSet.resolver.updates as HasRequest[],
   );
 
-  // Executors
   creates(
     CreateExecutorExecutorRequestSchema,
     "Executor",
