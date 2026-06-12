@@ -1,7 +1,4 @@
-import { create } from "@bufbuild/protobuf";
-import { durationFromMs } from "@bufbuild/protobuf/wkt";
-import { createValidator } from "@bufbuild/protovalidate";
-import { CreateWorkflowRequestSchema } from "@tailor-proto/tailor/v1/workflow_pb";
+import { AuthConnection_Type } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { describe, expect, test } from "vitest";
 import { createChangeSet } from "./change-set";
 import { validatePlan, type ValidatePlanInput } from "./validate-plan";
@@ -165,23 +162,28 @@ describe("validatePlan", () => {
     await expect(validatePlan(input)).resolves.toBeUndefined();
   });
 
-  test("(c) message-level CEL rule is evaluated — initial_backoff > max_backoff is rejected", () => {
-    const validator = createValidator();
-    const req = create(CreateWorkflowRequestSchema, {
+  test("(c) workflow create with retryPolicy initialBackoff > maxBackoff is rejected via validatePlan", async () => {
+    const input = emptyInput();
+    input.workflow.changeSet.creates.push({
+      name: "my-workflow",
       workspaceId: WS_ID,
-      workflowName: "my-workflow",
-      retryPolicy: {
-        maxRetries: 3,
-        initialBackoff: durationFromMs(10_000),
-        maxBackoff: durationFromMs(5_000),
-        backoffMultiplier: 2.0,
+      workflow: {
+        name: "my-workflow",
+        mainJob: { name: "my-main-job" },
+        retryPolicy: {
+          maxRetries: 3,
+          initialBackoff: "10s",
+          maxBackoff: "5s",
+          backoffMultiplier: 2.0,
+        },
       },
-    });
-    const result = validator.validate(CreateWorkflowRequestSchema, req);
-    expect(result.kind).toBe("invalid");
-    const violations = result.kind === "invalid" ? result.violations : [];
-    const messages = violations.map((v) => v.message);
-    expect(messages).toContain("initial_backoff must be less than or equal to max_backoff");
+      usedJobNames: ["my-main-job"],
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+
+    await expect(validatePlan(input)).rejects.toThrow(
+      /\d+ validation error\(s\) found in 1 resource\(s\)/,
+    );
   });
 
   test("(d) executor create with invalid name produces a violation", async () => {
@@ -199,6 +201,53 @@ describe("validatePlan", () => {
     await expect(validatePlan(input)).rejects.toThrow(
       /\d+ validation error\(s\) found in 1 resource\(s\)/,
     );
+  });
+
+  test("(f) auth connection create with invalid name is rejected", async () => {
+    const input = emptyInput();
+    input.auth.changeSet.connection.creates.push({
+      name: "INVALID_NAME",
+      request: {
+        workspaceId: WS_ID,
+        connection: {
+          name: "INVALID_NAME",
+          type: AuthConnection_Type.OAUTH2,
+          config: {
+            case: "oauth2",
+            value: {
+              providerUrl: "https://provider.example.com",
+              issuerUrl: "https://issuer.example.com",
+              clientId: "client123",
+              clientSecret: "secret123",
+              authUrl: "",
+              tokenUrl: "",
+            },
+          },
+        },
+      },
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+
+    await expect(validatePlan(input)).rejects.toThrow(
+      /\d+ validation error\(s\) found in 1 resource\(s\)/,
+    );
+  });
+
+  test("(g) application create with cors containing a placeholder string passes", async () => {
+    const input = emptyInput();
+    input.app.creates.push({
+      name: "my-app",
+      request: {
+        workspaceId: WS_ID,
+        applicationName: "my-app",
+        authNamespace: "my-auth",
+        cors: ["https://__PLACEHOLDER__"],
+        subgraphs: [{ serviceType: 1, serviceNamespace: "tailordb" }],
+      },
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
   });
 
   test("(e) violations from multiple resources are aggregated into one error", async () => {

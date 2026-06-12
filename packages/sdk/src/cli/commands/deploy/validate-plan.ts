@@ -2,6 +2,11 @@ import { create, type DescMessage } from "@bufbuild/protobuf";
 import { pathToString } from "@bufbuild/protobuf/reflect";
 import { createValidator, type Validator } from "@bufbuild/protovalidate";
 import {
+  CreateApplicationRequestSchema,
+  UpdateApplicationRequestSchema,
+} from "@tailor-proto/tailor/v1/application_pb";
+import {
+  CreateAuthConnectionRequestSchema,
   CreateAuthHookRequestSchema,
   CreateAuthMachineUserRequestSchema,
   CreateAuthOAuth2ClientRequestSchema,
@@ -42,7 +47,12 @@ import {
   CreateTailorDBTypeRequestSchema,
   UpdateTailorDBTypeRequestSchema,
 } from "@tailor-proto/tailor/v1/tailordb_pb";
+import {
+  CreateWorkflowRequestSchema,
+  UpdateWorkflowRequestSchema,
+} from "@tailor-proto/tailor/v1/workflow_pb";
 import { logger, styles } from "@/cli/shared/logger";
+import { buildWorkflowValidationShape } from "./workflow";
 import type { planApplication } from "./application";
 import type { planAuth } from "./auth";
 import type { planExecutor } from "./executor";
@@ -116,14 +126,17 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * Validate all plan-time create/update requests against buf.validate constraints embedded in the
  * generated proto descriptors.
  *
- * Collections not validated: workflow, app, auth idpConfig/connection, idp client,
- * tailorDB gqlPermission, staticWebsite customDomain, secretManager, functionRegistry —
- * either assembled at apply time or lacking buf.validate annotations.
+ * Collections not validated: auth idpConfig, idp client, tailorDB gqlPermission,
+ * staticWebsite customDomain, secretManager, functionRegistry — no buf.validate annotations.
+ * Application cors is excluded: static-website URL placeholders are resolved at apply time
+ * and a bare cors array carries no constraint that would false-positive when omitted.
+ * Workflow jobFunctions excluded: versions are registered at apply time (registerJobFunctions)
+ * and the map field carries no min_items constraint.
  *
  * @param input - Plan results from the plan phase
  */
 export async function validatePlan(input: ValidatePlanInput): Promise<void> {
-  const { tailorDB, staticWebsite, idp, auth, pipeline, executor } = input;
+  const { tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow } = input;
 
   const validator = createValidator();
   const violations: ViolationEntry[] = [];
@@ -339,6 +352,52 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     UpdateExecutorExecutorRequestSchema,
     "Executor",
     executor.changeSet.updates as HasRequest[],
+  );
+
+  creates(
+    CreateWorkflowRequestSchema,
+    "Workflow",
+    workflow.changeSet.creates.map((item) => ({
+      name: item.name,
+      request: buildWorkflowValidationShape(item.workspaceId, item.workflow),
+    })),
+  );
+  updates(
+    UpdateWorkflowRequestSchema,
+    "Workflow",
+    workflow.changeSet.updates.map((item) => ({
+      name: item.name,
+      request: buildWorkflowValidationShape(item.workspaceId, item.workflow),
+    })),
+  );
+
+  // cors is excluded: static-website URL placeholders are resolved at apply time.
+  creates(
+    CreateApplicationRequestSchema,
+    "Application",
+    app.creates.map((item) => ({
+      name: item.name,
+      request: { ...item.request, cors: undefined },
+    })),
+  );
+  updates(
+    UpdateApplicationRequestSchema,
+    "Application",
+    [...app.updates, ...app.unchanged].map((item) => ({
+      name: item.name,
+      request: { ...item.request, cors: undefined },
+    })),
+  );
+
+  creates(
+    CreateAuthConnectionRequestSchema,
+    "Auth connection",
+    auth.changeSet.connection.creates as HasRequest[],
+  );
+  replaces(
+    CreateAuthConnectionRequestSchema,
+    "Auth connection",
+    auth.changeSet.connection.replaces as HasCreateRequest[],
   );
 
   if (violations.length === 0) {
