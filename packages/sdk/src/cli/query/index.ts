@@ -414,7 +414,7 @@ async function prepareQueryExecutor(
         error,
         engine,
         namespace,
-        machineUser: options.machineUser,
+        machineUser: machineUserResource.name,
       });
     }
   };

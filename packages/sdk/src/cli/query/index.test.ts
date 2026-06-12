@@ -573,6 +573,34 @@ describe("query", () => {
     );
   });
 
+  test("execution error names the resolved machine user when machineUser option is absent", async () => {
+    const { loadMachineUserName } = await import("../shared/context");
+    const { executeScript } = await import("../shared/script-executor");
+    vi.mocked(loadMachineUserName).mockResolvedValue("profile-bot");
+    mockClient.getAuthMachineUser.mockResolvedValue({
+      machineUser: {
+        name: "profile-bot",
+        clientId: "client-id",
+        clientSecret: "client-secret",
+      },
+    });
+    vi.mocked(executeScript).mockResolvedValue({
+      success: false,
+      logs: "",
+      result: "",
+      error: "machine user does not exist",
+    });
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        query: 'select * from "User";',
+      }),
+    ).rejects.toThrow("Machine user 'profile-bot' was not found.");
+  });
+
   test("throws 'Machine user is required' error when no machine user source resolves", async () => {
     const { loadMachineUserName } = await import("../shared/context");
     vi.mocked(loadMachineUserName).mockResolvedValue(undefined);

@@ -39,6 +39,7 @@ describe("function test-run --json", () => {
     scriptPath = path.join(tmpDir, "fn.js");
     fs.writeFileSync(scriptPath, "export default async function main() { return { ok: true }; }");
 
+    vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         auth: {
@@ -111,7 +112,7 @@ describe("function test-run --json", () => {
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
-  test("priority: --machine-user flag > profile default > config auto-pick", async () => {
+  test("forwards the --machine-user flag to machine user resolution and uses the resolved name", async () => {
     vi.mocked(loadMachineUserName).mockResolvedValue("flag-or-profile-bot");
 
     using _stdout = captureStdout();
