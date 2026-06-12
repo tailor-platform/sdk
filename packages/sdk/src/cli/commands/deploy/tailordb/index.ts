@@ -1884,19 +1884,9 @@ async function checkMigrationDiffs(
       continue;
     }
 
-    // Try to reconstruct snapshot from migrations
-    let previousSnapshot;
-    try {
-      previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir);
-    } catch {
-      // No migrations directory - this is fine, no check needed
-      results.push({
-        namespace,
-        migrationsDir,
-        hasDiff: false,
-      });
-      continue;
-    }
+    // Returns null when the migrations directory is missing or empty;
+    // throws when existing migration files are invalid.
+    const previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir);
 
     if (!previousSnapshot) {
       // No snapshots yet - user should run migrate generate first

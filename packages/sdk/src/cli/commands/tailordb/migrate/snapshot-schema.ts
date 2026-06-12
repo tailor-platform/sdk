@@ -120,11 +120,14 @@ export const snapshotRelationshipSchema: z.ZodType<SnapshotRelationship> = z.loo
 // Permission Types
 // ============================================================================
 
+// Field-ref operands are discriminated downstream with `in` checks, so an
+// unknown or extra key would be silently misinterpreted — reject it instead
+// of preserving it like the looseObject schemas do.
 const snapshotFieldRefOperandSchema = z.union([
-  z.looseObject({ user: z.string() }),
-  z.looseObject({ record: z.string() }),
-  z.looseObject({ newRecord: z.string() }),
-  z.looseObject({ oldRecord: z.string() }),
+  z.strictObject({ user: z.string() }),
+  z.strictObject({ record: z.string() }),
+  z.strictObject({ newRecord: z.string() }),
+  z.strictObject({ oldRecord: z.string() }),
 ]);
 
 // SnapshotValueOperand = string | boolean | string[] | boolean[]
@@ -173,9 +176,22 @@ const snapshotGqlActionSchema: z.ZodType<SnapshotGqlAction> = z.enum([
   "all",
 ]);
 
+// GQL permissions only support { user } field references (protoGqlOperand
+// rejects the rest at deploy time), so validate that at load time too.
+const snapshotGqlPermissionOperandSchema = z.union([
+  z.strictObject({ user: z.string() }),
+  snapshotValueOperandSchema,
+]);
+
+const snapshotGqlPermissionConditionSchema = z.tuple([
+  snapshotGqlPermissionOperandSchema,
+  snapshotPermissionOperatorSchema,
+  snapshotGqlPermissionOperandSchema,
+]);
+
 export const snapshotGqlPermissionPolicySchema: z.ZodType<SnapshotGqlPermissionPolicy> =
   z.looseObject({
-    conditions: z.array(snapshotPermissionConditionSchema),
+    conditions: z.array(snapshotGqlPermissionConditionSchema),
     actions: z.array(snapshotGqlActionSchema),
     permit: z.enum(["allow", "deny"]),
     description: z.string().optional(),

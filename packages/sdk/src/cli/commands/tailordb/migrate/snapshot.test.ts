@@ -1088,6 +1088,70 @@ describe("snapshot", () => {
       expect(loadSnapshot(filePath).version).toBe(2);
     });
 
+    test("rejects an ambiguous permission field-ref operand", () => {
+      const filePath = path.join(testDir, "ambiguous_operand_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                record: {
+                  create: [],
+                  read: [
+                    {
+                      permit: "allow",
+                      conditions: [[{ user: "id", record: "ownerId" }, "eq", "x"]],
+                    },
+                  ],
+                  update: [],
+                  delete: [],
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
+    test("rejects a record field-ref in GQL permission conditions", () => {
+      const filePath = path.join(testDir, "gql_record_ref_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                gql: [
+                  {
+                    permit: "allow",
+                    actions: ["read"],
+                    conditions: [[{ record: "ownerId" }, "eq", "x"]],
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
     test("throws with file path when the file is not valid JSON", () => {
       const filePath = path.join(testDir, "truncated_schema.json");
       fs.writeFileSync(filePath, '{"version": 1, "namespace": "x"');
