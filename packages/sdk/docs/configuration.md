@@ -13,6 +13,8 @@ For service-specific documentation, see:
 - [Static Website](./services/staticwebsite.md) - Static file hosting
 - [Secret Manager](./services/secret.md) - Secure credential storage
 
+To deploy the same config to multiple workspaces with per-environment values, see [Multi-Environment Configuration](./multi-environment.md).
+
 ### Application Settings
 
 ```typescript
