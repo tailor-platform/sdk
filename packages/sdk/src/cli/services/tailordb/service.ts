@@ -269,14 +269,14 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         return { pluginId, config, output: result.output };
       });
 
+      const hasPreviousGeneratedTypes = Object.hasOwn(rawTypes, pluginGeneratedKey);
       const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
-      // oxlint-disable typescript/no-unnecessary-condition
-      const hadPreviousGeneratedTypes =
-        previousGeneratedTypes !== undefined && Object.keys(previousGeneratedTypes).length > 0;
-      // oxlint-enable typescript/no-unnecessary-condition
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      if (previousGeneratedTypes) {
-        for (const typeName of Object.keys(previousGeneratedTypes)) {
+      const previousGeneratedTypeKeys = hasPreviousGeneratedTypes
+        ? Object.keys(previousGeneratedTypes)
+        : [];
+      const hadPreviousGeneratedTypes = previousGeneratedTypeKeys.length > 0;
+      if (hasPreviousGeneratedTypes) {
+        for (const typeName of previousGeneratedTypeKeys) {
           delete typeSourceInfo[typeName];
         }
       }

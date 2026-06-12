@@ -321,8 +321,7 @@ function areExecutorsEqual(
 
 function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
   for (const service of application.tailorDBServices) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (service.types[typeName]) {
+    if (Object.hasOwn(service.types, typeName)) {
       return service.namespace;
     }
   }

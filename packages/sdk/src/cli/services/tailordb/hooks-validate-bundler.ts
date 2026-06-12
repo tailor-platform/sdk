@@ -527,9 +527,9 @@ export async function precompileTailorDBTypeScripts(
         }),
       ),
     );
-    const firstError = results.find((r) => r.status === "rejected");
+    const firstError = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
     if (firstError) {
-      throw (firstError as PromiseRejectedResult).reason;
+      throw firstError.reason;
     }
     for (const [index, result] of results.entries()) {
       if (result.status === "fulfilled") {

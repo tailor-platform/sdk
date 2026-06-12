@@ -124,8 +124,8 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
   }
 
   // Handle --namespace flag
-  if (hasNamespace && options.namespace) {
-    const namespace = options.namespace;
+  if (hasNamespace) {
+    const namespace = options.namespace!;
 
     // Validate namespace exists in config and is not external
     if (!namespaces.includes(namespace)) {
@@ -156,8 +156,8 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
   }
 
   // Handle specific types
-  if (hasTypes && options.types) {
-    const typeNames = options.types;
+  if (hasTypes) {
+    const typeNames = options.types!;
 
     // Validate all types exist and get their namespaces before confirmation
     const typeNamespaceMap = await resolveTypeNamespaces({

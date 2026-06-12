@@ -60,16 +60,16 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
       }
 
       // Check if this is an enum value change
-      // oxlint-disable typescript/no-unnecessary-condition
       if (
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         before &&
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         after &&
         before.type === "enum" &&
         after.type === "enum" &&
         before.allowedValues &&
         after.allowedValues
       ) {
-        // oxlint-enable typescript/no-unnecessary-condition
         // Check if there are any differences in allowed values
         const beforeValues = before.allowedValues.map((v) => v.value);
         const afterValues = after.allowedValues.map((v) => v.value);
