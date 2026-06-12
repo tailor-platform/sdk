@@ -184,9 +184,16 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     );
   }
 
-  // Normalize to POSIX separators and validate before any filesystem use: the
-  // value is embedded into workflow YAML (paths filters / working-directory).
-  const dir = options.dir.replaceAll("\\", "/");
+  // Normalize before any filesystem use and before embedding into workflow
+  // YAML (paths filters / working-directory): POSIX separators, collapse
+  // duplicate slashes, drop a leading "./" and trailing "/" so values like
+  // "./apps/backend/" produce a clean "apps/backend".
+  const dir =
+    options.dir
+      .replaceAll("\\", "/")
+      .replace(/\/{2,}/g, "/")
+      .replace(/^\.\//, "")
+      .replace(/\/$/, "") || ".";
   validateDir(dir);
   const workingDirectory = dir !== "." ? dir : undefined;
 

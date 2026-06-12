@@ -439,6 +439,25 @@ describe("setupGitHub (integration)", () => {
     ).rejects.toThrow(/Invalid --dir/);
   });
 
+  test("normalizes a --dir with ./ prefix and trailing slash", async () => {
+    fs.mkdirSync(path.join(testDir, "apps/backend"), { recursive: true });
+    fs.writeFileSync(
+      path.join(testDir, "apps/backend/tailor.config.ts"),
+      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "my-app" });\n`,
+      "utf-8",
+    );
+    const opts = baseOptions({
+      workspaceName: "my-app",
+      dir: "./apps/backend/",
+      loadConfigName: async () => "my-app",
+    });
+    await setupGitHub(opts);
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    expect(wf).toContain('paths: ["apps/backend/**"]');
+    expect(wf).not.toContain("apps/backend//");
+    expect(wf).not.toContain('["./apps');
+  });
+
   test("errors when the config is missing", async () => {
     fs.rmSync(path.join(testDir, "tailor.config.ts"));
     await expect(setupGitHub(baseOptions({ workspaceName: "my-app" }))).rejects.toThrow(
