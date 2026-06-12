@@ -68,12 +68,32 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("name: Tailor (my-app)");
   });
 
-  test("pins actions with SHA + version comment and tailor actions with @v1", () => {
+  test("pins actions with SHA + version comment, including the tailor actions", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
     expect(content).toMatch(/uses: pnpm\/action-setup@[a-f0-9]+ # v\d+\.\d+\.\d+/);
-    expect(content).toContain("uses: tailor-platform/actions/plan@v1");
-    expect(content).toContain("uses: tailor-platform/actions/deploy@v1");
+    expect(content).toMatch(/uses: tailor-platform\/actions\/plan@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+  });
+
+  test("pins every `uses:` to a full commit SHA (no moving tags/branches)", () => {
+    // Generated workflows are committed to user repos and must be reproducible
+    // and pass zizmor/ghalint pinning checks: every action reference must be a
+    // 40-char commit SHA, never a tag like @v1. (actionlint does not enforce
+    // this, so it is asserted here.)
+    const assertShaPinned = (content: string): void => {
+      const refs = [...content.matchAll(/uses:\s*(\S+?)@(\S+)/g)];
+      expect(refs.length).toBeGreaterThan(0);
+      for (const [, action, ref] of refs) {
+        expect(ref, `${action}@${ref} must be pinned to a 40-char commit SHA`).toMatch(
+          /^[0-9a-f]{40}$/,
+        );
+      }
+    };
+    for (const pm of ["pnpm", "yarn", "npm", "bun"] as const) {
+      assertShaPinned(renderBranchWorkflow({ ...branchBase, packageManager: pm }).content);
+      assertShaPinned(renderTagWorkflow({ ...tagBase, packageManager: pm }).content);
+    }
   });
 
   test("uses the unified secret names and targets the workspace-id variable", () => {

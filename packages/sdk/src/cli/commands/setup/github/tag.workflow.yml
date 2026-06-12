@@ -65,7 +65,7 @@ jobs:
             exit 1
           fi
       - id: tailor-plan
-        uses: tailor-platform/actions/plan@v1
+        uses: tailor-platform/actions/plan@e8fed82c62c40ba4464770b9ce8bc8d9de5665b4 # v1.2.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           label: __WORKSPACE_NAME__
@@ -89,7 +89,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       # __SETUP_STEPS__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@v1
+        uses: tailor-platform/actions/deploy@e8fed82c62c40ba4464770b9ce8bc8d9de5665b4 # v1.2.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           # __WORKING_DIRECTORY__
