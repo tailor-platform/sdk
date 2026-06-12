@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
 
-const TEST_BASE = path.join(__dirname, "__test_bundle__");
+const TEST_BASE = path.join(__dirname, "__test_bundler__");
 
 const defaultMachineUser: ResolvedMachineUser = {
   name: "test-machine-user",

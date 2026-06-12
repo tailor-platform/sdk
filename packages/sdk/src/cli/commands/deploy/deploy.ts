@@ -5,6 +5,7 @@ import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
+import { assertUniqueTailorDBTypeNamesWithExternal } from "@/cli/services/tailordb/type-name-validation";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
@@ -490,6 +491,15 @@ export async function deploy(options?: DeployOptions) {
 
     rootSpan.setAttribute("app.name", application.name);
     rootSpan.setAttribute("workspace.id", workspaceId);
+
+    await withSpan("plan.validateTailorDBTypeNames", () =>
+      assertUniqueTailorDBTypeNamesWithExternal({
+        client,
+        workspaceId,
+        tailorDBServices: application.tailorDBServices,
+        externalTailorDBNamespaces: application.externalTailorDBNamespaces,
+      }),
+    );
 
     // Collect function entries from in-memory bundled scripts (after build, before plan)
     const workflowService = application.workflowService;

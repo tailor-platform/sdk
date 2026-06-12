@@ -1,8 +1,9 @@
 ---
-# Static analysis for GitHub Actions using actionlint and ghalint
+# Static analysis for GitHub Actions using actionlint, ghalint, and zizmor
 #
 # - actionlint: https://github.com/rhysd/actionlint
 # - ghalint: https://github.com/suzuki-shunsuke/ghalint
+# - zizmor: https://docs.zizmor.sh/
 name: GitHub Actions Lint
 
 on:
@@ -10,6 +11,7 @@ on:
     paths:
       - .github/workflows/*.yaml
       - .github/workflows/*.yml
+      - .github/actions/**
       - aqua.yaml
       - aqua-checksums.json
       - .ghalint.yaml
@@ -42,6 +44,11 @@ jobs:
 
       - name: Run ghalint actions
         run: ghalint run-action
+
+      - name: Run zizmor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: zizmor --no-progress .github/workflows/ .github/actions/
 
   lint-generated-workflows:
     runs-on: ubuntu-latest

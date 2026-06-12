@@ -37,3 +37,6 @@ allowBuilds:
   "@prisma/engines": false
   protobufjs: false
   unrs-resolver: false
+
+overrides:
+  valibot@>=0.31.0 <1.2.0: 1.4.1

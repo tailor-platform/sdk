@@ -1,5 +1,7 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
+import { logger } from "@/cli/shared/logger";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
@@ -8,13 +10,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-} from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -96,16 +92,82 @@ export async function applyWorkflow(
       }),
     ]);
   } else if (phase === "delete") {
-    // Delete workflows
-    await Promise.all(
-      changeSet.deletes.map((del) =>
-        client.deleteWorkflow({
-          workspaceId: del.workspaceId,
-          workflowId: del.workflowId,
-        }),
-      ),
+    await deleteAllSettled(
+      changeSet.deletes.map((del) => ({
+        resourceType: "workflow",
+        resourceName: del.name,
+        run: () =>
+          client.deleteWorkflow({
+            workspaceId: del.workspaceId,
+            workflowId: del.workflowId,
+          }),
+      })),
+    );
+
+    await deleteAllSettled(
+      (result.jobFunctionDeletes ?? collectDeletableJobFunctions(changeSet.deletes)).map((del) => ({
+        resourceType: "workflow job function",
+        resourceName: del.jobFunctionName,
+        run: () =>
+          client.deleteWorkflowJobFunction({
+            workspaceId: del.workspaceId,
+            jobFunctionName: del.jobFunctionName,
+          }),
+      })),
     );
   }
+}
+
+type DeleteOperation = {
+  resourceType: string;
+  resourceName: string;
+  run: () => Promise<unknown>;
+};
+
+async function deleteAllSettled(operations: readonly DeleteOperation[]) {
+  const results = await Promise.allSettled(operations.map((operation) => operation.run()));
+  const errors: unknown[] = [];
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      return;
+    }
+    const operation = operations[index];
+    const error = result.reason;
+    if (!operation) {
+      errors.push(error);
+      return;
+    }
+    if (error instanceof ConnectError && error.code === Code.NotFound) {
+      return;
+    }
+    if (error instanceof ConnectError && error.code === Code.FailedPrecondition) {
+      logger.warn(
+        `Skipped deleting ${operation.resourceType} "${operation.resourceName}" because it is still referenced.`,
+      );
+      return;
+    }
+    errors.push(error);
+  });
+  const firstError = errors[0];
+  if (firstError) {
+    throw firstError;
+  }
+}
+
+function collectDeletableJobFunctions(deletes: readonly DeleteWorkflow[]) {
+  const seen = new Set<string>();
+  const jobFunctions: Array<{ workspaceId: string; jobFunctionName: string }> = [];
+  for (const del of deletes) {
+    for (const jobFunctionName of del.deletableJobNames) {
+      const key = `${del.workspaceId}\0${jobFunctionName}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      jobFunctions.push({ workspaceId: del.workspaceId, jobFunctionName });
+    }
+  }
+  return jobFunctions;
 }
 
 /**
@@ -131,7 +193,7 @@ function filterJobFunctionVersions(
  * Register job functions used by any workflow.
  * Only registers jobs that are actually used (based on usedJobNames in changeSet).
  * Uses create for new jobs and update for existing jobs.
- * Sets metadata on used JobFunctions and removes metadata from unused ones.
+ * Sets metadata on used JobFunctions.
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
  * @param appName - Application name
@@ -164,7 +226,6 @@ async function registerJobFunctions(
       allUsedJobNames.add(jobName);
     }
   }
-
   // Fetch existing job functions with their names
   const existingJobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
     const response = await client.listWorkflowJobFunctions({
@@ -214,26 +275,6 @@ async function registerJobFunctions(
     }
   }
 
-  // Remove metadata from JobFunctions that are no longer used by this app
-  const unusedJobFunctions = existingJobFunctions.filter(
-    (jobName) => !allUsedJobNames.has(jobName),
-  );
-  await Promise.all(
-    unusedJobFunctions.map(async (jobName) => {
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
-      });
-
-      // Only remove metadata if owned by this app
-      if (isOwnedByApp(metadata?.labels, appName, appId)) {
-        await client.setMetadata({
-          trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
-          labels: { [sdkNameLabelKey]: "" }, // Remove ownership
-        });
-      }
-    }),
-  );
-
   return jobFunctionVersions;
 }
 
@@ -258,6 +299,12 @@ type DeleteWorkflow = {
   workspaceId: string;
   workflowId: string;
   usedJobNames: string[];
+  deletableJobNames: string[];
+};
+
+type DeleteWorkflowJobFunction = {
+  workspaceId: string;
+  jobFunctionName: string;
 };
 
 function parseDurationToProto(duration: string): { seconds: bigint; nanos: number } {
@@ -309,6 +356,7 @@ export async function planWorkflow(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
   const unchangedWorkflowJobNames = new Set<string>();
+  const retainedWorkflowJobNames = new Set<string>();
 
   const existingWorkflows = await fetchExistingResourcesWithLabels({
     client,
@@ -344,6 +392,7 @@ export async function planWorkflow(
           `  export const ${workflow.mainJob.name} = createWorkflowJob({ name: "${workflow.mainJob.name}", ... })`,
       );
     }
+    usedJobNames.forEach((jobName) => retainedWorkflowJobNames.add(jobName));
 
     if (existing) {
       const owned = trackDesiredResourceOwnership({
@@ -392,6 +441,7 @@ export async function planWorkflow(
     }
   }
 
+  const deleteWorkflows: DeleteWorkflow[] = [];
   Object.values(existingWorkflows).forEach((existing) => {
     if (!existing) {
       return;
@@ -403,15 +453,37 @@ export async function planWorkflow(
       appId,
       resourceOwners,
     });
+    const usedJobNames = getExistingWorkflowJobNames(existing.resource);
     if (owned) {
-      changeSet.deletes.push({
+      deleteWorkflows.push({
         name: existing.resource.name,
         workspaceId,
         workflowId: existing.resource.id,
-        usedJobNames: getExistingWorkflowJobNames(existing.resource),
+        usedJobNames,
+        deletableJobNames: [],
       });
+    } else {
+      usedJobNames.forEach((jobName) => retainedWorkflowJobNames.add(jobName));
     }
   });
+
+  const jobFunctionDeletes = await planWorkflowJobFunctionDeletes({
+    client,
+    workspaceId,
+    appName,
+    appId,
+    retainedWorkflowJobNames,
+  });
+  const deletableJobNames = new Set(jobFunctionDeletes.map((del) => del.jobFunctionName));
+
+  for (const del of deleteWorkflows) {
+    changeSet.deletes.push({
+      ...del,
+      deletableJobNames: del.usedJobNames.filter(
+        (jobName) => !retainedWorkflowJobNames.has(jobName) && deletableJobNames.has(jobName),
+      ),
+    });
+  }
 
   return {
     changeSet,
@@ -421,7 +493,44 @@ export async function planWorkflow(
     appName,
     appId,
     unchangedWorkflowJobNames,
+    jobFunctionDeletes,
   };
+}
+
+type PlanWorkflowJobFunctionDeletesParams = {
+  client: OperatorClient;
+  workspaceId: string;
+  appName: string;
+  appId: string | undefined;
+  retainedWorkflowJobNames: ReadonlySet<string>;
+};
+
+async function planWorkflowJobFunctionDeletes(
+  params: PlanWorkflowJobFunctionDeletesParams,
+): Promise<DeleteWorkflowJobFunction[]> {
+  const { client, workspaceId, appName, appId, retainedWorkflowJobNames } = params;
+  const existingJobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
+    const response = await client.listWorkflowJobFunctions({
+      workspaceId,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [response.jobFunctions.map((jobFunction) => jobFunction.name), response.nextPageToken];
+  });
+  const candidates = [...new Set(existingJobFunctions)].filter(
+    (jobName) => !retainedWorkflowJobNames.has(jobName),
+  );
+  const owned = await Promise.all(
+    candidates.map(async (jobFunctionName) => {
+      const { metadata } = await client.getMetadata({
+        trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
+      });
+      return isOwnedByApp(metadata?.labels, appName, appId)
+        ? { workspaceId, jobFunctionName }
+        : undefined;
+    }),
+  );
+  return owned.filter((item): item is DeleteWorkflowJobFunction => item !== undefined);
 }
 
 type WorkflowDisplayEntry = GroupedDisplayEntry;
