@@ -205,7 +205,7 @@ describe("renderTagWorkflow", () => {
     const { content, generatedIds } = renderTagWorkflow({ ...tagBase, branch: "main" });
     expect(content).not.toMatch(NO_MARKER);
     expect(content).toContain("tailor-tag-guard:");
-    expect(content).toContain("TARGET_BRANCH: main");
+    expect(content).toContain('TARGET_BRANCH: "main"');
     expect(content).toContain("needs: tailor-tag-guard");
     expect(content).toContain("needs.tailor-tag-guard.outputs.on-branch == 'true'");
     expect(generatedIds).toContain("tailor-tag-guard");
@@ -392,6 +392,20 @@ describe("setupGitHub (integration)", () => {
     await expect(
       setupGitHub(baseOptions({ workspaceName: "my-app", tag: true, plan: false })),
     ).rejects.toThrow(/--no-plan/);
+  });
+
+  test("rejects a branch name with YAML-unsafe characters", async () => {
+    await expect(
+      setupGitHub(baseOptions({ workspaceName: "my-app", branch: "feat,bar" })),
+    ).rejects.toThrow(/Invalid branch name/);
+  });
+
+  test("rejects a tag pattern with YAML-unsafe characters", async () => {
+    await expect(
+      setupGitHub(
+        baseOptions({ workspaceName: "my-app", tag: true, tagPattern: "v* #${{ evil }}" }),
+      ),
+    ).rejects.toThrow(/Invalid tag pattern/);
   });
 
   test("errors when the config is missing", async () => {

@@ -4,11 +4,11 @@ name: Tailor (__WORKSPACE_NAME__)
 on:
   # __PULL_REQUEST_START__
   pull_request:
-    branches: [__BRANCH__]
+    branches: ["__BRANCH__"]
     # __PATHS__
   # __PULL_REQUEST_END__
   push:
-    branches: [__BRANCH__]
+    branches: ["__BRANCH__"]
     # __PATHS__
   workflow_dispatch:
     # __DISPATCH_INPUTS_START__

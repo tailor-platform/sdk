@@ -44,9 +44,12 @@ What it does:
 
 - On **pull request**: runs `generate`, checks that generated files are
   committed (`generate-check`), and posts a deployment plan as a PR comment.
-- On **push to the branch**: runs the same checks, then deploys.
+  (The plan and deploy jobs are independent; pull requests run plan only.)
+- On **push to the branch**: deploys. The deploy action runs `generate` and
+  applies the config; it does not re-run the PR plan.
 - On **`workflow_dispatch`** with `dry-run: true`: runs plan only (useful for
-  rollback verification — see [Rollback](#rollback)).
+  rollback verification — see [Rollback](#rollback)). With `dry-run: false`
+  (default) it deploys, like a push.
 
 Fork pull requests cannot read repository secrets. For forks, the plan step is
 automatically skipped; `generate-check` and other non-secret checks still run.
@@ -71,8 +74,9 @@ What it does:
 - **`tailor-deploy`**: waits for `tailor-plan`, then deploys. When
   `--environment` is set, GitHub requires the environment's required reviewers
   to approve before the deploy job starts.
-- On **`workflow_dispatch`**: `tag-guard` is bypassed (useful for rollbacks
-  from any ref). `dry-run: true` stops before the deploy job.
+- On **`workflow_dispatch`**: the `tailor-tag-guard` result is ignored — the
+  plan job runs regardless of branch reachability (useful for rolling back to
+  any tag). `dry-run: true` stops before the deploy job.
 
 ### Choosing `--branch` for the tag target
 
@@ -82,6 +86,11 @@ What it does:
 | ------ | ---------------------------------------------------------------------------------------------- |
 | Branch | The branch that triggers the workflow (push + PR base). Defaults to the repo's default branch. |
 | Tag    | The branch whose history the tag must be reachable from. Omit to disable the guard entirely.   |
+
+The workspace name (`--workspace-name`, or the config `name` when omitted) must
+be 3–63 characters of lowercase letters, numbers, and hyphens, and cannot start
+or end with a hyphen — the same rule the platform enforces when creating the
+workspace, so an accepted name will not fail at deploy time.
 
 ## Generated files
 
@@ -202,8 +211,9 @@ git revert <commit-sha>
 git push
 ```
 
-The push triggers the normal pipeline. The plan job previews the diff; the
-deploy job applies it after the plan succeeds.
+The push triggers the deploy job, which applies the reverted configuration. To
+preview the diff first, open the revert as a pull request (the plan job comments
+the diff) or use a `dry-run: true` manual dispatch before merging.
 
 ### Option 2 — Advance the tag (tag target)
 

@@ -69,6 +69,36 @@ function validateWorkspaceName(name: string): void {
   }
 }
 
+// The values below are embedded into workflow YAML. Restrict them to
+// characters that are safe inside a double-quoted YAML scalar (and cannot
+// smuggle a ${{ }} expression into the generated file).
+const BRANCH_RE = /^[A-Za-z0-9._/-]+$/;
+const TAG_PATTERN_RE = /^[A-Za-z0-9._/*?![\]-]+$/;
+
+function validateBranch(branch: string): void {
+  if (!BRANCH_RE.test(branch)) {
+    throw new Error(
+      `Invalid branch name "${branch}". Only letters, numbers, ".", "_", "/", and "-" are supported here.`,
+    );
+  }
+}
+
+function validateTagPattern(pattern: string): void {
+  if (!TAG_PATTERN_RE.test(pattern)) {
+    throw new Error(
+      `Invalid tag pattern "${pattern}". Only letters, numbers, ".", "_", "/", "-", and the glob characters "*?![]" are supported.`,
+    );
+  }
+}
+
+// `rel` is "" for the root itself, ".." or "../foo" for an escape. Guard on
+// the path segment so a sibling-prefixed name like "..foo" is not rejected.
+function escapesRoot(rel: string): boolean {
+  return (
+    rel === ".." || rel.startsWith(`..${path.sep}`) || rel.startsWith("../") || path.isAbsolute(rel)
+  );
+}
+
 /**
  * Resolve the config file path for the given app directory.
  *
@@ -82,7 +112,7 @@ function validateWorkspaceName(name: string): void {
 function resolveConfigPath(outputDir: string, dir: string): string {
   const appDir = path.resolve(outputDir, dir);
   const rel = path.relative(outputDir, appDir);
-  if (path.isAbsolute(dir) || rel.startsWith("..") || path.isAbsolute(rel)) {
+  if (path.isAbsolute(dir) || escapesRoot(rel)) {
     throw new Error(`--dir must be a relative path inside the repository (got "${dir}").`);
   }
   // Also catch symlinked subdirectories that point outside the repository.
@@ -90,7 +120,7 @@ function resolveConfigPath(outputDir: string, dir: string): string {
     const realAppDir = path.normalize(fs.realpathSync(appDir));
     const realOutputDir = path.normalize(fs.realpathSync(outputDir));
     const realRel = path.relative(realOutputDir, realAppDir);
-    if (realRel.startsWith("..") || path.isAbsolute(realRel)) {
+    if (escapesRoot(realRel)) {
       throw new Error(
         `--dir must resolve to a directory inside the repository (got "${dir}", which links outside it).`,
       );
@@ -147,10 +177,15 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   const workingDirectory = options.dir !== "." ? options.dir : undefined;
   const packageManager = detectPackageManager(options.outputDir);
 
+  if (kind === "tag") {
+    validateTagPattern(options.tagPattern);
+  }
+
   let branch: string | null = null;
   let render: RenderResult;
   if (kind === "branch") {
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
+    validateBranch(branch);
     render = renderBranchWorkflow({
       workspaceName,
       workspaceRegion: options.workspaceRegion,
@@ -164,6 +199,9 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     });
   } else {
     branch = options.branch ?? null;
+    if (branch !== null) {
+      validateBranch(branch);
+    }
     render = renderTagWorkflow({
       workspaceName,
       workspaceRegion: options.workspaceRegion,
@@ -378,7 +416,9 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
   writeLock(options.outputDir, { version: LOCK_VERSION, targets });
 
   if (decision.action === "restore") {
-    logger.success(`Restored ${styles.path(resolved.file)} from the lock`);
+    // The file was tracked in the lock but missing on disk; it is re-rendered
+    // from the current options (not reconstructed from the lock contents).
+    logger.success(`Regenerated ${styles.path(resolved.file)} (was missing on disk)`);
   } else if (decision.action === "regenerate") {
     logger.success(`Regenerated ${styles.path(resolved.file)}`);
   } else {

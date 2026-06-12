@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
       - id: tailor-tag-guard
         env:
-          TARGET_BRANCH: __BRANCH__
+          TARGET_BRANCH: "__BRANCH__"
         run: |
           git fetch origin "$TARGET_BRANCH"
           if git merge-base --is-ancestor "$GITHUB_SHA" "origin/$TARGET_BRANCH"; then

@@ -29,11 +29,11 @@ status checks**.
 
 #### Jobs generated in P0
 
-| Job id             | Target                | Description                                                                                 |
-| ------------------ | --------------------- | ------------------------------------------------------------------------------------------- |
-| `tailor-tag-guard` | tag (with `--branch`) | Checks that the tagged commit is reachable from the configured branch. Output: `on-branch`. |
-| `tailor-plan`      | branch, tag           | Runs `generate`, `generate-check`, and posts a plan diff.                                   |
-| `tailor-deploy`    | branch, tag           | Runs deploy (`tailor-sdk deploy`).                                                          |
+| Job id             | Target                | Description                                                                                                                                                 |
+| ------------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tailor-tag-guard` | tag (with `--branch`) | Checks that the tagged commit is reachable from the configured branch. Output: `on-branch`.                                                                 |
+| `tailor-plan`      | branch, tag           | Runs `generate`, `generate-check`, and the plan dry-run. On a branch target it posts a PR comment; on a tag target it writes the step summary only (no PR). |
+| `tailor-deploy`    | branch, tag           | Runs the deploy (`tailor-sdk apply`).                                                                                                                       |
 
 #### Steps generated in P0
 
@@ -118,7 +118,8 @@ The lock file is JSON, 2-space indented, with a trailing newline. It is
         // history of managed ids written by this setup run
         "tailor-plan", // job id
         "tailor-plan/tailor-checkout", // job/step qualified form
-        "tailor-plan/tailor-setup-pnpm",
+        "tailor-plan/tailor-setup-pnpm", // pnpm projects only
+        "tailor-plan/tailor-setup-node",
         "tailor-plan/tailor-install",
         "tailor-plan/tailor-generate",
         "tailor-plan/tailor-generate-check",
@@ -136,13 +137,17 @@ The lock file is JSON, 2-space indented, with a trailing newline. It is
 
 ### Discipline
 
-- **Version field**: if `version > 1`, the SDK emits an error: "This lock file
-  was written by a newer SDK. Update `@tailor-platform/sdk` to continue."
+- **Version field**: if `version > LOCK_VERSION`, the SDK errors with
+  "`.github/tailor-sdk.lock` was written by a newer SDK (lock version N).
+  Update the SDK to continue: pnpm update @tailor-platform/sdk". A missing
+  `version`, a non-array `targets`, or invalid JSON each produce a distinct
+  "machine-owned; restore it from git" error rather than the newer-SDK message.
 - **Hash mismatch**: if the on-disk file hash differs from `contentHash`, the
   SDK stops and reports the conflict. `--force` overwrites the file and resets
   the hash.
-- **Missing file, lock present**: the file is regenerated and the hash updated.
-  The SDK logs that the file was restored.
+- **Missing file, lock present**: the file is re-rendered from the current
+  options (not reconstructed from the lock contents) and the hash updated. The
+  SDK logs that the file was regenerated because it was missing on disk.
 - **File present, not in lock**: treated as an unmanaged file. The SDK errors
   and asks the user to delete it or use `--force` to take it under management.
 - **Target identity in P0**: `(kind, workspaceName)` is the unique key.
@@ -368,10 +373,12 @@ Rules:
 
 **P0 — auto-create mode (name + region):**
 `tailor-platform/actions/plan@v1` and `tailor-platform/actions/deploy@v1`
-receive `workspace-name` and `workspace-region` as inputs. The actions resolve
-or create the workspace at runtime. This eliminates the pre-P0 chicken-and-egg
-problem where `TAILOR_PLATFORM_WORKSPACE_ID` was unavailable until after the
-first deploy.
+receive `workspace-name` and `workspace-region` as inputs and resolve the
+workspace at runtime. The two actions differ on a miss: `deploy` creates the
+workspace, while `plan` does **not** create it and falls back to build-only
+validation (reporting that it will be created on the first deploy). This
+eliminates the pre-P0 chicken-and-egg problem where
+`TAILOR_PLATFORM_WORKSPACE_ID` was unavailable until after the first deploy.
 
 **P1 — `--workspace-id` direct mode:**
 A `--workspace-id` CLI flag will allow targeting a pre-existing workspace by

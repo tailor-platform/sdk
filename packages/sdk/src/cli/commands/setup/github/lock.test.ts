@@ -83,6 +83,21 @@ describe("readLock / writeLock", () => {
     );
     expect(() => readLock(testDir)).toThrow(/no valid 'version'/);
   });
+
+  test("throws with restore guidance when targets is not an array", () => {
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.writeFileSync(
+      path.join(testDir, ".github/tailor-sdk.lock"),
+      `${JSON.stringify({ version: LOCK_VERSION }, null, 2)}\n`,
+    );
+    expect(() => readLock(testDir)).toThrow(/no valid 'targets'/);
+  });
+
+  test("throws on invalid JSON", () => {
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, ".github/tailor-sdk.lock"), "{ not json");
+    expect(() => readLock(testDir)).toThrow(/not valid JSON/);
+  });
 });
 
 describe("findTarget", () => {

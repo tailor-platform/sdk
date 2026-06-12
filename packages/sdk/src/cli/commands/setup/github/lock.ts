@@ -95,6 +95,12 @@ export function readLock(outputDir: string): LockFile | null {
         "Update the SDK to continue: pnpm update @tailor-platform/sdk",
     );
   }
+  if (!Array.isArray(parsed.targets)) {
+    throw new Error(
+      `${LOCK_FILENAME} has no valid 'targets' array. The lock file is machine-owned; ` +
+        "restore it from git (git checkout -- .github/tailor-sdk.lock) and re-run setup.",
+    );
+  }
   return parsed;
 }
 
