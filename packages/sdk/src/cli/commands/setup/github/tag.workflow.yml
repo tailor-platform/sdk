@@ -46,6 +46,7 @@ jobs:
     # __PLAN_IF__
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: __ENVIRONMENT__
     permissions:
       contents: read
     steps:
@@ -66,8 +67,8 @@ jobs:
       - id: tailor-plan
         uses: tailor-platform/actions/plan@v1
         with:
-          workspace-name: __WORKSPACE_NAME__
-          workspace-region: __WORKSPACE_REGION__
+          workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          label: __WORKSPACE_NAME__
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
@@ -75,7 +76,7 @@ jobs:
   tailor-deploy:
     needs: tailor-plan
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry-run) }}
-    # __ENVIRONMENT__
+    environment: __ENVIRONMENT__
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -90,10 +91,7 @@ jobs:
       - id: tailor-apply
         uses: tailor-platform/actions/deploy@v1
         with:
-          workspace-name: __WORKSPACE_NAME__
-          workspace-region: __WORKSPACE_REGION__
-          # __ORGANIZATION_ID__
-          # __FOLDER_ID__
+          workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}

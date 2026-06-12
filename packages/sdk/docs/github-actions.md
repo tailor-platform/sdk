@@ -14,19 +14,21 @@ lives):
 
 ```bash
 # Branch target: deploy to stg on every push to main
-tailor-sdk setup github -o <org-id> -r <region> -n my-app-stg
+tailor-sdk setup github -n my-app-stg
 
 # Tag target: deploy to production when a tag is pushed, with an approval gate
-tailor-sdk setup github -o <org-id> -r <region> -n my-app-prod \
+tailor-sdk setup github -n my-app-prod \
   --tag --branch main --environment production
 ```
 
 After running the command, follow the **Next steps** printed to the terminal to
-set the required secrets and commit the generated files.
+set the required secrets, set the `TAILOR_PLATFORM_WORKSPACE_ID` variable, and
+commit the generated files.
 
-`--organization-id` (`-o`) is optional: it is used only to create the workspace
-on the first deploy. Pass it if the workspace does not exist yet and your
-machine user belongs to more than one organization; otherwise you can omit it.
+The generated workflow deploys to whichever workspace its
+`TAILOR_PLATFORM_WORKSPACE_ID` Environment variable points at — it never
+creates or renames a workspace. Provision the workspace and set that variable
+before the first deploy (see [Targeting a workspace](#targeting-a-workspace)).
 
 ## Targets
 
@@ -39,9 +41,9 @@ The branch target fires on pull requests and pushes to the branch you specify
 (defaulting to the repository's default branch when `--branch` is omitted):
 
 ```bash
-tailor-sdk setup github -o <org-id> -r <region> -n my-app-stg
+tailor-sdk setup github -n my-app-stg
 # Equivalent to:
-tailor-sdk setup github -o <org-id> -r <region> -n my-app-stg --branch main
+tailor-sdk setup github -n my-app-stg --branch main
 ```
 
 What it does:
@@ -64,7 +66,7 @@ The tag target fires when a tag matching `--tag-pattern` (default `v*`) is
 pushed:
 
 ```bash
-tailor-sdk setup github -o <org-id> -r <region> -n my-app-prod \
+tailor-sdk setup github -n my-app-prod \
   --tag --tag-pattern "v*" --branch main --environment production
 ```
 
@@ -75,9 +77,9 @@ What it does:
   silently skipped, not an error.
 - **`tailor-plan`**: runs `generate`, `generate-check`, and posts a plan
   summary to the Actions step summary (no PR comment, because there is no PR).
-- **`tailor-deploy`**: waits for `tailor-plan`, then deploys. When
-  `--environment` is set, GitHub requires the environment's required reviewers
-  to approve before the deploy job starts.
+- **`tailor-deploy`**: waits for `tailor-plan`, then deploys. If the target
+  environment has required reviewers configured, GitHub requires their approval
+  before the deploy job starts.
 - On **`workflow_dispatch`**: the `tailor-tag-guard` result is ignored — the
   plan job runs regardless of branch reachability (useful for rolling back to
   any tag). `dry-run: true` stops before the deploy job.
@@ -93,8 +95,44 @@ What it does:
 
 The workspace name (`--workspace-name`, or the config `name` when omitted) must
 be 3–63 characters of lowercase letters, numbers, and hyphens, and cannot start
-or end with a hyphen — the same rule the platform enforces when creating the
-workspace, so an accepted name will not fail at deploy time.
+or end with a hyphen. It is used for the generated file name, the workflow
+`name:`, the plan label, and the default GitHub Environment name; it does not
+select which workspace gets deployed (see
+[Targeting a workspace](#targeting-a-workspace)).
+
+## Targeting a workspace
+
+The generated `plan` and `deploy` jobs target a workspace by **id**, read from
+the `TAILOR_PLATFORM_WORKSPACE_ID` GitHub Environment variable. They never
+resolve a workspace by name and never create one. Set this variable per
+environment before the first deploy.
+
+Because the variable is scoped to a GitHub Environment, both the `plan` and
+`deploy` jobs declare `environment:` so the value resolves. When you omit
+`--environment`, the environment name defaults to the workspace name.
+
+1. Provision the workspace (once per environment) and obtain its id. For now
+   this is a manual step:
+
+   ```bash
+   tailor-sdk workspace create   # copy the printed workspace id
+   ```
+
+2. Set the id as the Environment variable (the environment name is your
+   `--environment` value, or the workspace name when omitted):
+
+   ```bash
+   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env my-app-stg
+   ```
+
+If `TAILOR_PLATFORM_WORKSPACE_ID` is unset, `deploy` fails because the target
+workspace is not provisioned, and `plan` reports that the workspace is not
+provisioned yet instead of running a dry-run.
+
+If the target environment has required reviewers, that approval gate applies to
+the `plan` job as well as `deploy`, because `plan` must enter the environment to
+read the variable. (A token-based read that lets `plan` run without entering the
+environment is planned.)
 
 ## Generated files
 
@@ -149,35 +187,39 @@ The generated workflow reads two secrets:
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Machine user client ID     |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Machine user client secret |
 
-Set them with the GitHub CLI:
+Set them on the target GitHub Environment (the `--environment` value, or the
+workspace name when omitted) with the GitHub CLI:
 
 ```bash
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET
+gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env my-app-stg
+gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env my-app-stg
 ```
 
-When `--environment <env>` is used, set secrets at the environment level so
-they are isolated from other targets:
-
-```bash
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env production
-gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env production
-```
+Setting them at the environment level isolates each target's credentials and
+keeps them alongside that environment's `TAILOR_PLATFORM_WORKSPACE_ID`
+variable. You can also set them as repository-level secrets if every target
+shares one machine user.
 
 ## GitHub Environments (approval gate)
 
-When you pass `--environment <env>`, the deploy job is associated with a GitHub
-Environment. This lets you:
+Both the `plan` and `deploy` jobs are associated with a GitHub Environment — the
+`--environment` value, or the workspace name when omitted. The environment holds
+that target's `TAILOR_PLATFORM_WORKSPACE_ID` variable and machine-user secrets,
+and lets you:
 
-- **Require reviewer approval** before the deploy runs (suitable for
-  production).
-- **Scope secrets** to specific environments so staging and production use
-  separate machine users.
+- **Require reviewer approval** before the jobs run (suitable for production).
+- **Scope secrets and the workspace-id variable** to specific environments so
+  staging and production deploy to separate workspaces with separate machine
+  users.
 
 To configure the environment, go to your repository's **Settings → Environments**
-and create an environment whose name matches the `--environment` value you
-passed to `setup github`. Add required reviewers and environment-scoped secrets
-there.
+and create an environment whose name matches the target's environment. Add
+required reviewers, the `TAILOR_PLATFORM_WORKSPACE_ID` variable, and the
+environment-scoped secrets there.
+
+Required reviewers gate the `plan` job as well, because `plan` must enter the
+environment to read `TAILOR_PLATFORM_WORKSPACE_ID`. (A token-based read that
+lets `plan` run without entering the environment is planned.)
 
 ## Manual runs and dry-run
 
@@ -196,7 +238,7 @@ you can deploy any commit regardless of branch membership.
 For a monorepo where your SDK app lives in a subdirectory, pass `--dir`:
 
 ```bash
-tailor-sdk setup github -o <org-id> -r <region> -n my-app --dir apps/backend
+tailor-sdk setup github -n my-app --dir apps/backend
 ```
 
 The generated workflow adds a `paths` filter on `apps/backend/**` so the
@@ -261,11 +303,25 @@ A typical setup with staging and production:
 
 ```bash
 # Staging: main → stg (deploy on every push to main)
-tailor-sdk setup github -o <org-id> -r <region> -n my-app-stg
+tailor-sdk setup github -n my-app-stg
 
 # Production: tagged commits → prod, with approval gate and branch guard
-tailor-sdk setup github -o <org-id> -r <region> -n my-app-prod \
+tailor-sdk setup github -n my-app-prod \
   --tag --branch main --environment production
+```
+
+Then provision each workspace and set its id on the matching environment (the
+staging target's environment defaults to `my-app-stg`; production uses
+`production`):
+
+```bash
+gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env my-app-stg
+gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env my-app-stg
+gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env my-app-stg
+
+gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env production
+gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env production
+gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env production
 ```
 
 Commit both workflow files and `.github/tailor-sdk.lock`.

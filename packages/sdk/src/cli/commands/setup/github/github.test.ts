@@ -17,18 +17,16 @@ const NO_MARKER = /__[A-Z_]+__/;
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
-  workspaceRegion: "asia-northeast",
-  organizationId: "org-123",
   branch: "main",
+  environment: "my-app",
   packageManager: "pnpm",
   plan: true,
 };
 
 const tagBase: RenderTagParams = {
   workspaceName: "my-app",
-  workspaceRegion: "asia-northeast",
-  organizationId: "org-123",
   tagPattern: "v*",
+  environment: "my-app",
   packageManager: "pnpm",
 };
 
@@ -78,7 +76,7 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("uses: tailor-platform/actions/deploy@v1");
   });
 
-  test("uses the unified secret names and no workspace-id variable", () => {
+  test("uses the unified secret names and targets the workspace-id variable", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain(
       "platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
@@ -86,8 +84,26 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain(
       "platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
     );
-    expect(content).not.toContain("TAILOR_PLATFORM_WORKSPACE_ID");
+    expect(content).toContain("workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}");
     expect(content).not.toContain("secrets.PLATFORM_MACHINE_USER_CLIENT_ID");
+  });
+
+  test("targets the workspace by id, never by name or region", () => {
+    const { content } = renderBranchWorkflow(branchBase);
+    expect(content).not.toContain("workspace-name:");
+    expect(content).not.toContain("workspace-region:");
+    expect(content).not.toContain("organization-id:");
+    expect(content).not.toContain("folder-id:");
+  });
+
+  test("sets environment on both the plan and deploy jobs", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, environment: "production" });
+    expect(content.match(/environment: production/g)).toHaveLength(2);
+  });
+
+  test("passes the workspace name as the plan label", () => {
+    const { content } = renderBranchWorkflow(branchBase);
+    expect(content).toContain("label: my-app");
   });
 
   test("includes the fork guard on the plan step", () => {
@@ -152,19 +168,10 @@ describe("renderBranchWorkflow", () => {
     expect(() => parseYAML(scoped)).not.toThrow();
   });
 
-  test("includes folder-id and environment only when provided", () => {
-    const plain = renderBranchWorkflow(branchBase).content;
-    expect(plain).not.toContain("folder-id:");
-    expect(plain).not.toContain("environment:");
-
-    const full = renderBranchWorkflow({
-      ...branchBase,
-      folderId: "folder-1",
-      environment: "production",
-    }).content;
-    expect(full).not.toMatch(NO_MARKER);
-    expect(full).toContain("folder-id: folder-1");
-    expect(full).toContain("environment: production");
+  test("defaults the environment to the passed environment value", () => {
+    const { content } = renderBranchWorkflow({ ...branchBase, environment: "staging" });
+    expect(content).not.toMatch(NO_MARKER);
+    expect(content).toContain("environment: staging");
   });
 
   test("setup steps differ by package manager", () => {
@@ -184,19 +191,8 @@ describe("renderBranchWorkflow", () => {
   });
 
   test("preserves $ characters in values", () => {
-    const { content } = renderBranchWorkflow({ ...branchBase, organizationId: "org$&x" });
-    expect(content).toContain("organization-id: org$&x");
-  });
-
-  test("omits organization-id and folder-id lines when not provided", () => {
-    const { content } = renderBranchWorkflow({
-      ...branchBase,
-      organizationId: undefined,
-      folderId: undefined,
-    });
-    expect(content).not.toContain("organization-id:");
-    expect(content).not.toContain("folder-id:");
-    expect(() => parseYAML(content)).not.toThrow();
+    const { content } = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/a$&b" });
+    expect(content).toContain("working-directory: apps/a$&b");
   });
 });
 
@@ -321,8 +317,6 @@ describe("setupGitHub (integration)", () => {
   };
 
   const baseOptions = (overrides: Partial<SetupGitHubOptions> = {}): SetupGitHubOptions => ({
-    workspaceRegion: "asia-northeast",
-    organizationId: "org-123",
     tag: false,
     tagPattern: "v*",
     plan: true,
@@ -353,6 +347,20 @@ describe("setupGitHub (integration)", () => {
     expect(lock?.targets).toHaveLength(1);
     expect(lock?.targets[0]).toMatchObject({ kind: "branch", workspaceName: "cfg-app" });
     expect(lock?.targets[0]?.contentHash).toBe(hashContent(fs.readFileSync(wf, "utf-8")));
+  });
+
+  test("defaults the environment to the workspace name", async () => {
+    await setupGitHub(baseOptions({ workspaceName: "my-app" }));
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    expect(wf.match(/environment: my-app/g)).toHaveLength(2);
+    expect(readLock(testDir)?.targets[0]?.inputs.environment).toBe("my-app");
+  });
+
+  test("uses an explicit --environment over the workspace name", async () => {
+    await setupGitHub(baseOptions({ workspaceName: "my-app", environment: "production" }));
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    expect(wf).toContain("environment: production");
+    expect(readLock(testDir)?.targets[0]?.inputs.environment).toBe("production");
   });
 
   test("injects an app id when missing", async () => {

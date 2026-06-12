@@ -65,19 +65,16 @@ tailor-sdk setup github [options]
 
 **Options**
 
-| Option                                  | Alias | Description                                                                                                                                       | Required | Default |
-| --------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>`     | `-n`  | Workspace name (defaults to the config 'name')                                                                                                    | No       | -       |
-| `--workspace-region <WORKSPACE_REGION>` | `-r`  | Workspace region                                                                                                                                  | Yes      | -       |
-| `--organization-id <ORGANIZATION_ID>`   | `-o`  | Organization ID (used to create the workspace on first deploy)                                                                                    | No       | -       |
-| `--folder-id <FOLDER_ID>`               | `-f`  | Folder ID (workspace placement on creation)                                                                                                       | No       | -       |
-| `--branch <BRANCH>`                     | -     | Branch target: deploy trigger branch (defaults to the detected default branch). Tag target: tag-reachability guard branch (no guard when omitted) | No       | -       |
-| `--tag`                                 | -     | Generate a tag target (deploy on tag push)                                                                                                        | No       | `false` |
-| `--tag-pattern <TAG_PATTERN>`           | -     | Tag glob to match (requires --tag; defaults to v\*)                                                                                               | No       | -       |
-| `--environment <ENVIRONMENT>`           | -     | GitHub Environment for the deploy job                                                                                                             | No       | -       |
-| `--no-plan`                             | -     | Disable the plan job for a branch target (cannot be combined with --tag)                                                                          | No       | `false` |
-| `--dir <DIR>`                           | `-d`  | App directory (for monorepo setups)                                                                                                               | No       | `"."`   |
-| `--force`                               | -     | Discard hand edits / take over unmanaged files and regenerate                                                                                     | No       | `false` |
+| Option                              | Alias | Description                                                                                                                                       | Required | Default |
+| ----------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
+| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name')                                                                                                    | No       | -       |
+| `--branch <BRANCH>`                 | -     | Branch target: deploy trigger branch (defaults to the detected default branch). Tag target: tag-reachability guard branch (no guard when omitted) | No       | -       |
+| `--tag`                             | -     | Generate a tag target (deploy on tag push)                                                                                                        | No       | `false` |
+| `--tag-pattern <TAG_PATTERN>`       | -     | Tag glob to match (requires --tag; defaults to v\*)                                                                                               | No       | -       |
+| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)                                                                      | No       | -       |
+| `--no-plan`                         | -     | Disable the plan job for a branch target (cannot be combined with --tag)                                                                          | No       | `false` |
+| `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                                                                                               | No       | `"."`   |
+| `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                                                                                     | No       | `false` |
 
 <!-- politty:command:setup github:options:end -->
 

@@ -27,9 +27,6 @@ import {
 
 export type SetupGitHubOptions = {
   workspaceName?: string;
-  workspaceRegion: string;
-  organizationId?: string;
-  folderId?: string;
   branch?: string;
   tag: boolean;
   tagPattern: string;
@@ -49,8 +46,9 @@ async function defaultLoadConfigName(configPath: string): Promise<string | undef
   return config.name;
 }
 
-// Kept in sync with the `workspace create` schema (cli/commands/workspace/create.ts)
-// so a name accepted here cannot fail workspace creation on the first deploy.
+// Kept in sync with the `workspace create` schema (cli/commands/workspace/create.ts).
+// The name is used as the plan label, the generated file name, and the default
+// GitHub Environment name, so it must stay within the workspace-name charset.
 const WORKSPACE_NAME_RE = /^[a-z0-9-]+$/;
 
 function validateWorkspaceName(name: string): void {
@@ -140,6 +138,7 @@ type Resolved = {
   kind: TargetKind;
   workspaceName: string;
   branch: string | null;
+  environment: string;
   packageManager: PackageManager;
   render: RenderResult;
   inputs: LockInputs;
@@ -176,6 +175,10 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   const kind: TargetKind = options.tag ? "tag" : "branch";
   const workingDirectory = options.dir !== "." ? options.dir : undefined;
   const packageManager = detectPackageManager(options.outputDir);
+  // The env-scoped TAILOR_PLATFORM_WORKSPACE_ID variable is only readable by a
+  // job that declares `environment:`, so every plan/deploy job sets one. When
+  // --environment is omitted it defaults to the workspace name.
+  const environment = options.environment ?? workspaceName;
 
   if (kind === "tag") {
     validateTagPattern(options.tagPattern);
@@ -188,12 +191,9 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     validateBranch(branch);
     render = renderBranchWorkflow({
       workspaceName,
-      workspaceRegion: options.workspaceRegion,
-      organizationId: options.organizationId,
-      folderId: options.folderId,
       branch,
       workingDirectory,
-      environment: options.environment,
+      environment,
       packageManager,
       plan: options.plan,
     });
@@ -204,31 +204,35 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     }
     render = renderTagWorkflow({
       workspaceName,
-      workspaceRegion: options.workspaceRegion,
-      organizationId: options.organizationId,
-      folderId: options.folderId,
       tagPattern: options.tagPattern,
       branch: options.branch,
       workingDirectory,
-      environment: options.environment,
+      environment,
       packageManager,
     });
   }
 
   const file = `.github/workflows/tailor-${workspaceName}.yml`;
   const inputs: LockInputs = {
-    workspaceRegion: options.workspaceRegion,
-    organizationId: options.organizationId ?? null,
-    folderId: options.folderId ?? null,
     branch,
     tagPattern: kind === "tag" ? options.tagPattern : null,
-    environment: options.environment ?? null,
+    environment,
     dir: options.dir,
     packageManager,
     plan: kind === "branch" ? options.plan : true,
   };
 
-  return { kind, workspaceName, branch, packageManager, render, inputs, file, configPath };
+  return {
+    kind,
+    workspaceName,
+    branch,
+    environment,
+    packageManager,
+    render,
+    inputs,
+    file,
+    configPath,
+  };
 }
 
 type Decision =
@@ -308,32 +312,29 @@ function assertNoKindCollision(obj: {
 /**
  * Print next-step guidance after generating workflow files.
  * @param obj - Output context
- * @param obj.environment - GitHub Environment name, if any
+ * @param obj.environment - Resolved GitHub Environment name for this target
  * @param obj.idInjected - Whether an app id was injected into the config
  */
-function printNextSteps(obj: { environment?: string; idInjected: boolean }): void {
+function printNextSteps(obj: { environment: string; idInjected: boolean }): void {
   const { environment, idInjected } = obj;
-  const envFlag = environment ? ` --env ${environment}` : "";
 
   logger.newline();
   logger.info("Next steps:");
   logger.newline();
-  logger.log("1. Set the machine-user credentials as GitHub secrets:");
-  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID${envFlag}`);
-  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET${envFlag}`);
-
-  let step = 2;
-  if (environment) {
-    logger.newline();
-    logger.log(
-      `${step}. Create the "${environment}" environment under repository ` +
-        "Settings > Environments and configure any required reviewers.",
-    );
-    step += 1;
-  }
+  logger.log(`1. Set the machine-user credentials as secrets on the "${environment}" environment:`);
+  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env ${environment}`);
+  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env ${environment}`);
 
   logger.newline();
-  logger.log(`${step}. Commit the generated files:`);
+  logger.log(
+    `2. Provision the workspace and set its id as the TAILOR_PLATFORM_WORKSPACE_ID variable ` +
+      `on the "${environment}" environment:`,
+  );
+  logger.log("   tailor-sdk workspace create   # if it does not exist yet; copy the id");
+  logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
+
+  logger.newline();
+  logger.log("3. Commit the generated files:");
   logger.log("   - .github/workflows/tailor-*.yml");
   logger.log("   - .github/tailor-sdk.lock");
   if (idInjected) {
@@ -425,5 +426,5 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
     logger.success(`Generated ${styles.path(resolved.file)}`);
   }
 
-  printNextSteps({ environment: options.environment, idInjected });
+  printNextSteps({ environment: resolved.environment, idInjected });
 }

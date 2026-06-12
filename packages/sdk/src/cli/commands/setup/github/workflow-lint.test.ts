@@ -56,8 +56,7 @@ afterAll(() => {
 
 const COMMON = {
   workspaceName: "my-app",
-  workspaceRegion: "asia-northeast",
-  organizationId: "org-123",
+  environment: "my-app",
 };
 
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
@@ -121,17 +120,16 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
-  // folderId + environment
-  test("branch / pnpm / plan=true / with folderId + environment", () => {
+  // explicit environment
+  test("branch / pnpm / plan=true / with explicit environment", () => {
     const { content } = renderBranchWorkflow({
       ...COMMON,
       branch: "main",
       packageManager: "pnpm",
       plan: true,
-      folderId: "folder-1",
       environment: "production",
     });
-    const { ok, output } = writeAndLint("branch-pnpm-plan-folder-env", content);
+    const { ok, output } = writeAndLint("branch-pnpm-plan-env", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
@@ -188,15 +186,15 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflo
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
-  // folderId
-  test("tag / bun / no guard / with folderId", () => {
+  // explicit environment, no guard
+  test("tag / bun / no guard / with explicit environment", () => {
     const { content } = renderTagWorkflow({
       ...COMMON,
       tagPattern: "v*",
       packageManager: "bun",
-      folderId: "folder-42",
+      environment: "production",
     });
-    const { ok, output } = writeAndLint("tag-bun-noguard-folder", content);
+    const { ok, output } = writeAndLint("tag-bun-noguard-env", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 });

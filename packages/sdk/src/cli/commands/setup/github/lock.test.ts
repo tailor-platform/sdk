@@ -13,12 +13,9 @@ function makeLock(): LockFile {
         file: ".github/workflows/tailor-my-app.yml",
         templateVersion: 1,
         inputs: {
-          workspaceRegion: "asia-northeast",
-          organizationId: "org-1",
-          folderId: null,
           branch: "main",
           tagPattern: null,
-          environment: null,
+          environment: "my-app",
           dir: ".",
           packageManager: "pnpm",
           plan: true,

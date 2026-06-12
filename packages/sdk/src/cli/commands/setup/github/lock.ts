@@ -11,12 +11,9 @@ const LOCK_FILENAME = ".github/tailor-sdk.lock";
 export type TargetKind = "branch" | "tag";
 
 export type LockInputs = {
-  workspaceRegion: string;
-  organizationId: string | null;
-  folderId: string | null;
   branch: string | null;
   tagPattern: string | null;
-  environment: string | null;
+  environment: string;
   dir: string;
   packageManager: string;
   plan: boolean;

@@ -12,18 +12,6 @@ export const githubCommand = defineAppCommand({
         alias: "n",
         description: "Workspace name (defaults to the config 'name')",
       }),
-      "workspace-region": arg(z.string().min(1), {
-        alias: "r",
-        description: "Workspace region",
-      }),
-      "organization-id": arg(z.string().min(1).optional(), {
-        alias: "o",
-        description: "Organization ID (used to create the workspace on first deploy)",
-      }),
-      "folder-id": arg(z.string().min(1).optional(), {
-        alias: "f",
-        description: "Folder ID (workspace placement on creation)",
-      }),
       branch: arg(z.string().min(1).optional(), {
         description:
           "Branch target: deploy trigger branch (defaults to the detected default branch). " +
@@ -36,7 +24,7 @@ export const githubCommand = defineAppCommand({
         description: "Tag glob to match (requires --tag; defaults to v*)",
       }),
       environment: arg(z.string().min(1).optional(), {
-        description: "GitHub Environment for the deploy job",
+        description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
       }),
       "no-plan": arg(z.boolean().default(false), {
         description: "Disable the plan job for a branch target (cannot be combined with --tag)",
@@ -60,9 +48,6 @@ export const githubCommand = defineAppCommand({
 
     await setupGitHub({
       workspaceName: args["workspace-name"],
-      workspaceRegion: args["workspace-region"],
-      organizationId: args["organization-id"],
-      folderId: args["folder-id"],
       branch: args.branch,
       tag: args.tag,
       tagPattern: args["tag-pattern"] ?? "v*",
