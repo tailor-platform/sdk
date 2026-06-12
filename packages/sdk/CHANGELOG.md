@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.61.0
+
+### Minor Changes
+
+- [#1398](https://github.com/tailor-platform/sdk/pull/1398) [`19fa125`](https://github.com/tailor-platform/sdk/commit/19fa12594cfb82ca01d429300d5703717643a114) Thanks [@dqn](https://github.com/dqn)! - Display folder names alongside workspace names in workspace-related CLI output.
+
 ## 1.60.3
 
 ### Patch Changes
