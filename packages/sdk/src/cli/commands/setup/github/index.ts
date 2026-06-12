@@ -16,13 +16,13 @@ export const githubCommand = defineAppCommand({
         alias: "r",
         description: "Workspace region",
       }),
-      "organization-id": arg(z.string().min(1), {
+      "organization-id": arg(z.string().min(1).optional(), {
         alias: "o",
-        description: "Organization ID",
+        description: "Organization ID (used to create the workspace on first deploy)",
       }),
       "folder-id": arg(z.string().min(1).optional(), {
         alias: "f",
-        description: "Folder ID",
+        description: "Folder ID (workspace placement on creation)",
       }),
       branch: arg(z.string().min(1).optional(), {
         description:

@@ -28,7 +28,7 @@ import {
 export type SetupGitHubOptions = {
   workspaceName?: string;
   workspaceRegion: string;
-  organizationId: string;
+  organizationId?: string;
   folderId?: string;
   branch?: string;
   tag: boolean;
@@ -218,7 +218,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   const file = `.github/workflows/tailor-${workspaceName}.yml`;
   const inputs: LockInputs = {
     workspaceRegion: options.workspaceRegion,
-    organizationId: options.organizationId,
+    organizationId: options.organizationId ?? null,
     folderId: options.folderId ?? null,
     branch,
     tagPattern: kind === "tag" ? options.tagPattern : null,

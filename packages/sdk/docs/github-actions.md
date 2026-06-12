@@ -24,6 +24,10 @@ tailor-sdk setup github -o <org-id> -r <region> -n my-app-prod \
 After running the command, follow the **Next steps** printed to the terminal to
 set the required secrets and commit the generated files.
 
+`--organization-id` (`-o`) is optional: it is used only to create the workspace
+on the first deploy. Pass it if the workspace does not exist yet and your
+machine user belongs to more than one organization; otherwise you can omit it.
+
 ## Targets
 
 A _target_ is one workflow file that handles one deployment destination.

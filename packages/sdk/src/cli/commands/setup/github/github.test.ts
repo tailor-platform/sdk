@@ -187,6 +187,17 @@ describe("renderBranchWorkflow", () => {
     const { content } = renderBranchWorkflow({ ...branchBase, organizationId: "org$&x" });
     expect(content).toContain("organization-id: org$&x");
   });
+
+  test("omits organization-id and folder-id lines when not provided", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      organizationId: undefined,
+      folderId: undefined,
+    });
+    expect(content).not.toContain("organization-id:");
+    expect(content).not.toContain("folder-id:");
+    expect(() => parseYAML(content)).not.toThrow();
+  });
 });
 
 describe("renderTagWorkflow", () => {

@@ -92,7 +92,7 @@ jobs:
         with:
           workspace-name: __WORKSPACE_NAME__
           workspace-region: __WORKSPACE_REGION__
-          organization-id: __ORGANIZATION_ID__
+          # __ORGANIZATION_ID__
           # __FOLDER_ID__
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}

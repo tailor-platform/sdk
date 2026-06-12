@@ -12,7 +12,7 @@ export type TargetKind = "branch" | "tag";
 
 export type LockInputs = {
   workspaceRegion: string;
-  organizationId: string;
+  organizationId: string | null;
   folderId: string | null;
   branch: string | null;
   tagPattern: string | null;

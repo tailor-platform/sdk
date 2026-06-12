@@ -12,6 +12,7 @@
 - **`--environment`**: pin the deploy job to a GitHub Environment for required-reviewer approval gates.
 - **`--force`**: take over an unmanaged file or discard hand edits.
 - **Auto-detection**: default branch is detected from `git` when `--branch` is omitted; package manager is detected from your lockfile.
+- **`--organization-id` and `--folder-id` are optional**: both are used only to create the workspace on the first deploy (matching `workspace create`), so deploys to an existing workspace no longer need them.
 
 **Breaking changes (beta)**
 
