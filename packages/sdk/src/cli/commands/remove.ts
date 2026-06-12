@@ -32,7 +32,6 @@ export interface RemoveOptions {
 
 async function loadOptions(options?: RemoveOptions) {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

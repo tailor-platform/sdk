@@ -21,7 +21,7 @@ async function loadOptions(options: ListUsersOptions) {
     throw new Error(result.error.issues[0].message);
   }
 
-  const accessToken = await loadAccessToken({ useProfile: true, profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.data.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
     workspaceId: result.data.workspaceId,

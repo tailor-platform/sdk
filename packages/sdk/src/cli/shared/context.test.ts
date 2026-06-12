@@ -312,7 +312,7 @@ describe("loadAccessToken", () => {
         },
         current_user: null,
       });
-      const result = await loadAccessToken({ useProfile: true, profile: "myprofile" });
+      const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(validToken);
     });
   });
@@ -330,7 +330,7 @@ describe("loadAccessToken", () => {
   });
 
   describe("opts.profile", () => {
-    test("returns token from profile when useProfile is true and profile provided", async () => {
+    test("returns token from profile when profile provided", async () => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -347,7 +347,7 @@ describe("loadAccessToken", () => {
         },
         current_user: null,
       });
-      const result = await loadAccessToken({ useProfile: true, profile: "myprofile" });
+      const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(validToken);
     });
 
@@ -359,12 +359,12 @@ describe("loadAccessToken", () => {
         profiles: {},
         current_user: null,
       });
-      await expect(loadAccessToken({ useProfile: true, profile: "nonexistent" })).rejects.toThrow(
+      await expect(loadAccessToken({ profile: "nonexistent" })).rejects.toThrow(
         'Profile "nonexistent" not found',
       );
     });
 
-    test("does not use profile when useProfile is false", async () => {
+    test("prefers the profile user over current_user", async () => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -375,19 +375,25 @@ describe("loadAccessToken", () => {
             token_expires_at: futureDate,
             storage: "file",
           },
+          profileuser: {
+            access_token: otherToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+            storage: "file",
+          },
         },
         profiles: {
           myprofile: { user: "profileuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
         },
         current_user: "currentuser",
       });
-      const result = await loadAccessToken({ useProfile: false, profile: "myprofile" });
-      expect(result).toBe(validToken);
+      const result = await loadAccessToken({ profile: "myprofile" });
+      expect(result).toBe(otherToken);
     });
   });
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
-    test("returns token from env profile when useProfile is true", async () => {
+    test("returns token from env profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
       writePlatformConfig({
         version: 2,
@@ -405,7 +411,7 @@ describe("loadAccessToken", () => {
         },
         current_user: null,
       });
-      const result = await loadAccessToken({ useProfile: true });
+      const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
 
@@ -434,7 +440,7 @@ describe("loadAccessToken", () => {
         },
         current_user: null,
       });
-      const result = await loadAccessToken({ useProfile: true, profile: "optsprofile" });
+      const result = await loadAccessToken({ profile: "optsprofile" });
       expect(result).toBe(validToken);
     });
   });

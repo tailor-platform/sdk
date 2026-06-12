@@ -56,7 +56,6 @@ function applicationInfo(app: Application): ApplicationInfo {
 export async function show(options?: ShowOptions): Promise<ShowInfo> {
   // Load and validate options
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

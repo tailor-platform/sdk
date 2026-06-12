@@ -86,7 +86,6 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     const machineUserName = resolveMachineUserName(args["machine-user"], config.auth);
 
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);

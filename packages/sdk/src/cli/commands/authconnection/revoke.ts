@@ -25,7 +25,6 @@ export const revokeAuthConnectionCommand = defineAppCommand({
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
