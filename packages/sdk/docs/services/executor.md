@@ -212,14 +212,14 @@ Execute JavaScript/TypeScript functions:
 createExecutor({
   operation: {
     kind: "function",
-    body: async ({ newRecord }) => {
-      console.log("New record created:", newRecord);
+    body: async ({ newRecord, env }) => {
+      console.log(`New record created in ${env.bar}:`, newRecord);
     },
   },
 });
 ```
 
-`function` and `jobFunction` `body` args include an `invoker` field: the principal running this function, overridden by `authInvoker` when set; `null` for anonymous calls. Other operation kinds (`graphql`, `webhook`, `workflow`) do not pass `invoker` into their callbacks.
+Executor callbacks receive the trigger args, including `env` from `defineConfig({ env })`. `function` and `jobFunction` `body` args also include an `invoker` field: the principal running this function, overridden by `authInvoker` when set; `null` for anonymous calls. Other operation kinds (`graphql`, `webhook`, `workflow`) receive `env` through their callback args but do not pass `invoker` into those callbacks.
 
 ### Job Function Operation
 

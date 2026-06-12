@@ -13,6 +13,8 @@ For service-specific documentation, see:
 - [Static Website](./services/staticwebsite.md) - Static file hosting
 - [Secret Manager](./services/secret.md) - Secure credential storage
 
+To deploy the same config to multiple workspaces with per-environment values, see [Multi-Environment Configuration](./multi-environment.md).
+
 ### Application Settings
 
 ```typescript
@@ -105,6 +107,7 @@ When using external resources:
 - The resource itself is not deployed by this project
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
+- TailorDB type names must remain unique across local and external TailorDB namespaces; `deploy` checks external TailorDB type names before applying changes
 - Destructive operations like `tailordb truncate` (and `seedPlugin`'s `seed:reset`) automatically exclude external resources to prevent accidental data loss in shared resources
 
 ### Built-in IdP
@@ -183,7 +186,7 @@ export default defineConfig({
 
 ### Environment Variables
 
-Define environment variables that can be accessed in resolvers, executors, and workflows:
+Use `env` in `defineConfig()` for non-secret values that application code needs at runtime, such as environment names, feature flags, and public service URLs. Values must be strings, numbers, or booleans.
 
 ```typescript
 export default defineConfig({
@@ -195,6 +198,32 @@ export default defineConfig({
   },
 });
 ```
+
+`tailor.config.ts` runs locally when an SDK command loads the config. If values come from your shell or an env file, SDK commands can load them before config evaluation with the global [`--env-file`](./cli-reference.md#environment-file-loading) and `--env-file-if-exists` options:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  env: {
+    foo: Number(process.env.FOO ?? "1"),
+    bar: process.env.BAR ?? "hello",
+    baz: (process.env.BAZ ?? "true") === "true",
+  },
+});
+```
+
+If the same config defines an auth before-login hook, make sure the config module can be evaluated without Node-only globals in the platform runtime. Avoid arbitrary `process.env` reads in that module; pass literal values, or values generated into a config module before deployment, and read them from the hook's `env` argument.
+
+When the SDK deploys application code or runs detected service code with `function test-run`, it passes the resolved values as the `env` argument. Do not read `process.env` from deployed resolvers, executors, workflow jobs, auth hooks, or migration scripts; Node-side environment variables are not available there. Put sensitive values in [Secret Manager](./services/secret.md) instead of `env`.
+
+| Code location             | Runtime access                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolver body             | `body: ({ env }) => ...`                                                                                                                  |
+| Executor callbacks        | `body: ({ env }) => ...`, `url: ({ env }) => String(env.bar)`, `variables: ({ env }) => ({ enabled: env.baz })`, or similar callback args |
+| Workflow job body         | `body: (input, { env }) => ...`                                                                                                           |
+| Auth before-login hook    | `handler: async ({ env }) => ...`                                                                                                         |
+| TailorDB migration script | `main(trx, { env }: MigrationContext)`                                                                                                    |
+| `function test-run`       | Same `env` argument shape as the detected resolver, executor, or workflow job                                                             |
 
 ```typescript
 // In resolvers
@@ -226,6 +255,12 @@ hooks: {
     invoker: "hook-invoker",
   },
 };
+
+// In TailorDB migration scripts
+export async function main(trx: Transaction, { env }: MigrationContext): Promise<void> {
+  if (!env.baz) return;
+  await trx.updateTable("User").set({ stage: env.bar }).execute();
+}
 ```
 
 ### Workflow Service

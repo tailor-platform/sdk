@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  valibot@>=0.31.0 <1.2.0: ^1.2.0
+  valibot@>=0.31.0 <1.2.0: 1.4.1
 
 importers:
 
@@ -2207,7 +2207,7 @@ packages:
     resolution: {integrity: sha512-8ilJFrDcz1aaQb6inA6cQXovu4F3wRHFvG2sNXYlbtwyOg8csJTSB/BP6EEfvWRqt8j/uRK71rI99baS9yKYvw==}
     hasBin: true
     peerDependencies:
-      valibot: ^1.2.0
+      valibot: 1.4.1
     peerDependenciesMeta:
       valibot:
         optional: true

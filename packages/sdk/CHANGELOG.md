@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.60.2
+
+### Patch Changes
+
+- [#1399](https://github.com/tailor-platform/sdk/pull/1399) [`4b1c61c`](https://github.com/tailor-platform/sdk/commit/4b1c61c51a2c8367ab50b3cd8144a0bfb9074fc1) Thanks [@dqn](https://github.com/dqn)! - Reject duplicate TailorDB type names across application namespaces, including deployed external TailorDB namespaces checked at deploy time. Projects that currently reuse a type name across namespaces will fail validation on the next `generate` or `deploy`; rename the duplicated types before upgrading.
+
+- [#1406](https://github.com/tailor-platform/sdk/pull/1406) [`a10389f`](https://github.com/tailor-platform/sdk/commit/a10389f7498f9817f7dbf235a64496e83e024a85) Thanks [@dqn](https://github.com/dqn)! - Clarify how non-secret runtime `env` values defined in `defineConfig()` are passed to resolvers, executors, workflow jobs, auth hooks, TailorDB migrations, and `function test-run`.
+
+## 1.60.1
+
+### Patch Changes
+
+- [#1356](https://github.com/tailor-platform/sdk/pull/1356) [`be55e45`](https://github.com/tailor-platform/sdk/commit/be55e45ba2a9eeac0d02633aa793a212c8651acf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1404](https://github.com/tailor-platform/sdk/pull/1404) [`0aa76e9`](https://github.com/tailor-platform/sdk/commit/0aa76e9c25c41b619433838d0848e8e010e2078a) Thanks [@remiposo](https://github.com/remiposo)! - Fix `db.fields.timestamps()` so `updatedAt` is updated on every record update. Since update hooks receive the stored value merged with the input, the previous `value ?? new Date()` fallback froze `updatedAt` at its first value. `createdAt` still respects a user-specified value on create.
+
 ## 1.60.0
 
 ### Minor Changes

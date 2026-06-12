@@ -23,7 +23,7 @@ Define TailorDB Types in files matching glob patterns specified in `tailor.confi
 - **Multiple types per file**: You can define multiple TailorDB types in a single file
 - **Export method**: Use named exports (`export const`)
 - **Export both value and type**: Always export both the runtime value and TypeScript type
-- **Uniqueness**: Type names must be unique across all TailorDB files
+- **Uniqueness**: Type names must be unique across all TailorDB namespaces in the application
 
 ```typescript
 import { db } from "@tailor-platform/sdk";
