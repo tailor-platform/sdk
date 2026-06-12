@@ -1071,6 +1071,30 @@ describe("snapshot", () => {
   });
 
   describe("loadSnapshot validation", () => {
+    test("loads a snapshot with a different format version", () => {
+      // example/migrations contain snapshots with version 2; the loader must
+      // not pin the version field to the current constant.
+      const filePath = path.join(testDir, "v2_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 2,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: { User: { name: "User", pluralForm: "Users", fields: {} } },
+        }),
+      );
+
+      expect(loadSnapshot(filePath).version).toBe(2);
+    });
+
+    test("throws with file path when the file is not valid JSON", () => {
+      const filePath = path.join(testDir, "truncated_schema.json");
+      fs.writeFileSync(filePath, '{"version": 1, "namespace": "x"');
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
     test("throws with file path when JSON is not an object", () => {
       const filePath = path.join(testDir, "corrupt_schema.json");
       fs.writeFileSync(filePath, JSON.stringify("not an object"));

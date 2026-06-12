@@ -227,7 +227,7 @@ export interface TailorDBSnapshotType {
  */
 export interface SchemaSnapshot {
   /** Format version for future compatibility */
-  version: 1;
+  version: number;
   namespace: string;
   createdAt: string;
   types: Record<string, TailorDBSnapshotType>;

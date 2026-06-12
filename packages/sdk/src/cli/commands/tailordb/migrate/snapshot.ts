@@ -547,7 +547,13 @@ export function createSnapshotFromLocalTypes(
  */
 export function loadSnapshot(filePath: string): SchemaSnapshot {
   const content = fs.readFileSync(filePath, "utf-8");
-  const result = schemaSnapshotSchema.safeParse(JSON.parse(content));
+  let raw: unknown;
+  try {
+    raw = JSON.parse(content);
+  } catch (error) {
+    throw new Error(`Invalid schema snapshot at ${filePath}: ${String(error)}`, { cause: error });
+  }
+  const result = schemaSnapshotSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`);
   }
@@ -565,7 +571,13 @@ export function loadSnapshot(filePath: string): SchemaSnapshot {
  */
 export function loadDiff(filePath: string): MigrationDiff {
   const content = fs.readFileSync(filePath, "utf-8");
-  const result = migrationDiffSchema.safeParse(JSON.parse(content));
+  let raw: unknown;
+  try {
+    raw = JSON.parse(content);
+  } catch (error) {
+    throw new Error(`Invalid migration diff at ${filePath}: ${String(error)}`, { cause: error });
+  }
+  const result = migrationDiffSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`);
   }

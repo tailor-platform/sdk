@@ -10,7 +10,6 @@
  */
 
 import { z } from "zod";
-import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import type {
   TypeSettingsPatch,
   SnapshotPermissionState,
@@ -230,7 +229,7 @@ export const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.loo
 // ============================================================================
 
 export const schemaSnapshotSchema: z.ZodType<SchemaSnapshot> = z.looseObject({
-  version: z.literal(SCHEMA_SNAPSHOT_VERSION),
+  version: z.number(),
   namespace: z.string(),
   createdAt: z.string(),
   types: z.record(z.string(), tailorDBSnapshotTypeSchema),
@@ -424,7 +423,7 @@ export const warningChangeInfoSchema: z.ZodType<WarningChangeInfo> = z.looseObje
 // older diff.json files that predate these fields still validate cleanly.
 // loadDiff backfills both from the warnings array after validation.
 export const migrationDiffSchema: z.ZodType<MigrationDiff> = z.looseObject({
-  version: z.literal(SCHEMA_SNAPSHOT_VERSION),
+  version: z.number(),
   namespace: z.string(),
   createdAt: z.string(),
   description: z.string().optional(),
