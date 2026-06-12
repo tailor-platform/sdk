@@ -137,7 +137,7 @@ export type SnapshotPermissionCondition = readonly [
 export function isSnapshotFieldRefOperand(
   operand: SnapshotPermissionOperand,
 ): operand is SnapshotFieldRefOperand {
-  // operand type is widened by MessageInitShape at call sites
+  // snapshot JSON may contain null; z.unknown() does not reject it
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   return typeof operand === "object" && operand !== null && !Array.isArray(operand);
 }

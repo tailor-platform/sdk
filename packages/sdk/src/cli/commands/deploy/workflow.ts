@@ -106,9 +106,7 @@ export async function applyWorkflow(
     );
 
     await deleteAllSettled(
-      // platform response may omit the field
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      (result.jobFunctionDeletes ?? collectDeletableJobFunctions(changeSet.deletes)).map((del) => ({
+      result.jobFunctionDeletes.map((del) => ({
         resourceType: "workflow job function",
         resourceName: del.jobFunctionName,
         run: () =>
@@ -151,22 +149,6 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
   if (firstError) {
     throw firstError;
   }
-}
-
-function collectDeletableJobFunctions(deletes: readonly DeleteWorkflow[]) {
-  const seen = new Set<string>();
-  const jobFunctions: Array<{ workspaceId: string; jobFunctionName: string }> = [];
-  for (const del of deletes) {
-    for (const jobFunctionName of del.deletableJobNames) {
-      const key = `${del.workspaceId}\0${jobFunctionName}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      jobFunctions.push({ workspaceId: del.workspaceId, jobFunctionName });
-    }
-  }
-  return jobFunctions;
 }
 
 /**

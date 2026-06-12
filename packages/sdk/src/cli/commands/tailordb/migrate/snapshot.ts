@@ -1794,9 +1794,7 @@ function convertRemoteFieldsToSnapshot(
       if (remoteField.foreignKeyType) config.foreignKeyType = remoteField.foreignKeyType;
       if (remoteField.foreignKeyField) config.foreignKeyField = remoteField.foreignKeyField;
     }
-    // platform response may omit the field
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (remoteField.allowedValues && remoteField.allowedValues.length > 0) {
+    if (remoteField.allowedValues.length > 0) {
       config.allowedValues = remoteField.allowedValues.map((v) => ({
         value: v.value,
         ...(v.description && { description: v.description }),
@@ -1816,9 +1814,7 @@ function convertRemoteFieldsToSnapshot(
       }
     }
 
-    // platform response may omit the field
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (remoteField.validate && remoteField.validate.length > 0) {
+    if (remoteField.validate.length > 0) {
       config.validate = remoteField.validate.map((v) => ({
         script: { expr: v.script?.expr ?? "" },
         errorMessage: v.errorMessage ?? "",
