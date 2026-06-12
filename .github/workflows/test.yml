@@ -32,6 +32,7 @@ jobs:
               - .github/actions/**
               - packages/**
               - example/**
+              - llm-challenge/**
               - package.json
               - tsconfig.json
               - pnpm-workspace.yaml
