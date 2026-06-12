@@ -258,9 +258,9 @@ type ResolveMachineUserNameOptions = {
 async function resolveMachineUserName(options: ResolveMachineUserNameOptions): Promise<string> {
   const { cliMachineUser, profile, authConfig } = options;
 
-  const fromProfile = await loadMachineUserName({ machineUser: cliMachineUser, profile });
-  if (fromProfile) {
-    return fromProfile;
+  const resolved = await loadMachineUserName({ machineUser: cliMachineUser, profile });
+  if (resolved) {
+    return resolved;
   }
 
   if (authConfig && !("external" in authConfig && authConfig.external)) {

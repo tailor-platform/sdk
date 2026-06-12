@@ -91,6 +91,7 @@ export const tokenCommand = defineAppCommand({
       name: arg(z.string().optional(), {
         positional: true,
         description: "Machine user name. Falls back to the active profile's default machine user.",
+        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
     })
     .strict(),
