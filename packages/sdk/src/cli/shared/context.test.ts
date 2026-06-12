@@ -3,7 +3,13 @@ import * as os from "node:os";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId, writePlatformConfig } from "./context";
+import {
+  loadAccessToken,
+  loadConfigPath,
+  loadMachineUserName,
+  loadWorkspaceId,
+  writePlatformConfig,
+} from "./context";
 import { logger } from "./logger";
 import { resetKeyringState } from "./token-store";
 
@@ -254,6 +260,108 @@ describe("loadWorkspaceId", () => {
     test("throws error when no workspaceId source is available", async () => {
       await expect(loadWorkspaceId()).rejects.toThrow("Workspace ID not found");
     });
+  });
+});
+
+describe("loadMachineUserName", () => {
+  const validUUID = "12345678-1234-4abc-8def-123456789012";
+
+  beforeEach(() => {
+    vi.resetModules();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("returns machineUser from opts when provided", async () => {
+    const result = await loadMachineUserName({ machineUser: "bot" });
+    expect(result).toBe("bot");
+  });
+
+  test("opts.machineUser takes precedence over env variable", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
+    const result = await loadMachineUserName({ machineUser: "opts-bot" });
+    expect(result).toBe("opts-bot");
+  });
+
+  test("returns machineUser from env when opts not provided", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
+    const result = await loadMachineUserName();
+    expect(result).toBe("env-bot");
+  });
+
+  test("env takes precedence over profile default", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
+      current_user: null,
+    });
+    const result = await loadMachineUserName({ profile: "myprofile" });
+    expect(result).toBe("env-bot");
+  });
+
+  test("returns machine_user from profile when profile provided", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
+      current_user: null,
+    });
+    const result = await loadMachineUserName({ profile: "myprofile" });
+    expect(result).toBe("profile-bot");
+  });
+
+  test("returns undefined when profile has no machine_user", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: { myprofile: { user: "u", workspace_id: validUUID } },
+      current_user: null,
+    });
+    const result = await loadMachineUserName({ profile: "myprofile" });
+    expect(result).toBeUndefined();
+  });
+
+  test("throws when profile does not exist", async () => {
+    await expect(loadMachineUserName({ profile: "nonexistent" })).rejects.toThrow(
+      'Profile "nonexistent" not found',
+    );
+  });
+
+  test("returns undefined when nothing is set", async () => {
+    const result = await loadMachineUserName();
+    expect(result).toBeUndefined();
+  });
+
+  test("returns machine_user from env profile when TAILOR_PLATFORM_PROFILE is set", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        envprofile: { user: "u", workspace_id: validUUID, machine_user: "env-profile-bot" },
+      },
+      current_user: null,
+    });
+    const result = await loadMachineUserName();
+    expect(result).toBe("env-profile-bot");
   });
 });
 

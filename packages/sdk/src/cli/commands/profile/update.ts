@@ -27,6 +27,11 @@ export const updateCommand = defineAppCommand({
         description:
           "Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.",
       }),
+      "machine-user": arg(z.string().optional(), {
+        alias: "m",
+        description:
+          "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.",
+      }),
     })
     .strict(),
   run: async (args) => {
@@ -38,7 +43,12 @@ export const updateCommand = defineAppCommand({
     }
 
     // Check if at least one property is provided
-    if (!args.user && !args["workspace-id"] && args.permission === undefined) {
+    if (
+      !args.user &&
+      !args["workspace-id"] &&
+      args.permission === undefined &&
+      args["machine-user"] === undefined
+    ) {
       throw new Error("Please provide at least one property to update.");
     }
 
@@ -79,6 +89,13 @@ export const updateCommand = defineAppCommand({
     } else if (args.permission === "write") {
       delete profile.readonly;
     }
+    if (args["machine-user"] !== undefined) {
+      if (args["machine-user"] === "") {
+        delete profile.machine_user;
+      } else {
+        profile.machine_user = args["machine-user"];
+      }
+    }
     writePlatformConfig(config);
     if (!args.json) {
       logger.success(`Profile "${args.name}" updated successfully`);
@@ -90,6 +107,7 @@ export const updateCommand = defineAppCommand({
       user: newUser,
       workspaceId: newWorkspaceId,
       permission: profile.readonly === true ? "read" : "write",
+      ...(profile.machine_user ? { machineUser: profile.machine_user } : {}),
     };
     logger.out(profileInfo);
   },

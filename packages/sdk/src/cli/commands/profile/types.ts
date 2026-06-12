@@ -3,4 +3,5 @@ export interface ProfileInfo {
   user: string;
   workspaceId: string;
   permission: "read" | "write";
+  machineUser?: string;
 }

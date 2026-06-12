@@ -72,4 +72,55 @@ describe("profile list", () => {
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);
   });
+
+  test("includes machineUser in JSON output when profile has machine_user set", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          machine_user: "bot",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ name: "myprofile", machineUser: "bot" });
+  });
+
+  test("omits machineUser from JSON output when profile has no machine_user", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).not.toHaveProperty("machineUser");
+  });
 });

@@ -241,11 +241,12 @@ tailor-sdk profile create [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description                                                                       | Required | Default   |
-| ------------------------------- | ----- | --------------------------------------------------------------------------------- | -------- | --------- |
-| `--user <USER>`                 | `-u`  | User email                                                                        | Yes      | -         |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                      | Yes      | -         |
-| `--permission <PERMISSION>`     | -     | Profile permission. 'read' blocks all write commands while the profile is active. | No       | `"write"` |
+| Option                          | Alias | Description                                                                                                            | Required | Default   |
+| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------- | -------- | --------- |
+| `--user <USER>`                 | `-u`  | User email                                                                                                             | Yes      | -         |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                           | Yes      | -         |
+| `--permission <PERMISSION>`     | -     | Profile permission. 'read' blocks all write commands while the profile is active.                                      | No       | `"write"` |
+| `--machine-user <MACHINE_USER>` | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). | No       | -         |
 
 <!-- politty:command:profile create:options:end -->
 
@@ -320,11 +321,12 @@ tailor-sdk profile update [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description                                                                          | Required | Default |
-| ------------------------------- | ----- | ------------------------------------------------------------------------------------ | -------- | ------- |
-| `--user <USER>`                 | `-u`  | New user email                                                                       | No       | -       |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | New workspace ID                                                                     | No       | -       |
-| `--permission <PERMISSION>`     | -     | Profile permission. 'read' blocks all write commands; 'write' lifts the restriction. | No       | -       |
+| Option                          | Alias | Description                                                                                                                                           | Required | Default |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
+| `--user <USER>`                 | `-u`  | New user email                                                                                                                                        | No       | -       |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | New workspace ID                                                                                                                                      | No       | -       |
+| `--permission <PERMISSION>`     | -     | Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.                                                                  | No       | -       |
+| `--machine-user <MACHINE_USER>` | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear. | No       | -       |
 
 <!-- politty:command:profile update:options:end -->
 

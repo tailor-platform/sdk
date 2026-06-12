@@ -34,6 +34,7 @@ const mockClient = {
 vi.mock("../shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
+  loadMachineUserName: vi.fn(),
 }));
 
 vi.mock("../shared/client", () => ({
@@ -85,7 +86,8 @@ describe("query", () => {
 
     const { readFile } = await import("node:fs/promises");
     const { getEditorCommand, openInEditor } = await import("../shared/editor");
-    const { loadAccessToken, loadWorkspaceId } = await import("../shared/context");
+    const { loadAccessToken, loadWorkspaceId, loadMachineUserName } =
+      await import("../shared/context");
     const { initOperatorClient, fetchMachineUserToken } = await import("../shared/client");
     const { loadConfig } = await import("../shared/config-loader");
     const { extractAllNamespaces } = await import("../shared/config");
@@ -100,6 +102,7 @@ describe("query", () => {
     vi.mocked(openInEditor).mockResolvedValue(true);
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
+    vi.mocked(loadMachineUserName).mockImplementation(async (opts) => opts?.machineUser ?? "bot");
     vi.mocked(initOperatorClient).mockResolvedValue(mockClient as never);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
@@ -552,6 +555,36 @@ describe("query", () => {
       "total",
       "createdAt",
     ]);
+  });
+
+  test("uses machine user resolved from profile default when machineUser option is absent", async () => {
+    const { loadMachineUserName } = await import("../shared/context");
+    vi.mocked(loadMachineUserName).mockResolvedValue("profile-bot");
+
+    await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      query: 'select * from "User";',
+    });
+
+    expect(mockClient.getAuthMachineUser).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "profile-bot" }),
+    );
+  });
+
+  test("throws 'Machine user is required' error when no machine user source resolves", async () => {
+    const { loadMachineUserName } = await import("../shared/context");
+    vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        query: 'select * from "User";',
+      }),
+    ).rejects.toThrow("Machine user is required");
   });
 });
 

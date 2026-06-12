@@ -22,6 +22,7 @@ const pfProfileSchema = z.object({
   user: z.string(),
   workspace_id: z.string(),
   readonly: z.boolean().optional(),
+  machine_user: z.string().optional(),
 });
 
 const pfUserSchemaV1 = z.object({
@@ -82,6 +83,10 @@ type LoadWorkspaceIdOptions = {
 };
 type LoadAccessTokenOptions = {
   useProfile?: boolean;
+  profile?: string;
+};
+type LoadMachineUserNameOptions = {
+  machineUser?: string;
   profile?: string;
 };
 
@@ -353,6 +358,37 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
     Workspace ID not found.
     Please specify workspace ID via --workspace-id option or TAILOR_PLATFORM_WORKSPACE_ID environment variable.
   `);
+}
+
+/**
+ * Load machine user name from command options, environment variables, or platform config.
+ * In CLI context, env fallback is also handled by politty's arg env option.
+ * Priority: opts/machineUser > env/TAILOR_PLATFORM_MACHINE_USER_NAME > opts/profile (profile default) > undefined
+ * @param opts - Machine user and profile options
+ * @returns Resolved machine user name, or undefined if not set
+ */
+export async function loadMachineUserName(
+  opts?: LoadMachineUserNameOptions,
+): Promise<string | undefined> {
+  if (opts?.machineUser) {
+    return opts.machineUser;
+  }
+
+  if (process.env.TAILOR_PLATFORM_MACHINE_USER_NAME) {
+    return process.env.TAILOR_PLATFORM_MACHINE_USER_NAME;
+  }
+
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  if (profile) {
+    const pfConfig = await readPlatformConfig();
+    const profileEntry = pfConfig.profiles[profile];
+    if (!profileEntry) {
+      throw new Error(`Profile "${profile}" not found`);
+    }
+    return profileEntry.machine_user;
+  }
+
+  return undefined;
 }
 
 /**

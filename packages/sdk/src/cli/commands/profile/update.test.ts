@@ -127,3 +127,63 @@ describe("profile update --permission", () => {
     expect(config.profiles.rw?.readonly).toBe(true);
   });
 });
+
+describe("profile update --machine-user", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u@example.com", workspace_id: validUUID },
+      },
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("sets machine_user on disk and skips remote validation", async () => {
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--machine-user", "bot"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.machine_user).toBe("bot");
+
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
+  });
+
+  test("clears machine_user when empty string is passed", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--machine-user", ""]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.machine_user).toBeUndefined();
+  });
+
+  test("machine-user-only update does not hit remote validation", async () => {
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--machine-user", "admin"]);
+
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+  });
+});
