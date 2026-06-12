@@ -110,14 +110,11 @@ export async function applyAuth(
     ]);
 
     // Auth Connections
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (changeSet.connection) {
-      await applyAuthConnections(
-        client,
-        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
-        "create-update",
-      );
-    }
+    await applyAuthConnections(
+      client,
+      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      "create-update",
+    );
 
     // IdPConfigs
     await Promise.all([
@@ -265,14 +262,11 @@ export async function applyAuth(
     );
 
     // Auth Connections
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (changeSet.connection) {
-      await applyAuthConnections(
-        client,
-        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
-        "delete-resources",
-      );
-    }
+    await applyAuthConnections(
+      client,
+      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      "delete-resources",
+    );
   } else {
     // Services only
     await Promise.all(

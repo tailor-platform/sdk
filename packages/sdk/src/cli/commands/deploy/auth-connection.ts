@@ -128,11 +128,8 @@ export async function planAuthConnections(
 
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
   for (const auth of auths) {
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (auth.connections) {
-      for (const [name, config] of Object.entries(auth.connections)) {
-        desiredConnections[name] = config;
-      }
+    for (const [name, config] of Object.entries(auth.connections)) {
+      desiredConnections[name] = config;
     }
   }
 

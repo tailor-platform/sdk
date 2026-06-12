@@ -636,11 +636,6 @@ function protoFields(
   baseName: string,
   isInput: boolean,
 ): MessageInitShape<typeof PipelineResolver_FieldSchema>[] {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  if (!fields) {
-    return [];
-  }
-
   return Object.entries(fields).map(([fieldName, field]) => {
     let type: MessageInitShape<typeof PipelineResolver_TypeSchema>;
     const hasCreateHook = isInput && field.metadata.hooks?.create !== undefined;

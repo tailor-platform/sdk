@@ -134,11 +134,6 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
     }
     const operation = operations[index];
     const error = result.reason;
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (!operation) {
-      errors.push(error);
-      return;
-    }
     if (error instanceof ConnectError && error.code === Code.NotFound) {
       return;
     }
