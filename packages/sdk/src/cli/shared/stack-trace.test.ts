@@ -55,7 +55,7 @@ describe("parseStackTrace", () => {
     const result = parseStackTrace(error);
 
     expect(result.frames).toHaveLength(1);
-    expect(result.frames[0].functionName).toBe("fn");
+    expect(result.frames[0]!.functionName).toBe("fn");
   });
 
   test("returns empty frames for error without stack trace", () => {
@@ -218,8 +218,8 @@ describe("mapStackFrames", () => {
     const result = mapStackFrames(frames, traceMap);
 
     expect(result).toHaveLength(1);
-    expect(result[0].original).toEqual(frames[0]);
-    expect(result[0].mapped).toEqual({
+    expect(result[0]!.original).toEqual(frames[0]);
+    expect(result[0]!.mapped).toEqual({
       source: "resolvers/error-test.ts",
       line: 4,
       column: 3,
@@ -235,7 +235,7 @@ describe("mapStackFrames", () => {
     const result = mapStackFrames(frames, null);
 
     expect(result).toHaveLength(1);
-    expect(result[0].mapped).toBeNull();
+    expect(result[0]!.mapped).toBeNull();
   });
 
   test("returns mapped: null when sourcemap has no mapping for position", () => {
@@ -256,7 +256,7 @@ describe("mapStackFrames", () => {
     const result = mapStackFrames(frames, traceMap);
 
     expect(result).toHaveLength(1);
-    expect(result[0].mapped).toBeNull();
+    expect(result[0]!.mapped).toBeNull();
   });
 
   test("identifies correct source in multi-source bundles via round-trip validation", () => {
@@ -294,10 +294,10 @@ describe("mapStackFrames", () => {
     const result = mapStackFrames(frames, traceMap);
 
     expect(result).toHaveLength(1);
-    expect(result[0].mapped).not.toBeNull();
-    expect(result[0].mapped?.source).toBe("resolvers/add.ts");
-    expect(result[0].mapped?.line).toBe(10);
-    expect(result[0].mapped?.column).toBe(4);
+    expect(result[0]!.mapped).not.toBeNull();
+    expect(result[0]!.mapped?.source).toBe("resolvers/add.ts");
+    expect(result[0]!.mapped?.line).toBe(10);
+    expect(result[0]!.mapped?.column).toBe(4);
   });
 
   test("identifies correct source when true source is in middle of sources array", () => {
@@ -336,10 +336,10 @@ describe("mapStackFrames", () => {
     const result = mapStackFrames(frames, traceMap);
 
     expect(result).toHaveLength(1);
-    expect(result[0].mapped).not.toBeNull();
-    expect(result[0].mapped?.source).toBe("resolvers/target.ts");
-    expect(result[0].mapped?.line).toBe(5);
-    expect(result[0].mapped?.column).toBe(11);
+    expect(result[0]!.mapped).not.toBeNull();
+    expect(result[0]!.mapped?.source).toBe("resolvers/target.ts");
+    expect(result[0]!.mapped?.line).toBe(5);
+    expect(result[0]!.mapped?.column).toBe(11);
   });
 
   test("returns mapped.name as null even when sourcemap contains an original name", () => {
@@ -364,8 +364,8 @@ describe("mapStackFrames", () => {
     const result = mapStackFrames(frames, traceMap);
 
     expect(result).toHaveLength(1);
-    expect(result[0].mapped).not.toBeNull();
-    expect(result[0].mapped?.name).toBeNull();
+    expect(result[0]!.mapped).not.toBeNull();
+    expect(result[0]!.mapped?.name).toBeNull();
   });
 });
 

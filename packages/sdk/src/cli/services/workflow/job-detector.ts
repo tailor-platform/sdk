@@ -40,8 +40,8 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
     if (isSdkFunctionCall(node, bindings, "createWorkflowJob")) {
       const callExpr = node as unknown as CallExpression;
       const args = callExpr.arguments;
-      if (args.length >= 1 && args[0].type === "ObjectExpression") {
-        const configObj = args[0] as ObjectExpression;
+      if (args.length >= 1 && args[0]!.type === "ObjectExpression") {
+        const configObj = args[0]! as ObjectExpression;
         const nameProp = findProperty(configObj.properties, "name");
         const bodyProp = findProperty(configObj.properties, "body");
 
@@ -56,7 +56,7 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
           let statementRange: { start: number; end: number } | undefined;
           let exportName: string | undefined;
           for (let i = parents.length - 1; i >= 0; i--) {
-            const parent = parents[i];
+            const parent = parents[i]!;
             if (parent.type === "VariableDeclarator") {
               const declarator = parent as unknown as {
                 id?: { type?: string; name?: string };

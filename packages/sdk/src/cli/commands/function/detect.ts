@@ -148,7 +148,7 @@ function detectWorkflowJob(
   }
 
   if (jobs.length === 1) {
-    return { type: "workflow-job", name: jobs[0].name, exportName: jobs[0].exportName };
+    return { type: "workflow-job", name: jobs[0]!.name, exportName: jobs[0]!.exportName };
   }
 
   const available = jobs.map((j) => `  - "${j.name}" (export: ${j.exportName})`).join("\n");

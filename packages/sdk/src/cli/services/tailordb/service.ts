@@ -73,7 +73,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       );
     }
 
-    rawTypes[rawTypesKey][typeName] = type;
+    rawTypes[rawTypesKey]![typeName] = type;
     typeSourceInfo[typeName] = sourceInfo;
   };
 
@@ -124,7 +124,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     });
 
     if (extendedType) {
-      rawTypes[sourceFilePath][rawType.name] = extendedType;
+      rawTypes[sourceFilePath]![rawType.name] = extendedType;
     }
     for (const gen of generatedTypes) {
       // Plugin-generated types don't have a source file.
@@ -272,7 +272,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       const hasPreviousGeneratedTypes = Object.hasOwn(rawTypes, pluginGeneratedKey);
       const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
       const previousGeneratedTypeKeys = hasPreviousGeneratedTypes
-        ? Object.keys(previousGeneratedTypes)
+        ? Object.keys(previousGeneratedTypes!)
         : [];
       const hadPreviousGeneratedTypes = previousGeneratedTypeKeys.length > 0;
       if (hasPreviousGeneratedTypes) {

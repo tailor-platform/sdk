@@ -533,7 +533,7 @@ export async function precompileTailorDBTypeScripts(
     }
     for (const [index, result] of results.entries()) {
       if (result.status === "fulfilled") {
-        setPrecompiledScriptExpr(targets[index].fn, result.value);
+        setPrecompiledScriptExpr(targets[index]!.fn, result.value);
       }
     }
   } finally {

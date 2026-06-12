@@ -570,7 +570,7 @@ export function mockSecretmanager() {
       const result: Record<string, string> = {};
       for (const name of names) {
         if (name in vaultData) {
-          result[name] = vaultData[name];
+          result[name] = vaultData[name]!;
         }
       }
       return result as Partial<Record<T[number], string>>;

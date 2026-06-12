@@ -17,7 +17,7 @@ export type RestoreWorkspaceOptions = z.input<typeof restoreWorkspaceOptionsSche
 async function loadOptions(options: RestoreWorkspaceOptions) {
   const result = restoreWorkspaceOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken();

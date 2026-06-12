@@ -351,7 +351,7 @@ export function parseMethodName(methodName: string): {
     return { operation: "perform", resourceType: "resource" };
   }
 
-  const [, action, resource] = match;
+  const [, action, resource] = match as [string, string, string];
   return { operation: action.toLowerCase(), resourceType: resource };
 }
 

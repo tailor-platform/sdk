@@ -21,7 +21,7 @@ export type GetOrganizationOptions = z.input<typeof getOrganizationOptionsSchema
 export async function getOrganization(options: GetOrganizationOptions): Promise<OrganizationInfo> {
   const result = getOrganizationOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken();

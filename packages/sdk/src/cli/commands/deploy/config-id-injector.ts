@@ -82,7 +82,7 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
     throw new Error(`Multiple defineConfig() calls found in ${configPath}. Only one is supported.`);
   }
 
-  const { configObj } = calls[0];
+  const { configObj } = calls[0]!;
   if (!configObj) {
     throw new Error(
       `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
@@ -126,7 +126,7 @@ const idComment =
 function insertIdProperty(source: string, configObj: ObjectExpression, id: string): string {
   const idLiteral = `id: ${JSON.stringify(id)}`;
   if (configObj.properties.length > 0) {
-    const firstProp = configObj.properties[0];
+    const firstProp = configObj.properties[0]!;
     const lineStart = source.lastIndexOf("\n", firstProp.start - 1) + 1;
     const indent = source.slice(lineStart, firstProp.start);
     const insertion = `${idComment}\n${indent}${idLiteral},\n${indent}`;

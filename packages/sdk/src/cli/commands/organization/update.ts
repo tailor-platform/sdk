@@ -25,7 +25,7 @@ export async function updateOrganization(
 ): Promise<OrganizationInfo> {
   const result = updateOrganizationOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken();

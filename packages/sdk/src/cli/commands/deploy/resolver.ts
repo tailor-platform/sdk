@@ -600,7 +600,7 @@ function processResolver(
     { "": resolver.output },
     `${typeBaseName}Output`,
     false,
-  )[0];
+  )[0]!;
 
   // Build description (combine resolver description and output description)
   const resolverDescription = resolver.description || `${resolver.name} resolver`;

@@ -62,7 +62,7 @@ function insertValues(node: OperationNode): Record<string, unknown> {
       `insertValues: query inserts ${rows.length} rows; use insertRows() for multi-row inserts`,
     );
   }
-  return rows[0];
+  return rows[0]!;
 }
 
 function updateValues(node: OperationNode): Record<string, unknown> {

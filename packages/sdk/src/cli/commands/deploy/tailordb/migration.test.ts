@@ -198,8 +198,8 @@ describe("migration", () => {
       expect(result.size).toBe(2);
       expect(result.get("namespace-a")).toHaveLength(2);
       expect(result.get("namespace-b")).toHaveLength(1);
-      expect(result.get("namespace-a")?.[0].number).toBe(1);
-      expect(result.get("namespace-a")?.[1].number).toBe(2);
+      expect(result.get("namespace-a")![0]!.number).toBe(1);
+      expect(result.get("namespace-a")![1]!.number).toBe(2);
     });
 
     test("returns empty map for empty input", () => {
@@ -286,8 +286,8 @@ describe("migration", () => {
       const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
 
       expect(result).toHaveLength(1);
-      expect(result[0].number).toBe(1);
-      expect(result[0].namespace).toBe("tailordb");
+      expect(result[0]!.number).toBe(1);
+      expect(result[0]!.namespace).toBe("tailordb");
     });
 
     test("detects multiple pending migrations", async () => {
@@ -304,8 +304,8 @@ describe("migration", () => {
       const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
 
       expect(result).toHaveLength(2);
-      expect(result[0].number).toBe(2);
-      expect(result[1].number).toBe(3);
+      expect(result[0]!.number).toBe(2);
+      expect(result[1]!.number).toBe(3);
     });
 
     test("skips migrations without diff file", async () => {
@@ -373,7 +373,7 @@ describe("migration", () => {
       const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
 
       expect(result).toHaveLength(1);
-      expect(result[0].diff.requiresMigrationScript).toBe(true);
+      expect(result[0]!.diff.requiresMigrationScript).toBe(true);
     });
 
     test("sorts migrations by namespace and number", async () => {
@@ -400,14 +400,14 @@ describe("migration", () => {
 
       expect(result).toHaveLength(4);
       // Should be sorted by namespace first, then by number
-      expect(result[0].namespace).toBe("namespace-a");
-      expect(result[0].number).toBe(1);
-      expect(result[1].namespace).toBe("namespace-a");
-      expect(result[1].number).toBe(2);
-      expect(result[2].namespace).toBe("namespace-b");
-      expect(result[2].number).toBe(1);
-      expect(result[3].namespace).toBe("namespace-b");
-      expect(result[3].number).toBe(2);
+      expect(result[0]!.namespace).toBe("namespace-a");
+      expect(result[0]!.number).toBe(1);
+      expect(result[1]!.namespace).toBe("namespace-a");
+      expect(result[1]!.number).toBe(2);
+      expect(result[2]!.namespace).toBe("namespace-b");
+      expect(result[2]!.number).toBe(1);
+      expect(result[3]!.namespace).toBe("namespace-b");
+      expect(result[3]!.number).toBe(2);
     });
   });
 
@@ -569,7 +569,7 @@ describe("migration", () => {
 
       expect(bundleMigrationScriptMock).toHaveBeenCalledTimes(1);
       expect(executeScriptMock).toHaveBeenCalledTimes(1);
-      expect(executeScriptMock.mock.calls[0][0]).toMatchObject({
+      expect(executeScriptMock.mock.calls[0]![0]).toMatchObject({
         name: "migration-tailordb-0001.js",
       });
     });

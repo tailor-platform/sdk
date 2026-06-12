@@ -96,7 +96,7 @@ function collectIdpUserTriggerTargets(application: Readonly<Application>): Reado
     if (executor.trigger.idp != null) {
       targets.add(executor.trigger.idp);
     } else if (idps.length === 1) {
-      targets.add(idps[0].name);
+      targets.add(idps[0]!.name);
     }
   }
   return targets;

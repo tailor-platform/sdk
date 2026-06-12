@@ -70,7 +70,7 @@ export function createAuthService(
 
       // 2. Single TailorDB
       if (totalNamespaceCount === 1) {
-        userProfileNamespace = tailorDBServices[0]?.namespace ?? externalTailorDBNamespaces[0];
+        userProfileNamespace = tailorDBServices[0]?.namespace ?? externalTailorDBNamespaces[0]!;
       } else {
         // 3. Multiple TailorDBs
         await Promise.all(tailorDBServices.map((tailordb) => tailordb.loadTypes()));

@@ -24,7 +24,7 @@ export type ListFoldersOptions = z.input<typeof listFoldersOptionsSchema>;
 export async function listFolders(options: ListFoldersOptions): Promise<FolderListInfo[]> {
   const result = listFoldersOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const { organizationId, parentFolderId, order, limit } = result.data;

@@ -370,7 +370,7 @@ function resolveIdpNamespace(
         `(${available}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
     );
   }
-  return application.idpServices[0].name;
+  return application.idpServices[0]!.name;
 }
 
 function resolveAuthNamespace(application: Readonly<Application>): string {

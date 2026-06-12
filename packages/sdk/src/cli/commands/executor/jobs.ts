@@ -377,8 +377,6 @@ export async function watchExecutorJob<E extends ExecutorLike>(
     };
 
     const latestAttempt = attemptInfos[0];
-    // index access may be undefined without noUncheckedIndexedAccess
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
     const operationReference = latestAttempt?.operationReference;
 
     // Phase 2: Based on target type, wait for the downstream execution

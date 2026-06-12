@@ -100,7 +100,7 @@ describe("planWorkflow", () => {
         const jobFunctionPrefix = `trn:v1:workspace:${workspaceId}:workflow_job_function:`;
         if (trn.startsWith(jobFunctionPrefix)) {
           const name = trn.slice(jobFunctionPrefix.length);
-          const jobFunction = labelsByJobFunction[name];
+          const jobFunction = labelsByJobFunction[name]!;
           return {
             metadata: {
               labels: jobFunction.label
@@ -162,11 +162,11 @@ describe("planWorkflow", () => {
 
       // "new-workflow" should be created
       expect(result.changeSet.creates).toHaveLength(1);
-      expect(result.changeSet.creates[0].name).toBe("new-workflow");
+      expect(result.changeSet.creates[0]!.name).toBe("new-workflow");
 
       // "old-workflow" should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("old-workflow");
+      expect(result.changeSet.deletes[0]!.name).toBe("old-workflow");
     });
   });
 
@@ -197,11 +197,11 @@ describe("planWorkflow", () => {
 
       // "workflow-a" should be updated
       expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0].name).toBe("workflow-a");
+      expect(result.changeSet.updates[0]!.name).toBe("workflow-a");
 
       // "workflow-b" should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("workflow-b");
+      expect(result.changeSet.deletes[0]!.name).toBe("workflow-b");
     });
 
     test("all workflows are deleted when config is empty", async () => {
@@ -311,9 +311,9 @@ describe("planWorkflow", () => {
       );
 
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("removed-workflow");
-      expect(result.changeSet.deletes[0].usedJobNames).toEqual(["removed-job", "shared-job"]);
-      expect(result.changeSet.deletes[0]).toHaveProperty("deletableJobNames", ["removed-job"]);
+      expect(result.changeSet.deletes[0]!.name).toBe("removed-workflow");
+      expect(result.changeSet.deletes[0]!.usedJobNames).toEqual(["removed-job", "shared-job"]);
+      expect(result.changeSet.deletes[0]!).toHaveProperty("deletableJobNames", ["removed-job"]);
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
 
@@ -350,8 +350,8 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("removed-workflow");
-      expect(result.changeSet.deletes[0]).toHaveProperty("deletableJobNames", []);
+      expect(result.changeSet.deletes[0]!.name).toBe("removed-workflow");
+      expect(result.changeSet.deletes[0]!).toHaveProperty("deletableJobNames", []);
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
 
@@ -380,8 +380,8 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("removed-workflow");
-      expect(result.changeSet.deletes[0]).toHaveProperty("deletableJobNames", []);
+      expect(result.changeSet.deletes[0]!.name).toBe("removed-workflow");
+      expect(result.changeSet.deletes[0]!).toHaveProperty("deletableJobNames", []);
     });
   });
 
@@ -415,7 +415,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("my-workflow");
+      expect(result.changeSet.deletes[0]!.name).toBe("my-workflow");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
   });
@@ -458,7 +458,7 @@ describe("planWorkflow", () => {
       );
 
       expect(result.changeSet.unchanged).toHaveLength(1);
-      expect(result.changeSet.unchanged[0].name).toBe("sample-workflow");
+      expect(result.changeSet.unchanged[0]!.name).toBe("sample-workflow");
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
@@ -519,7 +519,7 @@ describe("planWorkflow", () => {
       );
 
       expect(result.changeSet.unchanged).toHaveLength(1);
-      expect(result.changeSet.unchanged[0].name).toBe("order-processing");
+      expect(result.changeSet.unchanged[0]!.name).toBe("order-processing");
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
@@ -566,7 +566,7 @@ describe("planWorkflow", () => {
       );
 
       expect(result.changeSet.unchanged).toHaveLength(1);
-      expect(result.changeSet.unchanged[0].name).toBe("batch-processing");
+      expect(result.changeSet.unchanged[0]!.name).toBe("batch-processing");
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
@@ -614,7 +614,7 @@ describe("planWorkflow", () => {
 
       expect(result.changeSet.unchanged).toHaveLength(0);
       expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0].name).toBe("batch-processing");
+      expect(result.changeSet.updates[0]!.name).toBe("batch-processing");
     });
 
     test("plans owned orphaned job functions for deletion even when remaining workflows are unchanged", async () => {
@@ -724,8 +724,8 @@ describe("planWorkflow", () => {
         workspaceId,
         jobFunctionName: "removed-job",
       });
-      expect(deleteWorkflow.mock.invocationCallOrder[0]).toBeLessThan(
-        deleteWorkflowJobFunction.mock.invocationCallOrder[0],
+      expect(deleteWorkflow.mock.invocationCallOrder[0]!).toBeLessThan(
+        deleteWorkflowJobFunction.mock.invocationCallOrder[0]!,
       );
     });
 

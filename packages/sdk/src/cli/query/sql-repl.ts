@@ -12,7 +12,7 @@ export function isSqlInputComplete(input: string): boolean {
   let lastSignificantTokenWasSemicolon = false;
 
   for (let i = 0; i < input.length; i += 1) {
-    const char = input[i];
+    const char = input[i]!;
     const next = input[i + 1];
 
     if (inLineComment) {

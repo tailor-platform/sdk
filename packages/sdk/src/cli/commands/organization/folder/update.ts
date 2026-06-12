@@ -24,7 +24,7 @@ export type UpdateFolderOptions = z.input<typeof updateFolderOptionsSchema>;
 export async function updateFolder(options: UpdateFolderOptions): Promise<FolderInfo> {
   const result = updateFolderOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken();

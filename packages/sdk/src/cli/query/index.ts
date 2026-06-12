@@ -102,7 +102,7 @@ async function getNamespaceFromSqlQuery(
   }
 
   if (namespaces.length === 1) {
-    return namespaces[0];
+    return namespaces[0]!;
   }
 
   const typeNames = extractTypeNamesFromSql(query);
@@ -126,7 +126,7 @@ async function getNamespaceFromSqlQuery(
 
   const namespacesFromTypes = new Set(typeNamespaceMap.values());
   if (namespacesFromTypes.size === 1) {
-    return [...namespacesFromTypes][0];
+    return [...namespacesFromTypes][0]!;
   }
 
   throw new Error(
@@ -138,7 +138,7 @@ async function loadOptions(options: QueryBaseOptions) {
   const result = queryBaseOptionsSchema.safeParse(options);
 
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken({
@@ -357,7 +357,7 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
   const result = queryOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const executor = await prepareQueryExecutor(result.data);
@@ -877,7 +877,7 @@ function splitSqlStatements(query: string): string[] {
   // so we use the next statement's start (or end of string) as the boundary.
   return statements.map((s, i) => {
     const start = s._location!.start;
-    const end = i + 1 < statements.length ? statements[i + 1]._location!.start : query.length;
+    const end = i + 1 < statements.length ? statements[i + 1]!._location!.start : query.length;
     return query.substring(start, end);
   });
 }
@@ -896,7 +896,7 @@ function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolea
     for (let i = 0; i < result.result.length; i++) {
       if (i > 0) logger.log("");
       logger.info(queries[i] ?? `Statement ${i + 1}`);
-      printSingleSqlResult(result.result[i], options);
+      printSingleSqlResult(result.result[i]!, options);
     }
     return;
   }

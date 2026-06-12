@@ -343,7 +343,7 @@ export async function applySecretManager(
         }
         for (const secret of vault.secrets) {
           if (secret.value != null) {
-            state.vaults[vault.vaultName][secret.name] = hashValue(secret.value);
+            state.vaults[vault.vaultName]![secret.name] = hashValue(secret.value);
           }
         }
       }
@@ -376,8 +376,8 @@ export async function applySecretManager(
       const state = loadSecretsState();
       for (const del of secretChangeSet.deletes) {
         if (Object.hasOwn(state.vaults, del.vaultName)) {
-          delete state.vaults[del.vaultName][del.secretName];
-          if (Object.keys(state.vaults[del.vaultName]).length === 0) {
+          delete state.vaults[del.vaultName]![del.secretName];
+          if (Object.keys(state.vaults[del.vaultName]!).length === 0) {
             delete state.vaults[del.vaultName];
           }
         }

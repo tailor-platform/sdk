@@ -31,8 +31,8 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
     if (isSdkFunctionCall(node, bindings, "createWorkflow")) {
       const callExpr = node as unknown as CallExpression;
       const args = callExpr.arguments;
-      if (args.length >= 1 && args[0].type === "ObjectExpression") {
-        const configObj = args[0] as ObjectExpression;
+      if (args.length >= 1 && args[0]!.type === "ObjectExpression") {
+        const configObj = args[0]! as ObjectExpression;
         const nameProp = findProperty(configObj.properties, "name");
 
         if (nameProp && isStringLiteral(nameProp.value)) {
@@ -40,7 +40,7 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
           let exportName: string | undefined;
           let isDefaultExport = false;
           for (let i = parents.length - 1; i >= 0; i--) {
-            const parent = parents[i];
+            const parent = parents[i]!;
             if (parent.type === "VariableDeclarator") {
               const declarator = parent as unknown as {
                 id?: { type?: string; name?: string };

@@ -22,7 +22,7 @@ export type GetFolderOptions = z.input<typeof getFolderOptionsSchema>;
 export async function getFolder(options: GetFolderOptions): Promise<FolderInfo> {
   const result = getFolderOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken();

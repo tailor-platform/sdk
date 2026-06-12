@@ -132,8 +132,6 @@ interface FormatLogLineOptions {
 export function formatLogLine(opts: FormatLogLineOptions): string {
   const { mode, indent, type, message, timestamp } = opts;
   const indentPrefix = indent > 0 ? " ".repeat(indent) : "";
-  // index access may be undefined without noUncheckedIndexedAccess
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
   const colorFn = TYPE_COLORS[type] || ((text: string) => text);
 
   // Plain mode: color only, no icon, no timestamp

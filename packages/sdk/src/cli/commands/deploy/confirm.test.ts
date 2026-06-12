@@ -49,7 +49,7 @@ describe("confirmOwnerConflict", () => {
     await confirmOwnerConflict(conflicts, "my-app", false);
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
-    const message = vi.mocked(prompt.confirm).mock.calls[0][0].message;
+    const message = vi.mocked(prompt.confirm).mock.calls[0]![0]!.message;
     expect(message).toContain("Re-tag");
     expect(message).toContain("my-app");
     expect(message).not.toContain("name mismatch");
@@ -63,7 +63,7 @@ describe("confirmOwnerConflict", () => {
     await confirmOwnerConflict(conflicts, "new-app", false);
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
-    const message = vi.mocked(prompt.confirm).mock.calls[0][0].message;
+    const message = vi.mocked(prompt.confirm).mock.calls[0]![0]!.message;
     expect(message).toContain("Update");
     expect(message).toContain("new-app");
     expect(message).not.toContain("Re-tag");
@@ -78,8 +78,8 @@ describe("confirmOwnerConflict", () => {
     await confirmOwnerConflict(conflicts, "my-app", false);
 
     expect(prompt.confirm).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(prompt.confirm).mock.calls[0][0].message).toContain("Re-tag");
-    expect(vi.mocked(prompt.confirm).mock.calls[1][0].message).toContain("Update");
+    expect(vi.mocked(prompt.confirm).mock.calls[0]![0]!.message).toContain("Re-tag");
+    expect(vi.mocked(prompt.confirm).mock.calls[1]![0]!.message).toContain("Update");
   });
 
   test("does not prompt when yes is true (id regeneration)", async () => {

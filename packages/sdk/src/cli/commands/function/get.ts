@@ -20,7 +20,7 @@ export type GetFunctionRegistryOptions = z.input<typeof getFunctionRegistryOptio
 async function loadOptions(options: GetFunctionRegistryOptions) {
   const result = getFunctionRegistryOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken({ useProfile: true, profile: result.data.profile });

@@ -35,7 +35,7 @@ export const durationArg = z
   .refine(
     (val) => {
       const match = val.match(durationPattern)!;
-      return parseInt(match[1], 10) > 0;
+      return parseInt(match[1]!, 10) > 0;
     },
     { message: "Duration must be greater than 0" },
   );
@@ -47,8 +47,8 @@ export const durationArg = z
  */
 export function parseDuration(duration: string): number {
   const match = duration.match(durationPattern)!;
-  const value = parseInt(match[1], 10);
-  const unit = match[2] as DurationUnit;
+  const value = parseInt(match[1]!, 10);
+  const unit = match[2]! as DurationUnit;
   return value * unitToMs[unit];
 }
 

@@ -950,7 +950,7 @@ function createTailorDBType<
       // oxlint-disable-next-line no-explicit-any
       Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
         (this.fields as Record<string, TailorAnyDBField>)[fieldName] =
-          this.fields[fieldName].hooks(fieldHooks);
+          this.fields[fieldName]!.hooks(fieldHooks);
       });
       return this;
     },
@@ -1033,9 +1033,9 @@ function createTailorDBType<
       const result = {} as Record<K, TailorAnyDBField>;
       for (const key of keys) {
         if (options) {
-          result[key] = this.fields[key].clone(options);
+          result[key] = this.fields[key]!.clone(options);
         } else {
-          result[key] = this.fields[key];
+          result[key] = this.fields[key]!;
         }
       }
       // oxlint-disable-next-line no-explicit-any
@@ -1047,7 +1047,7 @@ function createTailorDBType<
       const result = {} as Record<string, TailorAnyDBField>;
       for (const key in this.fields) {
         if (Object.hasOwn(this.fields, key) && !keysSet.has(key as unknown as K)) {
-          result[key] = this.fields[key];
+          result[key] = this.fields[key]!;
         }
       }
       return result as Omit<Fields, K>;

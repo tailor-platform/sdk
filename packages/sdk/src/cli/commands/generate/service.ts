@@ -146,7 +146,7 @@ export function createGenerationManager(params: {
     namespace: string,
     typeInfo: TypeInfo,
   ): Promise<void> {
-    const results = generatorResults[gen.id];
+    const results = generatorResults[gen.id]!;
     results.tailordbResults[namespace] = {};
 
     // Check if generator has processType method
@@ -158,10 +158,10 @@ export function createGenerationManager(params: {
     await Promise.allSettled(
       Object.entries(typeInfo.types).map(async ([typeName, type]) => {
         try {
-          results.tailordbResults[namespace][typeName] = await processType({
+          results.tailordbResults[namespace]![typeName] = await processType({
             type,
             namespace,
-            source: typeInfo.sourceInfo[typeName],
+            source: typeInfo.sourceInfo[typeName]!,
             plugins: typeInfo.pluginAttachments.get(typeName) ?? [],
           });
         } catch (error) {
@@ -196,7 +196,7 @@ export function createGenerationManager(params: {
     namespace: string,
     resolvers: Record<string, Resolver>,
   ): Promise<void> {
-    const results = generatorResults[gen.id];
+    const results = generatorResults[gen.id]!;
     results.resolverResults[namespace] = {};
 
     // Check if generator has processResolver method
@@ -209,7 +209,7 @@ export function createGenerationManager(params: {
     await Promise.allSettled(
       Object.entries(resolvers).map(async ([resolverName, resolver]) => {
         try {
-          results.resolverResults[namespace][resolverName] = await processResolver({
+          results.resolverResults[namespace]![resolverName] = await processResolver({
             resolver,
             namespace,
           });
@@ -241,7 +241,7 @@ export function createGenerationManager(params: {
   }
 
   async function processExecutors(gen: AnyCodeGenerator): Promise<void> {
-    const results = generatorResults[gen.id];
+    const results = generatorResults[gen.id]!;
 
     // Check if generator has processExecutor method
     if (!gen.processExecutor) {
@@ -265,7 +265,7 @@ export function createGenerationManager(params: {
   }
 
   async function aggregate(gen: AnyCodeGenerator): Promise<void> {
-    const results = generatorResults[gen.id];
+    const results = generatorResults[gen.id]!;
 
     const tailordbResults: TailorDBNamespaceResult<unknown>[] = [];
     const resolverResults: ResolverNamespaceResult<unknown>[] = [];
@@ -563,7 +563,7 @@ export function createGenerationManager(params: {
       ).toString(),
     };
 
-    const child = spawn(process.argv[0], [process.argv[1], ...args], {
+    const child = spawn(process.argv[0]!, [process.argv[1]!, ...args], {
       stdio: "inherit",
       env,
       detached: false,
@@ -696,7 +696,7 @@ export function createGenerationManager(params: {
               await resolverService.loadResolvers();
               services.resolver[namespace] = {};
               Object.entries(resolverService.resolvers).forEach(([_, resolver]) => {
-                services.resolver[namespace][resolver.name] = resolver;
+                services.resolver[namespace]![resolver.name] = resolver;
               });
             } catch (error) {
               logger.error(

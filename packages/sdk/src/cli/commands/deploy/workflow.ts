@@ -133,7 +133,7 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
     if (result.status === "fulfilled") {
       return;
     }
-    const operation = operations[index];
+    const operation = operations[index]!;
     const error = result.reason;
     if (error instanceof ConnectError && error.code === Code.NotFound) {
       return;
@@ -180,8 +180,6 @@ function filterJobFunctionVersions(
 ): { [key: string]: bigint } {
   const filtered: { [key: string]: bigint } = {};
   for (const jobName of usedJobNames) {
-    // index access may be undefined without noUncheckedIndexedAccess
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (allVersions[jobName] !== undefined) {
       filtered[jobName] = allVersions[jobName];
     }
@@ -212,8 +210,6 @@ async function registerJobFunctions(
 
   // Get workspaceId from the first workflow
   const firstWorkflow = changeSet.creates[0] || changeSet.updates[0] || changeSet.deletes[0];
-  // index access may be undefined without noUncheckedIndexedAccess
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!firstWorkflow) {
     return jobFunctionVersions;
   }
@@ -384,8 +380,6 @@ export async function planWorkflow(
     });
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
-    // index access may be undefined without noUncheckedIndexedAccess
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!usedJobNames) {
       throw new Error(
         `Job "${workflow.mainJob.name}" (mainJob of workflow "${workflow.name}") was not found.\n\n` +

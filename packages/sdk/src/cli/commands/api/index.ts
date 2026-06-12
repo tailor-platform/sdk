@@ -27,7 +27,7 @@ function resolveNamespaceName(methodName: string, config: LoadedConfig): string 
     return config.auth?.name;
   }
   if (/IdP/.test(methodName)) {
-    if (config.idp?.length === 1) return config.idp[0].name;
+    if (config.idp?.length === 1) return config.idp[0]!.name;
     return undefined;
   }
   if (/TailorDB/.test(methodName)) {
@@ -73,14 +73,14 @@ function parseBodyAsObject(body: string): Record<string, unknown> | undefined {
 function setNestedPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
   let cursor: Record<string, unknown> = obj;
   for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i];
+    const key = path[i]!;
     const next = cursor[key];
     if (typeof next !== "object" || next === null || Array.isArray(next)) {
       cursor[key] = {};
     }
     cursor = cursor[key] as Record<string, unknown>;
   }
-  cursor[path[path.length - 1]] = value;
+  cursor[path[path.length - 1]!] = value;
 }
 
 /**
@@ -232,7 +232,7 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
             expand: {
               dependsOn: ["endpoint"],
               enumerate: ({ endpoint }) =>
-                enumerateAllFieldCompletions(extractMethodName(endpoint)),
+                enumerateAllFieldCompletions(extractMethodName(endpoint ?? "")),
             },
           },
         },

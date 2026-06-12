@@ -72,9 +72,9 @@ export function parseStackTrace(error: string): ParsedStackTrace {
     if (match) {
       frames.push({
         functionName: match[1] || "<anonymous>",
-        file: match[2],
-        line: Number(match[3]),
-        column: Number(match[4]),
+        file: match[2]!,
+        line: Number(match[3]!),
+        column: Number(match[4]!),
       });
     }
   }
@@ -111,7 +111,7 @@ export function extractInlineSourcemap(bundledCode: string): TraceMap | null {
   if (!match) return null;
 
   try {
-    const decoded = Buffer.from(match[1], "base64").toString("utf-8");
+    const decoded = Buffer.from(match[1]!, "base64").toString("utf-8");
     const rawSourceMap = JSON.parse(decoded);
     return new TraceMap(rawSourceMap);
   } catch {

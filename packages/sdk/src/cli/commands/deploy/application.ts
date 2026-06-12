@@ -322,7 +322,7 @@ export async function planApplication(
       }
     });
     if (idpConfigs.length > 0) {
-      authIdpConfigName = idpConfigs[0].name;
+      authIdpConfigName = idpConfigs[0]!.name;
     }
   }
   const metaRequest = await buildMetaRequest({

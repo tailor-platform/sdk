@@ -70,7 +70,7 @@ async function set(options: SetOptions): Promise<void> {
     }
     targetNamespace = options.namespace;
   } else if (namespacesWithMigrations.length === 1) {
-    targetNamespace = namespacesWithMigrations[0].namespace;
+    targetNamespace = namespacesWithMigrations[0]!.namespace;
   } else {
     throw new Error(
       `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations.map((ns) => ns.namespace).join(", ")}`,

@@ -18,7 +18,7 @@ export type ListUsersOptions = z.input<typeof listUsersOptionsSchema>;
 async function loadOptions(options: ListUsersOptions) {
   const result = listUsersOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken({ useProfile: true, profile: result.data.profile });

@@ -256,7 +256,7 @@ function resolveMachineUserName(
     if (machineUsers) {
       const keys = Object.keys(machineUsers);
       if (keys.length > 0) {
-        return keys[0];
+        return keys[0]!;
       }
     }
   }

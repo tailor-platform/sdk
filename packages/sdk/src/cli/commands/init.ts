@@ -9,7 +9,7 @@ const detectPackageManager = () => {
   const availablePMs = ["npm", "yarn", "pnpm", "bun"];
   const userAgent = process.env.npm_config_user_agent;
   if (!userAgent) return;
-  const [name] = userAgent.split("/");
+  const [name] = userAgent.split("/") as [string, ...string[]];
   if (!availablePMs.includes(name)) return;
   return name;
 };

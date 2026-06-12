@@ -22,7 +22,7 @@ export type DeleteFolderOptions = z.input<typeof deleteFolderOptionsSchema>;
 export async function deleteFolder(options: DeleteFolderOptions): Promise<void> {
   const result = deleteFolderOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken();

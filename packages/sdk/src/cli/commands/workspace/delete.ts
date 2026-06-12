@@ -18,7 +18,7 @@ async function loadOptions(options: DeleteWorkspaceOptions) {
   // Validate options with zod schema
   const result = deleteWorkspaceOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken();

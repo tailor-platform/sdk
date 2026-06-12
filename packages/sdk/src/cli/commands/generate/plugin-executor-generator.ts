@@ -486,7 +486,7 @@ function extractDynamicImportSpecifier(resolve: () => Promise<{ default: unknown
       `resolve() must return a dynamic import, e.g. \`async () => await import("./executors/on-create")\`.`,
     );
   }
-  return match[1];
+  return match[1]!;
 }
 
 /**

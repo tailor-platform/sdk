@@ -212,13 +212,13 @@ export function replTransform(
 
   if (event.type === "insert" && event.char in BRACKET_PAIRS) {
     const close = BRACKET_PAIRS[event.char];
-    const line = lines[row];
+    const line = lines[row]!;
     const newLine = line.slice(0, col) + close + line.slice(col);
     return { lines: lines.with(row, newLine), row, col };
   }
 
   if (event.type === "insert" && CLOSE_BRACKETS.has(event.char)) {
-    const line = lines[row];
+    const line = lines[row]!;
     if (line[col] === event.char) {
       const newLine = line.slice(0, col) + line.slice(col + 1);
       return { lines: lines.with(row, newLine), row, col };
@@ -226,7 +226,7 @@ export function replTransform(
   }
 
   if (event.type === "backspace") {
-    const line = lines[row];
+    const line = lines[row]!;
     const beforeCursor = line.slice(0, col);
     if (beforeCursor.length >= 1 && /^ +$/.test(beforeCursor)) {
       const newIndent = beforeCursor.slice(0, -1);
@@ -236,10 +236,10 @@ export function replTransform(
   }
 
   if (event.type === "newline" && row > 0) {
-    const prevLine = lines[row - 1];
+    const prevLine = lines[row - 1]!;
     const baseIndent = prevLine.match(/^(\s*)/)?.[1] ?? "";
     const endsWithOpen = /[{([]$/.test(prevLine.trimEnd());
-    const startsWithClose = /^[}\])]/.test(lines[row].trimStart());
+    const startsWithClose = /^[}\])]/.test(lines[row]!.trimStart());
 
     if (endsWithOpen && startsWithClose) {
       // Bracket expansion: the cursor sits between a matching open/close
@@ -248,7 +248,7 @@ export function replTransform(
       const innerIndent = baseIndent + "  ";
       const newLines = lines
         .with(row, innerIndent)
-        .toSpliced(row + 1, 0, baseIndent + lines[row].trimStart());
+        .toSpliced(row + 1, 0, baseIndent + lines[row]!.trimStart());
       return { lines: newLines, row, col: innerIndent.length };
     }
     if (endsWithOpen) {
@@ -258,7 +258,7 @@ export function replTransform(
       const closeChar = BRACKET_PAIRS[openChar] ?? "}";
       const indent = baseIndent + "  ";
       const newLines = lines
-        .with(row, indent + lines[row])
+        .with(row, indent + lines[row]!)
         .toSpliced(row + 1, 0, baseIndent + closeChar);
       return { lines: newLines, row, col: indent.length };
     }

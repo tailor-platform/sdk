@@ -139,7 +139,7 @@ function resolveTargetNamespace(
     return requested;
   }
   if (namespacesWithMigrations.length === 1) {
-    return namespacesWithMigrations[0].namespace;
+    return namespacesWithMigrations[0]!.namespace;
   }
   throw new Error(
     `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations.map((ns) => ns.namespace).join(", ")}`,

@@ -14,7 +14,7 @@ describe("parseFieldConfig precompiled expressions", () => {
     });
 
     const schema = toSchemaOutputs({ User: type });
-    const field = parseFieldConfig(schema.User.fields.email);
+    const field = parseFieldConfig(schema.User!.fields.email!);
 
     expect(field.hooks?.create?.expr).toBe("PRECOMPILED_HOOK_EXPR");
   });
@@ -28,7 +28,7 @@ describe("parseFieldConfig precompiled expressions", () => {
     });
 
     const schema = toSchemaOutputs({ User: type });
-    const field = parseFieldConfig(schema.User.fields.email);
+    const field = parseFieldConfig(schema.User!.fields.email!);
 
     expect(field.validate?.[0]?.script.expr).toBe("PRECOMPILED_VALIDATE_EXPR");
   });

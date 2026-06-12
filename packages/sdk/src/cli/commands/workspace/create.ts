@@ -47,7 +47,7 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
   // Validate options with zod schema
   const result = createWorkspaceOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
   const validated = result.data;
 

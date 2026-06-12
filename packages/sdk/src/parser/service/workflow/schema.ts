@@ -18,7 +18,7 @@ const unitToSeconds: Record<(typeof durationUnits)[number], number> = {
 function durationToSeconds(duration: string): number {
   const match = duration.match(/^(\d+)(ms|s|m)$/);
   if (!match) return 0;
-  return parseInt(match[1], 10) * unitToSeconds[match[2] as (typeof durationUnits)[number]];
+  return parseInt(match[1]!, 10) * unitToSeconds[match[2]! as (typeof durationUnits)[number]];
 }
 
 const baseDurationSchema = z.templateLiteral([z.number().int().positive(), z.enum(durationUnits)]);

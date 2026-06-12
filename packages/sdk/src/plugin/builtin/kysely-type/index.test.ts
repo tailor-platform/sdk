@@ -10,7 +10,7 @@ import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailor
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
-  return types[type.name];
+  return types[type.name]!;
 }
 
 const mockBasicType = db.type("User", {
@@ -154,9 +154,9 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
-      expect(result.files[0].path).toBe(testDistPath);
+      expect(result.files[0]!.path).toBe(testDistPath);
 
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
       expect(content).toContain("type Generated,");
       expect(content).toContain("type NamespaceTransaction");
       expect(content).toContain("type NamespaceInsertable");
@@ -187,9 +187,9 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
-      expect(result.files[0].path).toBe(testDistPath);
+      expect(result.files[0]!.path).toBe(testDistPath);
 
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
       expect(content).toContain("User: {");
       expect(content).toContain("Status: {");
       expect(content).toContain("interface Namespace {");
@@ -247,7 +247,7 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
 
       // Check both namespaces are included
       expect(content).toContain('"tailordb": {');
@@ -275,7 +275,7 @@ describe("KyselyTypePlugin integration tests", () => {
       const plugin = kyselyTypePlugin({ distPath: testDistPath });
       const result = await plugin.onTailorDBReady!(ctx);
 
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
 
       // Timestamp should not be imported (not used)
       expect(content).not.toContain("type Timestamp");

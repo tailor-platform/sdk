@@ -30,7 +30,7 @@ function buildSchema(overrides: Partial<TailorDbErdSchema> = {}): TailorDbErdSch
 function extractEmbeddedSchema(html: string): unknown {
   const match = html.match(/<script type="application\/json" id="erd-schema">([\s\S]*?)<\/script>/);
   if (!match) throw new Error("embedded schema block not found");
-  return JSON.parse(match[1]);
+  return JSON.parse(match[1]!);
 }
 
 describe("buildViewerHtml", () => {

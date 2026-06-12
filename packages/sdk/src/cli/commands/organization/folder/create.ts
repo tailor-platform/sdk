@@ -24,7 +24,7 @@ export type CreateFolderOptions = z.input<typeof createFolderOptionsSchema>;
 export async function createFolder(options: CreateFolderOptions): Promise<FolderInfo> {
   const result = createFolderOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(result.error.issues[0]!.message);
   }
 
   const accessToken = await loadAccessToken();
