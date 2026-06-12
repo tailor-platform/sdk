@@ -399,37 +399,33 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   };
 
   if (type.description) snapshotType.description = type.description;
-  // raw user definitions may omit settings the parsed type marks required
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  if (type.settings) {
-    snapshotType.settings = {};
-    if (type.settings.aggregation !== undefined) {
-      snapshotType.settings.aggregation = type.settings.aggregation;
-    }
-    if (type.settings.bulkUpsert !== undefined) {
-      snapshotType.settings.bulkUpsert = type.settings.bulkUpsert;
-    }
-    if (type.settings.gqlOperations) {
-      // gqlOperations is already normalized by schema transform
-      const ops = type.settings.gqlOperations;
-      snapshotType.settings.gqlOperations = {
-        ...(ops.create !== undefined && {
-          create: ops.create,
-        }),
-        ...(ops.update !== undefined && {
-          update: ops.update,
-        }),
-        ...(ops.delete !== undefined && {
-          delete: ops.delete,
-        }),
-        ...(ops.read !== undefined && {
-          read: ops.read,
-        }),
-      };
-    }
-    if (type.settings.publishEvents !== undefined) {
-      snapshotType.settings.publishEvents = type.settings.publishEvents;
-    }
+  snapshotType.settings = {};
+  if (type.settings.aggregation !== undefined) {
+    snapshotType.settings.aggregation = type.settings.aggregation;
+  }
+  if (type.settings.bulkUpsert !== undefined) {
+    snapshotType.settings.bulkUpsert = type.settings.bulkUpsert;
+  }
+  if (type.settings.gqlOperations) {
+    // gqlOperations is already normalized by schema transform
+    const ops = type.settings.gqlOperations;
+    snapshotType.settings.gqlOperations = {
+      ...(ops.create !== undefined && {
+        create: ops.create,
+      }),
+      ...(ops.update !== undefined && {
+        update: ops.update,
+      }),
+      ...(ops.delete !== undefined && {
+        delete: ops.delete,
+      }),
+      ...(ops.read !== undefined && {
+        read: ops.read,
+      }),
+    };
+  }
+  if (type.settings.publishEvents !== undefined) {
+    snapshotType.settings.publishEvents = type.settings.publishEvents;
   }
 
   if (type.indexes && Object.keys(type.indexes).length > 0) {
