@@ -44,11 +44,12 @@ import type {
   SnapshotRelationship,
   SnapshotActionPermission,
   SnapshotRecordPermission,
-  SnapshotGqlAction,
   SnapshotGqlPermissionPolicy,
   SnapshotGqlPermission,
   TailorDBSnapshotType,
   SchemaSnapshot,
+  SnapshotPermissionOperand,
+  SnapshotPermissionCondition,
 } from "./snapshot-types";
 
 // ============================================================================
@@ -60,7 +61,7 @@ export const snapshotHookSchema: z.ZodType<SnapshotHook> = z.looseObject({
 });
 
 export const snapshotValidationSchema: z.ZodType<SnapshotValidation> = z.looseObject({
-  script: z.looseObject({ expr: z.string() }),
+  script: z.looseObject({ expr: z.string() }).optional() as z.ZodType<{ expr: string }>,
   errorMessage: z.string(),
 });
 
@@ -79,9 +80,8 @@ export const snapshotEnumValueSchema: z.ZodType<SnapshotEnumValue> = z.looseObje
 // z.lazy handles the recursion; the outer cast closes the type cycle.
 export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.looseObject({
   type: z.string(),
-  // `required` is non-optional in the interface; the schema enforces this
-  // so downstream code can safely drop the `?? true` guards.
-  required: z.boolean(),
+  // `required` defaults to true to match the pre-validation `?? true` behaviour.
+  required: z.boolean().default(true),
   array: z.boolean().optional(),
   index: z.boolean().optional(),
   unique: z.boolean().optional(),
@@ -120,38 +120,52 @@ export const snapshotRelationshipSchema: z.ZodType<SnapshotRelationship> = z.loo
 // Permission Types
 // ============================================================================
 
-// Field-ref operands are discriminated downstream with `in` checks, so an
-// unknown or extra key would be silently misinterpreted — reject it instead
-// of preserving it like the looseObject schemas do.
-const snapshotFieldRefOperandSchema = z.union([
-  z.strictObject({ user: z.string() }),
-  z.strictObject({ record: z.string() }),
-  z.strictObject({ newRecord: z.string() }),
-  z.strictObject({ oldRecord: z.string() }),
-]);
+// Structure validated; vocabulary kept open for platform evolution
+const FIELD_REF_KEYS = ["user", "record", "newRecord", "oldRecord"] as const;
 
-// SnapshotValueOperand = string | boolean | string[] | boolean[]
-// Arrays first so z.union picks them before string/boolean scalars.
-const snapshotValueOperandSchema = z.union([
-  z.array(z.string()),
-  z.array(z.boolean()),
-  z.string(),
-  z.boolean(),
-]);
+// Record-level operand: reject a plain object that contains two or more known
+// ref keys — such an object is ambiguous and signals a malformed condition.
+const snapshotPermissionOperandSchema = z.unknown().refine((v) => {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
+  const keys = Object.keys(v as Record<string, unknown>);
+  const refKeyCount = FIELD_REF_KEYS.filter((k) => keys.includes(k)).length;
+  return refKeyCount < 2;
+}, "Ambiguous field-ref operand: contains more than one of user/record/newRecord/oldRecord") as unknown as z.ZodType<SnapshotPermissionOperand>;
 
-const snapshotPermissionOperandSchema = z.union([
-  snapshotFieldRefOperandSchema,
-  snapshotValueOperandSchema,
-]);
+// GQL operand: same ambiguity check, plus reject record/newRecord/oldRecord refs.
+const snapshotGqlPermissionOperandSchema = z
+  .unknown()
+  .refine((v) => {
+    if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
+    const keys = Object.keys(v as Record<string, unknown>);
+    const refKeyCount = FIELD_REF_KEYS.filter((k) => keys.includes(k)).length;
+    return refKeyCount < 2;
+  }, "Ambiguous field-ref operand: contains more than one of user/record/newRecord/oldRecord")
+  .refine((v) => {
+    if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
+    const keys = Object.keys(v as Record<string, unknown>);
+    return !["record", "newRecord", "oldRecord"].some((k) => keys.includes(k));
+  }, "GQL permissions only support { user } field references") as unknown as z.ZodType<SnapshotPermissionOperand>;
 
-const snapshotPermissionOperatorSchema = z.enum(["eq", "ne", "in", "nin", "hasAny", "nhasAny"]);
+// Structure validated; vocabulary kept open for platform evolution
+const snapshotPermissionOperatorSchema = z.string();
 
-// SnapshotPermissionCondition is a readonly 3-tuple
-const snapshotPermissionConditionSchema = z.tuple([
-  snapshotPermissionOperandSchema,
-  snapshotPermissionOperatorSchema,
-  snapshotPermissionOperandSchema,
-]);
+// SnapshotPermissionCondition is a readonly 3-tuple; extra trailing elements tolerated.
+const snapshotPermissionConditionSchema = z
+  .tuple([
+    snapshotPermissionOperandSchema,
+    snapshotPermissionOperatorSchema,
+    snapshotPermissionOperandSchema,
+  ])
+  .rest(z.unknown()) as unknown as z.ZodType<SnapshotPermissionCondition>;
+
+const snapshotGqlPermissionConditionSchema = z
+  .tuple([
+    snapshotGqlPermissionOperandSchema,
+    snapshotPermissionOperatorSchema,
+    snapshotGqlPermissionOperandSchema,
+  ])
+  .rest(z.unknown()) as unknown as z.ZodType<SnapshotPermissionCondition>;
 
 export const snapshotActionPermissionSchema: z.ZodType<SnapshotActionPermission> = z.looseObject({
   conditions: z.array(snapshotPermissionConditionSchema),
@@ -160,34 +174,14 @@ export const snapshotActionPermissionSchema: z.ZodType<SnapshotActionPermission>
 });
 
 export const snapshotRecordPermissionSchema: z.ZodType<SnapshotRecordPermission> = z.looseObject({
-  create: z.array(snapshotActionPermissionSchema),
-  read: z.array(snapshotActionPermissionSchema),
-  update: z.array(snapshotActionPermissionSchema),
-  delete: z.array(snapshotActionPermissionSchema),
+  create: z.array(snapshotActionPermissionSchema).default([]),
+  read: z.array(snapshotActionPermissionSchema).default([]),
+  update: z.array(snapshotActionPermissionSchema).default([]),
+  delete: z.array(snapshotActionPermissionSchema).default([]),
 });
 
-const snapshotGqlActionSchema: z.ZodType<SnapshotGqlAction> = z.enum([
-  "read",
-  "create",
-  "update",
-  "delete",
-  "aggregate",
-  "bulkUpsert",
-  "all",
-]);
-
-// GQL permissions only support { user } field references (protoGqlOperand
-// rejects the rest at deploy time), so validate that at load time too.
-const snapshotGqlPermissionOperandSchema = z.union([
-  z.strictObject({ user: z.string() }),
-  snapshotValueOperandSchema,
-]);
-
-const snapshotGqlPermissionConditionSchema = z.tuple([
-  snapshotGqlPermissionOperandSchema,
-  snapshotPermissionOperatorSchema,
-  snapshotGqlPermissionOperandSchema,
-]);
+// Structure validated; vocabulary kept open for platform evolution
+const snapshotGqlActionSchema = z.string();
 
 export const snapshotGqlPermissionPolicySchema: z.ZodType<SnapshotGqlPermissionPolicy> =
   z.looseObject({
@@ -195,7 +189,7 @@ export const snapshotGqlPermissionPolicySchema: z.ZodType<SnapshotGqlPermissionP
     actions: z.array(snapshotGqlActionSchema),
     permit: z.enum(["allow", "deny"]),
     description: z.string().optional(),
-  });
+  }) as unknown as z.ZodType<SnapshotGqlPermissionPolicy>;
 
 // SnapshotGqlPermission = readonly SnapshotGqlPermissionPolicy[]
 const snapshotGqlPermissionSchema: z.ZodType<SnapshotGqlPermission> = z.array(

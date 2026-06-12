@@ -22,7 +22,7 @@ export interface SnapshotHook {
  * Validation configuration in schema snapshot
  */
 export interface SnapshotValidation {
-  script: { expr: string };
+  script?: { expr: string };
   errorMessage: string;
 }
 

@@ -224,7 +224,7 @@ function toProtoSnapshotFieldValidate(
     action: TailorDBType_PermitAction.DENY,
     errorMessage: val.errorMessage || "",
     script: {
-      expr: val.script.expr ? `!${val.script.expr}` : "",
+      expr: val.script && val.script.expr ? `!${val.script.expr}` : "",
     },
   }));
 }

@@ -1152,6 +1152,124 @@ describe("snapshot", () => {
       expect(() => loadSnapshot(filePath)).toThrow(filePath);
     });
 
+    test("loads a snapshot with an unknown operator string", () => {
+      const filePath = path.join(testDir, "unknown_operator_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                record: {
+                  create: [],
+                  read: [
+                    {
+                      permit: "allow",
+                      conditions: [["x", "startsWith", "admin"]],
+                    },
+                  ],
+                  update: [],
+                  delete: [],
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).not.toThrow();
+    });
+
+    test("loads a snapshot with an unknown GQL action", () => {
+      const filePath = path.join(testDir, "unknown_gql_action_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                gql: [
+                  {
+                    permit: "allow",
+                    actions: ["futureAction"],
+                    conditions: [["x", "eq", "y"]],
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).not.toThrow();
+    });
+
+    test("loads a field config without required and defaults it to true", () => {
+      const filePath = path.join(testDir, "no_required_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {
+                name: { type: "string" },
+              },
+            },
+          },
+        }),
+      );
+
+      const loaded = loadSnapshot(filePath);
+      expect(loaded.types.User?.fields.name?.required).toBe(true);
+    });
+
+    test("loads a partial record permission object (only create and read)", () => {
+      const filePath = path.join(testDir, "partial_permission_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                record: {
+                  create: [{ permit: "allow", conditions: [] }],
+                  read: [{ permit: "allow", conditions: [] }],
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      const loaded = loadSnapshot(filePath);
+      expect(loaded.types.User?.permissions?.record?.create).toHaveLength(1);
+      expect(loaded.types.User?.permissions?.record?.update).toEqual([]);
+      expect(loaded.types.User?.permissions?.record?.delete).toEqual([]);
+    });
+
     test("throws with file path when the file is not valid JSON", () => {
       const filePath = path.join(testDir, "truncated_schema.json");
       fs.writeFileSync(filePath, '{"version": 1, "namespace": "x"');
@@ -1166,14 +1284,24 @@ describe("snapshot", () => {
       expect(() => loadSnapshot(filePath)).toThrow(filePath);
     });
 
-    test("throws with file path when a required field has wrong type", () => {
+    test("throws with file path and offending field path when a required field has wrong type", () => {
       const filePath = path.join(testDir, "bad_type_schema.json");
       fs.writeFileSync(
         filePath,
         JSON.stringify({ version: 1, namespace: 42, createdAt: "t", types: {} }),
       );
 
-      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+      let thrownError: unknown;
+      try {
+        loadSnapshot(filePath);
+      } catch (e) {
+        thrownError = e;
+      }
+      expect(thrownError).toBeInstanceOf(Error);
+      const message = (thrownError as Error).message;
+      expect(message).toContain(filePath);
+      // z.prettifyError includes the field path ("namespace") in the output
+      expect(message).toContain("namespace");
     });
 
     test("loads a legacy snapshot missing newer optional fields", () => {

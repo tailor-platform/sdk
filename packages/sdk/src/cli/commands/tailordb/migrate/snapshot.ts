@@ -555,7 +555,9 @@ export function loadSnapshot(filePath: string): SchemaSnapshot {
   }
   const result = schemaSnapshotSchema.safeParse(raw);
   if (!result.success) {
-    throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`);
+    throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`, {
+      cause: result.error,
+    });
   }
   const snapshot = result.data;
   for (const type of Object.values(snapshot.types)) {
@@ -579,7 +581,9 @@ export function loadDiff(filePath: string): MigrationDiff {
   }
   const result = migrationDiffSchema.safeParse(raw);
   if (!result.success) {
-    throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`);
+    throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`, {
+      cause: result.error,
+    });
   }
   const parsed = result.data;
   // Backfill fields introduced after the initial diff.json schema so that older
@@ -956,7 +960,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   for (let i = 0; i < oldValidate.length; i++) {
     const oldV = assertDefined(oldValidate[i], `oldValidate missing index ${i}`);
     const newV = assertDefined(newValidate[i], `newValidate missing index ${i}`);
-    if (oldV.script.expr !== newV.script.expr) return true;
+    if ((oldV.script?.expr ?? "") !== (newV.script?.expr ?? "")) return true;
     if (oldV.errorMessage !== newV.errorMessage) return true;
   }
 
