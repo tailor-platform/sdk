@@ -112,11 +112,24 @@ describe("startWorkflow runtime overload", () => {
       name: "my-workflow",
     });
 
+    expect(loadMachineUserName).toHaveBeenCalledWith({
+      machineUser: undefined,
+      profile: undefined,
+    });
     expect(testStartWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         authInvoker: expect.objectContaining({ machineUserName: "profile-bot" }),
       }),
     );
+  });
+
+  test("forwards the machineUser option to machine user resolution", async () => {
+    await startWorkflow({ name: "my-workflow", machineUser: "flag-bot" });
+
+    expect(loadMachineUserName).toHaveBeenCalledWith({
+      machineUser: "flag-bot",
+      profile: undefined,
+    });
   });
 
   test("throws when no machine user source is available", async () => {

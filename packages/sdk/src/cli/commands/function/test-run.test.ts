@@ -32,6 +32,7 @@ vi.mock("@/cli/shared/script-executor", () => ({
 describe("function test-run --json", () => {
   let tmpDir: string;
   let scriptPath: string;
+  let getAuthMachineUserMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-test-run-json-test-"));
@@ -48,12 +49,13 @@ describe("function test-run --json", () => {
         },
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    getAuthMachineUserMock = vi.fn().mockResolvedValue({
+      machineUser: {
+        id: "machine-user-id",
+      },
+    });
     vi.mocked(initOperatorClient).mockResolvedValue({
-      getAuthMachineUser: vi.fn().mockResolvedValue({
-        machineUser: {
-          id: "machine-user-id",
-        },
-      }),
+      getAuthMachineUser: getAuthMachineUserMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
     vi.mocked(executeScript).mockResolvedValue({
       success: true,
@@ -91,6 +93,9 @@ describe("function test-run --json", () => {
 
     await runCommand(testRunCommand, [scriptPath]);
 
+    expect(getAuthMachineUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "profile-bot" }),
+    );
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
@@ -102,17 +107,12 @@ describe("function test-run --json", () => {
 
     await runCommand(testRunCommand, [scriptPath]);
 
+    expect(getAuthMachineUserMock).toHaveBeenCalledWith(expect.objectContaining({ name: "admin" }));
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
   test("priority: --machine-user flag > profile default > config auto-pick", async () => {
     vi.mocked(loadMachineUserName).mockResolvedValue("flag-or-profile-bot");
-    const getAuthMachineUserMock = vi.fn().mockResolvedValue({
-      machineUser: { id: "machine-user-id" },
-    });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getAuthMachineUser: getAuthMachineUserMock,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
     using _stdout = captureStdout();
     using _stderr = captureStderr();
@@ -120,6 +120,9 @@ describe("function test-run --json", () => {
 
     await runCommand(testRunCommand, [scriptPath, "--machine-user", "flag-bot"]);
 
+    expect(loadMachineUserName).toHaveBeenCalledWith(
+      expect.objectContaining({ machineUser: "flag-bot" }),
+    );
     expect(getAuthMachineUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: "flag-or-profile-bot" }),
     );

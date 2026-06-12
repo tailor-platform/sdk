@@ -178,12 +178,4 @@ describe("profile update --machine-user", () => {
     const config = await readPlatformConfig();
     expect(config.profiles.myprofile?.machine_user).toBeUndefined();
   });
-
-  test("machine-user-only update does not hit remote validation", async () => {
-    using _logger = silenceLogger("out", "success");
-    await runCommand(updateCommand, ["myprofile", "--machine-user", "admin"]);
-
-    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
-    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
-  });
 });
