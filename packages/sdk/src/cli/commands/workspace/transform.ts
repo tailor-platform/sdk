@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
+import pLimit from "p-limit";
 import { formatTimestamp } from "@/cli/shared/format";
 import { logger, type FieldTransformer } from "@/cli/shared/logger";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -102,8 +102,11 @@ export async function workspaceInfosWithFolderNames(
   workspaces: Workspace[],
 ): Promise<WorkspaceInfo[]> {
   const resolveFolderName = createWorkspaceFolderNameResolver(client);
-  return withBundleConcurrency(workspaces, async (workspace) =>
-    workspaceInfo(workspace, await resolveFolderName(workspace)),
+  const limit = pLimit(5);
+  return Promise.all(
+    workspaces.map((workspace) =>
+      limit(async () => workspaceInfo(workspace, await resolveFolderName(workspace))),
+    ),
   );
 }
 

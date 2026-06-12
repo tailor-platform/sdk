@@ -119,7 +119,7 @@ describe("workspace transform", () => {
     expect(mockClient.getOrganizationFolder).toHaveBeenCalledTimes(1);
   });
 
-  test("caps concurrent folder lookups", async () => {
+  test("caps concurrent folder lookups with a fixed limit", async () => {
     vi.useFakeTimers();
     vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
     let active = 0;
@@ -136,7 +136,7 @@ describe("workspace transform", () => {
 
     const pending = workspaceInfosWithFolderNames(
       mockClient,
-      Array.from({ length: 4 }, (_, index) =>
+      Array.from({ length: 7 }, (_, index) =>
         workspace({
           id: `workspace-${index}`,
           name: `space-${index}`,
@@ -147,12 +147,15 @@ describe("workspace transform", () => {
     await vi.runAllTimersAsync();
     const infos = await pending;
 
-    expect(maxActive).toBeLessThanOrEqual(2);
+    expect(maxActive).toBe(5);
     expect(infos.map(workspaceDisplayName)).toEqual([
       "folder-0/space-0",
       "folder-1/space-1",
       "folder-2/space-2",
       "folder-3/space-3",
+      "folder-4/space-4",
+      "folder-5/space-5",
+      "folder-6/space-6",
     ]);
   });
 });
