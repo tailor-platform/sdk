@@ -356,6 +356,11 @@ async function sync(options: SyncOptions): Promise<void> {
     logger.newline();
   }
 
+  logger.warn(
+    "Sync never runs migrate.ts scripts; it only applies the schema snapshot and moves the migration label.",
+  );
+  logger.newline();
+
   if (current !== null && targetVersion < current) {
     logger.warn(
       `Migrations ${formatMigrationNumber(targetVersion + 1)}–${formatMigrationNumber(
