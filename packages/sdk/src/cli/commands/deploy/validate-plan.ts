@@ -160,6 +160,22 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     });
   }
 
+  function replaces<Desc extends DescMessage>(
+    schema: Desc,
+    kind: string,
+    items: ReadonlyArray<HasCreateRequest>,
+  ): void {
+    validateItems({
+      validator,
+      schema,
+      kind,
+      action: "replace",
+      items,
+      requestKey: "createRequest",
+      violations,
+    });
+  }
+
   // TailorDB service creates (UpdateService has no request field — only metaRequest)
   creates(
     CreateTailorDBServiceRequestSchema,
@@ -287,15 +303,11 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "OAuth2 client",
     auth.changeSet.oauth2Client.updates as HasRequest[],
   );
-  validateItems({
-    validator,
-    schema: CreateAuthOAuth2ClientRequestSchema,
-    kind: "OAuth2 client",
-    action: "replace",
-    items: auth.changeSet.oauth2Client.replaces as HasCreateRequest[],
-    requestKey: "createRequest",
-    violations,
-  });
+  replaces(
+    CreateAuthOAuth2ClientRequestSchema,
+    "OAuth2 client",
+    auth.changeSet.oauth2Client.replaces as HasCreateRequest[],
+  );
 
   creates(
     CreatePipelineServiceRequestSchema,
