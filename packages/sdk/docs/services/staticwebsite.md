@@ -74,6 +74,8 @@ defineStaticWebSite("my-website", {
 
 After deploying, use `tailor-sdk staticwebsite domain get <domain>` to check domain status and retrieve the CNAME targets required for DNS configuration.
 
+A domain can be associated with only one workspace at a time. To set custom domains only in the workspace that owns the domain, see [Multi-Environment Configuration](../multi-environment.md#settings-that-belong-to-a-single-environment).
+
 ## Type-safe URL References
 
 The returned website object provides a `url` property that resolves to the actual URL at deployment time. Use this for type-safe configuration:

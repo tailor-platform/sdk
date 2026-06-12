@@ -85,6 +85,7 @@ the installed SDK version. Files are copied (not symlinked) so they survive
 
 ### Guides
 
+- [Multi-Environment Configuration](./docs/multi-environment.md) - Deploying one config to multiple workspaces
 - [Runtime API](./docs/runtime.md) - Typed wrappers for `tailor.iconv`, `tailor.secretmanager`, `tailor.idp`, `tailor.workflow`, `tailor.context`, `tailor.authconnection`, and `tailordb.file`
 - [Testing Guide](./docs/testing.md) - Unit and E2E testing patterns
 - [CLI Reference](./docs/cli-reference.md) - Command-line interface documentation
