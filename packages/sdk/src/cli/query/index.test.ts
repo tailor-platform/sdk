@@ -271,6 +271,7 @@ describe("query", () => {
       query: "SELECT 1; SELECT 2",
     });
 
+    expect(executeScript).toHaveBeenCalled();
     const call = vi.mocked(executeScript).mock.calls[0]![0]!;
     const arg = JSON.parse(call.arg ?? "{}");
     expect(arg.queries).toEqual(["SELECT 1; ", "SELECT 2"]);
