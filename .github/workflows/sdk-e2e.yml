@@ -30,6 +30,8 @@ jobs:
               - .github/actions/**
               - packages/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   sdk-e2e:

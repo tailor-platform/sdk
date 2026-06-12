@@ -35,6 +35,8 @@ jobs:
               - packages/**
               - example/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   generate:

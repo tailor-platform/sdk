@@ -29,6 +29,8 @@ jobs:
               - example/**
               - packages/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   deploy:
