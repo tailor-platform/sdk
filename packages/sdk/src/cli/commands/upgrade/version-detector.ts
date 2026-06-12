@@ -12,6 +12,7 @@ const SDK_PACKAGE_NAME = "@tailor-platform/sdk";
  */
 export async function detectInstalledVersion(projectRoot: string): Promise<string | null> {
   let dir = path.resolve(projectRoot);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     try {
       const sdkPath = path.join(dir, "node_modules", SDK_PACKAGE_NAME);

@@ -28,6 +28,7 @@ function findDefineConfigCalls(node: unknown, results: ConfigCallSite[]): void {
     const ce = n as unknown as CallExpression;
     if (ce.callee.type === "Identifier" && ce.callee.name === "defineConfig") {
       const arg = ce.arguments[0];
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       const configObj = arg && arg.type === "ObjectExpression" ? (arg as ObjectExpression) : null;
       results.push({ callExpr: ce, configObj });
     }

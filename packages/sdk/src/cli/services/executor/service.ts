@@ -81,7 +81,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
     loadExecutors: async () => {
       if (!loadPromise) {
         loadPromise = (async () => {
-          if (!config.files || config.files.length === 0) {
+          if (config.files.length === 0) {
             return undefined;
           }
 

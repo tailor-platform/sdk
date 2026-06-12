@@ -113,6 +113,7 @@ function parseTailorDBType(
         targetField: fieldName,
         sourceField: relationInfo.key,
         isArray: false,
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         description: targetType?.metadata?.description || "",
       };
     }
@@ -127,8 +128,8 @@ function parseTailorDBType(
     fields,
     forwardRelationships,
     backwardRelationships: createRecord<ParsedRelationship>(),
-    settings: metadata.settings || {},
-    permissions: parsePermissions(metadata.permissions || {}),
+    settings: metadata.settings ?? {},
+    permissions: parsePermissions(metadata.permissions),
     indexes: metadata.indexes,
     files: metadata.files,
   };
@@ -176,6 +177,7 @@ function buildBackwardRelationships(
           }
 
           // Track the source of this backward name
+          // oxlint-disable-next-line typescript/no-unnecessary-condition
           if (!backwardNameSources[typeName][backwardName]) {
             backwardNameSources[typeName][backwardName] = [];
           }

@@ -471,19 +471,21 @@ function createTailorDBField<
 
       case "nested":
         // Validate nested object fields
+        // oxlint-disable typescript/no-unnecessary-condition
         if (
           typeof value !== "object" ||
           value === null ||
           Array.isArray(value) ||
           value instanceof Date
         ) {
+          // oxlint-enable typescript/no-unnecessary-condition
           issues.push({
             message: `Expected an object: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
           });
-        } else if (field.fields && Object.keys(field.fields).length > 0) {
+        } else if (Object.keys(field.fields).length > 0) {
           for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-            const fieldValue = value?.[fieldName];
+            const fieldValue = (value as Record<string, unknown>)[fieldName];
             const result = nestedField._parseInternal({
               value: fieldValue,
               data,
@@ -921,7 +923,7 @@ function createTailorDBType<
     get metadata(): TailorDBTypeMetadata {
       // Convert indexes to the format expected by the manifest
       const indexes: Record<string, { fields: string[]; unique?: boolean }> = {};
-      if (_indexes && _indexes.length > 0) {
+      if (_indexes.length > 0) {
         _indexes.forEach((index) => {
           const fieldNames = index.fields.map((field) => String(field));
           const key = index.name || `idx_${fieldNames.join("_")}`;

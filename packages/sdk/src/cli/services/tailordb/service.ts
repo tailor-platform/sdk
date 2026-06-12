@@ -94,7 +94,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   const warnOmittedPermit = (): void => {
     for (const fileTypes of Object.values(rawTypes)) {
       for (const [typeName, type] of Object.entries(fileTypes)) {
-        const locations = findOmittedPermitRules(type.metadata.permissions ?? {});
+        const locations = findOmittedPermitRules(type.metadata.permissions);
         if (locations.length > 0) {
           logger.warn(
             `TailorDB type "${typeName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
@@ -223,7 +223,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     loadTypes: async () => {
       if (!loadPromise) {
         loadPromise = (async () => {
-          if (!config.files || config.files.length === 0) {
+          if (config.files.length === 0) {
             return undefined;
           }
 
@@ -270,8 +270,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       });
 
       const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
+      // oxlint-disable typescript/no-unnecessary-condition
       const hadPreviousGeneratedTypes =
         previousGeneratedTypes !== undefined && Object.keys(previousGeneratedTypes).length > 0;
+      // oxlint-enable typescript/no-unnecessary-condition
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (previousGeneratedTypes) {
         for (const typeName of Object.keys(previousGeneratedTypes)) {
           delete typeSourceInfo[typeName];

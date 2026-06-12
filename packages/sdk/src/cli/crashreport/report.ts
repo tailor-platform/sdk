@@ -100,7 +100,7 @@ function readCurrentUser(): string | null {
     const configPath = path.join(xdgConfig, "tailor-platform", "config.yaml");
     if (!fs.existsSync(configPath)) return null;
     const raw = parseYAML(fs.readFileSync(configPath, "utf-8")) as { current_user?: string | null };
-    return raw?.current_user ?? null;
+    return raw.current_user ?? null;
   } catch {
     return null;
   }

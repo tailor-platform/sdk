@@ -609,7 +609,7 @@ function copyMetadataToExtendedType(
 
   // Copy files metadata
   const metadata = original.metadata;
-  if (metadata.files && Object.keys(metadata.files).length > 0) {
+  if (Object.keys(metadata.files).length > 0) {
     result = result.files(metadata.files);
   }
 
@@ -626,10 +626,10 @@ function copyMetadataToExtendedType(
   // Copy permissions from metadata
   // Zod schema operand types are wider unions than the configure layer's discriminated PermissionCondition,
   // so type assertions are needed here.
-  if (metadata.permissions?.record) {
+  if (metadata.permissions.record) {
     result = result.permission(metadata.permissions.record as TailorTypePermission);
   }
-  if (metadata.permissions?.gql) {
+  if (metadata.permissions.gql) {
     result = result.gqlPermission(metadata.permissions.gql as TailorTypeGqlPermission);
   }
 
@@ -645,7 +645,7 @@ function copyMetadataToExtendedType(
   }
 
   // Copy plugins (but don't re-process them)
-  if (original.plugins && original.plugins.length > 0) {
+  if (original.plugins.length > 0) {
     for (const plugin of original.plugins) {
       // Use type assertion as plugin ID is dynamic at runtime
       result = result.plugin({

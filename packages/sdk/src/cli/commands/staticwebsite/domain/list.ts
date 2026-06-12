@@ -44,7 +44,7 @@ export const domainListCommand = defineAppCommand({
 
       const formatted = customDomains.map((d) => ({
         domain: d.domain,
-        status: statusLabels[d.status] ?? "unknown",
+        status: statusLabels[d.status],
         trafficCnameTarget: d.trafficCnameTarget,
         certificateCnameTarget: d.certificateCnameTarget,
       }));

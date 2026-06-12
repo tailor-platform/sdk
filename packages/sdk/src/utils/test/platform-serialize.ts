@@ -55,6 +55,7 @@ export function platformSerialize<T>(value: T): T {
 
   // `JSON.stringify` returns `undefined` when the root collapses (e.g. a `toJSON`
   // returning `undefined`); parsing that would throw opaquely.
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (serialized === undefined) {
     throw new TypeError("platformSerialize: value is not JSON-serializable at <root>");
   }

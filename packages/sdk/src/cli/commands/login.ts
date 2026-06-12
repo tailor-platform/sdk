@@ -148,7 +148,7 @@ export const loginCommand = defineAppCommand({
       .describe("Machine User Login"),
   ]),
   run: async (args) => {
-    if ("machine-user" in args && args["machine-user"]) {
+    if ("machine-user" in args) {
       await loginAsMachineUser({
         clientId: args.clientId,
         clientSecret: args.clientSecret,

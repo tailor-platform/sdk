@@ -103,6 +103,7 @@ export function normalizeGqlPermission(
 
 function normalizeGqlPolicy(policy: GqlPermissionPolicy): StandardGqlPermissionPolicy {
   return {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     conditions: policy.conditions ? normalizeConditions(policy.conditions) : [],
     actions: policy.actions === "all" ? ["all"] : policy.actions,
     permit: policy.permit ? "allow" : "deny",

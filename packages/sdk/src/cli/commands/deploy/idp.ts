@@ -155,7 +155,7 @@ export async function applyIdP(
         });
       }),
     );
-  } else if (phase === "delete-services") {
+  } else {
     // Services only
     await Promise.all(changeSet.service.deletes.map((del) => client.deleteIdPService(del.request)));
   }

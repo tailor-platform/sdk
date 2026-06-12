@@ -771,13 +771,13 @@ export function createGenerationManager(params: {
       // Watch TailorDB services
       for (const db of app.tailorDBServices) {
         const dbNamespace = db.namespace;
-        await watcher?.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files);
+        await watcher.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files);
       }
 
       // Watch Resolver services
       for (const resolverService of app.resolverServices) {
         const resolverNamespace = resolverService.namespace;
-        await watcher?.addWatchGroup(
+        await watcher.addWatchGroup(
           `Resolver/${resolverNamespace}`,
           resolverService["config"].files,
         );

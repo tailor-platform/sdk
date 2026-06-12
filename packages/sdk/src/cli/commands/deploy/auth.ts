@@ -110,6 +110,7 @@ export async function applyAuth(
     ]);
 
     // Auth Connections
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (changeSet.connection) {
       await applyAuthConnections(
         client,
@@ -264,6 +265,7 @@ export async function applyAuth(
     );
 
     // Auth Connections
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (changeSet.connection) {
       await applyAuthConnections(
         client,
@@ -271,7 +273,7 @@ export async function applyAuth(
         "delete-resources",
       );
     }
-  } else if (phase === "delete-services") {
+  } else {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteAuthService(del.request)),

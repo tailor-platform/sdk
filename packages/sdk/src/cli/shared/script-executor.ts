@@ -78,12 +78,14 @@ export async function waitForExecution(
   executionId: string,
   pollInterval: number = DEFAULT_POLL_INTERVAL,
 ): Promise<ExecutionWaitResult> {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const { execution } = await client.getFunctionExecution({
       workspaceId,
       executionId,
     });
 
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!execution) {
       throw new Error(`Execution '${executionId}' not found.`);
     }

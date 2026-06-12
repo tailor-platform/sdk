@@ -128,6 +128,7 @@ export async function planAuthConnections(
 
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
   for (const auth of auths) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (auth.connections) {
       for (const [name, config] of Object.entries(auth.connections)) {
         desiredConnections[name] = config;
@@ -249,13 +250,17 @@ function extractOAuth2Config(
 ): AuthConnectionConfig | undefined {
   if (!connection) return undefined;
   const config = connection.config;
-  if (!config || config.case !== "oauth2" || !config.value) return undefined;
+  if (!config || config.case !== "oauth2") return undefined;
   const v = config.value;
   return {
     type: "oauth2",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     providerUrl: (v.providerUrl as string) ?? "",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     issuerUrl: (v.issuerUrl as string) ?? "",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     clientId: (v.clientId as string) ?? "",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     clientSecret: (v.clientSecret as string) ?? "",
     authUrl: (v.authUrl as string) || undefined,
     tokenUrl: (v.tokenUrl as string) || undefined,
@@ -314,7 +319,7 @@ export async function applyAuthConnections(
       }
     }
     saveSecretsState(state);
-  } else if (phase === "delete-resources" || phase === "delete") {
+  } else {
     await Promise.all(
       changeSet.deletes.map(async (del) => {
         await client.deleteAuthConnection(del.request);

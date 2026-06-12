@@ -151,6 +151,7 @@ async function shouldForceApplyAll(
   for (const trn of candidateTrns) {
     try {
       const { metadata } = await client.getMetadata({ trn });
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (metadata?.labels?.[sdkNameLabelKey] !== application.name) {
         continue;
       }
@@ -264,9 +265,7 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], namespaceOf),
     ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], namespaceOf),
     ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], namespaceOf),
-    ...(results.auth.changeSet.connection
-      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf)
-      : []),
+    ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf),
   ];
 
   // Print grouped sections

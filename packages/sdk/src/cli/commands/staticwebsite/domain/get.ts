@@ -45,7 +45,7 @@ export const domainGetCommand = defineAppCommand({
 
       const info = {
         domain: customDomain.domain,
-        status: statusLabels[customDomain.status] ?? "unknown",
+        status: statusLabels[customDomain.status],
         trafficCnameTarget: customDomain.trafficCnameTarget,
         certificateCnameTarget: customDomain.certificateCnameTarget,
         errorMessage: customDomain.errorMessage || undefined,

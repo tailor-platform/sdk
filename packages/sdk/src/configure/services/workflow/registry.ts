@@ -93,6 +93,7 @@ export function getRegisteredWorkflow(name: string): RegisteredWorkflow | undefi
 }
 
 function currentPlatformWorkflow(): PlatformWorkflow | undefined {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   return (globalThis as GlobalWithRegistry).tailor?.workflow;
 }
 

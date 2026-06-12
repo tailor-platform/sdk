@@ -125,6 +125,7 @@ export async function waitForExecution(
     : null;
 
   try {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (true) {
       const { execution } = await client.getWorkflowExecution({
         workspaceId,

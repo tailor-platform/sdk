@@ -338,6 +338,7 @@ export async function applySecretManager(
     if (application) {
       const state = loadSecretsState();
       for (const vault of application.secrets) {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (!state.vaults[vault.vaultName]) {
           state.vaults[vault.vaultName] = {};
         }
@@ -349,7 +350,7 @@ export async function applySecretManager(
       }
       saveSecretsState(state);
     }
-  } else if (phase === "delete") {
+  } else {
     // Delete orphan secrets
     await Promise.all(
       secretChangeSet.deletes.map((del) =>
@@ -375,6 +376,7 @@ export async function applySecretManager(
     if (secretChangeSet.deletes.length > 0 || vaultChangeSet.deletes.length > 0) {
       const state = loadSecretsState();
       for (const del of secretChangeSet.deletes) {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (state.vaults[del.vaultName]) {
           delete state.vaults[del.vaultName][del.secretName];
           if (Object.keys(state.vaults[del.vaultName]).length === 0) {

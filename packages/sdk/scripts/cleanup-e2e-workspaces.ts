@@ -27,12 +27,13 @@ async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> 
   const allWorkspaces: Workspace[] = [];
   let pageToken = "";
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const response = await client.listWorkspaces({
       pageToken: pageToken || undefined,
     });
 
-    const workspaces = response.workspaces ?? [];
+    const workspaces = response.workspaces;
     allWorkspaces.push(...workspaces);
 
     if (!response.nextPageToken) {

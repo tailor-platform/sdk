@@ -51,7 +51,9 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields).toHaveProperty("name");
       expect(manifest.schema?.fields).toHaveProperty("email");
       expect(manifest.schema?.fields).not.toHaveProperty("id");
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.name?.required).toBe(true);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.email?.required).toBe(false);
     });
 
@@ -141,8 +143,11 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.status?.type).toBe("enum");
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.status?.allowedValues).toHaveLength(3);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.status?.allowedValues?.[0]?.value).toBe("PENDING");
     });
 
@@ -156,6 +161,7 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.tags?.array).toBe(true);
     });
 
@@ -175,8 +181,11 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.authorId?.foreignKey).toBe(true);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.authorId?.foreignKeyType).toBe("User");
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.authorId?.foreignKeyField).toBe("id");
     });
 
@@ -196,9 +205,13 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.indexes?.email_unique?.fieldNames).toEqual(["email"]);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.indexes?.email_unique?.unique).toBe(true);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.indexes?.name_status?.fieldNames).toEqual(["name", "status"]);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.indexes?.name_status?.unique).toBe(false);
     });
 
@@ -212,7 +225,9 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.files?.attachment?.description).toBe("Document attachment");
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.files?.thumbnail?.description).toBe("");
     });
 
@@ -231,7 +246,9 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.relationships?.author?.refType).toBe("User");
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.relationships?.author?.array).toBe(false);
     });
 
@@ -250,7 +267,9 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.relationships?.posts?.refType).toBe("Post");
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.relationships?.posts?.array).toBe(true);
     });
 
@@ -310,7 +329,9 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.updatedAt?.hooks?.create?.expr).toBe("now()");
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.updatedAt?.hooks?.update?.expr).toBe("now()");
     });
 
@@ -363,6 +384,7 @@ describe("snapshot-manifest", () => {
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
       const profileField = manifest.schema?.fields?.profile;
       const displayNameField = profileField?.fields?.displayName;
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       const emailField = profileField?.fields?.contact?.fields?.email;
 
       expect(displayNameField?.validate).toHaveLength(1);
@@ -395,8 +417,11 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.orderNumber?.serial?.start).toBe(1000n);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.orderNumber?.serial?.maxValue).toBe(9999n);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       expect(manifest.schema?.fields?.orderNumber?.serial?.format).toBe("ORD-%04d");
     });
 
@@ -423,6 +448,7 @@ describe("snapshot-manifest", () => {
       });
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       const serial = manifest.schema?.fields?.detail?.fields?.lineNumber?.serial;
 
       // Nested serial values must be bigint (not number) so that the deploy

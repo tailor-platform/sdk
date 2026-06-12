@@ -91,7 +91,7 @@ export async function applyWorkflow(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
+  } else {
     await deleteAllSettled(
       changeSet.deletes.map((del) => ({
         resourceType: "workflow",
@@ -105,6 +105,7 @@ export async function applyWorkflow(
     );
 
     await deleteAllSettled(
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       (result.jobFunctionDeletes ?? collectDeletableJobFunctions(changeSet.deletes)).map((del) => ({
         resourceType: "workflow job function",
         resourceName: del.jobFunctionName,
@@ -133,6 +134,7 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
     }
     const operation = operations[index];
     const error = result.reason;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!operation) {
       errors.push(error);
       return;
@@ -182,6 +184,7 @@ function filterJobFunctionVersions(
 ): { [key: string]: bigint } {
   const filtered: { [key: string]: bigint } = {};
   for (const jobName of usedJobNames) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (allVersions[jobName] !== undefined) {
       filtered[jobName] = allVersions[jobName];
     }
@@ -212,6 +215,7 @@ async function registerJobFunctions(
 
   // Get workspaceId from the first workflow
   const firstWorkflow = changeSet.creates[0] || changeSet.updates[0] || changeSet.deletes[0];
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!firstWorkflow) {
     return jobFunctionVersions;
   }
@@ -382,6 +386,7 @@ export async function planWorkflow(
     });
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!usedJobNames) {
       throw new Error(
         `Job "${workflow.mainJob.name}" (mainJob of workflow "${workflow.name}") was not found.\n\n` +

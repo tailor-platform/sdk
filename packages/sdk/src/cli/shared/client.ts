@@ -398,9 +398,11 @@ export async function fetchAll<T>(
   const items: T[] = [];
   let pageToken = "";
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const [batch, nextPageToken] = await fn(pageToken, MAX_PAGE_SIZE);
     items.push(...batch);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!nextPageToken) break;
     pageToken = nextPageToken;
   }
@@ -432,6 +434,7 @@ export async function fetchPaged<T>(
   const items: T[] = [];
   let pageToken = "";
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const pageSize = unbounded ? MAX_PAGE_SIZE : Math.min(limit - items.length, MAX_PAGE_SIZE);
     if (!unbounded && pageSize <= 0) break;
@@ -439,6 +442,7 @@ export async function fetchPaged<T>(
     const [batch, nextPageToken] = await fn(pageToken, pageSize);
     items.push(...batch);
     if (!unbounded && items.length >= limit) break;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!nextPageToken) break;
     pageToken = nextPageToken;
   }

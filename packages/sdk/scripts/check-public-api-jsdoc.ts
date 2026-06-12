@@ -26,12 +26,7 @@ const pkg = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"), "utf8")) a
 function entryPoints(): string[] {
   const points: string[] = [];
   for (const [key, value] of Object.entries(pkg.exports)) {
-    if (
-      typeof value !== "object" ||
-      !value ||
-      !("types" in value) ||
-      typeof value.types !== "string"
-    ) {
+    if (typeof value !== "object" || !("types" in value) || typeof value.types !== "string") {
       continue;
     }
     const types = value.types;

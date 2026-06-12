@@ -192,6 +192,7 @@ export function convertFieldConfigToProto(
     foreignKey: config.foreignKey ?? false,
     foreignKeyType: config.foreignKeyType,
     foreignKeyField: config.foreignKeyField,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     required: config.required ?? true,
     vector: config.vector ?? false,
     ...toProtoSnapshotFieldHooks(config),
@@ -223,6 +224,7 @@ function toProtoSnapshotFieldValidate(
   return (config.validate ?? []).map((val) => ({
     action: TailorDBType_PermitAction.DENY,
     errorMessage: val.errorMessage || "",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     ...(val.script && {
       script: {
         expr: val.script.expr ? `!${val.script.expr}` : "",
@@ -271,6 +273,7 @@ function processNestedFieldsFromSnapshot(
         allowedValues: fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [],
         description: fieldConfig.description || "",
         validate: toProtoSnapshotFieldValidate(fieldConfig),
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         required: fieldConfig.required ?? true,
         array: fieldConfig.array ?? false,
         index: false,
@@ -290,6 +293,7 @@ function processNestedFieldsFromSnapshot(
             : [],
         description: fieldConfig.description || "",
         validate: toProtoSnapshotFieldValidate(fieldConfig),
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         required: fieldConfig.required ?? true,
         array: fieldConfig.array ?? false,
         index: false,

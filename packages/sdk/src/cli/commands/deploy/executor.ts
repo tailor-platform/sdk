@@ -62,7 +62,7 @@ export async function applyExecutor(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
+  } else {
     // Delete in reverse order of dependencies
     // Executors
     await Promise.all(changeSet.deletes.map((del) => client.deleteExecutorExecutor(del.request)));
@@ -242,7 +242,7 @@ export function formatExecutorChangeEntries(
 }
 
 function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {
-  const normalized = normalizeProtoConfig(executor) ?? {};
+  const normalized = normalizeProtoConfig(executor);
   const webhookHeaders =
     normalized.targetConfig?.config?.case === "webhook"
       ? (normalized.targetConfig.config.value.headers ?? []).toSorted((left, right) =>
@@ -321,6 +321,7 @@ function areExecutorsEqual(
 
 function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
   for (const service of application.tailorDBServices) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (service.types[typeName]) {
       return service.namespace;
     }

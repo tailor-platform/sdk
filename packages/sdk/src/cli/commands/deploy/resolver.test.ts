@@ -83,7 +83,7 @@ describe("planPipeline (resolver service level)", () => {
       listPipelineResolvers: vi
         .fn()
         .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-          pipelineResolvers: existingResolvers[namespaceName] || [],
+          pipelineResolvers: existingResolvers[namespaceName] ?? [],
           nextPageToken: "",
         })),
       getPipelineResolver: vi
@@ -92,7 +92,7 @@ describe("planPipeline (resolver service level)", () => {
           ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
             pipelineResolver:
               resolverDetails[`${namespaceName}:${resolverName}`] ??
-              (existingResolvers[namespaceName] || []).find(
+              (existingResolvers[namespaceName] ?? []).find(
                 (resolver) => resolver.name === resolverName,
               ),
           }),
@@ -504,7 +504,7 @@ describe("processResolver authInvoker mapping", () => {
       listPipelineResolvers: vi
         .fn()
         .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-          pipelineResolvers: existingResolvers[namespaceName] || [],
+          pipelineResolvers: existingResolvers[namespaceName] ?? [],
           nextPageToken: "",
         })),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {

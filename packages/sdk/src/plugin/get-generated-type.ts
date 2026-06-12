@@ -290,7 +290,7 @@ async function getGeneratedTypeForTypeAttachedPlugin(
   let output = pluginCache.get(cacheKey);
 
   if (!output) {
-    const typeConfig = sourceType.plugins?.find((p) => p.pluginId === plugin.id)?.config;
+    const typeConfig = sourceType.plugins.find((p) => p.pluginId === plugin.id)?.config;
     output = await plugin.onTypeLoaded({
       type: sourceType,
       typeConfig: typeConfig ?? {},
