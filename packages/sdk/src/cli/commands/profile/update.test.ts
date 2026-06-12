@@ -279,6 +279,57 @@ describe("profile update --machine-user-override", () => {
     expect((result as { error?: Error }).error?.message).toContain("--machine-user-override allow");
   });
 
+  test("clears machine_user and machine_user_override together", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          machine_user: "bot",
+          machine_user_override: "deny",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, [
+      "myprofile",
+      "--machine-user",
+      "",
+      "--machine-user-override",
+      "allow",
+    ]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.machine_user).toBeUndefined();
+    expect(config.profiles.myprofile?.machine_user_override).toBeUndefined();
+  });
+
+  test("unrelated update succeeds when stored deny has no machine user (hand-edited config)", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          machine_user_override: "deny",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--permission", "write"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.readonly).toBeUndefined();
+    expect(config.profiles.myprofile?.machine_user_override).toBe("deny");
+  });
+
   test("output includes machineUserOverride when machine_user is present", async () => {
     using stdout = captureStdout();
     using _stderr = captureStderr();

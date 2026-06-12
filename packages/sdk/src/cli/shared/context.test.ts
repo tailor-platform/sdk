@@ -404,6 +404,12 @@ describe("loadMachineUserName", () => {
       expect(result).toBe("profile-bot");
     });
 
+    test("resolves when env var matches profile's machine_user", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "profile-bot");
+      const result = await loadMachineUserName({ profile: "locked" });
+      expect(result).toBe("profile-bot");
+    });
+
     test("resolves to profile's machine_user when nothing explicit is provided", async () => {
       const result = await loadMachineUserName({ profile: "locked" });
       expect(result).toBe("profile-bot");

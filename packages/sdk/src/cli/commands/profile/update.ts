@@ -71,13 +71,17 @@ export const updateCommand = defineAppCommand({
         ? undefined
         : (args["machine-user-override"] ?? profile.machine_user_override);
 
-    if (finalOverride === "deny" && !finalMachineUser) {
-      if (args["machine-user"] === "") {
-        throw new Error(
-          `Cannot clear the machine user while machine-user-override is "deny". Also pass --machine-user-override allow.`,
-        );
+    if (
+      (args["machine-user"] !== undefined || args["machine-user-override"] !== undefined) &&
+      finalOverride === "deny" &&
+      !finalMachineUser
+    ) {
+      if (args["machine-user-override"] === "deny") {
+        throw new Error("--machine-user-override deny requires --machine-user.");
       }
-      throw new Error("--machine-user-override deny requires --machine-user.");
+      throw new Error(
+        `Cannot clear the machine user while machine-user-override is "deny". Also pass --machine-user-override allow.`,
+      );
     }
 
     // Skip remote validation when neither user nor workspace is changing.

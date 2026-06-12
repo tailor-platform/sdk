@@ -391,7 +391,7 @@ export async function loadMachineUserName(
         code: "PROFILE_MACHINE_USER_OVERRIDE_DENIED",
         message: `Profile "${profile}" denies overriding the machine user.`,
         details: `This profile fixes the machine user to "${entry.machine_user}" for application-data commands.`,
-        suggestion: `Omit the machine user option, or run 'tailor-sdk profile update ${profile} --machine-user-override allow'.`,
+        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run 'tailor-sdk profile update ${profile} --machine-user-override allow'.`,
       });
     }
     return entry.machine_user;
