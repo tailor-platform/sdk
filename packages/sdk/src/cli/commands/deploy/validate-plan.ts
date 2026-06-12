@@ -62,6 +62,7 @@ import {
 } from "@tailor-proto/tailor/v1/workflow_pb";
 import { logger, styles } from "@/cli/shared/logger";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
+import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
 import type { planApplication } from "./application";
 import type { planAuth } from "./auth";
@@ -471,7 +472,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "Secret Manager vault",
     secretManager.vaultChangeSet.creates.map((item) => ({
       name: item.name,
-      request: { workspaceId: item.workspaceId, secretmanagerVaultName: item.name },
+      request: vaultCreateRequest(item),
     })),
   );
   creates(
@@ -479,12 +480,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "Secret Manager secret",
     secretManager.secretChangeSet.creates.map((item) => ({
       name: item.name,
-      request: {
-        workspaceId: item.workspaceId,
-        secretmanagerVaultName: item.vaultName,
-        secretmanagerSecretName: item.secretName,
-        secretmanagerSecretValue: item.value,
-      },
+      request: secretCreateRequest(item),
     })),
   );
   updates(
@@ -492,12 +488,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "Secret Manager secret",
     secretManager.secretChangeSet.updates.map((item) => ({
       name: item.name,
-      request: {
-        workspaceId: item.workspaceId,
-        secretmanagerVaultName: item.vaultName,
-        secretmanagerSecretName: item.secretName,
-        secretmanagerSecretValue: item.value,
-      },
+      request: secretUpdateRequest(item),
     })),
   );
 
