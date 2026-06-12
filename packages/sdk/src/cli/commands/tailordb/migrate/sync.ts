@@ -124,7 +124,8 @@ async function assertMigrationsReproduceLocalTypes(
 ): Promise<GenerateAllManifestsOptions> {
   const { config, plugins } = loaded;
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
-  const { defineApplication } = await import("@/cli/services/application");
+  const { defineApplication, generatePluginFilesIfNeeded } =
+    await import("@/cli/services/application");
   const application = defineApplication({ config, pluginManager });
 
   const tailordbService = application.tailorDBServices.find(
@@ -133,12 +134,36 @@ async function assertMigrationsReproduceLocalTypes(
   if (!tailordbService) {
     throw new Error(`No TailorDB service found for namespace "${target.namespace}"`);
   }
-  await tailordbService.loadTypes();
-  await tailordbService.processNamespacePlugins();
+  // Load every namespace (not just the target): plugin executors are
+  // registered while types load, and may trigger on the target's types.
+  for (const service of application.tailorDBServices) {
+    await service.loadTypes();
+    await service.processNamespacePlugins();
+  }
 
-  const executors = Object.values((await application.executorService?.loadExecutors()) ?? {});
+  // Mirror loadApplication: plugin-generated executor files must be loaded
+  // too, or publishRecordEvents would be applied as false for the types
+  // their record triggers depend on. Read the executors getter rather than
+  // the loadExecutors() result — the latter is undefined for plugin-only
+  // executor configurations.
+  const pluginExecutorFiles = generatePluginFilesIfNeeded(
+    pluginManager,
+    application.tailorDBServices,
+    config.path,
+  );
+  const executorService =
+    application.executorService ??
+    (pluginExecutorFiles.length > 0
+      ? (await import("@/cli/services/executor/service")).createExecutorService({
+          config: { files: [] },
+        })
+      : undefined);
+  await executorService?.loadExecutors();
+  if (pluginExecutorFiles.length > 0) {
+    await executorService?.loadPluginExecutorFiles([...pluginExecutorFiles]);
+  }
   const executorUsedTypes = new Set<string>();
-  for (const executor of executors) {
+  for (const executor of Object.values(executorService?.executors ?? {})) {
     if (executor.trigger.kind === "tailordb") {
       executorUsedTypes.add(executor.trigger.typeName);
     }

@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   migrationsDir: "",
   localTypes: {} as Record<string, unknown>,
   executors: {} as Record<string, unknown>,
+  pluginExecutors: {} as Record<string, unknown>,
+  pluginExecutorFiles: [] as string[],
   listTailorDBTypes: vi.fn(),
   createTailorDBType: vi.fn(),
   updateTailorDBType: vi.fn(),
@@ -64,8 +66,16 @@ vi.mock("@/cli/services/application", () => ({
     ],
     executorService: {
       loadExecutors: vi.fn(() => Promise.resolve(state.executors)),
+      loadPluginExecutorFiles: vi.fn(() => {
+        Object.assign(state.executors, state.pluginExecutors);
+        return Promise.resolve(undefined);
+      }),
+      get executors() {
+        return state.executors;
+      },
     },
   })),
+  generatePluginFilesIfNeeded: vi.fn(() => state.pluginExecutorFiles),
 }));
 
 // Parsed-type shape consumed by createSnapshotFromLocalTypes; produces the
@@ -156,6 +166,8 @@ describe("tailordb migration sync", () => {
     // check passes by default.
     state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
     state.executors = {};
+    state.pluginExecutors = {};
+    state.pluginExecutorFiles = [];
 
     state.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [{ name: "User" }, { name: "Stale" }],
@@ -312,6 +324,18 @@ describe("tailordb migration sync", () => {
     expect(state.updateTailorDBType).not.toHaveBeenCalled();
     expect(state.deleteTailorDBType).not.toHaveBeenCalled();
     expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("includes plugin-generated executors in publishRecordEvents detection", async () => {
+    state.pluginExecutorFiles = ["/tmp/plugin-executor.ts"];
+    state.pluginExecutors = { onUser: { trigger: { kind: "tailordb", typeName: "User" } } };
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.updateTailorDBType.mock.calls[0][0]).toMatchObject({
+      tailordbType: { name: "User", schema: { settings: { publishRecordEvents: true } } },
+    });
   });
 
   test("enables publishRecordEvents for types used by executor record triggers", async () => {
