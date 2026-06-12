@@ -60,6 +60,7 @@ import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./reso
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
+import { validatePlan } from "./validate-plan";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { PlanContext } from "./types";
 
@@ -70,6 +71,7 @@ export interface DeployOptions {
   dryRun?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
+  noValidate?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
@@ -704,6 +706,23 @@ export async function deploy(options?: DeployOptions) {
       workflow,
       secretManager,
     });
+
+    if (options?.noValidate) {
+      logger.warn("Client-side validation skipped (--no-validate).");
+    } else {
+      await validatePlan({
+        functionRegistry,
+        tailorDB,
+        staticWebsite,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+        secretManager,
+      });
+    }
 
     if (dryRun) {
       logger.info("Dry run enabled. No changes applied.");
