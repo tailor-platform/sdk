@@ -54,10 +54,7 @@ import type { planStaticWebsite } from "./staticwebsite";
 import type { planTailorDB } from "./tailordb/index";
 import type { planWorkflow } from "./workflow";
 
-/**
- * The plan results passed to validatePlan.
- * Mirrors the PlanResults type in deploy.ts.
- */
+/** Plan results passed to validatePlan. */
 export type ValidatePlanInput = {
   functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
@@ -104,12 +101,12 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
           kind,
           name: item.name,
           action,
-          fieldPath: pathToString(v.field),
+          fieldPath: v.field.length > 0 ? pathToString(v.field) : "(message)",
           message: v.message,
         });
       }
     } else if (result.kind === "error") {
-      logger.debug(
+      logger.warn(
         `Validation error for ${kind} "${item.name}" (${action}): ${result.error.message}`,
       );
     }
@@ -349,7 +346,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     return;
   }
 
-  const resourceNames = new Set(violations.map((v) => v.name));
+  const resourceNames = new Set(violations.map((v) => `${v.kind}:${v.name}`));
   logger.error(
     `Pre-flight validation found ${violations.length} violation(s) across ${resourceNames.size} resource(s):`,
   );
