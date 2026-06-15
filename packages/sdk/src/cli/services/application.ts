@@ -19,6 +19,7 @@ import { createTailorDBService, type TailorDBService } from "@/cli/services/tail
 import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "@/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "@/cli/services/workflow/service";
+import { getApplicationAuthNamespace } from "@/cli/shared/auth-namespace";
 import { resolveBundleLogLevel } from "@/cli/shared/bundle-log-level";
 import { type LoadedConfig } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
@@ -488,7 +489,7 @@ export async function loadApplication(
   // 7. Build trigger context for workflow/job trigger transformation
   const triggerContext = await buildTriggerContext(
     config.workflow,
-    authResult.authService?.config.name,
+    getApplicationAuthNamespace({ authService: authResult.authService, config }),
   );
 
   // 8. Resolve bundle settings
