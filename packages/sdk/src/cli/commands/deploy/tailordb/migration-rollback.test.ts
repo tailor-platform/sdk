@@ -426,11 +426,19 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("rolls back types the pre-phase created for namespace GQL permissions, not just diff types", async () => {
+  test("rolls back types the pre-phase created via missingTypeCreates, not just diff types", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
-    // A type the pre-phase can create via missingTypeCreates — present only in
-    // gqlPermission.creates, not in this migration's diff.
+    // LeakedType is not in this migration's diff, but the pre-phase creates it
+    // through missingTypeCreates because it is a type create with a GQL permission.
+    planResult.changeSet.type.creates.push({
+      name: "LeakedType",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-ns",
+        tailordbType: { name: "LeakedType", schema: { fields: [] } },
+      },
+    });
     planResult.changeSet.gqlPermission.creates = [
       {
         name: "LeakedType",
@@ -460,6 +468,31 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     );
     expect(deletedNames).toContain("StockReservation");
     expect(deletedNames).toContain("LeakedType");
+  });
+
+  test("does not roll back a drifted type the pre-phase never touched", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkAddTypeMigration(1, "StockReservation"),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+      new Error("rpc error: code = Aborted desc = migration failed"),
+    );
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "migration failed",
+    );
+
+    // GoodsReceipt pre-exists at the prior checkpoint and was not touched by this
+    // run, so rollback must neither update nor delete it.
+    const touched = [
+      ...vi.mocked(client.deleteTailorDBType).mock.calls,
+      ...vi.mocked(client.updateTailorDBType).mock.calls,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ].map((c) => (c[0] as any)?.tailordbTypeName ?? (c[0] as any)?.tailordbType?.name);
+    expect(touched).not.toContain("GoodsReceipt");
   });
 
   test("restores a pre-existing type to its prior-checkpoint schema when migrate.ts fails", async () => {

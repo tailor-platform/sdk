@@ -478,7 +478,6 @@ export async function applyTailorDB(
           try {
             await rollbackSingleMigrationPrePhase(
               client,
-              changeSet,
               migration,
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
@@ -1011,7 +1010,6 @@ async function executeSingleMigrationPostPhase(
 /**
  * Revert a single migration's Pre-phase DDL to the prior checkpoint's schema.
  * @param client - Operator client instance
- * @param changeSet - TailorDB change set
  * @param migration - The migration whose Pre-phase DDL must be reverted
  * @param workspaceId - Workspace ID
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
@@ -1020,7 +1018,6 @@ async function executeSingleMigrationPostPhase(
  */
 async function rollbackSingleMigrationPrePhase(
   client: OperatorClient,
-  changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
@@ -1029,15 +1026,10 @@ async function rollbackSingleMigrationPrePhase(
   // The baseline migration has no prior checkpoint to revert to.
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
 
-  // Types in this migration's diff, plus any the pre-phase may have created to
-  // satisfy namespace GQL permissions (missingTypeCreates), which can include
-  // types belonging to later migrations.
-  const rollbackTypes = getAffectedTypeNames(migration);
-  for (const create of changeSet.gqlPermission.creates) {
-    if (create.request.namespaceName === migration.namespace && create.request.typeName) {
-      rollbackTypes.add(create.request.typeName);
-    }
-  }
+  // Only the types this apply run actually created or updated in the pre-phase
+  // (including any created via missingTypeCreates). This keeps rollback a no-op
+  // when nothing was applied and never touches unmanaged/drifted types.
+  const rollbackTypes = new Set<string>([...processedTypes.created, ...processedTypes.updated]);
   if (rollbackTypes.size === 0) return;
 
   const priorSnapshot = reconstructSnapshotFromMigrations(
