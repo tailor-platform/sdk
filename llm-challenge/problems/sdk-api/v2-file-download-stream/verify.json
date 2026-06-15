@@ -5,7 +5,7 @@
       "id": "streaming-download-used",
       "kind": "content-match",
       "glob": "**/*.ts",
-      "pattern": "\\.downloadStream\\b|\\bdownloadStream\\s*\\(",
+      "pattern": "\\.downloadStream\\b|\\bdownloadStream\\s*\\(|import\\s*\\{[^}]*\\bdownloadStream\\s+as\\s+\\w+[^}]*\\}\\s*from\\s*[\"']@tailor-platform/sdk/runtime/file[\"']",
       "description": "runtime code uses the current streaming download facility for stored files"
     },
     {
