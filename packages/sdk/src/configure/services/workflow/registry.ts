@@ -1,5 +1,3 @@
-import { platformSerialize } from "@/utils/test/platform-serialize";
-import { buildJobContext } from "./test-env-key";
 import type { TailorEnv } from "@/types/env";
 import type { TailorInvoker } from "@/types/user";
 
@@ -77,18 +75,6 @@ function requirePlatformWorkflow(): PlatformWorkflow {
 // A valid placeholder UUID, so callers that validate the execution id behave the
 // same locally as against the platform.
 export const TRIGGER_DEFAULT = "00000000-0000-4000-8000-000000000000";
-
-function serializeReturn(out: unknown): unknown {
-  return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
-}
-
-// Runs the registered body across the platform JSON boundary for
-// `runWorkflowLocally()`.
-export function runRegisteredJob(name: string, args?: unknown): unknown {
-  const body = getRegisteredJob(name);
-  const out = body ? body(platformSerialize(args), buildJobContext()) : null;
-  return serializeReturn(out);
-}
 
 // `.trigger()` routes through the installed `tailor.workflow` shim. Local body
 // execution is intentionally available only through `runWorkflowLocally()`.

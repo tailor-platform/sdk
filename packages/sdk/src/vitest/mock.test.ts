@@ -292,7 +292,7 @@ describe("mock", () => {
     test("runWorkflowLocally() runs the whole chain", async () => {
       const inner = createWorkflowJob({
         name: "default-runtime-inner",
-        body: (input: { n: number }) => ({ n: input.n + 1 }),
+        body: async (input: { n: number }) => ({ n: input.n + 1 }),
       });
       const main = createWorkflowJob({
         name: "default-runtime-main",
