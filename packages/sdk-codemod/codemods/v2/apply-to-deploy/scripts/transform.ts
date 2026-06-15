@@ -6,12 +6,19 @@ import * as path from "pathe";
 // `apply` and `deploy` are the same subcommand on the same binary.
 // `(?![-\w])` excludes both word continuation (`applyConfig`) and dash-suffixed
 // names (`apply-foo`) so a hypothetical sibling subcommand is not rewritten.
-const APPLY_PATTERN = /\btailor-sdk(@[^\s'"`]+)?(\s+)apply(?![-\w])/g;
+const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
+const BOOLEAN_GLOBAL_ARG = "(?:--verbose|--json|-j)";
+const VALUE_GLOBAL_ARG = "(?:--env-file|--env-file-if-exists|-e)";
+const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
+const APPLY_PATTERN = new RegExp(
+  `\\btailor-sdk(@[^\\s'"\`]+)?(${GLOBAL_ARG_PATTERN}\\s+)apply(?![-\\w])`,
+  "g",
+);
 
 function replaceApply(value: string): string {
   return value.replace(
     APPLY_PATTERN,
-    (_match, ver: string | undefined, sep: string) => `tailor-sdk${ver ?? ""}${sep}deploy`,
+    (_match, ver: string | undefined, prefix: string) => `tailor-sdk${ver ?? ""}${prefix}deploy`,
   );
 }
 
