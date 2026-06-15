@@ -115,6 +115,7 @@ vi.mock("@/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
   };
 });
 
+import { reconstructSnapshotFromMigrations } from "@/cli/commands/tailordb/migrate/snapshot";
 import * as migrationModule from "./migration";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
@@ -409,5 +410,38 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     // A pre-existing type must not be deleted by the rollback.
     expect(client.deleteTailorDBType).not.toHaveBeenCalled();
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
+  test("surfaces the original migration error even when the rollback itself fails", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkAddTypeMigration(1, "StockReservation"),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+      new Error("rpc error: code = Aborted desc = original migration failure"),
+    );
+
+    // Make rollback's prior-snapshot reconstruction throw (e.g. missing files),
+    // while the pre-phase reconstruction (migration N) still succeeds.
+    const snap = vi.mocked(reconstructSnapshotFromMigrations);
+    type SnapImpl = Parameters<typeof snap.mockImplementation>[0];
+    snap.mockImplementation(((migrationsDir: string, maxVersion?: number) => {
+      if ((maxVersion ?? 0) === 0) {
+        throw new Error("rollback snapshot reconstruction failed");
+      }
+      return snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion);
+    }) as SnapImpl);
+
+    try {
+      // The original failure must surface, not the rollback error.
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        "original migration failure",
+      );
+      expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+    } finally {
+      snap.mockImplementation(snapshotFixtures.reconstructSnapshotFromMigrations as SnapImpl);
+    }
   });
 });

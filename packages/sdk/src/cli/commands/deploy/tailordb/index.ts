@@ -484,13 +484,21 @@ export async function applyTailorDB(
         } catch (error) {
           // The checkpoint never advanced for this migration, so revert its
           // committed pre-migration DDL to keep schema and checkpoint consistent.
-          await rollbackSingleMigrationPrePhase(
-            client,
-            migration,
-            migrationContext.workspaceId,
-            migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTypes,
-          );
+          // Rollback is best-effort: never let it mask the original failure.
+          try {
+            await rollbackSingleMigrationPrePhase(
+              client,
+              migration,
+              migrationContext.workspaceId,
+              migrationContext.tailorDBInputs,
+              migrationContext.executorUsedTypes,
+            );
+          } catch (rollbackError) {
+            logger.warn(
+              `Failed to roll back migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
+                `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+            );
+          }
           throw error;
         }
 
