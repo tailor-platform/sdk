@@ -232,7 +232,7 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
             expand: {
               dependsOn: ["endpoint"],
               enumerate: ({ endpoint }) =>
-                enumerateAllFieldCompletions(extractMethodName(endpoint ?? "")),
+                enumerateAllFieldCompletions(extractMethodName(endpoint)),
             },
           },
         },

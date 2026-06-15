@@ -31,9 +31,9 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
     // Static imports: import { createWorkflowJob } from "@tailor-platform/sdk"
     if (nodeType === "ImportDeclaration") {
       const importDecl = node as unknown as ImportDeclaration;
-      const source = importDecl.source?.value;
+      const source = importDecl.source.value;
       if (typeof source === "string" && isTailorSdkSource(source)) {
-        for (const specifier of importDecl.specifiers || []) {
+        for (const specifier of importDecl.specifiers) {
           // import { createWorkflowJob } from "@tailor-platform/sdk"
           // import { createWorkflowJob as create } from "@tailor-platform/sdk"
           if (specifier.type === "ImportSpecifier") {
@@ -43,18 +43,21 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
                 ? importSpec.imported.name
                 : (importSpec.imported as { value?: string }).value;
             if (imported === functionName) {
-              bindings.add(importSpec.local?.name || imported);
+              bindings.add(importSpec.local.name);
             }
           }
           // import sdk from "@tailor-platform/sdk" → sdk.createWorkflowJob
           // import * as sdk from "@tailor-platform/sdk" → sdk.createWorkflowJob
+          // callee may be a ComputedMemberExpression at runtime
+          // oxlint-disable typescript/no-unnecessary-condition
           else if (
             specifier.type === "ImportDefaultSpecifier" ||
             specifier.type === "ImportNamespaceSpecifier"
+            // oxlint-enable typescript/no-unnecessary-condition
           ) {
             const spec = specifier as ImportDefaultSpecifier | ImportNamespaceSpecifier;
             // Store namespace/default with special prefix to track member access
-            bindings.add(`__namespace__:${spec.local?.name}`);
+            bindings.add(`__namespace__:${spec.local.name}`);
           }
         }
       }
@@ -67,7 +70,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
     // const { createWorkflowJob } = require("@tailor-platform/sdk")
     if (nodeType === "VariableDeclaration") {
       const varDecl = node as unknown as VariableDeclaration;
-      for (const decl of varDecl.declarations || []) {
+      for (const decl of varDecl.declarations) {
         const init = unwrapAwait(decl.init);
         const source = getImportSource(init);
 
@@ -75,14 +78,14 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
           const id = decl.id;
 
           // const sdk = await import(...) / const sdk = require(...)
-          if (id?.type === "Identifier") {
+          if (id.type === "Identifier") {
             bindings.add(`__namespace__:${id.name}`);
           }
           // const { createWorkflowJob } = await import(...) / require(...)
           // const { createWorkflowJob: create } = await import(...) / require(...)
-          else if (id?.type === "ObjectPattern") {
+          else if (id.type === "ObjectPattern") {
             const objPattern = id as unknown as ObjectPattern;
-            for (const prop of objPattern.properties || []) {
+            for (const prop of objPattern.properties) {
               if (prop.type === "Property") {
                 const bindingProp = prop as BindingProperty;
                 const keyName =
@@ -92,7 +95,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
                 if (keyName === functionName) {
                   const localName =
                     bindingProp.value.type === "Identifier" ? bindingProp.value.name : keyName;
-                  bindings.add(localName ?? "");
+                  bindings.add(localName);
                 }
               }
             }
@@ -142,6 +145,8 @@ export function isSdkFunctionCall(
   // Note: oxc uses MemberExpression with computed: false for static member access
   if (callee.type === "MemberExpression") {
     const memberExpr = callee as unknown as StaticMemberExpression;
+    // callee may be a ComputedMemberExpression at runtime
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!memberExpr.computed) {
       const object = memberExpr.object;
       const property = memberExpr.property;

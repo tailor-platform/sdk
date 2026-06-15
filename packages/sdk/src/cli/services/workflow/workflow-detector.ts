@@ -31,7 +31,7 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
     if (isSdkFunctionCall(node, bindings, "createWorkflow")) {
       const callExpr = node as unknown as CallExpression;
       const args = callExpr.arguments;
-      if (args?.length >= 1 && args[0]?.type === "ObjectExpression") {
+      if (args.length >= 1 && args[0].type === "ObjectExpression") {
         const configObj = args[0] as ObjectExpression;
         const nameProp = findProperty(configObj.properties, "name");
 
@@ -110,14 +110,14 @@ export function detectDefaultImports(program: Program): Map<string, string> {
 
     if (nodeType === "ImportDeclaration") {
       const importDecl = node as unknown as ImportDeclaration;
-      const source = importDecl.source?.value;
+      const source = importDecl.source.value;
 
       if (typeof source === "string") {
-        for (const specifier of importDecl.specifiers || []) {
+        for (const specifier of importDecl.specifiers) {
           // import foo from "module"
           if (specifier.type === "ImportDefaultSpecifier") {
             const spec = specifier as ImportDefaultSpecifier;
-            if (spec.local?.name) {
+            if (spec.local.name) {
               imports.set(spec.local.name, source);
             }
           }

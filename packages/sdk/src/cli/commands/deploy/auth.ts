@@ -110,13 +110,11 @@ export async function applyAuth(
     ]);
 
     // Auth Connections
-    if (changeSet.connection) {
-      await applyAuthConnections(
-        client,
-        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
-        "create-update",
-      );
-    }
+    await applyAuthConnections(
+      client,
+      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      "create-update",
+    );
 
     // IdPConfigs
     await Promise.all([
@@ -264,14 +262,12 @@ export async function applyAuth(
     );
 
     // Auth Connections
-    if (changeSet.connection) {
-      await applyAuthConnections(
-        client,
-        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
-        "delete-resources",
-      );
-    }
-  } else if (phase === "delete-services") {
+    await applyAuthConnections(
+      client,
+      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      "delete-resources",
+    );
+  } else {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteAuthService(del.request)),

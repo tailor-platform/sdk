@@ -40,7 +40,7 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
     if (isSdkFunctionCall(node, bindings, "createWorkflowJob")) {
       const callExpr = node as unknown as CallExpression;
       const args = callExpr.arguments;
-      if (args?.length >= 1 && args[0]?.type === "ObjectExpression") {
+      if (args.length >= 1 && args[0].type === "ObjectExpression") {
         const configObj = args[0] as ObjectExpression;
         const nameProp = findProperty(configObj.properties, "name");
         const bodyProp = findProperty(configObj.properties, "body");
@@ -140,6 +140,8 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
       if (callee.type === "MemberExpression") {
         const memberExpr = callee as unknown as StaticMemberExpression;
         if (
+          // callee may be a ComputedMemberExpression at runtime
+          // oxlint-disable-next-line typescript/no-unnecessary-condition
           !memberExpr.computed &&
           memberExpr.object.type === "Identifier" &&
           memberExpr.property.name === "trigger"
@@ -149,6 +151,8 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
           let argsText = "";
           if (callExpr.arguments.length > 0) {
             const firstArg = callExpr.arguments[0];
+            // callee may be a ComputedMemberExpression at runtime
+            // oxlint-disable-next-line typescript/no-unnecessary-condition
             if (firstArg && "start" in firstArg && "end" in firstArg) {
               argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
             }

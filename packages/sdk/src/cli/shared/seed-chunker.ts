@@ -66,6 +66,8 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
   }
 
   // Filter to types that have data
+  // index access may be undefined without noUncheckedIndexedAccess
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   const typesWithData = order.filter((type) => data[type] && data[type].length > 0);
 
   if (typesWithData.length === 0) {

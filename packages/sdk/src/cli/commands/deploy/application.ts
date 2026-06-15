@@ -60,7 +60,7 @@ export async function applyApplication(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
+  } else {
     // Delete in reverse order of dependencies
     // Applications
     await Promise.all(
@@ -295,7 +295,7 @@ export async function planApplication(
 
   let authNamespace: string | undefined;
   let authIdpConfigName: string | undefined;
-  if (application.authService && application.authService.config) {
+  if (application.authService) {
     authNamespace = application.authService.config.name;
 
     const idProvider = application.authService.config.idProvider;

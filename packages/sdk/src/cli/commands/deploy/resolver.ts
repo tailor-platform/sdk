@@ -96,7 +96,7 @@ export async function applyPipeline(
     await Promise.all(
       changeSet.resolver.deletes.map((del) => client.deletePipelineResolver(del.request)),
     );
-  } else if (phase === "delete-services") {
+  } else {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deletePipelineService(del.request)),
@@ -457,7 +457,7 @@ export function formatResolverChangeEntries(
 }
 
 function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {
-  const normalized = normalizeProtoConfig(resolver) ?? {};
+  const normalized = normalizeProtoConfig(resolver);
   return {
     name: normalized.name,
     description: normalized.description ?? "",
@@ -636,10 +636,6 @@ function protoFields(
   baseName: string,
   isInput: boolean,
 ): MessageInitShape<typeof PipelineResolver_FieldSchema>[] {
-  if (!fields) {
-    return [];
-  }
-
   return Object.entries(fields).map(([fieldName, field]) => {
     let type: MessageInitShape<typeof PipelineResolver_TypeSchema>;
     const hasCreateHook = isInput && field.metadata.hooks?.create !== undefined;

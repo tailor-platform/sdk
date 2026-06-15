@@ -135,7 +135,7 @@ async function getRemoteMigrationNumber(
   try {
     const trn = resourceTrn(workspaceId, "tailordb", namespace);
     const { metadata } = await client.getMetadata({ trn });
-    const label = metadata?.labels?.["sdk-migration"];
+    const label = metadata?.labels["sdk-migration"];
     if (!label) return null; // No migration label means first apply
     const match = label.match(/^m(\d+)$/);
     return match ? parseInt(match[1], 10) : null;
@@ -578,7 +578,7 @@ export async function applyTailorDB(
       changeSet.gqlPermission.deletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
     );
     await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
-  } else if (phase === "delete-services") {
+  } else {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
@@ -728,6 +728,8 @@ function buildSnapshotTypeManifest(
 ): MessageInitShape<typeof TailorDBTypeSchema> | undefined {
   const snapshot = migrationSnapshotCache.load(migration);
   const snapshotType = snapshot.types[typeName];
+  // index access may be undefined without noUncheckedIndexedAccess
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
   return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
@@ -777,7 +779,7 @@ async function executeSingleMigrationPrePhase(
         clonedRequest.tailordbType = snapshotType;
 
         const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
-        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType?.schema?.fields) {
+        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
@@ -827,7 +829,7 @@ async function executeSingleMigrationPrePhase(
         clonedRequest.tailordbType = snapshotType;
 
         const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
-        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType?.schema?.fields) {
+        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 

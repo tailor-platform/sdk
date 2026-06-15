@@ -188,7 +188,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         logger.error("Execution failed");
       }
 
-      if (result.logs?.trim()) {
+      if (result.logs.trim()) {
         logger.log(styles.bold("\nLogs:"));
         for (const line of result.logs.split("\n")) {
           logger.log(`  ${line}`);
@@ -338,7 +338,7 @@ export function resolveResolverArg(
     type: "machine_user" as const,
     workspaceId,
     attributes: machineUser.attributes ?? null,
-    attributeList: machineUser.attributeList ?? [],
+    attributeList: machineUser.attributeList,
   };
 
   const newResult = inputSchema.parse({ value: parsed, data: parsed, user });

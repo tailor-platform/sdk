@@ -103,7 +103,7 @@ describe("planWorkflow", () => {
           const jobFunction = labelsByJobFunction[name];
           return {
             metadata: {
-              labels: jobFunction?.label
+              labels: jobFunction.label
                 ? {
                     [sdkNameLabelKey]: jobFunction.label,
                     "sdk-version": jobFunction.sdkVersion ?? "v1-0-0",

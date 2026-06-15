@@ -51,6 +51,8 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
       const { before, after } = change;
 
       // Check if this is an optional -> required change
+      // snapshot JSON is parsed without validation
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (before && after && !before.required && after.required) {
         if (!optionalToRequired.has(change.typeName)) {
           optionalToRequired.set(change.typeName, new Set());
@@ -60,7 +62,11 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
 
       // Check if this is an enum value change
       if (
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         before &&
+        // snapshot JSON is parsed without validation
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         after &&
         before.type === "enum" &&
         after.type === "enum" &&
@@ -90,6 +96,8 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
 
       // Required field added is a breaking change - add it as optional in db.ts
       // so migration script can set values for existing records
+      // snapshot JSON is parsed without validation
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (after && after.required) {
         if (!addedRequiredFields.has(change.typeName)) {
           addedRequiredFields.set(change.typeName, new Map());

@@ -503,7 +503,7 @@ export async function applyFunctionRegistry(
       await uploadFunctionScript(client, workspaceId, update.entry, false);
       await client.setMetadata(update.metaRequest);
     }
-  } else if (phase === "delete") {
+  } else {
     await Promise.all(
       changeSet.deletes.map((del) =>
         client.deleteFunctionRegistry({

@@ -317,6 +317,8 @@ async function runFreshErdExport(options: FreshErdExportOptions): Promise<ErdBui
 
 function selectPrimaryResult(results: ErdBuildResult[]): ErdBuildResult {
   const [primary, ...rest] = results;
+  // index access may be undefined without noUncheckedIndexedAccess
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!primary) {
     throw new Error("No ERD build results found.");
   }

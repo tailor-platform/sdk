@@ -241,13 +241,13 @@ function findDefaultImportRemovalRange(
     if (statement.type !== "ImportDeclaration") continue;
 
     const importDecl = statement as unknown as ImportDeclaration;
-    const specifiers = importDecl.specifiers || [];
+    const specifiers = importDecl.specifiers;
 
     for (const spec of specifiers) {
       if (spec.type !== "ImportDefaultSpecifier") continue;
 
       const defaultSpec = spec as ImportDefaultSpecifier;
-      if (defaultSpec.local?.name !== localName) continue;
+      if (defaultSpec.local.name !== localName) continue;
 
       if (specifiers.length === 1) {
         return { start: importDecl.start, end: importDecl.end, isFullDeclaration: true };
@@ -293,11 +293,14 @@ function detectExtendedTriggerCalls(
       if (callee.type === "MemberExpression") {
         const memberExpr = callee as unknown as StaticMemberExpression;
 
+        // callee may be a ComputedMemberExpression at runtime
+        // oxlint-disable typescript/no-unnecessary-condition
         const identifierName =
           !memberExpr.computed && memberExpr.object.type === "Identifier"
             ? (memberExpr.object as IdentifierReference).name
             : null;
         const propertyName = !memberExpr.computed ? memberExpr.property.name : null;
+        // oxlint-enable typescript/no-unnecessary-condition
 
         if (identifierName && propertyName === "trigger") {
           const isWorkflow = workflowNames.has(identifierName);
@@ -308,6 +311,8 @@ function detectExtendedTriggerCalls(
             let argsText = "";
             if (argCount > 0) {
               const firstArg = callExpr.arguments[0];
+              // callee may be a ComputedMemberExpression at runtime
+              // oxlint-disable-next-line typescript/no-unnecessary-condition
               if (firstArg && "start" in firstArg && "end" in firstArg) {
                 argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
               }

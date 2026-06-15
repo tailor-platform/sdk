@@ -270,14 +270,12 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
     if (stmt.type === "ImportDeclaration") {
       const importDecl = stmt as ImportDeclaration;
       const text = source.slice(importDecl.start, importDecl.end);
-      if (importDecl.specifiers) {
-        for (const spec of importDecl.specifiers) {
-          bindings.set(spec.local.name, {
-            name: spec.local.name,
-            sourceText: text,
-            kind: "import",
-          });
-        }
+      for (const spec of importDecl.specifiers) {
+        bindings.set(spec.local.name, {
+          name: spec.local.name,
+          sourceText: text,
+          kind: "import",
+        });
       }
     } else if (stmt.type === "VariableDeclaration") {
       const varDecl = stmt as VariableDeclaration;
@@ -529,8 +527,8 @@ export async function precompileTailorDBTypeScripts(
         }),
       ),
     );
-    const firstError = results.find((r) => r.status === "rejected");
-    if (firstError && firstError.status === "rejected") {
+    const firstError = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (firstError) {
       throw firstError.reason;
     }
     for (const [index, result] of results.entries()) {

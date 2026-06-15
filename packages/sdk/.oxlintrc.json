@@ -48,6 +48,7 @@
     "typescript/require-array-sort-compare": "off",
     "typescript/restrict-template-expressions": "off",
     "typescript/unbound-method": "off",
+    "typescript/no-unnecessary-condition": "error",
     "jsdoc/check-access": "warn",
     "jsdoc/check-property-names": "warn",
     "jsdoc/check-tag-names": [

@@ -93,7 +93,7 @@ async function set(options: SetOptions): Promise<void> {
   let currentMigration: number;
   try {
     const { metadata } = await client.getMetadata({ trn });
-    const label = metadata?.labels?.["sdk-migration"];
+    const label = metadata?.labels["sdk-migration"];
     currentMigration = label ? (parseMigrationLabelNumber(label) ?? 0) : 0;
   } catch {
     currentMigration = 0;
