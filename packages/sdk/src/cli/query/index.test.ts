@@ -271,8 +271,9 @@ describe("query", () => {
       query: "SELECT 1; SELECT 2",
     });
 
-    const call = vi.mocked(executeScript).mock.calls[0]?.[0];
-    const arg = JSON.parse(call?.arg ?? "{}");
+    expect(executeScript).toHaveBeenCalled();
+    const call = vi.mocked(executeScript).mock.calls[0]![0]!;
+    const arg = JSON.parse(call.arg ?? "{}");
     expect(arg.queries).toEqual(["SELECT 1; ", "SELECT 2"]);
   });
 
@@ -287,8 +288,8 @@ describe("query", () => {
       query: `INSERT INTO t VALUES ('hello;world')`,
     });
 
-    const call = vi.mocked(executeScript).mock.calls[0]?.[0];
-    const arg = JSON.parse(call?.arg ?? "{}");
+    const call = vi.mocked(executeScript).mock.calls[0]![0]!;
+    const arg = JSON.parse(call.arg ?? "{}");
     expect(arg.queries).toHaveLength(1);
   });
 
@@ -405,7 +406,7 @@ describe("query", () => {
       rows: Record<string, unknown>[];
       rowCount: number;
     };
-    expect(Object.keys(sqlResult.rows[0])).toEqual([
+    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
       "id",
       "name",
       "email",
@@ -462,7 +463,7 @@ describe("query", () => {
       rows: Record<string, unknown>[];
       rowCount: number;
     };
-    expect(Object.keys(sqlResult.rows[0])).toEqual([
+    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
       "orderId",
       "id",
       "name",
@@ -500,7 +501,7 @@ describe("query", () => {
       rows: Record<string, unknown>[];
       rowCount: number;
     };
-    expect(Object.keys(sqlResult.rows[0])).toEqual(["email", "name"]);
+    expect(Object.keys(sqlResult.rows[0]!)).toEqual(["email", "name"]);
   });
 
   test("matches columns case-insensitively for unquoted SQL aliases", async () => {
@@ -545,7 +546,7 @@ describe("query", () => {
       rows: Record<string, unknown>[];
       rowCount: number;
     };
-    expect(Object.keys(sqlResult.rows[0])).toEqual([
+    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
       "UID",
       "id",
       "customerID",

@@ -3,7 +3,7 @@
  *
  * Thin typed wrapper around the platform-provided `tailor.secretmanager` runtime API.
  * At runtime this delegates to `globalThis.tailor.secretmanager`. Use
- * `secretmanagerMock` from `@tailor-platform/sdk/vitest` to mock these calls
+ * `mockSecretmanager` from `@tailor-platform/sdk/vitest` to mock these calls
  * in unit tests.
  * @example
  * import { secretmanager } from "@tailor-platform/sdk/runtime";

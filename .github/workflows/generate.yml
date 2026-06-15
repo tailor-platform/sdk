@@ -11,7 +11,37 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    # No bot-skip guard here (unlike test.yml): generate must re-run on
+    # tailor-pr-trigger[bot] commits so the cross-platform consistency check
+    # validates the generated files the bot just committed.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: "false"
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            changes:
+              - .github/workflows/generate.yml
+              - .github/actions/**
+              - packages/**
+              - example/**
+              - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
+              - pnpm-lock.yaml
+
   generate:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -29,10 +59,18 @@ jobs:
       - name: Run generate
         run: pnpm -r run generate
 
+      # The "expected" generator fixtures come from a separate config
+      # (tailor.config.expected.ts) that `pnpm generate` and CI tests don't
+      # cover; regenerate them so the commit step below catches any drift.
+      - name: Update generator expected fixtures
+        run: pnpm --filter example run test:generator:update-expects
+
       - name: Get changed files
         id: changes
         run: |
-          files=$(git diff --name-only | tr '\n' ' ')
+          # Include untracked files too, so newly generated fixtures (e.g. a
+          # schema for a new type) are committed and not silently dropped.
+          files=$( { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u | tr '\n' ' ')
           echo "files=${files}" >> "$GITHUB_OUTPUT"
 
       - name: Commit changes
@@ -45,6 +83,8 @@ jobs:
           files: ${{ steps.changes.outputs.files }}
 
   generate-cross-platform:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -91,19 +131,34 @@ jobs:
           echo "No differences found - generate output is consistent across platforms"
 
   generate-summary:
-    needs: [generate, generate-cross-platform]
+    needs: [changes, generate, generate-cross-platform]
     if: always()
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          GENERATE_RESULT: ${{ needs.generate.result }}
+          GENERATE_CROSS_PLATFORM_RESULT: ${{ needs.generate-cross-platform.result }}
         run: |
-          if [[ "${{ needs.generate.result }}" != "success" ]]; then
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
+            echo "Skipped - no relevant changes"
+            exit 0
+          fi
+          if [[ "$GENERATE_RESULT" != "success" ]]; then
             echo "Generate job failed"
             exit 1
           fi
-          if [[ "${{ needs.generate-cross-platform.result }}" != "success" ]]; then
+          if [[ "$GENERATE_CROSS_PLATFORM_RESULT" != "success" ]]; then
             echo "Cross-platform generate jobs failed"
             exit 1
           fi

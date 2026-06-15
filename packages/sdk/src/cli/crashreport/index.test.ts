@@ -39,7 +39,7 @@ describe("reportCrash", () => {
     const files = fs.readdirSync(tmpDir).filter((f) => f.endsWith(".crash.log"));
     expect(files.length).toBe(1);
 
-    const content = fs.readFileSync(path.join(tmpDir, files[0]), "utf-8");
+    const content = fs.readFileSync(path.join(tmpDir, files[0]!), "utf-8");
     expect(content).toContain("unexpected boom");
   });
 
@@ -82,8 +82,8 @@ describe("reportCrash", () => {
       expect.objectContaining({ method: "POST" }),
     );
 
-    const call = mockFetch.mock.calls[0];
-    const body = JSON.parse(call[1].body as string);
+    const call = mockFetch.mock.calls[0]!;
+    const body = JSON.parse(call[1]!.body as string);
     expect(body).toHaveProperty("query");
     expect(body.query).toContain("submitCrashReport");
     const { variables } = body;

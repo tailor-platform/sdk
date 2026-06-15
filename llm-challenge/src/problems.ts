@@ -18,7 +18,7 @@ export async function discoverProblems(packageRoot: string): Promise<Problem[]> 
     const entries = await fs.readdir(groupRoot, { withFileTypes: true });
     for (const entry of entries
       .filter((item) => item.isDirectory())
-      .sort((left, right) => left.name.localeCompare(right.name))) {
+      .toSorted((left, right) => left.name.localeCompare(right.name))) {
       const problemRoot = path.join(groupRoot, entry.name);
       const metaPath = path.join(problemRoot, "meta.json");
       const promptPath = path.join(problemRoot, "prompt.md");

@@ -6,6 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
 const listFunctionRegistriesOptionsSchema = z.object({
@@ -20,10 +21,10 @@ export type ListFunctionRegistriesOptions = z.input<typeof listFunctionRegistrie
 async function loadOptions(options: ListFunctionRegistriesOptions) {
   const result = listFunctionRegistriesOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ useProfile: true, profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.data.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
     workspaceId: result.data.workspaceId,

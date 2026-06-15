@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
 
-const TEST_BASE = path.join(__dirname, "__test_bundle__");
+const TEST_BASE = path.join(__dirname, "__test_bundler__");
 
 const defaultMachineUser: ResolvedMachineUser = {
   name: "test-machine-user",
@@ -92,6 +92,39 @@ export function main(input: any) {
       fs.writeFileSync(tempFile, result.bundledCode);
       const mod = await import(pathToFileURL(tempFile).href);
       expect(typeof mod.main).toBe("function");
+    });
+
+    test("drops console calls below the configured logLevel", async () => {
+      const sourceFile = path.join(testDir, "logs.ts");
+      fs.writeFileSync(
+        sourceFile,
+        `
+export function main() {
+  console.debug("debug");
+  console.log("log");
+  console.info("info");
+  console.warn("warn");
+  console.error("error");
+  return true;
+}
+`,
+      );
+
+      const detected: DetectedFunction = { type: "plain", name: "logs", namedMain: true };
+      const result = await bundleForTestRun({
+        detected,
+        sourceFile,
+        inlineSourcemap: false,
+        logLevel: "WARN",
+        machineUser: defaultMachineUser,
+        workspaceId: defaultWorkspaceId,
+      });
+
+      expect(result.bundledCode).not.toContain("console.debug");
+      expect(result.bundledCode).not.toContain("console.log");
+      expect(result.bundledCode).not.toContain("console.info");
+      expect(result.bundledCode).toContain("console.warn");
+      expect(result.bundledCode).toContain("console.error");
     });
   });
 

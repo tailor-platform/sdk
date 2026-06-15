@@ -1,3 +1,5 @@
+import { assertDefined } from "@/utils/assert";
+
 /**
  * Return true when the buffered SQL input ends with a real statement terminator.
  * @param input - Buffered SQL input
@@ -12,7 +14,7 @@ export function isSqlInputComplete(input: string): boolean {
   let lastSignificantTokenWasSemicolon = false;
 
   for (let i = 0; i < input.length; i += 1) {
-    const char = input[i];
+    const char = assertDefined(input[i], `character at index ${i} missing`);
     const next = input[i + 1];
 
     if (inLineComment) {

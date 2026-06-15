@@ -312,6 +312,21 @@ Use cases:
 
 `migration set` does not perform a true rollback. To undo a schema/data change in production, write a new forward migration that reverses it (see [Rollback Strategy](#rollback-strategy)).
 
+## `migration sync` Semantics
+
+`tailor-sdk tailordb migration sync <N>` reconstructs the schema snapshot at migration `N` from the working tree's migration history and **overwrites the remote schema to match it**, then sets the `sdk-migration` label to `N`. Unlike `migration set`, it changes the remote schema as well as the bookkeeping. Like `set`, it never runs `migrate.ts` scripts itself — it only changes what the next `apply` considers pending:
+
+| Movement                         | Effect on next `apply`                                                                    | Effect on data                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Backward (e.g., `0003` → `0001`) | Migrations `0002` and `0003` become pending and re-execute, including their `migrate.ts`. | Types absent from snapshot `0001` are deleted along with their data; re-executed scripts may rewrite data. |
+| Forward (e.g., `0001` → `0003`)  | Migrations `0002` and `0003` are skipped — their `migrate.ts` scripts will not run.       | Data the skipped scripts would have migrated stays as-is.                                                  |
+
+Before anything is sent to the remote, `sync` verifies that replaying the full migration history reproduces the current local type definitions. If it does not — because migration files were edited and no longer match, or because a schema change has not been recorded with `migration generate` yet — the command fails without touching the remote. This means a rewritten migration history is validated before it can overwrite the deployed schema.
+
+Because syncing backward causes already-applied scripts to re-execute on the next deploy, **write `migrate.ts` scripts to be idempotent** (see [Performance and Large Tables](#performance-and-large-tables) for resumable `where` clauses).
+
+The main use case is recovering from drift after a `deploy --no-schema-check` from an older revision: instead of checking out that revision, run `migration sync <N>` to restore the remote to a known snapshot, then `tailor-sdk deploy` to apply the remaining migrations from the working tree.
+
 ## Team Workflow and CI/CD
 
 ### Branch coordination
@@ -426,7 +441,8 @@ For genuinely different schemas across environments, prefer separate workspaces 
 1. `tailor-sdk tailordb migration status` to see local vs remote.
 2. Compare with teammates — has someone applied different migrations?
 3. If remote was changed manually, decide whether to update local migrations to match or to use `migration set <N>` to align bookkeeping.
-4. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround.
+4. To force the remote schema back to a known snapshot, use `migration sync <N>` (see [`migration sync` Semantics](#migration-sync-semantics)).
+5. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround.
 
 ### "No machine user available for migration execution"
 

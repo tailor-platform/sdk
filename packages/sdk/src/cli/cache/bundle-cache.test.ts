@@ -380,7 +380,7 @@ describe("withCache", () => {
     expect(build).toHaveBeenCalledOnce();
     // build receives an array containing the dep-collector plugin
     const firstCallArgs = build.mock.calls[0] as unknown[];
-    expect(firstCallArgs?.[0]).toHaveLength(1);
+    expect(firstCallArgs[0]).toHaveLength(1);
     // Cache entry should exist after save
     expect(store.getEntry("resolver:myResolver")).toBeDefined();
     expect(result).toBe("built output");
@@ -499,6 +499,13 @@ describe("computeBundlerContextHash", () => {
   test("returns different hash when prefix differs", () => {
     const a = computeBundlerContextHash({ ...baseParams, prefix: "ENV_A=1" });
     const b = computeBundlerContextHash({ ...baseParams, prefix: "ENV_B=2" });
+
+    expect(a).not.toBe(b);
+  });
+
+  test("returns different hash when bundleLogLevel differs", () => {
+    const a = computeBundlerContextHash({ ...baseParams, bundleLogLevel: "DEBUG" });
+    const b = computeBundlerContextHash({ ...baseParams, bundleLogLevel: "WARN" });
 
     expect(a).not.toBe(b);
   });

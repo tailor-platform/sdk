@@ -27,15 +27,18 @@ jobs:
           filters: |
             changes:
               - .github/workflows/sdk-e2e.yml
+              - .github/actions/**
               - packages/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   sdk-e2e:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    name: SDK E2E
+    name: SDK package e2e
     permissions:
       contents: read
     timeout-minutes: 20
@@ -58,39 +61,86 @@ jobs:
         working-directory: packages/sdk
         run: pnpm run test --project e2e
         env:
+          TAILOR_PLATFORM_E2E_RUN_ID: ${{ github.run_id }}-sdk
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+          TAILOR_PLATFORM_WORKSPACE_REGION: us-west
 
-      - name: Run template e2e tests
+      - name: Cleanup e2e workspaces
+        if: always()
+        working-directory: packages/sdk
+        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}-sdk
+
+  template-workflow-e2e:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    name: Template workflow e2e
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - name: checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: "false"
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Login as machine user
+        run: pnpm tailor-sdk login --machineuser
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
+      - name: Run template workflow e2e tests
         working-directory: packages/create-sdk/templates/workflow
         run: pnpm test:e2e
         env:
           CI: "true"
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
-          TAILOR_PLATFORM_WORKSPACE_NAME: template-e2e-${{ github.run_id }}
-          TAILOR_PLATFORM_WORKSPACE_REGION: asia-northeast
+          TAILOR_PLATFORM_WORKSPACE_NAME: template-e2e-${{ github.run_id }}-template
+          TAILOR_PLATFORM_WORKSPACE_REGION: us-west
 
       - name: Cleanup e2e workspaces
         if: always()
         working-directory: packages/sdk
-        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
+        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}-template
 
   sdk-e2e-result:
-    needs: [changes, sdk-e2e]
-    if: always()
+    needs: [changes, sdk-e2e, template-workflow-e2e]
+    if: >-
+      always() &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          SDK_E2E_RESULT: ${{ needs.sdk-e2e.result }}
+          TEMPLATE_WORKFLOW_E2E_RESULT: ${{ needs.template-workflow-e2e.result }}
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.sdk-e2e.result }}" != "success" ]]; then
-            echo "SDK E2E job failed"
+          if [[ "$SDK_E2E_RESULT" != "success" ]]; then
+            echo "SDK package e2e job failed"
+            exit 1
+          fi
+          if [[ "$TEMPLATE_WORKFLOW_E2E_RESULT" != "success" ]]; then
+            echo "Template workflow e2e job failed"
             exit 1
           fi
           echo "SDK E2E job succeeded"

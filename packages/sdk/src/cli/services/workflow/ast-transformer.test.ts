@@ -31,10 +31,10 @@ const job2 = createWorkflowJob({
       const jobs = findAllJobs(program, source);
 
       expect(jobs).toHaveLength(2);
-      expect(jobs[0].name).toBe("job-one");
-      expect(jobs[0].exportName).toBe("job1");
-      expect(jobs[1].name).toBe("job-two");
-      expect(jobs[1].exportName).toBe("job2");
+      expect(jobs[0]!.name).toBe("job-one");
+      expect(jobs[0]!.exportName).toBe("job1");
+      expect(jobs[1]!.name).toBe("job-two");
+      expect(jobs[1]!.exportName).toBe("job2");
     });
 
     test("does not detect objects where body is not a function", () => {
@@ -55,7 +55,7 @@ const realJob = createWorkflowJob({
       const jobs = findAllJobs(program, source);
 
       expect(jobs).toHaveLength(1);
-      expect(jobs[0].name).toBe("real-job");
+      expect(jobs[0]!.name).toBe("real-job");
     });
 
     test("does not detect objects where name is not a string literal", () => {
@@ -76,7 +76,7 @@ const realJob = createWorkflowJob({
       const jobs = findAllJobs(program, source);
 
       expect(jobs).toHaveLength(1);
-      expect(jobs[0].name).toBe("real-job");
+      expect(jobs[0]!.name).toBe("real-job");
     });
 
     test("bodyValueRange returns correct position", () => {
@@ -86,7 +86,7 @@ const job = createWorkflowJob({ name: "test", body: () => { return 42; } });`;
       const jobs = findAllJobs(program, source);
 
       expect(jobs).toHaveLength(1);
-      const bodyCode = source.slice(jobs[0].bodyValueRange.start, jobs[0].bodyValueRange.end);
+      const bodyCode = source.slice(jobs[0]!.bodyValueRange.start, jobs[0]!.bodyValueRange.end);
       expect(bodyCode).toBe("() => { return 42; }");
     });
 
@@ -97,8 +97,8 @@ export const myJob = createWorkflowJob({ name: "my-job-name", body: () => {} });
       const jobs = findAllJobs(program, source);
 
       expect(jobs).toHaveLength(1);
-      expect(jobs[0].name).toBe("my-job-name");
-      expect(jobs[0].exportName).toBe("myJob");
+      expect(jobs[0]!.name).toBe("my-job-name");
+      expect(jobs[0]!.exportName).toBe("myJob");
     });
 
     describe("verify no false positives occur", () => {
@@ -121,7 +121,7 @@ const realJob = createWorkflowJob({
 
         // only createWorkflowJob calls are detected
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].name).toBe("real-job");
+        expect(jobs[0]!.name).toBe("real-job");
       });
 
       test("objects not passed to createWorkflowJob are not detected", () => {
@@ -145,7 +145,7 @@ const realJob = createWorkflowJob({
 
         // only createWorkflowJob calls are detected
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].name).toBe("real-job");
+        expect(jobs[0]!.name).toBe("real-job");
       });
 
       test("objects in arrays are not detected unless used with createWorkflowJob", () => {
@@ -183,7 +183,7 @@ const job = create({
         const jobs = findAllJobs(program, source);
 
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].name).toBe("job-one");
+        expect(jobs[0]!.name).toBe("job-one");
       });
 
       test("default import", () => {
@@ -199,7 +199,7 @@ const job = sdk.createWorkflowJob({
         const jobs = findAllJobs(program, source);
 
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].name).toBe("job-one");
+        expect(jobs[0]!.name).toBe("job-one");
       });
 
       test("namespace import", () => {
@@ -215,7 +215,7 @@ const job = sdk.createWorkflowJob({
         const jobs = findAllJobs(program, source);
 
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].name).toBe("job-one");
+        expect(jobs[0]!.name).toBe("job-one");
       });
 
       test("subpath import", () => {
@@ -231,7 +231,7 @@ const job = createWorkflowJob({
         const jobs = findAllJobs(program, source);
 
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].name).toBe("job-one");
+        expect(jobs[0]!.name).toBe("job-one");
       });
 
       test("dynamic import", () => {
@@ -247,7 +247,7 @@ const job = sdk.createWorkflowJob({
         const jobs = findAllJobs(program, source);
 
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].name).toBe("job-one");
+        expect(jobs[0]!.name).toBe("job-one");
       });
 
       test("require()", () => {
@@ -263,7 +263,7 @@ const job = createWorkflowJob({
         const jobs = findAllJobs(program, source);
 
         expect(jobs).toHaveLength(1);
-        expect(jobs[0].name).toBe("job-one");
+        expect(jobs[0]!.name).toBe("job-one");
       });
     });
 
@@ -377,8 +377,8 @@ const result = await otherJob.trigger({ id: 123 });
       const calls = detectTriggerCalls(program, source);
 
       expect(calls).toHaveLength(1);
-      expect(calls[0].identifierName).toBe("otherJob");
-      expect(calls[0].argsText).toBe("{ id: 123 }");
+      expect(calls[0]!.identifierName).toBe("otherJob");
+      expect(calls[0]!.argsText).toBe("{ id: 123 }");
     });
 
     test("detects multiple trigger calls", () => {
@@ -390,8 +390,8 @@ const b = await job2.trigger({ y: 2 });
       const calls = detectTriggerCalls(program, source);
 
       expect(calls).toHaveLength(2);
-      expect(calls[0].identifierName).toBe("job1");
-      expect(calls[1].identifierName).toBe("job2");
+      expect(calls[0]!.identifierName).toBe("job1");
+      expect(calls[1]!.identifierName).toBe("job2");
     });
 
     test("detects trigger calls without arguments", () => {
@@ -402,8 +402,8 @@ const result = await simpleJob.trigger();
       const calls = detectTriggerCalls(program, source);
 
       expect(calls).toHaveLength(1);
-      expect(calls[0].identifierName).toBe("simpleJob");
-      expect(calls[0].argsText).toBe("");
+      expect(calls[0]!.identifierName).toBe("simpleJob");
+      expect(calls[0]!.argsText).toBe("");
     });
   });
 
@@ -694,8 +694,8 @@ const myWorkflow = createWorkflow({
       const workflows = findAllWorkflows(program, source);
 
       expect(workflows).toHaveLength(1);
-      expect(workflows[0].name).toBe("my-workflow");
-      expect(workflows[0].exportName).toBe("myWorkflow");
+      expect(workflows[0]!.name).toBe("my-workflow");
+      expect(workflows[0]!.exportName).toBe("myWorkflow");
     });
 
     test("detects default exported workflow", () => {
@@ -716,8 +716,8 @@ export default createWorkflow({
       const workflows = findAllWorkflows(program, source);
 
       expect(workflows).toHaveLength(1);
-      expect(workflows[0].name).toBe("default-workflow");
-      expect(workflows[0].isDefaultExport).toBe(true);
+      expect(workflows[0]!.name).toBe("default-workflow");
+      expect(workflows[0]!.isDefaultExport).toBe(true);
     });
 
     test("detects multiple workflows", () => {
@@ -734,8 +734,8 @@ const workflow2 = createWorkflow({ name: "workflow-two", mainJob: job2 });
       const workflows = findAllWorkflows(program, source);
 
       expect(workflows).toHaveLength(2);
-      expect(workflows[0].name).toBe("workflow-one");
-      expect(workflows[1].name).toBe("workflow-two");
+      expect(workflows[0]!.name).toBe("workflow-one");
+      expect(workflows[1]!.name).toBe("workflow-two");
     });
   });
 

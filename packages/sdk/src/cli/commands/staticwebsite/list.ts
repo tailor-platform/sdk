@@ -29,7 +29,6 @@ async function listStaticWebsites(
   options?: StaticWebsiteListOptions,
 ): Promise<StaticWebsiteInfo[]> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -56,7 +55,7 @@ async function listStaticWebsites(
     workspaceId,
     name: site.name,
     description: site.description,
-    url: site.url ?? "",
+    url: site.url,
     allowedIpAddresses: site.allowedIpAddresses,
   }));
 }

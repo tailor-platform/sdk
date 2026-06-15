@@ -58,8 +58,8 @@ describe("defineAuth", () => {
     });
 
     expect(authConfig.name).toBe("test");
-    expect(authConfig.userProfile?.type).toBe(userType);
-    expect(authConfig.userProfile?.usernameField).toBe("email");
+    expect(authConfig.userProfile.type).toBe(userType);
+    expect(authConfig.userProfile.usernameField).toBe("email");
     expect(authConfig.machineUsers?.admin.attributes?.role).toBe("ADMIN");
   });
 
@@ -93,7 +93,7 @@ describe("defineAuth", () => {
     });
 
     expect(authConfig.name).toBe("minimal");
-    expect(authConfig.userProfile?.type).toBe(userType);
+    expect(authConfig.userProfile.type).toBe(userType);
     expect(authConfig.machineUsers).toBeUndefined();
   });
 

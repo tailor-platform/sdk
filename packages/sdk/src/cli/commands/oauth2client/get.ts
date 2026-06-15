@@ -7,6 +7,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { type OAuth2ClientCredentials, toOAuth2ClientCredentials } from "./transform";
 
 export interface GetOAuth2ClientOptions {
@@ -25,7 +26,6 @@ export async function getOAuth2Client(
   options: GetOAuth2ClientOptions,
 ): Promise<OAuth2ClientCredentials> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -50,7 +50,9 @@ export async function getOAuth2Client(
       name: options.name,
     });
 
-    return toOAuth2ClientCredentials(oauth2Client!);
+    return toOAuth2ClientCredentials(
+      assertDefined(oauth2Client, "oauth2Client missing in response"),
+    );
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
       throw new Error(`OAuth2 client '${options.name}' not found.`, { cause: error });

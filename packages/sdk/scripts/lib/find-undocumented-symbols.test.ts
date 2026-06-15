@@ -10,7 +10,7 @@ function check(...files: string[]) {
 }
 
 function names(failures: { name: string }[]) {
-  return failures.map((f) => f.name).sort();
+  return failures.map((f) => f.name).toSorted();
 }
 
 describe("findUndocumentedSymbols", () => {

@@ -33,7 +33,8 @@ export const updateCommand = defineAppCommand({
     const config = await readPlatformConfig();
 
     // Check if profile exists
-    if (!config.profiles[args.name]) {
+    const profile = config.profiles[args.name];
+    if (!profile) {
       throw new Error(`Profile "${args.name}" not found.`);
     }
 
@@ -41,8 +42,6 @@ export const updateCommand = defineAppCommand({
     if (!args.user && !args["workspace-id"] && args.permission === undefined) {
       throw new Error("Please provide at least one property to update.");
     }
-
-    const profile = config.profiles[args.name]!;
     const oldUser = profile.user;
     const newUser = args.user || oldUser;
     const oldWorkspaceId = profile.workspace_id;

@@ -9,6 +9,8 @@ import { t } from "@/configure/types";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { createGenerationManager } from "./service";
+import type { Application } from "@/cli/services/application";
+import type { TailorDBService } from "@/cli/services/tailordb/service";
 import type { LoadedConfig, Generator } from "@/cli/shared/config-loader";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { Resolver } from "@/types/resolver.generated";
@@ -36,7 +38,7 @@ vi.mock("@/cli/shared/logger", async (importOriginal) => {
   return {
     ...actual,
     logger: {
-      ...(actual.logger ?? {}),
+      ...actual.logger,
       log: vi.fn(),
       debug: vi.fn(),
       warn: vi.fn(),
@@ -88,6 +90,39 @@ class TestGenerator {
       ],
     };
   }
+}
+
+function loadedTailorDBService(namespace: string, typeNames: string[]): TailorDBService {
+  const types = Object.fromEntries(typeNames.map((typeName) => [typeName, {}]));
+  const typeSourceInfo = Object.fromEntries(
+    typeNames.map((typeName) => [
+      typeName,
+      {
+        filePath: `${namespace}/${typeName}.ts`,
+        exportName: typeName.toLowerCase(),
+      },
+    ]),
+  );
+
+  return {
+    namespace,
+    config: { files: [] },
+    types,
+    typeSourceInfo,
+    pluginAttachments: new Map(),
+    loadTypes: vi.fn().mockResolvedValue(types),
+    processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+  } as unknown as TailorDBService;
+}
+
+function applicationWithTailorDBServices(
+  config: LoadedConfig,
+  tailorDBServices: TailorDBService[],
+): Application {
+  return {
+    ...defineApplication({ config: { ...config, db: {} } }),
+    tailorDBServices,
+  };
 }
 
 describe("GenerationManager", () => {
@@ -185,6 +220,34 @@ describe("GenerationManager", () => {
 
       await singleAppManager.generate(false);
       expect(singleAppManager.services).toBeDefined();
+    });
+
+    test("rejects duplicate TailorDB type names between namespaces", async () => {
+      const duplicateApp = applicationWithTailorDBServices(mockConfig, [
+        loadedTailorDBService("main", ["User"]),
+        loadedTailorDBService("analytics", ["User"]),
+      ]);
+      const duplicateManager = createGenerationManager({
+        application: duplicateApp,
+        config: mockConfig,
+      });
+
+      await expect(duplicateManager.generate(false)).rejects.toThrow(
+        /Duplicate TailorDB type names detected/,
+      );
+    });
+
+    test("does not exit watch mode for duplicate TailorDB type names", async () => {
+      const duplicateApp = applicationWithTailorDBServices(mockConfig, [
+        loadedTailorDBService("main", ["User"]),
+        loadedTailorDBService("analytics", ["User"]),
+      ]);
+      const duplicateManager = createGenerationManager({
+        application: duplicateApp,
+        config: mockConfig,
+      });
+
+      await expect(duplicateManager.generate(true)).resolves.not.toThrow();
     });
   });
 

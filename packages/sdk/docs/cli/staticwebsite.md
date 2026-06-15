@@ -31,6 +31,7 @@ tailor-sdk staticwebsite [command]
 | Command                                         | Description                                           |
 | ----------------------------------------------- | ----------------------------------------------------- |
 | [`staticwebsite deploy`](#staticwebsite-deploy) | Deploy a static website from a local build directory. |
+| [`staticwebsite domain`](#staticwebsite-domain) | Manage custom domains for static websites.            |
 | [`staticwebsite list`](#staticwebsite-list)     | List all static websites in a workspace.              |
 | [`staticwebsite get`](#staticwebsite-get)       | Get details of a specific static website.             |
 
@@ -121,6 +122,142 @@ tailor-sdk staticwebsite list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:staticwebsite list:global-options-link:end -->
+<!-- politty:command:staticwebsite domain:heading:start -->
+
+### staticwebsite domain
+
+<!-- politty:command:staticwebsite domain:heading:end -->
+
+<!-- politty:command:staticwebsite domain:description:start -->
+
+Manage custom domains for static websites.
+
+<!-- politty:command:staticwebsite domain:description:end -->
+
+<!-- politty:command:staticwebsite domain:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk staticwebsite domain [command]
+```
+
+<!-- politty:command:staticwebsite domain:usage:end -->
+
+<!-- politty:command:staticwebsite domain:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite domain:global-options-link:end -->
+
+<!-- politty:command:staticwebsite domain:subcommands:start -->
+
+**Commands**
+
+| Command                                                   | Description                               |
+| --------------------------------------------------------- | ----------------------------------------- |
+| [`staticwebsite domain list`](#staticwebsite-domain-list) | List custom domains for a static website. |
+| [`staticwebsite domain get`](#staticwebsite-domain-get)   | Get details of a custom domain.           |
+
+<!-- politty:command:staticwebsite domain:subcommands:end -->
+<!-- politty:command:staticwebsite domain get:heading:start -->
+
+#### staticwebsite domain get
+
+<!-- politty:command:staticwebsite domain get:heading:end -->
+
+<!-- politty:command:staticwebsite domain get:description:start -->
+
+Get details of a custom domain.
+
+<!-- politty:command:staticwebsite domain get:description:end -->
+
+<!-- politty:command:staticwebsite domain get:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk staticwebsite domain get [options] <domain>
+```
+
+<!-- politty:command:staticwebsite domain get:usage:end -->
+
+<!-- politty:command:staticwebsite domain get:arguments:start -->
+
+**Arguments**
+
+| Argument | Description        | Required |
+| -------- | ------------------ | -------- |
+| `domain` | Custom domain name | Yes      |
+
+<!-- politty:command:staticwebsite domain get:arguments:end -->
+
+<!-- politty:command:staticwebsite domain get:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+<!-- politty:command:staticwebsite domain get:options:end -->
+
+<!-- politty:command:staticwebsite domain get:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite domain get:global-options-link:end -->
+
+<!-- politty:command:staticwebsite domain list:heading:start -->
+
+#### staticwebsite domain list
+
+<!-- politty:command:staticwebsite domain list:heading:end -->
+
+<!-- politty:command:staticwebsite domain list:description:start -->
+
+List custom domains for a static website.
+
+<!-- politty:command:staticwebsite domain list:description:end -->
+
+<!-- politty:command:staticwebsite domain list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk staticwebsite domain list [options] <name>
+```
+
+<!-- politty:command:staticwebsite domain list:usage:end -->
+
+<!-- politty:command:staticwebsite domain list:arguments:start -->
+
+**Arguments**
+
+| Argument | Description         | Required |
+| -------- | ------------------- | -------- |
+| `name`   | Static website name | Yes      |
+
+<!-- politty:command:staticwebsite domain list:arguments:end -->
+
+<!-- politty:command:staticwebsite domain list:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+<!-- politty:command:staticwebsite domain list:options:end -->
+
+<!-- politty:command:staticwebsite domain list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite domain list:global-options-link:end -->
+
 <!-- politty:command:staticwebsite get:heading:start -->
 
 ### staticwebsite get

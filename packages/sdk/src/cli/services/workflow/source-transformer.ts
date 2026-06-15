@@ -29,8 +29,8 @@ function findVariableDeclarationsByName(
     // Only set if not already set (ExportNamedDeclaration is processed first and sets the outer range)
     if (nodeType === "VariableDeclaration") {
       const varDecl = node as unknown as VariableDeclaration;
-      for (const decl of varDecl.declarations || []) {
-        if (decl.id?.type === "Identifier" && decl.id.name) {
+      for (const decl of varDecl.declarations) {
+        if (decl.id.type === "Identifier" && decl.id.name) {
           if (!declarations.has(decl.id.name)) {
             declarations.set(decl.id.name, {
               start: varDecl.start,
@@ -47,8 +47,8 @@ function findVariableDeclarationsByName(
       const declaration = exportDecl.declaration;
       if (declaration?.type === "VariableDeclaration") {
         const varDecl = declaration as VariableDeclaration;
-        for (const decl of varDecl.declarations || []) {
-          if (decl.id?.type === "Identifier" && decl.id.name) {
+        for (const decl of varDecl.declarations) {
+          if (decl.id.type === "Identifier" && decl.id.name) {
             declarations.set(decl.id.name, {
               start: exportDecl.start,
               end: exportDecl.end,

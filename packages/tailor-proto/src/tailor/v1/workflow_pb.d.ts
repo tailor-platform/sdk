@@ -390,6 +390,39 @@ export declare type UpdateWorkflowJobFunctionResponse = Message<"tailor.v1.Updat
 export declare const UpdateWorkflowJobFunctionResponseSchema: GenMessage<UpdateWorkflowJobFunctionResponse>;
 
 /**
+ * @generated from message tailor.v1.DeleteWorkflowJobFunctionRequest
+ */
+export declare type DeleteWorkflowJobFunctionRequest = Message<"tailor.v1.DeleteWorkflowJobFunctionRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string job_function_name = 2;
+   */
+  jobFunctionName: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteWorkflowJobFunctionRequest.
+ * Use `create(DeleteWorkflowJobFunctionRequestSchema)` to create a new message.
+ */
+export declare const DeleteWorkflowJobFunctionRequestSchema: GenMessage<DeleteWorkflowJobFunctionRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteWorkflowJobFunctionResponse
+ */
+export declare type DeleteWorkflowJobFunctionResponse = Message<"tailor.v1.DeleteWorkflowJobFunctionResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteWorkflowJobFunctionResponse.
+ * Use `create(DeleteWorkflowJobFunctionResponseSchema)` to create a new message.
+ */
+export declare const DeleteWorkflowJobFunctionResponseSchema: GenMessage<DeleteWorkflowJobFunctionResponse>;
+
+/**
  * @generated from message tailor.v1.GetWorkflowJobFunctionRequest
  */
 export declare type GetWorkflowJobFunctionRequest = Message<"tailor.v1.GetWorkflowJobFunctionRequest"> & {

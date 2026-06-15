@@ -1,4 +1,5 @@
 import { OAuth2Client } from "@badgateway/oauth2-client";
+import { create } from "@bufbuild/protobuf";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import {
   type Client,
@@ -7,6 +8,7 @@ import {
   createClient,
   type Interceptor,
   type Transport,
+  type UnaryResponse,
 } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { getGlobalDispatcher } from "undici";
@@ -105,10 +107,20 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
 }
 
 /**
- * Create an interceptor that retries idempotent requests with backoff.
+ * Create an interceptor that retries failed unary requests with backoff.
+ *
+ * Retries any unary method on `Unavailable`/`ResourceExhausted`, and `Internal`
+ * only for methods declared idempotent, up to 3 attempts (despite the historical
+ * "idempotent" naming, the first two codes are retried regardless of idempotency).
+ * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
+ * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
+ * success, since it means a prior attempt already committed the resource
+ * server-side. Emits `logger.debug` traces on every retry and swallow so the
+ * cause of field `already_exists` failures can be diagnosed.
+ * @internal
  * @returns Retry interceptor
  */
-function retryInterceptor(): Interceptor {
+export function retryInterceptor(): Interceptor {
   return (next) => async (req) => {
     if (req.stream) {
       return await next(req);
@@ -123,8 +135,27 @@ function retryInterceptor(): Interceptor {
       try {
         return await next(req);
       } catch (error) {
+        // A retry that comes back AlreadyExists is treated as success: a prior
+        // attempt (the one whose retriable error sent us here) already created
+        // the resource server-side, but its response was lost as
+        // Unavailable/ResourceExhausted under load. The identical retry then
+        // races against that committed write and fails with `already_exists`.
+        // Restricted to RETRY_SAFE_CREATE_METHODS (deploy creates whose response
+        // body is unused) and to actual retries (i > 0); a first-attempt
+        // AlreadyExists is a genuine conflict and still surfaces.
+        if (i > 0 && isRetrySafeCreateAlreadyExists(error, req.method.name)) {
+          logger.debug(
+            `retry: ${req.method.name} returned AlreadyExists on attempt ${i + 1}; ` +
+              `treating as success (prior attempt likely committed)`,
+          );
+          return synthesizeEmptyUnaryResponse(req);
+        }
         if (isRetirable(error, req.method.idempotency)) {
           lastError = error;
+          logger.debug(
+            `retry: ${req.method.name} attempt ${i + 1} failed with ` +
+              `${connectCodeName(error)}; retrying`,
+          );
           continue;
         }
         throw error;
@@ -135,12 +166,121 @@ function retryInterceptor(): Interceptor {
 }
 
 /**
+ * Human-readable name for the Connect status code of an error, for diagnostics.
+ * @param error - Error thrown by a request (expected to be a ConnectError)
+ * @returns The Code name (e.g., "Unavailable"), or "unknown" for non-ConnectError
+ */
+function connectCodeName(error: unknown): string {
+  return error instanceof ConnectError ? Code[error.code] : "unknown";
+}
+
+/**
+ * Create RPCs for which a post-retry `AlreadyExists` may be treated as success.
+ *
+ * Membership is deliberately an allowlist, not `startsWith("Create")`: swallowing
+ * synthesizes an empty response (see `synthesizeEmptyUnaryResponse`), which is only
+ * safe when every caller ignores the response body. These are the deploy/apply
+ * resource creations that fire under heavy parallelism and discard their response.
+ *
+ * Intentionally excluded because their callers read the response body — swallowing
+ * would hand back an empty message and corrupt downstream state:
+ * - `CreateIdPClient` (uses `resp.client.clientSecret` to seed the secret vault)
+ * - `CreateWorkflowJobFunction` (uses `response.jobFunction.version`)
+ * - `CreateWorkspace` / `CreatePersonalAccessToken` / `CreateDeployment` /
+ *   `CreateOrganizationFolder` (interactive commands that return created data)
+ *
+ * `CreateFunctionRegistry` is client-streaming and never reaches this path
+ * (streaming requests bypass the retry loop entirely).
+ *
+ * An allowlist miss is safe: the resource simply loses race protection and an
+ * `already_exists` surfaces loudly, as before — never a silent empty response.
+ *
+ * A drift guard (see client.test.ts) fails CI if any `client.create*` used in the
+ * deploy flow is neither listed here nor explicitly classified as response-consuming,
+ * so a newly added apply create cannot silently miss this list.
+ * @internal
+ */
+export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
+  "CreateApplication",
+  "CreateAuthConnection",
+  "CreateAuthHook",
+  "CreateAuthIDPConfig",
+  "CreateAuthMachineUser",
+  "CreateAuthOAuth2Client",
+  "CreateAuthSCIMConfig",
+  "CreateAuthSCIMResource",
+  "CreateAuthService",
+  "CreateExecutorExecutor",
+  "CreateIdPService",
+  "CreatePipelineResolver",
+  "CreatePipelineService",
+  "CreateSecretManagerSecret",
+  "CreateSecretManagerVault",
+  "CreateStaticWebsite",
+  "CreateTailorDBGQLPermission",
+  "CreateTailorDBService",
+  "CreateTailorDBType",
+  "CreateTenantConfig",
+  "CreateUserProfileConfig",
+  "CreateWorkflow",
+]);
+
+/**
+ * Whether an error is an `AlreadyExists` from a retry-safe Create RPC.
+ *
+ * Only `AlreadyExists` stands in for "my prior write already landed"; for other
+ * verbs/codes it would be a real conflict that must surface.
+ * @param error - Error thrown by the request
+ * @param methodName - RPC method name (e.g., "CreateTailorDBType")
+ * @returns True if the error is an `AlreadyExists` from a retry-safe Create method
+ */
+function isRetrySafeCreateAlreadyExists(error: unknown, methodName: string): boolean {
+  return (
+    error instanceof ConnectError &&
+    error.code === Code.AlreadyExists &&
+    RETRY_SAFE_CREATE_METHODS.has(methodName)
+  );
+}
+
+/**
+ * Build a default (empty) unary response for the request's output message.
+ *
+ * Used when a retried Create is determined to have already succeeded on a prior
+ * attempt: callers in the deploy pipeline ignore Create response bodies, so an
+ * empty message faithfully represents the already-applied state.
+ * @param req - Unary request whose output schema is used
+ * @returns A synthesized unary response with an empty output message
+ */
+function synthesizeEmptyUnaryResponse(req: {
+  service: UnaryResponse["service"];
+  method: UnaryResponse["method"];
+}): UnaryResponse {
+  return {
+    stream: false,
+    service: req.service,
+    method: req.method,
+    header: new Headers(),
+    message: create(req.method.output),
+    trailer: new Headers(),
+  };
+}
+
+/**
+ * Base delay (ms) for the first retry. Subsequent attempts double it.
+ *
+ * Kept relatively large so a retry does not immediately race an original request
+ * that is still settling server-side under load (e.g. a compound create whose
+ * response was lost), which is what triggers the `already_exists` race.
+ */
+const RETRY_BASE_DELAY_MS = 500;
+
+/**
  * Wait for an exponential backoff delay with jitter.
  * @param attempt - Current retry attempt number (1-based)
  * @returns Promise that resolves after the delay
  */
 function waitRetryBackoff(attempt: number) {
-  const base = 50 * 2 ** (attempt - 1);
+  const base = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
   const jitter = 0.1 * (Math.random() * 2 - 1);
   const backoff = base * (1 + jitter);
   return new Promise((resolve) => setTimeout(resolve, backoff));
@@ -211,7 +351,7 @@ export function parseMethodName(methodName: string): {
     return { operation: "perform", resourceType: "resource" };
   }
 
-  const [, action, resource] = match;
+  const [, action, resource] = match as [string, string, string];
   return { operation: action.toLowerCase(), resourceType: resource };
 }
 
@@ -258,9 +398,13 @@ export async function fetchAll<T>(
   const items: T[] = [];
   let pageToken = "";
 
+  // loop exits when the platform stops returning a page token
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const [batch, nextPageToken] = await fn(pageToken, MAX_PAGE_SIZE);
     items.push(...batch);
+    // loop exits when the platform stops returning a page token
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!nextPageToken) break;
     pageToken = nextPageToken;
   }
@@ -292,6 +436,8 @@ export async function fetchPaged<T>(
   const items: T[] = [];
   let pageToken = "";
 
+  // loop exits when the platform stops returning a page token
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const pageSize = unbounded ? MAX_PAGE_SIZE : Math.min(limit - items.length, MAX_PAGE_SIZE);
     if (!unbounded && pageSize <= 0) break;
@@ -299,6 +445,8 @@ export async function fetchPaged<T>(
     const [batch, nextPageToken] = await fn(pageToken, pageSize);
     items.push(...batch);
     if (!unbounded && items.length >= limit) break;
+    // loop exits when the platform stops returning a page token
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!nextPageToken) break;
     pageToken = nextPageToken;
   }

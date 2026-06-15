@@ -1,7 +1,7 @@
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { trnPrefix } from "@/cli/commands/deploy/label";
+import { resourceTrn } from "@/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
@@ -11,6 +11,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 import { getNamespacesWithMigrations } from "./config";
 import { formatMigrationNumber, isValidMigrationNumber } from "./snapshot";
 import { parseMigrationLabelNumber } from "./types";
@@ -70,7 +71,8 @@ async function set(options: SetOptions): Promise<void> {
     }
     targetNamespace = options.namespace;
   } else if (namespacesWithMigrations.length === 1) {
-    targetNamespace = namespacesWithMigrations[0].namespace;
+    const [ns] = namespacesWithMigrations;
+    targetNamespace = assertDefined(ns, "namespace with migrations missing").namespace;
   } else {
     throw new Error(
       `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations.map((ns) => ns.namespace).join(", ")}`,
@@ -79,7 +81,6 @@ async function set(options: SetOptions): Promise<void> {
 
   // 5. Initialize client
   const accessToken = await loadAccessToken({
-    useProfile: false,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -89,11 +90,11 @@ async function set(options: SetOptions): Promise<void> {
   });
 
   // 6. Get current migration number
-  const trn = `${trnPrefix(workspaceId)}:tailordb:${targetNamespace}`;
+  const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
   let currentMigration: number;
   try {
     const { metadata } = await client.getMetadata({ trn });
-    const label = metadata?.labels?.["sdk-migration"];
+    const label = metadata?.labels["sdk-migration"];
     currentMigration = label ? (parseMigrationLabelNumber(label) ?? 0) : 0;
   } catch {
     currentMigration = 0;

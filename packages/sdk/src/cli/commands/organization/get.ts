@@ -5,6 +5,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 const getOrganizationOptionsSchema = z.object({
@@ -21,7 +22,7 @@ export type GetOrganizationOptions = z.input<typeof getOrganizationOptionsSchema
 export async function getOrganization(options: GetOrganizationOptions): Promise<OrganizationInfo> {
   const result = getOrganizationOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();

@@ -26,7 +26,9 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const tempDirs: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  const dirs = [...tempDirs];
+  tempDirs.length = 0;
+  await Promise.all(dirs.map((dir) => fs.rm(dir, { recursive: true, force: true })));
 });
 
 describe("argument parsing", () => {
@@ -105,8 +107,8 @@ describe("problem discovery", () => {
   test("discovers the initial problem set from group directories", async () => {
     const problems = await discoverProblems(packageRoot);
 
-    expect(problems).toHaveLength(19);
-    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(15);
+    expect(problems).toHaveLength(20);
+    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(16);
     expect(problems.filter((problem) => problem.group === "cli")).toHaveLength(4);
     expect(problems.map((problem) => problem.id)).toContain("plugin-registration");
     expect(problems.every((problem) => problem.verifyPath !== undefined)).toBe(true);

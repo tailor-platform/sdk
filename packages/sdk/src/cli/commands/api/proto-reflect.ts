@@ -12,7 +12,7 @@ const UNARY_METHODS: DescMethodUnary[] = OperatorService.methods.filter(
 );
 
 export function listMethodNames(): string[] {
-  return UNARY_METHODS.map((m) => m.name).sort();
+  return UNARY_METHODS.map((m) => m.name).toSorted();
 }
 
 /**
@@ -24,7 +24,7 @@ export function listMethodNames(): string[] {
  * @returns Sorted list of accepted endpoint values
  */
 export function listMethodChoices(): string[] {
-  return UNARY_METHODS.flatMap((m) => [m.name, `${OperatorService.typeName}/${m.name}`]).sort();
+  return UNARY_METHODS.flatMap((m) => [m.name, `${OperatorService.typeName}/${m.name}`]).toSorted();
 }
 
 export function getMethodDescriptor(methodName: string): DescMethodUnary | undefined {

@@ -598,7 +598,7 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
     });
 
     expect(result.changeSet.service.creates).toHaveLength(1);
-    expect(result.changeSet.service.creates[0].request.publishUserEvents).toBe(false);
+    expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(false);
   });
 
   test("undefined publishUserEvents is auto-enabled when the IdP is targeted by an idpUser trigger", async () => {
@@ -612,7 +612,7 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
     });
 
     expect(result.changeSet.service.creates).toHaveLength(1);
-    expect(result.changeSet.service.creates[0].request.publishUserEvents).toBe(true);
+    expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(true);
   });
 
   test("explicit publishUserEvents:true stays true", async () => {
@@ -625,7 +625,7 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
       idpUserTriggerTargets: new Set(["idp-a"]),
     });
 
-    expect(result.changeSet.service.creates[0].request.publishUserEvents).toBe(true);
+    expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(true);
   });
 
   test("explicit publishUserEvents:false throws when executor targets the IdP", async () => {

@@ -123,8 +123,8 @@ describe("createTailorDBHook", () => {
       });
       expect(Array.isArray(result.lines)).toBe(true);
       expect(result.lines).toHaveLength(2);
-      expect((result.lines as { id: string }[])[0].id).toMatch(UUID_REGEX);
-      expect((result.lines as { id: string }[])[1].id).toMatch(UUID_REGEX);
+      expect((result.lines as { id: string }[])[0]!.id).toMatch(UUID_REGEX);
+      expect((result.lines as { id: string }[])[1]!.id).toMatch(UUID_REGEX);
     });
 
     test("invokes per-element sub-field hooks", () => {

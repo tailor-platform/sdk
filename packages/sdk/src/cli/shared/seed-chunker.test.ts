@@ -15,10 +15,10 @@ describe("chunkSeedData", () => {
     });
 
     expect(chunks).toHaveLength(1);
-    expect(chunks[0].data).toEqual(data);
-    expect(chunks[0].order).toEqual(["User", "Order"]);
-    expect(chunks[0].index).toBe(0);
-    expect(chunks[0].total).toBe(1);
+    expect(chunks[0]!.data).toEqual(data);
+    expect(chunks[0]!.order).toEqual(["User", "Order"]);
+    expect(chunks[0]!.index).toBe(0);
+    expect(chunks[0]!.total).toBe(1);
   });
 
   test("returns empty array when no data to seed", () => {
@@ -75,8 +75,8 @@ describe("chunkSeedData", () => {
 
     // Verify index and total are correct
     for (let i = 0; i < chunks.length; i++) {
-      expect(chunks[i].index).toBe(i);
-      expect(chunks[i].total).toBe(chunks.length);
+      expect(chunks[i]!.index).toBe(i);
+      expect(chunks[i]!.total).toBe(chunks.length);
     }
 
     // Verify total record count is preserved
@@ -115,8 +115,8 @@ describe("chunkSeedData", () => {
     const uniqueOrder = [...new Set(flatOrder)];
 
     for (let i = 0; i < uniqueOrder.length - 1; i++) {
-      const idxA = order.indexOf(uniqueOrder[i]);
-      const idxB = order.indexOf(uniqueOrder[i + 1]);
+      const idxA = order.indexOf(uniqueOrder[i]!);
+      const idxB = order.indexOf(uniqueOrder[i + 1]!);
       expect(idxA).toBeLessThanOrEqual(idxB);
     }
   });
@@ -151,13 +151,13 @@ describe("chunkSeedData", () => {
     }
 
     // Total records should be preserved
-    const totalRecords = chunks.reduce((sum, chunk) => sum + chunk.data.HugeType.length, 0);
+    const totalRecords = chunks.reduce((sum, chunk) => sum + chunk.data["HugeType"]!.length, 0);
     expect(totalRecords).toBe(200);
 
     // Verify index/total
     for (let i = 0; i < chunks.length; i++) {
-      expect(chunks[i].index).toBe(i);
-      expect(chunks[i].total).toBe(chunks.length);
+      expect(chunks[i]!.index).toBe(i);
+      expect(chunks[i]!.total).toBe(chunks.length);
     }
   });
 
@@ -213,7 +213,7 @@ describe("chunkSeedData", () => {
     });
 
     expect(chunks).toHaveLength(1);
-    expect(chunks[0].order).toEqual(["User", "MissingType"]);
+    expect(chunks[0]!.order).toEqual(["User", "MissingType"]);
   });
 
   test("handles types with data but listed in order without data", () => {

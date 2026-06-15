@@ -6,15 +6,11 @@ minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
   - "@tailor-platform/*"
-  - "@toiroakr/lines-db"
-  - politty
-  - zinfer
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
-  # Pre-existing version pulled in transitively via @liam-hq/cli.
-  # Earlier @swc/core versions had provenance attestation; this one does not.
+  # Pre-existing transitive version without provenance attestation.
   - "@swc/core@1.12.11"
 
 packages:
@@ -38,3 +34,6 @@ allowBuilds:
   "@prisma/engines": false
   protobufjs: false
   unrs-resolver: false
+
+overrides:
+  valibot@>=0.31.0 <1.2.0: 1.4.1

@@ -125,6 +125,8 @@ export async function waitForExecution(
     : null;
 
   try {
+    // loop exits when the workflow execution reaches a terminal status
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (true) {
       const { execution } = await client.getWorkflowExecution({
         workspaceId,
@@ -271,7 +273,6 @@ async function startWorkflowByName(
   options: StartWorkflowOptions,
 ): Promise<StartWorkflowResultWithWait> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -322,7 +323,6 @@ export async function startWorkflow<W extends WorkflowLike>(
   }
 
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

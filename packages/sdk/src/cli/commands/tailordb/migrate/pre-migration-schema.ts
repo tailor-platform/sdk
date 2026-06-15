@@ -93,8 +93,8 @@ export function applyPreMigrationFieldAdjustments(
 ): void {
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
-      // Guard against malformed diff.json: `before` is typed required but
-      // the file is parsed without validation.
+      // snapshot JSON is parsed without validation
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (change.before) {
         fields[fieldName] = convertFieldConfigToProto(change.before);
       }
@@ -105,6 +105,8 @@ export function applyPreMigrationFieldAdjustments(
     if (!field) continue;
 
     if (change.kind === "field_added") {
+      // snapshot JSON is parsed without validation
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (change.after?.required) {
         field.required = false;
       }
@@ -113,14 +115,20 @@ export function applyPreMigrationFieldAdjustments(
 
     const { before, after } = change;
 
+    // snapshot JSON is parsed without validation
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!before?.required && after?.required) {
       field.required = false;
     }
 
+    // snapshot JSON is parsed without validation
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!(before?.unique ?? false) && (after?.unique ?? false)) {
       field.unique = false;
     }
 
+    // snapshot JSON is parsed without validation
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (before?.allowedValues && after?.allowedValues) {
       const afterValues = new Set(after.allowedValues.map((v) => v.value));
       const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));

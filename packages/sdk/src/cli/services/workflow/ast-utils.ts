@@ -55,6 +55,8 @@ export function getImportSource(node: Expression | null | undefined): string | n
     if (callExpr.callee.type === "Identifier" && callExpr.callee.name === "require") {
       const arg = callExpr.arguments[0];
       if (
+        // callee may be a ComputedMemberExpression at runtime
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         arg &&
         "type" in arg &&
         arg.type === "Literal" &&
@@ -141,7 +143,7 @@ export function findProperty(properties: ObjectPropertyKind[], name: string): Fo
  * @returns Transformed source code
  */
 export function applyReplacements(source: string, replacements: Replacement[]): string {
-  const sorted = [...replacements].sort((a, b) => b.start - a.start);
+  const sorted = replacements.toSorted((a, b) => b.start - a.start);
   let result = source;
   for (const r of sorted) {
     result = result.slice(0, r.start) + r.text + result.slice(r.end);

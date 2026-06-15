@@ -6,6 +6,7 @@ import * as path from "pathe";
 import { lt as semverLt } from "semver";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
+import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
 import { initOAuth2Client } from "./client";
 import { logger } from "./logger";
@@ -81,7 +82,6 @@ type LoadWorkspaceIdOptions = {
   profile?: string;
 };
 type LoadAccessTokenOptions = {
-  useProfile?: boolean;
   profile?: string;
 };
 
@@ -205,18 +205,27 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
       token_expires_at: entry.token_expires_at,
     };
   }
+  // Clear current_user when it points at a user missing from the rebuilt v1
+  // users map, so the downgraded file never references a non-existent user.
+  const currentUser =
+    config.current_user && users[config.current_user] ? config.current_user : null;
   return {
     version: 1,
     users,
     profiles: config.profiles,
-    current_user: config.current_user,
+    current_user: currentUser,
   };
 }
 
 /**
  * Write Tailor Platform CLI configuration to disk.
- * By default, V2 configs are converted to V1 for backward compatibility.
- * Set TAILOR_USE_KEYRING to write V2 format (required for keyring storage).
+ * By default, V2 configs are converted to V1 for backward compatibility, so an
+ * older SDK can still read the file. Configs containing a keyring user are kept
+ * as V2 regardless, because the keyring storage variant is not representable in
+ * V1 and downgrading it would silently drop the user's login. Such configs are
+ * already V2 on disk (a keyring entry is only ever persisted with
+ * TAILOR_USE_KEYRING set), so keeping V2 does not regress backward compatibility.
+ * Set TAILOR_USE_KEYRING to write V2 format unconditionally.
  *
  * The config file may contain access/refresh tokens when the OS keyring is
  * unavailable, so it is written via {@link writeSecretFile} so other users
@@ -225,8 +234,12 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
  */
 export function writePlatformConfig(config: PfConfig | PfConfigV1) {
   const configPath = platformConfigPath();
+  const hasKeyringUser =
+    config.version === 2 && Object.values(config.users).some((u) => u?.storage === "keyring");
   const diskConfig =
-    config.version === 2 && !process.env.TAILOR_USE_KEYRING ? toV1ForDisk(config) : config;
+    config.version === 2 && !process.env.TAILOR_USE_KEYRING && !hasKeyringUser
+      ? toV1ForDisk(config)
+      : config;
   writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
@@ -362,9 +375,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
 
   const pfConfig = await readPlatformConfig();
   let user;
-  const profile = opts?.useProfile
-    ? opts.profile || process.env.TAILOR_PLATFORM_PROFILE
-    : undefined;
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (profile) {
     const u = pfConfig.profiles[profile]?.user;
     if (!u) {
@@ -500,7 +511,9 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
     `);
   }
 
-  const newExpiresAt = new Date(resp.expiresAt!).toISOString();
+  const newExpiresAt = new Date(
+    assertDefined(resp.expiresAt, "token refresh response missing expiresAt"),
+  ).toISOString();
   await saveUserTokens(
     config,
     user,

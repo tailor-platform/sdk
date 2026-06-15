@@ -7,6 +7,7 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 import { apiCall } from "./api-call";
 import { inspectCommand } from "./inspect";
 import { listCommand } from "./list";
@@ -27,7 +28,7 @@ function resolveNamespaceName(methodName: string, config: LoadedConfig): string 
     return config.auth?.name;
   }
   if (/IdP/.test(methodName)) {
-    if (config.idp?.length === 1) return config.idp[0].name;
+    if (config.idp?.length === 1) return assertDefined(config.idp[0], "idp config missing").name;
     return undefined;
   }
   if (/TailorDB/.test(methodName)) {
@@ -73,14 +74,14 @@ function parseBodyAsObject(body: string): Record<string, unknown> | undefined {
 function setNestedPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
   let cursor: Record<string, unknown> = obj;
   for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i];
+    const key = assertDefined(path[i], "path segment missing");
     const next = cursor[key];
     if (typeof next !== "object" || next === null || Array.isArray(next)) {
       cursor[key] = {};
     }
     cursor = cursor[key] as Record<string, unknown>;
   }
-  cursor[path[path.length - 1]] = value;
+  cursor[assertDefined(path[path.length - 1], "path last segment missing")] = value;
 }
 
 /**
@@ -183,7 +184,7 @@ export const apiCommand = defineAppCommand({
   description: "Call Tailor Platform API endpoints directly.",
   notes: `Use \`tailor-sdk api list\` to enumerate invocable methods and \`tailor-sdk api inspect <endpoint>\` to print an endpoint's input message tree (combine with \`--json\` for machine-readable output).
 
-The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from \`--body\`:
+The request body is inferred from the target endpoint's request schema, and commonly required fields are auto-injected so they can be omitted from \`--body\`:
 
 - \`workspaceId\` — resolved from \`-w\` / \`TAILOR_PLATFORM_WORKSPACE_ID\` / the selected profile.
 - \`namespaceName\` — resolved from \`tailor.config.ts\` based on the endpoint's service:
@@ -192,7 +193,7 @@ The request body is inferred from the proto definition of the target endpoint, a
 
 Values already present in \`--body\` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.
 
-Use \`--field key=value\` (repeatable) to set request body fields without writing JSON. Dotted keys (e.g. \`application.name=foo\`) build nested objects. \`--field\` overrides matching fields in \`--body\` and tab-completes from the endpoint's proto schema.`,
+Use \`--field key=value\` (repeatable) to set request body fields without writing JSON. Dotted keys (e.g. \`application.name=foo\`) build nested objects. \`--field\` overrides matching fields in \`--body\` and tab-completes from the endpoint's request schema.`,
   examples: [
     {
       cmd: 'GetApplication -b \'{"applicationName":"app-1"}\'',

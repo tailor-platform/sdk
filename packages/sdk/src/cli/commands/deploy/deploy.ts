@@ -5,6 +5,7 @@ import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
+import { assertUniqueTailorDBTypeNamesWithExternal } from "@/cli/services/tailordb/type-name-validation";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
@@ -54,11 +55,12 @@ import {
   type NamespaceAction,
 } from "./grouped-display";
 import { applyIdP, planIdP } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
+import { validatePlan } from "./validate-plan";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { PlanContext } from "./types";
 
@@ -69,51 +71,12 @@ export interface DeployOptions {
   dryRun?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
+  noValidate?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
-}
-
-function applicationTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:application:${name}`;
-}
-
-function functionRegistryTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
-}
-
-function pipelineTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:pipeline:${name}`;
-}
-
-function idpTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
-}
-
-function authTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
-}
-
-function executorTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
-}
-
-function workflowTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
-}
-
-function staticWebsiteTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
-}
-
-function tailorDBTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:tailordb:${name}`;
-}
-
-function vaultTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
 }
 
 /**
@@ -135,7 +98,8 @@ function collectIdpUserTriggerTargets(application: Readonly<Application>): Reado
     if (executor.trigger.idp != null) {
       targets.add(executor.trigger.idp);
     } else if (idps.length === 1) {
-      targets.add(idps[0].name);
+      const [idp] = idps;
+      if (idp) targets.add(idp.name);
     }
   }
   return targets;
@@ -149,7 +113,7 @@ async function shouldForceApplyAll(
 ) {
   const desiredLabels = (
     await buildMetaRequest({
-      trn: applicationTrn(workspaceId, application.name),
+      trn: resourceTrn(workspaceId, "application", application.name),
       appName: application.name,
       appId: application.id,
     })
@@ -157,39 +121,41 @@ async function shouldForceApplyAll(
   const candidateTrns = new Set<string>();
 
   if (application.subgraphs.length > 0) {
-    candidateTrns.add(applicationTrn(workspaceId, application.name));
+    candidateTrns.add(resourceTrn(workspaceId, "application", application.name));
   }
   application.staticWebsiteServices.forEach((website) => {
-    candidateTrns.add(staticWebsiteTrn(workspaceId, website.name));
+    candidateTrns.add(resourceTrn(workspaceId, "staticwebsite", website.name));
   });
   application.resolverServices.forEach((pipeline) => {
-    candidateTrns.add(pipelineTrn(workspaceId, pipeline.namespace));
+    candidateTrns.add(resourceTrn(workspaceId, "pipeline", pipeline.namespace));
   });
   application.idpServices.forEach((idp) => {
-    candidateTrns.add(idpTrn(workspaceId, idp.name));
+    candidateTrns.add(resourceTrn(workspaceId, "idp", idp.name));
   });
   if (application.authService) {
-    candidateTrns.add(authTrn(workspaceId, application.authService.config.name));
+    candidateTrns.add(resourceTrn(workspaceId, "auth", application.authService.config.name));
   }
   Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
-    candidateTrns.add(executorTrn(workspaceId, executor.name));
+    candidateTrns.add(resourceTrn(workspaceId, "executor", executor.name));
   });
   Object.values(application.workflowService?.workflows ?? {}).forEach((workflow) => {
-    candidateTrns.add(workflowTrn(workspaceId, workflow.name));
+    candidateTrns.add(resourceTrn(workspaceId, "workflow", workflow.name));
   });
   application.tailorDBServices.forEach((service) => {
-    candidateTrns.add(tailorDBTrn(workspaceId, service.namespace));
+    candidateTrns.add(resourceTrn(workspaceId, "tailordb", service.namespace));
   });
   application.secrets.forEach((vault) => {
-    candidateTrns.add(vaultTrn(workspaceId, vault.vaultName));
+    candidateTrns.add(resourceTrn(workspaceId, "vault", vault.vaultName));
   });
   functionEntries.forEach((entry) => {
-    candidateTrns.add(functionRegistryTrn(workspaceId, entry.name));
+    candidateTrns.add(resourceTrn(workspaceId, "function_registry", entry.name));
   });
 
   for (const trn of candidateTrns) {
     try {
       const { metadata } = await client.getMetadata({ trn });
+      // platform response may omit the field
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (metadata?.labels?.[sdkNameLabelKey] !== application.name) {
         continue;
       }
@@ -303,9 +269,7 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], namespaceOf),
     ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], namespaceOf),
     ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], namespaceOf),
-    ...(results.auth.changeSet.connection
-      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf)
-      : []),
+    ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf),
   ];
 
   // Print grouped sections
@@ -321,6 +285,7 @@ function printPlanResults(results: PlanResults) {
   const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
   const authServiceActions = extractServiceActions(results.auth.changeSet.service);
   results.staticWebsite.changeSet.print();
+  results.staticWebsite.customDomainChangeSet.print();
   results.app.print();
   printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
   printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
@@ -391,6 +356,7 @@ export function summarizePlanResults(
   const nonGrouped = summarizeChangeSets([
     otherChanges,
     results.staticWebsite.changeSet,
+    results.staticWebsite.customDomainChangeSet,
     results.app,
     results.secretManager.vaultChangeSet,
     results.secretManager.secretChangeSet,
@@ -515,7 +481,6 @@ export async function deploy(options?: DeployOptions) {
 
     // Initialize client
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: options?.profile,
     });
     const client = await initOperatorClient(accessToken);
@@ -526,6 +491,15 @@ export async function deploy(options?: DeployOptions) {
 
     rootSpan.setAttribute("app.name", application.name);
     rootSpan.setAttribute("workspace.id", workspaceId);
+
+    await withSpan("plan.validateTailorDBTypeNames", () =>
+      assertUniqueTailorDBTypeNamesWithExternal({
+        client,
+        workspaceId,
+        tailorDBServices: application.tailorDBServices,
+        externalTailorDBNamespaces: application.externalTailorDBNamespaces,
+      }),
+    );
 
     // Collect function entries from in-memory bundled scripts (after build, before plan)
     const workflowService = application.workflowService;
@@ -672,6 +646,12 @@ export async function deploy(options?: DeployOptions) {
           resourceName: replace.name,
         });
       }
+      for (const del of auth.changeSet.connection.deletes) {
+        importantDeletions.push({
+          resourceType: "Auth connection",
+          resourceName: del.name,
+        });
+      }
       for (const del of secretManager.vaultChangeSet.deletes) {
         importantDeletions.push({
           resourceType: "Secret Manager vault",
@@ -726,6 +706,23 @@ export async function deploy(options?: DeployOptions) {
       workflow,
       secretManager,
     });
+
+    if (options?.noValidate) {
+      logger.warn("Client-side validation skipped (--no-validate).");
+    } else {
+      await validatePlan({
+        functionRegistry,
+        tailorDB,
+        staticWebsite,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+        secretManager,
+      });
+    }
 
     if (dryRun) {
       logger.info("Dry run enabled. No changes applied.");

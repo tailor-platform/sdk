@@ -8,9 +8,10 @@ import {
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { symbols } from "@/cli/shared/logger";
 import { HTTP_METHODS } from "@/parser/service/http-adapter";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
 import type { HttpAdapterBundleResult } from "@/cli/services/http-adapter/bundler";
@@ -42,7 +43,7 @@ export async function applyApplication(
       ...changeSet.creates.map(async (create) => {
         create.request.cors = await resolveStaticWebsiteUrls(
           client,
-          create.request.workspaceId!,
+          assertDefined(create.request.workspaceId, "request missing workspaceId"),
           create.request.cors,
           "CORS",
         );
@@ -52,7 +53,7 @@ export async function applyApplication(
       ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
           client,
-          update.request.workspaceId!,
+          assertDefined(update.request.workspaceId, "request missing workspaceId"),
           update.request.cors,
           "CORS",
         );
@@ -60,7 +61,7 @@ export async function applyApplication(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
+  } else {
     // Delete in reverse order of dependencies
     // Applications
     await Promise.all(
@@ -116,12 +117,8 @@ type ComparableApplication = {
   httpAdapters: ComparableHttpAdapter[];
 };
 
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:application:${name}`;
-}
-
 function sortStrings(values: readonly string[] | undefined): string[] {
-  return [...(values ?? [])].sort();
+  return (values ?? []).toSorted();
 }
 
 function normalizeSubgraphs(
@@ -129,10 +126,10 @@ function normalizeSubgraphs(
 ): ComparableApplication["subgraphs"] {
   return [...(subgraphs ?? [])]
     .map((subgraph) => ({
-      serviceType: subgraph.serviceType!,
+      serviceType: assertDefined(subgraph.serviceType, "subgraph missing serviceType"),
       serviceNamespace: subgraph.serviceNamespace ?? "",
     }))
-    .sort((left, right) => {
+    .toSorted((left, right) => {
       if (left.serviceType !== right.serviceType) {
         return left.serviceType - right.serviceType;
       }
@@ -165,7 +162,7 @@ function normalizeHttpAdapters(
       enabled: adapter.enabled ?? true,
       priority: adapter.priority ?? 0,
     }))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .toSorted((left, right) => left.name.localeCompare(right.name));
 }
 
 function toComparableApplication(
@@ -299,7 +296,7 @@ export async function planApplication(
 
   let authNamespace: string | undefined;
   let authIdpConfigName: string | undefined;
-  if (application.authService && application.authService.config) {
+  if (application.authService) {
     authNamespace = application.authService.config.name;
 
     const idProvider = application.authService.config.idProvider;
@@ -313,7 +310,10 @@ export async function planApplication(
       try {
         const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
           workspaceId,
-          namespaceName: authNamespace!,
+          namespaceName: assertDefined(
+            authNamespace,
+            "authNamespace must be set before listing IDP configs",
+          ),
           pageToken,
           pageSize: maxPageSize,
         });
@@ -326,11 +326,14 @@ export async function planApplication(
       }
     });
     if (idpConfigs.length > 0) {
-      authIdpConfigName = idpConfigs[0].name;
+      const [firstConfig] = idpConfigs;
+      if (firstConfig) {
+        authIdpConfigName = firstConfig.name;
+      }
     }
   }
   const metaRequest = await buildMetaRequest({
-    trn: trn(workspaceId, application.name),
+    trn: resourceTrn(workspaceId, "application", application.name),
     appName: application.name,
     appId: application.id,
   });
@@ -429,7 +432,7 @@ async function fetchAppLabels(
 ): Promise<Record<string, string> | undefined> {
   try {
     const { metadata } = await client.getMetadata({
-      trn: trn(workspaceId, appName),
+      trn: resourceTrn(workspaceId, "application", appName),
     });
     return metadata?.labels;
   } catch (error) {
@@ -472,7 +475,7 @@ export function diffHttpAdapterDisplay(
     }
   }
   return entries
-    .sort((left, right) => left.name.localeCompare(right.name))
+    .toSorted((left, right) => left.name.localeCompare(right.name))
     .map((entry) => `${entry.symbol} ${entry.name} (httpAdapter)`);
 }
 

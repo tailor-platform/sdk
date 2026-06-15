@@ -1,5 +1,6 @@
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { type AuthConfigSchema } from "@/parser/service/auth";
+import { assertDefined } from "@/utils/assert";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type { z } from "zod";
 
@@ -70,7 +71,9 @@ export function createAuthService(
 
       // 2. Single TailorDB
       if (totalNamespaceCount === 1) {
-        userProfileNamespace = tailorDBServices[0]?.namespace ?? externalTailorDBNamespaces[0];
+        userProfileNamespace =
+          tailorDBServices[0]?.namespace ??
+          assertDefined(externalTailorDBNamespaces[0], "external TailorDB namespace missing");
       } else {
         // 3. Multiple TailorDBs
         await Promise.all(tailorDBServices.map((tailordb) => tailordb.loadTypes()));

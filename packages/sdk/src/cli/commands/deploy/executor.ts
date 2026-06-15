@@ -16,6 +16,7 @@ import {
 import { type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
 import { stringifyFunction } from "@/parser/service/tailordb";
+import { assertDefined } from "@/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
@@ -25,7 +26,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -62,7 +63,7 @@ export async function applyExecutor(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
+  } else {
     // Delete in reverse order of dependencies
     // Executors
     await Promise.all(changeSet.deletes.map((del) => client.deleteExecutorExecutor(del.request)));
@@ -85,10 +86,6 @@ type DeleteExecutor = {
   name: string;
   request: MessageInitShape<typeof DeleteExecutorExecutorRequestSchema>;
 };
-
-function trn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
-}
 
 /**
  * Plan executor-related changes based on current and desired state.
@@ -114,14 +111,14 @@ export async function planExecutor(context: PlanContext) {
       return [executors, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: trn,
+    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "executor", name),
   });
 
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest({
-      trn: trn(workspaceId, executor.name),
+      trn: resourceTrn(workspaceId, "executor", executor.name),
       appName: application.name,
       appId: application.id,
     });
@@ -246,10 +243,10 @@ export function formatExecutorChangeEntries(
 }
 
 function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {
-  const normalized = normalizeProtoConfig(executor) ?? {};
+  const normalized = normalizeProtoConfig(executor);
   const webhookHeaders =
     normalized.targetConfig?.config?.case === "webhook"
-      ? [...(normalized.targetConfig.config.value.headers ?? [])].sort((left, right) =>
+      ? (normalized.targetConfig.config.value.headers ?? []).toSorted((left, right) =>
           (left.key ?? "").localeCompare(right.key ?? ""),
         )
       : undefined;
@@ -325,7 +322,7 @@ function areExecutorsEqual(
 
 function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
   for (const service of application.tailorDBServices) {
-    if (service.types[typeName]) {
+    if (Object.hasOwn(service.types, typeName)) {
       return service.namespace;
     }
   }
@@ -374,7 +371,7 @@ function resolveIdpNamespace(
         `(${available}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
     );
   }
-  return application.idpServices[0].name;
+  return assertDefined(application.idpServices[0], "idp service missing").name;
 }
 
 function resolveAuthNamespace(application: Readonly<Application>): string {
@@ -448,24 +445,22 @@ function protoExecutor(
       triggerConfig = {
         config: {
           case: "incomingWebhook",
-          value: {
-            ...(trigger.response
-              ? {
-                  response: {
-                    ...(trigger.response.body
-                      ? {
-                          body: {
-                            expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
-                          },
-                        }
-                      : {}),
-                    ...(trigger.response.statusCode != null
-                      ? { statusCode: trigger.response.statusCode }
-                      : {}),
-                  },
-                }
-              : {}),
-          },
+          value: trigger.response
+            ? {
+                response: {
+                  ...(trigger.response.body
+                    ? {
+                        body: {
+                          expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
+                        },
+                      }
+                    : {}),
+                  ...(trigger.response.statusCode != null
+                    ? { statusCode: trigger.response.statusCode }
+                    : {}),
+                },
+              }
+            : {},
         },
       };
       break;

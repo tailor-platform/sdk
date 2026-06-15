@@ -2,7 +2,7 @@
  * TailorDB file (BLOB) utilities.
  *
  * Thin typed wrapper around the platform-provided `tailordb.file` runtime API.
- * At runtime this delegates to `globalThis.tailordb.file`. Use `fileMock` from
+ * At runtime this delegates to `globalThis.tailordb.file`. Use `mockFile` from
  * `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
  * @example
  * import { file } from "@tailor-platform/sdk/runtime";

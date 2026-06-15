@@ -3,7 +3,7 @@
  *
  * Thin typed wrapper around the platform-provided `tailor.authconnection` runtime API.
  * At runtime this delegates to `globalThis.tailor.authconnection`. Use
- * `authconnectionMock` from `@tailor-platform/sdk/vitest` to mock in unit tests.
+ * `mockAuthconnection` from `@tailor-platform/sdk/vitest` to mock in unit tests.
  * @example
  * import { authconnection } from "@tailor-platform/sdk/runtime";
  *

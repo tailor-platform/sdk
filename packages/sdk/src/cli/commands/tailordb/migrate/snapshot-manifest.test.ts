@@ -1,3 +1,5 @@
+// MessageInitShape makes every proto field optional
+/* oxlint-disable typescript/no-unnecessary-condition */
 import { describe, expect, test } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
@@ -398,6 +400,39 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.orderNumber?.serial?.start).toBe(1000n);
       expect(manifest.schema?.fields?.orderNumber?.serial?.maxValue).toBe(9999n);
       expect(manifest.schema?.fields?.orderNumber?.serial?.format).toBe("ORD-%04d");
+    });
+
+    test("converts serial in nested fields to bigint", () => {
+      const snapshotType = createTestSnapshotType("Order", {
+        fields: {
+          id: { type: "uuid", required: true },
+          detail: {
+            type: "nested",
+            required: true,
+            fields: {
+              lineNumber: {
+                type: "string",
+                required: true,
+                serial: {
+                  start: 1000,
+                  maxValue: 9999,
+                  format: "LINE-%04d",
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const serial = manifest.schema?.fields?.detail?.fields?.lineNumber?.serial;
+
+      // Nested serial values must be bigint (not number) so that the deploy
+      // comparison matches the proto-typed remote schema. A number here would
+      // produce a spurious "update" on every deploy.
+      expect(serial?.start).toBe(1000n);
+      expect(serial?.maxValue).toBe(9999n);
+      expect(serial?.format).toBe("LINE-%04d");
     });
   });
 

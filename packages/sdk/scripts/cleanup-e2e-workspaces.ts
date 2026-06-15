@@ -10,6 +10,7 @@
 
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
+import { assertDefined } from "../src/utils/assert";
 
 const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "template-e2e-", "sdk-ci-"];
 
@@ -27,12 +28,14 @@ async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> 
   const allWorkspaces: Workspace[] = [];
   let pageToken = "";
 
+  // loop exits when the platform stops returning a page token
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const response = await client.listWorkspaces({
       pageToken: pageToken || undefined,
     });
 
-    const workspaces = response.workspaces ?? [];
+    const workspaces = response.workspaces;
     allWorkspaces.push(...workspaces);
 
     if (!response.nextPageToken) {
@@ -51,8 +54,9 @@ async function main() {
     console.log("🔍 DRY RUN MODE - No workspaces will be deleted\n");
   }
 
-  // Initialize client
-  const accessToken = await loadAccessToken({ useProfile: false });
+  // Initialize client (machine-user login, never a local profile)
+  delete process.env.TAILOR_PLATFORM_PROFILE;
+  const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   // List all workspaces with pagination
@@ -96,7 +100,9 @@ async function main() {
   for (const ws of e2eWorkspaces) {
     try {
       console.log(`  Deleting ${ws.name}...`);
-      await client.deleteWorkspace({ workspaceId: ws.id! });
+      await client.deleteWorkspace({
+        workspaceId: assertDefined(ws.id, `workspace "${ws.name}" missing id`),
+      });
       console.log(`  ✅ Deleted ${ws.name}`);
       deleted++;
     } catch (error) {

@@ -55,6 +55,7 @@ function emptyResults(): PlanResults {
     },
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
+      customDomainChangeSet: createChangeSet("CustomDomains"),
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
@@ -104,6 +105,7 @@ function emptyResults(): PlanResults {
     workflow: {
       changeSet: createChangeSet("Workflows"),
       unchangedWorkflowJobNames: new Set<string>(),
+      jobFunctionDeletes: [],
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),

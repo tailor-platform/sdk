@@ -302,7 +302,7 @@ describe("planSecretManager hash-based diff", () => {
 
     const result = await planSecretManager(ctx);
     expect(result.secretChangeSet.updates).toHaveLength(1);
-    expect(result.secretChangeSet.updates[0].value).toBe("new-value");
+    expect(result.secretChangeSet.updates[0]!.value).toBe("new-value");
   });
 
   test("includes update when no stored state exists", async () => {
@@ -366,7 +366,7 @@ describe("planSecretManager vault metadata and deletion", () => {
     const result = await planSecretManager(ctx);
 
     expect(result.vaultChangeSet.deletes).toHaveLength(1);
-    expect(result.vaultChangeSet.deletes[0].name).toBe("removed-vault");
+    expect(result.vaultChangeSet.deletes[0]!.name).toBe("removed-vault");
     // Secrets inside deleted vault should also be planned for deletion
     expect(result.secretChangeSet.deletes).toEqual(
       expect.arrayContaining([
@@ -423,7 +423,7 @@ describe("planSecretManager vault metadata and deletion", () => {
     const result = await planSecretManager(ctx);
 
     expect(result.vaultChangeSet.unchanged).toHaveLength(1);
-    expect(result.vaultChangeSet.unchanged[0].name).toBe("my-vault");
+    expect(result.vaultChangeSet.unchanged[0]!.name).toBe("my-vault");
     expect(result.vaultChangeSet.creates).toHaveLength(0);
   });
 
@@ -650,7 +650,7 @@ describe("applySecretManager state persistence", () => {
     await applySecretManager(client, planResult, "create-update", application);
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
-    const savedState = mockSaveSecretsState.mock.calls[0][0];
+    const savedState = mockSaveSecretsState.mock.calls[0]![0];
     expect(savedState.vaults["my-vault"]["secret-a"]).toBe(hashValue("value-a"));
     expect(savedState.vaults["my-vault"]["secret-b"]).toBe(hashValue("value-b"));
   });
@@ -698,7 +698,7 @@ describe("applySecretManager state persistence", () => {
     await applySecretManager(client, planResult, "delete");
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
-    const savedState = mockSaveSecretsState.mock.calls[0][0];
+    const savedState = mockSaveSecretsState.mock.calls[0]![0];
     expect(savedState.vaults["my-vault"]["secret-a"]).toBe(hashValue("value-a"));
     expect(savedState.vaults["my-vault"]["orphan"]).toBeUndefined();
   });
@@ -732,7 +732,7 @@ describe("applySecretManager state persistence", () => {
 
     await applySecretManager(client, planResult, "delete");
 
-    const savedState = mockSaveSecretsState.mock.calls[0][0];
+    const savedState = mockSaveSecretsState.mock.calls[0]![0];
     expect(savedState.vaults["my-vault"]).toBeUndefined();
   });
 });
@@ -844,7 +844,7 @@ describe("planSecretManager ignoreNullishValues", () => {
     const result = await planSecretManager(ctx);
 
     expect(result.secretChangeSet.creates).toHaveLength(1);
-    expect(result.secretChangeSet.creates[0].secretName).toBe("new-secret");
+    expect(result.secretChangeSet.creates[0]!.secretName).toBe("new-secret");
     expect(result.secretChangeSet.updates).toHaveLength(0);
     expect(result.secretChangeSet.deletes).toHaveLength(0);
     expect(result.skippedSecrets).toEqual(["my-vault/existing-secret"]);
@@ -909,7 +909,7 @@ describe("applySecretManager ignoreNullishValues state persistence", () => {
     await applySecretManager(client, planResult, "create-update", application);
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
-    const savedState = mockSaveSecretsState.mock.calls[0][0];
+    const savedState = mockSaveSecretsState.mock.calls[0]![0];
     // Nullish secret preserves previous hash
     expect(savedState.vaults["my-vault"]["nullish-secret"]).toBe(hashValue("previous-value"));
     // Valued secret gets new hash

@@ -16,8 +16,10 @@ import {
 import { bundleResolvers } from "@/cli/services/resolver/bundler";
 import { createResolverService, type ResolverService } from "@/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/services/tailordb/service";
+import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "@/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "@/cli/services/workflow/service";
+import { resolveBundleLogLevel } from "@/cli/shared/bundle-log-level";
 import { type LoadedConfig } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
@@ -31,10 +33,10 @@ import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import {
   type AppConfig,
   type ExecutorServiceInput,
+  type HttpAdapterServiceInput,
   type ResolverServiceInput,
   type WorkflowServiceConfig,
 } from "@/types/app-config";
-import { type HttpAdapterServiceInput } from "@/types/app-config";
 import { type AuthConfig } from "@/types/auth";
 import { type IdPConfig } from "@/types/idp";
 import { type TailorDBServiceInput } from "@/types/tailordb";
@@ -107,7 +109,11 @@ function defineTailorDB(
     } else {
       // Parse config through schema to normalize gqlOperations
       const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
-      const tailorDB = createTailorDBService({ namespace, config: parsedConfig, pluginManager });
+      const tailorDB = createTailorDBService({
+        namespace,
+        config: parsedConfig,
+        pluginManager,
+      });
       tailorDBServices.push(tailorDB);
     }
     subgraphs.push({ Type: "tailordb", Name: namespace });
@@ -453,6 +459,9 @@ export async function loadApplication(
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();
   }
+  assertUniqueLocalTailorDBTypeNames({
+    tailorDBServices: tailordbResult.tailorDBServices,
+  });
 
   // 3. Generate plugin files and determine executor file paths
   const pluginExecutorFiles = generatePluginFilesIfNeeded(
@@ -482,8 +491,9 @@ export async function loadApplication(
     authResult.authService?.config.name,
   );
 
-  // 8. Resolve inline sourcemap setting
+  // 8. Resolve bundle settings
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
+  const bundleLogLevel = resolveBundleLogLevel(config.logLevel);
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -501,6 +511,7 @@ export async function loadApplication(
       triggerContext,
       bundleCache,
       inlineSourcemap,
+      bundleLogLevel,
     );
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(name, code);
@@ -515,6 +526,7 @@ export async function loadApplication(
       additionalFiles: [...pluginExecutorFiles],
       cache: bundleCache,
       inlineSourcemap,
+      bundleLogLevel,
     });
   }
 
@@ -529,6 +541,7 @@ export async function loadApplication(
       triggerContext,
       bundleCache,
       inlineSourcemap,
+      bundleLogLevel,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -544,6 +557,7 @@ export async function loadApplication(
         hasOutput: a.hasOutput,
       })),
       bundleCache,
+      bundleLogLevel,
     );
   }
 
@@ -558,6 +572,7 @@ export async function loadApplication(
       triggerContext,
       cache: bundleCache,
       inlineSourcemap,
+      bundleLogLevel,
     });
   }
 

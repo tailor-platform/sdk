@@ -51,7 +51,7 @@ export const shared = (value: string) => value.toUpperCase();
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
-    expect(service.adapters[0].adapter.name).toBe("adapter");
+    expect(service.adapters[0]!.adapter.name).toBe("adapter");
   });
 
   test("accepts a computed (non-literal) name as long as it is valid at runtime", async () => {
@@ -72,7 +72,7 @@ export default createHttpAdapter({
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
-    expect(service.adapters[0].adapter.name).toBe("dynamic-name");
+    expect(service.adapters[0]!.adapter.name).toBe("dynamic-name");
   });
 
   test("allows handlers shared between methods via a local reference", async () => {
@@ -93,7 +93,7 @@ export default createHttpAdapter({
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
-    expect(service.adapters[0].methods).toEqual(["get", "post"]);
+    expect(service.adapters[0]!.methods).toEqual(["get", "post"]);
   });
 
   test("rejects files whose input handler is async", async () => {

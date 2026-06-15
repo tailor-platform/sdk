@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import type { CallExpression, ObjectExpression, ObjectProperty } from "@oxc-project/types";
 
 export interface EnsureConfigIdResult {
@@ -28,6 +29,8 @@ function findDefineConfigCalls(node: unknown, results: ConfigCallSite[]): void {
     const ce = n as unknown as CallExpression;
     if (ce.callee.type === "Identifier" && ce.callee.name === "defineConfig") {
       const arg = ce.arguments[0];
+      // callee may be a ComputedMemberExpression at runtime
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       const configObj = arg && arg.type === "ObjectExpression" ? (arg as ObjectExpression) : null;
       results.push({ callExpr: ce, configObj });
     }
@@ -80,7 +83,7 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
     throw new Error(`Multiple defineConfig() calls found in ${configPath}. Only one is supported.`);
   }
 
-  const { configObj } = calls[0];
+  const { configObj } = assertDefined(calls[0], "defineConfig call site missing");
   if (!configObj) {
     throw new Error(
       `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
@@ -124,7 +127,7 @@ const idComment =
 function insertIdProperty(source: string, configObj: ObjectExpression, id: string): string {
   const idLiteral = `id: ${JSON.stringify(id)}`;
   if (configObj.properties.length > 0) {
-    const firstProp = configObj.properties[0];
+    const firstProp = assertDefined(configObj.properties[0], "first property missing");
     const lineStart = source.lastIndexOf("\n", firstProp.start - 1) + 1;
     const indent = source.slice(lineStart, firstProp.start);
     const insertion = `${idComment}\n${indent}${idLiteral},\n${indent}`;

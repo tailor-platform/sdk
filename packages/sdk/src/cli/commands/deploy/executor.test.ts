@@ -193,11 +193,11 @@ describe("planExecutor", () => {
 
       // "new-executor" should be created
       expect(result.changeSet.creates).toHaveLength(1);
-      expect(result.changeSet.creates[0].name).toBe("new-executor");
+      expect(result.changeSet.creates[0]!.name).toBe("new-executor");
 
       // "old-executor" should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("old-executor");
+      expect(result.changeSet.deletes[0]!.name).toBe("old-executor");
 
       // No updates (since old and new are different names)
       expect(result.changeSet.updates).toHaveLength(0);
@@ -228,15 +228,15 @@ describe("planExecutor", () => {
 
       // "executor-a-renamed" should be created
       expect(result.changeSet.creates).toHaveLength(1);
-      expect(result.changeSet.creates[0].name).toBe("executor-a-renamed");
+      expect(result.changeSet.creates[0]!.name).toBe("executor-a-renamed");
 
       // "executor-b" should be updated (exists)
       expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0].name).toBe("executor-b");
+      expect(result.changeSet.updates[0]!.name).toBe("executor-b");
 
       // "executor-a" should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("executor-a");
+      expect(result.changeSet.deletes[0]!.name).toBe("executor-a");
     });
   });
 
@@ -263,11 +263,11 @@ describe("planExecutor", () => {
 
       // "executor-a" should be updated
       expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0].name).toBe("executor-a");
+      expect(result.changeSet.updates[0]!.name).toBe("executor-a");
 
       // "executor-b" should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("executor-b");
+      expect(result.changeSet.deletes[0]!.name).toBe("executor-b");
 
       // No creates
       expect(result.changeSet.creates).toHaveLength(0);
@@ -296,7 +296,7 @@ describe("planExecutor", () => {
 
       // All should be deleted
       expect(result.changeSet.deletes).toHaveLength(3);
-      expect(result.changeSet.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
         "executor-1",
         "executor-2",
         "executor-3",
@@ -378,7 +378,7 @@ describe("planExecutor", () => {
 
       // Only own executor should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("my-executor");
+      expect(result.changeSet.deletes[0]!.name).toBe("my-executor");
 
       // Other app's executor should be in resourceOwners
       expect(result.resourceOwners.has("other-app")).toBe(true);
@@ -405,7 +405,7 @@ describe("planExecutor", () => {
 
       // Should be created
       expect(result.changeSet.creates).toHaveLength(1);
-      expect(result.changeSet.creates[0].name).toBe("new-executor");
+      expect(result.changeSet.creates[0]!.name).toBe("new-executor");
 
       // No updates or deletes
       expect(result.changeSet.updates).toHaveLength(0);
@@ -433,7 +433,7 @@ describe("planExecutor", () => {
 
       // Should be updated
       expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0].name).toBe("existing-executor");
+      expect(result.changeSet.updates[0]!.name).toBe("existing-executor");
 
       // No creates or deletes
       expect(result.changeSet.creates).toHaveLength(0);
@@ -450,7 +450,7 @@ describe("planExecutor", () => {
         forRemoval: false,
         config: mockConfig,
       });
-      const desiredExecutor = createResult.changeSet.creates[0].request.executor;
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
 
       const client = createMockClient([
         {
@@ -469,7 +469,7 @@ describe("planExecutor", () => {
       });
 
       expect(result.changeSet.unchanged).toHaveLength(1);
-      expect(result.changeSet.unchanged[0].name).toBe("existing-executor");
+      expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
@@ -496,7 +496,7 @@ describe("planExecutor", () => {
         forRemoval: false,
         config: mockConfig,
       });
-      const desiredExecutor = structuredClone(createResult.changeSet.creates[0].request.executor);
+      const desiredExecutor = structuredClone(createResult.changeSet.creates[0]!.request.executor);
       const eventConfig = desiredExecutor?.triggerConfig?.config;
       if (eventConfig?.case !== "event") {
         throw new Error("expected event trigger config");
@@ -520,7 +520,7 @@ describe("planExecutor", () => {
       });
 
       expect(result.changeSet.unchanged).toHaveLength(1);
-      expect(result.changeSet.unchanged[0].name).toBe("existing-executor");
+      expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
       expect(result.changeSet.updates).toHaveLength(0);
     });
   });
@@ -546,7 +546,7 @@ describe("planExecutor", () => {
 
       // Should detect unmanaged resource
       expect(result.unmanaged).toHaveLength(1);
-      expect(result.unmanaged[0].resourceName).toBe("my-executor");
+      expect(result.unmanaged[0]!.resourceName).toBe("my-executor");
     });
 
     test("detects conflict when same name owned by different app", async () => {
@@ -567,8 +567,8 @@ describe("planExecutor", () => {
 
       // Should detect conflict
       expect(result.conflicts).toHaveLength(1);
-      expect(result.conflicts[0].resourceName).toBe("my-executor");
-      expect(result.conflicts[0].currentOwner).toBe("other-app");
+      expect(result.conflicts[0]!.resourceName).toBe("my-executor");
+      expect(result.conflicts[0]!.currentOwner).toBe("other-app");
     });
   });
 
@@ -623,7 +623,7 @@ describe("planExecutor", () => {
       const result = await planExecutor(ctx);
 
       expect(result.changeSet.creates).toHaveLength(1);
-      const create = result.changeSet.creates[0];
+      const create = result.changeSet.creates[0]!;
 
       const eventConfig = (
         create.request.executor?.triggerConfig?.config as {
@@ -660,7 +660,7 @@ describe("planExecutor", () => {
       const result = await planExecutor(ctx);
 
       expect(result.changeSet.creates).toHaveLength(1);
-      const create = result.changeSet.creates[0];
+      const create = result.changeSet.creates[0]!;
 
       const variablesExpr = (
         create.request.executor?.targetConfig?.config as {
@@ -676,7 +676,7 @@ describe("planExecutor", () => {
 
   describe("typed event config", () => {
     function getEventConfig(result: Awaited<ReturnType<typeof planExecutor>>) {
-      const create = result.changeSet.creates[0];
+      const create = result.changeSet.creates[0]!;
       return (
         create.request.executor?.triggerConfig?.config as {
           case: "event";

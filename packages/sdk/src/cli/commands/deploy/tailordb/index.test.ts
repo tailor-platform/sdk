@@ -139,9 +139,9 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.service.creates).toHaveLength(1);
-      expect(result.changeSet.service.creates[0].name).toBe("new-tailordb");
+      expect(result.changeSet.service.creates[0]!.name).toBe("new-tailordb");
       expect(result.changeSet.service.deletes).toHaveLength(1);
-      expect(result.changeSet.service.deletes[0].name).toBe("old-tailordb");
+      expect(result.changeSet.service.deletes[0]!.name).toBe("old-tailordb");
     });
   });
 
@@ -164,9 +164,9 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.service.unchanged).toHaveLength(1);
-      expect(result.changeSet.service.unchanged[0].name).toBe("tailordb-a");
+      expect(result.changeSet.service.unchanged[0]!.name).toBe("tailordb-a");
       expect(result.changeSet.service.deletes).toHaveLength(1);
-      expect(result.changeSet.service.deletes[0].name).toBe("tailordb-b");
+      expect(result.changeSet.service.deletes[0]!.name).toBe("tailordb-b");
     });
 
     test("all services are deleted when config is empty", async () => {
@@ -187,7 +187,7 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
         "tailordb-1",
         "tailordb-2",
       ]);
@@ -249,7 +249,7 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(1);
-      expect(result.changeSet.service.deletes[0].name).toBe("my-tailordb");
+      expect(result.changeSet.service.deletes[0]!.name).toBe("my-tailordb");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
   });
@@ -330,10 +330,10 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.type.creates).toHaveLength(1);
-      const createdType = result.changeSet.type.creates[0].request.tailordbType;
+      const createdType = result.changeSet.type.creates[0]!.request.tailordbType;
       const profileField = createdType?.schema?.fields?.profile;
       const displayNameField = profileField?.fields?.displayName;
-      const contactEmailField = profileField?.fields?.contact?.fields?.email;
+      const contactEmailField = profileField?.fields?.contact!.fields?.email;
 
       expect(displayNameField?.validate).toHaveLength(1);
       expect(displayNameField?.validate?.[0]?.errorMessage).toBe("Display name is required");
@@ -973,12 +973,12 @@ describe("applyPreMigrationFieldAdjustments", () => {
     applyPreMigrationFieldAdjustments(fields, typeChanges);
 
     expect(fields.oldParentId).toBeDefined();
-    expect(fields.oldParentId?.type).toBe("uuid");
-    expect(fields.oldParentId?.foreignKey).toBe(true);
-    expect(fields.oldParentId?.foreignKeyType).toBe("OldParent");
-    expect(fields.oldParentId?.required).toBe(true);
+    expect(fields.oldParentId!.type).toBe("uuid");
+    expect(fields.oldParentId!.foreignKey).toBe(true);
+    expect(fields.oldParentId!.foreignKeyType).toBe("OldParent");
+    expect(fields.oldParentId!.required).toBe(true);
     // Untouched fields are preserved.
-    expect(fields.name?.type).toBe("string");
+    expect(fields.name!.type).toBe("string");
   });
 
   test("relaxes newly-added required field to optional", () => {
@@ -999,7 +999,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
 
     applyPreMigrationFieldAdjustments(fields, typeChanges);
 
-    expect(fields.newField?.required).toBe(false);
+    expect(fields.newField!.required).toBe(false);
   });
 
   test("does not modify fields that are not in typeChanges", () => {
@@ -1010,7 +1010,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
 
     applyPreMigrationFieldAdjustments(fields, typeChanges);
 
-    expect(fields.keep?.required).toBe(true);
+    expect(fields.keep!.required).toBe(true);
   });
 });
 

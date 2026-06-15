@@ -5,8 +5,12 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { initOperatorClient } from "../src/cli/shared/client";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
+
+// e2e must authenticate as the machine user from `tailor-sdk login --machineuser`,
+// never as the developer's locally configured profile.
+delete process.env.TAILOR_PLATFORM_PROFILE;
 
 const TRACKING_DIR = path.join(os.tmpdir(), "e2e-workspaces");
 const TEMPDIR_TRACKING_DIR = path.join(os.tmpdir(), "e2e-tempdirs");
@@ -29,6 +33,33 @@ export function trackTempDir(tempDir: string): void {
   // Use base64 to encode path as filename
   const encoded = Buffer.from(tempDir).toString("base64url");
   fs.writeFileSync(path.join(TEMPDIR_TRACKING_DIR, encoded), tempDir);
+}
+
+/**
+ * Resolve the run id prefix for e2e test workspace names.
+ * @returns Run id prefix
+ */
+export function resolveE2ERunId(): string {
+  return process.env.TAILOR_PLATFORM_E2E_RUN_ID ?? process.env.GITHUB_RUN_ID ?? "";
+}
+
+/**
+ * Resolve the workspace region for e2e tests.
+ * @param client - Operator client
+ * @returns Workspace region
+ */
+export async function resolveE2EWorkspaceRegion(client: OperatorClient): Promise<string> {
+  const configuredRegion = process.env.TAILOR_PLATFORM_WORKSPACE_REGION;
+  if (configuredRegion) {
+    return configuredRegion;
+  }
+
+  const regionsResp = await client.listAvailableWorkspaceRegions({});
+  const region = regionsResp.regions[0];
+  if (!region) {
+    throw new Error("No available regions found");
+  }
+  return region;
 }
 
 /**
@@ -61,7 +92,7 @@ export async function teardown(): Promise<void> {
   fs.rmSync(TRACKING_DIR, { recursive: true, force: true });
 
   console.log(`[globalTeardown] Cleaning up ${ids.length} workspace(s)...`);
-  const token = await loadAccessToken({ useProfile: false });
+  const token = await loadAccessToken();
   const client = await initOperatorClient(token);
 
   for (const id of ids) {
