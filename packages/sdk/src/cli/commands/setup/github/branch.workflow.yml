@@ -40,6 +40,13 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - id: tailor-merge-base
+        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          git merge --no-commit --no-ff "origin/$BASE_REF" || true
       # __SETUP_STEPS__
       - id: tailor-generate
         # __WORKING_DIRECTORY__
@@ -68,13 +75,6 @@ jobs:
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
-      - id: tailor-merge-base
-        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
-          git merge --no-commit --no-ff "origin/$BASE_REF" || true
       - id: tailor-plan
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
         # __WORKING_DIRECTORY__

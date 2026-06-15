@@ -42,6 +42,7 @@ status checks**.
 | `tailor-tag-guard/tailor-checkout`        | `actions/checkout` with `fetch-depth: 0`                        |
 | `tailor-tag-guard/tailor-tag-guard`       | Branch-reachability shell script                                |
 | `tailor-plan/tailor-checkout`             | `actions/checkout`                                              |
+| `tailor-plan/tailor-merge-base`           | Merges the PR base branch before branch-target dry-runs         |
 | `tailor-plan/tailor-setup-pnpm`           | `pnpm/action-setup` (pnpm projects only)                        |
 | `tailor-plan/tailor-setup-node`           | `actions/setup-node`                                            |
 | `tailor-plan/tailor-setup-bun`            | `oven-sh/setup-bun` (bun projects only)                         |
@@ -50,7 +51,6 @@ status checks**.
 | `tailor-plan/tailor-generate-check`       | Checks generated files are committed                            |
 | `tailor-plan/tailor-mask-credentials`     | Masks machine-user credentials                                  |
 | `tailor-plan/tailor-login`                | `tailor-sdk login --machine-user`                               |
-| `tailor-plan/tailor-merge-base`           | Merges the PR base branch before branch-target dry-runs         |
 | `tailor-plan/tailor-plan`                 | `tailor-sdk deploy --dry-run --yes`                             |
 | `tailor-plan/tailor-plan-summary`         | Writes the plan result to the step summary                      |
 | `tailor-plan/tailor-plan-comment`         | Updates the PR plan comment on branch targets                   |
@@ -125,6 +125,7 @@ The lock file is JSON, 2-space indented, with a trailing newline. It is
         // history of managed ids written by this setup run
         "tailor-plan", // job id
         "tailor-plan/tailor-checkout", // job/step qualified form
+        "tailor-plan/tailor-merge-base",
         "tailor-plan/tailor-setup-pnpm", // pnpm projects only
         "tailor-plan/tailor-setup-node",
         "tailor-plan/tailor-install",
@@ -132,7 +133,6 @@ The lock file is JSON, 2-space indented, with a trailing newline. It is
         "tailor-plan/tailor-generate-check",
         "tailor-plan/tailor-mask-credentials",
         "tailor-plan/tailor-login",
-        "tailor-plan/tailor-merge-base",
         "tailor-plan/tailor-plan",
         "tailor-plan/tailor-plan-summary",
         "tailor-plan/tailor-plan-comment",

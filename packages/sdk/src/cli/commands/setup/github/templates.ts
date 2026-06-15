@@ -191,12 +191,12 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     generatedIds.push(
       "tailor-plan",
       "tailor-plan/tailor-checkout",
+      "tailor-plan/tailor-merge-base",
       ...setupIds("tailor-plan", packageManager),
       "tailor-plan/tailor-generate",
       "tailor-plan/tailor-generate-check",
       "tailor-plan/tailor-mask-credentials",
       "tailor-plan/tailor-login",
-      "tailor-plan/tailor-merge-base",
       "tailor-plan/tailor-plan",
       "tailor-plan/tailor-plan-summary",
       "tailor-plan/tailor-plan-comment",

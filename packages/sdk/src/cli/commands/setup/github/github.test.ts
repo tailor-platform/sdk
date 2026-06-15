@@ -132,6 +132,9 @@ describe("renderBranchWorkflow", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain('git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"');
     expect(content).toContain('git merge --no-commit --no-ff "origin/$BASE_REF" || true');
+    expect(content.indexOf("id: tailor-merge-base")).toBeLessThan(
+      content.indexOf("id: tailor-setup-pnpm"),
+    );
   });
 
   test("paginates plan comment lookup", () => {
