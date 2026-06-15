@@ -34,6 +34,7 @@ interface TriggerRecord {
 interface LocalExecution {
   records: TriggerRecord[];
   cursor: number;
+  pending?: PendingTrigger;
 }
 
 class PendingTrigger {
@@ -135,6 +136,9 @@ function createLocalJobRunner(): {
         `Cannot trigger workflow job "${jobName}" outside runWorkflowLocally() job execution.`,
       );
     }
+    if (activeExecution.pending) {
+      throw activeExecution.pending;
+    }
 
     const serializedArgs = platformSerialize(args);
     const index = activeExecution.cursor;
@@ -143,10 +147,12 @@ function createLocalJobRunner(): {
     const cached = activeExecution.records[index];
     if (cached) {
       assertSameTrigger(cached, jobName, serializedArgs);
-      return cached.result;
+      return platformSerialize(cached.result);
     }
 
-    throw new PendingTrigger(jobName, serializedArgs);
+    const pending = new PendingTrigger(jobName, serializedArgs);
+    activeExecution.pending = pending;
+    throw pending;
   };
 
   const runJob = async (name: string, args?: unknown): Promise<unknown> => {
@@ -164,6 +170,15 @@ function createLocalJobRunner(): {
 
       try {
         const out = await body(platformSerialize(args), buildJobContext());
+        if (execution.pending) {
+          const result = await runJob(execution.pending.jobName, execution.pending.args);
+          records.push({
+            jobName: execution.pending.jobName,
+            args: execution.pending.args,
+            result,
+          });
+          continue;
+        }
         if (execution.cursor !== records.length) {
           throw new Error(
             `Workflow job trigger sequence changed while replaying "${name}". Expected ${records.length} trigger(s), but replay reached ${execution.cursor}.`,
@@ -171,9 +186,10 @@ function createLocalJobRunner(): {
         }
         return platformSerialize(out);
       } catch (cause) {
-        if (cause instanceof PendingTrigger) {
-          const result = await runJob(cause.jobName, cause.args);
-          records.push({ jobName: cause.jobName, args: cause.args, result });
+        const pending = cause instanceof PendingTrigger ? cause : execution.pending;
+        if (pending) {
+          const result = await runJob(pending.jobName, pending.args);
+          records.push({ jobName: pending.jobName, args: pending.args, result });
           continue;
         }
         throw cause;
