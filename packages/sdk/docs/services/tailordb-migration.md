@@ -428,6 +428,16 @@ For genuinely different schemas across environments, prefer separate workspaces 
 3. If remote was changed manually, decide whether to update local migrations to match or to use `migration set <N>` to align bookkeeping.
 4. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround.
 
+### "Invalid schema snapshot" or "Invalid migration diff" error
+
+**Cause:** A `schema.json` or `diff.json` file in the `migrations/` directory is corrupted or does not match the expected structure. Merge conflicts left in these files are a common cause.
+
+**Resolution:**
+
+1. Read the error message — it includes the file path and the offending field.
+2. Restore the file from version control (`git checkout -- <path>`), or regenerate migration files with `migration generate` / `migration script`.
+3. Do not hand-edit `schema.json` or `diff.json`; they are managed by the CLI.
+
 ### "No machine user available for migration execution"
 
 **Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`.
