@@ -90,6 +90,12 @@ jobs:
           EXIT_CODE=$?
           set -e
 
+          MAX_OUTPUT=60000
+          if [ "${#OUTPUT}" -gt "$MAX_OUTPUT" ]; then
+            OUTPUT_TAIL="${OUTPUT: -$MAX_OUTPUT}"
+            OUTPUT=$(printf '%s\n\n%s' "[output truncated to the last $MAX_OUTPUT characters - see the workflow logs for the full plan]" "$OUTPUT_TAIL")
+          fi
+
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           {
             echo "exit-code=$EXIT_CODE"
