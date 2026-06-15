@@ -13,7 +13,12 @@ export {
   createImportMain,
 } from "./mock";
 
-/** Represents an unauthenticated user in the Tailor platform. */
+/**
+ * Represents an unauthenticated user in the Tailor platform.
+ *
+ * @deprecated Represent an absent principal as `null` instead. This constant is
+ * removed in the next major version.
+ */
 export const unauthenticatedTailorUser = {
   id: "00000000-0000-0000-0000-000000000000",
   type: "",
