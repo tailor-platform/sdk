@@ -9,8 +9,7 @@
     "directory": "packages/sdk"
   },
   "bin": {
-    "tailor-sdk": "./dist/cli/index.mjs",
-    "tailor-sdk-skills": "./dist/cli/skills.mjs"
+    "tailor-sdk": "./dist/cli/index.mjs"
   },
   "files": [
     "CHANGELOG.md",
