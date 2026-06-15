@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@4bcad4c136ee26393cd8592e6822e53ba72cc776 # v1.3.0
+        uses: tailor-platform/actions/tag-guard@b37a41f0f491bac6619deb5ba8ba8d4a00cdff1e # v1.3.0
         with:
           target-branch: "__BRANCH__"
   # __TAG_GUARD_JOB_END__
@@ -45,13 +45,15 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@4bcad4c136ee26393cd8592e6822e53ba72cc776 # v1.3.0
+        uses: tailor-platform/actions/setup@b37a41f0f491bac6619deb5ba8ba8d4a00cdff1e # v1.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@4bcad4c136ee26393cd8592e6822e53ba72cc776 # v1.3.0
-        # __WORKING_DIRECTORY_WITH__
+        uses: tailor-platform/actions/generate-check@b37a41f0f491bac6619deb5ba8ba8d4a00cdff1e # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
       - id: tailor-plan
         uses: tailor-platform/actions/plan@4d0f160b6b5cc2f02594776665471497c297181e # v1.2.0
         with:
@@ -76,7 +78,7 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@4bcad4c136ee26393cd8592e6822e53ba72cc776 # v1.3.0
+        uses: tailor-platform/actions/setup@b37a41f0f491bac6619deb5ba8ba8d4a00cdff1e # v1.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__

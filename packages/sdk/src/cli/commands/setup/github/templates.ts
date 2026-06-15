@@ -102,13 +102,6 @@ function applyCommon(
     "WORKING_DIRECTORY",
     workingDirectory ? `working-directory: ${workingDirectory}` : undefined,
   );
-  // A `with:` block carrying only the optional working-directory: emit the
-  // whole block when a directory is set, drop it (no inputs) otherwise.
-  out = line(
-    out,
-    "WORKING_DIRECTORY_WITH",
-    workingDirectory ? `with:\n  working-directory: ${workingDirectory}` : undefined,
-  );
   // Plain placeholders last so values containing `$` are not interpreted as
   // replacement patterns.
   return out
