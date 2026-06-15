@@ -7,7 +7,6 @@ import type {
   UserAttributeListKey,
   UserAttributeMap,
 } from "@/types/auth";
-import type { AuthInvoker as ParserAuthInvoker } from "@/types/auth.generated";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/types/field-types";
 import type { TailorField } from "@/types/tailor-field";
 
@@ -89,22 +88,12 @@ export type {
 } from "@/types/auth";
 
 /**
- * Invoker type compatible with tailor.v1.AuthInvoker
- * - namespace: auth service name
- * - machineUserName: machine user name
- */
-export type AuthInvoker<M extends string> = Omit<ParserAuthInvoker, "machineUserName"> & {
-  machineUserName: M;
-};
-
-/**
  * Define an auth service for the Tailor SDK.
  * @template Name
  * @template User
  * @template AttributeMap
  * @template AttributeList
  * @template MachineUserNames
- * @template M
  * @param name - Auth service name
  * @param config - Auth service configuration
  * @returns Defined auth service
@@ -127,8 +116,7 @@ export function defineAuth<
   >,
 ): DefinedAuth<
   Name,
-  UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames, ConnectionNames>,
-  MachineUserNames
+  UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames, ConnectionNames>
 >;
 export function defineAuth<
   const Name extends string,
@@ -140,8 +128,7 @@ export function defineAuth<
   config: MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>,
 ): DefinedAuth<
   Name,
-  MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>,
-  MachineUserNames
+  MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>
 >;
 /* @__NO_SIDE_EFFECTS__ */
 export function defineAuth<
@@ -161,9 +148,6 @@ export function defineAuth<
   const result = {
     ...config,
     name,
-    invoker<M extends MachineUserNames>(machineUser: M) {
-      return { namespace: name, machineUserName: machineUser } as const;
-    },
     getConnectionToken<C extends string>(connectionName: C): Promise<AuthConnectionTokenResult> {
       return tailor.authconnection.getConnectionToken(connectionName);
     },
@@ -172,7 +156,6 @@ export function defineAuth<
     | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes>
   ) & {
     name: string;
-    invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M>;
     getConnectionToken<C extends string>(connectionName: C): Promise<AuthConnectionTokenResult>;
   };
 

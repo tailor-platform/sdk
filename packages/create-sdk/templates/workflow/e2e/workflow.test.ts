@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import { startWorkflow } from "@tailor-platform/sdk/cli";
-import config from "../tailor.config";
 import userProfileSyncWorkflow from "../src/workflow/sync-profile";
 
 describe("workflow", () => {
@@ -11,7 +10,7 @@ describe("workflow", () => {
 
     const { executionId, wait } = await startWorkflow({
       workflow: userProfileSyncWorkflow,
-      authInvoker: config.auth.invoker("admin"),
+      authInvoker: "admin",
       arg: {
         name: "workflow-test-user",
         email: testEmail,
