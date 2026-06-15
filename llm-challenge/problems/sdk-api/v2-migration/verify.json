@@ -65,6 +65,34 @@
       "description": "tests no longer use deprecated setup helpers"
     },
     {
+      "id": "workflow-trigger-mocks-sync",
+      "kind": "content-match",
+      "glob": "**/*.{test,spec}.ts",
+      "pattern": "\\.mockReturnValue\\s*\\(",
+      "description": "workflow trigger spies return synchronous job outputs"
+    },
+    {
+      "id": "legacy-workflow-trigger-mocks-removed",
+      "kind": "content-not-match",
+      "glob": "**/*.{test,spec}.ts",
+      "pattern": "\\.mockResolvedValue\\s*\\(",
+      "description": "workflow trigger spies no longer mock promise-wrapped trigger outputs"
+    },
+    {
+      "id": "workflow-local-runner-used",
+      "kind": "content-match",
+      "glob": "**/*.{test,spec}.ts",
+      "pattern": "runWorkflowLocally\\s*\\(",
+      "description": "full-chain workflow tests use the local workflow runner"
+    },
+    {
+      "id": "legacy-main-job-trigger-local-run-removed",
+      "kind": "content-not-match",
+      "glob": "**/*.{test,spec}.ts",
+      "pattern": "\\.mainJob\\.trigger\\s*\\(",
+      "description": "tests no longer use workflow main job trigger as the local full-chain runner"
+    },
+    {
       "id": "streaming-download-used",
       "kind": "content-match",
       "glob": "**/*.ts",

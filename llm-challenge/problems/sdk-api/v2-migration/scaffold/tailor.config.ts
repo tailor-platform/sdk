@@ -29,7 +29,7 @@ export default defineConfig({
     },
   },
   workflow: {
-    files: ["./src/workflowLauncher.ts"],
+    files: ["./src/workflowLauncher.ts", "./src/orderWorkflow.ts"],
   },
   auth,
 });
