@@ -41,14 +41,14 @@ const NORMALIZER_IDENTIFIER = "__tailor_normalizeAuthInvoker";
 /**
  * Build the source text of the injected normalizer helper.
  *
- * Accepts either a plain string (machine user name) or the object form
- * `{ namespace, machineUserName }`, and always returns the object form.
+ * Accepts a plain string machine user name and returns the object form
+ * expected by the platform RPC.
  * The auth namespace is baked in at bundle time.
  * @param authNamespace - Auth service namespace to embed
  * @returns Source line defining the helper
  */
 function buildNormalizerHelperSource(authNamespace: string): string {
-  return `const ${NORMALIZER_IDENTIFIER} = (v) => typeof v === "string" ? { namespace: ${JSON.stringify(authNamespace)}, machineUserName: v } : v;\n`;
+  return `const ${NORMALIZER_IDENTIFIER} = (machineUserName) => ({ namespace: ${JSON.stringify(authNamespace)}, machineUserName });\n`;
 }
 
 /**
@@ -431,10 +431,9 @@ export function transformFunctionTriggers(
       if (workflowName) {
         // Resolve the source expression for authInvoker.
         const rawExpr = call.authInvoker.isShorthand ? "authInvoker" : call.authInvoker.valueText;
-        // Wrap with the runtime normalizer so any form (string literal,
-        // variable reference, function call, or `{ namespace, machineUserName }`
-        // object) becomes the object form the platform RPC expects. The
-        // normalizer is injected once at the top of the file.
+        // Wrap with the runtime normalizer so string expressions become the
+        // object form the platform RPC expects. The normalizer is injected
+        // once at the top of the file.
         // When no auth service is configured we can't expand a string, so
         // we pass through unchanged (platform will reject a string with a
         // clear error).

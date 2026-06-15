@@ -6,8 +6,8 @@ import type { AuthInvoker } from "@/types/auth.generated";
  * Accepts either:
  * - `undefined` — returns undefined
  * - a plain string (machine user name) — expands to `{ namespace, machineUserName }` using `authNamespace`
- * - an object `{ namespace, machineUserName }` — returned as-is
- * @param authInvoker - String machine user name or object form
+ * - an internal object `{ namespace, machineUserName }` — returned as-is
+ * @param authInvoker - String machine user name or internal object form
  * @param authNamespace - Auth service namespace (required when authInvoker is a string)
  * @param context - Contextual label used in error messages (e.g. `resolver "foo"`)
  * @returns Object form of auth invoker, or undefined
@@ -22,7 +22,7 @@ export function normalizeAuthInvoker(
     if (!authNamespace) {
       throw new Error(
         `${context} uses a string authInvoker ("${authInvoker}"), but no Auth service is configured. ` +
-          `Configure an Auth service or use the object form { namespace, machineUserName }.`,
+          `Configure an Auth service before using authInvoker.`,
       );
     }
     return { namespace: authNamespace, machineUserName: authInvoker };

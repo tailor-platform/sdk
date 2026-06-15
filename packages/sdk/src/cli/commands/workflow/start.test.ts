@@ -71,10 +71,7 @@ describe("startWorkflow runtime overload", () => {
           body: () => undefined,
         },
       },
-      authInvoker: {
-        namespace: "typed-ns",
-        machineUserName: "typed-user",
-      },
+      authInvoker: "typed-user",
     } as never);
 
     expect(loadConfig).toHaveBeenCalledTimes(1);
@@ -88,6 +85,33 @@ describe("startWorkflow runtime overload", () => {
     expect(testStartWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowId: "id:legacy-workflow",
+      }),
+    );
+  });
+
+  test("typed shape resolves auth namespace from config and sends proto authInvoker", async () => {
+    await startWorkflow({
+      workflow: {
+        name: "typed-workflow",
+        mainJob: {
+          body: () => undefined,
+        },
+      },
+      authInvoker: "typed-user",
+    });
+
+    expect(loadConfig).toHaveBeenCalledTimes(1);
+    expect(getApplicationMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      applicationName: "my-app",
+    });
+    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "id:typed-workflow",
+        authInvoker: expect.objectContaining({
+          namespace: "auth-ns",
+          machineUserName: "typed-user",
+        }),
       }),
     );
   });
