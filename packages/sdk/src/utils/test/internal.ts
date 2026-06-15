@@ -32,7 +32,7 @@ export function toSchemaOutputs(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Accept any db.type() result for testing
   types: Record<string, any>,
 ): Record<string, TailorDBTypeSchemaOutput> {
-  const result: Record<string, TailorDBTypeSchemaOutput> = {};
+  const result = Object.create(null) as Record<string, TailorDBTypeSchemaOutput>;
   for (const [name, type] of Object.entries(types)) {
     result[name] = toSchemaOutput(type);
   }

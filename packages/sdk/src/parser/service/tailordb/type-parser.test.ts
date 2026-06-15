@@ -4,6 +4,29 @@ import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {
+  test("allows type names that match Object prototype properties", () => {
+    const testType = db.type("toString", {
+      value: db.string(),
+    });
+
+    const result = parseTypes(toSchemaOutputs({ toString: testType }), "test-namespace");
+
+    expect(Object.hasOwn(result, "toString")).toBe(true);
+  });
+
+  test("allows __proto__ as a type name", () => {
+    const testType = db.type("__proto__", {
+      value: db.string(),
+    });
+
+    const result = parseTypes(
+      toSchemaOutputs(Object.fromEntries([["__proto__", testType]])),
+      "test-namespace",
+    );
+
+    expect(Object.hasOwn(result, "__proto__")).toBe(true);
+  });
+
   describe("array field validation", () => {
     test("should throw error when index is set on array field", () => {
       // Bypass type check by directly setting metadata
@@ -39,7 +62,7 @@ describe("parseTypes", () => {
       });
 
       const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
-      expect(result.Test.fields.email.config.index).toBe(true);
+      expect(result.Test!.fields.email!.config.index).toBe(true);
     });
 
     test("should allow unique on non-array fields", () => {
@@ -48,7 +71,7 @@ describe("parseTypes", () => {
       });
 
       const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
-      expect(result.Test.fields.email.config.unique).toBe(true);
+      expect(result.Test!.fields.email!.config.unique).toBe(true);
     });
   });
 
@@ -71,8 +94,8 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.Employee.backwardRelationships).toHaveProperty("performanceReviews");
-      expect(result.Employee.backwardRelationships.performanceReviews).toMatchObject({
+      expect(result.Employee!.backwardRelationships).toHaveProperty("performanceReviews");
+      expect(result.Employee!.backwardRelationships.performanceReviews).toMatchObject({
         name: "performanceReviews",
         targetType: "PerformanceReview",
         targetField: "employeeId",
@@ -143,14 +166,14 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.Employee.backwardRelationships).toHaveProperty("targetReviews");
-      expect(result.Employee.backwardRelationships).toHaveProperty("authorReviews");
-      expect(result.Employee.backwardRelationships.targetReviews).toMatchObject({
+      expect(result.Employee!.backwardRelationships).toHaveProperty("targetReviews");
+      expect(result.Employee!.backwardRelationships).toHaveProperty("authorReviews");
+      expect(result.Employee!.backwardRelationships.targetReviews).toMatchObject({
         name: "targetReviews",
         targetType: "PerformanceReview",
         targetField: "targetEmployeeId",
       });
-      expect(result.Employee.backwardRelationships.authorReviews).toMatchObject({
+      expect(result.Employee!.backwardRelationships.authorReviews).toMatchObject({
         name: "authorReviews",
         targetType: "PerformanceReview",
         targetField: "authorEmployeeId",
@@ -204,8 +227,8 @@ describe("parseTypes", () => {
 
       const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
-      expect(result.User.backwardRelationships).toHaveProperty("posts");
-      expect(result.User.backwardRelationships.posts).toMatchObject({
+      expect(result.User!.backwardRelationships).toHaveProperty("posts");
+      expect(result.User!.backwardRelationships.posts).toMatchObject({
         name: "posts",
         targetType: "Post",
         isArray: true,
@@ -230,8 +253,8 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.User.backwardRelationships).toHaveProperty("profile");
-      expect(result.User.backwardRelationships.profile).toMatchObject({
+      expect(result.User!.backwardRelationships).toHaveProperty("profile");
+      expect(result.User!.backwardRelationships.profile).toMatchObject({
         name: "profile",
         targetType: "Profile",
         isArray: false,
@@ -376,7 +399,7 @@ describe("parseTypes", () => {
       const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
       // Check computed metadata on field config
-      const authorIdConfig = result.Post.fields.authorId.config;
+      const authorIdConfig = result.Post!.fields.authorId!.config;
       expect(authorIdConfig.foreignKey).toBe(true);
       expect(authorIdConfig.foreignKeyType).toBe("User");
       expect(authorIdConfig.foreignKeyField).toBe("id");
@@ -401,7 +424,7 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.Profile.fields.userId.config.unique).toBe(true);
+      expect(result.Profile!.fields.userId!.config.unique).toBe(true);
     });
 
     test("should set unique=true for oneToOne relations (unique before relation)", () => {
@@ -424,7 +447,7 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.Profile.fields.userId.config.unique).toBe(true);
+      expect(result.Profile!.fields.userId!.config.unique).toBe(true);
     });
 
     test("should set unique=true for oneToOne relations (unique after relation)", () => {
@@ -448,7 +471,7 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.Profile.fields.userId.config.unique).toBe(true);
+      expect(result.Profile!.fields.userId!.config.unique).toBe(true);
     });
 
     test("should throw error when unique is set on n-1 relation (unique before relation)", () => {
@@ -510,8 +533,8 @@ describe("parseTypes", () => {
       const result = parseTypes(toSchemaOutputs({ Node: node }), "test-namespace");
 
       // Check that self-reference is resolved to type name
-      expect(result.Node.fields.parentId.config.foreignKeyType).toBe("Node");
-      expect(result.Node.fields.parentId.relation?.targetType).toBe("Node");
+      expect(result.Node!.fields.parentId!.config.foreignKeyType).toBe("Node");
+      expect(result.Node!.fields.parentId!.relation?.targetType).toBe("Node");
     });
 
     test("should not create forward/backward relationships for keyOnly relations", () => {
@@ -529,9 +552,9 @@ describe("parseTypes", () => {
       const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
       // keyOnly should not create relation info
-      expect(result.Post.fields.userId.relation).toBeUndefined();
-      expect(result.Post.forwardRelationships).toEqual({});
-      expect(result.User.backwardRelationships).toEqual({});
+      expect(result.Post!.fields.userId!.relation).toBeUndefined();
+      expect(result.Post!.forwardRelationships).toEqual({});
+      expect(result.User!.backwardRelationships).toEqual({});
     });
   });
 });

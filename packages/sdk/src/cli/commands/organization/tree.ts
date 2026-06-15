@@ -94,13 +94,13 @@ async function buildFolderTreeJson(
 
 function renderTree(nodes: TreeNode[], prefix: string): string {
   let output = "";
-  for (let i = 0; i < nodes.length; i++) {
+  for (const [i, node] of nodes.entries()) {
     const isLast = i === nodes.length - 1;
     const connector = isLast ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ";
     const childPrefix = isLast ? "    " : "\u2502   ";
-    output += `${prefix}${connector}${nodes[i].name}\n`;
-    if (nodes[i].children.length > 0) {
-      output += renderTree(nodes[i].children, prefix + childPrefix);
+    output += `${prefix}${connector}${node.name}\n`;
+    if (node.children.length > 0) {
+      output += renderTree(node.children, prefix + childPrefix);
     }
   }
   return output;

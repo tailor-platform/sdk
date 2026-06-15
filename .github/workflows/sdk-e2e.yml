@@ -27,8 +27,11 @@ jobs:
           filters: |
             changes:
               - .github/workflows/sdk-e2e.yml
+              - .github/actions/**
               - packages/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   sdk-e2e:
@@ -108,22 +111,35 @@ jobs:
 
   sdk-e2e-result:
     needs: [changes, sdk-e2e, template-workflow-e2e]
-    if: always()
+    if: >-
+      always() &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          SDK_E2E_RESULT: ${{ needs.sdk-e2e.result }}
+          TEMPLATE_WORKFLOW_E2E_RESULT: ${{ needs.template-workflow-e2e.result }}
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.sdk-e2e.result }}" != "success" ]]; then
+          if [[ "$SDK_E2E_RESULT" != "success" ]]; then
             echo "SDK package e2e job failed"
             exit 1
           fi
-          if [[ "${{ needs.template-workflow-e2e.result }}" != "success" ]]; then
+          if [[ "$TEMPLATE_WORKFLOW_E2E_RESULT" != "success" ]]; then
             echo "Template workflow e2e job failed"
             exit 1
           fi

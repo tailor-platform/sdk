@@ -30,7 +30,7 @@ export function parseTypes(
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
 ): Record<string, TailorDBType> {
-  const types: Record<string, TailorDBType> = {};
+  const types = createRecord<TailorDBType>();
   const allTypeNames = new Set(Object.keys(rawTypes));
 
   for (const [typeName, type] of Object.entries(rawTypes)) {
@@ -58,8 +58,8 @@ function parseTailorDBType(
   const metadata = type.metadata;
   const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
 
-  const fields: Record<string, ParsedField> = {};
-  const forwardRelationships: Record<string, ParsedRelationship> = {};
+  const fields = createRecord<ParsedField>();
+  const forwardRelationships = createRecord<ParsedRelationship>();
 
   for (const [fieldName, fieldDef] of Object.entries(type.fields) as [
     string,
@@ -113,7 +113,7 @@ function parseTailorDBType(
         targetField: fieldName,
         sourceField: relationInfo.key,
         isArray: false,
-        description: targetType?.metadata?.description || "",
+        description: targetType?.metadata.description || "",
       };
     }
 
@@ -126,9 +126,9 @@ function parseTailorDBType(
     description: metadata.description,
     fields,
     forwardRelationships,
-    backwardRelationships: {},
-    settings: metadata.settings || {},
-    permissions: parsePermissions(metadata.permissions || {}),
+    backwardRelationships: createRecord<ParsedRelationship>(),
+    settings: metadata.settings ?? {},
+    permissions: parsePermissions(metadata.permissions),
     indexes: metadata.indexes,
     files: metadata.files,
   };
@@ -151,11 +151,14 @@ function buildBackwardRelationships(
   const backwardNameSources: Record<
     string,
     Record<string, { sourceType: string; fieldName: string }[]>
-  > = {};
+  > = Object.create(null);
 
   // Initialize tracking for all types
   for (const typeName of Object.keys(types)) {
-    backwardNameSources[typeName] = {};
+    backwardNameSources[typeName] = Object.create(null) as Record<
+      string,
+      { sourceType: string; fieldName: string }[]
+    >;
   }
 
   // Build backward relationships and track sources
@@ -173,10 +176,18 @@ function buildBackwardRelationships(
           }
 
           // Track the source of this backward name
-          if (!backwardNameSources[typeName][backwardName]) {
-            backwardNameSources[typeName][backwardName] = [];
+          const typeBackwardNames = backwardNameSources[typeName];
+          if (typeBackwardNames === undefined) {
+            throw new Error(`backward name sources not initialized for type: ${typeName}`);
           }
-          backwardNameSources[typeName][backwardName].push({
+          if (!typeBackwardNames[backwardName]) {
+            typeBackwardNames[backwardName] = [];
+          }
+          const sources = typeBackwardNames[backwardName];
+          if (sources === undefined) {
+            throw new Error(`backward name sources entry not initialized for: ${backwardName}`);
+          }
+          sources.push({
             sourceType: otherTypeName,
             fieldName,
           });
@@ -199,7 +210,10 @@ function buildBackwardRelationships(
 
   for (const [targetTypeName, backwardNames] of Object.entries(backwardNameSources)) {
     const targetType = types[targetTypeName];
-    const targetTypeSourceInfo = typeSourceInfo?.[targetTypeName];
+    if (targetType === undefined) {
+      throw new Error(`type not found: ${targetTypeName}`);
+    }
+    const targetTypeSourceInfo = getTypeSourceInfo(typeSourceInfo, targetTypeName);
     const targetLocation = targetTypeSourceInfo
       ? isPluginGeneratedType(targetTypeSourceInfo)
         ? ` (plugin: ${targetTypeSourceInfo.pluginId})`
@@ -211,7 +225,7 @@ function buildBackwardRelationships(
       if (sources.length > 1) {
         const sourceList = sources
           .map((s) => {
-            const sourceInfo = typeSourceInfo?.[s.sourceType];
+            const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.sourceType);
             const location = sourceInfo
               ? isPluginGeneratedType(sourceInfo)
                 ? ` (plugin: ${sourceInfo.pluginId})`
@@ -227,9 +241,12 @@ function buildBackwardRelationships(
       }
 
       // Check for conflict with existing fields
-      if (backwardName in targetType.fields) {
+      if (Object.hasOwn(targetType.fields, backwardName)) {
         const source = sources[0];
-        const sourceInfo = typeSourceInfo?.[source.sourceType];
+        if (source === undefined) {
+          throw new Error(`no source found for backward name: ${backwardName}`);
+        }
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
         const sourceLocation = sourceInfo
           ? isPluginGeneratedType(sourceInfo)
             ? ` (plugin: ${sourceInfo.pluginId})`
@@ -243,9 +260,12 @@ function buildBackwardRelationships(
       }
 
       // Check for conflict with files fields
-      if (targetType.files && backwardName in targetType.files) {
+      if (targetType.files && Object.hasOwn(targetType.files, backwardName)) {
         const source = sources[0];
-        const sourceInfo = typeSourceInfo?.[source.sourceType];
+        if (source === undefined) {
+          throw new Error(`no source found for backward name: ${backwardName}`);
+        }
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
         const sourceLocation = sourceInfo
           ? isPluginGeneratedType(sourceInfo)
             ? ` (plugin: ${sourceInfo.pluginId})`
@@ -290,7 +310,7 @@ function validatePluralFormUniqueness(
     const pluralQuery = inflection.camelize(parsedType.pluralForm, true);
 
     if (singularQuery === pluralQuery) {
-      const sourceInfo = typeSourceInfo?.[parsedType.name];
+      const sourceInfo = getTypeSourceInfo(typeSourceInfo, parsedType.name);
       const location = sourceInfo
         ? isPluginGeneratedType(sourceInfo)
           ? ` (plugin: ${sourceInfo.pluginId})`
@@ -304,37 +324,35 @@ function validatePluralFormUniqueness(
   }
 
   // Check 2: All query names must be unique across types
-  const queryNameToSource: Record<string, { typeName: string; kind: string }[]> = {};
+  const queryNameToSource = new Map<string, { typeName: string; kind: string }[]>();
 
   for (const parsedType of Object.values(types)) {
     const singularQuery = inflection.camelize(parsedType.name, true);
     const pluralQuery = inflection.camelize(parsedType.pluralForm, true);
 
-    if (!queryNameToSource[singularQuery]) {
-      queryNameToSource[singularQuery] = [];
-    }
-    queryNameToSource[singularQuery].push({
+    const singularSources = queryNameToSource.get(singularQuery) ?? [];
+    singularSources.push({
       typeName: parsedType.name,
       kind: "singular",
     });
+    queryNameToSource.set(singularQuery, singularSources);
 
     if (singularQuery !== pluralQuery) {
-      if (!queryNameToSource[pluralQuery]) {
-        queryNameToSource[pluralQuery] = [];
-      }
-      queryNameToSource[pluralQuery].push({
+      const pluralSources = queryNameToSource.get(pluralQuery) ?? [];
+      pluralSources.push({
         typeName: parsedType.name,
         kind: "plural",
       });
+      queryNameToSource.set(pluralQuery, pluralSources);
     }
   }
 
-  const duplicates = Object.entries(queryNameToSource).filter(([, sources]) => sources.length > 1);
+  const duplicates = [...queryNameToSource].filter(([, sources]) => sources.length > 1);
 
   for (const [queryName, sources] of duplicates) {
     const sourceList = sources
       .map((s) => {
-        const sourceInfo = typeSourceInfo?.[s.typeName];
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.typeName);
         const location = sourceInfo
           ? isPluginGeneratedType(sourceInfo)
             ? ` (plugin: ${sourceInfo.pluginId})`
@@ -352,4 +370,17 @@ function validatePluralFormUniqueness(
         `${errors.map((e) => `  - ${e}`).join("\n")}`,
     );
   }
+}
+
+function getTypeSourceInfo(
+  typeSourceInfo: TypeSourceInfo | undefined,
+  typeName: string,
+): TypeSourceInfo[string] | undefined {
+  return typeSourceInfo && Object.hasOwn(typeSourceInfo, typeName)
+    ? typeSourceInfo[typeName]
+    : undefined;
+}
+
+function createRecord<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>;
 }

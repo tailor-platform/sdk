@@ -13,6 +13,7 @@ import { logger, styles } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import { PluginManager } from "@/plugin/manager";
+import { assertDefined } from "@/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { parseMigrationNumberArg } from "./migration-number";
@@ -264,7 +265,7 @@ function selectTargetNamespace(
         .join(", ")}`,
     );
   }
-  return namespacesWithMigrations[0];
+  return assertDefined(namespacesWithMigrations[0], "namespace with migrations missing");
 }
 
 /**

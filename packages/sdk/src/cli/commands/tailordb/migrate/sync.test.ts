@@ -222,17 +222,17 @@ describe("tailordb migration sync", () => {
     // Snapshot at 0001 contains User (existing → update) and Post (new → create);
     // remote-only Stale is deleted.
     expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.createTailorDBType.mock.calls[0][0]).toMatchObject({
+    expect(state.createTailorDBType.mock.calls[0]![0]).toMatchObject({
       namespaceName: "tailordb",
       tailordbType: { name: "Post" },
     });
     expect(state.updateTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.updateTailorDBType.mock.calls[0][0]).toMatchObject({
+    expect(state.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
       namespaceName: "tailordb",
       tailordbType: { name: "User" },
     });
     expect(state.deleteTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.deleteTailorDBType.mock.calls[0][0]).toMatchObject({
+    expect(state.deleteTailorDBType.mock.calls[0]![0]).toMatchObject({
       namespaceName: "tailordb",
       tailordbTypeName: "Stale",
     });
@@ -333,7 +333,7 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.updateTailorDBType.mock.calls[0][0]).toMatchObject({
+    expect(state.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
       tailordbType: { name: "User", schema: { settings: { publishRecordEvents: true } } },
     });
   });
@@ -344,10 +344,10 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.updateTailorDBType.mock.calls[0][0]).toMatchObject({
+    expect(state.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
       tailordbType: { name: "User", schema: { settings: { publishRecordEvents: true } } },
     });
-    expect(state.createTailorDBType.mock.calls[0][0]).toMatchObject({
+    expect(state.createTailorDBType.mock.calls[0]![0]).toMatchObject({
       tailordbType: { name: "Post", schema: { settings: { publishRecordEvents: false } } },
     });
   });

@@ -110,7 +110,7 @@ async function execRemove(
   auth.changeSet.authHook.print();
   auth.changeSet.scim.print();
   auth.changeSet.scimResource.print();
-  auth.changeSet.connection?.print();
+  auth.changeSet.connection.print();
   secretManager.vaultChangeSet.print();
   secretManager.secretChangeSet.print();
 

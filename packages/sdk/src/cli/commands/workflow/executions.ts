@@ -281,6 +281,8 @@ export async function getWorkflowExecution(
   async function waitForCompletion(): Promise<WorkflowExecutionDetailInfo> {
     const interval = options.interval ?? 3000;
 
+    // loop exits when the workflow execution reaches a terminal status
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (true) {
       const { execution } = await client.getWorkflowExecution({
         workspaceId,

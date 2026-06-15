@@ -38,7 +38,7 @@ describe("extractVaultStore", () => {
     const store = extractVaultStore(secrets);
     expect(store).not.toBeNull();
     // Mutating the store must not affect the original.
-    store!.aws.K = "modified";
+    store!.aws!.K = "modified";
     expect(aws.K).toBe("v");
   });
 

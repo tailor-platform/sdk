@@ -105,6 +105,7 @@ function emptyResults(): PlanResults {
     workflow: {
       changeSet: createChangeSet("Workflows"),
       unchangedWorkflowJobNames: new Set<string>(),
+      jobFunctionDeletes: [],
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),

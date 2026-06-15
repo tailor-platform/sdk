@@ -19,6 +19,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
+import { assertDefined } from "@/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType, type DetectedFunction } from "./detect";
 
@@ -187,7 +188,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         logger.error("Execution failed");
       }
 
-      if (result.logs?.trim()) {
+      if (result.logs.trim()) {
         logger.log(styles.bold("\nLogs:"));
         for (const line of result.logs.split("\n")) {
           logger.log(`  ${line}`);
@@ -255,7 +256,7 @@ function resolveMachineUserName(
     if (machineUsers) {
       const keys = Object.keys(machineUsers);
       if (keys.length > 0) {
-        return keys[0];
+        return assertDefined(keys[0], "machine user key missing");
       }
     }
   }
@@ -337,7 +338,7 @@ export function resolveResolverArg(
     type: "machine_user" as const,
     workspaceId,
     attributes: machineUser.attributes ?? null,
-    attributeList: machineUser.attributeList ?? [],
+    attributeList: machineUser.attributeList,
   };
 
   const newResult = inputSchema.parse({ value: parsed, data: parsed, user });

@@ -6,6 +6,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
+import { assertDefined } from "@/utils/assert";
 import { ES_BUILTINS } from "./es-builtins";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 import type {
@@ -270,14 +271,12 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
     if (stmt.type === "ImportDeclaration") {
       const importDecl = stmt as ImportDeclaration;
       const text = source.slice(importDecl.start, importDecl.end);
-      if (importDecl.specifiers) {
-        for (const spec of importDecl.specifiers) {
-          bindings.set(spec.local.name, {
-            name: spec.local.name,
-            sourceText: text,
-            kind: "import",
-          });
-        }
+      for (const spec of importDecl.specifiers) {
+        bindings.set(spec.local.name, {
+          name: spec.local.name,
+          sourceText: text,
+          kind: "import",
+        });
       }
     } else if (stmt.type === "VariableDeclaration") {
       const varDecl = stmt as VariableDeclaration;
@@ -529,13 +528,16 @@ export async function precompileTailorDBTypeScripts(
         }),
       ),
     );
-    const firstError = results.find((r) => r.status === "rejected");
-    if (firstError && firstError.status === "rejected") {
+    const firstError = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (firstError) {
       throw firstError.reason;
     }
     for (const [index, result] of results.entries()) {
       if (result.status === "fulfilled") {
-        setPrecompiledScriptExpr(targets[index].fn, result.value);
+        setPrecompiledScriptExpr(
+          assertDefined(targets[index], `bundle target at index ${index} missing`).fn,
+          result.value,
+        );
       }
     }
   } finally {

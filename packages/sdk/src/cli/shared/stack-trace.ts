@@ -12,6 +12,7 @@
 import { TraceMap, generatedPositionFor, originalPositionFor } from "@jridgewell/trace-mapping";
 import * as path from "pathe";
 import { styles } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 
 /** A single frame parsed from a V8 stack trace */
 export interface StackFrame {
@@ -72,9 +73,9 @@ export function parseStackTrace(error: string): ParsedStackTrace {
     if (match) {
       frames.push({
         functionName: match[1] || "<anonymous>",
-        file: match[2],
-        line: Number(match[3]),
-        column: Number(match[4]),
+        file: assertDefined(match[2], "stack frame file missing"),
+        line: Number(assertDefined(match[3], "stack frame line missing")),
+        column: Number(assertDefined(match[4], "stack frame column missing")),
       });
     }
   }
@@ -111,7 +112,10 @@ export function extractInlineSourcemap(bundledCode: string): TraceMap | null {
   if (!match) return null;
 
   try {
-    const decoded = Buffer.from(match[1], "base64").toString("utf-8");
+    const decoded = Buffer.from(
+      assertDefined(match[1], "sourcemap base64 data missing"),
+      "base64",
+    ).toString("utf-8");
     const rawSourceMap = JSON.parse(decoded);
     return new TraceMap(rawSourceMap);
   } catch {

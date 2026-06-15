@@ -21,6 +21,7 @@ import {
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { findOmittedPermitRules, parseIdPPermission } from "@/parser/service/idp/permission";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
@@ -95,11 +96,11 @@ export async function applyIdP(
 
         // Create the secret manager vault and secret
         const vaultName = idpClientVaultName(
-          create.request.namespaceName!,
+          assertDefined(create.request.namespaceName, "request missing namespaceName"),
           create.request.client?.name || "",
         );
         const secretName = idpClientSecretName(
-          create.request.namespaceName!,
+          assertDefined(create.request.namespaceName, "request missing namespaceName"),
           create.request.client?.name || "",
         );
         await client.createSecretManagerVault({
@@ -155,7 +156,7 @@ export async function applyIdP(
         });
       }),
     );
-  } else if (phase === "delete-services") {
+  } else {
     // Services only
     await Promise.all(changeSet.service.deletes.map((del) => client.deleteIdPService(del.request)));
   }
@@ -567,10 +568,12 @@ async function planClients(
   };
 
   const clientsByIdp = await Promise.all(idps.map((idp) => fetchClients(idp.name)));
-  for (let i = 0; i < idps.length; i++) {
-    const idp = idps[i];
+  for (const [i, idp] of idps.entries()) {
     const namespaceName = idp.name;
-    const existingClients = clientsByIdp[i];
+    const existingClients = assertDefined(
+      clientsByIdp[i],
+      "clientsByIdp missing entry for idp index",
+    );
     const existingNameMap = new Map<string, string>();
     existingClients.forEach((client) => {
       existingNameMap.set(client.name, client.clientSecret);
@@ -618,9 +621,11 @@ async function planClients(
   const deletedClientsByService = await Promise.all(
     deletedServices.map((namespaceName) => fetchClients(namespaceName)),
   );
-  for (let i = 0; i < deletedServices.length; i++) {
-    const namespaceName = deletedServices[i];
-    deletedClientsByService[i].forEach((client) => {
+  for (const [i, namespaceName] of deletedServices.entries()) {
+    assertDefined(
+      deletedClientsByService[i],
+      "deletedClientsByService missing entry for service index",
+    ).forEach((client) => {
       changeSet.deletes.push({
         name: client.name,
         request: {

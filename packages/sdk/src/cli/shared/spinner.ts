@@ -1,3 +1,4 @@
+import { assertDefined } from "@/utils/assert";
 import { styles, symbols } from "./logger";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -166,7 +167,9 @@ export class Spinner {
   #renderFrame(): void {
     this.#stream.write(SYNC_BEGIN);
     this.#clearDrawn();
-    const frame = styles.info(FRAMES[this.#frame] ?? FRAMES[0]!);
+    const frame = styles.info(
+      FRAMES[this.#frame] ?? assertDefined(FRAMES[0], "spinner frames empty"),
+    );
     this.#frame = (this.#frame + 1) % FRAMES.length;
     const indent = " ".repeat(this.#indent);
     const line = `${indent}${frame} ${this.text}`;

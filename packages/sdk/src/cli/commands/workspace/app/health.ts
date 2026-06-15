@@ -6,6 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { appHealthInfo, type AppHealthInfo } from "./transform";
 
 const healthOptionsSchema = z.object({
@@ -19,7 +20,7 @@ export type HealthOptions = z.input<typeof healthOptionsSchema>;
 async function loadOptions(options: HealthOptions) {
   const result = healthOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const accessToken = await loadAccessToken({ profile: result.data.profile });

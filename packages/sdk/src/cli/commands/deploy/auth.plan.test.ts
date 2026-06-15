@@ -54,6 +54,7 @@ function createMockApplication(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+      connections: {},
       config: {
         name: "auth-a",
         publishSessionEvents: true,
@@ -93,6 +94,7 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+      connections: {},
       config: {
         name: "auth-a",
         oauth2Clients: {
@@ -119,6 +121,7 @@ function createMockApplicationWithBuiltInIdP(): Application {
     staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+      connections: {},
       config: {
         name: "auth-a",
         idProvider: {
@@ -319,7 +322,7 @@ describe("planAuth", () => {
     const result = await planAuth(createContext(client));
 
     expect(result.changeSet.authHook.unchanged).toHaveLength(1);
-    expect(result.changeSet.authHook.unchanged[0].name).toBe("auth-a/before-login");
+    expect(result.changeSet.authHook.unchanged[0]!.name).toBe("auth-a/before-login");
     expect(result.changeSet.authHook.updates).toHaveLength(0);
   });
 
@@ -495,6 +498,7 @@ describe("planAuth", () => {
       staticWebsiteServices: [],
       authService: {
         resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        connections: {},
         config: {
           name: "auth-a",
           oauth2Clients: {
@@ -607,6 +611,7 @@ describe("planAuth", () => {
         staticWebsiteServices: [{ name: "my-frontend" }],
         authService: {
           resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+          connections: {},
           config: {
             name: "auth-a",
             oauth2Clients: {

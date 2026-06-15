@@ -6,6 +6,7 @@ import * as path from "pathe";
 import { lt as semverLt } from "semver";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
+import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
 import { initOAuth2Client } from "./client";
 import { logger } from "./logger";
@@ -510,7 +511,9 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
     `);
   }
 
-  const newExpiresAt = new Date(resp.expiresAt!).toISOString();
+  const newExpiresAt = new Date(
+    assertDefined(resp.expiresAt, "token refresh response missing expiresAt"),
+  ).toISOString();
   await saveUserTokens(
     config,
     user,

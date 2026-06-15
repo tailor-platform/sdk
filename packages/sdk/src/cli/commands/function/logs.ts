@@ -123,7 +123,7 @@ function formatExecutionErrorFallback(error: FunctionExecutionErrorDisplay): str
   const composed = composeExecutionErrorString(error);
   const [headerLine, ...frameLines] = composed.split("\n");
   return [
-    `  ${styles.error(headerLine ?? "")}`,
+    `  ${styles.error(headerLine)}`,
     ...frameLines.map((line) => `  ${styles.dim(line)}`),
   ].join("\n");
 }

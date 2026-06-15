@@ -55,7 +55,7 @@ async function listStaticWebsites(
     workspaceId,
     name: site.name,
     description: site.description,
-    url: site.url ?? "",
+    url: site.url,
     allowedIpAddresses: site.allowedIpAddresses,
   }));
 }

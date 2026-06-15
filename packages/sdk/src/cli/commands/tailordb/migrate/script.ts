@@ -18,6 +18,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
 import { logger, styles } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { writeDbTypesFile } from "./db-types-generator";
 import { parseMigrationNumberArg } from "./migration-number";
@@ -59,9 +60,10 @@ async function script(options: ScriptOptions): Promise<void> {
   }
 
   const targetNamespace = resolveTargetNamespace(namespacesWithMigrations, options.namespace);
-  const { migrationsDir } = namespacesWithMigrations.find(
-    (ns) => ns.namespace === targetNamespace,
-  )!;
+  const { migrationsDir } = assertDefined(
+    namespacesWithMigrations.find((ns) => ns.namespace === targetNamespace),
+    "namespace with migrations not found",
+  );
 
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
   if (!fs.existsSync(diffPath)) {
@@ -123,7 +125,8 @@ function resolveTargetNamespace(
     return requested;
   }
   if (namespacesWithMigrations.length === 1) {
-    return namespacesWithMigrations[0].namespace;
+    const [ns] = namespacesWithMigrations;
+    return assertDefined(ns, "namespace with migrations missing").namespace;
   }
   throw new Error(
     `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations.map((ns) => ns.namespace).join(", ")}`,
