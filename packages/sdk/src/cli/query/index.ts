@@ -754,7 +754,6 @@ export const queryCommand = defineAppCommand({
       }),
       "machine-user": arg(z.string(), {
         alias: "m",
-        hiddenAlias: "machineuser",
         description: "Machine user name for query execution",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),

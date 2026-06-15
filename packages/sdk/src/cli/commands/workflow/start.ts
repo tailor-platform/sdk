@@ -350,7 +350,6 @@ export const startCommand = defineAppCommand({
       ...nameArgs,
       "machine-user": arg(z.string(), {
         alias: "m",
-        hiddenAlias: "machineuser",
         description: "Machine user name",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
