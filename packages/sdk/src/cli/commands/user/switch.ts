@@ -12,7 +12,7 @@ export const switchCommand = defineAppCommand({
     .object({
       user: arg(z.string(), {
         positional: true,
-        description: "User email",
+        description: "User ID",
       }),
     })
     .strict(),

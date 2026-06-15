@@ -109,7 +109,7 @@ export const createCommand = defineAppCommand({
         description: "Profile name to create",
       }),
       "profile-user": arg(z.string().optional(), {
-        description: "User email for the profile (defaults to current user)",
+        description: "User ID for the profile (defaults to current user)",
       }),
       permission: arg(z.enum(["write", "read"]).default("write"), {
         description:

@@ -203,7 +203,7 @@ tailor-sdk user switch <user>
 
 | Argument | Description | Required |
 | -------- | ----------- | -------- |
-| `user`   | User email  | Yes      |
+| `user`   | User ID     | Yes      |
 
 <!-- politty:command:user switch:arguments:end -->
 
