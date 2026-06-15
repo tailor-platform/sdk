@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.62.0
+
+### Minor Changes
+
+- [#1420](https://github.com/tailor-platform/sdk/pull/1420) [`815a0c8`](https://github.com/tailor-platform/sdk/commit/815a0c8c652be5157c3fe1e1d009f39d57247dbe) Thanks [@dqn](https://github.com/dqn)! - Validate planned resources against platform constraints before applying changes in `deploy`. Constraint violations (such as invalid resource names or out-of-range values) are now reported together before any change is applied, instead of failing one by one during the apply step. The same check runs with `--dry-run`, and `--no-validate` skips it.
+
+- [#1183](https://github.com/tailor-platform/sdk/pull/1183) [`0123147`](https://github.com/tailor-platform/sdk/commit/0123147bb649bf6044fbd371285355ebb60ca5e8) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor-sdk tailordb migration sync <number>`. The new subcommand reconstructs the TailorDB schema snapshot at the given migration number (e.g. `0` for the baseline) and brings the remote in line with it without requiring a `git checkout`. Useful for recovering from drift introduced by an unintended `deploy --no-schema-check`. Before touching the remote, the command verifies that replaying the full migration history reproduces the current local type definitions, and shows the current vs. target migration with warnings about `migrate.ts` scripts that will re-execute or be skipped on the next deploy. After syncing, run `tailor-sdk deploy` to catch up the remaining migrations from the working tree.
+
+### Patch Changes
+
+- [#1408](https://github.com/tailor-platform/sdk/pull/1408) [`6dfa310`](https://github.com/tailor-platform/sdk/commit/6dfa310fef003027a045afba3519c787fa92341c) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix profile-based token resolution being ignored by some commands. The CLI documents that the access token resolves from `--profile`, then `TAILOR_PLATFORM_PROFILE`, then the current login, but `tailordb migration set`/`status` and the `organization` commands skipped profile resolution and always used the current login — pairing one profile's workspace with another user's token. All commands now follow the documented order.
+
+- [#1418](https://github.com/tailor-platform/sdk/pull/1418) [`2c029aa`](https://github.com/tailor-platform/sdk/commit/2c029aa28797477f2f553821f420efa43452d295) Thanks [@dqn](https://github.com/dqn)! - Enable `noUncheckedIndexedAccess` in the SDK package so index accesses are checked at the type level. No behavior change.
+
+- [#1417](https://github.com/tailor-platform/sdk/pull/1417) [`edfb391`](https://github.com/tailor-platform/sdk/commit/edfb39115b1eb3b05ee0e4663c3af5352373d3c1) Thanks [@dqn](https://github.com/dqn)! - Internal cleanup of redundant conditions and optional chains, now enforced by the `typescript/no-unnecessary-condition` lint rule. No behavior change.
+
 ## 1.61.0
 
 ### Minor Changes
