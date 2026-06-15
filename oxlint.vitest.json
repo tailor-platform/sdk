@@ -27,8 +27,8 @@
           "expectTypeOf",
           "assert",
           "assertType",
-          "expect*",
-          "assert*"
+          "expectBundleExists",
+          "assertDocMatch"
         ]
       }
     ],
