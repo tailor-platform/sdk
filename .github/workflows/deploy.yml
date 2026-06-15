@@ -70,7 +70,7 @@ jobs:
 
       - name: Login as machine user
         if: runner.os != 'Windows'
-        run: pnpm tailor-sdk login --machineuser
+        run: pnpm tailor-sdk login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
