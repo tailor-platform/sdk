@@ -5,7 +5,7 @@
       "id": "streaming-download-used",
       "kind": "content-match",
       "glob": "**/*.ts",
-      "pattern": "\\.downloadStream\\b",
+      "pattern": "\\.downloadStream\\b|\\bdownloadStream\\s*\\(",
       "description": "runtime code uses the current streaming download facility for stored files"
     },
     {
