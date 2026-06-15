@@ -133,7 +133,6 @@ export const loginCommand = defineAppCommand({
     z
       .object({
         "machine-user": arg(z.literal(true), {
-          hiddenAlias: "machineuser",
           description: "Login as a platform machine user.",
           required: true,
         }),
