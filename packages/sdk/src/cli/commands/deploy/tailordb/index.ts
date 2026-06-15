@@ -478,6 +478,7 @@ export async function applyTailorDB(
           try {
             await rollbackSingleMigrationPrePhase(
               client,
+              changeSet,
               migration,
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
@@ -1010,6 +1011,7 @@ async function executeSingleMigrationPostPhase(
 /**
  * Revert a single migration's Pre-phase DDL to the prior checkpoint's schema.
  * @param client - Operator client instance
+ * @param changeSet - TailorDB change set
  * @param migration - The migration whose Pre-phase DDL must be reverted
  * @param workspaceId - Workspace ID
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
@@ -1018,6 +1020,7 @@ async function executeSingleMigrationPostPhase(
  */
 async function rollbackSingleMigrationPrePhase(
   client: OperatorClient,
+  changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
@@ -1026,10 +1029,24 @@ async function rollbackSingleMigrationPrePhase(
   // The baseline migration has no prior checkpoint to revert to.
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
 
-  // Only the types this apply run actually created or updated in the pre-phase
-  // (including any created via missingTypeCreates). This keeps rollback a no-op
-  // when nothing was applied and never touches unmanaged/drifted types.
-  const rollbackTypes = new Set<string>([...processedTypes.created, ...processedTypes.updated]);
+  // Type names belonging to this migration's namespace (diff plus this
+  // namespace's change-set entries). `processedTypes` is global and stores bare
+  // names, so this scopes rollback to the failed namespace and avoids touching a
+  // same-named type in another namespace.
+  const namespaceTypes = getAffectedTypeNames(migration);
+  for (const create of changeSet.type.creates) {
+    const name = create.request.tailordbType?.name;
+    if (create.request.namespaceName === migration.namespace && name) namespaceTypes.add(name);
+  }
+  for (const update of changeSet.type.updates) {
+    const name = update.request.tailordbType?.name;
+    if (update.request.namespaceName === migration.namespace && name) namespaceTypes.add(name);
+  }
+
+  // Of those, only the types this apply run actually created or updated (so
+  // rollback is a no-op when nothing was applied and never touches drift).
+  const applied = new Set([...processedTypes.created, ...processedTypes.updated]);
+  const rollbackTypes = new Set([...namespaceTypes].filter((name) => applied.has(name)));
   if (rollbackTypes.size === 0) return;
 
   const priorSnapshot = reconstructSnapshotFromMigrations(
