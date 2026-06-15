@@ -10,8 +10,9 @@ const COMMAND_PATTERN = new RegExp(
   `\\btailor-sdk(@[^\\s'"\`]+)?(\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
   "g",
 );
+const TAILOR_COMMAND_PATTERN = /\btailor-sdk(?:@[^\s'"`]+)?[^\n;&|'"`]*/g;
 const OPTION_PATTERN = new RegExp(
-  `(?<![\\w-])(${OPTION_RENAMES.map(([from]) => from).join("|")})(?=$|[\\s=])`,
+  `(?<![\\w-])(${OPTION_RENAMES.map(([from]) => from).join("|")})(?![\\w-])`,
   "g",
 );
 
@@ -25,7 +26,9 @@ function replaceAll(value: string): string {
       (_match, ver: string | undefined, sep: string, cmd: string) =>
         `tailor-sdk${ver ?? ""}${sep}${COMMAND_MAP.get(cmd) ?? cmd}`,
     )
-    .replace(OPTION_PATTERN, (option: string) => OPTION_MAP.get(option) ?? option);
+    .replace(TAILOR_COMMAND_PATTERN, (command: string) =>
+      command.replace(OPTION_PATTERN, (option: string) => OPTION_MAP.get(option) ?? option),
+    );
 }
 
 function transformText(source: string): string | null {

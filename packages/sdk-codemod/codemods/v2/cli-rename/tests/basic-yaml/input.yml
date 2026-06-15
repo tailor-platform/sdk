@@ -9,3 +9,4 @@ jobs:
       - run: pnpm exec tailor-sdk crash-report list
       - run: pnpm exec tailor-sdk crash-report send --file latest.crash.log
       - run: pnpm exec tailor-sdk login --machineuser ci
+      - run: "pnpm exec tailor-sdk query --machineuser ci"
