@@ -134,6 +134,19 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("per_page: 100");
   });
 
+  test("logs full plan output before truncating comments and outputs", () => {
+    const branch = renderBranchWorkflow(branchBase).content;
+    const tag = renderTagWorkflow(tagBase).content;
+    for (const content of [branch, tag]) {
+      expect(content).toContain("::group::Full Tailor Platform plan output");
+      expect(content).toContain("::stop-commands::$LOG_STOP_TOKEN");
+      expect(content).toContain("printf '%s\\n' \"$OUTPUT\"");
+      expect(content).toContain(
+        "[output truncated to the last $MAX_OUTPUT characters - see the workflow logs for the full plan]",
+      );
+    }
+  });
+
   test("references the dry-run dispatch input with bracket notation", () => {
     // `inputs.dry-run` is ambiguous to readers/tools; the bracket form is
     // unambiguous for a hyphenated input name.

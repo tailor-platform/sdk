@@ -92,6 +92,12 @@ jobs:
 
           MAX_OUTPUT=60000
           if [ "${#OUTPUT}" -gt "$MAX_OUTPUT" ]; then
+            LOG_STOP_TOKEN=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+            echo "::group::Full Tailor Platform plan output"
+            echo "::stop-commands::$LOG_STOP_TOKEN"
+            printf '%s\n' "$OUTPUT"
+            echo "::$LOG_STOP_TOKEN::"
+            echo "::endgroup::"
             OUTPUT_TAIL="${OUTPUT: -$MAX_OUTPUT}"
             OUTPUT=$(printf '%s\n\n%s' "[output truncated to the last $MAX_OUTPUT characters - see the workflow logs for the full plan]" "$OUTPUT_TAIL")
           fi
