@@ -68,12 +68,12 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("name: Tailor (my-app)");
   });
 
-  test("pins actions with SHA + version comment, including the tailor actions", () => {
+  test("pins actions with SHA + version comment", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
     expect(content).toMatch(/uses: pnpm\/action-setup@[a-f0-9]+ # v\d+\.\d+\.\d+/);
-    expect(content).toMatch(/uses: tailor-platform\/actions\/plan@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
-    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: actions\/github-script@[a-f0-9]+ # v\d+/);
+    expect(content).not.toContain("tailor-platform/actions/");
   });
 
   test("pins every `uses:` to a full commit SHA (no moving tags/branches)", () => {
@@ -99,12 +99,14 @@ describe("renderBranchWorkflow", () => {
   test("uses the unified secret names and targets the workspace-id variable", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain(
-      "platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
+      "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
     );
     expect(content).toContain(
-      "platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
+      "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
     );
-    expect(content).toContain("workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}");
+    expect(content).toContain(
+      "TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}",
+    );
     expect(content).not.toContain("secrets.PLATFORM_MACHINE_USER_CLIENT_ID");
   });
 
@@ -123,7 +125,7 @@ describe("renderBranchWorkflow", () => {
 
   test("passes the workspace name as the plan label", () => {
     const { content } = renderBranchWorkflow(branchBase);
-    expect(content).toContain("label: my-app");
+    expect(content).toContain("LABEL: my-app");
   });
 
   test("references the dry-run dispatch input with bracket notation", () => {
@@ -147,11 +149,15 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("cancel-in-progress: false");
   });
 
-  test("includes generate + generate-check in plan only (deploy delegates)", () => {
+  test("runs generate checks in plan and deploys with the canonical command", () => {
     const { content } = renderBranchWorkflow(branchBase);
     const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
     expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
+    expect(content.match(/^ {6}- id: tailor-generate$/gm)).toHaveLength(2);
     expect(content.match(/id: tailor-generate-check/g)).toHaveLength(1);
+    expect(content).toContain("pnpm exec tailor-sdk deploy --dry-run --yes");
+    expect(content).toContain("pnpm exec tailor-sdk deploy --yes");
+    expect(content).not.toContain("tailor-sdk apply");
   });
 
   test("emits PM exec prefix for generate", () => {
@@ -191,8 +197,8 @@ describe("renderBranchWorkflow", () => {
     const scoped = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/foo" }).content;
     expect(scoped).not.toMatch(NO_MARKER);
     expect(scoped).toContain('paths: ["apps/foo/**"]');
-    // generate step + plan action + deploy action
-    expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(3);
+    // plan generate/login/dry-run and deploy login/generate/deploy
+    expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(6);
     expect(() => parseYAML(scoped)).not.toThrow();
   });
 
@@ -215,7 +221,8 @@ describe("renderBranchWorkflow", () => {
     const { generatedIds } = renderBranchWorkflow(branchBase);
     expect(generatedIds).toContain("tailor-plan");
     expect(generatedIds).toContain("tailor-plan/tailor-setup-pnpm");
-    expect(generatedIds).toContain("tailor-deploy/tailor-apply");
+    expect(generatedIds).toContain("tailor-plan/tailor-plan");
+    expect(generatedIds).toContain("tailor-deploy/tailor-deploy");
   });
 
   test("preserves $ characters in values", () => {
