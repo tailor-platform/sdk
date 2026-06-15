@@ -434,6 +434,28 @@ describe("loadMachineUserName", () => {
     const result = await loadMachineUserName({ machineUser: "explicit-bot", profile: "missing" });
     expect(result).toBe("explicit-bot");
   });
+
+  test("rejects with MACHINE_USER_NAME_EMPTY when opts.machineUser is an empty string", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
+    const err = await loadMachineUserName({ machineUser: "" }).catch((e: unknown) => e);
+    expect(isCLIError(err)).toBe(true);
+    expect((err as { code?: string }).code).toBe("MACHINE_USER_NAME_EMPTY");
+  });
+
+  test("rejects empty opts.machineUser instead of falling back to profile default", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
+      current_user: null,
+    });
+    const err = await loadMachineUserName({ machineUser: "", profile: "myprofile" }).catch(
+      (e: unknown) => e,
+    );
+    expect(isCLIError(err)).toBe(true);
+    expect((err as { code?: string }).code).toBe("MACHINE_USER_NAME_EMPTY");
+  });
 });
 
 describe("loadAccessToken", () => {

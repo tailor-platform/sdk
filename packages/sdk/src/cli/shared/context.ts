@@ -367,6 +367,7 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
  * Load machine user name from command options, environment variables, or platform config.
  * In CLI context, env fallback is also handled by politty's arg env option.
  * Priority: opts/machineUser > env/TAILOR_PLATFORM_MACHINE_USER_NAME > opts/profile (profile default) > undefined.
+ * An explicitly empty `opts.machineUser` is rejected with a CLIError (`MACHINE_USER_NAME_EMPTY`) rather than falling back to the env var or profile default.
  * When the active profile has `machine_user_override: "deny"`, an explicit value that differs from the profile's machine user throws a CLIError with code `PROFILE_MACHINE_USER_OVERRIDE_DENIED`.
  * @param opts - Machine user and profile options
  * @returns Resolved machine user name, or undefined if not set
@@ -374,6 +375,15 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
 export async function loadMachineUserName(
   opts?: LoadMachineUserNameOptions,
 ): Promise<string | undefined> {
+  if (opts?.machineUser === "") {
+    throw CLIError({
+      code: "MACHINE_USER_NAME_EMPTY",
+      message: "Machine user name cannot be empty.",
+      suggestion:
+        "Pass a non-empty machine user name, or omit the option to use the environment variable or profile default.",
+    });
+  }
+
   const explicit = opts?.machineUser || process.env.TAILOR_PLATFORM_MACHINE_USER_NAME || undefined;
 
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
