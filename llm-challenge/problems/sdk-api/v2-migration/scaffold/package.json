@@ -1,0 +1,15 @@
+{
+  "name": "v2-migration-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "tailor-sdk apply",
+    "crash": "tailor-sdk crash-report list",
+    "skills": "tailor-sdk-skills",
+    "smoke": "tailor-sdk function test-run src/customerResolver.ts --arg '{\"input\":{\"email\":\"ada@example.com\"}}'",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
+  }
+}

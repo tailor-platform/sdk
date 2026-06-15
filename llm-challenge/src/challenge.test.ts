@@ -107,10 +107,11 @@ describe("problem discovery", () => {
   test("discovers the initial problem set from group directories", async () => {
     const problems = await discoverProblems(packageRoot);
 
-    expect(problems).toHaveLength(23);
-    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(19);
+    expect(problems).toHaveLength(21);
+    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(17);
     expect(problems.filter((problem) => problem.group === "cli")).toHaveLength(4);
     expect(problems.map((problem) => problem.id)).toContain("plugin-registration");
+    expect(problems.map((problem) => problem.id)).toContain("v2-migration");
     expect(problems.every((problem) => problem.verifyPath !== undefined)).toBe(true);
     expect(
       problems.every((problem) => problem.sourcePath === `problems/${problem.group}/${problem.id}`),
@@ -486,6 +487,18 @@ describe("verification summary", () => {
               glob: "src/*.txt",
               pattern: "customer",
             },
+            {
+              id: "deprecated-text-absent",
+              kind: "content-not-match",
+              glob: "src/*.txt",
+              pattern: "deprecated",
+            },
+            {
+              id: "customer-text-not-absent",
+              kind: "content-not-match",
+              glob: "src/*.txt",
+              pattern: "customer",
+            },
             { id: "missing-file", kind: "file-exists", path: "missing.txt" },
           ],
         },
@@ -522,6 +535,12 @@ describe("verification summary", () => {
     });
     expect(summary.checks.find((check) => check.id === "customer-text")).toMatchObject({
       outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "deprecated-text-absent")).toMatchObject({
+      outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "customer-text-not-absent")).toMatchObject({
+      outcome: "unsatisfied",
     });
     expect(summary.checks.find((check) => check.id === "missing-file")).toMatchObject({
       outcome: "unsatisfied",

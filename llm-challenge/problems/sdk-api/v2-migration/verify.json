@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "deploy-script-renamed",
+      "kind": "content-match",
+      "glob": "package.json",
+      "pattern": "tailor-sdk deploy",
+      "description": "package scripts use the current deploy command name"
+    },
+    {
+      "id": "cli-scripts-migrated",
+      "kind": "content-not-match",
+      "glob": "package.json",
+      "pattern": "tailor-sdk apply|tailor-sdk crash-report|tailor-sdk-skills|\\\"input\\\"\\s*:",
+      "description": "package scripts no longer use removed command names or wrapped test-run input JSON"
+    },
+    {
+      "id": "plugins-configured",
+      "kind": "content-match",
+      "glob": "tailor.config.ts",
+      "pattern": "\\bdefinePlugins\\s*\\(",
+      "description": "configuration uses plugin registration"
+    },
+    {
+      "id": "plugin-imports-current",
+      "kind": "content-match",
+      "glob": "tailor.config.ts",
+      "pattern": "@tailor-platform/sdk/plugin/(kysely-type|enum-constants|file-utils|seed)",
+      "description": "built-in plugins are imported from dedicated plugin subpaths"
+    },
+    {
+      "id": "legacy-plugin-config-removed",
+      "kind": "content-not-match",
+      "glob": "tailor.config.ts",
+      "pattern": "defineGenerators|@tailor-platform/sdk/cli",
+      "description": "configuration no longer uses generator tuples or CLI plugin namespace imports"
+    },
+    {
+      "id": "principal-api-migrated",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "\\bTailorPrincipal\\b|\\bcaller\\b",
+      "description": "runtime code uses the current principal/caller naming"
+    },
+    {
+      "id": "legacy-principal-api-removed",
+      "kind": "content-not-match",
+      "glob": "**/*.ts",
+      "pattern": "\\bTailorUser\\b|\\bTailorActor\\b|\\bTailorInvoker\\b|\\bunauthenticatedTailorUser\\b|\\bauth\\.invoker\\b|\\bTailordb\\.",
+      "description": "runtime code no longer uses legacy principal, invoker, or capitalized TailorDB namespace patterns"
+    },
+    {
+      "id": "official-test-mocks-used",
+      "kind": "content-match",
+      "glob": "**/*.{test,spec}.ts",
+      "pattern": "@tailor-platform/sdk/vitest[\\s\\S]*(mockTailordb|mockFile|mockWorkflow)|(mockTailordb|mockFile|mockWorkflow)[\\s\\S]*@tailor-platform/sdk/vitest",
+      "description": "tests use the current SDK test mock controllers"
+    },
+    {
+      "id": "legacy-test-mocks-removed",
+      "kind": "content-not-match",
+      "glob": "**/*.{test,spec}.ts",
+      "pattern": "@tailor-platform/sdk/test|setup\\w*Mock",
+      "description": "tests no longer use deprecated setup helpers"
+    },
+    {
+      "id": "streaming-download-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "\\.downloadStream\\b|\\bdownloadStream\\s*\\(|import\\s*\\{[^}]*\\bdownloadStream\\s+as\\s+\\w+[^}]*\\}\\s*from\\s*[\"']@tailor-platform/sdk/runtime/file[\"']",
+      "description": "runtime file code uses the current streaming download facility"
+    },
+    {
+      "id": "legacy-file-stream-removed",
+      "kind": "content-not-match",
+      "glob": "**/*.ts",
+      "pattern": "\\bopenDownloadStream\\b",
+      "description": "runtime file code no longer uses the legacy file stream API"
+    },
+    {
+      "id": "globals-explicitly-activated",
+      "kind": "content-match",
+      "glob": "**/*.{ts,json,jsonc}",
+      "pattern": "@tailor-platform/sdk/runtime",
+      "description": "project explicitly activates runtime globals or uses runtime wrappers"
+    }
+  ]
+}

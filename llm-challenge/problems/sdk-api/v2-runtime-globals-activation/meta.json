@@ -1,4 +1,0 @@
-{
-  "id": "v2-runtime-globals-activation",
-  "title": "Type-check runtime code that uses injected platform globals"
-}

@@ -61,6 +61,14 @@ type VerifySpecCheck =
        * Counts files, not occurrences: a single file with several matches counts once.
        */
       minMatches?: number;
+    }
+  | {
+      id: string;
+      kind: "content-not-match";
+      description?: string;
+      glob: string;
+      pattern: string;
+      flags?: string;
     };
 
 const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
@@ -208,6 +216,9 @@ function evaluateProblemCheck(
     if (check.kind === "content-match") {
       return contentMatchCheck(check, worktreePath, files);
     }
+    if (check.kind === "content-not-match") {
+      return contentNotMatchCheck(check, worktreePath, files);
+    }
     const unknownCheck = check as { id: string; kind: string };
     return invalidProblemCheck(unknownCheck.id, `Unknown problem check kind: ${unknownCheck.kind}`);
   } catch (error) {
@@ -279,6 +290,31 @@ function contentMatchCheck(
     kind: "assertion",
     description: check.description ?? `${check.glob} content matches ${check.pattern}`,
     outcome: matchedFiles.length >= minMatches ? "satisfied" : "unsatisfied",
+    observations: [`matchedFiles: ${matchedFiles.length}`, ...matchedFiles.slice(0, 10)],
+  };
+}
+
+function contentNotMatchCheck(
+  check: Extract<VerifySpecCheck, { kind: "content-not-match" }>,
+  worktreePath: string,
+  files: string[],
+): VerificationCheckResult {
+  const regex = new RegExp(check.pattern, check.flags ?? "");
+  const globRegex = globToRegExp(check.glob);
+  const matchedFiles: string[] = [];
+  for (const file of files.filter((candidate) => globRegex.test(candidate))) {
+    const text = readFileSync(path.join(worktreePath, file), "utf8");
+    regex.lastIndex = 0;
+    if (regex.test(text)) {
+      matchedFiles.push(file);
+    }
+  }
+  return {
+    id: check.id,
+    scope: "problem",
+    kind: "assertion",
+    description: check.description ?? `${check.glob} content does not match ${check.pattern}`,
+    outcome: matchedFiles.length === 0 ? "satisfied" : "unsatisfied",
     observations: [`matchedFiles: ${matchedFiles.length}`, ...matchedFiles.slice(0, 10)],
   };
 }
