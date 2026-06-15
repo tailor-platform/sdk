@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "streaming-download-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "\\.downloadStream\\b",
+      "description": "runtime code uses the current streaming download facility for stored files"
+    },
+    {
+      "id": "stream-reader-consumed",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "getReader|ReadableStream|for\\s+await",
+      "description": "the download stream is consumed with a standard reader loop"
+    }
+  ]
+}

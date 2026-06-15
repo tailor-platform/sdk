@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "globals-explicitly-activated",
+      "kind": "content-match",
+      "glob": "**/*.{ts,json,jsonc}",
+      "pattern": "@tailor-platform/sdk/runtime",
+      "description": "project explicitly activates the runtime types via a side-effect import, tsconfig types entry, or typed wrappers"
+    }
+  ]
+}

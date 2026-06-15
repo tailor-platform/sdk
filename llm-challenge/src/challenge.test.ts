@@ -107,8 +107,8 @@ describe("problem discovery", () => {
   test("discovers the initial problem set from group directories", async () => {
     const problems = await discoverProblems(packageRoot);
 
-    expect(problems).toHaveLength(20);
-    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(16);
+    expect(problems).toHaveLength(23);
+    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(19);
     expect(problems.filter((problem) => problem.group === "cli")).toHaveLength(4);
     expect(problems.map((problem) => problem.id)).toContain("plugin-registration");
     expect(problems.every((problem) => problem.verifyPath !== undefined)).toBe(true);

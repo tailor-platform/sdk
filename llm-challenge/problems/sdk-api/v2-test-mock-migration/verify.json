@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "unit-test-file-created",
+      "kind": "file-glob",
+      "glob": "**/*.{test,spec}.ts",
+      "minCount": 1,
+      "description": "workspace includes a unit test file for the operation"
+    },
+    {
+      "id": "official-test-mock-imported",
+      "kind": "content-match",
+      "glob": "**/*.{test,spec}.ts",
+      "pattern": "@tailor-platform/sdk/vitest",
+      "description": "test imports the SDK's official testing mock facility"
+    },
+    {
+      "id": "database-mock-used",
+      "kind": "content-match",
+      "glob": "**/*.{test,spec}.ts",
+      "pattern": "mock",
+      "flags": "i",
+      "description": "test substitutes the database response through a mock"
+    }
+  ]
+}
