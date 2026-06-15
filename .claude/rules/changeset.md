@@ -17,6 +17,12 @@ Ask: **Does this change affect SDK users?**
 
 Common mistake: new CLI commands, new config options, and new field types are **minor**, not patch.
 
+## Beta does not cover GA changes
+
+"This feature is beta, so breaking changes are acceptable" applies **only to the beta surface itself** (the beta command/API). When a change also alters a stable (GA) code path — even if it ships alongside a beta feature in the same PR — judge and label that part as a **GA breaking change** on its own merits: give it its own breaking-change callout with migration steps, never a "(beta)" banner.
+
+Check which module/command the diff actually touches, not the PR's headline feature. Example: a beta `setup github` overhaul that also makes `tailor-sdk apply` (GA) fail on a missing config `id` in CI is a GA breaking change — not a beta one.
+
 ## Description
 
 Write from the SDK user's perspective. Describe what changed for them, not implementation details.

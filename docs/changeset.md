@@ -57,6 +57,18 @@ SDK users don't need to know about this change. Their code works exactly the sam
 | Performance improvement | minor | **patch** | Same behavior, just faster                     |
 | Better validation error | minor | **patch** | Existing behavior improved, not new capability |
 
+## Beta Scope and Breaking Changes
+
+A "beta" feature can take breaking changes more freely than a stable one — but **that allowance is scoped to the beta surface itself** (the beta command or API). It is not a blanket license for the whole PR.
+
+When a change ships under a beta-feature headline but **also touches a stable (GA) code path**, the GA part is a normal breaking change and must be treated as one:
+
+- Judge it on its own merits against the levels above — a behavior change to a GA command (e.g. `tailor-sdk apply`/`deploy`, `db.type`, `defineConfig`) that requires users to act is **major**, regardless of the PR's headline.
+- Give it its **own breaking-change callout** in the changeset with migration steps. Do **not** fold it under a "(beta)" heading where it reads as low-impact.
+- Decide by **which module/command the diff actually modifies**, not by the PR's headline feature.
+
+Example of the trap: a beta `setup github` overhaul that also makes `tailor-sdk apply` (GA) fail on a missing config `id` in CI. The `setup github` flag changes are beta; the `apply` failure is a GA breaking change and must be called out as such — not waved through because the PR is "about" the beta command.
+
 ## When No Changeset Is Needed
 
 Add the `skip-changeset` label to your PR when:
