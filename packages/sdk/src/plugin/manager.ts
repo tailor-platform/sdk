@@ -1,5 +1,5 @@
 import { db, type TailorAnyDBType } from "@/configure/services/tailordb";
-import { hasGenerationHooks, getPluginGenerationDependencies } from "@/plugin/types";
+import { hasGenerationHooks, getPluginGenerationDependencies } from "@/plugin/guards";
 import { assertDefined } from "@/utils/assert";
 import type {
   TailorTypePermission,

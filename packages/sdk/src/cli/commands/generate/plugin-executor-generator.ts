@@ -13,8 +13,8 @@ import {
   getPluginImportBaseDirs,
   resolveRelativePluginImportPath,
 } from "@/cli/shared/plugin-import";
+import { isPluginExecutorWithFile } from "@/plugin/guards";
 import {
-  isPluginExecutorWithFile,
   type PluginGeneratedExecutorLegacy,
   type PluginGeneratedExecutorWithFile,
   type PluginTriggerConfig,
