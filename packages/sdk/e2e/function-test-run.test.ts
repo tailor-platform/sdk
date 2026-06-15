@@ -119,7 +119,7 @@ async function runTestRun(
 describe.sequential("E2E: function test-run", () => {
   beforeAll(async () => {
     // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
-    const accessToken = await loadAccessToken({ useProfile: false });
+    const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
     const region = await resolveE2EWorkspaceRegion(client);
 

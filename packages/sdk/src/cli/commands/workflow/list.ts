@@ -20,7 +20,6 @@ export interface ListWorkflowsOptions {
  */
 export async function listWorkflows(options?: ListWorkflowsOptions): Promise<WorkflowListInfo[]> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

@@ -82,7 +82,6 @@ type LoadWorkspaceIdOptions = {
   profile?: string;
 };
 type LoadAccessTokenOptions = {
-  useProfile?: boolean;
   profile?: string;
 };
 
@@ -376,9 +375,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
 
   const pfConfig = await readPlatformConfig();
   let user;
-  const profile = opts?.useProfile
-    ? opts.profile || process.env.TAILOR_PLATFORM_PROFILE
-    : undefined;
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (profile) {
     const u = pfConfig.profiles[profile]?.user;
     if (!u) {

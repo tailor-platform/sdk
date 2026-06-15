@@ -81,7 +81,6 @@ async function set(options: SetOptions): Promise<void> {
 
   // 5. Initialize client
   const accessToken = await loadAccessToken({
-    useProfile: false,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

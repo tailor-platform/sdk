@@ -21,9 +21,9 @@ import { logger, styles } from "@/cli/shared/logger";
 import { assertDefined } from "@/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { writeDbTypesFile } from "./db-types-generator";
+import { parseMigrationNumberArg } from "./migration-number";
 import {
   getMigrationFilePath,
-  isValidMigrationNumber,
   loadDiff,
   reconstructSnapshotFromMigrations,
   INITIAL_SCHEMA_NUMBER,
@@ -43,23 +43,7 @@ export interface ScriptOptions {
 async function script(options: ScriptOptions): Promise<void> {
   logBetaWarning("tailordb migration");
 
-  // Accept either the canonical 4-digit form ("0001") or a bare integer
-  // ("1"–"9999"). Reject inputs containing non-digit characters, integer
-  // forms with leading zeros ("00001"), and anything outside the
-  // 0000-9999 directory range that the migrations system supports.
-  let migrationNumber: number;
-  if (isValidMigrationNumber(options.number)) {
-    migrationNumber = parseInt(options.number, 10);
-  } else if (/^[1-9]\d*$/.test(options.number)) {
-    migrationNumber = parseInt(options.number, 10);
-    if (migrationNumber > 9999) {
-      throw new Error(`Migration number ${options.number} is out of range. Expected 1-9999.`);
-    }
-  } else {
-    throw new Error(
-      `Invalid migration number format: ${options.number}. Expected 4-digit format (e.g., 0001) or integer 1-9999 (e.g., 1).`,
-    );
-  }
+  const migrationNumber = parseMigrationNumberArg(options.number);
 
   if (migrationNumber === INITIAL_SCHEMA_NUMBER) {
     throw new Error(

@@ -161,7 +161,6 @@ export async function listExecutorJobs<E extends ExecutorLike>(
   // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -231,7 +230,6 @@ export async function getExecutorJob<E extends ExecutorLike>(
   // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -299,7 +297,6 @@ export async function watchExecutorJob<E extends ExecutorLike>(
   // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

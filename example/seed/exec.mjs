@@ -258,7 +258,7 @@ const appInfo = await show({ configPath, profile: values.profile });
 const authNamespace = appInfo.auth;
 
 // Initialize operator client (once for all namespaces)
-const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
+const accessToken = await loadAccessToken({ profile: values.profile });
 const workspaceId = await loadWorkspaceId({ profile: values.profile });
 const operatorClient = await initOperatorClient(accessToken);
 

@@ -93,7 +93,6 @@ async function triggerExecutorByName(
   options: TriggerExecutorOptions,
 ): Promise<TriggerExecutorResult> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -220,7 +219,6 @@ The \`--logs\` option displays logs from the downstream execution when available
     await assertWritable({ profile: args.profile });
     // Validate trigger type before processing
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);

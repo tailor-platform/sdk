@@ -481,7 +481,6 @@ export async function deploy(options?: DeployOptions) {
 
     // Initialize client
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: options?.profile,
     });
     const client = await initOperatorClient(accessToken);

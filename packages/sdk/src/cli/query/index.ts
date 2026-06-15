@@ -145,7 +145,6 @@ async function loadOptions(options: QueryBaseOptions) {
   }
 
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: result.data.profile,
   });
   const client = await initOperatorClient(accessToken);

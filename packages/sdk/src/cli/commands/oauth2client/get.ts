@@ -26,7 +26,6 @@ export async function getOAuth2Client(
   options: GetOAuth2ClientOptions,
 ): Promise<OAuth2ClientCredentials> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

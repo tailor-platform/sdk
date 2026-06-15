@@ -28,7 +28,6 @@ export async function listWebhookExecutors(
   options?: ListWebhookExecutorsOptions,
 ): Promise<WebhookExecutorInfo[]> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

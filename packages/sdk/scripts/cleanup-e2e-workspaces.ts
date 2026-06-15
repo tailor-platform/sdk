@@ -54,8 +54,9 @@ async function main() {
     console.log("🔍 DRY RUN MODE - No workspaces will be deleted\n");
   }
 
-  // Initialize client
-  const accessToken = await loadAccessToken({ useProfile: false });
+  // Initialize client (machine-user login, never a local profile)
+  delete process.env.TAILOR_PLATFORM_PROFILE;
+  const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   // List all workspaces with pagination
