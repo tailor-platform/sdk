@@ -1,7 +1,7 @@
 import { platformSerialize } from "@/utils/test/platform-serialize";
 import { buildJobContext } from "./test-env-key";
 import type { TailorEnv } from "@/types/env";
-import type { TailorInvoker } from "@/types/user";
+import type { TailorPrincipal } from "@/types/user";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -10,7 +10,7 @@ import type { TailorInvoker } from "@/types/user";
  */
 export type RegisteredJobBody = (
   args: unknown,
-  context: { env: TailorEnv; invoker?: TailorInvoker },
+  context: { env: TailorEnv; invoker: TailorPrincipal | null },
 ) => unknown | Promise<unknown>;
 
 export interface RegisteredWorkflow {

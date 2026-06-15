@@ -2,7 +2,7 @@
 import { describe, expect, test, expectTypeOf } from "vitest";
 import { createWorkflowJob, type WorkflowJob } from "./job";
 import { createWorkflow } from "./workflow";
-import type { TailorInvoker } from "@/types/user";
+import type { TailorPrincipal } from "@/types/user";
 
 describe("WorkflowJob type inference", () => {
   test("preserves literal types in output when using as const", () => {
@@ -55,7 +55,7 @@ describe("WorkflowJob type inference", () => {
       body: (_input: undefined, context) => {
         expectTypeOf(context).toHaveProperty("env");
         expectTypeOf(context).toHaveProperty("invoker");
-        expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+        expectTypeOf(context.invoker).toEqualTypeOf<TailorPrincipal | null>();
       },
     });
   });

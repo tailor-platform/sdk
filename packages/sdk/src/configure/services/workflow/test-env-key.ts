@@ -10,7 +10,7 @@
  * @internal
  */
 import type { TailorEnv } from "../../../types/env";
-import type { TailorInvoker } from "../../../types/user";
+import type { TailorPrincipal } from "../../../types/user";
 
 const SLOT_KEY = "__tailorWorkflowTestEnv";
 
@@ -49,11 +49,11 @@ export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
 // env from `mockWorkflow().setEnv()`, else the deprecated env-var. Shallow-copied
 // to isolate against cross-trigger mutation.
-export function buildJobContext(): { env: TailorEnv; invoker?: TailorInvoker } {
+export function buildJobContext(): { env: TailorEnv; invoker: TailorPrincipal | null } {
   const fromGlobal = readWorkflowTestEnv();
-  if (fromGlobal !== undefined) return { env: { ...fromGlobal } };
+  if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker: null };
   const raw = process.env[WORKFLOW_TEST_ENV_KEY];
-  if (!raw) return { env: {} as TailorEnv };
+  if (!raw) return { env: {} as TailorEnv, invoker: null };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -68,5 +68,5 @@ export function buildJobContext(): { env: TailorEnv; invoker?: TailorInvoker } {
       `${WORKFLOW_TEST_ENV_KEY} must be a JSON object; provide a record or use mockWorkflow().setEnv().`,
     );
   }
-  return { env: { ...(parsed as TailorEnv) } };
+  return { env: { ...(parsed as TailorEnv) }, invoker: null };
 }

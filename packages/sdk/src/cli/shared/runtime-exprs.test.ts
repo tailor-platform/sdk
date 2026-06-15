@@ -12,7 +12,9 @@ describe("buildExecutorArgsExpr", () => {
         const expr = buildExecutorArgsExpr(kind, env);
         expect(expr).toContain("...args");
         expect(expr).toContain("appNamespace: args.namespaceName");
-        expect(expr).toContain("actor: args.actor");
+        expect(expr).toContain("actor: (($raw)");
+        expect(expr).toContain("})(args.actor)");
+        expect(expr).toContain("userType");
         expect(expr).toContain("attributeMap");
         expect(expr).toContain("attributeList");
         expect(expr).toContain(`env: ${JSON.stringify(env)}`);
@@ -44,7 +46,8 @@ describe("buildExecutorArgsExpr", () => {
 
     test("includes actor transform and appNamespace", () => {
       const expr = buildExecutorArgsExpr("resolverExecuted", env);
-      expect(expr).toContain("actor: args.actor");
+      expect(expr).toContain("actor: (($raw)");
+      expect(expr).toContain("})(args.actor)");
       expect(expr).toContain("appNamespace: args.namespaceName");
     });
 
@@ -98,12 +101,12 @@ describe("buildResolverOperationHookExpr", () => {
     expect(expr).toContain("input: context.args");
   });
 
-  test("includes user transformation via tailorUserMap", () => {
+  test("includes caller transformation via tailorPrincipalMap", () => {
     const expr = buildResolverOperationHookExpr(env);
-    expect(expr).toContain("user:");
-    expect(expr).toContain("user.workspace_id");
-    expect(expr).toContain("user.attribute_map");
-    expect(expr).toContain("user.attributes");
+    expect(expr).toContain("caller:");
+    expect(expr).toContain("workspace_id");
+    expect(expr).toContain("attribute_map");
+    expect(expr).toContain("attributes");
   });
 
   test("includes env injection", () => {

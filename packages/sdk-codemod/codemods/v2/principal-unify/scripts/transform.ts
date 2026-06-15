@@ -9,7 +9,14 @@ const TYPE_RENAME_MAP: Record<string, string> = {
 
 const UNAUTHENTICATED = "unauthenticatedTailorUser";
 
-const QUICK_FILTER_NEEDLES = [...Object.keys(TYPE_RENAME_MAP), UNAUTHENTICATED, "createResolver"];
+const QUICK_FILTER_NEEDLES = [
+  ...Object.keys(TYPE_RENAME_MAP),
+  UNAUTHENTICATED,
+  "createResolver",
+  ".hooks",
+  ".validate",
+  ".parse",
+];
 
 function quickFilter(source: string): boolean {
   if (!source.includes("@tailor-platform/sdk")) return false;
@@ -503,6 +510,131 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
   }
 }
 
+function findMemberCallName(call: SgNode): string | null {
+  const fn = call.field("function");
+  if (!fn || fn.kind() !== "member_expression") return null;
+  const property = fn.field("property");
+  return property?.text() ?? null;
+}
+
+function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
+  const params =
+    fn.field("parameters") ??
+    fn.field("parameter") ??
+    fn.children().find((c: SgNode) => c.kind() === "formal_parameters");
+  if (!params) return null;
+
+  const firstParam = params
+    .children()
+    .find(
+      (c: SgNode) =>
+        c.kind() === "required_parameter" ||
+        c.kind() === "optional_parameter" ||
+        c.kind() === "identifier" ||
+        c.kind() === "object_pattern",
+    );
+  if (!firstParam) return null;
+  if (firstParam.kind() === "object_pattern" || firstParam.kind() === "identifier") {
+    return firstParam;
+  }
+  return firstParam.field("pattern");
+}
+
+function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
+  const pattern = getFirstFunctionParamPattern(fn);
+  const body = fn.field("body");
+  if (!pattern || pattern.kind() !== "object_pattern" || !body) return;
+
+  let renamesBinding = false;
+  for (const child of pattern.children()) {
+    const kind = child.kind();
+    if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
+      renamesBinding = true;
+    } else if (kind === "object_assignment_pattern") {
+      const inner = child
+        .children()
+        .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
+      if (inner?.text() === "user") renamesBinding = true;
+    }
+  }
+
+  if (renamesBinding && patternBindsName(pattern, "invoker")) return;
+
+  let renamedShorthandUser = false;
+  for (const child of pattern.children()) {
+    const kind = child.kind();
+    if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
+      edits.push(child.replace("invoker"));
+      renamedShorthandUser = true;
+    } else if (kind === "pair_pattern") {
+      const key = child.field("key");
+      if (key?.text() === "user") {
+        edits.push(key.replace("invoker"));
+      }
+    } else if (kind === "object_assignment_pattern") {
+      const inner = child
+        .children()
+        .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
+      if (inner?.text() === "user") {
+        edits.push(inner.replace("invoker"));
+        renamedShorthandUser = true;
+      }
+    }
+  }
+
+  if (!renamedShorthandUser) return;
+
+  const shadowRanges = collectAllShadowRanges(body, "user");
+  const refs = body.findAll({ rule: { kind: "identifier", regex: "^user$" } });
+  for (const ref of refs) {
+    const pos = ref.range().start.index;
+    if (isInsideAnyRange(pos, shadowRanges)) continue;
+    edits.push(ref.replace("invoker"));
+  }
+
+  const shortRefs = body.findAll({
+    rule: { kind: "shorthand_property_identifier", regex: "^user$" },
+  });
+  for (const ref of shortRefs) {
+    const pos = ref.range().start.index;
+    if (isInsideAnyRange(pos, shadowRanges)) continue;
+    edits.push(ref.replace("user: invoker"));
+  }
+}
+
+function transformPrincipalCallbacksInCall(call: SgNode, edits: Edit[]): void {
+  const memberName = findMemberCallName(call);
+  if (memberName !== "hooks" && memberName !== "validate") return;
+
+  const args = call.field("arguments");
+  if (!args) return;
+  for (const kind of ["arrow_function", "function_expression"]) {
+    const callbacks = args.findAll({ rule: { kind } });
+    for (const callback of callbacks) {
+      transformPrincipalCallbackParam(callback, edits);
+    }
+  }
+}
+
+function transformParseArgsObject(call: SgNode, edits: Edit[]): void {
+  const memberName = findMemberCallName(call);
+  if (memberName !== "parse") return;
+
+  const args = call.field("arguments");
+  const objArg = args?.children().find((c: SgNode) => c.kind() === "object");
+  if (!objArg) return;
+
+  for (const child of objArg.children()) {
+    const kind = child.kind();
+    if (kind === "pair") {
+      const key = child.field("key");
+      if (key?.text() === "user") edits.push(key.replace("invoker"));
+    } else if (kind === "shorthand_property_identifier" && child.text() === "user") {
+      edits.push(child.replace("invoker: user"));
+    }
+  }
+}
+
 /**
  * Migrate user/actor/invoker types and identifiers to the unified TailorPrincipal.
  *
@@ -516,6 +648,8 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
  *   handles aliased pairs (`{ user: currentUser }`) by rewriting only the property name, and
  *   rewrites `<ctx>.user` for non-destructured single-param bodies — respecting variable
  *   shadowing in both directions.
+ * - Renames TailorDB hook/validator callback `user` parameters to `invoker`, and rewrites
+ *   `.parse({ user: ... })` arguments to `.parse({ invoker: ... })`.
  * @param source - TypeScript source text.
  * @returns Transformed source or null when nothing matched.
  */
@@ -622,6 +756,12 @@ export default function transform(source: string): string | null {
       const arrow = findResolverBodyArrow(call);
       if (arrow) transformResolverBody(arrow, edits);
     }
+  }
+
+  const memberCalls = tree.findAll({ rule: { kind: "call_expression" } });
+  for (const call of memberCalls) {
+    transformPrincipalCallbacksInCall(call, edits);
+    transformParseArgsObject(call, edits);
   }
 
   if (edits.length === 0) return null;

@@ -7,10 +7,10 @@
  * - Bundle inline: interpolated into the generated `.entry.js` wrapper and
  *   evaluated inside the bundled script at function entry.
  *
- * The user field mapping (server → SDK) shared across services is defined in
- * `@/parser/service/tailordb` as `tailorUserMap`.
+ * The principal field mapping (server → SDK) shared across services is defined
+ * in `@/parser/service/tailordb` as `tailorPrincipalMap`.
  */
-import { tailorUserMap } from "@/parser/service/tailordb";
+import { tailorPrincipalMap } from "@/parser/service/tailordb";
 import type { Trigger } from "@/types/executor.generated";
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,8 @@ import type { Trigger } from "@/types/executor.generated";
  * `invoker` value expression, inlined into bundler entry wrappers.
  *
  * Calls `tailor.context.getInvoker()` at function entry and maps the server
- * shape to TailorInvoker. Anonymous callers (`null`) pass through as `null`.
+ * shape to `TailorPrincipal | null`. Anonymous callers (`null`) pass through
+ * as `null`.
  */
 export const INVOKER_EXPR = `(($raw) => $raw ? ({
   id: $raw.id,
@@ -38,15 +39,26 @@ export const INVOKER_EXPR = `(($raw) => $raw ? ({
 /**
  * Actor field transformation expression.
  *
- * Transforms the server's actor object to match the SDK's TailorActor type:
- *   server `attributeMap`  → SDK `attributes`
- *   server `attributes`    → SDK `attributeList`
- *   other fields           → passed through
- *   null/undefined actor   → null
+ * Transforms the server's actor object to match `TailorPrincipal | null`.
  */
-const ACTOR_TRANSFORM_EXPR =
-  `actor: args.actor ? (({ attributeMap, attributes: attrList, ...rest }) => ` +
-  `({ ...rest, attributes: attributeMap, attributeList: attrList }))(args.actor) : null`;
+const ACTOR_TRANSFORM_EXPR = `actor: (($raw) => {
+  const type = $raw?.userType === "USER_TYPE_USER"
+    ? "user"
+    : $raw?.userType === "USER_TYPE_MACHINE_USER"
+      ? "machine_user"
+      : $raw?.type;
+  const id = $raw?.userId ?? $raw?.id;
+  if (!$raw || !id || !type || type === "USER_TYPE_UNSPECIFIED" || id === "00000000-0000-0000-0000-000000000000") {
+    return null;
+  }
+  return {
+    id,
+    type,
+    workspaceId: $raw.workspaceId,
+    attributes: $raw.attributeMap ?? {},
+    attributeList: $raw.attributes ?? [],
+  };
+})(args.actor)`;
 
 /**
  * Build the JavaScript expression that transforms server-format executor event
@@ -92,7 +104,7 @@ export function buildExecutorArgsExpr(
  * Transforms server context to SDK resolver context:
  *   context.args        → input
  *   context.pipeline     → spread into result
- *   user (global var)    → TailorUser (via tailorUserMap: workspace_id→workspaceId, attribute_map→attributes, attributes→attributeList)
+ *   user (global var)    → caller (`TailorPrincipal | null`)
  *   env                 → injected as JSON
  * @param env - Application env record to embed in the expression
  * @returns A JavaScript expression string for the operationHook
@@ -100,5 +112,5 @@ export function buildExecutorArgsExpr(
 export function buildResolverOperationHookExpr(
   env: Record<string, string | number | boolean>,
 ): string {
-  return `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`;
+  return `({ ...context.pipeline, input: context.args, caller: ${tailorPrincipalMap}, env: ${JSON.stringify(env)} });`;
 }

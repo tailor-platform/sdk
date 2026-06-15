@@ -1,4 +1,4 @@
-import type { output, TailorUser } from "@/configure";
+import type { output } from "@/configure";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { TailorField } from "@/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
@@ -12,20 +12,6 @@ export {
   setupWaitPointMock,
   createImportMain,
 } from "./mock";
-
-/**
- * Represents an unauthenticated user in the Tailor platform.
- *
- * @deprecated Represent an absent principal as `null` instead. This constant is
- * removed in the next major version.
- */
-export const unauthenticatedTailorUser = {
-  id: "00000000-0000-0000-0000-000000000000",
-  type: "",
-  workspaceId: "00000000-0000-0000-0000-000000000000",
-  attributes: null,
-  attributeList: [],
-} as const satisfies TailorUser;
 
 /**
  * Creates a hook function that processes TailorDB type fields
@@ -66,7 +52,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           hooked[key] = field.metadata.hooks.create({
             value: (data as Record<string, unknown>)[key],
             data: data,
-            user: unauthenticatedTailorUser,
+            invoker: null,
           });
           if (hooked[key] instanceof Date) {
             hooked[key] = hooked[key].toISOString();
@@ -103,7 +89,7 @@ export function createStandardSchema<T = Record<string, unknown>>(
         const result = schemaType.parse({
           value: hooked,
           data: hooked,
-          user: unauthenticatedTailorUser,
+          invoker: null,
         });
         if (result.issues) {
           return result;

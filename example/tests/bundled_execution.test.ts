@@ -76,7 +76,7 @@ describe("bundled execution tests", () => {
       expect(result).toEqual(10);
     });
 
-    test("resolvers/showUserInfo.js returns user and invoker information", async () => {
+    test("resolvers/showUserInfo.js returns caller and invoker information", async () => {
       using _invokerSpy = vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
         id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
         type: "machine_user",
@@ -87,7 +87,7 @@ describe("bundled execution tests", () => {
 
       const main = await importActualMain("resolvers/showUserInfo.js");
       const payload = {
-        user: {
+        caller: {
           id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
           type: "user",
           workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
@@ -96,7 +96,7 @@ describe("bundled execution tests", () => {
       };
       const result = await main(payload);
       expect(result).toEqual({
-        user: {
+        caller: {
           id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
           type: "user",
           workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
