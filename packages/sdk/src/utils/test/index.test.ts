@@ -184,12 +184,12 @@ describe("createTailorDBHook", () => {
   });
 
   describe("create hook on a top-level field", () => {
-    test("invokes the create hook with value, full data, and the unauthenticated user", () => {
-      const seen: { value: unknown; data: unknown; userId: string }[] = [];
+    test("invokes the create hook with value, full data, and a null invoker", () => {
+      const seen: { value: unknown; data: unknown; invoker: unknown }[] = [];
       const type = db.type("Order", { total: db.float(), tax: db.float() }).hooks({
         tax: {
-          create: ({ value, data, user }) => {
-            seen.push({ value, data, userId: user.id });
+          create: ({ value, data, invoker }) => {
+            seen.push({ value, data, invoker });
             return (data as { total: number }).total * 0.1;
           },
         },
@@ -200,7 +200,7 @@ describe("createTailorDBHook", () => {
         {
           value: undefined,
           data: { total: 100, tax: undefined },
-          userId: "00000000-0000-0000-0000-000000000000",
+          invoker: null,
         },
       ]);
     });

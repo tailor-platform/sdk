@@ -7,9 +7,27 @@ import type {
 } from "@/types/tailordb";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
-// Since there's naming difference between platform and sdk,
-// use this mapping in all scripts to provide variables that match sdk types.
-export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes }`;
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+// Since there's naming difference between platform and SDK, use this mapping in
+// all scripts to provide variables that match `TailorPrincipal | null`.
+export const tailorPrincipalMap = /* js */ `(($raw) => {
+  const type = $raw?.type === "USER_TYPE_USER"
+    ? "user"
+    : $raw?.type === "USER_TYPE_MACHINE_USER"
+      ? "machine_user"
+      : $raw?.type;
+  if (!$raw || !type || type === "USER_TYPE_UNSPECIFIED" || $raw.id === "${NIL_UUID}") {
+    return null;
+  }
+  return {
+    id: $raw.id,
+    type,
+    workspaceId: $raw.workspace_id ?? $raw.workspaceId,
+    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},
+    attributeList: $raw.attributes ?? [],
+  };
+})(user)`;
 
 /**
  * Convert a function to a string representation.
@@ -46,7 +64,7 @@ const convertHookToExpr = (fn: Function): string => {
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+  return `(${normalized})({ value: _value, data: _data, invoker: ${tailorPrincipalMap} })`;
 };
 
 /**
@@ -89,7 +107,7 @@ export function parseFieldConfig(
         script: {
           expr:
             getPrecompiledScriptExpr(fn) ??
-            `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+            `(${fn.toString().trim()})({ value: _value, data: _data, invoker: ${tailorPrincipalMap} })`,
         },
         errorMessage: message,
       };

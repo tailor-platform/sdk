@@ -1,2 +1,2 @@
-export type { TailorActor, TailorActorType } from "./actor";
 export type { TailorEnv } from "./env";
+export type { TailorPrincipal } from "./user";

@@ -12,24 +12,15 @@
  * }
  */
 
+import type { TailorPrincipal } from "@/types/user";
+
 /**
  * Information about the invoker of the current function execution.
  *
- * Matches the shape of `TailorUser` and `TailorActor` — `attributes` is the
- * attribute map and `attributeList` is the array of attribute IDs.
+ * Matches the public `TailorPrincipal` shape — `attributes` is the attribute
+ * map and `attributeList` is the array of attribute IDs.
  */
-export interface Invoker {
-  /** The invoker's ID */
-  id: string;
-  /** The invoker's type */
-  type: "user" | "machine_user";
-  /** The workspace ID */
-  workspaceId: string;
-  /** A map of the invoker's attributes */
-  attributes: Record<string, unknown>;
-  /** The list of attribute IDs */
-  attributeList: string[];
-}
+export type Invoker = TailorPrincipal;
 
 /**
  * Raw platform-side invoker payload returned by `tailor.context.getInvoker()`.
@@ -70,7 +61,7 @@ export function getInvoker(): Invoker | null {
     id: raw.id,
     type: raw.type,
     workspaceId: raw.workspaceId,
-    attributes: raw.attributeMap,
-    attributeList: raw.attributes,
+    attributes: raw.attributeMap as Invoker["attributes"],
+    attributeList: raw.attributes as Invoker["attributeList"],
   };
 }

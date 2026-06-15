@@ -17,7 +17,7 @@ import {
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
 import type { Operation } from "./operation";
-import type { TailorInvoker } from "@/types/user";
+import type { TailorPrincipal } from "@/types/user";
 
 describe("createExecutor", () => {
   test("can disable executor", () => {
@@ -87,7 +87,7 @@ describe("createExecutor", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args).toEqualTypeOf<Args & { invoker?: TailorInvoker }>();
+          expectTypeOf(args).toEqualTypeOf<Args & { invoker: TailorPrincipal | null }>();
         },
       },
     });
@@ -1073,7 +1073,7 @@ describe("functionTarget", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+          expectTypeOf(args.invoker).toEqualTypeOf<TailorPrincipal | null>();
         },
       },
     });

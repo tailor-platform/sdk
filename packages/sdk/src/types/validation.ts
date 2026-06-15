@@ -1,11 +1,15 @@
 import type { output, InferFieldsOutput } from "./helpers";
-import type { TailorUser } from "./user";
+import type { TailorPrincipal } from "./user";
 import type { NonEmptyObject } from "type-fest";
 
 /**
  * Validation function type
  */
-export type ValidateFn<O, D = unknown> = (args: { value: O; data: D; user: TailorUser }) => boolean;
+export type ValidateFn<O, D = unknown> = (args: {
+  value: O;
+  data: D;
+  invoker: TailorPrincipal | null;
+}) => boolean;
 
 /**
  * Validation configuration with custom error message

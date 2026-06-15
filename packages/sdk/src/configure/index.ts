@@ -16,14 +16,7 @@ export namespace t {
 }
 
 export { type TailorField } from "@/configure/types/type";
-export {
-  type TailorPrincipal,
-  type TailorUser,
-  type TailorInvoker,
-  unauthenticatedTailorUser,
-  type AttributeMap,
-  type AttributeList,
-} from "@/types/user";
+export { type TailorPrincipal, type AttributeMap, type AttributeList } from "@/types/user";
 export { type Env } from "@/types/env";
 export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
 export { type IdpNameRegistry, type IdpName } from "@/configure/types/idp-name";

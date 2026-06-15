@@ -1,4 +1,3 @@
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { describe, expect, test } from "vitest";
 import resolver from "./showUserInfo";
 
@@ -6,26 +5,29 @@ describe("showUserInfo resolver", () => {
   test("returns default user info", async () => {
     const result = await resolver.body({
       input: undefined as never,
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toEqual({
-      userId: unauthenticatedTailorUser.id,
-      userType: unauthenticatedTailorUser.type,
-      workspaceId: unauthenticatedTailorUser.workspaceId,
+      userId: "anonymous",
+      userType: "anonymous",
+      workspaceId: "",
     });
   });
 
   test("returns custom user info", async () => {
-    const customUser = {
-      ...unauthenticatedTailorUser,
+    const customCaller = {
       id: "user-123",
       type: "machine_user" as const,
       workspaceId: "ws-456",
+      attributes: {},
+      attributeList: [],
     };
     const result = await resolver.body({
       input: undefined as never,
-      user: customUser,
+      caller: customCaller,
+      invoker: customCaller,
       env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toEqual({

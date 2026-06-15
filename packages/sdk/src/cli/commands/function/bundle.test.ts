@@ -279,7 +279,7 @@ export default {
         workspaceId: defaultWorkspaceId,
       });
 
-      expect(result.bundledCode).toContain("USER_TYPE_MACHINE_USER");
+      expect(result.bundledCode).toContain("machine_user");
       expect(result.bundledCode).toContain("ADMIN");
       expect(result.bundledCode).toContain(defaultMachineUser.id);
       expect(result.bundledCode).toContain(defaultWorkspaceId);

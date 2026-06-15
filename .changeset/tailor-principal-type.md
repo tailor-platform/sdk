@@ -1,10 +1,7 @@
 ---
-"@tailor-platform/sdk": minor
+"@tailor-platform/sdk": major
 ---
 
-Add `TailorPrincipal`, a unified type for the caller, actor, and invoker of a function execution.
+Unify function principal context around `TailorPrincipal`.
 
-The principal types are deprecated in favor of it and unified into `TailorPrincipal` (with absence represented as `null`) in the next major version:
-
-- `TailorUser`, `TailorInvoker`, and the `unauthenticatedTailorUser` constant (including the one from `@tailor-platform/sdk/test`).
-- The event executor `actor` value, whose `userId`/`userType` fields become `id`/`type` with `"user"`/`"machine_user"` values.
+Resolver contexts now use `caller` and `invoker` as `TailorPrincipal | null`, workflow and executor invokers also use `TailorPrincipal | null`, and event executor `actor` uses `TailorPrincipal | null` with `id`/`type` fields. The legacy `TailorUser`, `TailorInvoker`, `TailorActor`, `TailorActorType`, and `unauthenticatedTailorUser` exports are removed.

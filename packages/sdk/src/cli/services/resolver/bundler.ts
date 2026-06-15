@@ -156,7 +156,7 @@ async function bundleSingleResolver(
             const result = t.object(_internalResolver.input).parse({
               value: context.input,
               data: context.input,
-              user: context.user,
+              invoker,
             });
 
             if (result.issues) {

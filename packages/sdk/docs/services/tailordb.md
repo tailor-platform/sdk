@@ -260,7 +260,7 @@ Add hooks to execute functions during data creation or update. Hooks receive thr
 
 - `value`: User input if provided, otherwise existing value on update or null on create
 - `data`: Entire record data (for accessing other field values)
-- `user`: User performing the operation
+- `invoker`: Principal performing the operation
 
 #### Field-level Hooks
 
@@ -268,7 +268,7 @@ Set hooks directly on individual fields:
 
 ```typescript
 db.string().hooks({
-  create: ({ user }) => user.id,
+  create: ({ invoker }) => invoker?.id ?? "",
   update: ({ value }) => value,
 });
 ```

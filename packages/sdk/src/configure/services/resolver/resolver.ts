@@ -6,12 +6,12 @@ import type { TailorAnyField, TailorField } from "@/configure/types/type";
 import type { TailorEnv } from "@/types/env";
 import type { InferFieldsOutput, output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
-import type { TailorInvoker, TailorUser } from "@/types/user";
+import type { TailorPrincipal } from "@/types/user";
 
 type Context<Input extends Record<string, TailorAnyField> | undefined> = {
   input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;
-  user: TailorUser;
-  invoker?: TailorInvoker;
+  caller: TailorPrincipal | null;
+  invoker: TailorPrincipal | null;
   env: TailorEnv;
 };
 
@@ -49,7 +49,7 @@ type ResolverReturn<
  * Create a resolver definition for the Tailor SDK.
  *
  * The `body` function receives a context with `input` (typed from `config.input`),
- * `user`, `invoker` (reflects `authInvoker` delegation), and `env`.
+ * `caller`, `invoker` (reflects `authInvoker` delegation), and `env`.
  * The return value of `body` must match the `output` type.
  *
  * `output` accepts either a single TailorField (e.g. `t.string()`) or a
@@ -72,7 +72,7 @@ type ResolverReturn<
  *   input: {
  *     id: t.string(),
  *   },
- *   body: async ({ input, user }) => {
+ *   body: async ({ input, caller }) => {
  *     const db = getDB("tailordb");
  *     const result = await db.selectFrom("User").selectAll().where("id", "=", input.id).executeTakeFirst();
  *     return { name: result?.name ?? "", email: result?.email ?? "" };

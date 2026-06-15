@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { ContextInvoker } from "@/runtime/context";
-import type { TailorInvoker } from "@/types/user";
+import type { TailorPrincipal } from "@/types/user";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
@@ -134,9 +134,9 @@ export function setupWorkflowMock(handler: JobHandler): {
  * Sets up a mock for `globalThis.tailor.context.getInvoker` used in bundled
  * resolver/executor/workflow tests.
  * @deprecated With the `tailor-runtime` environment from `@tailor-platform/sdk/vitest`, drive the invoker via `vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue(...)` for bundled tests, or pass `invoker` directly to `.body()` when unit-testing resolvers/executors/workflow jobs against the TypeScript source.
- * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
+ * @param invoker - The `TailorPrincipal` value to return, or `null` for anonymous.
  */
-export function setupInvokerMock(invoker: TailorInvoker): void {
+export function setupInvokerMock(invoker: TailorPrincipal | null): void {
   const raw: ContextInvoker | null = invoker
     ? {
         id: invoker.id,

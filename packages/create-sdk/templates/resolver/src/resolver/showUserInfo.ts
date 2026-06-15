@@ -6,9 +6,9 @@ const resolver = createResolver({
   operation: "query",
   body: (context) => {
     return {
-      userId: context.user.id,
-      userType: context.user.type,
-      workspaceId: context.user.workspaceId,
+      userId: context.caller?.id ?? "anonymous",
+      userType: context.caller?.type ?? "anonymous",
+      workspaceId: context.caller?.workspaceId ?? "",
     };
   },
   output: t.object({

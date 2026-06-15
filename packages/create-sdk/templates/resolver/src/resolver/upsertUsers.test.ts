@@ -1,4 +1,3 @@
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { createKyselyMock } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test, vi } from "vitest";
 import { getDB, type Namespace } from "../generated/db";
@@ -30,7 +29,8 @@ describe("upsertUsers resolver", () => {
           { name: "Existing", email: "exists@example.com", age: 41 },
         ],
       },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
 

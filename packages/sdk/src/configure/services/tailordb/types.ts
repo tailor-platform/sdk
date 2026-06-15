@@ -1,7 +1,7 @@
 import type { output } from "@/types/helpers";
 import type { TailorAnyDBField, TailorDBField } from "@/types/tailor-db-field";
 import type { GqlOperationsConfig } from "@/types/tailordb";
-import type { TailorUser } from "@/types/user";
+import type { TailorPrincipal } from "@/types/user";
 import type { NonEmptyObject } from "type-fest";
 
 // --- Hook types (UX-focused, for configure layer) ---
@@ -11,7 +11,7 @@ type HookFn<TValue, TData, TReturn> = (args: {
   data: TData extends Record<string, unknown>
     ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
     : unknown;
-  user: TailorUser;
+  invoker: TailorPrincipal | null;
 }) => TReturn;
 
 export type Hook<TData, TReturn> = {

@@ -261,7 +261,7 @@ describe("dataplane", () => {
       const query = gql`
         query {
           showUserInfo {
-            user {
+            caller {
               id
               type
               workspaceId
@@ -280,7 +280,7 @@ describe("dataplane", () => {
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
         showUserInfo: {
-          user: {
+          caller: {
             id: expect.any(String),
             type: "machine_user",
             workspaceId: expect.any(String),
@@ -310,13 +310,15 @@ describe("dataplane", () => {
 
       const responseFields = userInfo?.response?.type?.fields ?? [];
 
-      const userField = responseFields.find((f) => f.name === "user");
-      expect(userField?.description).toBe("Authenticated user");
-      const userSubFields = userField?.type?.fields ?? [];
-      expect(userSubFields.find((f) => f.name === "id")?.description).toBe("User ID");
-      expect(userSubFields.find((f) => f.name === "type")?.description).toBe("User type");
-      expect(userSubFields.find((f) => f.name === "workspaceId")?.description).toBe("Workspace ID");
-      expect(userSubFields.find((f) => f.name === "role")?.description).toBe("User role");
+      const callerField = responseFields.find((f) => f.name === "caller");
+      expect(callerField?.description).toBe("Authenticated caller");
+      const callerSubFields = callerField?.type?.fields ?? [];
+      expect(callerSubFields.find((f) => f.name === "id")?.description).toBe("User ID");
+      expect(callerSubFields.find((f) => f.name === "type")?.description).toBe("User type");
+      expect(callerSubFields.find((f) => f.name === "workspaceId")?.description).toBe(
+        "Workspace ID",
+      );
+      expect(callerSubFields.find((f) => f.name === "role")?.description).toBe("User role");
 
       const invokerField = responseFields.find((f) => f.name === "invoker");
       expect(invokerField?.description).toBe("Function invoker");

@@ -41,7 +41,7 @@ const allCodemods: CodemodPackage[] = [
     id: "v2/principal-unify",
     name: "Unify TailorUser/TailorActor/TailorInvoker → TailorPrincipal",
     description:
-      "Rename TailorUser/TailorActor/TailorInvoker to TailorPrincipal, drop unauthenticatedTailorUser, and rename resolver body `user` to `caller`",
+      "Rename TailorUser/TailorActor/TailorInvoker to TailorPrincipal, drop unauthenticatedTailorUser, rename resolver body `user` to `caller`, and rename TailorDB callback `user` to `invoker`",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/principal-unify/scripts/transform.js",
