@@ -353,10 +353,6 @@ export default defineConfig({
 
 - **`process` and `require`** are not removed or blocked. Vitest's internal runner depends on them extensively. On the real platform runtime, they do not exist.
 
-### Migrating from the deprecated `setup*Mock` helpers
-
-The `setup*Mock` helpers from `@tailor-platform/sdk/test` are removed in v2 — see [Migrating to v2](./migration/v2.md#test-mock-helpers) for the replacement mapping.
-
 ## Unit Tests
 
 Unit tests call `.body()` (or `.trigger()`) directly on a resolver, workflow job, or executor and stub any platform-provided globals they touch.
