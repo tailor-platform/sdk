@@ -19,7 +19,19 @@
         "withinDescribe": "test"
       }
     ],
-    "vitest/expect-expect": "error",
+    "vitest/expect-expect": [
+      "error",
+      {
+        "assertFunctionNames": [
+          "expect",
+          "expectTypeOf",
+          "assert",
+          "assertType",
+          "expect*",
+          "assert*"
+        ]
+      }
+    ],
     "vitest/hoisted-apis-on-top": "error",
     "vitest/no-conditional-expect": "error",
     "vitest/no-conditional-tests": "error",
