@@ -37,3 +37,4 @@ allowBuilds:
 
 overrides:
   valibot@>=0.31.0 <1.2.0: 1.4.1
+  esbuild@>=0.17.0 <0.28.1: 0.28.1
