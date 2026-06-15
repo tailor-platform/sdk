@@ -140,6 +140,14 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("per_page: 100");
   });
 
+  test("builds plan comment markdown without YAML indentation", () => {
+    const { content } = renderBranchWorkflow(branchBase);
+    expect(content).toContain("].join('\\n');");
+    expect(content).toContain("`## ${status} Tailor Platform Plan (${key})`");
+    expect(content).toContain("`<summary>Plan output (exit code: ${exitCode})</summary>`");
+    expect(content).not.toContain("            ## ${status} Tailor Platform Plan");
+  });
+
   test("logs full plan output before truncating comments and outputs", () => {
     const branch = renderBranchWorkflow(branchBase).content;
     const tag = renderTagWorkflow(tagBase).content;

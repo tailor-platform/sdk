@@ -171,11 +171,13 @@ jobs:
 
             let body;
             if (!workspaceId) {
-              body = `${marker}
-            ## Tailor Platform Plan (${key})
-
-            Workspace is not provisioned yet. Set TAILOR_PLATFORM_WORKSPACE_ID after provisioning the workspace.
-            `;
+              body = [
+                marker,
+                `## Tailor Platform Plan (${key})`,
+                '',
+                'Workspace is not provisioned yet. Set TAILOR_PLATFORM_WORKSPACE_ID after provisioning the workspace.',
+                '',
+              ].join('\n');
             } else {
               const exitCode = process.env.DRY_RUN_EXIT_CODE;
               let output = process.env.DRY_RUN_OUTPUT;
@@ -185,18 +187,20 @@ jobs:
                 output = note + output.slice(output.length - MAX_OUTPUT);
               }
               const status = exitCode === '0' ? 'PASS' : 'FAIL';
-              body = `${marker}
-            ## ${status} Tailor Platform Plan (${key})
-
-            <details>
-            <summary>Plan output (exit code: ${exitCode})</summary>
-
-            \`\`\`
-            ${output}
-            \`\`\`
-
-            </details>
-            `;
+              body = [
+                marker,
+                `## ${status} Tailor Platform Plan (${key})`,
+                '',
+                '<details>',
+                `<summary>Plan output (exit code: ${exitCode})</summary>`,
+                '',
+                '```',
+                output,
+                '```',
+                '',
+                '</details>',
+                '',
+              ].join('\n');
             }
 
             const comments = await github.paginate(github.rest.issues.listComments, {
