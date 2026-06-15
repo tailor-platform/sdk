@@ -52,4 +52,4 @@ Use `--dry-run` to preview what changes will be made before applying them.
 
 ### Version Migration Guides
 
-For v2, run `tailor-sdk upgrade` first, then work through [Migrating to v2](../migration/v2.md). The guide marks which migrations are codemod-backed and which require manual follow-up.
+For v2, run `tailor-sdk upgrade --from <old-version>` first, then work through [Migrating to v2](../migration/v2.md). The guide marks which migrations are codemod-backed and which require manual follow-up.
