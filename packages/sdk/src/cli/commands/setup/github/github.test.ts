@@ -128,6 +128,12 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("LABEL: my-app");
   });
 
+  test("paginates plan comment lookup", () => {
+    const { content } = renderBranchWorkflow(branchBase);
+    expect(content).toContain("github.paginate(github.rest.issues.listComments");
+    expect(content).toContain("per_page: 100");
+  });
+
   test("references the dry-run dispatch input with bracket notation", () => {
     // `inputs.dry-run` is ambiguous to readers/tools; the bracket form is
     // unambiguous for a hyphenated input name.
