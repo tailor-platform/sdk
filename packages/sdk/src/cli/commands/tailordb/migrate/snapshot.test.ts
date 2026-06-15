@@ -1970,6 +1970,7 @@ describe("snapshot", () => {
           foreignKey: config.foreignKey ?? false,
           foreignKeyType: config.foreignKeyType,
           allowedValues: config.allowedValues ?? [],
+          validate: [],
           ...(config.scale !== undefined && { scale: config.scale }),
         };
       }
