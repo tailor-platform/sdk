@@ -72,7 +72,7 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  * class instances exposing methods are rejected via the property walk.
  * @param config - Job configuration with name and body function.
  * @param config.name - Unique job name across the project.
- * @param config.body - Async function that processes the job input.
+ * @param config.body - Function that processes the job input.
  * @returns A WorkflowJob that can be triggered from other jobs.
  * @example
  * // Simple job with async body:
