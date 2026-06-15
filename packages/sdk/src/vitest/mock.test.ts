@@ -14,6 +14,7 @@ import {
   cleanupMocks,
   RUNTIME_FLAG_KEY,
 } from "./mock";
+import { runWorkflowLocally } from "./workflow-local";
 
 describe("mock", () => {
   beforeEach(() => {
@@ -116,10 +117,10 @@ describe("mock", () => {
       vi.unstubAllEnvs();
     });
 
-    test("records triggered jobs", () => {
+    test("records triggered jobs even when no handler is configured", () => {
       using wf = mockWorkflow();
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      trigger("my-job", { key: "value" });
+      expect(() => trigger("my-job", { key: "value" })).toThrow(/No workflow job mock/);
 
       expect(wf.triggeredJobs).toEqual([{ jobName: "my-job", args: { key: "value" } }]);
     });
@@ -159,24 +160,41 @@ describe("mock", () => {
     test("reset clears all state", () => {
       using wf = mockWorkflow();
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      trigger("job", {});
+      expect(() => trigger("job", {})).toThrow(/No workflow job mock/);
 
       wf.reset();
 
       expect(wf.triggeredJobs).toHaveLength(0);
     });
 
-    test("setEnv exposes env to job bodies via .trigger()", async () => {
+    test("setEnv exposes env to job bodies via runWorkflowLocally()", async () => {
       using wf = mockWorkflow();
       const captureEnv = createWorkflowJob({
         name: "capture-env",
         body: (_input: undefined, ctx) => ctx.env,
       });
+      const workflow = createWorkflow({ name: "capture-env-workflow", mainJob: captureEnv });
 
       wf.setEnv({ STAGE: "test", REGION: "asia" });
-      const env = await captureEnv.trigger();
+      const env = await runWorkflowLocally(workflow);
 
       expect(env).toEqual({ STAGE: "test", REGION: "asia" });
+    });
+
+    test("runWorkflowLocally env option overrides and restores the mock env", async () => {
+      using wf = mockWorkflow();
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-option",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+      const workflow = createWorkflow({ name: "capture-env-option-workflow", mainJob: captureEnv });
+
+      wf.setEnv({ STAGE: "from-mock" });
+
+      expect(
+        await runWorkflowLocally(workflow, undefined, { env: { STAGE: "from-option" } }),
+      ).toEqual({ STAGE: "from-option" });
+      expect(await runWorkflowLocally(workflow)).toEqual({ STAGE: "from-mock" });
     });
 
     test("reset clears env back to {}", async () => {
@@ -185,11 +203,12 @@ describe("mock", () => {
         name: "capture-env-reset",
         body: (_input: undefined, ctx) => ctx.env,
       });
+      const workflow = createWorkflow({ name: "capture-env-reset-workflow", mainJob: captureEnv });
 
       wf.setEnv({ STAGE: "test" });
       wf.reset();
 
-      expect(await captureEnv.trigger()).toEqual({});
+      expect(await runWorkflowLocally(workflow)).toEqual({});
     });
 
     describe("backward-compat: deprecated WORKFLOW_TEST_ENV_KEY env-var", () => {
@@ -199,11 +218,15 @@ describe("mock", () => {
           name: "capture-env-compat-priority",
           body: (_input: undefined, ctx) => ctx.env,
         });
+        const workflow = createWorkflow({
+          name: "capture-env-compat-priority-workflow",
+          mainJob: captureEnv,
+        });
 
         vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
         wf.setEnv({ STAGE: "from-setenv" });
 
-        expect(await captureEnv.trigger()).toEqual({ STAGE: "from-setenv" });
+        expect(await runWorkflowLocally(workflow)).toEqual({ STAGE: "from-setenv" });
       });
 
       test("env-var is used when setEnv has not been called", async () => {
@@ -211,10 +234,14 @@ describe("mock", () => {
           name: "capture-env-compat-fallback",
           body: (_input: undefined, ctx) => ctx.env,
         });
+        const workflow = createWorkflow({
+          name: "capture-env-compat-fallback-workflow",
+          mainJob: captureEnv,
+        });
 
         vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
 
-        expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
+        expect(await runWorkflowLocally(workflow)).toEqual({ STAGE: "from-env-var" });
       });
 
       test("throws when the env-var is valid JSON but not an object", async () => {
@@ -223,25 +250,46 @@ describe("mock", () => {
           name: "capture-env-compat-nonobject",
           body: (_input: undefined, ctx) => ctx.env,
         });
+        const workflow = createWorkflow({
+          name: "capture-env-compat-nonobject-workflow",
+          mainJob: captureEnv,
+        });
 
         vi.stubEnv(WORKFLOW_TEST_ENV_KEY, "42");
 
-        await expect(captureEnv.trigger()).rejects.toThrow(/must be a JSON object/);
+        await expect(runWorkflowLocally(workflow)).rejects.toThrow(/must be a JSON object/);
       });
     });
   });
 
   describe("default workflow runtime (no mockWorkflow needed)", () => {
-    test("a job's .trigger() runs its real body", async () => {
+    test("a job's .trigger() requires a configured workflow mock", () => {
       const double = createWorkflowJob({
         name: "default-runtime-double",
         body: (input: { n: number }) => ({ doubled: input.n * 2 }),
       });
 
-      expect(await double.trigger({ n: 21 })).toEqual({ doubled: 42 });
+      expect(() => double.trigger({ n: 21 })).toThrow(/No workflow job mock/);
     });
 
-    test("workflow.mainJob.trigger() runs the whole chain", async () => {
+    test("workflow.trigger() returns an execution id without running the main job", async () => {
+      let bodyRan = false;
+      const main = createWorkflowJob({
+        name: "default-runtime-main-trigger",
+        body: () => {
+          bodyRan = true;
+          return { ok: true };
+        },
+      });
+      const workflow = createWorkflow({ name: "default-runtime-trigger-wf", mainJob: main });
+
+      await expect(workflow.trigger(undefined)).resolves.toBe(
+        "00000000-0000-4000-8000-000000000000",
+      );
+      expect(bodyRan).toBe(false);
+    });
+
+    test("runWorkflowLocally() runs the whole chain", async () => {
       const inner = createWorkflowJob({
         name: "default-runtime-inner",
         body: (input: { n: number }) => ({ n: input.n + 1 }),
@@ -249,23 +297,24 @@ describe("mock", () => {
       const main = createWorkflowJob({
         name: "default-runtime-main",
         body: async (input: { n: number }) => {
-          const a = await inner.trigger({ n: input.n });
-          const b = await inner.trigger({ n: a.n });
+          const a = inner.trigger({ n: input.n });
+          const b = inner.trigger({ n: a.n });
           return { total: b.n };
         },
       });
       const workflow = createWorkflow({ name: "default-runtime-wf", mainJob: main });
 
-      expect(await workflow.mainJob.trigger({ n: 0 })).toEqual({ total: 2 });
+      expect(await runWorkflowLocally(workflow, { n: 0 })).toEqual({ total: 2 });
     });
 
-    test("the JSON boundary rejects a non-serializable trigger result", async () => {
+    test("runWorkflowLocally() rejects a non-serializable trigger result", async () => {
       const bad = createWorkflowJob({
         name: "default-runtime-bad",
         body: () => ({ when: new Date() }) as never,
       });
+      const workflow = createWorkflow({ name: "default-runtime-bad-wf", mainJob: bad });
 
-      await expect(bad.trigger()).rejects.toThrow(/Date instance/);
+      await expect(runWorkflowLocally(workflow)).rejects.toThrow(/Date instance/);
     });
   });
 

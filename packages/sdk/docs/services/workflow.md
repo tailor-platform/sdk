@@ -105,11 +105,11 @@ import { sendNotification } from "./jobs/send-notification";
 
 export const mainJob = createWorkflowJob({
   name: "main-job",
-  body: async (input: { customerId: string }) => {
-    const customer = await fetchCustomer.trigger({
+  body: (input: { customerId: string }) => {
+    const customer = fetchCustomer.trigger({
       customerId: input.customerId,
     });
-    const notification = await sendNotification.trigger({
+    const notification = sendNotification.trigger({
       message: "Order processed",
       recipient: customer.email,
     });
@@ -130,31 +130,31 @@ Using `.trigger()` inside a loop works correctly, as long as the loop is determi
 // ✅ OK: deterministic loop — same calls in the same order on every execution
 const regions = ["us", "eu", "ap"];
 for (const region of regions) {
-  const result = await fetchData.trigger({ region });
+  const result = fetchData.trigger({ region });
   results.push(result);
 }
 ```
 
 ```typescript
 // ❌ Bad: non-deterministic — argument changes between executions
-await processJob.trigger({ timestamp: Date.now() });
+processJob.trigger({ timestamp: Date.now() });
 
 // ✅ OK: call Date.now() in separated job
-const timestamp = await timestampJob.trigger();
-await processJob.trigger({ timestamp });
+const timestamp = timestampJob.trigger();
+processJob.trigger({ timestamp });
 ```
 
 ```typescript
 // ❌ Bad: non-deterministic — external data may change between executions
 const items = await fetch("https://api.example.com/items").then((r) => r.json());
 for (const item of items) {
-  await processItem.trigger({ id: item.id });
+  processItem.trigger({ id: item.id });
 }
 
 // ✅ OK: call fetch("https://api.example.com/items").then((r) => r.json()); in separated job
-const items = await fetchItemsJob.trigger();
+const items = fetchItemsJob.trigger();
 for (const item of items) {
-  await processItem.trigger({ id: item.id });
+  processItem.trigger({ id: item.id });
 }
 ```
 
@@ -178,15 +178,15 @@ import { sendNotification } from "./jobs/send-notification";
 // Jobs must be named exports
 export const processOrder = createWorkflowJob({
   name: "process-order",
-  body: async (input: { customerId: string }, { env, invoker }) => {
+  body: (input: { customerId: string }, { env, invoker }) => {
     // `env` contains values from `tailor.config.ts` -> `env`.
     // `invoker` is the principal running this job, overridden by `authInvoker`
     // when set; `null` for anonymous calls.
     // Trigger other jobs by calling .trigger() on the job object.
-    const customer = await fetchCustomer.trigger({
+    const customer = fetchCustomer.trigger({
       customerId: input.customerId,
     });
-    await sendNotification.trigger({
+    sendNotification.trigger({
       message: "Order processed",
       recipient: customer.email,
     });
