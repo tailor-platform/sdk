@@ -12,7 +12,8 @@ export type TailorActorType = "USER_TYPE_USER" | "USER_TYPE_MACHINE_USER" | "USE
  * Represents an actor in event triggers.
  *
  * @deprecated Use `TailorPrincipal` instead. `TailorActor` is unified into
- * `TailorPrincipal` in the next major version.
+ * `TailorPrincipal` in the next major version, where `userId`/`userType` become
+ * `id`/`type` with `"user"`/`"machine_user"` values.
  */
 export type TailorActor = {
   /** The ID of the workspace the user belongs to. */
