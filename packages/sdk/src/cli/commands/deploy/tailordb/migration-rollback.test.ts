@@ -1,9 +1,6 @@
 /**
- * A failed `migrate.ts` must leave the workspace at its prior checkpoint AND its
- * prior schema. The Pre-migration phase commits schema DDL (new types, relaxed
- * columns) before `migrate.ts` runs; when the data migration fails, the apply
- * loop must roll that DDL back so the schema does not sit ahead of the (un-advanced)
- * migration checkpoint and surface as opaque "Remote schema drift" on later deploys.
+ * A failed `migrate.ts` must roll back its Pre-phase DDL, leaving the workspace
+ * at its prior checkpoint and prior schema.
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
@@ -66,9 +63,7 @@ const snapshotFixtures = vi.hoisted(() => {
     fields,
   });
 
-  // Migration 1 introduces a brand new type (StockReservation), which does not
-  // exist at the prior checkpoint (migration 0), and adds a `note` field to the
-  // pre-existing GoodsReceipt type.
+  // Migration 1 adds a new type (StockReservation) and a `note` field on GoodsReceipt.
   const typesByMigration: Record<number, unknown> = {
     0: {
       GoodsReceipt: buildType("GoodsReceipt", "goodsReceipts", {
@@ -79,6 +74,16 @@ const snapshotFixtures = vi.hoisted(() => {
       GoodsReceipt: buildType("GoodsReceipt", "goodsReceipts", {
         code: { type: "string", required: true },
         note: { type: "string", required: false },
+      }),
+      StockReservation: buildType("StockReservation", "stockReservations", {
+        quantity: { type: "integer", required: true },
+      }),
+    },
+    2: {
+      GoodsReceipt: buildType("GoodsReceipt", "goodsReceipts", {
+        code: { type: "string", required: true },
+        note: { type: "string", required: false },
+        extra: { type: "string", required: false },
       }),
       StockReservation: buildType("StockReservation", "stockReservations", {
         quantity: { type: "integer", required: true },
@@ -377,6 +382,50 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
+  test("deletes the new type's GQL permission before dropping the type on rollback", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+    // The Pre-phase also created a GQL permission for the new type.
+    planResult.changeSet.gqlPermission.creates = [
+      {
+        name: "StockReservation",
+        request: {
+          workspaceId: "test-workspace",
+          namespaceName: "test-ns",
+          typeName: "StockReservation",
+          permission: {},
+        },
+      },
+    ];
+
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkAddTypeMigration(1, "StockReservation"),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+      new Error("rpc error: code = Aborted desc = migration failed"),
+    );
+
+    const order: string[] = [];
+    vi.mocked(client.deleteTailorDBGQLPermission).mockImplementation((req: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      order.push(`perm:${(req as any)?.typeName}`);
+      return Promise.resolve({}) as never;
+    });
+    vi.mocked(client.deleteTailorDBType).mockImplementation((req: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      order.push(`type:${(req as any)?.tailordbTypeName}`);
+      return Promise.resolve({}) as never;
+    });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "migration failed",
+    );
+
+    // The platform does not cascade, so the permission must be deleted first.
+    expect(order).toEqual(["perm:StockReservation", "type:StockReservation"]);
+    expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
   test("restores a pre-existing type to its prior-checkpoint schema when migrate.ts fails", async () => {
     const client = createMockClient();
     const planResult = createUpdatePlanResult();
@@ -410,6 +459,47 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     // A pre-existing type must not be deleted by the rollback.
     expect(client.deleteTailorDBType).not.toHaveBeenCalled();
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
+  test("in a multi-migration run, rolls back the failed migration to snapshot[N-1] and keeps the prior one committed", async () => {
+    const client = createMockClient();
+    const planResult = createUpdatePlanResult();
+
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkAddFieldMigration(1, "GoodsReceipt", "note"),
+      mkAddFieldMigration(2, "GoodsReceipt", "extra"),
+    ]);
+    // Migration 1 succeeds, migration 2's script fails.
+    vi.mocked(migrationModule.executeMigrations).mockImplementation(
+      (_ctx: unknown, migrations: PendingMigration[]) =>
+        migrations.some((m) => m.number === 2)
+          ? Promise.reject(new Error("migration 2 failed"))
+          : Promise.resolve(undefined),
+    );
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "migration 2 failed",
+    );
+
+    // Migration 1 committed (its checkpoint advanced); migration 2 did not.
+    const labelNumbers = vi
+      .mocked(migrationModule.updateMigrationLabel)
+      .mock.calls.map((c) => c[3]);
+    expect(labelNumbers).toEqual([1]);
+
+    // Rollback restored GoodsReceipt to snapshot[1] (has `note`, not `extra`) —
+    // proving it targeted N-1, not the baseline.
+    const lastUpdate = vi
+      .mocked(client.updateTailorDBType)
+      .mock.calls.filter(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (c) => (c[0] as any)?.tailordbType?.name === "GoodsReceipt",
+      )
+      .at(-1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const restoredFields = Object.keys((lastUpdate![0] as any)?.tailordbType?.schema?.fields ?? {});
+    expect(restoredFields).toContain("note");
+    expect(restoredFields).not.toContain("extra");
   });
 
   test("surfaces the original migration error even when the rollback itself fails", async () => {

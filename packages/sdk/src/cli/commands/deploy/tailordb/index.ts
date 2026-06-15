@@ -39,6 +39,7 @@ import {
   createSnapshotType,
   getLatestMigrationNumber,
   getMigrationFiles,
+  INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "@/cli/commands/tailordb/migrate/snapshot";
@@ -472,22 +473,12 @@ export async function applyTailorDB(
           if (migration.hasScript && migrationCtx) {
             await executeMigrations(migrationCtx, [migration]);
           }
-
-          // Post-migration phase: Apply final types (required: true) and deletions
-          await executeSingleMigrationPostPhase(
-            client,
-            changeSet,
-            migration,
-            migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTypes,
-          );
         } catch (error) {
-          // The checkpoint never advanced for this migration, so revert its
-          // committed pre-migration DDL to keep schema and checkpoint consistent.
-          // Rollback is best-effort: never let it mask the original failure.
+          // Best-effort revert of committed Pre-phase DDL; must not mask the original error.
           try {
             await rollbackSingleMigrationPrePhase(
               client,
+              changeSet,
               migration,
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
@@ -501,6 +492,16 @@ export async function applyTailorDB(
           }
           throw error;
         }
+
+        // Post-migration phase: Apply final types (required: true) and deletions.
+        // Not rolled back on failure: deletions here are irreversible.
+        await executeSingleMigrationPostPhase(
+          client,
+          changeSet,
+          migration,
+          migrationContext.tailorDBInputs,
+          migrationContext.executorUsedTypes,
+        );
 
         // Update migration label only after all phases complete successfully
         await updateMigrationLabel(
@@ -989,19 +990,9 @@ async function executeSingleMigrationPostPhase(
 }
 
 /**
- * Roll back the Pre-migration DDL committed for a single migration.
- *
- * The Pre-phase commits schema DDL (new types, new nullable columns, relaxed
- * constraints) before `migrate.ts` runs, but the migration checkpoint only
- * advances after the whole migration succeeds. When the data script fails the
- * checkpoint stays at the prior migration, so the schema must be restored to
- * that prior state — otherwise it sits ahead of the checkpoint and the next
- * deploy aborts with opaque "Remote schema drift detected".
- *
- * Restoration is best-effort: each affected type is reverted independently so a
- * single failure does not block the rest, and the original migration error is
- * always the one surfaced to the caller.
+ * Revert a single migration's Pre-phase DDL to the prior checkpoint's schema.
  * @param client - Operator client instance
+ * @param changeSet - TailorDB change set
  * @param migration - The migration whose Pre-phase DDL must be reverted
  * @param workspaceId - Workspace ID
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
@@ -1010,21 +1001,22 @@ async function executeSingleMigrationPostPhase(
  */
 async function rollbackSingleMigrationPrePhase(
   client: OperatorClient,
+  changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
+  // The baseline migration has no prior checkpoint to revert to.
+  if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
+
   const affectedTypes = getAffectedTypeNames(migration);
   if (affectedTypes.size === 0) return;
 
-  // Schema state as of the prior (still-recorded) checkpoint. Types present here
-  // are reverted to it; types absent from it were introduced by this migration
-  // and are dropped.
-  const priorSnapshot =
-    migration.number > 0
-      ? reconstructSnapshotFromMigrations(migration.migrationsDir, migration.number - 1)
-      : undefined;
+  const priorSnapshot = reconstructSnapshotFromMigrations(
+    migration.migrationsDir,
+    migration.number - 1,
+  );
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
 
   logger.warn(
@@ -1046,6 +1038,20 @@ async function rollbackSingleMigrationPrePhase(
           tailordbType: manifest,
         });
       } else {
+        // The type is new in this migration. Its GQL permission must go first:
+        // type deletion does not cascade to it.
+        const createdPermission = changeSet.gqlPermission.creates.find(
+          (create) =>
+            create.request.namespaceName === migration.namespace &&
+            create.request.typeName === typeName,
+        );
+        if (createdPermission) {
+          await client.deleteTailorDBGQLPermission({
+            workspaceId,
+            namespaceName: migration.namespace,
+            typeName,
+          });
+        }
         await client.deleteTailorDBType({
           workspaceId,
           namespaceName: migration.namespace,

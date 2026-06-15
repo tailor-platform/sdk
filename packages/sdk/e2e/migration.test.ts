@@ -680,12 +680,8 @@ export type user = typeof user;
 
   describe("Migration Rollback on Failure", () => {
     /**
-     * Scenario 8: A failing migrate.ts must not leave the workspace half-applied.
-     *
-     * Adds a required field (breaking → needs migrate.ts), then makes that
-     * migrate.ts throw. The apply must fail AND roll back its pre-migration DDL:
-     * the new field must not exist on the remote type and the checkpoint must
-     * stay at the prior migration — so a retry is not blocked by schema drift.
+     * Scenario 8: A failing migrate.ts must roll back its Pre-phase DDL, leaving
+     * the remote schema and checkpoint at the prior migration so a retry works.
      */
     test("generates the breaking migration whose script will fail", async () => {
       updateTypeFile(`import { db } from "@tailor-platform/sdk";
@@ -731,16 +727,16 @@ export type user = typeof user;
       const configPath = createConfig();
       const result = tryApplyCli(configPath, workspaceId, tempDir);
 
-      // The apply must fail (the migration script threw).
+      // The apply must fail for the injected reason, not an unrelated error.
       expect(result.ok).toBe(false);
+      expect(result.output).toContain("simulated migration failure for rollback e2e");
 
-      // Rollback: the field introduced by the failed migration's pre-phase DDL
-      // must be gone from the remote type.
+      // Rollback restored User to its checkpoint-4 schema: the new field is gone,
+      // prior fields remain.
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).not.toContain("loyaltyTier");
+      expect(fields).toEqual(expect.arrayContaining(["name", "email", "role", "phone"]));
 
-      // The checkpoint must stay at the prior migration, leaving schema and
-      // ledger consistent (no opaque drift on the next deploy).
       const checkpointAfter = await getMigrationCheckpoint(tailordbName);
       expect(checkpointAfter).toBe(4);
     }, 120000);
