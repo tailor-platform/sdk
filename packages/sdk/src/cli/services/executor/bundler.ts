@@ -68,7 +68,7 @@ export async function bundleExecutors(
   const configFiles = loadFilesWithIgnores(config);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
-    logger.warn(`No executor files found for patterns: ${config.files?.join(", ") ?? "(none)"}`);
+    logger.warn(`No executor files found for patterns: ${config.files.join(", ")}`);
     return bundledCode;
   }
 

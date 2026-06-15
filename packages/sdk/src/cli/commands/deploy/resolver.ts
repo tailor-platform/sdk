@@ -19,6 +19,7 @@ import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-exprs";
+import { assertDefined } from "@/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
@@ -96,7 +97,7 @@ export async function applyPipeline(
     await Promise.all(
       changeSet.resolver.deletes.map((del) => client.deletePipelineResolver(del.request)),
     );
-  } else if (phase === "delete-services") {
+  } else {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deletePipelineService(del.request)),
@@ -457,7 +458,7 @@ export function formatResolverChangeEntries(
 }
 
 function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {
-  const normalized = normalizeProtoConfig(resolver) ?? {};
+  const normalized = normalizeProtoConfig(resolver);
   return {
     name: normalized.name,
     description: normalized.description ?? "",
@@ -596,11 +597,10 @@ function processResolver(
     : [];
 
   // Build response
-  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = protoFields(
-    { "": resolver.output },
-    `${typeBaseName}Output`,
-    false,
-  )[0];
+  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = assertDefined(
+    protoFields({ "": resolver.output }, `${typeBaseName}Output`, false)[0],
+    "resolver output field missing",
+  );
 
   // Build description (combine resolver description and output description)
   const resolverDescription = resolver.description || `${resolver.name} resolver`;
@@ -636,10 +636,6 @@ function protoFields(
   baseName: string,
   isInput: boolean,
 ): MessageInitShape<typeof PipelineResolver_FieldSchema>[] {
-  if (!fields) {
-    return [];
-  }
-
   return Object.entries(fields).map(([fieldName, field]) => {
     let type: MessageInitShape<typeof PipelineResolver_TypeSchema>;
     const hasCreateHook = isInput && field.metadata.hooks?.create !== undefined;

@@ -148,7 +148,7 @@ describe("planApplication", () => {
     const result = await planApplication(createContext(client));
 
     expect(result.unchanged).toHaveLength(1);
-    expect(result.unchanged[0].name).toBe(appName);
+    expect(result.unchanged[0]!.name).toBe(appName);
     expect(result.updates).toHaveLength(0);
   });
 
@@ -196,7 +196,7 @@ describe("planApplication", () => {
     const result = await planApplication(createContext(client));
 
     expect(result.updates).toHaveLength(1);
-    expect(result.updates[0].name).toBe(appName);
+    expect(result.updates[0]!.name).toBe(appName);
     expect(result.unchanged).toHaveLength(0);
   });
 
@@ -227,7 +227,7 @@ describe("planApplication", () => {
     const result = await planApplication(createContext(client));
 
     expect(result.updates).toHaveLength(1);
-    expect(result.updates[0].name).toBe(appName);
+    expect(result.updates[0]!.name).toBe(appName);
     expect(result.unchanged).toHaveLength(0);
   });
 
@@ -237,7 +237,7 @@ describe("planApplication", () => {
     const result = await planApplication(createContext(client));
 
     expect(result.creates).toHaveLength(1);
-    expect(result.creates[0].name).toBe(appName);
+    expect(result.creates[0]!.name).toBe(appName);
     expect(result.updates).toHaveLength(0);
     expect(result.unchanged).toHaveLength(0);
   });
@@ -263,9 +263,9 @@ describe("planApplication", () => {
       const result = await planApplication(createContext(client, application));
 
       expect(result.creates).toHaveLength(1);
-      expect(result.creates[0].name).toBe(appName);
+      expect(result.creates[0]!.name).toBe(appName);
       expect(result.deletes).toHaveLength(1);
-      expect(result.deletes[0].name).toBe(oldName);
+      expect(result.deletes[0]!.name).toBe(oldName);
     });
 
     test("ignores apps with the same id when name still matches", async () => {
@@ -340,7 +340,7 @@ describe("planApplication", () => {
       });
 
       expect(result.deletes).toHaveLength(1);
-      expect(result.deletes[0].name).toBe(oldName);
+      expect(result.deletes[0]!.name).toBe(oldName);
       expect(result.creates).toHaveLength(0);
     });
   });
@@ -361,7 +361,7 @@ describe("planApplication", () => {
       });
 
       expect(result.deletes).toHaveLength(1);
-      expect(result.deletes[0].name).toBe(appName);
+      expect(result.deletes[0]!.name).toBe(appName);
     });
 
     test("deletes a same-name app owned via matching sdk-app-id", async () => {
@@ -381,7 +381,7 @@ describe("planApplication", () => {
       });
 
       expect(result.deletes).toHaveLength(1);
-      expect(result.deletes[0].name).toBe(appName);
+      expect(result.deletes[0]!.name).toBe(appName);
     });
 
     test("does not delete a same-name app owned by a different id", async () => {
@@ -432,7 +432,7 @@ describe("planApplication", () => {
 
       // Only the same-name app is deleted, and metadata is fetched for it alone.
       expect(result.deletes).toHaveLength(1);
-      expect(result.deletes[0].name).toBe(appName);
+      expect(result.deletes[0]!.name).toBe(appName);
       expect(client.getMetadata).toHaveBeenCalledTimes(1);
     });
   });

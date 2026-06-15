@@ -16,6 +16,7 @@ import {
 import { type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
 import { stringifyFunction } from "@/parser/service/tailordb";
+import { assertDefined } from "@/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
@@ -62,7 +63,7 @@ export async function applyExecutor(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
+  } else {
     // Delete in reverse order of dependencies
     // Executors
     await Promise.all(changeSet.deletes.map((del) => client.deleteExecutorExecutor(del.request)));
@@ -242,7 +243,7 @@ export function formatExecutorChangeEntries(
 }
 
 function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {
-  const normalized = normalizeProtoConfig(executor) ?? {};
+  const normalized = normalizeProtoConfig(executor);
   const webhookHeaders =
     normalized.targetConfig?.config?.case === "webhook"
       ? (normalized.targetConfig.config.value.headers ?? []).toSorted((left, right) =>
@@ -321,7 +322,7 @@ function areExecutorsEqual(
 
 function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
   for (const service of application.tailorDBServices) {
-    if (service.types[typeName]) {
+    if (Object.hasOwn(service.types, typeName)) {
       return service.namespace;
     }
   }
@@ -370,7 +371,7 @@ function resolveIdpNamespace(
         `(${available}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
     );
   }
-  return application.idpServices[0].name;
+  return assertDefined(application.idpServices[0], "idp service missing").name;
 }
 
 function resolveAuthNamespace(application: Readonly<Application>): string {

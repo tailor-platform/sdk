@@ -5,6 +5,7 @@ import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { findOmittedPermitRules } from "@/parser/service/tailordb/permission";
+import { assertDefined } from "@/utils/assert";
 import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import { formatTailorDBTypeSourceInfo } from "./type-name-validation";
@@ -73,7 +74,9 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       );
     }
 
-    rawTypes[rawTypesKey][typeName] = type;
+    assertDefined(rawTypes[rawTypesKey], `raw types entry missing for key: ${rawTypesKey}`)[
+      typeName
+    ] = type;
     typeSourceInfo[typeName] = sourceInfo;
   };
 
@@ -94,7 +97,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   const warnOmittedPermit = (): void => {
     for (const fileTypes of Object.values(rawTypes)) {
       for (const [typeName, type] of Object.entries(fileTypes)) {
-        const locations = findOmittedPermitRules(type.metadata.permissions ?? {});
+        const locations = findOmittedPermitRules(type.metadata.permissions);
         if (locations.length > 0) {
           logger.warn(
             `TailorDB type "${typeName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
@@ -124,7 +127,10 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     });
 
     if (extendedType) {
-      rawTypes[sourceFilePath][rawType.name] = extendedType;
+      assertDefined(
+        rawTypes[sourceFilePath],
+        `raw types entry missing for file: ${sourceFilePath}`,
+      )[rawType.name] = extendedType;
     }
     for (const gen of generatedTypes) {
       // Plugin-generated types don't have a source file.
@@ -223,7 +229,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     loadTypes: async () => {
       if (!loadPromise) {
         loadPromise = (async () => {
-          if (!config.files || config.files.length === 0) {
+          if (config.files.length === 0) {
             return undefined;
           }
 
@@ -269,11 +275,14 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         return { pluginId, config, output: result.output };
       });
 
+      const hasPreviousGeneratedTypes = Object.hasOwn(rawTypes, pluginGeneratedKey);
       const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
-      const hadPreviousGeneratedTypes =
-        previousGeneratedTypes !== undefined && Object.keys(previousGeneratedTypes).length > 0;
-      if (previousGeneratedTypes) {
-        for (const typeName of Object.keys(previousGeneratedTypes)) {
+      const previousGeneratedTypeKeys = previousGeneratedTypes
+        ? Object.keys(previousGeneratedTypes)
+        : [];
+      const hadPreviousGeneratedTypes = previousGeneratedTypeKeys.length > 0;
+      if (hasPreviousGeneratedTypes) {
+        for (const typeName of previousGeneratedTypeKeys) {
           delete typeSourceInfo[typeName];
         }
       }

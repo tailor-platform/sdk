@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
 import type { ProfileInfo } from "./types";
 
@@ -25,12 +26,15 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    const profileInfos: ProfileInfo[] = profiles.map(([name, profile]) => ({
-      name,
-      user: profile!.user,
-      workspaceId: profile!.workspace_id,
-      permission: profile!.readonly === true ? "read" : "write",
-    }));
+    const profileInfos: ProfileInfo[] = profiles.map(([name, profile]) => {
+      const p = assertDefined(profile, `profile entry "${name}" is undefined`);
+      return {
+        name,
+        user: p.user,
+        workspaceId: p.workspace_id,
+        permission: p.readonly === true ? "read" : "write",
+      };
+    });
     logger.out(profileInfos);
   },
 });

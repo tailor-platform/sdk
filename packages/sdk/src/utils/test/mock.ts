@@ -82,7 +82,7 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
 
     async queryObject(query: string, params: unknown[] = []): Promise<{ rows: unknown[] }> {
       executedQueries.push({ query, params });
-      return { rows: resolver(query, params) ?? [] };
+      return { rows: resolver(query, params) };
     }
   }
 

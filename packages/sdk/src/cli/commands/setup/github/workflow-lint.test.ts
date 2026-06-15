@@ -31,7 +31,7 @@ function runActionlint(workflowPath: string): LintResult {
   const result = spawnSync("actionlint", ["-color", workflowPath], {
     encoding: "utf-8",
   });
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+  const output = `${result.stdout}${result.stderr}`.trim();
   return { ok: result.status === 0, output };
 }
 

@@ -4,6 +4,7 @@
     "outDir": "./dist",
     "rootDir": "./",
     "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
     "paths": {

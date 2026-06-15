@@ -48,6 +48,8 @@
     "typescript/require-array-sort-compare": "off",
     "typescript/restrict-template-expressions": "off",
     "typescript/unbound-method": "off",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-non-null-assertion": "error",
     "jsdoc/check-access": "warn",
     "jsdoc/check-property-names": "warn",
     "jsdoc/check-tag-names": [
@@ -125,7 +127,12 @@
             "varsIgnorePattern": "^_"
           }
         ],
-        "import/no-cycle": ["error", { "ignoreTypes": false }],
+        "import/no-cycle": [
+          "error",
+          {
+            "ignoreTypes": false
+          }
+        ],
         "typescript/consistent-type-imports": [
           "error",
           {
@@ -367,6 +374,12 @@
       "rules": {
         "no-restricted-imports": "off",
         "no-console": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "e2e/**/*.ts", "**/__test_fixtures__/**"],
+      "rules": {
+        "typescript/no-non-null-assertion": "off"
       }
     }
   ],

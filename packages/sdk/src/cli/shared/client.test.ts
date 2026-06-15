@@ -274,7 +274,7 @@ describe("retryInterceptor", () => {
     for (const file of tsFiles) {
       const src = fs.readFileSync(file, "utf8");
       for (const m of src.matchAll(callRe)) {
-        const local = m[1];
+        const local = m[1]!;
         used.add(local.charAt(0).toUpperCase() + local.slice(1));
       }
     }

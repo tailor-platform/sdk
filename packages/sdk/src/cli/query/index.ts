@@ -12,6 +12,7 @@ import { parse as parseSql } from "pgsql-ast-parser";
 import { arg } from "politty";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
+import { assertDefined } from "@/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { deploymentArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
@@ -102,7 +103,7 @@ async function getNamespaceFromSqlQuery(
   }
 
   if (namespaces.length === 1) {
-    return namespaces[0];
+    return assertDefined(namespaces[0], "namespace missing");
   }
 
   const typeNames = extractTypeNamesFromSql(query);
@@ -126,7 +127,7 @@ async function getNamespaceFromSqlQuery(
 
   const namespacesFromTypes = new Set(typeNamespaceMap.values());
   if (namespacesFromTypes.size === 1) {
-    return [...namespacesFromTypes][0];
+    return assertDefined([...namespacesFromTypes][0], "namespace from types missing");
   }
 
   throw new Error(
@@ -138,7 +139,9 @@ async function loadOptions(options: QueryBaseOptions) {
   const result = queryBaseOptionsSchema.safeParse(options);
 
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(
+      assertDefined(result.error.issues[0], "validation error missing issues").message,
+    );
   }
 
   const accessToken = await loadAccessToken({
@@ -357,7 +360,9 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
   const result = queryOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(
+      assertDefined(result.error.issues[0], "validation error missing issues").message,
+    );
   }
 
   const executor = await prepareQueryExecutor(result.data);
@@ -522,6 +527,8 @@ async function runRepl(
   logger.info(`Entering ${options.engine.toUpperCase()} REPL mode.`);
   logger.info("Type \\help for usage, \\q to quit.");
 
+  // loop exits when the user types the quit command
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const [value, error] = await prompt(`${options.engine}> `);
 
@@ -874,8 +881,12 @@ function splitSqlStatements(query: string): string[] {
   // _location.end is unreliable for INSERT/UPDATE statements (https://github.com/oguimbal/pgsql-ast-parser/issues/135),
   // so we use the next statement's start (or end of string) as the boundary.
   return statements.map((s, i) => {
-    const start = s._location!.start;
-    const end = i + 1 < statements.length ? statements[i + 1]._location!.start : query.length;
+    const start = assertDefined(s._location, "SQL statement location missing").start;
+    const nextStmt = statements[i + 1];
+    const end =
+      nextStmt !== undefined
+        ? assertDefined(nextStmt._location, "SQL statement location missing").start
+        : query.length;
     return query.substring(start, end);
   });
 }
@@ -894,7 +905,10 @@ function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolea
     for (let i = 0; i < result.result.length; i++) {
       if (i > 0) logger.log("");
       logger.info(queries[i] ?? `Statement ${i + 1}`);
-      printSingleSqlResult(result.result[i], options);
+      printSingleSqlResult(
+        assertDefined(result.result[i], `SQL result at index ${i} missing`),
+        options,
+      );
     }
     return;
   }

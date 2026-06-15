@@ -60,6 +60,7 @@ import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./reso
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
+import { validatePlan } from "./validate-plan";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { PlanContext } from "./types";
 
@@ -70,6 +71,7 @@ export interface DeployOptions {
   dryRun?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
+  noValidate?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
@@ -96,7 +98,8 @@ function collectIdpUserTriggerTargets(application: Readonly<Application>): Reado
     if (executor.trigger.idp != null) {
       targets.add(executor.trigger.idp);
     } else if (idps.length === 1) {
-      targets.add(idps[0].name);
+      const [idp] = idps;
+      if (idp) targets.add(idp.name);
     }
   }
   return targets;
@@ -151,6 +154,8 @@ async function shouldForceApplyAll(
   for (const trn of candidateTrns) {
     try {
       const { metadata } = await client.getMetadata({ trn });
+      // platform response may omit the field
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (metadata?.labels?.[sdkNameLabelKey] !== application.name) {
         continue;
       }
@@ -264,9 +269,7 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], namespaceOf),
     ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], namespaceOf),
     ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], namespaceOf),
-    ...(results.auth.changeSet.connection
-      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf)
-      : []),
+    ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf),
   ];
 
   // Print grouped sections
@@ -706,6 +709,23 @@ export async function deploy(options?: DeployOptions) {
       workflow,
       secretManager,
     });
+
+    if (options?.noValidate) {
+      logger.warn("Client-side validation skipped (--no-validate).");
+    } else {
+      await validatePlan({
+        functionRegistry,
+        tailorDB,
+        staticWebsite,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+        secretManager,
+      });
+    }
 
     if (dryRun) {
       logger.info("Dry run enabled. No changes applied.");

@@ -23,6 +23,7 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
+import { assertDefined } from "@/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
@@ -110,33 +111,33 @@ export async function applyAuth(
     ]);
 
     // Auth Connections
-    if (changeSet.connection) {
-      await applyAuthConnections(
-        client,
-        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
-        "create-update",
-      );
-    }
+    await applyAuthConnections(
+      client,
+      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      "create-update",
+    );
 
     // IdPConfigs
     await Promise.all([
       ...changeSet.idpConfig.creates.map(async (create) => {
         if (create.idpConfig.kind === "BuiltInIdP") {
-          create.request.idpConfig!.config = await protoBuiltinIdPConfig(
-            client,
-            create.request.workspaceId!,
-            create.idpConfig,
-          );
+          assertDefined(create.request.idpConfig, "request missing idpConfig").config =
+            await protoBuiltinIdPConfig(
+              client,
+              assertDefined(create.request.workspaceId, "request missing workspaceId"),
+              create.idpConfig,
+            );
         }
         return client.createAuthIDPConfig(create.request);
       }),
       ...changeSet.idpConfig.updates.map(async (update) => {
         if (update.idpConfig.kind === "BuiltInIdP") {
-          update.request.idpConfig!.config = await protoBuiltinIdPConfig(
-            client,
-            update.request.workspaceId!,
-            update.idpConfig,
-          );
+          assertDefined(update.request.idpConfig, "request missing idpConfig").config =
+            await protoBuiltinIdPConfig(
+              client,
+              assertDefined(update.request.workspaceId, "request missing workspaceId"),
+              update.idpConfig,
+            );
         }
         return client.updateAuthIDPConfig(update.request);
       }),
@@ -177,19 +178,27 @@ export async function applyAuth(
     // OAuth2Clients
     await Promise.all([
       ...changeSet.oauth2Client.creates.map(async (create) => {
-        create.request.oauth2Client!.redirectUris = await resolveStaticWebsiteUrls(
+        const oauth2Client = assertDefined(
+          create.request.oauth2Client,
+          "request missing oauth2Client",
+        );
+        oauth2Client.redirectUris = await resolveStaticWebsiteUrls(
           client,
-          create.request.workspaceId!,
-          create.request.oauth2Client!.redirectUris,
+          assertDefined(create.request.workspaceId, "request missing workspaceId"),
+          oauth2Client.redirectUris,
           "OAuth2 redirect URIs",
         );
         return client.createAuthOAuth2Client(create.request);
       }),
       ...changeSet.oauth2Client.updates.map(async (update) => {
-        update.request.oauth2Client!.redirectUris = await resolveStaticWebsiteUrls(
+        const oauth2Client = assertDefined(
+          update.request.oauth2Client,
+          "request missing oauth2Client",
+        );
+        oauth2Client.redirectUris = await resolveStaticWebsiteUrls(
           client,
-          update.request.workspaceId!,
-          update.request.oauth2Client!.redirectUris,
+          assertDefined(update.request.workspaceId, "request missing workspaceId"),
+          oauth2Client.redirectUris,
           "OAuth2 redirect URIs",
         );
         return client.updateAuthOAuth2Client(update.request);
@@ -199,10 +208,14 @@ export async function applyAuth(
     // OAuth2Clients replaces (client type changed): delete then create sequentially
     for (const replace of changeSet.oauth2Client.replaces) {
       await client.deleteAuthOAuth2Client(replace.deleteRequest);
-      replace.createRequest.oauth2Client!.redirectUris = await resolveStaticWebsiteUrls(
+      const replaceOauth2Client = assertDefined(
+        replace.createRequest.oauth2Client,
+        "createRequest missing oauth2Client",
+      );
+      replaceOauth2Client.redirectUris = await resolveStaticWebsiteUrls(
         client,
-        replace.createRequest.workspaceId!,
-        replace.createRequest.oauth2Client!.redirectUris,
+        assertDefined(replace.createRequest.workspaceId, "createRequest missing workspaceId"),
+        replaceOauth2Client.redirectUris,
         "OAuth2 redirect URIs",
       );
       await client.createAuthOAuth2Client(replace.createRequest);
@@ -264,14 +277,12 @@ export async function applyAuth(
     );
 
     // Auth Connections
-    if (changeSet.connection) {
-      await applyAuthConnections(
-        client,
-        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
-        "delete-resources",
-      );
-    }
-  } else if (phase === "delete-services") {
+    await applyAuthConnections(
+      client,
+      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      "delete-resources",
+    );
+  } else {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteAuthService(del.request)),
@@ -736,7 +747,12 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
             value: {
               ...(idpConfig.metadataURL !== undefined
                 ? { metadataUrl: idpConfig.metadataURL }
-                : { rawMetadata: idpConfig.rawMetadata! }),
+                : {
+                    rawMetadata: assertDefined(
+                      idpConfig.rawMetadata,
+                      "SAML config missing rawMetadata",
+                    ),
+                  }),
               enableSignRequest: idpConfig.enableSignRequest,
               defaultRedirectUrl: idpConfig.defaultRedirectURL,
             },
@@ -1474,7 +1490,10 @@ async function planOAuth2Clients(
         { expectedLocalNames: expectedLocalWebsites },
       );
       if (existingClientsMap.has(oauth2ClientName)) {
-        const existingClient = existingClientsMap.get(oauth2ClientName)!;
+        const existingClient = assertDefined(
+          existingClientsMap.get(oauth2ClientName),
+          "existingClientsMap missing entry for oauth2ClientName",
+        );
         if (existingClient.clientType !== newOAuth2Client.clientType) {
           // Client type changed: need to replace (delete then create)
           changeSet.replaces.push({

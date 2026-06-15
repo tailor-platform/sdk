@@ -1272,9 +1272,9 @@ describe("TailorDBType/TailorDBField description support", () => {
         .description("User information object"),
     });
 
-    expect(profileType.fields.userInfo.metadata.description).toBe("User information object");
-    expect(profileType.fields.userInfo.fields.name.metadata.description).toBe("Full name");
-    expect(profileType.fields.userInfo.fields.email.metadata.description).toBe("Email address");
+    expect(profileType.fields.userInfo!.metadata.description).toBe("User information object");
+    expect(profileType.fields.userInfo!.fields.name!.metadata.description).toBe("Full name");
+    expect(profileType.fields.userInfo!.fields.email!.metadata.description).toBe("Email address");
   });
 
   test("TailorDBType can be used in resolver with description preserved", () => {
