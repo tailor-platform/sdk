@@ -1,9 +1,6 @@
 nodeLinker: hoisted
 saveExact: true
 
-overrides:
-  politty: "https://pkg.pr.new/politty@201faf6?v=20260607"
-
 minimumReleaseAge: 4320 # 3 days
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
