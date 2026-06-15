@@ -73,7 +73,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch origin "$BASE_REF"
+          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
           git merge --no-commit --no-ff "origin/$BASE_REF" || true
       - id: tailor-plan
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
