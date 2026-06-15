@@ -22,6 +22,7 @@ export const generators = defineGenerators([
 ]);
 
 export default defineConfig({
+  id: "dd52af75-a667-4751-806f-a6f3d16ee4c2",
   name: "{{APP_NAME}}",
   auth,
   db: {

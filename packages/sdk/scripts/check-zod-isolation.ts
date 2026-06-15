@@ -63,6 +63,9 @@ function findZodReferences(entryFile: string): ZodReference[] {
       .replace(/^\s*\/\/.*$/gm, "");
     for (const match of source.matchAll(importSpecifierPattern)) {
       const specifier = match[1];
+      if (specifier === undefined) {
+        continue;
+      }
       if (specifier === "zod" || specifier.startsWith("zod/")) {
         references.push({ file, specifier });
       } else if (specifier.startsWith(".")) {
@@ -89,7 +92,7 @@ interface Violation {
 const violations: Violation[] = [];
 
 for (const [entry, target] of Object.entries(pkg.exports)) {
-  if (typeof target !== "object" || target === null || ZOD_ALLOWED_ENTRIES.has(entry)) {
+  if (typeof target !== "object" || ZOD_ALLOWED_ENTRIES.has(entry)) {
     continue;
   }
   const checks: { level: "types" | "runtime"; file: string | undefined }[] = [

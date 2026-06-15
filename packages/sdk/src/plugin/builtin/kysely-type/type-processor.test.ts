@@ -8,7 +8,7 @@ import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailor
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
-  return types[type.name];
+  return types[type.name]!;
 }
 
 describe("Kysely TypeProcessor", () => {

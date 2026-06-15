@@ -65,7 +65,11 @@ for (const file of files) {
     .replace(/^\s*\/\/.*$/gm, "");
   const edges = new Set<string>();
   for (const match of source.matchAll(importSpecifierPattern)) {
-    const target = resolveSpecifier(file, match[1]);
+    const specifier = match[1];
+    if (specifier === undefined) {
+      continue;
+    }
+    const target = resolveSpecifier(file, specifier);
     if (target !== null && target !== file) {
       edges.add(target);
     }

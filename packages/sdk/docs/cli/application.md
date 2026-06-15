@@ -117,16 +117,17 @@ tailor-sdk deploy [options]
 
 **Options**
 
-| Option                          | Alias | Description                                        | Required | Default              | Env                               |
-| ------------------------------- | ----- | -------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                       | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                  | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                            | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                          | No       | `false`              | -                                 |
-| `--dry-run`                     | `-d`  | Run the command without making any changes         | No       | -                    | -                                 |
-| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | No       | -                    | -                                 |
-| `--no-cache`                    | -     | Disable bundle caching for this run                | No       | -                    | -                                 |
-| `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                                 |
+| `--dry-run`                     | `-d`  | Run the command without making any changes                        | No       | -                    | -                                 |
+| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots                | No       | -                    | -                                 |
+| `--no-validate`                 | -     | Skip client-side validation against platform resource constraints | No       | -                    | -                                 |
+| `--no-cache`                    | -     | Disable bundle caching for this run                               | No       | -                    | -                                 |
+| `--clean-cache`                 | -     | Clean the bundle cache before building                            | No       | -                    | -                                 |
 
 <!-- politty:command:deploy:options:end -->
 

@@ -11,7 +11,7 @@ import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailor
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
-  return types[type.name];
+  return types[type.name]!;
 }
 
 describe("FileUtilsPlugin", () => {
@@ -190,9 +190,9 @@ describe("FileUtilsPlugin", () => {
       const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
-      expect(result.files[0].path).toBe(testDistPath);
+      expect(result.files[0]!.path).toBe(testDistPath);
 
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
       expect(content).toContain("export interface TypeWithFiles");
       expect(content).toContain("User: {");
       expect(content).toContain("SalesOrder: {");
@@ -250,7 +250,7 @@ describe("FileUtilsPlugin", () => {
       const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
       expect(content).toContain("User: {");
       expect(content).toContain("Customer: {");
       expect(content).toContain('User: "tailordb"');

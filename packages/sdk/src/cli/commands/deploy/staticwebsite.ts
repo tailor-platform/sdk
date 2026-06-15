@@ -54,7 +54,7 @@ export async function applyStaticWebsite(
       }),
       ...customDomainChangeSet.deletes.map((del) => client.removeCustomDomain(del.request)),
     ]);
-  } else if (phase === "delete") {
+  } else {
     // Delete in reverse order of dependencies
     // StaticWebsites
     await Promise.all(changeSet.deletes.map((del) => client.deleteStaticWebsite(del.request)));

@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
 import {
   processIdpUser,
@@ -521,7 +522,7 @@ ${namespaceSelfRefEntries}
     const authNamespace = appInfo.auth;
 
     // Initialize operator client (once for all namespaces)
-    const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
+    const accessToken = await loadAccessToken({ profile: values.profile });
     const workspaceId = await loadWorkspaceId({ profile: values.profile });
     const operatorClient = await initOperatorClient(accessToken);
 
@@ -800,7 +801,10 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
         const selfRefTypes: string[] = [];
 
         for (const [typeName, type] of Object.entries(ns.types)) {
-          const source = ns.sourceInfo.get(typeName)!;
+          const source = assertDefined(
+            ns.sourceInfo.get(typeName),
+            `source info missing for type: ${typeName}`,
+          );
           const typeInfo = processSeedTypeInfo(type, ns.namespace);
           const linesDb = processLinesDb(type, source);
 

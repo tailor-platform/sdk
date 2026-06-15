@@ -163,6 +163,8 @@ export function findOmittedPermitRules(permission: RawIdPPermission | undefined)
   }
   const locations: string[] = [];
   for (const action of Object.keys(permission) as Array<keyof typeof permission>) {
+    // raw user input may omit action keys the type marks required
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     permission[action]?.forEach((rule: unknown, index: number) => {
       if (isObjectFormat(rule) && rule.permit === undefined) {
         locations.push(`${String(action)}[${index}]`);

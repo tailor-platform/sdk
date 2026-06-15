@@ -66,7 +66,6 @@ export async function getWorkflow<W extends WorkflowLike>(
   // the legacy branch due to structural typing, but still works correctly since it reads .name.
   const name = "name" in options ? options.name : options.workflow.name;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

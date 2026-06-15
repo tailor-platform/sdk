@@ -208,7 +208,6 @@ async function filterUsedJobs(
           for (const call of triggerCalls) {
             // Check if this trigger call is inside the job's body
             if (
-              detectedJob.bodyValueRange &&
               call.callRange.start >= detectedJob.bodyValueRange.start &&
               call.callRange.end <= detectedJob.bodyValueRange.end
             ) {

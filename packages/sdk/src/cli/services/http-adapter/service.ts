@@ -74,7 +74,7 @@ export function createHttpAdapterService(
 async function loadAdapterFiles(
   config: HttpAdapterServiceConfig,
 ): Promise<{ adapters: LoadedHttpAdapter[]; fileCount: number }> {
-  if (!config.files || config.files.length === 0) {
+  if (config.files.length === 0) {
     return { adapters: [], fileCount: 0 };
   }
 
@@ -179,5 +179,5 @@ function rejectAsyncHandlers(
 }
 
 function isAsyncFunction(fn: unknown): boolean {
-  return typeof fn === "function" && fn.constructor?.name === "AsyncFunction";
+  return typeof fn === "function" && fn.constructor.name === "AsyncFunction";
 }

@@ -214,7 +214,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
 
   beforeAll(async () => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
-    const accessToken = await loadAccessToken({ useProfile: false });
+    const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
 
     const region = await resolveE2EWorkspaceRegion(client);
@@ -347,15 +347,15 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       // Verify initial schema was created
       const files = getMigrationFiles(migrationsDir);
       expect(files.length).toBe(1);
-      expect(files[0].type).toBe("schema");
-      expect(files[0].number).toBe(INITIAL_SCHEMA_NUMBER);
+      expect(files[0]!.type).toBe("schema");
+      expect(files[0]!.number).toBe(INITIAL_SCHEMA_NUMBER);
 
       // Verify snapshot content
       const snapshot = reconstructSnapshotFromMigrations(migrationsDir);
       expect(snapshot).not.toBeNull();
       expect(snapshot!.types.User).toBeDefined();
-      expect(snapshot!.types.User.fields.name).toBeDefined();
-      expect(snapshot!.types.User.fields.email).toBeDefined();
+      expect(snapshot!.types.User!.fields.name).toBeDefined();
+      expect(snapshot!.types.User!.fields.email).toBeDefined();
     }, 60000);
 
     /**
@@ -406,8 +406,8 @@ export type user = typeof user;
       // Verify diff was created
       const files = getMigrationFiles(migrationsDir);
       expect(files.length).toBe(2);
-      expect(files[1].type).toBe("diff");
-      expect(files[1].number).toBe(1);
+      expect(files[1]!.type).toBe("diff");
+      expect(files[1]!.number).toBe(1);
 
       // Verify diff content
       const diffPath = getMigrationFilePath(migrationsDir, 1, "diff");
@@ -458,15 +458,15 @@ export type user = typeof user;
       // Verify diff was created
       const files = getMigrationFiles(migrationsDir);
       expect(files.length).toBe(3);
-      expect(files[2].type).toBe("diff");
-      expect(files[2].number).toBe(2);
+      expect(files[2]!.type).toBe("diff");
+      expect(files[2]!.number).toBe(2);
 
       // Verify diff shows breaking change
       const diffPath = getMigrationFilePath(migrationsDir, 2, "diff");
       const diff = loadDiff(diffPath);
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges.length).toBeGreaterThan(0);
-      expect(diff.breakingChanges[0].reason).toBe("Required field added");
+      expect(diff.breakingChanges[0]!.reason).toBe("Required field added");
 
       // Verify requiresMigrationScript is true
       expect(diff.requiresMigrationScript).toBe(true);
@@ -535,8 +535,8 @@ export type user = typeof user;
       // Verify diff was created
       const files = getMigrationFiles(migrationsDir);
       expect(files.length).toBe(4);
-      expect(files[3].type).toBe("diff");
-      expect(files[3].number).toBe(3);
+      expect(files[3]!.type).toBe("diff");
+      expect(files[3]!.number).toBe(3);
 
       // Verify diff content
       const diffPath = getMigrationFilePath(migrationsDir, 3, "diff");
@@ -586,8 +586,8 @@ export type user = typeof user;
       // Verify diff was created
       const files = getMigrationFiles(migrationsDir);
       expect(files.length).toBe(5);
-      expect(files[4].type).toBe("diff");
-      expect(files[4].number).toBe(4);
+      expect(files[4]!.type).toBe("diff");
+      expect(files[4]!.number).toBe(4);
 
       // Verify diff shows field removal as non-breaking change
       const diffPath = getMigrationFilePath(migrationsDir, 4, "diff");

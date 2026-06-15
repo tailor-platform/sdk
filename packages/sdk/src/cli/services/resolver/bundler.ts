@@ -52,7 +52,7 @@ export async function bundleResolvers(
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
-    logger.warn(`No resolver files found for patterns: ${config.files?.join(", ") ?? "(none)"}`);
+    logger.warn(`No resolver files found for patterns: ${config.files.join(", ")}`);
     return bundledCode;
   }
 

@@ -123,7 +123,7 @@ function formatExecutionErrorFallback(error: FunctionExecutionErrorDisplay): str
   const composed = composeExecutionErrorString(error);
   const [headerLine, ...frameLines] = composed.split("\n");
   return [
-    `  ${styles.error(headerLine ?? "")}`,
+    `  ${styles.error(headerLine)}`,
     ...frameLines.map((line) => `  ${styles.dim(line)}`),
   ].join("\n");
 }
@@ -344,7 +344,6 @@ Stack traces stay accurate even after later redeploys, because the trace is reso
     .strict(),
   run: async (args) => {
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);

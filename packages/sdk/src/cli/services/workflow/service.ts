@@ -103,7 +103,7 @@ async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<Workfl
   const workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
   const collectedJobs: CollectedJob[] = [];
 
-  if (!config.files || config.files.length === 0) {
+  if (config.files.length === 0) {
     return {
       workflows,
       workflowSources,

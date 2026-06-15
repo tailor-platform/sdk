@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.59.0",
+  "version": "1.63.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -162,6 +162,7 @@
     "@0no-co/graphql.web": "1.2.0",
     "@badgateway/oauth2-client": "3.3.1",
     "@bufbuild/protobuf": "2.12.0",
+    "@bufbuild/protovalidate": "1.2.0",
     "@connectrpc/connect": "2.1.1",
     "@connectrpc/connect-node": "2.1.1",
     "@inquirer/core": "11.2.1",
@@ -198,15 +199,15 @@
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.1",
     "politty": "0.5.1",
-    "rolldown": "1.0.3",
-    "semver": "7.8.2",
+    "rolldown": "1.1.0",
+    "semver": "7.8.3",
     "sql-highlight": "6.1.0",
     "std-env": "4.1.0",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "4.22.4",
     "type-fest": "5.7.0",
-    "undici": "8.4.0",
+    "undici": "8.4.1",
     "xdg-basedir": "5.1.0",
     "zod": "4.4.3"
   },
@@ -222,7 +223,7 @@
     "oxlint": "1.68.0",
     "oxlint-tsgolint": "0.23.0",
     "sonda": "0.11.1",
-    "tsdown": "0.22.1",
+    "tsdown": "0.22.2",
     "typescript": "5.9.3",
     "vitest": "4.1.8",
     "zinfer": "0.1.8"

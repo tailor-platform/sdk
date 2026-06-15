@@ -117,9 +117,9 @@ describe("snapshot", () => {
       expect(snapshot.namespace).toBe(namespace);
       expect(snapshot.createdAt).toBeDefined();
       expect(snapshot.types.User).toBeDefined();
-      expect(snapshot.types.User.name).toBe("User");
-      expect(snapshot.types.User.fields.id).toBeDefined();
-      expect(snapshot.types.User.fields.name).toBeDefined();
+      expect(snapshot.types.User!.name).toBe("User");
+      expect(snapshot.types.User!.fields.id).toBeDefined();
+      expect(snapshot.types.User!.fields.name).toBeDefined();
     });
 
     test("captures field attributes", () => {
@@ -139,9 +139,9 @@ describe("snapshot", () => {
 
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
-      expect(snapshot.types.Product.fields.sku.required).toBe(true);
-      expect(snapshot.types.Product.fields.sku.unique).toBe(true);
-      expect(snapshot.types.Product.fields.tags.array).toBe(true);
+      expect(snapshot.types.Product!.fields.sku!.required).toBe(true);
+      expect(snapshot.types.Product!.fields.sku!.unique).toBe(true);
+      expect(snapshot.types.Product!.fields.tags!.array).toBe(true);
     });
 
     test("captures foreign key relationships", () => {
@@ -163,9 +163,9 @@ describe("snapshot", () => {
 
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
-      expect(snapshot.types.Order.fields.customerId.foreignKey).toBe(true);
-      expect(snapshot.types.Order.fields.customerId.foreignKeyType).toBe("Customer");
-      expect(snapshot.types.Order.fields.customerId.foreignKeyField).toBe("id");
+      expect(snapshot.types.Order!.fields.customerId!.foreignKey).toBe(true);
+      expect(snapshot.types.Order!.fields.customerId!.foreignKeyType).toBe("Customer");
+      expect(snapshot.types.Order!.fields.customerId!.foreignKeyField).toBe("id");
     });
 
     test("captures enum fields with allowedValues", () => {
@@ -185,8 +185,8 @@ describe("snapshot", () => {
 
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
-      expect(snapshot.types.Task.fields.status.type).toBe("enum");
-      expect(snapshot.types.Task.fields.status.allowedValues).toEqual([
+      expect(snapshot.types.Task!.fields.status!.type).toBe("enum");
+      expect(snapshot.types.Task!.fields.status!.allowedValues).toEqual([
         { value: "PENDING" },
         { value: "IN_PROGRESS" },
         { value: "DONE" },
@@ -229,8 +229,8 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0].kind).toBe("type_added");
-      expect(diff.changes[0].typeName).toBe("NewType");
+      expect(diff.changes[0]!.kind).toBe("type_added");
+      expect(diff.changes[0]!.typeName).toBe("NewType");
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
@@ -249,7 +249,7 @@ describe("snapshot", () => {
 
       const diff = compareSnapshots(previous, current);
 
-      expect(diff.changes[0].kind).toBe("type_removed");
+      expect(diff.changes[0]!.kind).toBe("type_removed");
       expect(diff.hasBreakingChanges).toBe(false);
       expect(diff.requiresMigrationScript).toBe(false);
       expect(diff.hasWarnings).toBe(true);
@@ -321,7 +321,7 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.breakingChanges[0].reason).toBe("Required field added");
+      expect(diff.breakingChanges[0]!.reason).toBe("Required field added");
     });
 
     test("detects field removal (non-breaking)", () => {
@@ -351,7 +351,7 @@ describe("snapshot", () => {
 
       const diff = compareSnapshots(previous, current);
 
-      expect(diff.changes[0].kind).toBe("field_removed");
+      expect(diff.changes[0]!.kind).toBe("field_removed");
       expect(diff.hasBreakingChanges).toBe(false);
       expect(diff.requiresMigrationScript).toBe(false);
       expect(diff.hasWarnings).toBe(true);
@@ -394,9 +394,9 @@ describe("snapshot", () => {
 
       const diff = compareSnapshots(previous, current);
 
-      expect(diff.changes[0].kind).toBe("field_modified");
+      expect(diff.changes[0]!.kind).toBe("field_modified");
       expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.breakingChanges[0].reason).toContain("Field type changed");
+      expect(diff.breakingChanges[0]!.reason).toContain("Field type changed");
     });
 
     test("normalizes decimal scale at compare entry so missing scale matches platform default", () => {
@@ -465,7 +465,7 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.breakingChanges[0].reason).toContain("optional to required");
+      expect(diff.breakingChanges[0]!.reason).toContain("optional to required");
     });
 
     test("detects array to single value change (breaking change)", () => {
@@ -499,7 +499,7 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.breakingChanges[0].reason).toContain("array to single value");
+      expect(diff.breakingChanges[0]!.reason).toContain("array to single value");
     });
 
     test("detects unique constraint addition (breaking change)", () => {
@@ -533,7 +533,7 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.breakingChanges[0].reason).toContain("Unique constraint");
+      expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
     });
 
     test("detects enum values removal (breaking change)", () => {
@@ -580,8 +580,8 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.breakingChanges[0].reason).toContain("Enum values removed");
-      expect(diff.breakingChanges[0].reason).toContain("CANCELLED");
+      expect(diff.breakingChanges[0]!.reason).toContain("Enum values removed");
+      expect(diff.breakingChanges[0]!.reason).toContain("CANCELLED");
     });
 
     test("does not detect change when enum values are reordered", () => {
@@ -667,7 +667,7 @@ describe("snapshot", () => {
       const diff = compareSnapshots(previous, current);
 
       expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0].kind).toBe("field_modified");
+      expect(diff.changes[0]!.kind).toBe("field_modified");
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
@@ -824,9 +824,9 @@ describe("snapshot", () => {
       const files = getMigrationFiles(testDir);
 
       expect(files.length).toBe(3);
-      expect(files[0].number).toBe(INITIAL_SCHEMA_NUMBER);
-      expect(files[1].number).toBe(1);
-      expect(files[2].number).toBe(2);
+      expect(files[0]!.number).toBe(INITIAL_SCHEMA_NUMBER);
+      expect(files[1]!.number).toBe(1);
+      expect(files[2]!.number).toBe(2);
     });
 
     test("identifies schema vs diff files correctly (directory structure)", () => {
@@ -853,8 +853,8 @@ describe("snapshot", () => {
 
       const files = getMigrationFiles(testDir);
 
-      expect(files[0].type).toBe("schema");
-      expect(files[1].type).toBe("diff");
+      expect(files[0]!.type).toBe("schema");
+      expect(files[1]!.type).toBe("diff");
     });
 
     test("ignores invalid directories", () => {
@@ -1007,7 +1007,7 @@ describe("snapshot", () => {
       const loaded = loadDiff(filePath);
 
       expect(loaded.changes.length).toBe(1);
-      expect(loaded.changes[0].kind).toBe("type_added");
+      expect(loaded.changes[0]!.kind).toBe("type_added");
     });
 
     test("backfills warnings fields for legacy diff.json", () => {
@@ -1139,8 +1139,8 @@ describe("snapshot", () => {
 
       expect(reconstructed).not.toBeNull();
       expect(reconstructed?.types.User).toBeDefined();
-      expect(reconstructed?.types.User.fields.id).toBeDefined();
-      expect(reconstructed?.types.User.fields.name).toBeDefined();
+      expect(reconstructed?.types.User!.fields.id).toBeDefined();
+      expect(reconstructed?.types.User!.fields.name).toBeDefined();
     });
 
     test("applies single diff to schema (directory structure)", () => {
@@ -1181,8 +1181,8 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User.fields.id).toBeDefined();
-      expect(reconstructed?.types.User.fields.email).toBeDefined();
+      expect(reconstructed?.types.User!.fields.id).toBeDefined();
+      expect(reconstructed?.types.User!.fields.email).toBeDefined();
     });
 
     test("applies multiple diffs sequentially (directory structure)", () => {
@@ -1243,9 +1243,9 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User.fields.id).toBeDefined();
-      expect(reconstructed?.types.User.fields.name).toBeDefined();
-      expect(reconstructed?.types.User.fields.email).toBeDefined();
+      expect(reconstructed?.types.User!.fields.id).toBeDefined();
+      expect(reconstructed?.types.User!.fields.name).toBeDefined();
+      expect(reconstructed?.types.User!.fields.email).toBeDefined();
     });
 
     test("handles type addition in diff (directory structure)", () => {
@@ -1294,7 +1294,7 @@ describe("snapshot", () => {
 
       expect(reconstructed?.types.User).toBeDefined();
       expect(reconstructed?.types.Post).toBeDefined();
-      expect(reconstructed?.types.Post.fields.title).toBeDefined();
+      expect(reconstructed?.types.Post!.fields.title).toBeDefined();
     });
 
     test("handles type removal in diff (directory structure)", () => {
@@ -1420,13 +1420,13 @@ describe("snapshot", () => {
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
       // Forward relationship should be in forwardRelationships
-      expect(reconstructed?.types.Post.forwardRelationships?.author).toBeDefined();
-      expect(reconstructed?.types.Post.forwardRelationships?.author.targetType).toBe("User");
+      expect(reconstructed?.types.Post!.forwardRelationships?.author).toBeDefined();
+      expect(reconstructed?.types.Post!.forwardRelationships?.author!.targetType).toBe("User");
 
       // Backward relationship should be in backwardRelationships (NOT forwardRelationships)
-      expect(reconstructed?.types.User.backwardRelationships?.posts).toBeDefined();
-      expect(reconstructed?.types.User.backwardRelationships?.posts.targetType).toBe("Post");
-      expect(reconstructed?.types.User.forwardRelationships?.posts).toBeUndefined();
+      expect(reconstructed?.types.User!.backwardRelationships?.posts).toBeDefined();
+      expect(reconstructed?.types.User!.backwardRelationships?.posts!.targetType).toBe("Post");
+      expect(reconstructed?.types.User!.forwardRelationships?.posts).toBeUndefined();
     });
   });
 
@@ -1720,8 +1720,8 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("type_missing_remote");
-      expect(drifts[0].typeName).toBe("Post");
+      expect(drifts[0]!.kind).toBe("type_missing_remote");
+      expect(drifts[0]!.typeName).toBe("Post");
     });
 
     test("detects type missing in snapshot (unexpected type in remote)", () => {
@@ -1749,8 +1749,8 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("type_missing_local");
-      expect(drifts[0].typeName).toBe("ExtraType");
+      expect(drifts[0]!.kind).toBe("type_missing_local");
+      expect(drifts[0]!.typeName).toBe("ExtraType");
     });
 
     test("detects field missing in remote", () => {
@@ -1778,8 +1778,8 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("field_missing_remote");
-      expect(drifts[0].fieldName).toBe("email");
+      expect(drifts[0]!.kind).toBe("field_missing_remote");
+      expect(drifts[0]!.fieldName).toBe("email");
     });
 
     test("detects field missing in snapshot (unexpected field in remote)", () => {
@@ -1807,8 +1807,8 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("field_missing_local");
-      expect(drifts[0].fieldName).toBe("extraField");
+      expect(drifts[0]!.kind).toBe("field_missing_local");
+      expect(drifts[0]!.fieldName).toBe("extraField");
     });
 
     test("detects field type mismatch", () => {
@@ -1837,9 +1837,9 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("field_mismatch");
-      expect(drifts[0].fieldName).toBe("age");
-      expect(drifts[0].details).toContain("type");
+      expect(drifts[0]!.kind).toBe("field_mismatch");
+      expect(drifts[0]!.fieldName).toBe("age");
+      expect(drifts[0]!.details).toContain("type");
     });
 
     test("detects required flag mismatch", () => {
@@ -1868,8 +1868,8 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("field_mismatch");
-      expect(drifts[0].details).toContain("required");
+      expect(drifts[0]!.kind).toBe("field_mismatch");
+      expect(drifts[0]!.details).toContain("required");
     });
 
     test("detects array flag mismatch", () => {
@@ -1898,8 +1898,8 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("field_mismatch");
-      expect(drifts[0].details).toContain("array");
+      expect(drifts[0]!.kind).toBe("field_mismatch");
+      expect(drifts[0]!.details).toContain("array");
     });
 
     test("detects enum allowedValues mismatch", () => {
@@ -1936,8 +1936,8 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("field_mismatch");
-      expect(drifts[0].details).toContain("allowedValues");
+      expect(drifts[0]!.kind).toBe("field_mismatch");
+      expect(drifts[0]!.details).toContain("allowedValues");
     });
 
     test("normalizes decimal scale at compare entry so missing scale matches remote default", () => {
@@ -2004,8 +2004,8 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("field_mismatch");
-      expect(drifts[0].details).toContain("scale: remote=2, expected=6");
+      expect(drifts[0]!.kind).toBe("field_mismatch");
+      expect(drifts[0]!.details).toContain("scale: remote=2, expected=6");
     });
 
     test("handles empty remote types list", () => {
@@ -2024,7 +2024,7 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot([], snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("type_missing_remote");
+      expect(drifts[0]!.kind).toBe("type_missing_remote");
     });
 
     test("handles empty snapshot types", () => {
@@ -2043,7 +2043,7 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
-      expect(drifts[0].kind).toBe("type_missing_local");
+      expect(drifts[0]!.kind).toBe("type_missing_local");
     });
   });
 

@@ -11,7 +11,7 @@ import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailor
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
-  return types[type.name];
+  return types[type.name]!;
 }
 
 describe("EnumConstantsPlugin", () => {
@@ -35,13 +35,13 @@ describe("EnumConstantsPlugin", () => {
       const result = await processEnumType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.enums).toHaveLength(2);
-      expect(result.enums[0].name).toBe("UserRole");
-      expect(result.enums[0].values).toEqual([
+      expect(result.enums[0]!.name).toBe("UserRole");
+      expect(result.enums[0]!.values).toEqual([
         { value: "ADMIN", description: "" },
         { value: "USER", description: "" },
       ]);
-      expect(result.enums[1].name).toBe("UserStatus");
-      expect(result.enums[1].values).toEqual([
+      expect(result.enums[1]!.name).toBe("UserStatus");
+      expect(result.enums[1]!.values).toEqual([
         { value: "ACTIVE", description: "" },
         { value: "INACTIVE", description: "" },
       ]);
@@ -62,8 +62,8 @@ describe("EnumConstantsPlugin", () => {
       const result = await processEnumType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.enums).toHaveLength(1);
-      expect(result.enums[0].name).toBe("PurchaseOrderAttachedFilesType");
-      expect(result.enums[0].values).toEqual([
+      expect(result.enums[0]!.name).toBe("PurchaseOrderAttachedFilesType");
+      expect(result.enums[0]!.values).toEqual([
         { value: "text", description: "" },
         { value: "image", description: "" },
       ]);
@@ -92,8 +92,8 @@ describe("EnumConstantsPlugin", () => {
       const result = await processEnumType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.enums).toHaveLength(1);
-      expect(result.enums[0].name).toBe("InvoiceStatus");
-      expect(result.enums[0].values).toEqual([
+      expect(result.enums[0]!.name).toBe("InvoiceStatus");
+      expect(result.enums[0]!.values).toEqual([
         { value: "draft", description: "Draft invoice" },
         { value: "sent", description: "Sent invoice" },
         { value: "paid", description: "" },

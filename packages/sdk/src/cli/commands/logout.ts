@@ -15,14 +15,15 @@ export const logoutCommand = defineAppCommand({
   args: z.object({}).strict(),
   run: async () => {
     const pfConfig = await readPlatformConfig();
-    const userEntry = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;
-    if (!userEntry) {
+    const currentUser = pfConfig.current_user;
+    const userEntry = currentUser ? pfConfig.users[currentUser] : undefined;
+    if (!userEntry || !currentUser) {
       logger.info("You are not logged in.");
       return;
     }
 
     try {
-      const { accessToken, refreshToken } = await resolveTokens(userEntry, pfConfig.current_user!);
+      const { accessToken, refreshToken } = await resolveTokens(userEntry, currentUser);
       const client = initOAuth2Client();
       const tokenTypeHint = refreshToken ? "refresh_token" : "access_token";
       await client.revoke(
@@ -37,8 +38,8 @@ export const logoutCommand = defineAppCommand({
       logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
     }
 
-    await deleteUserTokens(pfConfig, pfConfig.current_user!);
-    delete pfConfig.users[pfConfig.current_user!];
+    await deleteUserTokens(pfConfig, currentUser);
+    delete pfConfig.users[currentUser];
     pfConfig.current_user = null;
     writePlatformConfig(pfConfig);
     logger.success("Successfully logged out from Tailor Platform.");

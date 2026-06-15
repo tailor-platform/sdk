@@ -21,6 +21,7 @@ When editing files matching these globs, read and follow the linked rule documen
 
 - `.changeset/**`: [Changeset Rules](.agents/rules/changeset.md)
 - `packages/sdk/src/cli/**/*.ts`: [CLI Logging Guidelines](.agents/rules/cli-logging.md)
+- `**`: [Code Comments](.agents/rules/code-comments.md)
 - `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
 - `packages/sdk/src/**/*.ts`: [JSDoc Parameter Rules (SDK)](.agents/rules/jsdoc.md)
 - `packages/sdk/src/types/**/*.ts`, `packages/sdk/src/parser/**/types.ts`, `packages/sdk/src/configure/**/types.ts`, `packages/sdk/src/configure/**/*.types.ts`, `packages/sdk/src/plugin/types.ts`, `packages/sdk/src/runtime/types.ts`, `packages/sdk/src/parser/**/schema.ts`, `packages/sdk/zinfer.config.ts`: [Schema Types](.agents/rules/schema-types.md)

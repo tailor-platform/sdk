@@ -5,6 +5,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
 const getFolderOptionsSchema = z.object({
@@ -22,7 +23,7 @@ export type GetFolderOptions = z.input<typeof getFolderOptionsSchema>;
 export async function getFolder(options: GetFolderOptions): Promise<FolderInfo> {
   const result = getFolderOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();

@@ -11,6 +11,11 @@
       "file": ".agents/rules/cli-logging.md"
     },
     {
+      "name": "code-comments",
+      "paths": ["**"],
+      "file": ".agents/rules/code-comments.md"
+    },
+    {
       "name": "docs-authoring",
       "paths": ["packages/sdk/docs/**", "packages/sdk/src/**/*.ts"],
       "file": ".agents/rules/docs-authoring.md"

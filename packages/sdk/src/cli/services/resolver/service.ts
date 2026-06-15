@@ -60,7 +60,7 @@ export function createResolverService(
       if (Object.keys(resolvers).length > 0) {
         return;
       }
-      if (!config.files || config.files.length === 0) {
+      if (config.files.length === 0) {
         return;
       }
 

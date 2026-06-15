@@ -13,5 +13,5 @@
     "zinfer.config.ts"
   ],
   "ignoreDependencies": ["undici", "vite"],
-  "ignoreBinaries": ["knip", "publint"]
+  "ignoreBinaries": ["knip", "publint", "actionlint"]
 }

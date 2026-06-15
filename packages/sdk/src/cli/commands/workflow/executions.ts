@@ -151,7 +151,6 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
         ? options.workflow?.name
         : undefined;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -210,7 +209,6 @@ export async function getWorkflowExecution(
   options: GetWorkflowExecutionOptions,
 ): Promise<GetWorkflowExecutionResult> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -283,6 +281,8 @@ export async function getWorkflowExecution(
   async function waitForCompletion(): Promise<WorkflowExecutionDetailInfo> {
     const interval = options.interval ?? 3000;
 
+    // loop exits when the workflow execution reaches a terminal status
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (true) {
       const { execution } = await client.getWorkflowExecution({
         workspaceId,

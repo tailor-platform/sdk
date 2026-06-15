@@ -1,5 +1,4 @@
-import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
-import { ValueSchema } from "@bufbuild/protobuf/wkt";
+import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
@@ -12,13 +11,6 @@ import {
   type UpdateTailorDBTypeRequestSchema,
 } from "@tailor-proto/tailor/v1/tailordb_pb";
 import {
-  TailorDBGQLPermission_Action,
-  type TailorDBGQLPermission_ConditionSchema,
-  type TailorDBGQLPermission_OperandSchema,
-  TailorDBGQLPermission_Operator,
-  TailorDBGQLPermission_Permit,
-  type TailorDBGQLPermission_PolicySchema,
-  type TailorDBGQLPermissionSchema,
   type TailorDBType as ProtoTailorDBType,
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
@@ -47,18 +39,18 @@ import {
   createSnapshotType,
   getLatestMigrationNumber,
   getMigrationFiles,
-  isSnapshotFieldRefOperand,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
-  type SnapshotPermissionCondition,
-  type SnapshotPermissionOperand,
-  type SnapshotGqlPermission,
-  type SnapshotGqlPermissionPolicy,
 } from "@/cli/commands/tailordb/migrate/snapshot";
-import { generateTailorDBTypeManifestFromSnapshot } from "@/cli/commands/tailordb/migrate/snapshot-manifest";
+import {
+  generateTailorDBTypeManifestFromSnapshot,
+  protoGqlPermission,
+} from "@/cli/commands/tailordb/migrate/snapshot-manifest";
+import { handleOptionalToRequiredError } from "@/cli/commands/tailordb/migrate/types";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
@@ -135,10 +127,12 @@ async function getRemoteMigrationNumber(
   try {
     const trn = resourceTrn(workspaceId, "tailordb", namespace);
     const { metadata } = await client.getMetadata({ trn });
-    const label = metadata?.labels?.["sdk-migration"];
+    const label = metadata?.labels["sdk-migration"];
     if (!label) return null; // No migration label means first apply
     const match = label.match(/^m(\d+)$/);
-    return match ? parseInt(match[1], 10) : null;
+    return match
+      ? parseInt(assertDefined(match[1], "migration label capture group missing"), 10)
+      : null;
   } catch {
     return null;
   }
@@ -578,7 +572,7 @@ export async function applyTailorDB(
       changeSet.gqlPermission.deletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
     );
     await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
-  } else if (phase === "delete-services") {
+  } else {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
@@ -589,28 +583,6 @@ export async function applyTailorDB(
 // ============================================================================
 // Error Handling Helpers
 // ============================================================================
-
-/**
- * Handle optional-to-required field change error with helpful message
- * @param {unknown} error - Error to handle
- * @param {string[]} messages - Additional messages to display
- */
-function handleOptionalToRequiredError(error: unknown, messages: string[]): never {
-  if (
-    error instanceof ConnectError &&
-    error.code === Code.FailedPrecondition &&
-    error.message.includes("cannot be updated from non-required to required when records exist")
-  ) {
-    logger.error(
-      "Schema change failed: Cannot change field from optional to required when records exist.",
-    );
-    logger.newline();
-    for (const message of messages) {
-      logger.info(message);
-    }
-  }
-  throw error;
-}
 
 // ============================================================================
 // Migration Execution Helpers
@@ -777,7 +749,7 @@ async function executeSingleMigrationPrePhase(
         clonedRequest.tailordbType = snapshotType;
 
         const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
-        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType?.schema?.fields) {
+        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
@@ -827,7 +799,7 @@ async function executeSingleMigrationPrePhase(
         clonedRequest.tailordbType = snapshotType;
 
         const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
-        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType?.schema?.fields) {
+        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
@@ -1383,8 +1355,7 @@ async function planTypes(
   // Validate that types used by executors don't have publishEvents explicitly set to false
   for (const tailordb of tailordbs) {
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
-    for (const typeName of Object.keys(types)) {
-      const type = types[typeName];
+    for (const [typeName, type] of Object.entries(types)) {
       if (executorUsedTypes.has(typeName) && type.settings?.publishEvents === false) {
         throw new Error(
           `Type "${typeName}" has publishEvents set to false, but it is used by an executor with a record trigger. ` +
@@ -1401,8 +1372,8 @@ async function planTypes(
     // Use filtered types if provided, otherwise use local types
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
 
-    for (const typeName of Object.keys(types)) {
-      const tailordbType = generateTailorDBTypeManifestFromSnapshot(types[typeName], {
+    for (const [typeName, tailordbTypeSnapshot] of Object.entries(types)) {
+      const tailordbType = generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
         publishRecordEvents: executorUsedTypes.has(typeName),
         namespaceGqlOperations: tailordb.config.gqlOperations,
       });
@@ -1653,8 +1624,8 @@ async function planGqlPermissions(
     });
 
     const types = tailordb.types;
-    for (const typeName of Object.keys(types)) {
-      const gqlPermission = types[typeName].permissions?.gql;
+    for (const [typeName, typeEntry] of Object.entries(types)) {
+      const gqlPermission = typeEntry.permissions?.gql;
       if (!gqlPermission) {
         continue;
       }
@@ -1737,119 +1708,6 @@ function normalizeComparableGqlPermission(permission: unknown) {
       ...policy,
       actions: (policy.actions ?? []).toSorted((left, right) => left - right),
     })),
-  };
-}
-
-function protoGqlPermission(
-  permission: SnapshotGqlPermission,
-): MessageInitShape<typeof TailorDBGQLPermissionSchema> {
-  return {
-    policies: permission.map((policy) => protoGqlPolicy(policy)),
-  };
-}
-
-function protoGqlPolicy(
-  policy: SnapshotGqlPermissionPolicy,
-): MessageInitShape<typeof TailorDBGQLPermission_PolicySchema> {
-  const actions: TailorDBGQLPermission_Action[] = [];
-  for (const action of policy.actions) {
-    switch (action) {
-      case "all":
-        actions.push(TailorDBGQLPermission_Action.ALL);
-        break;
-      case "create":
-        actions.push(TailorDBGQLPermission_Action.CREATE);
-        break;
-      case "read":
-        actions.push(TailorDBGQLPermission_Action.READ);
-        break;
-      case "update":
-        actions.push(TailorDBGQLPermission_Action.UPDATE);
-        break;
-      case "delete":
-        actions.push(TailorDBGQLPermission_Action.DELETE);
-        break;
-      case "aggregate":
-        actions.push(TailorDBGQLPermission_Action.AGGREGATE);
-        break;
-      case "bulkUpsert":
-        actions.push(TailorDBGQLPermission_Action.BULK_UPSERT);
-        break;
-      default:
-        throw new Error(`Unknown action: ${action satisfies never}`);
-    }
-  }
-  let permit: TailorDBGQLPermission_Permit;
-  switch (policy.permit) {
-    case "allow":
-      permit = TailorDBGQLPermission_Permit.ALLOW;
-      break;
-    case "deny":
-      permit = TailorDBGQLPermission_Permit.DENY;
-      break;
-    default:
-      throw new Error(`Unknown permission: ${policy.permit satisfies never}`);
-  }
-  return {
-    conditions: policy.conditions.map((cond) => protoGqlCondition(cond)),
-    actions,
-    permit,
-    description: policy.description,
-  };
-}
-
-function protoGqlCondition(
-  condition: SnapshotPermissionCondition,
-): MessageInitShape<typeof TailorDBGQLPermission_ConditionSchema> {
-  const [left, operator, right] = condition;
-
-  const l = protoGqlOperand(left);
-  const r = protoGqlOperand(right);
-  let op: TailorDBGQLPermission_Operator;
-  switch (operator) {
-    case "eq":
-      op = TailorDBGQLPermission_Operator.EQ;
-      break;
-    case "ne":
-      op = TailorDBGQLPermission_Operator.NE;
-      break;
-    case "in":
-      op = TailorDBGQLPermission_Operator.IN;
-      break;
-    case "nin":
-      op = TailorDBGQLPermission_Operator.NIN;
-      break;
-    case "hasAny":
-      op = TailorDBGQLPermission_Operator.HAS_ANY;
-      break;
-    case "nhasAny":
-      op = TailorDBGQLPermission_Operator.NHAS_ANY;
-      break;
-    default:
-      throw new Error(`Unknown operator: ${operator satisfies never}`);
-  }
-  return {
-    left: l,
-    operator: op,
-    right: r,
-  };
-}
-
-function protoGqlOperand(
-  operand: SnapshotPermissionOperand,
-): MessageInitShape<typeof TailorDBGQLPermission_OperandSchema> {
-  if (isSnapshotFieldRefOperand(operand)) {
-    if ("user" in operand) {
-      return { kind: { case: "userField", value: operand.user } };
-    }
-    throw new Error(
-      `Unsupported field-ref operand in GQL permission: ${JSON.stringify(operand)} ` +
-        `— GQL permissions only support { user } field references`,
-    );
-  }
-
-  return {
-    kind: { case: "value", value: fromJson(ValueSchema, operand) },
   };
 }
 

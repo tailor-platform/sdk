@@ -16,15 +16,21 @@ import {
   type Application,
 } from "@/cli/services/application";
 import { createExecutorService } from "@/cli/services/executor/service";
+import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
 import { loadConfig, type LoadedConfig, type Generator } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { generateUserTypes } from "@/cli/shared/type-generator";
 import { withSpan } from "@/cli/telemetry";
 import { PluginManager } from "@/plugin/manager";
+import { assertDefined } from "@/utils/assert";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
-import type { TypeSourceInfo, TailorDBType } from "@/parser/service/tailordb/types";
+import type {
+  TypeSourceInfo,
+  TypeSourceInfoEntry,
+  TailorDBType,
+} from "@/parser/service/tailordb/types";
 import type {
   TailorDBNamespaceData,
   ResolverNamespaceData,
@@ -149,7 +155,10 @@ export function createGenerationManager(params: {
     namespace: string,
     typeInfo: TypeInfo,
   ): Promise<void> {
-    const results = generatorResults[gen.id];
+    const results = assertDefined(
+      generatorResults[gen.id],
+      `generator result not initialized for ${gen.id}`,
+    );
     results.tailordbResults[namespace] = {};
 
     // Check if generator has processType method
@@ -161,10 +170,13 @@ export function createGenerationManager(params: {
     await Promise.allSettled(
       Object.entries(typeInfo.types).map(async ([typeName, type]) => {
         try {
-          results.tailordbResults[namespace][typeName] = await processType({
+          assertDefined(
+            results.tailordbResults[namespace],
+            `tailordb results not initialized for namespace ${namespace}`,
+          )[typeName] = await processType({
             type,
             namespace,
-            source: typeInfo.sourceInfo[typeName],
+            source: typeInfo.sourceInfo[typeName] as TypeSourceInfoEntry,
             plugins: typeInfo.pluginAttachments.get(typeName) ?? [],
           });
         } catch (error) {
@@ -199,7 +211,10 @@ export function createGenerationManager(params: {
     namespace: string,
     resolvers: Record<string, Resolver>,
   ): Promise<void> {
-    const results = generatorResults[gen.id];
+    const results = assertDefined(
+      generatorResults[gen.id],
+      `generator result not initialized for ${gen.id}`,
+    );
     results.resolverResults[namespace] = {};
 
     // Check if generator has processResolver method
@@ -212,7 +227,10 @@ export function createGenerationManager(params: {
     await Promise.allSettled(
       Object.entries(resolvers).map(async ([resolverName, resolver]) => {
         try {
-          results.resolverResults[namespace][resolverName] = await processResolver({
+          assertDefined(
+            results.resolverResults[namespace],
+            `resolver results not initialized for namespace ${namespace}`,
+          )[resolverName] = await processResolver({
             resolver,
             namespace,
           });
@@ -244,7 +262,10 @@ export function createGenerationManager(params: {
   }
 
   async function processExecutors(gen: AnyCodeGenerator): Promise<void> {
-    const results = generatorResults[gen.id];
+    const results = assertDefined(
+      generatorResults[gen.id],
+      `generator result not initialized for ${gen.id}`,
+    );
 
     // Check if generator has processExecutor method
     if (!gen.processExecutor) {
@@ -268,7 +289,10 @@ export function createGenerationManager(params: {
   }
 
   async function aggregate(gen: AnyCodeGenerator): Promise<void> {
-    const results = generatorResults[gen.id];
+    const results = assertDefined(
+      generatorResults[gen.id],
+      `generator result not initialized for ${gen.id}`,
+    );
 
     const tailordbResults: TailorDBNamespaceResult<unknown>[] = [];
     const resolverResults: ResolverNamespaceResult<unknown>[] = [];
@@ -364,7 +388,10 @@ export function createGenerationManager(params: {
 
     switch (hookName) {
       case "onTailorDBReady":
-        result = await plugin.onTailorDBReady!({
+        result = await assertDefined(
+          plugin.onTailorDBReady,
+          "plugin.onTailorDBReady hook missing",
+        )({
           tailordb,
           auth,
           baseDir: pluginBaseDir,
@@ -373,7 +400,10 @@ export function createGenerationManager(params: {
         });
         break;
       case "onResolverReady":
-        result = await plugin.onResolverReady!({
+        result = await assertDefined(
+          plugin.onResolverReady,
+          "plugin.onResolverReady hook missing",
+        )({
           tailordb,
           resolvers: buildResolverData(),
           auth,
@@ -383,7 +413,10 @@ export function createGenerationManager(params: {
         });
         break;
       case "onExecutorReady":
-        result = await plugin.onExecutorReady!({
+        result = await assertDefined(
+          plugin.onExecutorReady,
+          "plugin.onExecutorReady hook missing",
+        )({
           tailordb,
           resolvers: buildResolverData(),
           executors: { ...services.executor },
@@ -566,11 +599,15 @@ export function createGenerationManager(params: {
       ).toString(),
     };
 
-    const child = spawn(process.argv[0], [process.argv[1], ...args], {
-      stdio: "inherit",
-      env,
-      detached: false,
-    });
+    const child = spawn(
+      assertDefined(process.argv[0], "argv[0] missing"),
+      [assertDefined(process.argv[1], "argv[1] missing"), ...args],
+      {
+        stdio: "inherit",
+        env,
+        detached: false,
+      },
+    );
 
     // Forward signals to child
     const forwardSignal = (signal: NodeJS.Signals) => {
@@ -633,6 +670,17 @@ export function createGenerationManager(params: {
             }
           });
         }
+        try {
+          assertUniqueLocalTailorDBTypeNames({
+            tailorDBServices: app.tailorDBServices,
+          });
+        } catch (error) {
+          logger.error("Error validating TailorDB type names");
+          logger.error(String(error));
+          if (!watch) {
+            throw error;
+          }
+        }
       });
 
       // Generate plugin type and executor files
@@ -656,8 +704,9 @@ export function createGenerationManager(params: {
 
       // Resolve Auth namespaces (depends on TailorDB)
       if (app.authService) {
+        const authService = app.authService;
         await withSpan("generate.resolveAuthNamespaces", async () =>
-          app.authService!.resolveNamespaces(),
+          authService.resolveNamespaces(),
         );
       }
 
@@ -686,9 +735,10 @@ export function createGenerationManager(params: {
           await withSpan(`generate.loadResolvers.${namespace}`, async () => {
             try {
               await resolverService.loadResolvers();
-              services.resolver[namespace] = {};
+              const namespaceResolvers: Record<string, Resolver> = {};
+              services.resolver[namespace] = namespaceResolvers;
               Object.entries(resolverService.resolvers).forEach(([_, resolver]) => {
-                services.resolver[namespace][resolver.name] = resolver;
+                namespaceResolvers[resolver.name] = resolver;
               });
             } catch (error) {
               logger.error(
@@ -763,13 +813,13 @@ export function createGenerationManager(params: {
       // Watch TailorDB services
       for (const db of app.tailorDBServices) {
         const dbNamespace = db.namespace;
-        await watcher?.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files);
+        await watcher.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files);
       }
 
       // Watch Resolver services
       for (const resolverService of app.resolverServices) {
         const resolverNamespace = resolverService.namespace;
-        await watcher?.addWatchGroup(
+        await watcher.addWatchGroup(
           `Resolver/${resolverNamespace}`,
           resolverService["config"].files,
         );

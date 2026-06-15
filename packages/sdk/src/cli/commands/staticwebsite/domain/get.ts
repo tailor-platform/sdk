@@ -22,7 +22,6 @@ export const domainGetCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
@@ -45,6 +44,8 @@ export const domainGetCommand = defineAppCommand({
 
       const info = {
         domain: customDomain.domain,
+        // platform may return enum values newer than this SDK
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         status: statusLabels[customDomain.status] ?? "unknown",
         trafficCnameTarget: customDomain.trafficCnameTarget,
         certificateCnameTarget: customDomain.certificateCnameTarget,

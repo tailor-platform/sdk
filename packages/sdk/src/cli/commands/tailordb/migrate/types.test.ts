@@ -143,6 +143,9 @@ describe("parseMigrationLabelNumber", () => {
     expect(parseMigrationLabelNumber("x0001")).toBe(null); // Wrong prefix
     expect(parseMigrationLabelNumber("m")).toBe(null); // No number
     expect(parseMigrationLabelNumber("")).toBe(null);
+    expect(parseMigrationLabelNumber("m0001-extra")).toBe(null); // Trailing garbage
+    expect(parseMigrationLabelNumber("m1x")).toBe(null); // Non-digit suffix
+    expect(parseMigrationLabelNumber("m10000")).toBe(null); // Out of range
   });
 });
 

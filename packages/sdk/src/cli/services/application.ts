@@ -16,6 +16,7 @@ import {
 import { bundleResolvers } from "@/cli/services/resolver/bundler";
 import { createResolverService, type ResolverService } from "@/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/services/tailordb/service";
+import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "@/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "@/cli/services/workflow/service";
 import { resolveBundleLogLevel } from "@/cli/shared/bundle-log-level";
@@ -458,6 +459,9 @@ export async function loadApplication(
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();
   }
+  assertUniqueLocalTailorDBTypeNames({
+    tailorDBServices: tailordbResult.tailorDBServices,
+  });
 
   // 3. Generate plugin files and determine executor file paths
   const pluginExecutorFiles = generatePluginFilesIfNeeded(

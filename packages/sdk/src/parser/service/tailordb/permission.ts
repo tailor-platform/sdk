@@ -103,6 +103,8 @@ export function normalizeGqlPermission(
 
 function normalizeGqlPolicy(policy: GqlPermissionPolicy): StandardGqlPermissionPolicy {
   return {
+    // platform response may omit the field
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     conditions: policy.conditions ? normalizeConditions(policy.conditions) : [],
     actions: policy.actions === "all" ? ["all"] : policy.actions,
     permit: policy.permit ? "allow" : "deny",
@@ -202,6 +204,8 @@ export function findOmittedPermitRules(rawPermissions: RawPermissions): string[]
   const record = rawPermissions.record;
   if (record) {
     for (const action of Object.keys(record) as Array<keyof typeof record>) {
+      // raw user input may omit action keys the type marks required
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       record[action]?.forEach((rule: unknown, index: number) => {
         if (isObjectFormat(rule) && rule.permit === undefined) {
           locations.push(`record.${String(action)}[${index}]`);

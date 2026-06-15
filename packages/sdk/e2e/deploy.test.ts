@@ -52,7 +52,7 @@ describe("E2E: Service deletion order", () => {
 
   beforeAll(async () => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
-    const accessToken = await loadAccessToken({ useProfile: false });
+    const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
 
     const region = await resolveE2EWorkspaceRegion(client);
@@ -192,6 +192,14 @@ describe("E2E: Service deletion order", () => {
   }
 
   /**
+   * Helper to get the absolute path pattern for additional tailordb files
+   * @returns Absolute path pattern for additional tailordb files
+   */
+  function getAdditionalTailordbFilesPattern(): string {
+    return path.join(tempDir, "extra-tailordb", "*.ts").replace(/\\/g, "/");
+  }
+
+  /**
    * Helper to create TailorDB type file
    */
   function createTailorDBTypeFile(): void {
@@ -209,6 +217,27 @@ export const user = db.type("User", {
 });
 
 export type user = typeof user;
+`,
+    );
+  }
+
+  /**
+   * Helper to create additional TailorDB type file
+   */
+  function createAdditionalTailorDBTypeFile(): void {
+    const tailordbDir = path.join(tempDir, "extra-tailordb");
+    fs.mkdirSync(tailordbDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tailordbDir, "extra-user.ts"),
+      `
+import { db } from "@tailor-platform/sdk";
+
+export const extraUser = db.type("ExtraUser", {
+  name: db.string(),
+  email: db.string(),
+});
+
+export type extraUser = typeof extraUser;
 `,
     );
   }
@@ -255,6 +284,8 @@ export default defineConfig({
    */
   test("should delete additional tailordb service after application is updated", async () => {
     const additionalTailordbName = `extra-db-${testRunId}`;
+    createTailorDBTypeFile();
+    createAdditionalTailorDBTypeFile();
 
     // Step 1: Add an additional TailorDB service
     const configWithExtra = `
@@ -264,7 +295,7 @@ export default defineConfig({
   name: "${testAppName}",
   db: {
     "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
-    "${additionalTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+    "${additionalTailordbName}": { files: ["${getAdditionalTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -281,11 +312,11 @@ export default defineConfig({
     expect(servicesAfterAdd).toContain(sharedTailordbName);
     expect(servicesAfterAdd).toContain(additionalTailordbName);
 
-    // Verify: User type should exist in both namespaces
+    // Verify: each TailorDB namespace has its own type
     const typesInShared = await listTailorDBTypeNames(sharedTailordbName);
     expect(typesInShared).toContain("User");
     const typesInAdditional = await listTailorDBTypeNames(additionalTailordbName);
-    expect(typesInAdditional).toContain("User");
+    expect(typesInAdditional).toContain("ExtraUser");
 
     // Step 2: Remove the additional TailorDB (keep shared one)
     const configWithoutExtra = `

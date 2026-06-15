@@ -6,9 +6,6 @@ minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
   - "@tailor-platform/*"
-  - "@toiroakr/lines-db"
-  - politty
-  - zinfer
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
@@ -37,3 +34,7 @@ allowBuilds:
   "@prisma/engines": false
   protobufjs: false
   unrs-resolver: false
+
+overrides:
+  valibot@>=0.31.0 <1.2.0: 1.4.1
+  esbuild@>=0.17.0 <0.28.1: 0.28.1

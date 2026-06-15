@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.2.7
+
+### Patch Changes
+
+- [#1412](https://github.com/tailor-platform/sdk/pull/1412) [`ada99e7`](https://github.com/tailor-platform/sdk/commit/ada99e79847239381b29348598df81be4fbe909e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.3
+
 ## 0.2.6
 
 ### Patch Changes

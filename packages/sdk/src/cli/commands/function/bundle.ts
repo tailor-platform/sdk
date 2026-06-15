@@ -19,6 +19,7 @@ import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
+import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
 import type { DetectedFunction } from "./detect";
 import type { LogLevelInput } from "@/configure/config/types";
@@ -210,7 +211,7 @@ function generateEntry(
       // Mirrors the production workflow bundler (services/workflow/bundler.ts).
       // Note: user context is not available in TestExecScript for workflow jobs.
       // The production workflow bundler's user mapping is being fixed in fix/workflow-user.
-      const exportName = detected.exportName!;
+      const exportName = assertDefined(detected.exportName, "workflow job export name missing");
       return ml /* js */ `
         import { ${exportName} } from "${absoluteSourcePath}";
 

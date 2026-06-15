@@ -92,6 +92,8 @@ export function getRegisteredWorkflow(name: string): RegisteredWorkflow | undefi
 }
 
 function currentPlatformWorkflow(): PlatformWorkflow | undefined {
+  // globalThis may not have the tailor property at runtime
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   return (globalThis as GlobalWithRegistry).tailor?.workflow;
 }
 

@@ -380,7 +380,7 @@ describe("withCache", () => {
     expect(build).toHaveBeenCalledOnce();
     // build receives an array containing the dep-collector plugin
     const firstCallArgs = build.mock.calls[0] as unknown[];
-    expect(firstCallArgs?.[0]).toHaveLength(1);
+    expect(firstCallArgs[0]).toHaveLength(1);
     // Cache entry should exist after save
     expect(store.getEntry("resolver:myResolver")).toBeDefined();
     expect(result).toBe("built output");

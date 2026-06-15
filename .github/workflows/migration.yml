@@ -79,22 +79,34 @@ jobs:
       - name: Destroy workspace
         if: always()
         working-directory: example
-        run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
+        run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   migration-result:
     needs: [changes, migration]
-    if: always()
+    if: >-
+      always() &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          MIGRATION_RESULT: ${{ needs.migration.result }}
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.migration.result }}" != "success" ]]; then
+          if [[ "$MIGRATION_RESULT" != "success" ]]; then
             echo "Migration job failed"
             exit 1
           fi

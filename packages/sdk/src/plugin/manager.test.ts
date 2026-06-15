@@ -137,6 +137,6 @@ describe("PluginManager", () => {
       throw new Error("Expected plugin attachment to succeed");
     }
     expect(result.output.types).toBeDefined();
-    expect(result.output.types?.derived.name).toBe("Derived");
+    expect(result.output.types?.["derived"]!.name).toBe("Derived");
   });
 });

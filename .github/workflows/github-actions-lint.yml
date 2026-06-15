@@ -1,8 +1,9 @@
 ---
-# Static analysis for GitHub Actions using actionlint and ghalint
+# Static analysis for GitHub Actions using actionlint, ghalint, and zizmor
 #
 # - actionlint: https://github.com/rhysd/actionlint
 # - ghalint: https://github.com/suzuki-shunsuke/ghalint
+# - zizmor: https://docs.zizmor.sh/
 name: GitHub Actions Lint
 
 on:
@@ -10,9 +11,11 @@ on:
     paths:
       - .github/workflows/*.yaml
       - .github/workflows/*.yml
+      - .github/actions/**
       - aqua.yaml
       - aqua-checksums.json
       - .ghalint.yaml
+      - packages/sdk/src/cli/commands/setup/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -41,3 +44,28 @@ jobs:
 
       - name: Run ghalint actions
         run: ghalint run-action
+
+      - name: Run zizmor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: zizmor --no-progress .github/workflows/ .github/actions/
+
+  lint-generated-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Install aqua
+        uses: ./.github/actions/install-aqua
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Run actionlint tests
+        run: pnpm --filter @tailor-platform/sdk exec vitest run src/cli/commands/setup/github/workflow-lint.test.ts

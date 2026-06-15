@@ -632,29 +632,6 @@ describe("TailorDBType withTimestamps option tests", () => {
     expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
     expect((result as Date).getTime()).toBeLessThanOrEqual(after);
   });
-
-  test("updatedAt update hook respects a user-specified value", () => {
-    const { updatedAt } = db.fields.timestamps();
-    const updateHook = updatedAt.metadata.hooks?.update;
-    expect(updateHook).toBeDefined();
-
-    const specified = new Date("2025-02-10T09:00:00Z");
-    const result = updateHook!({ value: specified, data: {}, user: timestampHookUser });
-    expect(result).toBe(specified);
-  });
-
-  test("updatedAt update hook falls back to now when no value is given", () => {
-    const { updatedAt } = db.fields.timestamps();
-    const updateHook = updatedAt.metadata.hooks?.update;
-    expect(updateHook).toBeDefined();
-
-    const before = Date.now();
-    const result = updateHook!({ value: null, data: {}, user: timestampHookUser });
-    const after = Date.now();
-    expect(result).toBeInstanceOf(Date);
-    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
-    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
-  });
 });
 
 describe("TailorDBType composite type tests", () => {
@@ -1296,9 +1273,9 @@ describe("TailorDBType/TailorDBField description support", () => {
         .description("User information object"),
     });
 
-    expect(profileType.fields.userInfo.metadata.description).toBe("User information object");
-    expect(profileType.fields.userInfo.fields.name.metadata.description).toBe("Full name");
-    expect(profileType.fields.userInfo.fields.email.metadata.description).toBe("Email address");
+    expect(profileType.fields.userInfo!.metadata.description).toBe("User information object");
+    expect(profileType.fields.userInfo!.fields.name!.metadata.description).toBe("Full name");
+    expect(profileType.fields.userInfo!.fields.email!.metadata.description).toBe("Email address");
   });
 
   test("TailorDBType can be used in resolver with description preserved", () => {

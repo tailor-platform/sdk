@@ -476,19 +476,22 @@ function createTailorDBField<
 
       case "nested":
         // Validate nested object fields
+        // runtime value may not match the declared type
+        // oxlint-disable typescript/no-unnecessary-condition
         if (
           typeof value !== "object" ||
           value === null ||
           Array.isArray(value) ||
           value instanceof Date
         ) {
+          // oxlint-enable typescript/no-unnecessary-condition
           issues.push({
             message: `Expected an object: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
           });
-        } else if (field.fields && Object.keys(field.fields).length > 0) {
+        } else if (Object.keys(field.fields).length > 0) {
           for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-            const fieldValue = value?.[fieldName];
+            const fieldValue = (value as Record<string, unknown>)[fieldName];
             const result = nestedField._parseInternal({
               value: fieldValue,
               data,
@@ -926,7 +929,7 @@ function createTailorDBType<
     get metadata(): TailorDBTypeMetadata {
       // Convert indexes to the format expected by the manifest
       const indexes: Record<string, { fields: string[]; unique?: boolean }> = {};
-      if (_indexes && _indexes.length > 0) {
+      if (_indexes.length > 0) {
         _indexes.forEach((index) => {
           const fieldNames = index.fields.map((field) => String(field));
           const key = index.name || `idx_${fieldNames.join("_")}`;
@@ -951,8 +954,11 @@ function createTailorDBType<
       // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
       // oxlint-disable-next-line no-explicit-any
       Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] =
-          this.fields[fieldName].hooks(fieldHooks);
+        const field = this.fields[fieldName];
+        if (field === undefined) throw new Error(`field not found: ${fieldName}`);
+        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = (
+          field as TailorAnyDBField
+        ).hooks(fieldHooks);
       });
       return this;
     },
@@ -1034,10 +1040,11 @@ function createTailorDBType<
     pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options?: Opt) {
       const result = {} as Record<K, TailorAnyDBField>;
       for (const key of keys) {
+        const field = this.fields[key] as TailorAnyDBField;
         if (options) {
-          result[key] = this.fields[key].clone(options);
+          result[key] = field.clone(options);
         } else {
-          result[key] = this.fields[key];
+          result[key] = field;
         }
       }
       // oxlint-disable-next-line no-explicit-any
@@ -1049,7 +1056,7 @@ function createTailorDBType<
       const result = {} as Record<string, TailorAnyDBField>;
       for (const key in this.fields) {
         if (Object.hasOwn(this.fields, key) && !keysSet.has(key as unknown as K)) {
-          result[key] = this.fields[key];
+          result[key] = this.fields[key] as TailorAnyDBField;
         }
       }
       return result as Omit<Fields, K>;
@@ -1156,7 +1163,7 @@ export const db = {
     /**
      * Creates standard timestamp fields (createdAt, updatedAt) with auto-hooks.
      * createdAt is set on create, updatedAt is set on update.
-     * A user-specified value is respected when provided (e.g. seeding historical
+     * A user-specified createdAt is respected when provided (e.g. seeding historical
      * records); the current time is used only when the value is omitted.
      * @returns An object with createdAt and updatedAt fields
      * @example
@@ -1170,7 +1177,7 @@ export const db = {
         .hooks({ create: ({ value }) => value ?? new Date() })
         .description("Record creation timestamp"),
       updatedAt: datetime({ optional: true })
-        .hooks({ update: ({ value }) => value ?? new Date() })
+        .hooks({ update: () => new Date() })
         .description("Record last update timestamp"),
     }),
   },

@@ -39,7 +39,6 @@ export const listAuthConnectionCommand = defineAppCommand({
   args: z.object({ ...workspaceArgs, ...paginationArgs() }).strict(),
   run: async (args) => {
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);

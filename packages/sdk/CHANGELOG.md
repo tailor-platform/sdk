@@ -1,5 +1,90 @@
 # @tailor-platform/sdk
 
+## 1.63.0
+
+### Minor Changes
+
+- [#1403](https://github.com/tailor-platform/sdk/pull/1403) [`8aa6776`](https://github.com/tailor-platform/sdk/commit/8aa677605a7af3b690b09f7f436c260af5018c48) Thanks [@toiroakr](https://github.com/toiroakr)! - `setup github` (beta): overhaul branch and tag deploy targets
+
+  **New capabilities**
+
+  - **Tag target** (`--tag`): deploy on tag push, with an optional tag-reachability guard (`--branch`) that skips tags not reachable from the target branch.
+  - **Plan enabled by default**: the plan job and pull-request trigger are now on by default. Pass `--no-plan` to opt out (branch targets only; cannot be combined with `--tag`).
+  - **Lock file** (`.github/tailor-sdk.lock`): tracks template version, content hash, and managed step ids. Re-running `setup github` regenerates cleanly; hand-edited files are detected and require `--force` to overwrite.
+  - **Target the workspace by id**: the generated `plan`/`deploy` jobs deploy to the workspace named by the `TAILOR_PLATFORM_WORKSPACE_ID` GitHub Environment variable. They never resolve a workspace by name or create one — provision the workspace and set the variable per environment before the first deploy. `deploy` errors when the variable is unset; `plan` reports "not provisioned yet".
+  - **`--environment`**: pin the plan and deploy jobs to a GitHub Environment for required-reviewer approval gates and per-environment secrets/variables. Defaults to the workspace name when omitted.
+  - **`--force`**: take over an unmanaged file or discard hand edits.
+  - **Auto-detection**: default branch is detected from `git` when `--branch` is omitted; package manager is detected from your lockfile.
+
+  **Breaking changes (beta)**
+
+  - `--with-plan` is removed; plan is now the default. Replace with `--no-plan` to disable.
+  - `--workspace-region` (`-r`), `--organization-id` (`-o`), and `--folder-id` (`-f`) are removed. The generated workflow no longer creates a workspace; instead it deploys to the workspace id in the `TAILOR_PLATFORM_WORKSPACE_ID` Environment variable. Provision the workspace and set that variable per GitHub Environment.
+  - Secret names in the generated workflow changed: `PLATFORM_MACHINE_USER_CLIENT_ID` → `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`, `PLATFORM_MACHINE_USER_CLIENT_SECRET` → `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET`. Update your GitHub repository secrets.
+  - In CI, `tailor-sdk apply` no longer auto-generates a missing app `id` in `tailor.config.ts` — it fails with instructions instead, because an id minted per CI run would make every deploy look like a brand-new app. CI dry-runs (plan) perform the same check read-only, so a forgotten `id` fails at PR time rather than at deploy. Run `tailor-sdk setup github` (or `apply` locally) once and commit the injected `id`. Pipelines that intentionally deploy a throwaway app per run can opt back in with `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true`.
+
+### Patch Changes
+
+- [#1412](https://github.com/tailor-platform/sdk/pull/1412) [`ada99e7`](https://github.com/tailor-platform/sdk/commit/ada99e79847239381b29348598df81be4fbe909e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.3
+
+- [#1413](https://github.com/tailor-platform/sdk/pull/1413) [`23a81dc`](https://github.com/tailor-platform/sdk/commit/23a81dc24de1d12df876dd13ef3494492c486f0b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.4.1
+
+## 1.62.0
+
+### Minor Changes
+
+- [#1420](https://github.com/tailor-platform/sdk/pull/1420) [`815a0c8`](https://github.com/tailor-platform/sdk/commit/815a0c8c652be5157c3fe1e1d009f39d57247dbe) Thanks [@dqn](https://github.com/dqn)! - Validate planned resources against platform constraints before applying changes in `deploy`. Constraint violations (such as invalid resource names or out-of-range values) are now reported together before any change is applied, instead of failing one by one during the apply step. The same check runs with `--dry-run`, and `--no-validate` skips it.
+
+- [#1183](https://github.com/tailor-platform/sdk/pull/1183) [`0123147`](https://github.com/tailor-platform/sdk/commit/0123147bb649bf6044fbd371285355ebb60ca5e8) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor-sdk tailordb migration sync <number>`. The new subcommand reconstructs the TailorDB schema snapshot at the given migration number (e.g. `0` for the baseline) and brings the remote in line with it without requiring a `git checkout`. Useful for recovering from drift introduced by an unintended `deploy --no-schema-check`. Before touching the remote, the command verifies that replaying the full migration history reproduces the current local type definitions, and shows the current vs. target migration with warnings about `migrate.ts` scripts that will re-execute or be skipped on the next deploy. After syncing, run `tailor-sdk deploy` to catch up the remaining migrations from the working tree.
+
+### Patch Changes
+
+- [#1408](https://github.com/tailor-platform/sdk/pull/1408) [`6dfa310`](https://github.com/tailor-platform/sdk/commit/6dfa310fef003027a045afba3519c787fa92341c) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix profile-based token resolution being ignored by some commands. The CLI documents that the access token resolves from `--profile`, then `TAILOR_PLATFORM_PROFILE`, then the current login, but `tailordb migration set`/`status` and the `organization` commands skipped profile resolution and always used the current login — pairing one profile's workspace with another user's token. All commands now follow the documented order.
+
+- [#1418](https://github.com/tailor-platform/sdk/pull/1418) [`2c029aa`](https://github.com/tailor-platform/sdk/commit/2c029aa28797477f2f553821f420efa43452d295) Thanks [@dqn](https://github.com/dqn)! - Enable `noUncheckedIndexedAccess` in the SDK package so index accesses are checked at the type level. No behavior change.
+
+- [#1417](https://github.com/tailor-platform/sdk/pull/1417) [`edfb391`](https://github.com/tailor-platform/sdk/commit/edfb39115b1eb3b05ee0e4663c3af5352373d3c1) Thanks [@dqn](https://github.com/dqn)! - Internal cleanup of redundant conditions and optional chains, now enforced by the `typescript/no-unnecessary-condition` lint rule. No behavior change.
+
+## 1.61.0
+
+### Minor Changes
+
+- [#1398](https://github.com/tailor-platform/sdk/pull/1398) [`19fa125`](https://github.com/tailor-platform/sdk/commit/19fa12594cfb82ca01d429300d5703717643a114) Thanks [@dqn](https://github.com/dqn)! - Display folder names alongside workspace names in workspace-related CLI output.
+
+## 1.60.3
+
+### Patch Changes
+
+- [#1405](https://github.com/tailor-platform/sdk/pull/1405) [`585b917`](https://github.com/tailor-platform/sdk/commit/585b91797f68e999b24292e9ae8c70b6b2d72221) Thanks [@dqn](https://github.com/dqn)! - Delete workflow job functions when their owning workflow is removed during deploy.
+
+- [#1410](https://github.com/tailor-platform/sdk/pull/1410) [`65cd4e8`](https://github.com/tailor-platform/sdk/commit/65cd4e8c678ffac6b85a6371376931a403065c0b) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a Multi-Environment Configuration guide covering workspace selection, per-environment config values with env files, runtime `env` forwarding, and settings that belong to a single environment such as custom domains.
+
+## 1.60.2
+
+### Patch Changes
+
+- [#1399](https://github.com/tailor-platform/sdk/pull/1399) [`4b1c61c`](https://github.com/tailor-platform/sdk/commit/4b1c61c51a2c8367ab50b3cd8144a0bfb9074fc1) Thanks [@dqn](https://github.com/dqn)! - Reject duplicate TailorDB type names across application namespaces, including deployed external TailorDB namespaces checked at deploy time. Projects that currently reuse a type name across namespaces will fail validation on the next `generate` or `deploy`; rename the duplicated types before upgrading.
+
+- [#1406](https://github.com/tailor-platform/sdk/pull/1406) [`a10389f`](https://github.com/tailor-platform/sdk/commit/a10389f7498f9817f7dbf235a64496e83e024a85) Thanks [@dqn](https://github.com/dqn)! - Clarify how non-secret runtime `env` values defined in `defineConfig()` are passed to resolvers, executors, workflow jobs, auth hooks, TailorDB migrations, and `function test-run`.
+
+## 1.60.1
+
+### Patch Changes
+
+- [#1356](https://github.com/tailor-platform/sdk/pull/1356) [`be55e45`](https://github.com/tailor-platform/sdk/commit/be55e45ba2a9eeac0d02633aa793a212c8651acf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1404](https://github.com/tailor-platform/sdk/pull/1404) [`0aa76e9`](https://github.com/tailor-platform/sdk/commit/0aa76e9c25c41b619433838d0848e8e010e2078a) Thanks [@remiposo](https://github.com/remiposo)! - Fix `db.fields.timestamps()` so `updatedAt` is updated on every record update. Since update hooks receive the stored value merged with the input, the previous `value ?? new Date()` fallback froze `updatedAt` at its first value. `createdAt` still respects a user-specified value on create.
+
+## 1.60.0
+
+### Minor Changes
+
+- [#1370](https://github.com/tailor-platform/sdk/pull/1370) [`ca4e049`](https://github.com/tailor-platform/sdk/commit/ca4e0494d8f3069e91e55c0b8ccc15ed1e6b567b) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `authconnection open` command to open the auth connections page in the Tailor Platform Console. The `authconnection authorize` command now also points to this Console flow when the local callback server cannot be started, and the auth connection docs note that managing connections via `tailor.config.ts` is unreliable for shared and CI deploys (a deploy without the local `.tailor-sdk/` secret state recreates the connection and discards its token) — create connections and tokens from the Console instead.
+
+### Patch Changes
+
+- [#1386](https://github.com/tailor-platform/sdk/pull/1386) [`34aba6c`](https://github.com/tailor-platform/sdk/commit/34aba6c66fd60a2614fe37a4eee07b0252592894) Thanks [@toiroakr](https://github.com/toiroakr)! - Stabilize the `withBundleConcurrency` unit tests by driving their worker delays with fake timers instead of real `setTimeout`, so they no longer flake with a 5s timeout when a CI runner is under load. No runtime behavior changes.
+
 ## 1.59.0
 
 ### Minor Changes

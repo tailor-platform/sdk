@@ -56,9 +56,12 @@ function stubClient() {
         id: validUUID,
         name: "test-ws",
         region: "us-west",
+        organizationId: "organization-1",
+        folderId: "folder-1",
         createdAt: { seconds: 0n, nanos: 0 },
       },
     }),
+    getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "dev" } }),
   } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 }
 
