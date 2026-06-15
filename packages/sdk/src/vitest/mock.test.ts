@@ -400,6 +400,30 @@ describe("mock", () => {
       expect(attempts).toBe(1);
     });
 
+    test("runWorkflowLocally() validates nested workflow trigger args", async () => {
+      const innerMain = createWorkflowJob({
+        name: "default-runtime-nested-workflow-inner",
+        body: (_input: { when: string }) => ({ ok: true }),
+      });
+      const innerWorkflow = createWorkflow({
+        name: "default-runtime-nested-workflow",
+        mainJob: innerMain,
+      });
+      const main = createWorkflowJob({
+        name: "default-runtime-nested-workflow-main",
+        body: async () => {
+          await innerWorkflow.trigger({ when: new Date() } as never);
+          return { ok: true };
+        },
+      });
+      const workflow = createWorkflow({
+        name: "default-runtime-nested-workflow-wf",
+        mainJob: main,
+      });
+
+      await expect(runWorkflowLocally(workflow)).rejects.toThrow(/Date instance/);
+    });
+
     test("runWorkflowLocally() rejects a non-serializable trigger result", async () => {
       const bad = createWorkflowJob({
         name: "default-runtime-bad",
