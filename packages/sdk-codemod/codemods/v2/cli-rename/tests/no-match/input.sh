@@ -12,3 +12,5 @@ pnpm exec tailor-sdk executor jobs my-executor --jobId xyz
 pnpm exec tailor-sdk login --machineusername ci
 # Should not match: same option spelling for another command
 other-cli --machineuser=ci
+# Should not match: option spelling inside quoted arguments
+tailor-sdk query --query 'select --machineuser'

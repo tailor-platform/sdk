@@ -6,29 +6,118 @@ const OPTION_RENAMES: ReadonlyArray<readonly [string, string]> = [
   ["--machineuser", "--machine-user"],
 ];
 
+const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
+const BOOLEAN_GLOBAL_ARG = "(?:--verbose|--json|-j)";
+const VALUE_GLOBAL_ARG = "(?:--env-file|--env-file-if-exists|-e)";
+const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
 const COMMAND_PATTERN = new RegExp(
-  `\\btailor-sdk(@[^\\s'"\`]+)?(\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
+  `\\btailor-sdk(@[^\\s'"\`]+)?(${GLOBAL_ARG_PATTERN}\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
   "g",
 );
-const TAILOR_COMMAND_PATTERN = /\btailor-sdk(?:@[^\s'"`]+)?[^\n;&|'"`]*/g;
-const OPTION_PATTERN = new RegExp(
-  `(?<![\\w-])(${OPTION_RENAMES.map(([from]) => from).join("|")})(?![\\w-])`,
-  "g",
-);
+const TAILOR_BINARY_PATTERN = /\btailor-sdk(?:@[^\s'"`]+)?/g;
 
 const COMMAND_MAP = new Map(COMMAND_RENAMES);
-const OPTION_MAP = new Map(OPTION_RENAMES);
+
+function isOptionBoundaryChar(value: string | undefined): boolean {
+  return value === undefined || !/[\w-]/.test(value);
+}
+
+function findTailorCommandEnd(source: string, start: number): number {
+  if (source[start - 1] === "`") {
+    const codeSpanEnd = source.indexOf("`", start);
+    if (codeSpanEnd !== -1) return codeSpanEnd;
+  }
+
+  let end = start;
+  while (end < source.length) {
+    const ch = source[end];
+    const prev = source[end - 1];
+    if ((ch === ";" || ch === "&" || ch === "|") && prev !== "\\") break;
+    if (ch === "\n" && prev !== "\\") break;
+    end += 1;
+  }
+  return end;
+}
+
+function findOptionRename(command: string, index: number): readonly [string, string] | undefined {
+  return OPTION_RENAMES.find(
+    ([from]) =>
+      command.startsWith(from, index) &&
+      isOptionBoundaryChar(command[index - 1]) &&
+      isOptionBoundaryChar(command[index + from.length]),
+  );
+}
+
+function replaceOptionsInCommand(command: string): string {
+  let updated = "";
+  let index = 0;
+  let quote: "'" | '"' | null = null;
+
+  while (index < command.length) {
+    const ch = command[index];
+
+    if (quote !== null) {
+      updated += ch;
+      if (ch === "\\" && quote === '"' && index + 1 < command.length) {
+        index += 1;
+        updated += command[index];
+      } else if (ch === quote) {
+        quote = null;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      updated += ch;
+      index += 1;
+      continue;
+    }
+
+    const rename = findOptionRename(command, index);
+    if (rename) {
+      updated += rename[1];
+      index += rename[0].length;
+      continue;
+    }
+
+    updated += ch;
+    index += 1;
+  }
+
+  return updated;
+}
+
+function replaceOptionsInTailorCommands(source: string): string {
+  let updated = "";
+  let cursor = 0;
+  TAILOR_BINARY_PATTERN.lastIndex = 0;
+
+  for (;;) {
+    const match = TAILOR_BINARY_PATTERN.exec(source);
+    if (!match) break;
+
+    const start = match.index;
+    if (start < cursor) continue;
+
+    const end = findTailorCommandEnd(source, start);
+    updated += source.slice(cursor, start);
+    updated += replaceOptionsInCommand(source.slice(start, end));
+    cursor = end;
+    TAILOR_BINARY_PATTERN.lastIndex = end;
+  }
+
+  return updated + source.slice(cursor);
+}
 
 function replaceAll(value: string): string {
-  return value
-    .replace(
-      COMMAND_PATTERN,
-      (_match, ver: string | undefined, sep: string, cmd: string) =>
-        `tailor-sdk${ver ?? ""}${sep}${COMMAND_MAP.get(cmd) ?? cmd}`,
-    )
-    .replace(TAILOR_COMMAND_PATTERN, (command: string) =>
-      command.replace(OPTION_PATTERN, (option: string) => OPTION_MAP.get(option) ?? option),
-    );
+  const updated = value.replace(
+    COMMAND_PATTERN,
+    (_match, ver: string | undefined, prefix: string, cmd: string) =>
+      `tailor-sdk${ver ?? ""}${prefix}${COMMAND_MAP.get(cmd) ?? cmd}`,
+  );
+  return replaceOptionsInTailorCommands(updated);
 }
 
 function transformText(source: string): string | null {
