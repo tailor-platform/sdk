@@ -1,9 +1,19 @@
 import type { InferredAttributeList, InferredAttributeMap } from "./user";
 
-/** User type enum values from the Tailor Platform server. */
+/**
+ * User type enum values from the Tailor Platform server.
+ *
+ * @deprecated `TailorPrincipal` represents the type as `"user"` or
+ * `"machine_user"`. This enum is removed in the next major version.
+ */
 export type TailorActorType = "USER_TYPE_USER" | "USER_TYPE_MACHINE_USER" | "USER_TYPE_UNSPECIFIED";
 
-/** Represents an actor in event triggers. */
+/**
+ * Represents an actor in event triggers.
+ *
+ * @deprecated Use `TailorPrincipal` instead. `TailorActor` is unified into
+ * `TailorPrincipal` in the next major version.
+ */
 export type TailorActor = {
   /** The ID of the workspace the user belongs to. */
   workspaceId: string;
