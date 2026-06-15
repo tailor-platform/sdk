@@ -63,6 +63,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/define-generators-to-plugins")).resolves.toBeUndefined();
   });
 
+  test("v2/plugin-cli-import transforms correctly", async () => {
+    await expect(runFixtureCases("v2/plugin-cli-import")).resolves.toBeUndefined();
+  });
+
   test("v2/test-run-arg-input transforms correctly", async () => {
     await expect(runFixtureCases("v2/test-run-arg-input")).resolves.toBeUndefined();
   });

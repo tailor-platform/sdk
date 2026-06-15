@@ -17,6 +17,15 @@ const allCodemods: CodemodPackage[] = [
     legacyPatterns: ["defineGenerators"],
   },
   {
+    id: "v2/plugin-cli-import",
+    name: "@tailor-platform/sdk/cli plugin imports → dedicated subpaths",
+    description:
+      "Rewrite deprecated plugin re-export imports (kyselyTypePlugin, enumConstantsPlugin, fileUtilsPlugin, seedPlugin) from `@tailor-platform/sdk/cli` to their dedicated plugin subpaths",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/plugin-cli-import/scripts/transform.js",
+  },
+  {
     id: "v2/test-run-arg-input",
     name: "function test-run --arg input unwrap",
     description:
