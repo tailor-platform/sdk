@@ -25,11 +25,19 @@ type GlobalWithTailor = {
   };
 };
 
-interface TriggerRecord {
+type TriggerRecord = {
   jobName: string;
   args: unknown;
-  result: unknown;
-}
+} & (
+  | {
+      status: "fulfilled";
+      result: unknown;
+    }
+  | {
+      status: "rejected";
+      error: unknown;
+    }
+);
 
 interface LocalExecution {
   records: TriggerRecord[];
@@ -147,6 +155,9 @@ function createLocalJobRunner(): {
     const cached = activeExecution.records[index];
     if (cached) {
       assertSameTrigger(cached, jobName, serializedArgs);
+      if (cached.status === "rejected") {
+        throw cached.error;
+      }
       return platformSerialize(cached.result);
     }
 
@@ -171,12 +182,7 @@ function createLocalJobRunner(): {
       try {
         const out = await body(platformSerialize(args), buildJobContext());
         if (execution.pending) {
-          const result = await runJob(execution.pending.jobName, execution.pending.args);
-          records.push({
-            jobName: execution.pending.jobName,
-            args: execution.pending.args,
-            result,
-          });
+          await settlePendingTrigger(records, execution.pending, runJob);
           continue;
         }
         if (execution.cursor !== records.length) {
@@ -188,8 +194,7 @@ function createLocalJobRunner(): {
       } catch (cause) {
         const pending = cause instanceof PendingTrigger ? cause : execution.pending;
         if (pending) {
-          const result = await runJob(pending.jobName, pending.args);
-          records.push({ jobName: pending.jobName, args: pending.args, result });
+          await settlePendingTrigger(records, pending, runJob);
           continue;
         }
         throw cause;
@@ -200,6 +205,28 @@ function createLocalJobRunner(): {
   };
 
   return { runJob, triggerJobFunction };
+}
+
+async function settlePendingTrigger(
+  records: TriggerRecord[],
+  pending: PendingTrigger,
+  runJob: (name: string, args?: unknown) => Promise<unknown>,
+): Promise<void> {
+  try {
+    records.push({
+      jobName: pending.jobName,
+      args: pending.args,
+      status: "fulfilled",
+      result: await runJob(pending.jobName, pending.args),
+    });
+  } catch (error) {
+    records.push({
+      jobName: pending.jobName,
+      args: pending.args,
+      status: "rejected",
+      error,
+    });
+  }
 }
 
 function assertSameTrigger(record: TriggerRecord, jobName: string, args: unknown): void {

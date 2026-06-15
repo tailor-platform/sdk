@@ -356,6 +356,38 @@ describe("mock", () => {
       expect(await runWorkflowLocally(workflow)).toEqual({ ok: true });
     });
 
+    test("runWorkflowLocally() replays failed trigger errors into user catch blocks once", async () => {
+      let attempts = 0;
+      const inner = createWorkflowJob({
+        name: "default-runtime-failing-inner",
+        body: async () => {
+          attempts += 1;
+          throw new Error("inner failed");
+        },
+      });
+      const main = createWorkflowJob({
+        name: "default-runtime-failing-main",
+        body: () => {
+          try {
+            inner.trigger();
+            return { handled: false, message: "" };
+          } catch (cause) {
+            return { handled: true, message: (cause as Error).message };
+          }
+        },
+      });
+      const workflow = createWorkflow({
+        name: "default-runtime-failing-wf",
+        mainJob: main,
+      });
+
+      expect(await runWorkflowLocally(workflow)).toEqual({
+        handled: true,
+        message: "inner failed",
+      });
+      expect(attempts).toBe(1);
+    });
+
     test("runWorkflowLocally() rejects a non-serializable trigger result", async () => {
       const bad = createWorkflowJob({
         name: "default-runtime-bad",
