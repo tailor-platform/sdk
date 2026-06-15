@@ -10,3 +10,5 @@ pnpm exec tailor-sdk function logs --executionId abc
 pnpm exec tailor-sdk executor jobs my-executor --jobId xyz
 # Should not match: longer option names
 pnpm exec tailor-sdk login --machineusername ci
+# Should not match: same option spelling for another command
+other-cli --machineuser=ci

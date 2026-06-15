@@ -131,7 +131,8 @@ describe("renderBranchWorkflow", () => {
   test("fetches the pull request base into the remote-tracking ref before merge", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain('git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"');
-    expect(content).toContain('git merge --no-commit --no-ff "origin/$BASE_REF" || true');
+    expect(content).toContain('git merge --no-edit "origin/$BASE_REF"');
+    expect(content).not.toContain("git merge --no-commit");
     expect(content.indexOf("id: tailor-merge-base")).toBeLessThan(
       content.indexOf("id: tailor-setup-pnpm"),
     );

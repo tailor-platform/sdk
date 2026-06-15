@@ -45,8 +45,10 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
-          git merge --no-commit --no-ff "origin/$BASE_REF" || true
+          git merge --no-edit "origin/$BASE_REF"
       # __SETUP_STEPS__
       - id: tailor-generate
         # __WORKING_DIRECTORY__
