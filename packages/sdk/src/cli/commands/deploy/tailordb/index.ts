@@ -59,6 +59,7 @@ import { generateTailorDBTypeManifestFromSnapshot } from "@/cli/commands/tailord
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
@@ -138,7 +139,9 @@ async function getRemoteMigrationNumber(
     const label = metadata?.labels["sdk-migration"];
     if (!label) return null; // No migration label means first apply
     const match = label.match(/^m(\d+)$/);
-    return match ? parseInt(match[1], 10) : null;
+    return match
+      ? parseInt(assertDefined(match[1], "migration label capture group missing"), 10)
+      : null;
   } catch {
     return null;
   }
@@ -728,8 +731,6 @@ function buildSnapshotTypeManifest(
 ): MessageInitShape<typeof TailorDBTypeSchema> | undefined {
   const snapshot = migrationSnapshotCache.load(migration);
   const snapshotType = snapshot.types[typeName];
-  // index access may be undefined without noUncheckedIndexedAccess
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
   return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
@@ -1385,8 +1386,7 @@ async function planTypes(
   // Validate that types used by executors don't have publishEvents explicitly set to false
   for (const tailordb of tailordbs) {
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
-    for (const typeName of Object.keys(types)) {
-      const type = types[typeName];
+    for (const [typeName, type] of Object.entries(types)) {
       if (executorUsedTypes.has(typeName) && type.settings?.publishEvents === false) {
         throw new Error(
           `Type "${typeName}" has publishEvents set to false, but it is used by an executor with a record trigger. ` +
@@ -1403,8 +1403,8 @@ async function planTypes(
     // Use filtered types if provided, otherwise use local types
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
 
-    for (const typeName of Object.keys(types)) {
-      const tailordbType = generateTailorDBTypeManifestFromSnapshot(types[typeName], {
+    for (const [typeName, tailordbTypeSnapshot] of Object.entries(types)) {
+      const tailordbType = generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
         publishRecordEvents: executorUsedTypes.has(typeName),
         namespaceGqlOperations: tailordb.config.gqlOperations,
       });
@@ -1655,8 +1655,8 @@ async function planGqlPermissions(
     });
 
     const types = tailordb.types;
-    for (const typeName of Object.keys(types)) {
-      const gqlPermission = types[typeName].permissions?.gql;
+    for (const [typeName, typeEntry] of Object.entries(types)) {
+      const gqlPermission = typeEntry.permissions?.gql;
       if (!gqlPermission) {
         continue;
       }

@@ -106,12 +106,12 @@ describe("buildTailorDbErdSchema", () => {
       generatedAt: "2026-01-01T00:00:00.000Z",
     });
     expect(schema.cleanRoom.notes.join(" ")).toContain("does not copy Liam source code");
-    expect(schema.tables[0]).toMatchObject({
+    expect(schema.tables[0]!).toMatchObject({
       name: "Customer",
       pluralForm: "Customers",
       description: "Customer records",
     });
-    expect(schema.tables[0].columns).toEqual([
+    expect(schema.tables[0]!.columns).toEqual([
       {
         name: "id",
         type: "uuid",
@@ -193,7 +193,7 @@ describe("buildTailorDbErdSchema", () => {
         backwardName: "orders",
       },
     ]);
-    expect(schema.tables.find((table) => table.name === "Order")?.columns[1].relation).toEqual({
+    expect(schema.tables.find((table) => table.name === "Order")?.columns[1]!.relation).toEqual({
       targetTable: "Customer",
       targetColumn: "id",
       kind: "relation",
@@ -221,8 +221,8 @@ describe("buildTailorDbErdSchema", () => {
       generatedAt: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(schema.tables[0].columns.map((column) => column.name)).toEqual(["id", "email"]);
-    expect(schema.tables[0].columns[0]).toMatchObject({
+    expect(schema.tables[0]!.columns.map((column) => column.name)).toEqual(["id", "email"]);
+    expect(schema.tables[0]!.columns[0]!).toMatchObject({
       name: "id",
       primaryKey: true,
       unique: true,
@@ -253,7 +253,7 @@ describe("buildTailorDbErdSchema", () => {
       generatedAt: "2026-01-01T00:00:00.000Z",
     });
 
-    expect(schema.tables[0].source).toEqual({
+    expect(schema.tables[0]!.source).toEqual({
       kind: "plugin",
       exportName: "AuditLog",
       pluginId: "audit-plugin",

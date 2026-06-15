@@ -6,6 +6,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
+import { assertDefined } from "@/utils/assert";
 import { ES_BUILTINS } from "./es-builtins";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 import type {
@@ -533,7 +534,10 @@ export async function precompileTailorDBTypeScripts(
     }
     for (const [index, result] of results.entries()) {
       if (result.status === "fulfilled") {
-        setPrecompiledScriptExpr(targets[index].fn, result.value);
+        setPrecompiledScriptExpr(
+          assertDefined(targets[index], `bundle target at index ${index} missing`).fn,
+          result.value,
+        );
       }
     }
   } finally {

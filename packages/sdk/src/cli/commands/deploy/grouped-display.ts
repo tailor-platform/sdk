@@ -1,4 +1,5 @@
 import { logger, styles, symbols } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import {
   AUTH_HOOK_PREFIX,
   EXECUTOR_PREFIX,
@@ -294,14 +295,14 @@ export function printGroupedDisplaySection(
       namespaceOrder.push(ns);
       byNamespace.set(ns, []);
     }
-    byNamespace.get(ns)!.push(entry);
+    assertDefined(byNamespace.get(ns), "namespace group missing").push(entry);
   }
 
   // Track which services have child entries
   const printedServices = new Set<string>();
 
   for (const ns of namespaceOrder) {
-    const group = byNamespace.get(ns)!;
+    const group = assertDefined(byNamespace.get(ns), "namespace group missing");
     if (ns) {
       const svcAction = serviceMap.get(ns);
       const prefix = svcAction ? `${ACTION_SYMBOLS[svcAction]} ` : "";

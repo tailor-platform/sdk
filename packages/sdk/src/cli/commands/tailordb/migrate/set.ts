@@ -11,6 +11,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 import { getNamespacesWithMigrations } from "./config";
 import { formatMigrationNumber, isValidMigrationNumber } from "./snapshot";
 import { parseMigrationLabelNumber } from "./types";
@@ -70,7 +71,8 @@ async function set(options: SetOptions): Promise<void> {
     }
     targetNamespace = options.namespace;
   } else if (namespacesWithMigrations.length === 1) {
-    targetNamespace = namespacesWithMigrations[0].namespace;
+    const [ns] = namespacesWithMigrations;
+    targetNamespace = assertDefined(ns, "namespace with migrations missing").namespace;
   } else {
     throw new Error(
       `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations.map((ns) => ns.namespace).join(", ")}`,

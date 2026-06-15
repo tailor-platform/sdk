@@ -1,5 +1,6 @@
 import { db, type TailorAnyDBType } from "@/configure/services/tailordb";
 import { hasGenerationHooks, getPluginGenerationDependencies } from "@/types/plugin-generation";
+import { assertDefined } from "@/utils/assert";
 import type {
   TailorTypePermission,
   TailorTypeGqlPermission,
@@ -202,7 +203,10 @@ export class PluginManager {
     // Collect generated types
     if (output.types && Object.keys(output.types).length > 0) {
       // importPath is guaranteed by schema validation for plugins with definition-time hooks
-      const importPath = plugin.importPath!;
+      const importPath = assertDefined(
+        plugin.importPath,
+        `plugin "${plugin.id}" missing importPath`,
+      );
       for (const [kind, type] of Object.entries(output.types)) {
         this.generatedTypes.push({
           pluginId: context.pluginId,
@@ -293,7 +297,10 @@ export class PluginManager {
       // Collect generated types (namespace - no source type)
       if (output.types && Object.keys(output.types).length > 0) {
         // importPath is guaranteed by schema validation for plugins with definition-time hooks
-        const importPath = plugin.importPath!;
+        const importPath = assertDefined(
+          plugin.importPath,
+          `plugin "${plugin.id}" missing importPath`,
+        );
         for (const [kind, type] of Object.entries(output.types)) {
           const typeKey = `${pluginId}:${kind}:${type.name}`;
           if (this.namespaceGeneratedTypeKeys.has(typeKey)) {

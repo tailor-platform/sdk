@@ -19,6 +19,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
+import { assertDefined } from "@/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType, type DetectedFunction } from "./detect";
 
@@ -256,7 +257,7 @@ function resolveMachineUserName(
     if (machineUsers) {
       const keys = Object.keys(machineUsers);
       if (keys.length > 0) {
-        return keys[0];
+        return assertDefined(keys[0], "machine user key missing");
       }
     }
   }

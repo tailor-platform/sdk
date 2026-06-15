@@ -95,7 +95,9 @@ function isSafeBindingName(name: string): boolean {
   // Restrict to ASCII identifiers — Unicode bindings are valid JS but rare
   // for re-exports of node:* modules, and a regex over the full
   // ID_Start/ID_Continue sets adds substantial weight for marginal gain.
-  return ID_START.test(name[0]) && ID_CONT.test(name.slice(1));
+  const firstChar = name[0];
+  if (firstChar === undefined) return false;
+  return ID_START.test(firstChar) && ID_CONT.test(name.slice(1));
 }
 
 function buildBlockedReplacement(node: ImportLikeNode, message: string): string {

@@ -49,7 +49,7 @@ describe("sendCrashReport", () => {
 
     await sendCrashReport(report, "tailor-sdk/1.0.0");
 
-    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    const call = vi.mocked(globalThis.fetch).mock.calls[0]!;
     const body = JSON.parse(call[1]!.body as string);
     expect(body).toHaveProperty("query");
     expect(body).toHaveProperty("variables");
@@ -68,7 +68,7 @@ describe("sendCrashReport", () => {
 
     await sendCrashReport(report, "tailor-sdk/1.0.0");
 
-    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    const call = vi.mocked(globalThis.fetch).mock.calls[0]!;
     const { variables } = JSON.parse(call[1]!.body as string);
     expect(variables).toEqual(report);
   });

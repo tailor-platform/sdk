@@ -322,7 +322,7 @@ describe("planAuth", () => {
     const result = await planAuth(createContext(client));
 
     expect(result.changeSet.authHook.unchanged).toHaveLength(1);
-    expect(result.changeSet.authHook.unchanged[0].name).toBe("auth-a/before-login");
+    expect(result.changeSet.authHook.unchanged[0]!.name).toBe("auth-a/before-login");
     expect(result.changeSet.authHook.updates).toHaveLength(0);
   });
 

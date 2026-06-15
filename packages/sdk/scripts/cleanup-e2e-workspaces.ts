@@ -10,6 +10,7 @@
 
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
+import { assertDefined } from "../src/utils/assert";
 
 const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "template-e2e-", "sdk-ci-"];
 
@@ -98,7 +99,9 @@ async function main() {
   for (const ws of e2eWorkspaces) {
     try {
       console.log(`  Deleting ${ws.name}...`);
-      await client.deleteWorkspace({ workspaceId: ws.id! });
+      await client.deleteWorkspace({
+        workspaceId: assertDefined(ws.id, `workspace "${ws.name}" missing id`),
+      });
       console.log(`  ✅ Deleted ${ws.name}`);
       deleted++;
     } catch (error) {

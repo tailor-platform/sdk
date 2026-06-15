@@ -6,6 +6,7 @@
  */
 
 import * as fs from "node:fs/promises";
+import { assertDefined } from "@/utils/assert";
 import {
   getMigrationFilePath,
   type SchemaSnapshot,
@@ -57,7 +58,10 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         if (!optionalToRequired.has(change.typeName)) {
           optionalToRequired.set(change.typeName, new Set());
         }
-        optionalToRequired.get(change.typeName)!.add(change.fieldName);
+        assertDefined(
+          optionalToRequired.get(change.typeName),
+          "optionalToRequired entry missing",
+        ).add(change.fieldName);
       }
 
       // Check if this is an enum value change
@@ -85,7 +89,10 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
           if (!enumValueChanges.has(change.typeName)) {
             enumValueChanges.set(change.typeName, new Map());
           }
-          enumValueChanges.get(change.typeName)!.set(change.fieldName, {
+          assertDefined(
+            enumValueChanges.get(change.typeName),
+            "enumValueChanges entry missing",
+          ).set(change.fieldName, {
             beforeValues,
             afterValues,
           });
@@ -102,7 +109,10 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         if (!addedRequiredFields.has(change.typeName)) {
           addedRequiredFields.set(change.typeName, new Map());
         }
-        addedRequiredFields.get(change.typeName)!.set(change.fieldName, after);
+        assertDefined(
+          addedRequiredFields.get(change.typeName),
+          "addedRequiredFields entry missing",
+        ).set(change.fieldName, after);
       }
     }
   }

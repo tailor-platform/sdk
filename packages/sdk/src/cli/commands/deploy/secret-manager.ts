@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -343,7 +344,8 @@ export async function applySecretManager(
         }
         for (const secret of vault.secrets) {
           if (secret.value != null) {
-            state.vaults[vault.vaultName][secret.name] = hashValue(secret.value);
+            assertDefined(state.vaults[vault.vaultName], "vault state entry missing")[secret.name] =
+              hashValue(secret.value);
           }
         }
       }
@@ -376,8 +378,13 @@ export async function applySecretManager(
       const state = loadSecretsState();
       for (const del of secretChangeSet.deletes) {
         if (Object.hasOwn(state.vaults, del.vaultName)) {
-          delete state.vaults[del.vaultName][del.secretName];
-          if (Object.keys(state.vaults[del.vaultName]).length === 0) {
+          delete assertDefined(state.vaults[del.vaultName], "vault state entry missing")[
+            del.secretName
+          ];
+          if (
+            Object.keys(assertDefined(state.vaults[del.vaultName], "vault state entry missing"))
+              .length === 0
+          ) {
             delete state.vaults[del.vaultName];
           }
         }

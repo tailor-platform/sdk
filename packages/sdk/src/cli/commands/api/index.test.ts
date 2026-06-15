@@ -80,7 +80,7 @@ describe("api command workspaceId injection (end-to-end body contract)", () => {
     using _stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     await runCommand(apiCommand, args);
     expect(apiCallMock).toHaveBeenCalledTimes(1);
-    const opts = apiCallMock.mock.calls[0][0] as { body: string };
+    const opts = apiCallMock.mock.calls[0]![0] as { body: string };
     return JSON.parse(opts.body) as Record<string, unknown>;
   }
 

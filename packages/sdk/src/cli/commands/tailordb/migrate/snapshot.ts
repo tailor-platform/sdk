@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as inflection from "inflection";
 import * as path from "pathe";
+import { assertDefined } from "@/utils/assert";
 import {
   type MigrationDiff,
   type DiffChange,
@@ -191,7 +192,11 @@ export function isValidMigrationNumber(numberStr: string): boolean {
 export function parseMigrationNumber(fileName: string): number | null {
   const match = fileName.match(/^(\d{4})_/);
   if (!match) return null;
-  const num = parseInt(match[1], 10);
+  const [, digits] = match;
+  const num = parseInt(
+    assertDefined(digits, "parseMigrationNumber: regex capture group missing"),
+    10,
+  );
   return isNaN(num) ? null : num;
 }
 
@@ -660,132 +665,148 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       case "type_removed":
         delete types[change.typeName];
         break;
-      case "type_modified":
+      case "type_modified": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.after) {
+        if (existing && change.after) {
           const after = change.after;
           types[change.typeName] = {
-            ...types[change.typeName],
+            ...existing,
             ...(after.indexes !== undefined && { indexes: after.indexes }),
             ...(after.files !== undefined && { files: after.files }),
           };
         }
         break;
+      }
       case "field_added":
-      case "field_modified":
+      case "field_modified": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.fieldName) {
+        if (existing && change.fieldName) {
           types[change.typeName] = {
-            ...types[change.typeName],
+            ...existing,
             fields: {
-              ...types[change.typeName].fields,
+              ...existing.fields,
               [change.fieldName]: change.after,
             },
           };
         }
         break;
-      case "field_removed":
+      }
+      case "field_removed": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.fieldName) {
-          const { [change.fieldName]: _, ...remainingFields } = types[change.typeName].fields;
+        if (existing && change.fieldName) {
+          const { [change.fieldName]: _, ...remainingFields } = existing.fields;
           types[change.typeName] = {
-            ...types[change.typeName],
+            ...existing,
             fields: remainingFields,
           };
         }
         break;
+      }
       case "index_added":
-      case "index_modified":
+      case "index_modified": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.indexName) {
+        if (existing && change.indexName) {
           types[change.typeName] = {
-            ...types[change.typeName],
+            ...existing,
             indexes: {
-              ...types[change.typeName].indexes,
+              ...existing.indexes,
               [change.indexName]: change.after,
             },
           };
         }
         break;
-      case "index_removed":
+      }
+      case "index_removed": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.indexName && types[change.typeName].indexes) {
-          const { [change.indexName]: _, ...remainingIndexes } = types[change.typeName].indexes!;
+        if (existing && change.indexName && existing.indexes) {
+          const { [change.indexName]: _, ...remainingIndexes } = existing.indexes;
           types[change.typeName] = {
-            ...types[change.typeName],
+            ...existing,
             indexes: Object.keys(remainingIndexes).length > 0 ? remainingIndexes : undefined,
           };
         }
         break;
+      }
       case "file_added":
-      case "file_modified":
+      case "file_modified": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.fieldName) {
+        if (existing && change.fieldName) {
           types[change.typeName] = {
-            ...types[change.typeName],
+            ...existing,
             files: {
-              ...types[change.typeName].files,
+              ...existing.files,
               [change.fieldName]: change.after,
             },
           };
         }
         break;
-      case "file_removed":
+      }
+      case "file_removed": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.fieldName && types[change.typeName].files) {
-          const { [change.fieldName]: _, ...remainingFiles } = types[change.typeName].files!;
+        if (existing && change.fieldName && existing.files) {
+          const { [change.fieldName]: _, ...remainingFiles } = existing.files;
           types[change.typeName] = {
-            ...types[change.typeName],
+            ...existing,
             files: Object.keys(remainingFiles).length > 0 ? remainingFiles : undefined,
           };
         }
         break;
+      }
       case "relationship_added":
-      case "relationship_modified":
+      case "relationship_modified": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.relationshipName) {
+        if (existing && change.relationshipName) {
           const rel = change.after;
           // Use relationshipType if specified, fallback to existing logic for backwards compatibility
           const targetType =
             change.relationshipType ??
-            (types[change.typeName].forwardRelationships?.[change.relationshipName]
+            (existing.forwardRelationships?.[change.relationshipName]
               ? "forward"
-              : types[change.typeName].backwardRelationships?.[change.relationshipName]
+              : existing.backwardRelationships?.[change.relationshipName]
                 ? "backward"
                 : "forward");
 
           if (targetType === "forward") {
             types[change.typeName] = {
-              ...types[change.typeName],
+              ...existing,
               forwardRelationships: {
-                ...types[change.typeName].forwardRelationships,
+                ...existing.forwardRelationships,
                 [change.relationshipName]: rel,
               },
             };
           } else {
             types[change.typeName] = {
-              ...types[change.typeName],
+              ...existing,
               backwardRelationships: {
-                ...types[change.typeName].backwardRelationships,
+                ...existing.backwardRelationships,
                 [change.relationshipName]: rel,
               },
             };
           }
         }
         break;
-      case "relationship_removed":
+      }
+      case "relationship_removed": {
+        const type = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.relationshipName) {
-          const type = types[change.typeName];
+        if (type && change.relationshipName) {
           // Use relationshipType if specified
           const targetType =
             change.relationshipType ??
@@ -813,13 +834,15 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
           }
         }
         break;
-      case "permission_modified":
+      }
+      case "permission_modified": {
+        const existing = types[change.typeName];
         // snapshot JSON is parsed without validation
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (types[change.typeName] && change.after) {
+        if (existing && change.after) {
           const after = change.after;
           types[change.typeName] = {
-            ...types[change.typeName],
+            ...existing,
             permissions: {
               record: after.recordPermission,
               gql: after.gqlPermission,
@@ -827,6 +850,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
           };
         }
         break;
+      }
     }
   }
 
@@ -938,8 +962,10 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   const newValidate = newField.validate ?? [];
   if (oldValidate.length !== newValidate.length) return true;
   for (let i = 0; i < oldValidate.length; i++) {
-    if (oldValidate[i].script.expr !== newValidate[i].script.expr) return true;
-    if (oldValidate[i].errorMessage !== newValidate[i].errorMessage) return true;
+    const oldV = assertDefined(oldValidate[i], `oldValidate missing index ${i}`);
+    const newV = assertDefined(newValidate[i], `newValidate missing index ${i}`);
+    if (oldV.script.expr !== newV.script.expr) return true;
+    if (oldV.errorMessage !== newV.errorMessage) return true;
   }
 
   const oldSerial = oldField.serial;
@@ -959,10 +985,13 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   const newFieldNames = Object.keys(newFields);
   if (oldFieldNames.length !== newFieldNames.length) return true;
   for (const fieldName of oldFieldNames) {
-    // index access may be undefined without noUncheckedIndexedAccess
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (!newFields[fieldName]) return true;
-    if (areFieldsDifferent(oldFields[fieldName], newFields[fieldName])) return true;
+    const oldF = oldFields[fieldName];
+    const newF = newFields[fieldName];
+    if (!newF) return true;
+    if (
+      areFieldsDifferent(assertDefined(oldF, `field "${fieldName}" missing from oldFields`), newF)
+    )
+      return true;
   }
 
   return false;
@@ -1115,16 +1144,20 @@ function compareTypeFields(
   // Check for added fields
   for (const fieldName of currFieldNames) {
     if (!prevFieldNames.has(fieldName)) {
+      const currField = assertDefined(
+        currType.fields[fieldName],
+        `field "${fieldName}" missing from currType`,
+      );
       addChange(
         ctx,
         {
           kind: "field_added",
           typeName,
           fieldName,
-          after: currType.fields[fieldName],
+          after: currField,
         },
         undefined,
-        currType.fields[fieldName],
+        currField,
       );
     }
   }
@@ -1132,15 +1165,19 @@ function compareTypeFields(
   // Check for removed fields
   for (const fieldName of prevFieldNames) {
     if (!currFieldNames.has(fieldName)) {
+      const prevField = assertDefined(
+        prevType.fields[fieldName],
+        `field "${fieldName}" missing from prevType`,
+      );
       addChange(
         ctx,
         {
           kind: "field_removed",
           typeName,
           fieldName,
-          before: prevType.fields[fieldName],
+          before: prevField,
         },
-        prevType.fields[fieldName],
+        prevField,
         undefined,
       );
     }
@@ -1150,8 +1187,14 @@ function compareTypeFields(
   for (const fieldName of currFieldNames) {
     if (!prevFieldNames.has(fieldName)) continue;
 
-    const prevField = prevType.fields[fieldName];
-    const currField = currType.fields[fieldName];
+    const prevField = assertDefined(
+      prevType.fields[fieldName],
+      `field "${fieldName}" missing from prevType`,
+    );
+    const currField = assertDefined(
+      currType.fields[fieldName],
+      `field "${fieldName}" missing from currType`,
+    );
 
     if (areFieldsDifferent(prevField, currField)) {
       addChange(
@@ -1188,34 +1231,36 @@ function compareIndexes(
   const newKeys = new Set(Object.keys(newIndexes || {}));
 
   // Index added
-  for (const indexName of newKeys) {
+  for (const [indexName, indexConfig] of Object.entries(newIndexes ?? {})) {
     if (!oldKeys.has(indexName)) {
       ctx.changes.push({
         kind: "index_added",
         typeName,
         indexName,
-        after: newIndexes![indexName],
+        after: indexConfig,
       });
     }
   }
 
   // Index removed
-  for (const indexName of oldKeys) {
+  for (const [indexName, indexConfig] of Object.entries(oldIndexes ?? {})) {
     if (!newKeys.has(indexName)) {
       ctx.changes.push({
         kind: "index_removed",
         typeName,
         indexName,
-        before: oldIndexes![indexName],
+        before: indexConfig,
       });
     }
   }
 
   // Index modified
-  for (const indexName of newKeys) {
+  for (const [indexName, newIndex] of Object.entries(newIndexes ?? {})) {
     if (oldKeys.has(indexName)) {
-      const oldIndex = oldIndexes![indexName];
-      const newIndex = newIndexes![indexName];
+      const oldIndex = assertDefined(
+        assertDefined(oldIndexes, "oldIndexes is undefined when oldKeys has entry")[indexName],
+        `index "${indexName}" missing from oldIndexes`,
+      );
 
       const oldFieldsStr = JSON.stringify(oldIndex.fields.toSorted());
       const newFieldsStr = JSON.stringify(newIndex.fields.toSorted());
@@ -1255,40 +1300,44 @@ function compareFiles(
   const newKeys = new Set(Object.keys(newFiles || {}));
 
   // File field added
-  for (const fileName of newKeys) {
+  for (const [fileName, fileDesc] of Object.entries(newFiles ?? {})) {
     if (!oldKeys.has(fileName)) {
       ctx.changes.push({
         kind: "file_added",
         typeName,
         fieldName: fileName,
-        after: newFiles![fileName],
+        after: fileDesc,
       });
     }
   }
 
   // File field removed
-  for (const fileName of oldKeys) {
+  for (const [fileName, fileDesc] of Object.entries(oldFiles ?? {})) {
     if (!newKeys.has(fileName)) {
       ctx.changes.push({
         kind: "file_removed",
         typeName,
         fieldName: fileName,
-        before: oldFiles![fileName],
+        before: fileDesc,
       });
     }
   }
 
   // File field modified (description changed)
-  for (const fileName of newKeys) {
+  for (const [fileName, newDesc] of Object.entries(newFiles ?? {})) {
     if (oldKeys.has(fileName)) {
-      if (oldFiles![fileName] !== newFiles![fileName]) {
+      const oldDesc = assertDefined(
+        assertDefined(oldFiles, "oldFiles is undefined when oldKeys has entry")[fileName],
+        `file "${fileName}" missing from oldFiles`,
+      );
+      if (oldDesc !== newDesc) {
         ctx.changes.push({
           kind: "file_modified",
           typeName,
           fieldName: fileName,
           reason: "description changed",
-          before: oldFiles![fileName],
-          after: newFiles![fileName],
+          before: oldDesc,
+          after: newDesc,
         });
       }
     }
@@ -1315,36 +1364,40 @@ function compareRelationships(
   const newKeys = new Set(Object.keys(newRelationships || {}));
 
   // Relationship added
-  for (const relName of newKeys) {
+  for (const [relName, rel] of Object.entries(newRelationships ?? {})) {
     if (!oldKeys.has(relName)) {
       ctx.changes.push({
         kind: "relationship_added",
         typeName,
         relationshipName: relName,
         relationshipType,
-        after: newRelationships![relName],
+        after: rel,
       });
     }
   }
 
   // Relationship removed
-  for (const relName of oldKeys) {
+  for (const [relName, rel] of Object.entries(oldRelationships ?? {})) {
     if (!newKeys.has(relName)) {
       ctx.changes.push({
         kind: "relationship_removed",
         typeName,
         relationshipName: relName,
         relationshipType,
-        before: oldRelationships![relName],
+        before: rel,
       });
     }
   }
 
   // Relationship modified
-  for (const relName of newKeys) {
+  for (const [relName, newRel] of Object.entries(newRelationships ?? {})) {
     if (oldKeys.has(relName)) {
-      const oldRel = oldRelationships![relName];
-      const newRel = newRelationships![relName];
+      const oldRel = assertDefined(
+        assertDefined(oldRelationships, "oldRelationships is undefined when oldKeys has entry")[
+          relName
+        ],
+        `relationship "${relName}" missing from oldRelationships`,
+      );
 
       const reasons: string[] = [];
       if (oldRel.targetType !== newRel.targetType) reasons.push("targetType changed");
@@ -1430,23 +1483,23 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
   const currentTypeNames = new Set(Object.keys(current.types));
 
   // Check for added types
-  for (const typeName of currentTypeNames) {
+  for (const [typeName, type] of Object.entries(current.types)) {
     if (!previousTypeNames.has(typeName)) {
       ctx.changes.push({
         kind: "type_added",
         typeName,
-        after: current.types[typeName],
+        after: type,
       });
     }
   }
 
   // Check for removed types
-  for (const typeName of previousTypeNames) {
+  for (const [typeName, type] of Object.entries(previous.types)) {
     if (!currentTypeNames.has(typeName)) {
       ctx.changes.push({
         kind: "type_removed",
         typeName,
-        before: previous.types[typeName],
+        before: type,
       });
       ctx.warnings.push({
         typeName,
@@ -1460,8 +1513,14 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
   for (const typeName of currentTypeNames) {
     if (!previousTypeNames.has(typeName)) continue;
 
-    const prevType = previous.types[typeName];
-    const currType = current.types[typeName];
+    const prevType = assertDefined(
+      previous.types[typeName],
+      `type "${typeName}" missing from previous snapshot`,
+    );
+    const currType = assertDefined(
+      current.types[typeName],
+      `type "${typeName}" missing from current snapshot`,
+    );
 
     // Compare fields
     compareTypeFields(ctx, typeName, prevType, currType);
@@ -1945,8 +2004,14 @@ export function compareRemoteWithSnapshot(
   for (const typeName of snapshotTypeNames) {
     if (!remoteTypeNames.has(typeName)) continue;
 
-    const remoteType = remoteTypeMap.get(typeName)!;
-    const snapshotType = snapshot.types[typeName];
+    const remoteType = assertDefined(
+      remoteTypeMap.get(typeName),
+      `type "${typeName}" missing from remoteTypeMap`,
+    );
+    const snapshotType = assertDefined(
+      snapshot.types[typeName],
+      `type "${typeName}" missing from snapshot`,
+    );
 
     const remoteFields = convertRemoteFieldsToSnapshot(remoteType);
     const snapshotFields = snapshotType.fields;
@@ -1990,8 +2055,11 @@ export function compareRemoteWithSnapshot(
       const drift = compareFields(
         typeName,
         fieldName,
-        remoteFields[fieldName],
-        snapshotFields[fieldName],
+        assertDefined(remoteFields[fieldName], `field "${fieldName}" missing from remoteFields`),
+        assertDefined(
+          snapshotFields[fieldName],
+          `field "${fieldName}" missing from snapshotFields`,
+        ),
       );
       if (drift) {
         drifts.push(drift);

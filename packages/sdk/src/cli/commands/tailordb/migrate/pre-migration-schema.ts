@@ -102,8 +102,6 @@ export function applyPreMigrationFieldAdjustments(
     }
 
     const field = fields[fieldName];
-    // index access may be undefined without noUncheckedIndexedAccess
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!field) continue;
 
     if (change.kind === "field_added") {

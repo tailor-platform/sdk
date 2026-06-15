@@ -5,6 +5,7 @@ import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertDefined } from "@/utils/assert";
 import { folderListInfo, type FolderListInfo } from "../transform";
 
 const listFoldersOptionsSchema = z.object({
@@ -24,7 +25,7 @@ export type ListFoldersOptions = z.input<typeof listFoldersOptionsSchema>;
 export async function listFolders(options: ListFoldersOptions): Promise<FolderListInfo[]> {
   const result = listFoldersOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
   const { organizationId, parentFolderId, order, limit } = result.data;

@@ -27,9 +27,9 @@ describe("createKyselyMock", () => {
 
     expect(row).toEqual({ id: "1", email: "a@b.com", age: 30 });
     expect(mock.selects).toHaveLength(1);
-    expect(mock.executedQueries[0].kind).toBe("SelectQueryNode");
-    expect(mock.executedQueries[0].sql).toContain('select * from "User" where "email" = $1');
-    expect(mock.executedQueries[0].parameters).toEqual(["a@b.com"]);
+    expect(mock.executedQueries[0]!.kind).toBe("SelectQueryNode");
+    expect(mock.executedQueries[0]!.sql).toContain('select * from "User" where "email" = $1');
+    expect(mock.executedQueries[0]!.parameters).toEqual(["a@b.com"]);
   });
 
   test("records inserts with their parameters", async () => {
@@ -44,7 +44,7 @@ describe("createKyselyMock", () => {
 
     expect(created).toEqual({ id: "1", email: "a@b.com", age: 30 });
     expect(mock.inserts).toHaveLength(1);
-    expect(mock.inserts[0].parameters).toEqual(["1", "a@b.com", 30]);
+    expect(mock.inserts[0]!.parameters).toEqual(["1", "a@b.com", 30]);
   });
 
   test("retains the compiled node on each recorded query", async () => {
@@ -52,7 +52,7 @@ describe("createKyselyMock", () => {
 
     await mock.db.selectFrom("User").selectAll().execute();
 
-    expect(mock.executedQueries[0].node.kind).toBe("SelectQueryNode");
+    expect(mock.executedQueries[0]!.node.kind).toBe("SelectQueryNode");
   });
 
   test("reports staged numAffectedRows on a non-returning mutation", async () => {
@@ -155,8 +155,8 @@ describe("createKyselyMock", () => {
       .execute();
 
     expect(mock.selects).toHaveLength(1);
-    expect(mock.executedQueries[0].sql).toContain("left join");
-    expect(mock.executedQueries[0].sql).toContain("group by");
+    expect(mock.executedQueries[0]!.sql).toContain("left join");
+    expect(mock.executedQueries[0]!.sql).toContain("group by");
   });
 
   describe("insertValues", () => {
@@ -165,7 +165,7 @@ describe("createKyselyMock", () => {
 
       await mock.db.insertInto("User").values({ id: "1", email: "a@b.com", age: 30 }).execute();
 
-      expect(mock.inserts[0].insertValues()).toEqual({ id: "1", email: "a@b.com", age: 30 });
+      expect(mock.inserts[0]!.insertValues()).toEqual({ id: "1", email: "a@b.com", age: 30 });
     });
 
     test("throws on a multi-row insert", async () => {
@@ -179,7 +179,7 @@ describe("createKyselyMock", () => {
         ])
         .execute();
 
-      expect(() => mock.inserts[0].insertValues()).toThrow(/inserts 2 rows/);
+      expect(() => mock.inserts[0]!.insertValues()).toThrow(/inserts 2 rows/);
     });
 
     test("throws when given a non-insert query", async () => {
@@ -187,7 +187,7 @@ describe("createKyselyMock", () => {
 
       await mock.db.selectFrom("User").selectAll().execute();
 
-      expect(() => mock.selects[0].insertValues()).toThrow(/expected InsertQueryNode/);
+      expect(() => mock.selects[0]!.insertValues()).toThrow(/expected InsertQueryNode/);
     });
   });
 
@@ -203,7 +203,7 @@ describe("createKyselyMock", () => {
         ])
         .execute();
 
-      expect(mock.inserts[0].insertRows()).toEqual([
+      expect(mock.inserts[0]!.insertRows()).toEqual([
         { id: "1", email: "a@b.com", age: 30 },
         { id: "2", email: "c@d.com", age: 40 },
       ]);
@@ -218,7 +218,7 @@ describe("createKyselyMock", () => {
         .expression((eb) => eb.selectFrom("User").select(["id", "id as userId", "email as title"]))
         .execute();
 
-      expect(() => mock.inserts[0].insertRows()).toThrow(/unsupported insert shape/);
+      expect(() => mock.inserts[0]!.insertRows()).toThrow(/unsupported insert shape/);
     });
   });
 
@@ -228,7 +228,7 @@ describe("createKyselyMock", () => {
 
       await mock.db.updateTable("User").set({ age: 31 }).where("id", "=", "1").execute();
 
-      expect(mock.updates[0].updateValues()).toEqual({ age: 31 });
+      expect(mock.updates[0]!.updateValues()).toEqual({ age: 31 });
     });
 
     test("throws when given a non-update query", async () => {
@@ -236,7 +236,7 @@ describe("createKyselyMock", () => {
 
       await mock.db.selectFrom("User").selectAll().execute();
 
-      expect(() => mock.selects[0].updateValues()).toThrow(/expected UpdateQueryNode/);
+      expect(() => mock.selects[0]!.updateValues()).toThrow(/expected UpdateQueryNode/);
     });
   });
 

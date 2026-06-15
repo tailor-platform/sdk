@@ -14,6 +14,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, saveUserTokens, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertDefined } from "@/utils/assert";
 
 const redirectPort = 8085;
 const redirectUri = `http://localhost:${redirectPort}/callback`;
@@ -51,7 +52,9 @@ const startAuthServer = async () => {
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken ?? undefined,
           },
-          new Date(tokens.expiresAt!).toISOString(),
+          new Date(
+            assertDefined(tokens.expiresAt, "token response missing expiresAt"),
+          ).toISOString(),
         );
         pfConfig.current_user = userInfo.email;
         writePlatformConfig(pfConfig);
@@ -116,7 +119,7 @@ async function loginAsMachineUser(args: { clientId: string; clientSecret?: strin
     pfConfig,
     args.clientId,
     { accessToken: tokens.accessToken },
-    new Date(tokens.expiresAt!).toISOString(),
+    new Date(assertDefined(tokens.expiresAt, "token response missing expiresAt")).toISOString(),
   );
   pfConfig.current_user = args.clientId;
   writePlatformConfig(pfConfig);

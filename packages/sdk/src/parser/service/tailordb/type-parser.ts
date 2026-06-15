@@ -113,9 +113,7 @@ function parseTailorDBType(
         targetField: fieldName,
         sourceField: relationInfo.key,
         isArray: false,
-        // index access may be undefined without noUncheckedIndexedAccess
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        description: targetType?.metadata?.description || "",
+        description: targetType?.metadata.description || "",
       };
     }
 
@@ -178,12 +176,18 @@ function buildBackwardRelationships(
           }
 
           // Track the source of this backward name
-          // index access may be undefined without noUncheckedIndexedAccess
-          // oxlint-disable-next-line typescript/no-unnecessary-condition
-          if (!backwardNameSources[typeName][backwardName]) {
-            backwardNameSources[typeName][backwardName] = [];
+          const typeBackwardNames = backwardNameSources[typeName];
+          if (typeBackwardNames === undefined) {
+            throw new Error(`backward name sources not initialized for type: ${typeName}`);
           }
-          backwardNameSources[typeName][backwardName].push({
+          if (!typeBackwardNames[backwardName]) {
+            typeBackwardNames[backwardName] = [];
+          }
+          const sources = typeBackwardNames[backwardName];
+          if (sources === undefined) {
+            throw new Error(`backward name sources entry not initialized for: ${backwardName}`);
+          }
+          sources.push({
             sourceType: otherTypeName,
             fieldName,
           });
@@ -206,6 +210,9 @@ function buildBackwardRelationships(
 
   for (const [targetTypeName, backwardNames] of Object.entries(backwardNameSources)) {
     const targetType = types[targetTypeName];
+    if (targetType === undefined) {
+      throw new Error(`type not found: ${targetTypeName}`);
+    }
     const targetTypeSourceInfo = getTypeSourceInfo(typeSourceInfo, targetTypeName);
     const targetLocation = targetTypeSourceInfo
       ? isPluginGeneratedType(targetTypeSourceInfo)
@@ -236,6 +243,9 @@ function buildBackwardRelationships(
       // Check for conflict with existing fields
       if (Object.hasOwn(targetType.fields, backwardName)) {
         const source = sources[0];
+        if (source === undefined) {
+          throw new Error(`no source found for backward name: ${backwardName}`);
+        }
         const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
         const sourceLocation = sourceInfo
           ? isPluginGeneratedType(sourceInfo)
@@ -252,6 +262,9 @@ function buildBackwardRelationships(
       // Check for conflict with files fields
       if (targetType.files && Object.hasOwn(targetType.files, backwardName)) {
         const source = sources[0];
+        if (source === undefined) {
+          throw new Error(`no source found for backward name: ${backwardName}`);
+        }
         const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
         const sourceLocation = sourceInfo
           ? isPluginGeneratedType(sourceInfo)

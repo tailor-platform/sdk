@@ -19,6 +19,7 @@ import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-exprs";
+import { assertDefined } from "@/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
@@ -596,11 +597,10 @@ function processResolver(
     : [];
 
   // Build response
-  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = protoFields(
-    { "": resolver.output },
-    `${typeBaseName}Output`,
-    false,
-  )[0];
+  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = assertDefined(
+    protoFields({ "": resolver.output }, `${typeBaseName}Output`, false)[0],
+    "resolver output field missing",
+  );
 
   // Build description (combine resolver description and output description)
   const resolverDescription = resolver.description || `${resolver.name} resolver`;
