@@ -50,6 +50,6 @@ The `upgrade` command runs codemods that automatically transform your project co
 
 Use `--dry-run` to preview what changes will be made before applying them.
 
-### Manual Migration Steps
+### Version Migration Guides
 
-`tailor-sdk upgrade` rewrites most breaking changes for you, but a few require manual changes the codemods cannot make safely. For the v2 upgrade, work through [Migrating to v2](../migration/v2.md) after running `upgrade`.
+For v2, run `tailor-sdk upgrade` first, then work through [Migrating to v2](../migration/v2.md). The guide marks which migrations are codemod-backed and which require manual follow-up.
