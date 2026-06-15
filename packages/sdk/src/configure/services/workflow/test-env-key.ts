@@ -25,7 +25,7 @@ export function readWorkflowTestEnv(): TailorEnv | undefined {
 
 /**
  * Write the test-time env slot.
- * @param env - Env value to expose to `.trigger()` bodies.
+ * @param env - Env value to expose to `runWorkflowLocally()` job bodies.
  * @internal
  */
 export function writeWorkflowTestEnv(env: TailorEnv): void {
