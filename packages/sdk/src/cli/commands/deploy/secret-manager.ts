@@ -14,6 +14,12 @@ import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  CreateSecretManagerSecretRequestSchema,
+  CreateSecretManagerVaultRequestSchema,
+  UpdateSecretManagerSecretRequestSchema,
+} from "@tailor-proto/tailor/v1/secret_manager_pb";
 
 type CreateVault = {
   name: string;
@@ -52,6 +58,52 @@ type DeleteSecret = {
   workspaceId: string;
   vaultName: string;
 };
+
+/**
+ * Build the CreateSecretManagerVault request for a planned vault create.
+ * @param create - Planned vault create
+ * @returns Request init shape
+ */
+export function vaultCreateRequest(
+  create: CreateVault,
+): MessageInitShape<typeof CreateSecretManagerVaultRequestSchema> {
+  return {
+    workspaceId: create.workspaceId,
+    secretmanagerVaultName: create.name,
+  };
+}
+
+/**
+ * Build the CreateSecretManagerSecret request for a planned secret create.
+ * @param create - Planned secret create
+ * @returns Request init shape
+ */
+export function secretCreateRequest(
+  create: CreateSecret,
+): MessageInitShape<typeof CreateSecretManagerSecretRequestSchema> {
+  return {
+    workspaceId: create.workspaceId,
+    secretmanagerVaultName: create.vaultName,
+    secretmanagerSecretName: create.secretName,
+    secretmanagerSecretValue: create.value,
+  };
+}
+
+/**
+ * Build the UpdateSecretManagerSecret request for a planned secret update.
+ * @param update - Planned secret update
+ * @returns Request init shape
+ */
+export function secretUpdateRequest(
+  update: UpdateSecret,
+): MessageInitShape<typeof UpdateSecretManagerSecretRequestSchema> {
+  return {
+    workspaceId: update.workspaceId,
+    secretmanagerVaultName: update.vaultName,
+    secretmanagerSecretName: update.secretName,
+    secretmanagerSecretValue: update.value,
+  };
+}
 
 /**
  * Plan secret manager changes based on current and desired state.
@@ -282,10 +334,7 @@ export async function applySecretManager(
     // Create vaults first and set metadata
     await Promise.all(
       vaultChangeSet.creates.map(async (create) => {
-        await client.createSecretManagerVault({
-          workspaceId: create.workspaceId,
-          secretmanagerVaultName: create.name,
-        });
+        await client.createSecretManagerVault(vaultCreateRequest(create));
         if (application) {
           const metaRequest = await buildMetaRequest({
             trn: resourceTrn(create.workspaceId, "vault", create.name),
@@ -314,24 +363,14 @@ export async function applySecretManager(
     // Create new secrets
     await Promise.all(
       secretChangeSet.creates.map((create) =>
-        client.createSecretManagerSecret({
-          workspaceId: create.workspaceId,
-          secretmanagerVaultName: create.vaultName,
-          secretmanagerSecretName: create.secretName,
-          secretmanagerSecretValue: create.value,
-        }),
+        client.createSecretManagerSecret(secretCreateRequest(create)),
       ),
     );
 
     // Update existing secrets
     await Promise.all(
       secretChangeSet.updates.map((update) =>
-        client.updateSecretManagerSecret({
-          workspaceId: update.workspaceId,
-          secretmanagerVaultName: update.vaultName,
-          secretmanagerSecretName: update.secretName,
-          secretmanagerSecretValue: update.value,
-        }),
+        client.updateSecretManagerSecret(secretUpdateRequest(update)),
       ),
     );
 

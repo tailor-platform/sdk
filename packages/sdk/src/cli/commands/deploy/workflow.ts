@@ -22,6 +22,7 @@ import type { ApplyPhase } from "./phase";
 import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { CreateWorkflowRequestSchema } from "@tailor-proto/tailor/v1/workflow_pb";
 import type {
   ConcurrencyPolicySchema,
   RetryPolicySchema,
@@ -58,17 +59,14 @@ export async function applyWorkflow(
           jobFunctionVersions,
           create.usedJobNames,
         );
+        const shape = buildWorkflowValidationShape(create.workspaceId, create.workflow);
         await client.createWorkflow({
-          workspaceId: create.workspaceId,
-          workflowName: create.workflow.name,
-          mainJobFunctionName: create.workflow.mainJob.name,
+          workspaceId: shape.workspaceId,
+          workflowName: shape.workflowName,
+          mainJobFunctionName: shape.mainJobFunctionName,
+          retryPolicy: shape.retryPolicy,
+          concurrencyPolicy: shape.concurrencyPolicy,
           jobFunctions: filteredVersions,
-          ...(create.workflow.retryPolicy && {
-            retryPolicy: toRetryPolicy(create.workflow.retryPolicy),
-          }),
-          ...(create.workflow.concurrencyPolicy && {
-            concurrencyPolicy: toConcurrencyPolicy(create.workflow.concurrencyPolicy),
-          }),
         });
         await client.setMetadata(create.metaRequest);
       }),
@@ -77,17 +75,14 @@ export async function applyWorkflow(
           jobFunctionVersions,
           update.usedJobNames,
         );
+        const shape = buildWorkflowValidationShape(update.workspaceId, update.workflow);
         await client.updateWorkflow({
-          workspaceId: update.workspaceId,
-          workflowName: update.workflow.name,
-          mainJobFunctionName: update.workflow.mainJob.name,
+          workspaceId: shape.workspaceId,
+          workflowName: shape.workflowName,
+          mainJobFunctionName: shape.mainJobFunctionName,
+          retryPolicy: shape.retryPolicy,
+          concurrencyPolicy: shape.concurrencyPolicy,
           jobFunctions: filteredVersions,
-          ...(update.workflow.retryPolicy && {
-            retryPolicy: toRetryPolicy(update.workflow.retryPolicy),
-          }),
-          ...(update.workflow.concurrencyPolicy && {
-            concurrencyPolicy: toConcurrencyPolicy(update.workflow.concurrencyPolicy),
-          }),
         });
         await client.setMetadata(update.metaRequest);
       }),
@@ -327,6 +322,33 @@ function toConcurrencyPolicy(
 ): MessageInitShape<typeof ConcurrencyPolicySchema> {
   return {
     maxConcurrentExecutions: policy.maxConcurrentExecutions,
+  };
+}
+
+/** Plan-time init shape for Create/UpdateWorkflowRequest (jobFunctions excluded). */
+export type WorkflowValidationShape = Omit<
+  MessageInitShape<typeof CreateWorkflowRequestSchema>,
+  "jobFunctions"
+>;
+
+/**
+ * Build the plan-time validation init shape for a workflow.
+ * @param workspaceId - Workspace ID
+ * @param workflow - Parsed workflow object
+ * @returns Init shape suitable for validating against CreateWorkflowRequestSchema and UpdateWorkflowRequestSchema
+ */
+export function buildWorkflowValidationShape(
+  workspaceId: string,
+  workflow: Workflow,
+): WorkflowValidationShape {
+  return {
+    workspaceId,
+    workflowName: workflow.name,
+    mainJobFunctionName: workflow.mainJob.name,
+    ...(workflow.retryPolicy && { retryPolicy: toRetryPolicy(workflow.retryPolicy) }),
+    ...(workflow.concurrencyPolicy && {
+      concurrencyPolicy: toConcurrencyPolicy(workflow.concurrencyPolicy),
+    }),
   };
 }
 
