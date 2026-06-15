@@ -307,6 +307,55 @@ describe("mock", () => {
       expect(await runWorkflowLocally(workflow, { n: 0 })).toEqual({ total: 2 });
     });
 
+    test("runWorkflowLocally() clones cached trigger results on replay", async () => {
+      const mutable = createWorkflowJob({
+        name: "default-runtime-mutable",
+        body: () => ({ items: [] as string[] }),
+      });
+      const step = createWorkflowJob({
+        name: "default-runtime-step",
+        body: () => ({ ok: true }),
+      });
+      const main = createWorkflowJob({
+        name: "default-runtime-mutation-main",
+        body: () => {
+          const result = mutable.trigger();
+          result.items.push("x");
+          step.trigger();
+          return result;
+        },
+      });
+      const workflow = createWorkflow({
+        name: "default-runtime-mutation-wf",
+        mainJob: main,
+      });
+
+      expect(await runWorkflowLocally(workflow)).toEqual({ items: ["x"] });
+    });
+
+    test("runWorkflowLocally() hides replay signals from user catch blocks", async () => {
+      const inner = createWorkflowJob({
+        name: "default-runtime-caught-inner",
+        body: async () => ({ ok: true }),
+      });
+      const main = createWorkflowJob({
+        name: "default-runtime-caught-main",
+        body: () => {
+          try {
+            return inner.trigger();
+          } catch {
+            return { ok: false };
+          }
+        },
+      });
+      const workflow = createWorkflow({
+        name: "default-runtime-caught-wf",
+        mainJob: main,
+      });
+
+      expect(await runWorkflowLocally(workflow)).toEqual({ ok: true });
+    });
+
     test("runWorkflowLocally() rejects a non-serializable trigger result", async () => {
       const bad = createWorkflowJob({
         name: "default-runtime-bad",
