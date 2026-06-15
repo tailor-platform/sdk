@@ -1029,10 +1029,10 @@ async function rollbackSingleMigrationPrePhase(
   // The baseline migration has no prior checkpoint to revert to.
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
 
-  // Type names belonging to this migration's namespace (diff plus this
-  // namespace's change-set entries). `processedTypes` is global and stores bare
-  // names, so this scopes rollback to the failed namespace and avoids touching a
-  // same-named type in another namespace.
+  // `processedTypes` spans every namespace touched in this apply run; restrict
+  // rollback to this migration's namespace (its diff plus this namespace's
+  // change-set entries). Type names are unique across namespaces, so a name from
+  // another namespace simply won't appear in this set.
   const namespaceTypes = getAffectedTypeNames(migration);
   for (const create of changeSet.type.creates) {
     const name = create.request.tailordbType?.name;
