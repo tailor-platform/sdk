@@ -119,10 +119,10 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   }
 
   // Check for non-zero exit without a launch error (e.g. registry/auth/network failures)
-  if (result.status !== 0 && !result.stdout?.trim()) {
+  if (result.status !== 0 && !result.stdout.trim()) {
     throw CLIError({
       message: `@tailor-platform/sdk-codemod exited with code ${result.status}`,
-      details: result.stderr?.trim() || "(no stderr output)",
+      details: result.stderr.trim() || "(no stderr output)",
       suggestion:
         "Review the error above. Common causes: invalid version arguments, network issues, or missing package registry access.",
       command: "upgrade",

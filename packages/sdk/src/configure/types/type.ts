@@ -287,19 +287,22 @@ function createTailorField<
 
       case "nested":
         // Validate nested object fields
+        // runtime value may not match the declared type
+        // oxlint-disable typescript/no-unnecessary-condition
         if (
           typeof value !== "object" ||
           value === null ||
           Array.isArray(value) ||
           value instanceof Date
         ) {
+          // oxlint-enable typescript/no-unnecessary-condition
           issues.push({
             message: `Expected an object: received ${String(value)}`,
             path,
           });
-        } else if (field.fields && Object.keys(field.fields).length > 0) {
+        } else if (Object.keys(field.fields).length > 0) {
           for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-            const fieldValue = value?.[fieldName];
+            const fieldValue = (value as Record<string, unknown>)[fieldName];
             const result = nestedField._parseInternal({
               value: fieldValue,
               data,

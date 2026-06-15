@@ -184,6 +184,10 @@ describe("applyAuth phase separation", () => {
             },
           ],
         },
+        connection: {
+          ...mockChangeSet,
+          title: "Auth Connections",
+        },
       },
       conflicts: [],
       unmanaged: [],

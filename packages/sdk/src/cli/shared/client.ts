@@ -351,7 +351,7 @@ export function parseMethodName(methodName: string): {
     return { operation: "perform", resourceType: "resource" };
   }
 
-  const [, action, resource] = match;
+  const [, action, resource] = match as [string, string, string];
   return { operation: action.toLowerCase(), resourceType: resource };
 }
 
@@ -398,9 +398,13 @@ export async function fetchAll<T>(
   const items: T[] = [];
   let pageToken = "";
 
+  // loop exits when the platform stops returning a page token
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const [batch, nextPageToken] = await fn(pageToken, MAX_PAGE_SIZE);
     items.push(...batch);
+    // loop exits when the platform stops returning a page token
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!nextPageToken) break;
     pageToken = nextPageToken;
   }
@@ -432,6 +436,8 @@ export async function fetchPaged<T>(
   const items: T[] = [];
   let pageToken = "";
 
+  // loop exits when the platform stops returning a page token
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     const pageSize = unbounded ? MAX_PAGE_SIZE : Math.min(limit - items.length, MAX_PAGE_SIZE);
     if (!unbounded && pageSize <= 0) break;
@@ -439,6 +445,8 @@ export async function fetchPaged<T>(
     const [batch, nextPageToken] = await fn(pageToken, pageSize);
     items.push(...batch);
     if (!unbounded && items.length >= limit) break;
+    // loop exits when the platform stops returning a page token
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!nextPageToken) break;
     pageToken = nextPageToken;
   }

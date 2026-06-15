@@ -8,6 +8,7 @@ import {
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { symbols } from "@/cli/shared/logger";
 import { HTTP_METHODS } from "@/parser/service/http-adapter";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
@@ -42,7 +43,7 @@ export async function applyApplication(
       ...changeSet.creates.map(async (create) => {
         create.request.cors = await resolveStaticWebsiteUrls(
           client,
-          create.request.workspaceId!,
+          assertDefined(create.request.workspaceId, "request missing workspaceId"),
           create.request.cors,
           "CORS",
         );
@@ -52,7 +53,7 @@ export async function applyApplication(
       ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
           client,
-          update.request.workspaceId!,
+          assertDefined(update.request.workspaceId, "request missing workspaceId"),
           update.request.cors,
           "CORS",
         );
@@ -60,7 +61,7 @@ export async function applyApplication(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
+  } else {
     // Delete in reverse order of dependencies
     // Applications
     await Promise.all(
@@ -125,7 +126,7 @@ function normalizeSubgraphs(
 ): ComparableApplication["subgraphs"] {
   return [...(subgraphs ?? [])]
     .map((subgraph) => ({
-      serviceType: subgraph.serviceType!,
+      serviceType: assertDefined(subgraph.serviceType, "subgraph missing serviceType"),
       serviceNamespace: subgraph.serviceNamespace ?? "",
     }))
     .toSorted((left, right) => {
@@ -295,7 +296,7 @@ export async function planApplication(
 
   let authNamespace: string | undefined;
   let authIdpConfigName: string | undefined;
-  if (application.authService && application.authService.config) {
+  if (application.authService) {
     authNamespace = application.authService.config.name;
 
     const idProvider = application.authService.config.idProvider;
@@ -309,7 +310,10 @@ export async function planApplication(
       try {
         const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
           workspaceId,
-          namespaceName: authNamespace!,
+          namespaceName: assertDefined(
+            authNamespace,
+            "authNamespace must be set before listing IDP configs",
+          ),
           pageToken,
           pageSize: maxPageSize,
         });
@@ -322,7 +326,10 @@ export async function planApplication(
       }
     });
     if (idpConfigs.length > 0) {
-      authIdpConfigName = idpConfigs[0].name;
+      const [firstConfig] = idpConfigs;
+      if (firstConfig) {
+        authIdpConfigName = firstConfig.name;
+      }
     }
   }
   const metaRequest = await buildMetaRequest({

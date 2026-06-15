@@ -577,9 +577,9 @@ describe("createEnvironmentPlugin", () => {
     };
     (plugin.config as any).call({}, userConfig);
 
-    expect(userConfig.test.projects[0].test.environment).toMatch(/environment\.mjs$/);
+    expect(userConfig.test.projects[0]!.test.environment).toMatch(/environment\.mjs$/);
     // Other environments untouched.
-    expect(userConfig.test.projects[1].test.environment).toBe("node");
+    expect(userConfig.test.projects[1]!.test.environment).toBe("node");
   });
 
   test("leaves non-tailor environments untouched", () => {

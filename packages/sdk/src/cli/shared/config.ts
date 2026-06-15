@@ -31,7 +31,7 @@ export function extractOwnedNamespaces(config: LoadedConfig): string[] {
 
   if (config.db) {
     for (const [namespaceName, nsConfig] of Object.entries(config.db)) {
-      if ("external" in nsConfig && nsConfig.external === true) continue;
+      if ("external" in nsConfig) continue;
       namespaces.add(namespaceName);
     }
   }

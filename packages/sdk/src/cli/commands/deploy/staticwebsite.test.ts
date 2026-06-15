@@ -139,7 +139,7 @@ describe("planStaticWebsite", () => {
     const result = await planStaticWebsite(createContext(client));
 
     expect(result.changeSet.unchanged).toHaveLength(1);
-    expect(result.changeSet.unchanged[0].name).toBe("site-a");
+    expect(result.changeSet.unchanged[0]!.name).toBe("site-a");
     expect(result.changeSet.updates).toHaveLength(0);
   });
 
@@ -232,11 +232,11 @@ describe("planStaticWebsite", () => {
     const result = await planStaticWebsite(createContext(client, app));
 
     expect(result.customDomainChangeSet.creates).toHaveLength(1);
-    expect(result.customDomainChangeSet.creates[0].name).toBe("new.example.com");
+    expect(result.customDomainChangeSet.creates[0]!.name).toBe("new.example.com");
     expect(result.customDomainChangeSet.deletes).toHaveLength(1);
-    expect(result.customDomainChangeSet.deletes[0].name).toBe("old.example.com");
+    expect(result.customDomainChangeSet.deletes[0]!.name).toBe("old.example.com");
     expect(result.customDomainChangeSet.unchanged).toHaveLength(1);
-    expect(result.customDomainChangeSet.unchanged[0].name).toBe("example.com");
+    expect(result.customDomainChangeSet.unchanged[0]!.name).toBe("example.com");
   });
 
   test("does not manage custom domains for unowned websites", async () => {
@@ -311,10 +311,10 @@ describe("planStaticWebsite", () => {
 
     // sdk.example.com (SDK-owned, not in desired) → deleted
     expect(result.customDomainChangeSet.deletes).toHaveLength(1);
-    expect(result.customDomainChangeSet.deletes[0].name).toBe("sdk.example.com");
+    expect(result.customDomainChangeSet.deletes[0]!.name).toBe("sdk.example.com");
     // new.example.com (not existing) → created
     expect(result.customDomainChangeSet.creates).toHaveLength(1);
-    expect(result.customDomainChangeSet.creates[0].name).toBe("new.example.com");
+    expect(result.customDomainChangeSet.creates[0]!.name).toBe("new.example.com");
     // console.example.com (not SDK-owned) → untouched
   });
 
@@ -345,11 +345,11 @@ describe("planStaticWebsite", () => {
     // site-a: a.example.com unchanged
     // site-b: old-b.example.com deleted, b.example.com added
     expect(result.customDomainChangeSet.unchanged).toHaveLength(1);
-    expect(result.customDomainChangeSet.unchanged[0].name).toBe("a.example.com");
+    expect(result.customDomainChangeSet.unchanged[0]!.name).toBe("a.example.com");
     expect(result.customDomainChangeSet.creates).toHaveLength(1);
-    expect(result.customDomainChangeSet.creates[0].name).toBe("b.example.com");
+    expect(result.customDomainChangeSet.creates[0]!.name).toBe("b.example.com");
     expect(result.customDomainChangeSet.deletes).toHaveLength(1);
-    expect(result.customDomainChangeSet.deletes[0].name).toBe("old-b.example.com");
+    expect(result.customDomainChangeSet.deletes[0]!.name).toBe("old-b.example.com");
   });
 
   test("produces empty custom domain changeset when forRemoval is true", async () => {

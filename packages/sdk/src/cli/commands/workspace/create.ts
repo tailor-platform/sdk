@@ -5,6 +5,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
+import { assertDefined } from "@/utils/assert";
 import {
   workspaceDisplayName,
   workspaceInfoWithFolderName,
@@ -52,7 +53,7 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
   // Validate options with zod schema
   const result = createWorkspaceOptionsSchema.safeParse(options);
   if (!result.success) {
-    throw new Error(result.error.issues[0].message);
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
   const validated = result.data;
 
@@ -70,7 +71,10 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
     folderId: validated.folderId,
   });
 
-  return workspaceInfoWithFolderName(client, resp.workspace!);
+  return workspaceInfoWithFolderName(
+    client,
+    assertDefined(resp.workspace, "createWorkspace response missing workspace"),
+  );
 }
 
 export const createCommand = defineAppCommand({

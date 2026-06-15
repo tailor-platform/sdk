@@ -20,6 +20,9 @@ export const deployCommand = defineAppCommand({
       "no-schema-check": arg(z.boolean().optional(), {
         description: "Skip schema diff check against migration snapshots",
       }),
+      "no-validate": arg(z.boolean().optional(), {
+        description: "Skip client-side validation against platform resource constraints",
+      }),
       "no-cache": arg(z.boolean().optional(), {
         description: "Disable bundle caching for this run",
       }),
@@ -39,6 +42,7 @@ export const deployCommand = defineAppCommand({
       dryRun: args["dry-run"],
       yes: args.yes,
       noSchemaCheck: args["no-schema-check"],
+      noValidate: args["no-validate"],
       noCache: args["no-cache"],
       cleanCache: args["clean-cache"],
     });

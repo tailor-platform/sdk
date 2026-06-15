@@ -871,10 +871,10 @@ describe("TailorField clone-on-write / no aliasing", () => {
   test("t.object does not let builder calls leak into the caller's record", () => {
     const inner = { city: t.string() };
     const objField = t.object(inner);
-    objField.fields.city.description("mutated");
+    objField.fields.city!.description("mutated");
 
     expect(inner.city.metadata.description).toBeUndefined();
-    expect(objField.fields.city.metadata.description).toBeUndefined();
+    expect(objField.fields.city!.metadata.description).toBeUndefined();
   });
 
   test("chained builders accumulate metadata on the returned clone", () => {
@@ -892,8 +892,8 @@ describe("TailorField clone-on-write / no aliasing", () => {
     expect(updated).not.toBe(original);
     expect(updated.fields.city).not.toBe(original.fields.city);
 
-    updated.fields.city.description("mutated");
-    expect(original.fields.city.metadata.description).toBeUndefined();
+    updated.fields.city!.description("mutated");
+    expect(original.fields.city!.metadata.description).toBeUndefined();
   });
 
   test("clone-on-write preserves options and enum values", () => {
