@@ -245,8 +245,13 @@ function createLocalWorkflowRuntime(
 ): TailorWorkflowAPI {
   return {
     triggerJobFunction,
-    triggerWorkflow: (name, args, options) =>
-      previous ? previous.triggerWorkflow(name, args, options) : Promise.resolve(TRIGGER_DEFAULT),
+    triggerWorkflow: async (name, args, options) => {
+      if (previous) {
+        return await previous.triggerWorkflow(name, args, options);
+      }
+      platformSerialize(args);
+      return TRIGGER_DEFAULT;
+    },
     wait: (key, payload) => {
       if (previous) {
         return previous.wait(key, payload);
