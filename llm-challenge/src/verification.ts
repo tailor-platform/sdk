@@ -375,7 +375,7 @@ async function appendCommandLog(logPath: string, command: string, output: string
   await fs.appendFile(logPath, `$ ${command}\n${output}${output.endsWith("\n") ? "" : "\n"}`);
 }
 
-function globToRegExp(glob: string): RegExp {
+export function globToRegExp(glob: string): RegExp {
   let pattern = "";
   for (let index = 0; index < glob.length; index += 1) {
     const char = glob[index];
@@ -393,6 +393,18 @@ function globToRegExp(glob: string): RegExp {
     if (char === "*") {
       pattern += "[^/]*";
       continue;
+    }
+    if (char === "{") {
+      const close = glob.indexOf("}", index + 1);
+      if (close !== -1) {
+        const alternatives = glob
+          .slice(index + 1, close)
+          .split(",")
+          .map((alternative) => escapeRegExp(alternative));
+        pattern += `(?:${alternatives.join("|")})`;
+        index = close;
+        continue;
+      }
     }
     pattern += escapeRegExp(char);
   }
