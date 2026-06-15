@@ -50,9 +50,7 @@ import type { ListUsersResponse, ClientConfig } from "@tailor-platform/sdk/runti
 
 Most users do not need to touch the globals entry — `@tailor-platform/sdk/runtime` (and its subpath modules) cover the same surface without depending on any ambient declaration.
 
-For backwards compatibility with the previous `@tailor-platform/function-types`-based setup, the SDK still activates the ambient `tailor.*` / `tailordb.*` types automatically when you import from `@tailor-platform/sdk`. **This implicit activation will be removed in v2.0**; new code should prefer the typed wrappers from `@tailor-platform/sdk/runtime`.
-
-If you want to opt into the globals explicitly (or you are migrating ahead of v2.0), add a single side-effect import anywhere in your project:
+Importing from `@tailor-platform/sdk` does not activate the ambient `tailor.*` / `tailordb.*` declarations. If you want to opt into the globals, add a single side-effect import anywhere in your project:
 
 ```ts
 import "@tailor-platform/sdk/runtime/globals";
@@ -67,6 +65,8 @@ Or register the entry in `tsconfig.json`:
   },
 }
 ```
+
+The globals entry exposes the lowercase `tailordb.*` namespace only. Use `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` before upgrading if your project still references the removed capital-cased `Tailordb.*` namespace from `@tailor-platform/function-types`.
 
 ## Namespaces
 
