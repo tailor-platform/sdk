@@ -426,6 +426,42 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
+  test("rolls back types the pre-phase created for namespace GQL permissions, not just diff types", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+    // A type the pre-phase can create via missingTypeCreates — present only in
+    // gqlPermission.creates, not in this migration's diff.
+    planResult.changeSet.gqlPermission.creates = [
+      {
+        name: "LeakedType",
+        request: {
+          workspaceId: "test-workspace",
+          namespaceName: "test-ns",
+          typeName: "LeakedType",
+          permission: {},
+        },
+      },
+    ];
+
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkAddTypeMigration(1, "StockReservation"),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+      new Error("rpc error: code = Aborted desc = migration failed"),
+    );
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "migration failed",
+    );
+
+    const deletedNames = vi.mocked(client.deleteTailorDBType).mock.calls.map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c) => (c[0] as any)?.tailordbTypeName,
+    );
+    expect(deletedNames).toContain("StockReservation");
+    expect(deletedNames).toContain("LeakedType");
+  });
+
   test("restores a pre-existing type to its prior-checkpoint schema when migrate.ts fails", async () => {
     const client = createMockClient();
     const planResult = createUpdatePlanResult();

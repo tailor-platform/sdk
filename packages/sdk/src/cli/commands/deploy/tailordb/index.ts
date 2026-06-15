@@ -1010,8 +1010,16 @@ async function rollbackSingleMigrationPrePhase(
   // The baseline migration has no prior checkpoint to revert to.
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
 
-  const affectedTypes = getAffectedTypeNames(migration);
-  if (affectedTypes.size === 0) return;
+  // Types in this migration's diff, plus any the pre-phase may have created to
+  // satisfy namespace GQL permissions (missingTypeCreates), which can include
+  // types belonging to later migrations.
+  const rollbackTypes = getAffectedTypeNames(migration);
+  for (const create of changeSet.gqlPermission.creates) {
+    if (create.request.namespaceName === migration.namespace && create.request.typeName) {
+      rollbackTypes.add(create.request.typeName);
+    }
+  }
+  if (rollbackTypes.size === 0) return;
 
   const priorSnapshot = reconstructSnapshotFromMigrations(
     migration.migrationsDir,
@@ -1034,7 +1042,7 @@ async function rollbackSingleMigrationPrePhase(
       "rolling back its pre-migration schema changes.",
   );
 
-  for (const typeName of affectedTypes) {
+  for (const typeName of rollbackTypes) {
     const priorType = priorSnapshot.types[typeName];
     try {
       if (priorType) {
@@ -1048,20 +1056,15 @@ async function rollbackSingleMigrationPrePhase(
           tailordbType: manifest,
         });
       } else {
-        // The type is new in this migration. Its GQL permission must go first:
-        // type deletion does not cascade to it.
-        const createdPermission = changeSet.gqlPermission.creates.find(
-          (create) =>
-            create.request.namespaceName === migration.namespace &&
-            create.request.typeName === typeName,
-        );
-        if (createdPermission) {
-          await client.deleteTailorDBGQLPermission({
+        // New type: its GQL permission must go first (type deletion does not
+        // cascade). The permission may not exist, so the delete is best-effort.
+        await client
+          .deleteTailorDBGQLPermission({
             workspaceId,
             namespaceName: migration.namespace,
             typeName,
-          });
-        }
+          })
+          .catch(() => undefined);
         await client.deleteTailorDBType({
           workspaceId,
           namespaceName: migration.namespace,
