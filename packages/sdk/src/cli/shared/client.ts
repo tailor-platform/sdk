@@ -476,6 +476,7 @@ export async function fetchUserInfo(accessToken: string) {
 
   const rawJson = await resp.json();
   const schema = z.object({
+    sub: z.string(),
     email: z.string(),
   });
   return schema.parse(rawJson);

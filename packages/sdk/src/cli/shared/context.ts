@@ -8,7 +8,7 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
-import { initOAuth2Client } from "./client";
+import { fetchUserInfo, initOAuth2Client } from "./client";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -48,7 +48,15 @@ const pfUserFileSchema = z.object({
 
 const pfUserSchemaV2 = z.discriminatedUnion("storage", [pfUserKeyringSchema, pfUserFileSchema]);
 
-type PfUserV2 = z.output<typeof pfUserSchemaV2>;
+const pfUserKeyringSchemaV3 = pfUserKeyringSchema.extend({
+  email: z.string().optional(),
+});
+
+const pfUserFileSchemaV3 = pfUserFileSchema.extend({
+  email: z.string().optional(),
+});
+
+const pfUserSchemaV3 = z.discriminatedUnion("storage", [pfUserKeyringSchemaV3, pfUserFileSchemaV3]);
 
 const pfConfigSchemaV1 = z.object({
   version: z.literal(1),
@@ -57,8 +65,10 @@ const pfConfigSchemaV1 = z.object({
   current_user: z.string().nullable(),
 });
 
-const LATEST_CONFIG_VERSION = 2;
+const V2_CONFIG_VERSION = 2;
+const LATEST_CONFIG_VERSION = 3;
 const V2_MIN_SDK_VERSION = "1.29.0";
+const V3_MIN_SDK_VERSION = "2.0.0";
 
 const semverSchema = z.templateLiteral([
   z.number().int(),
@@ -69,7 +79,7 @@ const semverSchema = z.templateLiteral([
 ]);
 
 const pfConfigSchemaV2 = z.object({
-  version: z.literal(LATEST_CONFIG_VERSION),
+  version: z.literal(V2_CONFIG_VERSION),
   min_sdk_version: semverSchema,
   latest_version: z.number().int().optional(),
   latest_min_sdk_version: semverSchema.optional(),
@@ -78,8 +88,20 @@ const pfConfigSchemaV2 = z.object({
   current_user: z.string().nullable(),
 });
 
+const pfConfigSchemaV3 = z.object({
+  version: z.literal(LATEST_CONFIG_VERSION),
+  min_sdk_version: semverSchema,
+  latest_version: z.number().int().optional(),
+  latest_min_sdk_version: semverSchema.optional(),
+  users: z.partialRecord(z.string(), pfUserSchemaV3),
+  profiles: z.partialRecord(z.string(), pfProfileSchema),
+  current_user: z.string().nullable(),
+});
+
 type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
-type PfConfig = z.output<typeof pfConfigSchemaV2>;
+type PfConfigV2 = z.output<typeof pfConfigSchemaV2>;
+type PfConfig = z.output<typeof pfConfigSchemaV3>;
+type PfUser = z.output<typeof pfUserSchemaV3>;
 type LoadWorkspaceIdOptions = {
   workspaceId?: string;
   profile?: string;
@@ -106,8 +128,8 @@ function platformConfigPath() {
  * @param v1Config - v1 configuration to migrate
  * @returns Migrated v2 configuration
  */
-function migrateV1ToV2(v1Config: PfConfigV1): PfConfig {
-  const users: PfConfig["users"] = {};
+function migrateV1ToV2(v1Config: PfConfigV1): PfConfigV2 {
+  const users: PfConfigV2["users"] = {};
 
   for (const [name, v1User] of Object.entries(v1Config.users)) {
     if (!v1User) continue;
@@ -121,12 +143,56 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfig {
   }
 
   return {
-    version: LATEST_CONFIG_VERSION,
+    version: V2_CONFIG_VERSION,
     min_sdk_version: V2_MIN_SDK_VERSION,
     users,
     profiles: v1Config.profiles,
     current_user: v1Config.current_user,
   };
+}
+
+function inferEmailFromUserId(user: string): string | undefined {
+  return z.email().safeParse(user).success ? user : undefined;
+}
+
+function migrateV2ToV3(v2Config: PfConfigV2): PfConfig {
+  const users: PfConfig["users"] = {};
+
+  for (const [user, entry] of Object.entries(v2Config.users)) {
+    if (!entry) continue;
+    const email = inferEmailFromUserId(user);
+    users[user] = {
+      ...entry,
+      ...(email ? { email } : {}),
+    };
+  }
+
+  return {
+    version: LATEST_CONFIG_VERSION,
+    min_sdk_version: V3_MIN_SDK_VERSION,
+    users,
+    profiles: v2Config.profiles,
+    current_user: v2Config.current_user,
+  };
+}
+
+function migrateV1ToV3(v1Config: PfConfigV1): PfConfig {
+  return migrateV2ToV3(migrateV1ToV2(v1Config));
+}
+
+async function warnIfNewerConfigAvailable(config: {
+  latest_version?: number;
+  latest_min_sdk_version?: string;
+}) {
+  if (!config.latest_min_sdk_version) return;
+  const packageJson = await readPackageJson();
+  const sdkVersion = packageJson.version ?? "0.0.0";
+  if (semverLt(sdkVersion, config.latest_min_sdk_version)) {
+    logger.warn(ml`
+      A newer config version (${String(config.latest_version)}) is available.
+      Please update your SDK to >= ${config.latest_min_sdk_version}: pnpm update @tailor-platform/sdk
+    `);
+  }
 }
 
 /**
@@ -144,7 +210,7 @@ export async function readPlatformConfig(): Promise<PfConfig> {
       ? fromTailorctlConfig(tcConfig)
       : ({ version: 1, users: {}, profiles: {}, current_user: null } as const);
     writePlatformConfig(v1Config);
-    return migrateV1ToV2(v1Config);
+    return migrateV1ToV3(v1Config);
   }
 
   const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
@@ -173,36 +239,34 @@ export async function readPlatformConfig(): Promise<PfConfig> {
     `);
   }
 
-  // Try v2 first
+  // Try v3 first
+  const v3Result = pfConfigSchemaV3.safeParse(rawConfig);
+  if (v3Result.success) {
+    await warnIfNewerConfigAvailable(v3Result.data);
+    return v3Result.data;
+  }
+
+  // Try v2 next
   const v2Result = pfConfigSchemaV2.safeParse(rawConfig);
   if (v2Result.success) {
-    if (v2Result.data.latest_min_sdk_version) {
-      const packageJson = await readPackageJson();
-      const sdkVersion = packageJson.version ?? "0.0.0";
-      if (semverLt(sdkVersion, v2Result.data.latest_min_sdk_version)) {
-        logger.warn(ml`
-          A newer config version (${String(v2Result.data.latest_version)}) is available.
-          Please update your SDK to >= ${v2Result.data.latest_min_sdk_version}: pnpm update @tailor-platform/sdk
-        `);
-      }
-    }
-    return v2Result.data;
+    await warnIfNewerConfigAvailable(v2Result.data);
+    return migrateV2ToV3(v2Result.data);
   }
 
-  // Fall back to v1 (convert to v2 in memory, but don't rewrite disk)
+  // Fall back to v1 (convert to v3 in memory, but don't rewrite disk)
   const v1Result = pfConfigSchemaV1.safeParse(rawConfig);
   if (v1Result.success) {
-    return migrateV1ToV2(v1Result.data);
+    return migrateV1ToV3(v1Result.data);
   }
 
-  // Neither v1 nor v2
+  // Neither v1, v2, nor v3
   throw new Error(ml`
     Failed to parse config file at ${configPath}.
     The file may be corrupted or created by an incompatible SDK version.
   `);
 }
 
-function toV1ForDisk(config: PfConfig): PfConfigV1 {
+function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
   const users: PfConfigV1["users"] = {};
   for (const [name, entry] of Object.entries(config.users)) {
     if (!entry || entry.storage === "keyring") continue;
@@ -229,9 +293,9 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
  * By default, V2 configs are converted to V1 for backward compatibility, so an
  * older SDK can still read the file. Configs containing a keyring user are kept
  * as V2 regardless, because the keyring storage variant is not representable in
- * V1 and downgrading it would silently drop the user's login. Such configs are
- * already V2 on disk (a keyring entry is only ever persisted with
- * TAILOR_USE_KEYRING set), so keeping V2 does not regress backward compatibility.
+ * V1 and downgrading it would silently drop the user's login. V3 configs are
+ * kept as V3 because user keys are canonical subject IDs and may include email
+ * metadata that is not representable in older versions.
  * Set TAILOR_USE_KEYRING to write V2 format unconditionally.
  *
  * The config file may contain access/refresh tokens when the OS keyring is
@@ -239,7 +303,7 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
  * on the host cannot read it.
  * @param config - Platform configuration to write
  */
-export function writePlatformConfig(config: PfConfig | PfConfigV1) {
+export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) {
   const configPath = platformConfigPath();
   const hasKeyringUser =
     config.version === 2 && Object.values(config.users).some((u) => u?.storage === "keyring");
@@ -460,7 +524,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
  * @returns Access token and optional refresh token
  */
 export async function resolveTokens(
-  userEntry: PfUserV2,
+  userEntry: PfUser,
   user: string,
 ): Promise<{ accessToken: string; refreshToken?: string }> {
   if (userEntry.storage === "keyring") {
@@ -485,21 +549,25 @@ export async function resolveTokens(
  * @param config - Platform config
  * @param user - User identifier
  * @param tokens - Token data to save
- * @param tokens.accessToken
- * @param tokens.refreshToken
+ * @param tokens.accessToken - Access token to save
+ * @param tokens.refreshToken - Optional refresh token to save
  * @param expiresAt - Token expiration date
+ * @param metadata - Optional user metadata to persist with the token entry
  */
 export async function saveUserTokens(
   config: PfConfig,
   user: string,
   tokens: { accessToken: string; refreshToken?: string },
   expiresAt: string,
+  metadata?: { email?: string },
 ): Promise<void> {
+  const email = metadata?.email ?? config.users[user]?.email;
   if (process.env.TAILOR_USE_KEYRING && (await isKeyringAvailable())) {
     await saveKeyringTokens(user, tokens);
     config.users[user] = {
       token_expires_at: expiresAt,
       storage: "keyring",
+      ...(email ? { email } : {}),
     };
   } else {
     config.users[user] = {
@@ -507,6 +575,7 @@ export async function saveUserTokens(
       refresh_token: tokens.refreshToken,
       token_expires_at: expiresAt,
       storage: "file",
+      ...(email ? { email } : {}),
     };
   }
 }
@@ -523,10 +592,43 @@ export async function deleteUserTokens(config: PfConfig, user: string): Promise<
   }
 }
 
+function updateUserReferences(config: PfConfig, fromUser: string, toUser: string) {
+  if (fromUser === toUser) return;
+  if (config.current_user === fromUser) {
+    config.current_user = toUser;
+  }
+  for (const profile of Object.values(config.profiles)) {
+    if (profile?.user === fromUser) {
+      profile.user = toUser;
+    }
+  }
+}
+
+/**
+ * Remove a legacy alias after a canonical user ID has been written.
+ * @param config - Platform config
+ * @param legacyUser - Previous user key
+ * @param canonicalUser - Canonical user key
+ */
+export async function removeLegacyUserAlias(
+  config: PfConfig,
+  legacyUser: string,
+  canonicalUser: string,
+): Promise<void> {
+  if (legacyUser === canonicalUser) return;
+  updateUserReferences(config, legacyUser, canonicalUser);
+  await deleteUserTokens(config, legacyUser);
+  delete config.users[legacyUser];
+}
+
+function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean {
+  return Boolean(userEntry.email || inferEmailFromUserId(user));
+}
+
 /**
  * Fetch the latest access token, refreshing if necessary.
  * @param config - Platform config
- * @param user - User name
+ * @param user - User ID
  * @returns Latest access token
  */
 export async function fetchLatestToken(config: PfConfig, user: string): Promise<string> {
@@ -569,15 +671,30 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
   const newExpiresAt = new Date(
     assertDefined(resp.expiresAt, "token refresh response missing expiresAt"),
   ).toISOString();
+
+  let resolvedUser = user;
+  let email = userEntry.email;
+  if (shouldResolveSubjectOnRefresh(user, userEntry)) {
+    try {
+      const userInfo = await fetchUserInfo(resp.accessToken);
+      resolvedUser = userInfo.sub;
+      email = userInfo.email;
+    } catch (error) {
+      logger.debug(`Failed to resolve refreshed token user info: ${String(error)}`);
+    }
+  }
+
   await saveUserTokens(
     config,
-    user,
+    resolvedUser,
     {
       accessToken: resp.accessToken,
       refreshToken: resp.refreshToken ?? undefined,
     },
     newExpiresAt,
+    { email },
   );
+  await removeLegacyUserAlias(config, user, resolvedUser);
   writePlatformConfig(config);
   return resp.accessToken;
 }
