@@ -72,7 +72,7 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
               "workflow.trigger() is rewritten at build time and unavailable in the bundle",
             );
           }
-        : (args, options) => dispatchTriggerWorkflow(config.name, args, options),
+        : async (args, options) => await dispatchTriggerWorkflow(config.name, args, options),
     } as Workflow<Job>,
     "workflow",
   );

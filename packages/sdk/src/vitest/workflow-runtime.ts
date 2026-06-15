@@ -2,6 +2,7 @@
 // Must stay free of `vitest` (`vi`): it loads via `./globals` in the environment
 // realm where `vi` is unavailable, hence relative imports only (no `@/` alias).
 import { TRIGGER_DEFAULT } from "../configure/services/workflow/registry";
+import { platformSerialize } from "../utils/test/platform-serialize";
 
 export interface DefaultWorkflowRuntime {
   triggerJobFunction: (name: string, args?: unknown) => unknown;
@@ -21,7 +22,10 @@ export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
         `No workflow job mock for "${name}". Acquire mockWorkflow() and call setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
       );
     },
-    triggerWorkflow: async () => TRIGGER_DEFAULT,
+    triggerWorkflow: async (_name, args) => {
+      platformSerialize(args);
+      return TRIGGER_DEFAULT;
+    },
     wait: (key: string): unknown => {
       throw new Error(
         `No wait handler for "${key}". Acquire mockWorkflow() and call setWaitHandler(...).`,

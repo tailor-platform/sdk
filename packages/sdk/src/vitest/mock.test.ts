@@ -289,6 +289,18 @@ describe("mock", () => {
       expect(bodyRan).toBe(false);
     });
 
+    test("workflow.trigger() validates args in the default runtime", async () => {
+      const main = createWorkflowJob({
+        name: "default-runtime-trigger-args",
+        body: (input: { when: string }) => ({ when: input.when }),
+      });
+      const workflow = createWorkflow({ name: "default-runtime-trigger-args-wf", mainJob: main });
+
+      await expect(workflow.trigger({ when: new Date() } as never)).rejects.toThrow(
+        /Date instance/,
+      );
+    });
+
     test("runWorkflowLocally() runs the whole chain", async () => {
       const inner = createWorkflowJob({
         name: "default-runtime-inner",

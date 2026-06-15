@@ -391,13 +391,13 @@ describe("trigger without tailor.workflow", () => {
     expect(() => double.trigger({ n: 21 })).toThrow(/tailor\.workflow is not available/);
   });
 
-  test("workflow trigger throws instead of running the main job", () => {
+  test("workflow trigger rejects instead of running the main job", async () => {
     const main = createWorkflowJob({
       name: "fallback-main",
       body: (input: { n: number }) => ({ total: input.n + 1 }),
     });
     const workflow = createWorkflow({ name: "fallback-wf", mainJob: main });
 
-    expect(() => workflow.trigger({ n: 0 })).toThrow(/tailor\.workflow is not available/);
+    await expect(workflow.trigger({ n: 0 })).rejects.toThrow(/tailor\.workflow is not available/);
   });
 });
