@@ -68,6 +68,8 @@ Or register the entry in `tsconfig.json`:
 }
 ```
 
+v2 removes this implicit activation — see [Migrating to v2](./migration/v2.md#ambient-global-types) for the migration options.
+
 ## Namespaces
 
 The runtime entry re-exports the following namespaces. Detailed signatures, parameters, and return types live in the JSDoc next to each export — hover the symbol in your IDE or browse the source.
@@ -79,6 +81,8 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `workflow` — workflow & job control (`triggerWorkflow`, `triggerJobFunction`, `wait`, `resolve`)
 - `context` — execution context (`getInvoker`)
 - `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`, `openDownloadStream` _(deprecated)_)
+
+`openDownloadStream` is removed in v2 in favor of `downloadStream` — see [Migrating to v2](./migration/v2.md#file-streaming-opendownloadstream--downloadstream).
 
 ## Testing
 
