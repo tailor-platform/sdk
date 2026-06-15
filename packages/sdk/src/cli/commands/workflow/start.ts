@@ -296,10 +296,11 @@ async function resolveApplicationAuthNamespace(options: {
     workspaceId: options.workspaceId,
     applicationName: config.name,
   });
-  if (!application?.authNamespace) {
+  const authNamespace = application?.authNamespace || config.auth?.name;
+  if (!authNamespace) {
     throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
-  return application.authNamespace;
+  return authNamespace;
 }
 
 async function startWorkflowByName(

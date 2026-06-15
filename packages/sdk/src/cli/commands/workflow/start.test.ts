@@ -116,6 +116,38 @@ describe("startWorkflow runtime overload", () => {
     );
   });
 
+  test("typed shape falls back to external auth config name", async () => {
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      config: {
+        name: "my-app",
+        auth: { name: "external-auth", external: true },
+      },
+    } as Awaited<ReturnType<typeof loadConfig>>);
+    getApplicationMock.mockResolvedValueOnce({
+      application: {},
+    });
+
+    await startWorkflow({
+      workflow: {
+        name: "typed-workflow",
+        mainJob: {
+          body: () => undefined,
+        },
+      },
+      authInvoker: "typed-user",
+    });
+
+    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "id:typed-workflow",
+        authInvoker: expect.objectContaining({
+          namespace: "external-auth",
+          machineUserName: "typed-user",
+        }),
+      }),
+    );
+  });
+
   test("start command with jsonMode emits only parseable JSON to stdout", async () => {
     using stdout = captureStdout();
     using stderr = captureStderr();
