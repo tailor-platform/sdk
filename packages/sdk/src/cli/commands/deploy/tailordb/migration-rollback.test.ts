@@ -538,6 +538,30 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     expect(restoredFields).not.toContain("extra");
   });
 
+  test("rolls back when the pre-phase itself fails (createTailorDBType rejects)", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+    vi.mocked(client.createTailorDBType).mockRejectedValue(new Error("pre-phase create failed"));
+
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkAddTypeMigration(1, "StockReservation"),
+    ]);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "pre-phase create failed",
+    );
+
+    // The script never ran, the type the pre-phase tried to create is rolled
+    // back, and the checkpoint is untouched.
+    expect(migrationModule.executeMigrations).not.toHaveBeenCalled();
+    const deletedNames = vi.mocked(client.deleteTailorDBType).mock.calls.map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c) => (c[0] as any)?.tailordbTypeName,
+    );
+    expect(deletedNames).toContain("StockReservation");
+    expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
   test("surfaces the original migration error even when the rollback itself fails", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();

@@ -731,6 +731,23 @@ function buildSnapshotTypeManifest(
 }
 
 /**
+ * Await every promise to settle, then throw the first rejection. Unlike
+ * `Promise.all`, this never leaves sibling operations in flight after a failure,
+ * so a following rollback cannot race with still-pending DDL.
+ * @param promises - Promises (or already-resolved values) to await
+ * @returns {Promise<void>} Resolves once all settle; rejects with the first failure
+ */
+async function awaitAllSettledOrThrow(
+  promises: ReadonlyArray<Promise<unknown> | undefined>,
+): Promise<void> {
+  const results = await Promise.allSettled(promises);
+  const rejected = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (rejected) {
+    throw rejected.reason;
+  }
+}
+
+/**
  * Execute pre-migration phase for a single migration
  * @param {OperatorClient} client - Operator client instance
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
@@ -753,7 +770,9 @@ async function executeSingleMigrationPrePhase(
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
-  await Promise.all([
+  // Settle all DDL before returning so a rollback on failure never races with
+  // a still-pending create/update.
+  await awaitAllSettledOrThrow([
     ...changeSet.type.creates
       .filter((create) => {
         const typeName = create.request.tailordbType?.name;
@@ -851,7 +870,7 @@ async function executeSingleMigrationPrePhase(
       );
     });
     if (missingTypeCreates.length > 0) {
-      await Promise.all(
+      await awaitAllSettledOrThrow(
         missingTypeCreates.map((create) => {
           const typeName = create.request.tailordbType?.name;
           if (typeName) processedTypes.created.add(typeName);
@@ -860,7 +879,7 @@ async function executeSingleMigrationPrePhase(
       );
     }
     processedTypes.gqlPermissionsProcessed.add(migration.namespace);
-    await Promise.all([
+    await awaitAllSettledOrThrow([
       ...gqlPermissionCreatesForNamespace.map((create) =>
         client.createTailorDBGQLPermission(create.request),
       ),
