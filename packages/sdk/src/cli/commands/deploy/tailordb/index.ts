@@ -1017,6 +1017,16 @@ async function rollbackSingleMigrationPrePhase(
     migration.migrationsDir,
     migration.number - 1,
   );
+  // Without the prior snapshot, pre-existing and new types are indistinguishable;
+  // deleting them all would be destructive, so leave the schema untouched.
+  if (!priorSnapshot) {
+    logger.warn(
+      `Cannot roll back migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
+        `prior snapshot (migration ${formatMigrationNumber(migration.number - 1)}) could not be reconstructed. ` +
+        "Leaving schema as-is; manual repair may be required.",
+    );
+    return;
+  }
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
 
   logger.warn(
@@ -1025,7 +1035,7 @@ async function rollbackSingleMigrationPrePhase(
   );
 
   for (const typeName of affectedTypes) {
-    const priorType = priorSnapshot?.types[typeName];
+    const priorType = priorSnapshot.types[typeName];
     try {
       if (priorType) {
         const manifest = generateTailorDBTypeManifestFromSnapshot(priorType, {

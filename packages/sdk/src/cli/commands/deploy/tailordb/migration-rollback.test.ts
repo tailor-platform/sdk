@@ -534,4 +534,38 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
       snap.mockImplementation(snapshotFixtures.reconstructSnapshotFromMigrations as SnapImpl);
     }
   });
+
+  test("does not delete any type when the prior snapshot cannot be reconstructed", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkAddTypeMigration(1, "StockReservation"),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+      new Error("rpc error: code = Aborted desc = original migration failure"),
+    );
+
+    // Prior snapshot is unavailable: new and pre-existing types are then
+    // indistinguishable, so nothing must be deleted.
+    const snap = vi.mocked(reconstructSnapshotFromMigrations);
+    type SnapImpl = Parameters<typeof snap.mockImplementation>[0];
+    snap.mockImplementation(((migrationsDir: string, maxVersion?: number) =>
+      (maxVersion ?? 0) === 0
+        ? null
+        : snapshotFixtures.reconstructSnapshotFromMigrations(
+            migrationsDir,
+            maxVersion,
+          )) as SnapImpl);
+
+    try {
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        "original migration failure",
+      );
+      expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+      expect(client.updateTailorDBType).not.toHaveBeenCalled();
+    } finally {
+      snap.mockImplementation(snapshotFixtures.reconstructSnapshotFromMigrations as SnapImpl);
+    }
+  });
 });
