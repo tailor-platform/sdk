@@ -7,7 +7,7 @@ Demonstrates workflow patterns with job chaining, trigger testing, and dependenc
 - Workflow with multiple jobs (`createWorkflow`, `createWorkflowJob`)
 - Job chaining via `.trigger()`
 - Database operations in workflow jobs (DI pattern)
-- Integration testing with `workflow.mainJob.trigger()`
+- Integration testing with `runWorkflowLocally()`
 
 ## Getting Started
 

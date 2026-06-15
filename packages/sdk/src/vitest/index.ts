@@ -69,4 +69,5 @@ export {
   mockIconv,
 } from "./mock";
 
+export { runWorkflowLocally, type RunWorkflowLocallyOptions } from "./workflow-local";
 export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";

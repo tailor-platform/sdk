@@ -464,7 +464,7 @@ const mainJob = createWorkflowJob({
       );
 
       expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("fetch-data", { id: input.id }))()',
+        'tailor.workflow.triggerJobFunction("fetch-data", { id: input.id })',
       );
       // fetchData declaration is removed (const fetchData = ...)
       expect(result).not.toContain("const fetchData");
@@ -509,9 +509,7 @@ const mainJob = createWorkflowJob({
       // mainJob body is preserved
       expect(result).toContain('result: "main"');
       // trigger is transformed (job name appears in triggerJobFunction call)
-      expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("heavy-job", undefined))()',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("heavy-job", undefined)');
     });
 
     test("removes declarations of multiple other jobs", () => {
@@ -558,12 +556,8 @@ const mainJob = createWorkflowJob({
       // heavy code is removed (part of job1/job2 body)
       expect(result).not.toContain("heavy code");
       // triggers are transformed (job names appear in triggerJobFunction calls)
-      expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("job-one", undefined))()',
-      );
-      expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("job-two", undefined))()',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("job-one", undefined)');
+      expect(result).toContain('tailor.workflow.triggerJobFunction("job-two", undefined)');
     });
 
     test("does not modify jobs without trigger calls", () => {
@@ -1005,8 +999,8 @@ async function processOrder(orderId: string) {
     });
   });
 
-  describe("async IIFE wrapping for job triggers", () => {
-    test("wraps job.trigger() in an async IIFE and preserves await", () => {
+  describe("direct job trigger transformation", () => {
+    test("replaces job.trigger() with triggerJobFunction() and preserves await", () => {
       const source = `
 const customer = await fetchCustomer.trigger({ customerId: "123" });
 console.log(customer);
@@ -1017,11 +1011,11 @@ console.log(customer);
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'const customer = await (async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
+        'const customer = await tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
       );
     });
 
-    test("wraps multiple job.trigger() calls in an async IIFE", () => {
+    test("replaces multiple job.trigger() calls directly", () => {
       const source = `
 const customer = await fetchCustomer.trigger({ customerId: "123" });
 const notification = await sendNotification.trigger({ message: "Hello" });
@@ -1034,10 +1028,8 @@ const notification = await sendNotification.trigger({ message: "Hello" });
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('(async () => tailor.workflow.triggerJobFunction("fetch-customer"');
-      expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("send-notification"',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-customer"');
+      expect(result).toContain('tailor.workflow.triggerJobFunction("send-notification"');
     });
 
     test("does not wrap workflow.trigger() calls (already async)", () => {
@@ -1053,7 +1045,7 @@ const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoke
       expect(result).not.toContain("(async () => tailor.workflow.triggerWorkflow");
     });
 
-    test("wraps job.trigger() without await so it still returns a Promise", () => {
+    test("replaces job.trigger() without await with the raw platform result", () => {
       const source = `
 const customerPromise = fetchCustomer.trigger({ customerId: "123" });
 `;
@@ -1063,12 +1055,12 @@ const customerPromise = fetchCustomer.trigger({ customerId: "123" });
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'const customerPromise = (async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
+        'const customerPromise = tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
       );
       expect(result).not.toMatch(/\bawait\b/);
     });
 
-    test("wraps job.trigger() inside Promise.all array elements", () => {
+    test("replaces job.trigger() inside Promise.all array elements", () => {
       const source = `
 const [customer, notification] = await Promise.all([
   fetchCustomer.trigger({ customerId: "123" }),
@@ -1084,15 +1076,15 @@ const [customer, notification] = await Promise.all([
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
+        'tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
       );
       expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("send-notification", { message: "Hello" }))()',
+        'tailor.workflow.triggerJobFunction("send-notification", { message: "Hello" })',
       );
       expect(result).toContain("await Promise.all([");
     });
 
-    test("wraps job.trigger() before .then() chains", () => {
+    test("replaces job.trigger() before .then() chains without preserving Promise wrapping", () => {
       const source = `
 fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
   console.log(customer);
@@ -1104,11 +1096,11 @@ fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))().then(',
+        'tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }).then(',
       );
     });
 
-    test("wraps job.trigger() nested inside an unknown .trigger() argument", () => {
+    test("replaces job.trigger() nested inside an unknown .trigger() argument", () => {
       const source = `
 unknown.trigger(fetchCustomer.trigger({ customerId: "123" }));
 `;
@@ -1118,7 +1110,7 @@ unknown.trigger(fetchCustomer.trigger({ customerId: "123" }));
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
+        'tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
       );
       expect(result).toContain("unknown.trigger(");
     });
