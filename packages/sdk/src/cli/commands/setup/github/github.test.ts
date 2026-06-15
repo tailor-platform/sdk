@@ -128,6 +128,12 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("LABEL: my-app");
   });
 
+  test("fetches the pull request base into the remote-tracking ref before merge", () => {
+    const { content } = renderBranchWorkflow(branchBase);
+    expect(content).toContain('git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"');
+    expect(content).toContain('git merge --no-commit --no-ff "origin/$BASE_REF" || true');
+  });
+
   test("paginates plan comment lookup", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain("github.paginate(github.rest.issues.listComments");
