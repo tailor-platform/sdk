@@ -17,3 +17,4 @@ For **SDK users**, see:
 - [Testing](testing.md) - Test strategy and conventions
 - [Changeset Conventions](changeset.md) - Version bump level guidelines
 - [Telemetry / Performance Profiling](telemetry.md) - OTLP tracing for CLI performance analysis
+- [setup github Contracts](setup-github-contracts.md) - Beta graduation contracts: reserved ids, lock schema, ownership model, CLI flags, and more

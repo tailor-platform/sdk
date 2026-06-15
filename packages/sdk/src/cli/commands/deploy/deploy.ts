@@ -24,7 +24,7 @@ import {
   type HasName,
   type PlanSummary,
 } from "./change-set";
-import { ensureConfigId } from "./config-id-injector";
+import { ensureConfigIdForDeploy } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
@@ -393,12 +393,14 @@ export async function deploy(options?: DeployOptions) {
 
       const { config, plugins } = await withSpan("build.loadConfig", async () => {
         const foundPath = loadConfigPath(options?.configPath);
-        // Skip id injection in dry-run / build-only flows: those modes are
-        // expected to have no on-disk side effects.
-        if (foundPath && !dryRun && !buildOnly) {
+        // Locally inject a missing app id; in CI require an existing id
+        // instead of auto-generating one. CI dry-runs still run the check
+        // read-only (so a forgotten id fails the PR plan); local dry-run and
+        // build-only skip it. See ensureConfigIdForDeploy.
+        if (foundPath) {
           const resolvedPath = path.resolve(process.cwd(), foundPath);
           if (fs.existsSync(resolvedPath)) {
-            await ensureConfigId(resolvedPath);
+            await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
           }
         }
         return loadConfig(options?.configPath);
