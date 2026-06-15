@@ -8,6 +8,7 @@ import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import { assertDefined } from "@/utils/assert";
+import { resolveWorkspaceFolderName, workspaceDisplayName } from "./transform";
 
 const deleteWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
@@ -75,12 +76,19 @@ export const deleteCommand = defineAppCommand({
       throw new Error(`Workspace "${workspaceId}" not found.`);
     }
 
+    const workspaceResource = workspace.workspace;
+    const workspaceName = workspaceResource?.name ?? workspaceId;
+    const folderName = workspaceResource
+      ? await resolveWorkspaceFolderName(client, workspaceResource)
+      : "";
+    const displayName = workspaceDisplayName({ name: workspaceName, folderName });
+
     // Confirm deletion if not forced
     if (!args.yes) {
       const confirmation = await prompt.text({
-        message: `Enter the workspace name to confirm deletion (${workspace.workspace?.name}):`,
+        message: `Enter the workspace name to confirm deletion (${displayName}):`,
       });
-      if (confirmation !== workspace.workspace?.name) {
+      if (confirmation !== workspaceName && confirmation !== displayName) {
         logger.info("Workspace deletion cancelled.");
         return;
       }
@@ -106,10 +114,10 @@ export const deleteCommand = defineAppCommand({
     // Show success message
     if (profilesToDelete.length > 0) {
       logger.success(
-        `Workspace "${args["workspace-id"]}" and ${profilesToDelete.length} associated profile(s) deleted successfully.`,
+        `Workspace "${displayName}" and ${profilesToDelete.length} associated profile(s) deleted successfully.`,
       );
     } else {
-      logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
+      logger.success(`Workspace "${displayName}" deleted successfully.`);
     }
   },
 });

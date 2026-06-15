@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 1.61.0
+
+### Minor Changes
+
+- [#1398](https://github.com/tailor-platform/sdk/pull/1398) [`19fa125`](https://github.com/tailor-platform/sdk/commit/19fa12594cfb82ca01d429300d5703717643a114) Thanks [@dqn](https://github.com/dqn)! - Display folder names alongside workspace names in workspace-related CLI output.
+
+## 1.60.3
+
+### Patch Changes
+
+- [#1405](https://github.com/tailor-platform/sdk/pull/1405) [`585b917`](https://github.com/tailor-platform/sdk/commit/585b91797f68e999b24292e9ae8c70b6b2d72221) Thanks [@dqn](https://github.com/dqn)! - Delete workflow job functions when their owning workflow is removed during deploy.
+
+- [#1410](https://github.com/tailor-platform/sdk/pull/1410) [`65cd4e8`](https://github.com/tailor-platform/sdk/commit/65cd4e8c678ffac6b85a6371376931a403065c0b) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a Multi-Environment Configuration guide covering workspace selection, per-environment config values with env files, runtime `env` forwarding, and settings that belong to a single environment such as custom domains.
+
 ## 1.60.2
 
 ### Patch Changes

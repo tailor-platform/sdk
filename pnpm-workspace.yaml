@@ -6,9 +6,6 @@ minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
   - "@tailor-platform/*"
-  - "@toiroakr/lines-db"
-  - politty
-  - zinfer
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade

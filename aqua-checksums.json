@@ -91,6 +91,31 @@
       "algorithm": "sha256"
     },
     {
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.25.2/zizmor-aarch64-apple-darwin.tar.gz",
+      "checksum": "624EF0E09521AECD862126BE0F6D7754669AF2646750D68AC48A114BE33C3146",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.25.2/zizmor-aarch64-unknown-linux-gnu.tar.gz",
+      "checksum": "4B4B9491112C2A09B318101C0D3349B73AF1C4F532E097DD6D0164F2ABDA760D",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.25.2/zizmor-x86_64-apple-darwin.tar.gz",
+      "checksum": "353271B9EC301DD4BA158AF481323C831C6E9B494D5AC3F5AA58CF4B207699CC",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.25.2/zizmor-x86_64-pc-windows-msvc.zip",
+      "checksum": "65D46A8144F701200621B580F632076D80D082D60856DE9F88793A95FB5882D7",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.25.2/zizmor-x86_64-unknown-linux-gnu.tar.gz",
+      "checksum": "AA1FACD105F0D83FE5C55B1ADCD9D7417DE5D83AA27471F91DC0B66CF3803577",
+      "algorithm": "sha256"
+    },
+    {
       "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.523.0/registry.yaml",
       "checksum": "14BFA633212CF508D45DE47AD17CF666E009BCA351787E28F41D63FFD5B99D8B",
       "algorithm": "sha256"

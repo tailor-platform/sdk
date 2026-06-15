@@ -6,7 +6,12 @@ import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/
 import { logger } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import { assertDefined } from "@/utils/assert";
-import { workspaceInfo, type WorkspaceInfo } from "./transform";
+import {
+  workspaceDisplayName,
+  workspaceInfoWithFolderName,
+  workspaceNameTransformer,
+  type WorkspaceInfo,
+} from "./transform";
 import type { ProfileInfo } from "../profile";
 
 /**
@@ -66,7 +71,10 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
     folderId: validated.folderId,
   });
 
-  return workspaceInfo(assertDefined(resp.workspace, "createWorkspace response missing workspace"));
+  return workspaceInfoWithFolderName(
+    client,
+    assertDefined(resp.workspace, "createWorkspace response missing workspace"),
+  );
 }
 
 export const createCommand = defineAppCommand({
@@ -161,7 +169,7 @@ export const createCommand = defineAppCommand({
     }
 
     if (!args.json) {
-      logger.success(`Workspace "${args.name}" created successfully.`);
+      logger.success(`Workspace "${workspaceDisplayName(workspace)}" created successfully.`);
     }
 
     if (args.json && profileInfo) {
@@ -169,7 +177,7 @@ export const createCommand = defineAppCommand({
       return;
     }
 
-    logger.out(workspace);
+    logger.out(workspace, { display: { name: workspaceNameTransformer, folderName: null } });
     if (profileInfo) {
       logger.out("Profile:");
       logger.out(profileInfo);
