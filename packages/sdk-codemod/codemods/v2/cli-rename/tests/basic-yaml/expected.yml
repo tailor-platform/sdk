@@ -8,3 +8,4 @@ jobs:
       - run: pnpm install
       - run: pnpm exec tailor-sdk crashreport list
       - run: pnpm exec tailor-sdk crashreport send --file latest.crash.log
+      - run: pnpm exec tailor-sdk login --machine-user ci

@@ -8,3 +8,5 @@ echo "Generated crash-report uploaded"
 # Should not match: positional/long-form camelCase identifiers are out of scope
 pnpm exec tailor-sdk function logs --executionId abc
 pnpm exec tailor-sdk executor jobs my-executor --jobId xyz
+# Should not match: longer option names
+pnpm exec tailor-sdk login --machineusername ci
