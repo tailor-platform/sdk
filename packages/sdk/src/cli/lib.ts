@@ -93,6 +93,8 @@ export {
 } from "./commands/workflow/get";
 export {
   startWorkflow,
+  type MachineUserName,
+  type MachineUserNameRegistry,
   type StartWorkflowOptions,
   type StartWorkflowTypedOptions,
   type StartWorkflowResultWithWait,

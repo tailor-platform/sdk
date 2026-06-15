@@ -18,9 +18,24 @@ import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
 import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
-import type { MachineUserName } from "@/types/auth";
 import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
+
+// Interface for module augmentation
+// Users can extend via: declare module "@tailor-platform/sdk/cli" { interface MachineUserNameRegistry { ... } }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface MachineUserNameRegistry {}
+
+/**
+ * Machine user name for CLI helper APIs.
+ *
+ * When `tailor.d.ts` is generated (via `tailor-sdk deploy`/`generate`), this is narrowed
+ * to the union of defined machine user names. When no machine users are registered yet,
+ * falls back to `string` to avoid blocking editing before the first generate run.
+ */
+export type MachineUserName = keyof MachineUserNameRegistry extends never
+  ? string
+  : keyof MachineUserNameRegistry & string;
 
 type WorkflowLike = {
   name: string;

@@ -136,6 +136,10 @@ declare module "@tailor-platform/sdk" {
   interface IdpNameRegistry ${idpNameBody}
 }
 
+declare module "@tailor-platform/sdk/cli" {
+  interface MachineUserNameRegistry ${machineUserBody}
+}
+
 export {};
 
 `;

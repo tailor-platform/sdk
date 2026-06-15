@@ -3,6 +3,14 @@ import { describe, test, expectTypeOf } from "vitest";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
 import { type StartWorkflowOptions, type StartWorkflowTypedOptions } from "./start";
 
+declare module "./start" {
+  interface MachineUserNameRegistry {
+    admin: true;
+    "typed-user": true;
+    worker: true;
+  }
+}
+
 const calculationJob = createWorkflowJob({
   name: "calculation",
   body: (input: { a: number; b: number }) => ({ sum: input.a + input.b }),
@@ -126,6 +134,13 @@ describe("startWorkflow API types", () => {
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
       authInvoker: "worker",
+      arg: { a: 1, b: 2 },
+    });
+
+    acceptsCalculationWorkflowOptions({
+      workflow: calculationWorkflow,
+      // @ts-expect-error - invalid machine user name
+      authInvoker: "invalid-machine-user",
       arg: { a: 1, b: 2 },
     });
   });
