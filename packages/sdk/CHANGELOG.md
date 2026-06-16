@@ -1,5 +1,56 @@
 # @tailor-platform/sdk
 
+## 1.66.0
+### Minor Changes
+
+
+
+- [#1343](https://github.com/tailor-platform/sdk/pull/1343) [`f8ad2f7`](https://github.com/tailor-platform/sdk/commit/f8ad2f7f17b9453fc6ac20d25e780b6c420d4525) Thanks [@dqn](https://github.com/dqn)! - Adopt dispatcher-mode shell completion so generated completion scripts resolve the currently visible `tailor-sdk` binary at completion time, allowing project-local SDK installations to provide matching completions. Published SDK packages now include a bundled zsh completion worker so the dispatcher can skip first-use cache generation.
+
+
+
+- [#1402](https://github.com/tailor-platform/sdk/pull/1402) [`2720c06`](https://github.com/tailor-platform/sdk/commit/2720c06e1b7029df6518449abd7d5b7c480903e3) Thanks [@dragon3](https://github.com/dragon3)! - Add `defineAIGateway()` for declaring AI Gateways in `tailor.config.ts`. Configure with `authNamespace` (required) and an optional `cors` allow-list; reference the deployed gateway domain via the `domain` getter. Gateways are created, updated, and removed by `tailor deploy` / `tailor remove` against the platform's AI Gateway API.
+
+## 1.65.0
+### Minor Changes
+
+
+
+- [#1456](https://github.com/tailor-platform/sdk/pull/1456) [`5401fa8`](https://github.com/tailor-platform/sdk/commit/5401fa8a179af6adbf6edddba2307d55ae1cbc0b) Thanks [@k1LoW](https://github.com/k1LoW)! - Type the `federated_identity` claim in the `beforeLogin` hook. When a user signs in through a Built-in IdP OAuth provider (Google or Microsoft), `claims.federated_identity` now exposes the upstream provider's profile (`provider` plus profile claims such as `picture`, `name`, `given_name`, `family_name`, `locale`) with autocompletion, while arbitrary IdP claims remain reachable. Adds the `FederatedIdentity`, `FederatedIdentityClaims`, `FederatedIdentityProvider`, and `BeforeLoginClaims` types.
+
+
+### Patch Changes
+
+
+
+- [#1449](https://github.com/tailor-platform/sdk/pull/1449) [`016aff6`](https://github.com/tailor-platform/sdk/commit/016aff6aab31c334c57a5e5244453f2dd559c008) Thanks [@k1LoW](https://github.com/k1LoW)! - Document the `userAuthPolicy`, `gqlOperations`, and `lang` options of `defineIdp()` in the IdP service guide, including the password policy fields, allowed email domains, Google/Microsoft social login, the read-only `"query"` shortcut, and the cross-field validation constraints.
+
+
+
+- [#1450](https://github.com/tailor-platform/sdk/pull/1450) [`162ba62`](https://github.com/tailor-platform/sdk/commit/162ba629e0d511593718f289b93788d5d56778da) Thanks [@toiroakr](https://github.com/toiroakr)! - Update OpenTelemetry runtime dependencies to 2.8.0 to resolve a moderate security advisory (GHSA-8988-4f7v-96qf) in `@opentelemetry/core`
+
+
+
+- [#1432](https://github.com/tailor-platform/sdk/pull/1432) [`3a854a3`](https://github.com/tailor-platform/sdk/commit/3a854a3a10b938ce3cf6fe7527de4ab56ecf48d5) Thanks [@toiroakr](https://github.com/toiroakr)! - Roll back a migration's pre-migration schema changes when its data migration (`migrate.ts`) fails during `apply`. A failed migration now leaves the workspace at its prior checkpoint and prior schema instead of half-applied, so subsequent deploys are no longer blocked by opaque "Remote schema drift detected" errors.
+
+
+
+- [#1422](https://github.com/tailor-platform/sdk/pull/1422) [`f3f8427`](https://github.com/tailor-platform/sdk/commit/f3f84277fe1942601d0fcbb8a64c2c26823b5624) Thanks [@dqn](https://github.com/dqn)! - Internal cleanup of proto field optionality handling. No behavior change.
+
+
+
+- [#1421](https://github.com/tailor-platform/sdk/pull/1421) [`b933f47`](https://github.com/tailor-platform/sdk/commit/b933f474d65f8dfed56f3991aae3a52589368b10) Thanks [@dqn](https://github.com/dqn)! - Corrupted or hand-edited TailorDB migration snapshot/diff files now fail with a clear validation error when loaded, instead of causing undefined behavior later.
+
+## 1.64.0
+
+### Minor Changes
+
+- [#1419](https://github.com/tailor-platform/sdk/pull/1419) [`d9b5755`](https://github.com/tailor-platform/sdk/commit/d9b57557d812f107fc02721680aecf2ea5ba24ad) Thanks [@dqn](https://github.com/dqn)! - Add default machine user to CLI profiles. Use `tailor-sdk profile create <name> --machine-user <name>` or `tailor-sdk profile update <name> --machine-user <name>` to store a default machine user on a profile. Commands that require a machine user (`query`, `workflow start`, `function test-run`, `machineuser token`) now fall back to the active profile's default when no machine user is given via the command line (`--machine-user`, or the `NAME` argument for `machineuser token`) or the `TAILOR_PLATFORM_MACHINE_USER_NAME` environment variable. Pass an empty string to `profile update --machine-user ""` to clear the stored default. Profiles also support `--machine-user-override deny`, which locks the machine user to the stored default: any explicit machine user supplied on the command line or via `TAILOR_PLATFORM_MACHINE_USER_NAME` that differs from the profile's value causes commands to fail immediately with error code `PROFILE_MACHINE_USER_OVERRIDE_DENIED`. Use `--machine-user-override allow` (the default) to restore the previous behavior.
+
+### Patch Changes
+
+- [#1414](https://github.com/tailor-platform/sdk/pull/1414) [`1d04806`](https://github.com/tailor-platform/sdk/commit/1d04806e331377d847ac55ac3b9c1dcbb887a1f7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
 ## 1.63.0
 
 ### Minor Changes

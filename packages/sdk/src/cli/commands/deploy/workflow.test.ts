@@ -705,6 +705,7 @@ describe("planWorkflow", () => {
             isEmpty: () => false,
             print: () => {},
           },
+          jobFunctionDeletes: [{ workspaceId, jobFunctionName: "removed-job" }],
           conflicts: [],
           unmanaged: [],
           resourceOwners: new Set<string>(),

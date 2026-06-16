@@ -128,9 +128,7 @@ function formatSubjectEvent(subject: string, eventTypes: readonly string[]): str
 
 function formatTypedEventTrigger(config: ExecutorTriggerEventConfig): string | null {
   const typedConfig = config.typedConfig;
-  // platform response may omit the field
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  if (!typedConfig || typedConfig.case === undefined) {
+  if (typedConfig.case === undefined) {
     return null;
   }
 
@@ -247,9 +245,7 @@ function formatTriggerConfig(executor: ExecutorExecutor): Record<string, unknown
 
 function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<string, unknown> {
   const typedConfig = config.typedConfig;
-  // platform response may omit the field
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  if (!typedConfig || typedConfig.case === undefined) {
+  if (typedConfig.case === undefined) {
     return {
       eventType: config.eventType,
       condition: config.condition?.expr || "",
