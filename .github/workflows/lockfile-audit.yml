@@ -7,7 +7,7 @@ name: Lockfile Audit
 # and picomatch). This gate fails such PRs before they reach main.
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
     paths:
       - pnpm-lock.yaml
   pull_request:

@@ -1,0 +1,10 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@tailor-platform/create-sdk": "1.64.0",
+    "@tailor-platform/sdk": "1.64.0",
+    "@tailor-platform/sdk-codemod": "0.2.7"
+  },
+  "changesets": []
+}
