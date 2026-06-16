@@ -6,5 +6,13 @@
     "@tailor-platform/sdk": "1.64.0",
     "@tailor-platform/sdk-codemod": "0.2.7"
   },
-  "changesets": []
+  "changesets": [
+    "docs-idp-user-auth-policy",
+    "fix-lockfile-audit-vulns",
+    "migration-rollback-on-failure",
+    "plugin-cli-import-codemod",
+    "proto-init-shape-optionality",
+    "v2-baseline",
+    "validate-migrate-json"
+  ]
 }
