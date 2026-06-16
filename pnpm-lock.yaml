@@ -137,8 +137,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.1
-        version: 0.5.1(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.1))(zod@4.4.3)
+        specifier: 0.6.0
+        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.1))(zod@4.4.3)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -489,8 +489,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.1
-        version: 0.5.1(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.1))(zod@4.4.3)
+        specifier: 0.6.0
+        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.1))(zod@4.4.3)
       rolldown:
         specifier: 1.1.0
         version: 1.1.0
@@ -595,8 +595,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.5.1
-        version: 0.5.1(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.1))(zod@4.4.3)
+        specifier: 0.6.0
+        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.1))(zod@4.4.3)
       semver:
         specifier: 7.8.3
         version: 7.8.3
@@ -3329,9 +3329,10 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.5.1:
-    resolution: {integrity: sha512-KYXOO3R1xMVpUZGXhmwY2dejy22i+2mw1uuFtzRLzdiqtDoAYYyuFQBzpzIhQPMGEOu6/ZWrbXcK1dZrDrOtUQ==}
+  politty@0.6.0:
+    resolution: {integrity: sha512-xzEaIJ444nI2S0bRZb/AvcXaHQ0DDRs0y+JsmWUeIFgvgHjGHU8owJwXEY34B8ihCugxAQ0vVgPJX18EOoexfQ==}
     engines: {node: '>=18'}
+    hasBin: true
     peerDependencies:
       '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
       '@inquirer/prompts': ^8.3.2
@@ -6059,7 +6060,7 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.5.1(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.1))(zod@4.4.3):
+  politty@0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.1))(zod@4.4.3):
     dependencies:
       string-width: 8.2.1
       zod: 4.4.3
