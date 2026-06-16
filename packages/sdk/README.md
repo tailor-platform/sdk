@@ -89,6 +89,7 @@ the installed SDK version. Files are copied (not symlinked) so they survive
 - [Runtime API](./docs/runtime.md) - Typed wrappers for `tailor.iconv`, `tailor.secretmanager`, `tailor.idp`, `tailor.workflow`, `tailor.context`, `tailor.authconnection`, and `tailordb.file`
 - [Testing Guide](./docs/testing.md) - Unit and E2E testing patterns
 - [CLI Reference](./docs/cli-reference.md) - Command-line interface documentation
+- [Migrating to v2](./docs/migration/v2.md) - Upgrading a project to the v2 SDK
 
 ### Templates
 
