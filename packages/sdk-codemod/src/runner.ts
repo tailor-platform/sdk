@@ -47,6 +47,11 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 
 /** Directory names always excluded from file scanning. */
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
+const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
+
+function shouldSkipDirectory(name: string): boolean {
+  return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
+}
 
 async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string> {
   const absoluteDir = path.join(root, relativeDir);
@@ -60,7 +65,7 @@ async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string
   for (const entry of entries) {
     const relative = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
     if (entry.isDirectory()) {
-      if (EXCLUDE_DIRS.has(entry.name)) continue;
+      if (shouldSkipDirectory(entry.name)) continue;
       yield* walkFiles(root, relative);
       continue;
     }
