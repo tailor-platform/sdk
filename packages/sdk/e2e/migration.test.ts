@@ -103,17 +103,17 @@ function runGenerateCli(configPath: string, cwd: string): void {
 }
 
 /**
- * Run the apply CLI command via subprocess
+ * Run the deploy CLI command via subprocess
  * @param {string} configPath - Path to the config file
  * @param {string} workspaceId - Workspace ID
  * @param {string} cwd - Working directory
  */
-function runApplyCli(configPath: string, workspaceId: string, cwd: string): void {
+function runDeployCli(configPath: string, workspaceId: string, cwd: string): void {
   const sdkRoot = path.resolve(__dirname, "..");
   const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
 
   try {
-    execSync(`node ${cliPath} apply --config ${configPath} --workspace-id ${workspaceId} --yes`, {
+    execSync(`node ${cliPath} deploy --config ${configPath} --workspace-id ${workspaceId} --yes`, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"], // stdin ignored, stdout/stderr piped
       env: {
@@ -121,27 +121,27 @@ function runApplyCli(configPath: string, workspaceId: string, cwd: string): void
         NODE_OPTIONS: "--experimental-vm-modules",
       },
       encoding: "utf-8",
-      timeout: 120000, // 120 second timeout for apply operations
+      timeout: 120000, // 120 second timeout for deploy operations
     });
     // Success - output captured but not logged to keep test output clean
   } catch (error: unknown) {
     // Log error details for debugging
     if (error && typeof error === "object" && "stderr" in error) {
-      console.error("Apply CLI error:", (error as { stderr?: Buffer }).stderr?.toString());
+      console.error("Deploy CLI error:", (error as { stderr?: Buffer }).stderr?.toString());
     }
     throw error;
   }
 }
 
 /**
- * Run the apply CLI command, returning the result instead of throwing so callers
+ * Run the deploy CLI command, returning the result instead of throwing so callers
  * can assert on an expected failure.
  * @param {string} configPath - Path to the config file
  * @param {string} workspaceId - Workspace ID
  * @param {string} cwd - Working directory
- * @returns {{ ok: boolean; output: string }} Whether apply succeeded and its combined output
+ * @returns {{ ok: boolean; output: string }} Whether deploy succeeded and its combined output
  */
-function tryApplyCli(
+function tryDeployCli(
   configPath: string,
   workspaceId: string,
   cwd: string,
@@ -151,7 +151,7 @@ function tryApplyCli(
 
   try {
     const out = execSync(
-      `node ${cliPath} apply --config ${configPath} --workspace-id ${workspaceId} --yes`,
+      `node ${cliPath} deploy --config ${configPath} --workspace-id ${workspaceId} --yes`,
       {
         cwd,
         stdio: ["ignore", "pipe", "pipe"],
@@ -429,7 +429,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     test("applies initial migration to workspace", async () => {
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
       // Verify: TailorDB service should exist
       const services = await listTailorDBServiceNames();
@@ -488,7 +488,7 @@ export type user = typeof user;
     test("applies non-breaking migration to workspace", async () => {
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
       // Verify: phone field should be added to User type
       const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -552,7 +552,7 @@ export type user = typeof user;
 
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
       // Verify: requiredField should be added to User type
       const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -616,7 +616,7 @@ export type user = typeof user;
     test("applies type addition to workspace", async () => {
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
       // Verify: Post type should be added
       const types = await listTailorDBTypeNames(tailordbName);
@@ -670,7 +670,7 @@ export type user = typeof user;
     test("applies field removal to workspace", async () => {
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
       // Verify: requiredField should be removed from User type
       const fields = await getTailorDBTypeFields(tailordbName, "User");
@@ -725,9 +725,9 @@ export type user = typeof user;
       expect(checkpointBefore).toBe(4);
 
       const configPath = createConfig();
-      const result = tryApplyCli(configPath, workspaceId, tempDir);
+      const result = tryDeployCli(configPath, workspaceId, tempDir);
 
-      // The apply must fail for the injected reason, not an unrelated error.
+      // The deploy must fail for the injected reason, not an unrelated error.
       expect(result.ok).toBe(false);
       expect(result.output).toContain("simulated migration failure for rollback e2e");
 
@@ -755,8 +755,8 @@ export type user = typeof user;
       );
 
       const configPath = createConfig();
-      // No drift error: the failed apply left a consistent baseline at checkpoint 4.
-      runApplyCli(configPath, workspaceId, tempDir);
+      // No drift error: the failed deploy left a consistent baseline at checkpoint 4.
+      runDeployCli(configPath, workspaceId, tempDir);
 
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).toContain("loyaltyTier");

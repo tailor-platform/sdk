@@ -8,7 +8,7 @@ import setupYarn from "./setup-yarn.yml";
 import tagTemplate from "./tag.workflow.yml";
 
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 1;
+export const TEMPLATE_VERSION = 2;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -191,17 +191,27 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     generatedIds.push(
       "tailor-plan",
       "tailor-plan/tailor-checkout",
+      "tailor-plan/tailor-merge-base",
       ...setupIds("tailor-plan", packageManager),
       "tailor-plan/tailor-generate",
       "tailor-plan/tailor-generate-check",
+      "tailor-plan/tailor-mask-credentials",
+      "tailor-plan/tailor-login",
       "tailor-plan/tailor-plan",
+      "tailor-plan/tailor-plan-summary",
+      "tailor-plan/tailor-plan-comment",
+      "tailor-plan/tailor-plan-fail",
     );
   }
   generatedIds.push(
     "tailor-deploy",
     "tailor-deploy/tailor-checkout",
     ...setupIds("tailor-deploy", packageManager),
-    "tailor-deploy/tailor-apply",
+    "tailor-deploy/tailor-validate-workspace",
+    "tailor-deploy/tailor-mask-credentials",
+    "tailor-deploy/tailor-login",
+    "tailor-deploy/tailor-generate",
+    "tailor-deploy/tailor-deploy",
   );
 
   return { content: out, generatedIds };
@@ -249,11 +259,19 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
     ...setupIds("tailor-plan", packageManager),
     "tailor-plan/tailor-generate",
     "tailor-plan/tailor-generate-check",
+    "tailor-plan/tailor-mask-credentials",
+    "tailor-plan/tailor-login",
     "tailor-plan/tailor-plan",
+    "tailor-plan/tailor-plan-summary",
+    "tailor-plan/tailor-plan-fail",
     "tailor-deploy",
     "tailor-deploy/tailor-checkout",
     ...setupIds("tailor-deploy", packageManager),
-    "tailor-deploy/tailor-apply",
+    "tailor-deploy/tailor-validate-workspace",
+    "tailor-deploy/tailor-mask-credentials",
+    "tailor-deploy/tailor-login",
+    "tailor-deploy/tailor-generate",
+    "tailor-deploy/tailor-deploy",
   );
 
   return { content: out, generatedIds };

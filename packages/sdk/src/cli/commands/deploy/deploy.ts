@@ -16,6 +16,7 @@ import { parseBoolean } from "@/cli/shared/parse-boolean";
 import { generateUserTypes } from "@/cli/shared/type-generator";
 import { withSpan } from "@/cli/telemetry";
 import { PluginManager } from "@/plugin/manager";
+import { applyAIGateway, planAIGateway } from "./aigateway";
 import { applyApplication, planApplication } from "./application";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
 import {
@@ -126,6 +127,9 @@ async function shouldForceApplyAll(
   application.staticWebsiteServices.forEach((website) => {
     candidateTrns.add(resourceTrn(workspaceId, "staticwebsite", website.name));
   });
+  application.aiGatewayServices.forEach((gateway) => {
+    candidateTrns.add(resourceTrn(workspaceId, "aigateway", gateway.name));
+  });
   application.resolverServices.forEach((pipeline) => {
     candidateTrns.add(resourceTrn(workspaceId, "pipeline", pipeline.namespace));
   });
@@ -197,6 +201,7 @@ type PlanResults = {
   functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
   staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
+  aiGateway: Awaited<ReturnType<typeof planAIGateway>>;
   idp: Awaited<ReturnType<typeof planIdP>>;
   auth: Awaited<ReturnType<typeof planAuth>>;
   pipeline: Awaited<ReturnType<typeof planPipeline>>;
@@ -284,6 +289,7 @@ function printPlanResults(results: PlanResults) {
   const authServiceActions = extractServiceActions(results.auth.changeSet.service);
   results.staticWebsite.changeSet.print();
   results.staticWebsite.customDomainChangeSet.print();
+  results.aiGateway.changeSet.print();
   results.app.print();
   printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
   printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
@@ -355,6 +361,7 @@ export function summarizePlanResults(
     otherChanges,
     results.staticWebsite.changeSet,
     results.staticWebsite.customDomainChangeSet,
+    results.aiGateway.changeSet,
     results.app,
     results.secretManager.vaultChangeSet,
     results.secretManager.secretChangeSet,
@@ -524,6 +531,7 @@ export async function deploy(options?: DeployOptions) {
       functionRegistry,
       tailorDB,
       staticWebsite,
+      aiGateway,
       idp,
       auth,
       pipeline,
@@ -557,32 +565,44 @@ export async function deploy(options?: DeployOptions) {
           .filter((entry) => entry.name.startsWith(WORKFLOW_PREFIX))
           .map((entry) => entry.name.slice(WORKFLOW_PREFIX.length)),
       );
-      const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
-        await Promise.all([
-          withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-          withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-          withSpan("plan.idp", () => planIdP(ctx)),
-          withSpan("plan.auth", () => planAuth(ctx)),
-          withSpan("plan.pipeline", () => planPipeline(ctx)),
-          withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
-          withSpan("plan.executor", () => planExecutor(ctx)),
-          withSpan("plan.workflow", () =>
-            planWorkflow(
-              client,
-              workspaceId,
-              application.name,
-              application.id,
-              workflowService?.workflows ?? {},
-              workflowBuildResult?.mainJobDeps ?? {},
-              unchangedWorkflowJobs,
-            ),
+      const [
+        tailorDB,
+        staticWebsite,
+        aiGateway,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+        secretManager,
+      ] = await Promise.all([
+        withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+        withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+        withSpan("plan.aiGateway", () => planAIGateway(ctx)),
+        withSpan("plan.idp", () => planIdP(ctx)),
+        withSpan("plan.auth", () => planAuth(ctx)),
+        withSpan("plan.pipeline", () => planPipeline(ctx)),
+        withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
+        withSpan("plan.executor", () => planExecutor(ctx)),
+        withSpan("plan.workflow", () =>
+          planWorkflow(
+            client,
+            workspaceId,
+            application.name,
+            application.id,
+            workflowService?.workflows ?? {},
+            workflowBuildResult?.mainJobDeps ?? {},
+            unchangedWorkflowJobs,
           ),
-          withSpan("plan.secretManager", () => planSecretManager(ctx)),
-        ]);
+        ),
+        withSpan("plan.secretManager", () => planSecretManager(ctx)),
+      ]);
       return {
         functionRegistry,
         tailorDB,
         staticWebsite,
+        aiGateway,
         idp,
         auth,
         pipeline,
@@ -599,6 +619,7 @@ export async function deploy(options?: DeployOptions) {
         ...functionRegistry.conflicts,
         ...tailorDB.conflicts,
         ...staticWebsite.conflicts,
+        ...aiGateway.conflicts,
         ...idp.conflicts,
         ...auth.conflicts,
         ...pipeline.conflicts,
@@ -612,6 +633,7 @@ export async function deploy(options?: DeployOptions) {
         ...functionRegistry.unmanaged,
         ...tailorDB.unmanaged,
         ...staticWebsite.unmanaged,
+        ...aiGateway.unmanaged,
         ...idp.unmanaged,
         ...auth.unmanaged,
         ...pipeline.unmanaged,
@@ -631,6 +653,12 @@ export async function deploy(options?: DeployOptions) {
       for (const del of staticWebsite.changeSet.deletes) {
         importantDeletions.push({
           resourceType: "StaticWebsite",
+          resourceName: del.name,
+        });
+      }
+      for (const del of aiGateway.changeSet.deletes) {
+        importantDeletions.push({
+          resourceType: "AIGateway",
           resourceName: del.name,
         });
       }
@@ -671,6 +699,7 @@ export async function deploy(options?: DeployOptions) {
         ...functionRegistry.resourceOwners,
         ...tailorDB.resourceOwners,
         ...staticWebsite.resourceOwners,
+        ...aiGateway.resourceOwners,
         ...idp.resourceOwners,
         ...auth.resourceOwners,
         ...pipeline.resourceOwners,
@@ -698,6 +727,7 @@ export async function deploy(options?: DeployOptions) {
       functionRegistry,
       tailorDB,
       staticWebsite,
+      aiGateway,
       idp,
       auth,
       pipeline,
@@ -734,6 +764,7 @@ export async function deploy(options?: DeployOptions) {
       await applySecretManager(client, secretManager, "create-update", application);
       await applyFunctionRegistry(client, workspaceId, functionRegistry, "create-update");
       await applyStaticWebsite(client, staticWebsite, "create-update");
+      await applyAIGateway(client, aiGateway, "create-update");
       await applyIdP(client, idp, "create-update");
       await applyAuth(client, auth, "create-update");
       await applyTailorDB(client, tailorDB, "create-update");
@@ -763,6 +794,7 @@ export async function deploy(options?: DeployOptions) {
       await applyWorkflow(client, workflow, "delete");
       await applyExecutor(client, executor, "delete");
       await applyStaticWebsite(client, staticWebsite, "delete");
+      await applyAIGateway(client, aiGateway, "delete");
       await applySecretManager(client, secretManager, "delete");
     });
 

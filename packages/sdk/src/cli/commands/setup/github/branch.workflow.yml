@@ -40,6 +40,17 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+      - id: tailor-merge-base
+        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          git merge --no-edit "origin/$BASE_REF"
       # __SETUP_STEPS__
       - id: tailor-generate
         # __WORKING_DIRECTORY__
@@ -52,17 +63,193 @@ jobs:
             echo "::error::Generated files are out of date. Run 'tailor-sdk generate' locally and commit the result."
             exit 1
           fi
-      - id: tailor-plan
+      - id: tailor-mask-credentials
         # Fork PRs cannot read secrets; the checks above still run for them.
+        if: >-
+          (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&
+          vars.TAILOR_PLATFORM_WORKSPACE_ID != ''
+        run: |
+          echo "::add-mask::$CLIENT_ID"
+          echo "::add-mask::$CLIENT_SECRET"
+        env:
+          CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+      - id: tailor-login
+        if: >-
+          (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&
+          vars.TAILOR_PLATFORM_WORKSPACE_ID != ''
+        # __WORKING_DIRECTORY__
+        run: __PM_EXEC__ tailor-sdk login --machine-user
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+      - id: tailor-plan
+        if: >-
+          (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&
+          vars.TAILOR_PLATFORM_WORKSPACE_ID != ''
+        # __WORKING_DIRECTORY__
+        run: |
+          if [ -z "$TAILOR_PLATFORM_WORKSPACE_ID" ]; then
+            echo "exit-code=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          set +e
+          OUTPUT=$(__PM_EXEC__ tailor-sdk deploy --dry-run --yes 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          MAX_OUTPUT=60000
+          if [ "${#OUTPUT}" -gt "$MAX_OUTPUT" ]; then
+            LOG_STOP_TOKEN=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+            echo "::group::Full Tailor Platform plan output"
+            echo "::stop-commands::$LOG_STOP_TOKEN"
+            printf '%s\n' "$OUTPUT"
+            echo "::$LOG_STOP_TOKEN::"
+            echo "::endgroup::"
+            OUTPUT_TAIL="${OUTPUT: -$MAX_OUTPUT}"
+            OUTPUT=$(printf '%s\n\n%s' "[output truncated to the last $MAX_OUTPUT characters - see the workflow logs for the full plan]" "$OUTPUT_TAIL")
+          fi
+
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          {
+            echo "exit-code=$EXIT_CODE"
+            echo "output<<$EOF"
+            echo "$OUTPUT"
+            echo "$EOF"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+      - id: tailor-plan-summary
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-        uses: tailor-platform/actions/plan@4d0f160b6b5cc2f02594776665471497c297181e # v1.2.0
+        run: |
+          if [ -n "$LABEL" ]; then
+            KEY="$LABEL"
+          elif [ -n "$WORKSPACE_ID" ]; then
+            KEY="$WORKSPACE_ID"
+          else
+            KEY="workspace"
+          fi
+
+          if [ -z "$WORKSPACE_ID" ]; then
+            {
+              echo "## Tailor Platform Plan ($KEY)"
+              echo ""
+              echo "Workspace is not provisioned yet. Set TAILOR_PLATFORM_WORKSPACE_ID after provisioning the workspace."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$DRY_RUN_EXIT_CODE" = "0" ]; then
+            STATUS="PASS"
+          else
+            STATUS="FAIL"
+          fi
+
+          {
+            echo "## $STATUS Tailor Platform Plan ($KEY)"
+            echo ""
+            echo "<details>"
+            echo "<summary>Plan output (exit code: $DRY_RUN_EXIT_CODE)</summary>"
+            echo ""
+            echo '```'
+            echo "$DRY_RUN_OUTPUT"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          LABEL: __WORKSPACE_NAME__
+          DRY_RUN_OUTPUT: ${{ steps.tailor-plan.outputs.output }}
+          DRY_RUN_EXIT_CODE: ${{ steps.tailor-plan.outputs.exit-code }}
+      - id: tailor-plan-comment
+        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          LABEL: __WORKSPACE_NAME__
+          DRY_RUN_OUTPUT: ${{ steps.tailor-plan.outputs.output }}
+          DRY_RUN_EXIT_CODE: ${{ steps.tailor-plan.outputs.exit-code }}
         with:
-          workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
-          label: __WORKSPACE_NAME__
-          # __WORKING_DIRECTORY__
-          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
-          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const workspaceId = process.env.WORKSPACE_ID;
+            const label = process.env.LABEL;
+            const key = label || workspaceId || 'workspace';
+            const marker = `<!-- tailor-plan: ${key} -->`;
+
+            let body;
+            if (!workspaceId) {
+              body = [
+                marker,
+                `## Tailor Platform Plan (${key})`,
+                '',
+                'Workspace is not provisioned yet. Set TAILOR_PLATFORM_WORKSPACE_ID after provisioning the workspace.',
+                '',
+              ].join('\n');
+            } else {
+              const exitCode = process.env.DRY_RUN_EXIT_CODE;
+              let output = process.env.DRY_RUN_OUTPUT;
+              const MAX_OUTPUT = 60000;
+              if (output.length > MAX_OUTPUT) {
+                const note = `[output truncated to the last ${MAX_OUTPUT} characters - see the job's step summary for the full plan]\n\n`;
+                output = note + output.slice(output.length - MAX_OUTPUT);
+              }
+              const status = exitCode === '0' ? 'PASS' : 'FAIL';
+              body = [
+                marker,
+                `## ${status} Tailor Platform Plan (${key})`,
+                '',
+                '<details>',
+                `<summary>Plan output (exit code: ${exitCode})</summary>`,
+                '',
+                '```',
+                output,
+                '```',
+                '',
+                '</details>',
+                '',
+              ].join('\n');
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existingComment = comments.find(comment =>
+              comment.body?.includes(marker) &&
+              comment.user?.type === 'Bot' &&
+              comment.user?.login === 'github-actions[bot]'
+            );
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - id: tailor-plan-fail
+        if: >-
+          (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&
+          vars.TAILOR_PLATFORM_WORKSPACE_ID != ''
+        run: |
+          if [ "$DRY_RUN_EXIT_CODE" != "0" ]; then
+            echo "::error::Plan dry-run failed with exit code $DRY_RUN_EXIT_CODE"
+            exit "$DRY_RUN_EXIT_CODE"
+          fi
+        env:
+          DRY_RUN_EXIT_CODE: ${{ steps.tailor-plan.outputs.exit-code }}
   # __PLAN_JOB_END__
   tailor-deploy:
     # __DEPLOY_IF__
@@ -78,10 +265,34 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       # __SETUP_STEPS__
-      - id: tailor-apply
-        uses: tailor-platform/actions/deploy@4d0f160b6b5cc2f02594776665471497c297181e # v1.2.0
-        with:
-          workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
-          # __WORKING_DIRECTORY__
-          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
-          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+      - id: tailor-validate-workspace
+        env:
+          WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+        run: |
+          if [ -z "$WORKSPACE_ID" ]; then
+            echo "::error::Workspace is not provisioned: TAILOR_PLATFORM_WORKSPACE_ID is empty. Provision the workspace and set the variable."
+            exit 1
+          fi
+      - id: tailor-mask-credentials
+        run: |
+          echo "::add-mask::$CLIENT_ID"
+          echo "::add-mask::$CLIENT_SECRET"
+        env:
+          CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+      - id: tailor-login
+        # __WORKING_DIRECTORY__
+        run: __PM_EXEC__ tailor-sdk login --machine-user
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+      - id: tailor-generate
+        # __WORKING_DIRECTORY__
+        run: __PM_EXEC__ tailor-sdk generate
+        env:
+          TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+      - id: tailor-deploy
+        # __WORKING_DIRECTORY__
+        run: __PM_EXEC__ tailor-sdk deploy --yes
+        env:
+          TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}

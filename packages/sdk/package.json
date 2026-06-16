@@ -9,8 +9,7 @@
     "directory": "packages/sdk"
   },
   "bin": {
-    "tailor-sdk": "./dist/cli/index.mjs",
-    "tailor-sdk-skills": "./dist/cli/skills.mjs"
+    "tailor-sdk": "./dist/cli/index.mjs"
   },
   "files": [
     "CHANGELOG.md",
@@ -141,7 +140,7 @@
     "test:coverage": "vitest --coverage",
     "docs:check": "vitest run --project=unit* src/cli/docs.test.ts",
     "docs:update": "POLITTY_DOCS_UPDATE=true vitest run --project=unit* src/cli/docs.test.ts",
-    "build": "tsdown",
+    "build": "tsdown && politty generate-worker --bin dist/cli/index.mjs --program tailor-sdk --shell zsh --verify",
     "lint": "oxlint --type-aware .",
     "check:public-api-jsdoc": "tsx scripts/check-public-api-jsdoc.ts",
     "lint:fix": "oxlint --type-aware . --fix",
@@ -196,7 +195,7 @@
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.1",
-    "politty": "0.5.1",
+    "politty": "0.6.0",
     "rolldown": "1.1.0",
     "semver": "7.8.3",
     "sql-highlight": "6.1.0",
@@ -213,7 +212,7 @@
     "@opentelemetry/sdk-trace-base": "2.8.0",
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
-    "@types/node": "24.13.1",
+    "@types/node": "24.13.2",
     "@types/semver": "7.7.1",
     "@typescript/native-preview": "7.0.0-dev.20260612.1",
     "@vitest/coverage-v8": "4.1.8",

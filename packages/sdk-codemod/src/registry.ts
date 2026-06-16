@@ -60,7 +60,7 @@ const allCodemods: CodemodPackage[] = [
     id: "v2/apply-to-deploy",
     name: "tailor-sdk apply → tailor-sdk deploy",
     description:
-      "Rewrite `tailor-sdk apply` invocations in package.json scripts, shell scripts, CI configs, and docs to the v2-recommended `tailor-sdk deploy` alias",
+      "Rewrite `tailor-sdk apply` invocations in package.json scripts, shell scripts, CI configs, and docs to the canonical v2 `tailor-sdk deploy` command",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/apply-to-deploy/scripts/transform.js",
@@ -68,13 +68,14 @@ const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/cli-rename",
-    name: "v2 CLI rename (single-word commands)",
+    name: "v2 CLI rename",
     description:
-      "Rewrite `tailor-sdk crash-report` invocations to the v2 single-word `tailor-sdk crashreport` form across package.json scripts, shell scripts, CI configs, and docs",
+      "Rewrite `tailor-sdk crash-report` to `tailor-sdk crashreport` and `--machineuser` to `--machine-user` across package.json scripts, shell scripts, CI configs, and docs",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/cli-rename/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    legacyPatterns: ["tailor-sdk crash-report", "--machineuser"],
   },
   {
     id: "v2/auth-invoker-unwrap",
@@ -90,7 +91,7 @@ const allCodemods: CodemodPackage[] = [
     id: "v2/tailordb-namespace",
     name: "Tailordb → tailordb (lowercase ambient namespace)",
     description:
-      "Rewrite references to the deprecated capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the new lowercase `tailordb.*` namespace re-published by the SDK in place of `@tailor-platform/function-types`.",
+      "Rewrite references to the removed capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the lowercase `tailordb.*` namespace exposed by `@tailor-platform/sdk/runtime/globals`.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/tailordb-namespace/scripts/transform.js",

@@ -92,14 +92,12 @@ async function listGeneratedFiles(dirPath: string, depth = 0, maxDepth = 3): Pro
   }
 }
 
-const generatorsCompatDir = "tests/fixtures/generators";
 const pluginsCompatDir = "tests/fixtures/plugins";
 
 export async function generateCompatFiles(): Promise<void> {
-  for (const dir of [generatorsCompatDir, pluginsCompatDir]) {
+  for (const dir of [pluginsCompatDir]) {
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
   }
-  await generate({ configPath: "./tests/tailor.config.generators-compat.ts" });
   await generate({ configPath: "./tests/tailor.config.plugins-compat.ts" });
 
   // Also run deploy --buildOnly for plugins-compat (used by bundled_execution tests)

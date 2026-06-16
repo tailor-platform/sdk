@@ -7,3 +7,6 @@ echo "How to apply this configuration"
 pnpm exec tailor-sdk apply-foo
 # Should not match: word continuation
 pnpm exec tailor-sdk applyConfig
+# Should not match: wrapper or unrelated binary names
+tailor-sdk-wrapper apply --yes
+my-tailor-sdk apply --yes

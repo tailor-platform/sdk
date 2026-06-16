@@ -26,6 +26,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger } from "@/cli/shared/logger";
 import { buildTriggerContext } from "@/cli/shared/trigger-context";
+import { AIGatewaySchema } from "@/parser/service/aigateway";
 import { AuthConfigSchema } from "@/parser/service/auth";
 import { IdPSchema } from "@/parser/service/idp";
 import { SecretsSchema } from "@/parser/service/secrets";
@@ -44,6 +45,7 @@ import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 import type { BundledScripts } from "@/cli/commands/deploy/function-registry-types";
 import type { PluginManager } from "@/plugin/manager";
+import type { AIGateway, AIGatewayInput } from "@/types/aigateway.generated";
 import type { IdP } from "@/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
 
@@ -66,6 +68,7 @@ export type Application = {
   readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly httpAdapterService: Readonly<HttpAdapterService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
+  readonly aiGatewayServices: ReadonlyArray<AIGateway>;
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
@@ -250,6 +253,22 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
+function defineAIGateways(gateways: readonly AIGatewayInput[] | undefined): AIGateway[] {
+  const aiGatewayServices: AIGateway[] = [];
+  const gatewayNames = new Set<string>();
+
+  (gateways ?? []).forEach((config) => {
+    const gateway = AIGatewaySchema.parse(config);
+    if (gatewayNames.has(gateway.name)) {
+      throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
+    }
+    gatewayNames.add(gateway.name);
+    aiGatewayServices.push(gateway);
+  });
+
+  return aiGatewayServices;
+}
+
 function parseSecretManager(config: AppConfig["secrets"]): {
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
@@ -289,6 +308,7 @@ type DefineServicesResult = {
   idpResult: DefineIdpResult;
   authResult: DefineAuthResult;
   staticWebsiteServices: StaticWebsite[];
+  aiGatewayServices: AIGateway[];
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
 };
@@ -303,6 +323,7 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     tailordbResult.externalTailorDBNamespaces,
   );
   const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
+  const aiGatewayServices = defineAIGateways(config.aiGateways);
   const { secrets, ignoreNullishValues } = parseSecretManager(config.secrets);
   return {
     tailordbResult,
@@ -310,6 +331,7 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     idpResult,
     authResult,
     staticWebsiteServices,
+    aiGatewayServices,
     secrets,
     ignoreNullishValues: ignoreNullishValues,
   };
@@ -325,6 +347,7 @@ function buildApplication(params: {
   workflowService: WorkflowService | undefined;
   httpAdapterService: HttpAdapterService | undefined;
   staticWebsiteServices: StaticWebsite[];
+  aiGatewayServices: AIGateway[];
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
   env: Record<string, string | number | boolean>;
@@ -348,6 +371,7 @@ function buildApplication(params: {
     workflowService: params.workflowService,
     httpAdapterService: params.httpAdapterService,
     staticWebsiteServices: params.staticWebsiteServices,
+    aiGatewayServices: params.aiGatewayServices,
     secrets: params.secrets,
     ignoreNullishValues: params.ignoreNullishValues,
     env: params.env,
@@ -451,6 +475,7 @@ export async function loadApplication(
     idpResult,
     authResult,
     staticWebsiteServices,
+    aiGatewayServices,
     secrets,
     ignoreNullishValues,
   } = defineServices(config, pluginManager);
@@ -606,6 +631,7 @@ export async function loadApplication(
     workflowService,
     httpAdapterService,
     staticWebsiteServices,
+    aiGatewayServices,
     secrets,
     ignoreNullishValues,
     env: config.env ?? {},

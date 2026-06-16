@@ -356,8 +356,9 @@ export declare type ListMeterAITokenUsagesResponse_TokenUsage = Message<"tailor.
   aigatewayName: string;
 
   /**
-   * Response model name reported by the upstream provider, e.g. "gpt-5",
-   * "gemini-3-flash", "claude-sonnet-4-6".
+   * Request model name as the caller wrote it in their SDK call, e.g.
+   * "gpt-4o-mini", "gemini-2.5-flash", "claude-sonnet-4-6". Stable across
+   * provider-side alias rotations.
    *
    * @generated from field: string model = 2;
    */

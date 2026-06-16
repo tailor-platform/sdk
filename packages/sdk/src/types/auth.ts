@@ -13,7 +13,7 @@ import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "./fie
 import type { output } from "./helpers";
 import type { TailorDBInstance } from "./tailor-db-field";
 import type { TailorField } from "./tailor-field";
-import type { IsAny, JsonObject } from "type-fest";
+import type { IsAny, JsonObject, JsonValue } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)
 export type OAuth2ClientGrantType = OAuth2Client["grantTypes"][number];
@@ -241,8 +241,49 @@ type MachineUser<
               ? { attributeList?: never }
               : { attributeList: AttributeListToTuple<User, AttributeList> });
 
+/** Upstream OAuth provider that federated a login through the Built-in IdP. */
+export type FederatedIdentityProvider = "google" | "microsoft";
+
+/**
+ * Profile claims forwarded from the upstream OAuth provider's ID token.
+ *
+ * Commonly present claims are typed; any other claim the provider issues is
+ * forwarded as-is and reachable through the index signature. Availability
+ * varies by provider (e.g. Microsoft does not issue `picture`).
+ */
+export type FederatedIdentityClaims = {
+  name?: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+  locale?: string;
+  [claim: string]: JsonValue | undefined;
+};
+
+/**
+ * The upstream identity that federated this login, populated when a user signs
+ * in through a Built-in IdP OAuth provider (Google or Microsoft).
+ *
+ * Available on {@link BeforeLoginClaims.federated_identity}; `undefined` for
+ * password logins.
+ */
+export type FederatedIdentity = {
+  provider: FederatedIdentityProvider;
+  claims: FederatedIdentityClaims;
+};
+
+/**
+ * Token claims passed to the {@link BeforeLoginHook} handler. Carries the IdP's
+ * own claims (e.g. `sub`, `email`) plus, for federated logins, the upstream
+ * provider's profile under {@link BeforeLoginClaims.federated_identity}.
+ */
+export type BeforeLoginClaims = JsonObject & {
+  /** Present only for federated (Google/Microsoft) logins; `undefined` for password logins. */
+  federated_identity?: FederatedIdentity;
+};
+
 export type BeforeLoginHookArgs = {
-  claims: JsonObject;
+  claims: BeforeLoginClaims;
   idpConfigName: string;
   /** Environment variables defined in `defineConfig({ env })`. */
   env: TailorEnv;
