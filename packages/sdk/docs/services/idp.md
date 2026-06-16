@@ -169,7 +169,7 @@ defineIdp("my-idp", {
 **Constraints:** the following combinations are rejected at parse time.
 
 - `passwordMinLength` must be less than or equal to `passwordMaxLength`.
-- A non-empty `allowedEmailDomains` cannot be combined with `useNonEmailIdentifier: true` (an empty list is allowed). `allowGoogleOauth` and `allowMicrosoftOauth` cannot be combined with `useNonEmailIdentifier: true`.
+- A non-empty `allowedEmailDomains` cannot be combined with `useNonEmailIdentifier: true` (an empty list is allowed). Enabling `allowGoogleOauth` or `allowMicrosoftOauth` is likewise rejected with `useNonEmailIdentifier: true` (leaving them `false` or unset is fine).
 - `allowGoogleOauth` requires a non-empty `allowedEmailDomains`.
 - `allowMicrosoftOauth` requires both a non-empty `allowedEmailDomains` and `disablePasswordAuth: true`.
 - `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
