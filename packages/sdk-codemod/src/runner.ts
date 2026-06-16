@@ -170,7 +170,7 @@ export async function runCodemods(
     }
 
     let current = original;
-    for (const lt of loaded) {
+    for (const lt of matchedTransforms) {
       const result = await lt.transform(current, absolute);
       if (result != null) {
         current = result;
