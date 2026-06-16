@@ -130,6 +130,7 @@ describe("renderBranchWorkflow", () => {
 
   test("fetches the pull request base into the remote-tracking ref before merge", () => {
     const { content } = renderBranchWorkflow(branchBase);
+    expect(content).toContain("fetch-depth: 0");
     expect(content).toContain('git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"');
     expect(content).toContain('git merge --no-edit "origin/$BASE_REF"');
     expect(content).not.toContain("git merge --no-commit");

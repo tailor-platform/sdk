@@ -208,5 +208,27 @@ describe("runCodemods", () => {
       const jsonContent = await fs.promises.readFile(path.join(dir, "data.json"), "utf-8");
       expect(jsonContent).toBe("WORLD");
     });
+
+    test("should apply transforms to matching files under dot directories", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-dot-test-"));
+      tmpDir = dir;
+      const workflowPath = path.join(dir, ".github/workflows/test.yml");
+      await fs.promises.mkdir(path.dirname(workflowPath), { recursive: true });
+      await fs.promises.writeFile(workflowPath, "hello", "utf-8");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/upper", transformPath, ["**/*.yml"]),
+            scriptPath: transformPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.filesModified).toEqual([workflowPath]);
+      await expect(fs.promises.readFile(workflowPath, "utf-8")).resolves.toBe("HELLO");
+    });
   });
 });
