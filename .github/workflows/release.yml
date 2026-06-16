@@ -57,7 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
         shell: bash
-        run: ./.github/scripts/sync-published-tags.sh
+        run: bash ./.github/scripts/sync-published-tags.sh
 
       - name: Notify Slack on failure
         if: failure()

@@ -32,8 +32,12 @@ pkg_dir_for() { # <package-name> -> package directory
 }
 
 for tag in $(git tag --points-at HEAD); do
+  # Only handle Changesets package tags of the form "<pkg>@<version>", skipping
+  # any unrelated tag (e.g. "v1.2.3") that happens to point at HEAD.
+  case "$tag" in *@*) ;; *) continue ;; esac
   name="${tag%@*}"
   version="${tag##*@}"
+  [ -n "$name" ] && [ -n "$version" ] || continue
 
   if ! git ls-remote --exit-code --tags "$remote" "refs/tags/${tag}" >/dev/null 2>&1; then
     echo "Pushing tag ${tag}"
