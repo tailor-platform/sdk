@@ -22,15 +22,41 @@ function isOptionBoundaryChar(value: string | undefined): boolean {
   return value === undefined || !/[\w-]/.test(value);
 }
 
-function findTailorCommandEnd(source: string, start: number): number {
-  if (source[start - 1] === "`") {
-    const codeSpanEnd = source.indexOf("`", start);
-    if (codeSpanEnd !== -1) return codeSpanEnd;
-  }
+function findInlineCodeSpanEnd(source: string, start: number): number | undefined {
+  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const ticksBefore = [...source.slice(lineStart, start).matchAll(/`/g)].length;
+  if (ticksBefore % 2 === 0) return undefined;
 
+  const codeSpanEnd = source.indexOf("`", start);
+  return codeSpanEnd === -1 ? undefined : codeSpanEnd;
+}
+
+function findTailorCommandEnd(source: string, start: number): number {
+  const limit = findInlineCodeSpanEnd(source, start) ?? source.length;
+  let quote: "'" | '"' | null = null;
   let end = start;
-  while (end < source.length) {
+
+  while (end < limit) {
     const ch = source[end];
+
+    if (quote !== null) {
+      if (ch === "\\" && quote === '"' && end + 1 < limit) {
+        end += 2;
+        continue;
+      }
+      if (ch === quote) {
+        quote = null;
+      }
+      end += 1;
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      end += 1;
+      continue;
+    }
+
     const prev = source[end - 1];
     if ((ch === ";" || ch === "&" || ch === "|") && prev !== "\\") break;
     if (ch === "\n" && prev !== "\\") break;
