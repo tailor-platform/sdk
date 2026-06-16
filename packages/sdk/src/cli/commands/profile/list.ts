@@ -33,6 +33,12 @@ export const listCommand = defineAppCommand({
         user: p.user,
         workspaceId: p.workspace_id,
         permission: p.readonly === true ? "read" : "write",
+        ...(p.machine_user
+          ? {
+              machineUser: p.machine_user,
+              machineUserOverride: p.machine_user_override ?? "allow",
+            }
+          : {}),
       };
     });
     logger.out(profileInfos);

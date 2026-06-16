@@ -1,7 +1,7 @@
 # `setup github` Contracts
 
 This document specifies the **beta graduation contracts** for `tailor-sdk setup
-github` and the `tailor-platform/actions` that the generated workflows reference.
+github` and the generated GitHub Actions workflows.
 
 > **Graduation criterion:** Beta is not finished when implementation is
 > complete — it is finished when all 13 contracts below are confirmed, specified
@@ -33,28 +33,38 @@ status checks**.
 | ------------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tailor-tag-guard` | tag (with `--branch`) | Checks that the tagged commit is reachable from the configured branch. Output: `on-branch`.                                                                 |
 | `tailor-plan`      | branch, tag           | Runs `generate`, `generate-check`, and the plan dry-run. On a branch target it posts a PR comment; on a tag target it writes the step summary only (no PR). |
-| `tailor-deploy`    | branch, tag           | Runs the deploy (`tailor-sdk apply`).                                                                                                                       |
+| `tailor-deploy`    | branch, tag           | Runs the deploy (`tailor-sdk deploy`).                                                                                                                      |
 
 #### Steps generated in P0
 
-| Qualified id (`<job>/<step>`)       | Description                                                     |
-| ----------------------------------- | --------------------------------------------------------------- |
-| `tailor-tag-guard/tailor-checkout`  | `actions/checkout` with `fetch-depth: 0`                        |
-| `tailor-tag-guard/tailor-tag-guard` | Branch-reachability shell script                                |
-| `tailor-plan/tailor-checkout`       | `actions/checkout`                                              |
-| `tailor-plan/tailor-setup-pnpm`     | `pnpm/action-setup` (pnpm projects only)                        |
-| `tailor-plan/tailor-setup-node`     | `actions/setup-node`                                            |
-| `tailor-plan/tailor-setup-bun`      | `oven-sh/setup-bun` (bun projects only)                         |
-| `tailor-plan/tailor-install`        | Package install (`pnpm install --frozen-lockfile` / equivalent) |
-| `tailor-plan/tailor-generate`       | `tailor-sdk generate`                                           |
-| `tailor-plan/tailor-generate-check` | Checks generated files are committed                            |
-| `tailor-plan/tailor-plan`           | `tailor-platform/actions/plan` (SHA-pinned)                     |
-| `tailor-deploy/tailor-checkout`     | `actions/checkout`                                              |
-| `tailor-deploy/tailor-setup-pnpm`   | pnpm projects only                                              |
-| `tailor-deploy/tailor-setup-node`   | node projects                                                   |
-| `tailor-deploy/tailor-setup-bun`    | bun projects only                                               |
-| `tailor-deploy/tailor-install`      | Package install                                                 |
-| `tailor-deploy/tailor-apply`        | `tailor-platform/actions/deploy` (SHA-pinned)                   |
+| Qualified id (`<job>/<step>`)             | Description                                                     |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| `tailor-tag-guard/tailor-checkout`        | `actions/checkout` with `fetch-depth: 0`                        |
+| `tailor-tag-guard/tailor-tag-guard`       | Branch-reachability shell script                                |
+| `tailor-plan/tailor-checkout`             | `actions/checkout`                                              |
+| `tailor-plan/tailor-merge-base`           | Merges the PR base branch before branch-target dry-runs         |
+| `tailor-plan/tailor-setup-pnpm`           | `pnpm/action-setup` (pnpm projects only)                        |
+| `tailor-plan/tailor-setup-node`           | `actions/setup-node`                                            |
+| `tailor-plan/tailor-setup-bun`            | `oven-sh/setup-bun` (bun projects only)                         |
+| `tailor-plan/tailor-install`              | Package install (`pnpm install --frozen-lockfile` / equivalent) |
+| `tailor-plan/tailor-generate`             | `tailor-sdk generate`                                           |
+| `tailor-plan/tailor-generate-check`       | Checks generated files are committed                            |
+| `tailor-plan/tailor-mask-credentials`     | Masks machine-user credentials                                  |
+| `tailor-plan/tailor-login`                | `tailor-sdk login --machine-user`                               |
+| `tailor-plan/tailor-plan`                 | `tailor-sdk deploy --dry-run --yes`                             |
+| `tailor-plan/tailor-plan-summary`         | Writes the plan result to the step summary                      |
+| `tailor-plan/tailor-plan-comment`         | Updates the PR plan comment on branch targets                   |
+| `tailor-plan/tailor-plan-fail`            | Fails the job when the dry-run exits non-zero                   |
+| `tailor-deploy/tailor-checkout`           | `actions/checkout`                                              |
+| `tailor-deploy/tailor-setup-pnpm`         | pnpm projects only                                              |
+| `tailor-deploy/tailor-setup-node`         | node projects                                                   |
+| `tailor-deploy/tailor-setup-bun`          | bun projects only                                               |
+| `tailor-deploy/tailor-install`            | Package install                                                 |
+| `tailor-deploy/tailor-validate-workspace` | Fails when `TAILOR_PLATFORM_WORKSPACE_ID` is empty              |
+| `tailor-deploy/tailor-mask-credentials`   | Masks machine-user credentials                                  |
+| `tailor-deploy/tailor-login`              | `tailor-sdk login --machine-user`                               |
+| `tailor-deploy/tailor-generate`           | `tailor-sdk generate`                                           |
+| `tailor-deploy/tailor-deploy`             | `tailor-sdk deploy --yes`                                       |
 
 #### Public outputs (P0 implemented)
 
@@ -66,18 +76,18 @@ status checks**.
 
 The following ids and outputs are reserved and must not be used by user code:
 
-| Future id / output                   | Planned role                                                         |
-| ------------------------------------ | -------------------------------------------------------------------- |
-| `tailor-drift-check` (step)          | Warns when config has drifted from generated workflow                |
-| `tailor-seed-validate` (step)        | Validates seed JSONL against schema                                  |
-| `tailor-staticwebsite-deploy` (step) | Deploys static website assets                                        |
-| `build-site-<name>` (step)           | User-owned slot for building a static site named `<name>`            |
-| `seed-data` (step)                   | User-owned slot for seeding data (preview target)                    |
-| `tailor-preview-comment` (step)      | Posts workspace URL to PR                                            |
-| `tailor-preview-deploy` (job)        | Deploys the per-PR preview workspace                                 |
-| `tailor-preview-cleanup` (job)       | Deletes ephemeral preview workspace on PR close                      |
-| `steps.tailor-apply.outputs.app-url` | Application URL after deploy (wired into `build-site-<name>` inputs) |
-| `TAILOR_SITE_DIST_<SITE>` (env)      | Path to built static site dist registered by `build-site-<name>`     |
+| Future id / output                    | Planned role                                                         |
+| ------------------------------------- | -------------------------------------------------------------------- |
+| `tailor-drift-check` (step)           | Warns when config has drifted from generated workflow                |
+| `tailor-seed-validate` (step)         | Validates seed JSONL against schema                                  |
+| `tailor-staticwebsite-deploy` (step)  | Deploys static website assets                                        |
+| `build-site-<name>` (step)            | User-owned slot for building a static site named `<name>`            |
+| `seed-data` (step)                    | User-owned slot for seeding data (preview target)                    |
+| `tailor-preview-comment` (step)       | Posts workspace URL to PR                                            |
+| `tailor-preview-deploy` (job)         | Deploys the per-PR preview workspace                                 |
+| `tailor-preview-cleanup` (job)        | Deletes ephemeral preview workspace on PR close                      |
+| `steps.tailor-deploy.outputs.app-url` | Application URL after deploy (wired into `build-site-<name>` inputs) |
+| `TAILOR_SITE_DIST_<SITE>` (env)       | Path to built static site dist registered by `build-site-<name>`     |
 
 Slot ids (`build-site-<name>`, `seed-data`) are **user-owned in content** but
 **SDK-owned in name and position**. The SDK reserves the namespace; user code
@@ -102,7 +112,7 @@ The lock file is JSON, 2-space indented, with a trailing newline. It is
       "kind": "branch", // "branch" | "tag"
       "workspaceName": "my-app-stg",
       "file": ".github/workflows/tailor-my-app-stg.yml", // repo-root-relative, POSIX separators
-      "templateVersion": 1, // internal constant TEMPLATE_VERSION
+      "templateVersion": 2, // internal constant TEMPLATE_VERSION
       "inputs": {
         "branch": "main", // null for tag target with no --branch
         "tagPattern": null, // non-null for tag target only
@@ -115,12 +125,18 @@ The lock file is JSON, 2-space indented, with a trailing newline. It is
         // history of managed ids written by this setup run
         "tailor-plan", // job id
         "tailor-plan/tailor-checkout", // job/step qualified form
+        "tailor-plan/tailor-merge-base",
         "tailor-plan/tailor-setup-pnpm", // pnpm projects only
         "tailor-plan/tailor-setup-node",
         "tailor-plan/tailor-install",
         "tailor-plan/tailor-generate",
         "tailor-plan/tailor-generate-check",
+        "tailor-plan/tailor-mask-credentials",
+        "tailor-plan/tailor-login",
         "tailor-plan/tailor-plan",
+        "tailor-plan/tailor-plan-summary",
+        "tailor-plan/tailor-plan-comment",
+        "tailor-plan/tailor-plan-fail",
         "tailor-deploy",
         "tailor-deploy/tailor-checkout",
         "...",
@@ -220,27 +236,26 @@ can handle renaming and multi-trigger coexistence is a P2 enhancement.
 
 ### Principle
 
-- **Workflow = configuration.** The generated workflow owns triggers, job
-  topology (`needs`, `if`, `concurrency`, `environment`, `permissions`), and
-  `with:` parameter wiring.
-- **Actions = behaviour.** The execution logic of managed steps lives in
-  `tailor-platform/actions`, not in the generated workflow. This limits how
-  often users need to regenerate — only when configuration changes, not when
-  behaviour improves.
+- **Workflow = contract.** The generated workflow owns triggers, job topology
+  (`needs`, `if`, `concurrency`, `environment`, `permissions`), secret/variable
+  wiring, and the managed CLI steps.
+- **Actions = optional future extraction.** Behaviour can move to
+  `tailor-platform/actions` in a later release, but P0 generated workflows do
+  not depend on Tailor-owned composite actions.
 
 ### P0 state
 
 In P0, the setup steps (`tailor-setup-node`, `tailor-setup-pnpm`,
-`tailor-setup-bun`, `tailor-install`) and the `tailor-generate` /
-`tailor-generate-check` steps are inlined in the generated workflow. The
-`tailor-plan` and `tailor-apply` steps already delegate to composite actions
-(`tailor-platform/actions/plan` and `deploy`, SHA-pinned).
+`tailor-setup-bun`, `tailor-install`), `tailor-generate` /
+`tailor-generate-check`, plan dry-run/commenting, and deploy steps are inlined
+in the generated workflow. They use the canonical CLI surface:
+`tailor-sdk login --machine-user` and `tailor-sdk deploy`.
 
 ### P1 target state
 
-All managed steps will be extracted into `tailor-platform/actions`. The
-generated workflow will contain only a single composite-action call per managed
-function. Users will receive behaviour improvements (e.g., new drift checks)
+Managed steps may be extracted into `tailor-platform/actions`. If that happens,
+the generated workflow will contain a composite-action call per managed
+function. Users would receive behaviour improvements (e.g., new drift checks)
 via Renovate pin updates without needing to regenerate their workflows.
 
 ### No reusable workflows
@@ -438,7 +453,7 @@ in `deploy`/`plan`, a multi-match guard is **not** needed there.)
 
 **Terraform ownership boundary.** Terraform manages only the `tailor_workspace`
 shell; the in-workspace resources (TailorDB types, auth, executors, …) are
-owned by the SDK (`tailor-sdk apply`). The same resource must not be managed by
+owned by the SDK (`tailor-sdk deploy`). The same resource must not be managed by
 both.
 
 **Caveat (B2 GitHub App).** The App needs the `Environments: write` permission,
@@ -501,7 +516,7 @@ Rules that are fixed now so the namespace is stable:
 - The site `<name>` is normalized to a step id-safe string
   (`[a-z0-9-]+`). Normalization collisions are an error at setup time.
 - The interface contract for `build-site-<name>`:
-  - Input: `api-url` (the application GraphQL URL from `tailor-apply` outputs)
+  - Input: `api-url` (the application GraphQL URL from `tailor-deploy` outputs)
   - Output: registers `TAILOR_SITE_DIST_<SITE>` in `$GITHUB_ENV`
     where `<SITE>` is the upper-cased, non-alphanumeric-replaced site name
     (e.g., site `admin-portal` → `TAILOR_SITE_DIST_ADMIN_PORTAL`).
@@ -541,16 +556,14 @@ Not generated in P0. Specified here so the workspace naming scheme is stable.
 | Adding an optional input to an existing action            | Minor (v1.x)   |
 | Removing an input or changing behaviour in a breaking way | Major (v2)     |
 
-Templates generated by `setup github` pin **all** actions — including the
-tailor-platform ones — to a **full commit SHA with a version comment** (e.g.
-`tailor-platform/actions/plan@<sha> # v1.2.0`), exactly like every third-party
+Templates generated by `setup github` pin **all** referenced actions to a
+**full commit SHA with a version comment**, exactly like every third-party
 action in the template. Moving tags (`@v1`) are **not** used: a committed
 workflow must be reproducible and must pass the `unpinned-uses` / pin checks of
 zizmor and ghalint. A generated-workflow check fails if any `uses:` is not
-SHA-pinned. Updates flow through Renovate (which bumps the SHA + comment),
-the same path as the other actions — not by silently advancing a tag. The
+SHA-pinned. If Tailor-managed composite actions are introduced later, their
 embedded SHA must correspond to a released `tailor-platform/actions` version
-and is set/finalized as part of the coordinated release.
+and be set/finalized as part of the coordinated release.
 
 ### SDK ↔ actions compatibility check (P1)
 

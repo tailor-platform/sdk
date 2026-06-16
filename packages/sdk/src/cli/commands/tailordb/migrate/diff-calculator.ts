@@ -216,7 +216,7 @@ export type FieldDiffChange = FieldAddedChange | FieldRemovedChange | FieldModif
  */
 export interface MigrationDiff {
   /** Format version for future compatibility */
-  version: typeof SCHEMA_SNAPSHOT_VERSION;
+  version: number;
   namespace: string;
   createdAt: string;
   description?: string;

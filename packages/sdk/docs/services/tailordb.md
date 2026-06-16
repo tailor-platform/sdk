@@ -461,7 +461,7 @@ db.type("User", {
 
 - When `publishEvents: true`, record creation/update/deletion events are published
 - When not specified, it is **automatically set to `true`** if an executor uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`
-- When explicitly set to `false` while an executor uses this type, an error is thrown during `tailor apply`
+- When explicitly set to `false` while an executor uses this type, an error is thrown during `tailor-sdk deploy`
 
 **Use cases:**
 

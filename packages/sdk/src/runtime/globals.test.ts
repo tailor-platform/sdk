@@ -1,13 +1,19 @@
 /**
  * Type-level tests confirming that opting into `@tailor-platform/sdk/runtime/globals`
- * activates the ambient `tailor.*` / `tailordb` declarations.
+ * activates the ambient `tailor.*` / `tailordb` declarations, and that the
+ * removed capital-cased `Tailordb` namespace no longer resolves.
  *
- * These assertions are type-only — they reference `tailor`, `tailordb`, and
- * `TailorDBFileError` solely through `typeof` so the test does not require
- * the platform runtime to inject those values into the unit test environment.
+ * These assertions are type-only — the positive checks reference `tailor`,
+ * `tailordb`, and `TailorDBFileError` without depending on the platform
+ * runtime injecting those values into the unit test environment.
  */
 import "@/runtime/globals";
 import { describe, expectTypeOf, test } from "vitest";
+import type { TailordbCommandType } from "@/runtime";
+
+// @ts-expect-error Tailordb was removed in v2; use lowercase tailordb.*.
+const legacyTailordbQueryResult = null as unknown as Tailordb.QueryResult<{ id: string }>;
+void legacyTailordbQueryResult;
 
 describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () => {
   test("tailor.iconv.convert is declared as a function", () => {
@@ -32,6 +38,12 @@ describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () =>
 
   test("tailordb.file.upload is declared as a function", () => {
     expectTypeOf<typeof tailordb.file.upload>().toBeFunction();
+  });
+
+  test("tailordb namespace exposes query helper types", () => {
+    expectTypeOf<tailordb.QueryResult<{ id: string }>>().not.toBeAny();
+    expectTypeOf<tailordb.CommandType>().toEqualTypeOf<TailordbCommandType>();
+    expectTypeOf<tailordb.Client>().not.toBeAny();
   });
 
   test("TailorDBFileError is declared as a global class", () => {

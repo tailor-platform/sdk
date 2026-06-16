@@ -1,5 +1,45 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.0
+### Major Changes
+
+
+
+- [#1451](https://github.com/tailor-platform/sdk/pull/1451) [`3e6d582`](https://github.com/tailor-platform/sdk/commit/3e6d582a37d83a42302339cc4aea1d3dd11e8a81) Thanks [@tailor-platform-pr-trigger](https://github.com/apps/tailor-platform-pr-trigger)! - Start the v2 release line. v2 introduces breaking changes to the SDK API and CLI; run `tailor-sdk upgrade` to apply the bundled codemods when migrating. Prereleases are published to the `next` dist-tag — install with `@tailor-platform/sdk@next`.
+
+
+### Patch Changes
+
+
+
+- [#1449](https://github.com/tailor-platform/sdk/pull/1449) [`016aff6`](https://github.com/tailor-platform/sdk/commit/016aff6aab31c334c57a5e5244453f2dd559c008) Thanks [@k1LoW](https://github.com/k1LoW)! - Document the `userAuthPolicy`, `gqlOperations`, and `lang` options of `defineIdp()` in the IdP service guide, including the password policy fields, allowed email domains, Google/Microsoft social login, the read-only `"query"` shortcut, and the cross-field validation constraints.
+
+
+
+- [#1450](https://github.com/tailor-platform/sdk/pull/1450) [`162ba62`](https://github.com/tailor-platform/sdk/commit/162ba629e0d511593718f289b93788d5d56778da) Thanks [@toiroakr](https://github.com/toiroakr)! - Update OpenTelemetry runtime dependencies to 2.8.0 to resolve a moderate security advisory (GHSA-8988-4f7v-96qf) in `@opentelemetry/core`
+
+
+
+- [#1432](https://github.com/tailor-platform/sdk/pull/1432) [`3a854a3`](https://github.com/tailor-platform/sdk/commit/3a854a3a10b938ce3cf6fe7527de4ab56ecf48d5) Thanks [@toiroakr](https://github.com/toiroakr)! - Roll back a migration's pre-migration schema changes when its data migration (`migrate.ts`) fails during `apply`. A failed migration now leaves the workspace at its prior checkpoint and prior schema instead of half-applied, so subsequent deploys are no longer blocked by opaque "Remote schema drift detected" errors.
+
+
+
+- [#1422](https://github.com/tailor-platform/sdk/pull/1422) [`f3f8427`](https://github.com/tailor-platform/sdk/commit/f3f84277fe1942601d0fcbb8a64c2c26823b5624) Thanks [@dqn](https://github.com/dqn)! - Internal cleanup of proto field optionality handling. No behavior change.
+
+
+
+- [#1421](https://github.com/tailor-platform/sdk/pull/1421) [`b933f47`](https://github.com/tailor-platform/sdk/commit/b933f474d65f8dfed56f3991aae3a52589368b10) Thanks [@dqn](https://github.com/dqn)! - Corrupted or hand-edited TailorDB migration snapshot/diff files now fail with a clear validation error when loaded, instead of causing undefined behavior later.
+
+## 1.64.0
+
+### Minor Changes
+
+- [#1419](https://github.com/tailor-platform/sdk/pull/1419) [`d9b5755`](https://github.com/tailor-platform/sdk/commit/d9b57557d812f107fc02721680aecf2ea5ba24ad) Thanks [@dqn](https://github.com/dqn)! - Add default machine user to CLI profiles. Use `tailor-sdk profile create <name> --machine-user <name>` or `tailor-sdk profile update <name> --machine-user <name>` to store a default machine user on a profile. Commands that require a machine user (`query`, `workflow start`, `function test-run`, `machineuser token`) now fall back to the active profile's default when no machine user is given via the command line (`--machine-user`, or the `NAME` argument for `machineuser token`) or the `TAILOR_PLATFORM_MACHINE_USER_NAME` environment variable. Pass an empty string to `profile update --machine-user ""` to clear the stored default. Profiles also support `--machine-user-override deny`, which locks the machine user to the stored default: any explicit machine user supplied on the command line or via `TAILOR_PLATFORM_MACHINE_USER_NAME` that differs from the profile's value causes commands to fail immediately with error code `PROFILE_MACHINE_USER_OVERRIDE_DENIED`. Use `--machine-user-override allow` (the default) to restore the previous behavior.
+
+### Patch Changes
+
+- [#1414](https://github.com/tailor-platform/sdk/pull/1414) [`1d04806`](https://github.com/tailor-platform/sdk/commit/1d04806e331377d847ac55ac3b9c1dcbb887a1f7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
 ## 1.63.0
 
 ### Minor Changes

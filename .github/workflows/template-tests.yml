@@ -2,7 +2,7 @@ name: Template Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
   pull_request:
     paths:
       - packages/**
