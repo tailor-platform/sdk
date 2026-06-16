@@ -129,7 +129,7 @@ test("content-based mock", async () => {
 
 ### Workflow Mock
 
-Workflow job `.trigger()` calls delegate to `tailor.workflow.triggerJobFunction`. Acquire `mockWorkflow()` when you want to provide trigger responses with `setJobHandler` / `enqueueResult` or assert on `triggeredJobs`. If no response is configured, the mock throws so missing job mocks fail loudly:
+Workflow job `.trigger()` calls use the platform workflow runtime. Acquire `mockWorkflow()` when you want to provide trigger responses with `setJobHandler` / `enqueueResult` or assert on `triggeredJobs`. If no response is configured, the mock throws so missing job mocks fail loudly:
 
 ```typescript
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
