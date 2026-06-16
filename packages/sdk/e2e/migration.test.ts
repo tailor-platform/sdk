@@ -35,6 +35,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect, beforeAll } from "vitest";
+import { resourceTrn } from "../src/cli/commands/deploy/label";
 import {
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
@@ -42,6 +43,10 @@ import {
   INITIAL_SCHEMA_NUMBER,
   getMigrationFilePath,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
+import {
+  MIGRATION_LABEL_KEY,
+  parseMigrationLabelNumber,
+} from "../src/cli/commands/tailordb/migrate/types";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import {
@@ -125,6 +130,44 @@ function runApplyCli(configPath: string, workspaceId: string, cwd: string): void
       console.error("Apply CLI error:", (error as { stderr?: Buffer }).stderr?.toString());
     }
     throw error;
+  }
+}
+
+/**
+ * Run the apply CLI command, returning the result instead of throwing so callers
+ * can assert on an expected failure.
+ * @param {string} configPath - Path to the config file
+ * @param {string} workspaceId - Workspace ID
+ * @param {string} cwd - Working directory
+ * @returns {{ ok: boolean; output: string }} Whether apply succeeded and its combined output
+ */
+function tryApplyCli(
+  configPath: string,
+  workspaceId: string,
+  cwd: string,
+): { ok: boolean; output: string } {
+  const sdkRoot = path.resolve(__dirname, "..");
+  const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+
+  try {
+    const out = execSync(
+      `node ${cliPath} apply --config ${configPath} --workspace-id ${workspaceId} --yes`,
+      {
+        cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
+        encoding: "utf-8",
+        timeout: 120000,
+      },
+    );
+    return { ok: true, output: out };
+  } catch (error: unknown) {
+    let output = "";
+    if (error && typeof error === "object") {
+      const e = error as { stdout?: Buffer | string; stderr?: Buffer | string };
+      output = `${e.stdout?.toString() ?? ""}\n${e.stderr?.toString() ?? ""}`;
+    }
+    return { ok: false, output };
   }
 }
 
@@ -329,6 +372,28 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       tailordbTypeName: typeName,
     });
     return Object.keys(resp.tailordbType?.schema?.fields ?? {});
+  }
+
+  /**
+   * Read the applied migration checkpoint number from the TailorDB service metadata.
+   * @param namespace - TailorDB namespace name
+   * @returns The applied migration number, or null if no checkpoint label is set
+   */
+  async function getMigrationCheckpoint(namespace: string): Promise<number | null> {
+    const trn = resourceTrn(workspaceId, "tailordb", namespace);
+    const { metadata } = await client.getMetadata({ trn });
+    const label = metadata?.labels[MIGRATION_LABEL_KEY];
+    return label ? parseMigrationLabelNumber(label) : null;
+  }
+
+  /**
+   * Overwrite a migration's migrate.ts with the given script body.
+   * @param migrationNumber - Migration number
+   * @param body - Full TypeScript source to write
+   */
+  function overwriteMigrationScript(migrationNumber: number, body: string): void {
+    const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+    fs.writeFileSync(migratePath, body);
   }
 
   describe("Initial Setup", () => {
@@ -610,6 +675,94 @@ export type user = typeof user;
       // Verify: requiredField should be removed from User type
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).not.toContain("requiredField");
+    }, 120000);
+  });
+
+  describe("Migration Rollback on Failure", () => {
+    /**
+     * Scenario 8: A failing migrate.ts must roll back its Pre-phase DDL, leaving
+     * the remote schema and checkpoint at the prior migration so a retry works.
+     */
+    test("generates the breaking migration whose script will fail", async () => {
+      updateTypeFile(`import { db } from "@tailor-platform/sdk";
+
+export const user = db.type("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.string({ optional: true }),
+  phone: db.string({ optional: true }),
+  loyaltyTier: db.string(),
+});
+
+export type user = typeof user;
+`);
+
+      const configPath = createConfig();
+      runGenerateCli(configPath, tempDir);
+
+      const files = getMigrationFiles(migrationsDir);
+      expect(files.length).toBe(6);
+      expect(files[5]!.number).toBe(5);
+
+      const diffPath = getMigrationFilePath(migrationsDir, 5, "diff");
+      const diff = loadDiff(diffPath);
+      expect(diff.hasBreakingChanges).toBe(true);
+      expect(diff.requiresMigrationScript).toBe(true);
+      expect(fs.existsSync(getMigrationFilePath(migrationsDir, 5, "migrate"))).toBe(true);
+    }, 60000);
+
+    test("rolls back the pre-migration DDL when migrate.ts fails", async () => {
+      // Make the data migration deterministically fail.
+      overwriteMigrationScript(
+        5,
+        `export async function main(): Promise<void> {
+  throw new Error("simulated migration failure for rollback e2e");
+}
+`,
+      );
+
+      const checkpointBefore = await getMigrationCheckpoint(tailordbName);
+      expect(checkpointBefore).toBe(4);
+
+      const configPath = createConfig();
+      const result = tryApplyCli(configPath, workspaceId, tempDir);
+
+      // The apply must fail for the injected reason, not an unrelated error.
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain("simulated migration failure for rollback e2e");
+
+      // Rollback restored User to its checkpoint-4 schema: the new field is gone,
+      // prior fields remain.
+      const fields = await getTailorDBTypeFields(tailordbName, "User");
+      expect(fields).not.toContain("loyaltyTier");
+      expect(fields).toEqual(expect.arrayContaining(["name", "email", "role", "phone"]));
+
+      const checkpointAfter = await getMigrationCheckpoint(tailordbName);
+      expect(checkpointAfter).toBe(4);
+    }, 120000);
+
+    test("a retry succeeds once migrate.ts is fixed (workspace was recoverable)", async () => {
+      // Provide a working data migration that backfills the new required field.
+      overwriteMigrationScript(
+        5,
+        `export async function main(trx: any): Promise<void> {
+  await trx
+    .updateTable("User")
+    .set({ loyaltyTier: "bronze" })
+    .execute();
+}
+`,
+      );
+
+      const configPath = createConfig();
+      // No drift error: the failed apply left a consistent baseline at checkpoint 4.
+      runApplyCli(configPath, workspaceId, tempDir);
+
+      const fields = await getTailorDBTypeFields(tailordbName, "User");
+      expect(fields).toContain("loyaltyTier");
+
+      const checkpointAfter = await getMigrationCheckpoint(tailordbName);
+      expect(checkpointAfter).toBe(5);
     }, 120000);
   });
 });
