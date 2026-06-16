@@ -36,6 +36,45 @@ function findInlineCodeSpanEnd(source: string, start: number): number | undefine
   return codeSpanEnd === -1 ? undefined : codeSpanEnd;
 }
 
+function findEnclosingLineQuoteEnd(source: string, start: number): number | undefined {
+  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const lineEnd = source.indexOf("\n", start);
+  const limit = lineEnd === -1 ? source.length : lineEnd;
+  let quote: "'" | '"' | null = null;
+
+  for (let index = lineStart; index < start; index += 1) {
+    const ch = source[index];
+    if (quote !== null) {
+      if (ch === "\\" && quote === '"' && index + 1 < start) {
+        index += 1;
+        continue;
+      }
+      if (ch === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+    }
+  }
+
+  if (quote === null) return undefined;
+
+  for (let index = start; index < limit; index += 1) {
+    const ch = source[index];
+    if (ch === "\\" && quote === '"' && index + 1 < limit) {
+      index += 1;
+      continue;
+    }
+    if (ch === quote) {
+      return index;
+    }
+  }
+
+  return undefined;
+}
+
 function lineIndent(line: string): number {
   const match = line.match(/^ */);
   return match?.[0].length ?? 0;
@@ -103,7 +142,10 @@ function findTailorCommandEnd(
   start: number,
   foldedYamlRanges?: FoldedYamlRange[],
 ): number {
-  const limit = findInlineCodeSpanEnd(source, start) ?? source.length;
+  const limit = Math.min(
+    findInlineCodeSpanEnd(source, start) ?? source.length,
+    findEnclosingLineQuoteEnd(source, start) ?? source.length,
+  );
   const foldedYamlRange = findContainingFoldedYamlRange(foldedYamlRanges, start);
   const commandLimit = foldedYamlRange ? Math.min(limit, foldedYamlRange.end) : limit;
   let quote: "'" | '"' | null = null;

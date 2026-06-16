@@ -159,6 +159,9 @@ export async function runCodemods(
     if (seen.has(absolute)) continue;
     seen.add(absolute);
 
+    const matchedTransforms = loaded.filter((lt) => lt.matches(relative));
+    if (matchedTransforms.length === 0) continue;
+
     let original: string;
     try {
       original = await fs.promises.readFile(absolute, "utf-8");
@@ -167,10 +170,7 @@ export async function runCodemods(
     }
 
     let current = original;
-    const matchedTransforms: LoadedTransform[] = [];
     for (const lt of loaded) {
-      if (!lt.matches(relative)) continue;
-      matchedTransforms.push(lt);
       const result = await lt.transform(current, absolute);
       if (result != null) {
         current = result;
