@@ -26,7 +26,6 @@ import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/aut
 import { describe, test, expect, beforeAll } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";
-import { resolveResolverArg } from "../src/cli/commands/function/test-run";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
@@ -92,7 +91,7 @@ async function runTestRun(
     if (!detected.hasInput) {
       resolvedArg = undefined;
     } else if (detected.inputSchema) {
-      resolvedArg = resolveResolverArg(resolvedArg, detected.inputSchema, machineUser, workspaceId);
+      JSON.parse(resolvedArg);
     }
   }
 
@@ -180,7 +179,7 @@ describe.sequential("E2E: function test-run", () => {
   describe("resolver", () => {
     test("runs add resolver with input arguments", async () => {
       const result = await runTestRun("resolvers/add.ts", {
-        arg: '{"input":{"a":1,"b":2}}',
+        arg: '{"a":1,"b":2}',
       });
 
       expect(result.success).toBe(true);
@@ -213,7 +212,7 @@ describe.sequential("E2E: function test-run", () => {
 
     test("injects environment variables into resolver", async () => {
       const result = await runTestRun("resolvers/env.ts", {
-        arg: '{"input":{"multiplier":3}}',
+        arg: '{"multiplier":3}',
       });
 
       expect(result.success).toBe(true);
@@ -226,7 +225,7 @@ describe.sequential("E2E: function test-run", () => {
 
     test("supports getDB in resolver (stepChain)", async () => {
       const result = await runTestRun("resolvers/stepChain.ts", {
-        arg: '{"input":{"user":{"name":{"first":"John","last":"Doe"}}}}',
+        arg: '{"user":{"name":{"first":"John","last":"Doe"}}}',
       });
 
       expect(result.success).toBe(true);
@@ -239,7 +238,7 @@ describe.sequential("E2E: function test-run", () => {
 
     test("inserts nested object with Date and verifies round-trip", async () => {
       const result = await runTestRun("resolvers/insertNestedProfileWithDate.ts", {
-        arg: '{"input":{"name":"Test User","email":"test@example.com"}}',
+        arg: '{"name":"Test User","email":"test@example.com"}',
       });
 
       expect(result.success).toBe(true);
@@ -254,7 +253,7 @@ describe.sequential("E2E: function test-run", () => {
 
     test("reports validation errors for invalid input", async () => {
       const result = await runTestRun("resolvers/add.ts", {
-        arg: '{"input":{"a":100,"b":2}}',
+        arg: '{"a":100,"b":2}',
       });
 
       expect(result.success).toBe(false);

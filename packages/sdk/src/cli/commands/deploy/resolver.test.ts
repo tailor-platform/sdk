@@ -667,6 +667,58 @@ describe("processResolver authInvoker mapping", () => {
     await expect(planPipeline(ctx)).rejects.toThrow(/no Auth service is configured/);
   });
 
+  test("string authInvoker uses external auth config name", async () => {
+    const client = createMockClient([{ name: "test-ns", label: appName }]);
+
+    const resolverService = {
+      namespace: "test-ns",
+      config: {},
+      resolvers: {
+        myResolver: {
+          name: "myResolver",
+          operation: "query",
+          body: () => "hello",
+          output: { type: "string", metadata: {}, fields: {} },
+          authInvoker: "batch-user",
+        },
+      },
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ResolverService;
+
+    const application = {
+      name: appName,
+      env: {},
+      config: {
+        auth: { name: "external-auth", external: true },
+      },
+      resolverServices: [resolverService],
+      executorService: {
+        config: {},
+        executors: {},
+        loadExecutors: vi.fn().mockResolvedValue({}),
+      },
+    } as unknown as Application;
+
+    const ctx: PlanContext = {
+      client,
+      workspaceId,
+      application,
+      forRemoval: false,
+      config: { path: "/test/tailor.config.ts" } as LoadedConfig,
+    };
+
+    const result = await planPipeline(ctx);
+
+    const resolverCreate = result.changeSet.resolver.creates[0];
+    expect(resolverCreate).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const proto = (resolverCreate as any).request.pipelineResolver;
+    expect(proto.pipelines[0].invoker).toEqual({
+      namespace: "external-auth",
+      machineUserName: "batch-user",
+    });
+  });
+
   test("invoker is undefined when authInvoker is not set", async () => {
     const client = createMockClient([{ name: "test-ns", label: appName }]);
 

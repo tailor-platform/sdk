@@ -310,8 +310,6 @@ export default createResolver({
 
 Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `apply`) after defining new machine users to refresh it.
 
-> **Deprecated:** The `auth.invoker("<name>")` helper is still available for backward compatibility. Prefer the string form — it does not require importing `auth` from `tailor.config.ts` into runtime files, avoiding bundling config-layer (Node-only) dependencies.
-
 ## OAuth 2.0 Clients
 
 Configure OAuth 2.0 clients for third-party applications:

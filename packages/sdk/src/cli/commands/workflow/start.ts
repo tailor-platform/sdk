@@ -18,6 +18,10 @@ import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
 import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
+// Import from the public entry (not `@/types/auth`) so the `./cli` d.ts references
+// `@tailor-platform/sdk` externally instead of inlining the registry — a single
+// generated `declare module "@tailor-platform/sdk"` then narrows both entries.
+import type { MachineUserName } from "@tailor-platform/sdk";
 import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
@@ -64,9 +68,10 @@ export interface StartWorkflowOptions {
 
 type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
   workflow: W;
-  authInvoker: AuthInvoker<string>;
+  authInvoker: MachineUserName;
   workspaceId?: string;
   profile?: string;
+  configPath?: string;
   interval?: number;
 };
 
@@ -269,6 +274,23 @@ async function startWorkflowCore(
   }
 }
 
+async function resolveApplicationAuthNamespace(options: {
+  client: Awaited<ReturnType<typeof initOperatorClient>>;
+  workspaceId: string;
+  configPath?: string;
+}): Promise<string> {
+  const { config } = await loadConfig(options.configPath);
+  const { application } = await options.client.getApplication({
+    workspaceId: options.workspaceId,
+    applicationName: config.name,
+  });
+  const authNamespace = application?.authNamespace || config.auth?.name;
+  if (!authNamespace) {
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+  }
+  return authNamespace;
+}
+
 async function startWorkflowByName(
   options: StartWorkflowOptions,
 ): Promise<StartWorkflowResultWithWait> {
@@ -291,21 +313,18 @@ async function startWorkflowByName(
     profile: options.profile,
   });
 
-  const { config } = await loadConfig(options.configPath);
-  const { application } = await client.getApplication({
+  const authNamespace = await resolveApplicationAuthNamespace({
+    client,
     workspaceId,
-    applicationName: config.name,
+    configPath: options.configPath,
   });
-  if (!application?.authNamespace) {
-    throw new Error(`Application ${config.name} does not have an auth configuration.`);
-  }
 
   return await startWorkflowCore({
     client,
     workspaceId,
     workflowName: options.name,
     authInvoker: {
-      namespace: application.authNamespace,
+      namespace: authNamespace,
       machineUserName: machineUser,
     },
     arg: options.arg,
@@ -340,12 +359,20 @@ export async function startWorkflow<W extends WorkflowLike>(
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
+  const authNamespace = await resolveApplicationAuthNamespace({
+    client,
+    workspaceId,
+    configPath: options.configPath,
+  });
 
   return await startWorkflowCore({
     client,
     workspaceId,
     workflowName: options.workflow.name,
-    authInvoker: options.authInvoker,
+    authInvoker: {
+      namespace: authNamespace,
+      machineUserName: options.authInvoker,
+    },
     arg: options.arg,
     interval: options.interval,
   });

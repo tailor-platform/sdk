@@ -21,7 +21,7 @@ import { executeScript } from "@/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import { assertDefined } from "@/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
-import { detectFunctionType, type DetectedFunction } from "./detect";
+import { detectFunctionType } from "./detect";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
@@ -141,7 +141,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
           );
           args.arg = undefined;
         } else if (detected.inputSchema) {
-          args.arg = resolveResolverArg(args.arg, detected.inputSchema, machineUser, workspaceId);
+          JSON.parse(args.arg);
         }
       }
 
@@ -326,54 +326,4 @@ async function resolveMachineUser(
   }
 
   return { name: machineUserName, id, attributes, attributeList };
-}
-
-/**
- * Resolve resolver arg format: detect and unwrap deprecated {"input":{...}} wrapper.
- * Tries new format (arg = input fields) first via schema parse.
- * If that fails and arg looks like old format, tries unwrapping.
- * @param argStr - JSON string of the arg
- * @param inputSchema - Pre-built schema object from detect (has .parse())
- * @param machineUser - Resolved machine user info
- * @param workspaceId - Workspace ID
- * @returns Resolved JSON string (unwrapped if old format)
- */
-export function resolveResolverArg(
-  argStr: string,
-  inputSchema: NonNullable<DetectedFunction["inputSchema"]>,
-  machineUser: ResolvedMachineUser,
-  workspaceId: string,
-): string {
-  const parsed = JSON.parse(argStr);
-  const user = {
-    id: machineUser.id,
-    type: "machine_user" as const,
-    workspaceId,
-    attributes: machineUser.attributes ?? null,
-    attributeList: machineUser.attributeList,
-  };
-
-  const newResult = inputSchema.parse({ value: parsed, data: parsed, user });
-  if (!newResult.issues) {
-    return argStr;
-  }
-
-  // New format failed — check if old format works
-  if (
-    Object.keys(parsed).length === 1 &&
-    parsed.input != null &&
-    typeof parsed.input === "object" &&
-    !Array.isArray(parsed.input)
-  ) {
-    const oldResult = inputSchema.parse({ value: parsed.input, data: parsed.input, user });
-    if (!oldResult.issues) {
-      logger.warn(
-        '[DEPRECATED] Wrapping args with "input" key (e.g. {"input":{...}}) is deprecated. Pass input fields directly (e.g. {"a":1}). The "input" wrapper will be removed in v2.',
-      );
-      return JSON.stringify(parsed.input);
-    }
-  }
-
-  // Both failed — pass as-is, let server report the validation error
-  return argStr;
 }

@@ -86,6 +86,7 @@ describe("generateTypeDefinition", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
     expect(result).toContain("interface MachineUserNameRegistry {}");
+    expect(result).not.toContain('declare module "@tailor-platform/sdk/cli"');
   });
 
   test("should generate MachineUserNameRegistry with machine user names", () => {
@@ -95,6 +96,7 @@ describe("generateTypeDefinition", () => {
     ]);
 
     expect(result).toContain("interface MachineUserNameRegistry");
+    expect(result).not.toContain('declare module "@tailor-platform/sdk/cli"');
     // Names with hyphens are quoted
     expect(result).toContain('"manager-machine-user": true;');
     // Valid identifiers are emitted unquoted (matches formatter output)
