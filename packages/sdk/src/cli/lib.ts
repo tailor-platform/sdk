@@ -91,10 +91,9 @@ export {
   type GetWorkflowOptions,
   type GetWorkflowTypedOptions,
 } from "./commands/workflow/get";
+export type { MachineUserName } from "@tailor-platform/sdk";
 export {
   startWorkflow,
-  type MachineUserName,
-  type MachineUserNameRegistry,
   type StartWorkflowOptions,
   type StartWorkflowTypedOptions,
   type StartWorkflowResultWithWait,
