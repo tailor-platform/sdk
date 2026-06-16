@@ -134,15 +134,11 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       functionName = detected.name;
       logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
 
-      if (detected.type === "resolver" && args.arg) {
-        if (!detected.hasInput) {
-          logger.warn(
-            '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
-          );
-          args.arg = undefined;
-        } else if (detected.inputSchema) {
-          JSON.parse(args.arg);
-        }
+      if (detected.type === "resolver" && args.arg && !detected.hasInput) {
+        logger.warn(
+          '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
+        );
+        args.arg = undefined;
       }
 
       logger.info("Bundling...");
@@ -171,7 +167,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       workspaceId,
       name: scriptName,
       code: bundledCode,
-      arg: args.arg,
+      arg: args.arg === undefined ? undefined : JSON.parse(args.arg),
       invoker: authInvoker,
     });
 

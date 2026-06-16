@@ -210,10 +210,10 @@ async function sqlQuery(
     workspaceId: args.workspaceId,
     name: `query-sql-${args.namespace}.js`,
     code: args.bundledCode,
-    arg: JSON.stringify({
+    arg: {
       namespace: args.namespace,
       queries,
-    }),
+    },
     invoker,
   });
 
@@ -251,11 +251,11 @@ async function gqlQuery(
     workspaceId: args.workspaceId,
     name: `query-gql.js`,
     code: args.bundledCode,
-    arg: JSON.stringify({
+    arg: {
       endpoint: `${application.url}/query`,
       accessToken,
       query: args.query,
-    }),
+    },
     invoker,
   });
 
