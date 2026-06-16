@@ -24,6 +24,7 @@ export type AppConfigParsed = {
   workflow?: unknown;
   httpAdapter?: unknown;
   staticWebsites?: unknown;
+  aiGateways?: unknown;
   secrets?: unknown;
 };
 export type AppConfigParsedInput = AppConfigParsed;

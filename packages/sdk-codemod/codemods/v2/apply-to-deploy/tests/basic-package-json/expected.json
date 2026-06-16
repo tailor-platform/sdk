@@ -4,6 +4,8 @@
   "scripts": {
     "deploy:dev": "tailor-sdk deploy --profile dev",
     "deploy:prod": "tailor-sdk deploy --profile prod -y",
+    "deploy:json": "tailor-sdk --json deploy --dry-run",
+    "deploy:env": "tailor-sdk --env-file=.env deploy --yes",
     "build": "tsc"
   }
 }

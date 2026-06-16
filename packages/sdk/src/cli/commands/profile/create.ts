@@ -27,9 +27,22 @@ export const createCommand = defineAppCommand({
         description:
           "Profile permission. 'read' blocks all write commands while the profile is active.",
       }),
+      "machine-user": arg(z.string().optional(), {
+        alias: "m",
+        description:
+          "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).",
+      }),
+      "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
+        description:
+          "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user.",
+      }),
     })
     .strict(),
   run: async (args) => {
+    if (args["machine-user-override"] === "deny" && !args["machine-user"]) {
+      throw new Error("--machine-user-override deny requires --machine-user.");
+    }
+
     const config = await readPlatformConfig();
 
     // Check if profile already exists
@@ -60,6 +73,10 @@ export const createCommand = defineAppCommand({
       user: args.user,
       workspace_id: args["workspace-id"],
       ...(args.permission === "read" ? { readonly: true } : {}),
+      ...(args["machine-user"] ? { machine_user: args["machine-user"] } : {}),
+      ...(args["machine-user-override"] === "deny"
+        ? { machine_user_override: "deny" as const }
+        : {}),
     };
     writePlatformConfig(config);
 
@@ -73,6 +90,12 @@ export const createCommand = defineAppCommand({
       user: args.user,
       workspaceId: args["workspace-id"],
       permission: args.permission,
+      ...(args["machine-user"]
+        ? {
+            machineUser: args["machine-user"],
+            machineUserOverride: args["machine-user-override"] ?? "allow",
+          }
+        : {}),
     };
     logger.out(profileInfo);
   },
