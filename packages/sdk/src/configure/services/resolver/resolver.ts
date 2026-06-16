@@ -1,6 +1,5 @@
 import { t } from "@/configure/types/type";
 import { brandValue } from "@/utils/brand";
-import type { AuthInvoker } from "@/configure/services/auth";
 import type { MachineUserName } from "@/configure/types/machine-user";
 import type { TailorAnyField, TailorField } from "@/configure/types/type";
 import type { TailorEnv } from "@/types/env";
@@ -42,7 +41,7 @@ type ResolverReturn<
     input?: Input;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-    authInvoker?: AuthInvoker<string> | MachineUserName;
+    authInvoker?: MachineUserName;
   }>;
 
 /**
@@ -93,7 +92,7 @@ export function createResolver<
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-      authInvoker?: AuthInvoker<string> | MachineUserName;
+      authInvoker?: MachineUserName;
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.

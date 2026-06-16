@@ -497,14 +497,11 @@ describe("createResolver", () => {
         operation: "query",
         output: outputType,
         body: () => ({ result: "ok" }),
-        authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+        authInvoker: "batch-user",
       });
 
       expect(resolver.name).toBe("withAuthInvoker");
-      expect(resolver.authInvoker).toEqual({
-        namespace: "my-auth",
-        machineUserName: "batch-user",
-      });
+      expect(resolver.authInvoker).toBe("batch-user");
     });
 
     test("creates minimal resolver without optional fields", () => {

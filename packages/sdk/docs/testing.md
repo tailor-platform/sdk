@@ -853,14 +853,13 @@ Use `startWorkflow` from the CLI helpers. It starts the workflow on the deployed
 import { randomUUID } from "node:crypto";
 import { startWorkflow } from "@tailor-platform/sdk/cli";
 import { describe, expect, test } from "vitest";
-import config from "../tailor.config";
 import userProfileSync from "../src/workflow/sync-profile";
 
 describe("user-profile-sync workflow", () => {
   test("executes end to end", { timeout: 180_000 }, async () => {
     const { executionId, wait } = await startWorkflow({
       workflow: userProfileSync,
-      authInvoker: config.auth.invoker("admin"),
+      authInvoker: "admin",
       arg: {
         name: "workflow-test",
         email: `wf-${randomUUID()}@example.com`,

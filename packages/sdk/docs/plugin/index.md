@@ -149,7 +149,7 @@ These hooks produce TailorDB types, resolvers, and executors that become part of
 | `onResolverReady` | TailorDB types, Resolvers, Auth            | Write output files |
 | `onExecutorReady` | TailorDB types, Resolvers, Executors, Auth | Write output files |
 
-These hooks receive all finalized data and produce output files (TypeScript code, etc.). They replace the previous standalone `defineGenerators()` approach. No `importPath` required.
+These hooks receive all finalized data and produce output files (TypeScript code, etc.). No `importPath` required.
 
 A plugin can implement hooks from either or both phases.
 

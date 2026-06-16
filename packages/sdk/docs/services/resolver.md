@@ -240,7 +240,7 @@ Define actual resolver logic in the `body` function. Function arguments include:
 
 ### Using Kysely for Database Access
 
-If you're generating Kysely types with a generator, you can use `getDB` to execute typed queries:
+If you're generating Kysely types with `kyselyTypePlugin`, you can use `getDB` to execute typed queries:
 
 ```typescript
 import { getDB } from "../generated/tailordb";
@@ -370,7 +370,5 @@ export default createResolver({
 ```
 
 The machine user name is looked up in the auth service configured on your app (`machineUsers` in `defineAuth`). The namespace is resolved automatically — no need to import `auth` from `tailor.config.ts` in resolver files.
-
-> **Deprecated:** `auth.invoker("batch-processor")` still works, but is deprecated. Importing `auth` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
 
 **Note:** `authInvoker` controls the permissions for database operations and other platform actions. The `caller` object passed to `body` still reflects the original caller, while `invoker` reflects the principal actually running the body.

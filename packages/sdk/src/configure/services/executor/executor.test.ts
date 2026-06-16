@@ -1373,7 +1373,7 @@ describe("workflowTarget", () => {
         kind: "workflow",
         workflow: testWorkflow,
         args: { orderId: "test-id" },
-        authInvoker: { namespace: "my-auth", machineUserName: "admin" },
+        authInvoker: "admin",
       },
     });
   });

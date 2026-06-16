@@ -1,6 +1,5 @@
 import { createExecutor, recordUpdatedTrigger } from "@tailor-platform/sdk";
 import { inventory } from "../db/inventory";
-import config from "../../tailor.config";
 import { getDB } from "../generated/kysely-tailordb";
 
 export default createExecutor({
@@ -22,6 +21,6 @@ export default createExecutor({
         })
         .execute();
     },
-    invoker: config.auth.invoker("manager"),
+    authInvoker: "manager",
   },
 });
