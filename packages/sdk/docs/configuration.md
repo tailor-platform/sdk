@@ -294,5 +294,3 @@ export const plugins = definePlugins(
   enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
 );
 ```
-
-See [Generators](./generator/index.md) for legacy `defineGenerators()` documentation.

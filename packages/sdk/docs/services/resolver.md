@@ -240,7 +240,7 @@ Define actual resolver logic in the `body` function. Function arguments include:
 
 ### Using Kysely for Database Access
 
-If you're generating Kysely types with a generator, you can use `getDB` to execute typed queries:
+If you're generating Kysely types with `kyselyTypePlugin`, you can use `getDB` to execute typed queries:
 
 ```typescript
 import { getDB } from "../generated/tailordb";
