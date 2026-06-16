@@ -1,5 +1,35 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.0
+### Major Changes
+
+
+
+- [#1451](https://github.com/tailor-platform/sdk/pull/1451) [`3e6d582`](https://github.com/tailor-platform/sdk/commit/3e6d582a37d83a42302339cc4aea1d3dd11e8a81) Thanks [@tailor-platform-pr-trigger](https://github.com/apps/tailor-platform-pr-trigger)! - Start the v2 release line. v2 introduces breaking changes to the SDK API and CLI; run `tailor-sdk upgrade` to apply the bundled codemods when migrating. Prereleases are published to the `next` dist-tag — install with `@tailor-platform/sdk@next`.
+
+
+### Patch Changes
+
+
+
+- [#1449](https://github.com/tailor-platform/sdk/pull/1449) [`016aff6`](https://github.com/tailor-platform/sdk/commit/016aff6aab31c334c57a5e5244453f2dd559c008) Thanks [@k1LoW](https://github.com/k1LoW)! - Document the `userAuthPolicy`, `gqlOperations`, and `lang` options of `defineIdp()` in the IdP service guide, including the password policy fields, allowed email domains, Google/Microsoft social login, the read-only `"query"` shortcut, and the cross-field validation constraints.
+
+
+
+- [#1450](https://github.com/tailor-platform/sdk/pull/1450) [`162ba62`](https://github.com/tailor-platform/sdk/commit/162ba629e0d511593718f289b93788d5d56778da) Thanks [@toiroakr](https://github.com/toiroakr)! - Update OpenTelemetry runtime dependencies to 2.8.0 to resolve a moderate security advisory (GHSA-8988-4f7v-96qf) in `@opentelemetry/core`
+
+
+
+- [#1432](https://github.com/tailor-platform/sdk/pull/1432) [`3a854a3`](https://github.com/tailor-platform/sdk/commit/3a854a3a10b938ce3cf6fe7527de4ab56ecf48d5) Thanks [@toiroakr](https://github.com/toiroakr)! - Roll back a migration's pre-migration schema changes when its data migration (`migrate.ts`) fails during `apply`. A failed migration now leaves the workspace at its prior checkpoint and prior schema instead of half-applied, so subsequent deploys are no longer blocked by opaque "Remote schema drift detected" errors.
+
+
+
+- [#1422](https://github.com/tailor-platform/sdk/pull/1422) [`f3f8427`](https://github.com/tailor-platform/sdk/commit/f3f84277fe1942601d0fcbb8a64c2c26823b5624) Thanks [@dqn](https://github.com/dqn)! - Internal cleanup of proto field optionality handling. No behavior change.
+
+
+
+- [#1421](https://github.com/tailor-platform/sdk/pull/1421) [`b933f47`](https://github.com/tailor-platform/sdk/commit/b933f474d65f8dfed56f3991aae3a52589368b10) Thanks [@dqn](https://github.com/dqn)! - Corrupted or hand-edited TailorDB migration snapshot/diff files now fail with a clear validation error when loaded, instead of causing undefined behavior later.
+
 ## 1.64.0
 
 ### Minor Changes
