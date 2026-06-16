@@ -170,6 +170,19 @@ function findMarkdownFencedCodeRanges(source: string): TextRange[] {
   return ranges;
 }
 
+function isCommandSeparator(source: string, index: number): boolean {
+  const ch = source[index];
+  const prev = source[index - 1];
+  if (prev === "\\") return false;
+
+  if (ch === "&") {
+    const next = source[index + 1];
+    if (prev === ">" || prev === "<" || next === ">") return false;
+  }
+
+  return ch === ";" || ch === "&" || ch === "|" || ch === ")";
+}
+
 function findContainingRange(
   ranges: TextRange[] | undefined,
   index: number,
@@ -233,7 +246,7 @@ function findTailorCommandEnd(
     }
 
     const prev = source[end - 1];
-    if ((ch === ";" || ch === "&" || ch === "|" || ch === ")") && prev !== "\\") break;
+    if (isCommandSeparator(source, end)) break;
     if (ch === "\n" && prev !== "\\" && !foldedYamlRange) break;
     end += 1;
   }

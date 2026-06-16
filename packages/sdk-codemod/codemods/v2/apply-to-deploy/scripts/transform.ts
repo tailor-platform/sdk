@@ -2,8 +2,8 @@ import * as path from "pathe";
 
 // Match `tailor-sdk apply` plus the optional `@version` suffix that
 // package-manager run commands can add (`npx tailor-sdk@latest apply`,
-// `pnpm dlx tailor-sdk@1.45.2 apply`). The version pin is preserved because
-// `apply` and `deploy` are the same subcommand on the same binary.
+// `pnpm dlx tailor-sdk@1.45.2 apply`). The version pin is preserved; only the
+// command spelling changes.
 // `(?![-\w])` excludes both word continuation (`applyConfig`) and dash-suffixed
 // names (`apply-foo`) so a hypothetical sibling subcommand is not rewritten.
 const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
@@ -54,7 +54,7 @@ function transformPackageJson(source: string): string | null {
 /**
  * Replace `tailor-sdk apply` invocations with `tailor-sdk deploy`.
  *
- * `deploy` is a v1 alias of `apply` and the recommended name going forward.
+ * `deploy` is the canonical v2 command name.
  * @param source - File contents
  * @param filePath - Absolute path to the file (used to dispatch package.json vs text)
  * @returns Transformed source or null when nothing matched.
