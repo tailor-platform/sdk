@@ -11,7 +11,9 @@
 # already on the remote and releases that already exist are skipped.
 set -euo pipefail
 
-remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+# Authenticate git through gh's credential helper so the token is never
+# embedded in a remote URL (which could leak into logs or process args).
+gh auth setup-git
 
 changelog_entry() { # <changelog-file> <version>
   awk -v ver="## $2" '
@@ -39,9 +41,9 @@ for tag in $(git tag --points-at HEAD); do
   version="${tag##*@}"
   [ -n "$name" ] && [ -n "$version" ] || continue
 
-  if ! git ls-remote --exit-code --tags "$remote" "refs/tags/${tag}" >/dev/null 2>&1; then
+  if ! git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
     echo "Pushing tag ${tag}"
-    git push "$remote" "refs/tags/${tag}"
+    git push origin "refs/tags/${tag}"
   fi
 
   if gh release view "$tag" >/dev/null 2>&1; then
@@ -53,12 +55,20 @@ for tag in $(git tag --points-at HEAD); do
     continue
   fi
 
-  notes_file="$(mktemp)"
-  changelog_entry "${dir}/CHANGELOG.md" "$version" >"$notes_file"
-
   prerelease=()
   case "$version" in *-*) prerelease=(--prerelease) ;; esac
 
   echo "Creating GitHub release ${tag}"
-  gh release create "$tag" --title "$tag" --notes-file "$notes_file" "${prerelease[@]}"
+  # A version heading may exist with an empty body (e.g. packages with no
+  # direct changes), which is a valid empty release. Only fall back to
+  # auto-generated notes when the heading is missing entirely.
+  if grep -qxF "## ${version}" "${dir}/CHANGELOG.md"; then
+    notes_file="$(mktemp)"
+    changelog_entry "${dir}/CHANGELOG.md" "$version" >"$notes_file"
+    gh release create "$tag" --title "$tag" --notes-file "$notes_file" "${prerelease[@]}"
+    rm -f "$notes_file"
+  else
+    echo "No changelog entry for ${tag}; generating release notes"
+    gh release create "$tag" --title "$tag" --generate-notes "${prerelease[@]}"
+  fi
 done
