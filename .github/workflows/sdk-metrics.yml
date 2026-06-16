@@ -2,14 +2,13 @@ name: SDK Metrics
 
 on:
   pull_request:
-    branches: [main]
     paths:
       - packages/**
       - package.json
       - pnpm-lock.yaml
       - .github/workflows/sdk-metrics.yml
   push:
-    branches: [main]
+    branches: [main, v2]
   workflow_dispatch:
 
 permissions:
@@ -40,7 +39,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Login as machine user
-        run: pnpm tailor-sdk login --machineuser
+        run: pnpm tailor-sdk login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
@@ -81,7 +80,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Login as machine user
-        run: pnpm tailor-sdk login --machineuser
+        run: pnpm tailor-sdk login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}

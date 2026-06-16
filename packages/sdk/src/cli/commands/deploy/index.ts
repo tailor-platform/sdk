@@ -7,7 +7,6 @@ import { assertWritable } from "@/cli/shared/readonly-guard";
 
 export const deployCommand = defineAppCommand({
   name: "deploy",
-  aliases: ["apply"],
   description: "Deploy your application by applying the Tailor configuration.",
   args: z
     .object({

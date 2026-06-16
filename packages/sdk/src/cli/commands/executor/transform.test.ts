@@ -159,6 +159,7 @@ describe("transform", () => {
             case: "event" as const,
             value: {
               eventType: "tailordb.type_record.created",
+              typedConfig: { case: undefined },
               condition: {
                 expr: 'args.typeName === "User" && someOtherCondition',
               },
@@ -186,6 +187,7 @@ describe("transform", () => {
             case: "event" as const,
             value: {
               eventType: "pipeline.resolver.executed",
+              typedConfig: { case: undefined },
               condition: {
                 expr: 'args.resolverName === "myResolver"',
               },
@@ -210,6 +212,7 @@ describe("transform", () => {
             case: "event" as const,
             value: {
               eventType: "tailordb.type_record.created",
+              typedConfig: { case: undefined },
             },
           },
         },
@@ -291,6 +294,7 @@ describe("transform", () => {
             case: "event" as const,
             value: {
               eventType: "idp.user.created",
+              typedConfig: { case: undefined },
             },
           },
         },
@@ -312,6 +316,7 @@ describe("transform", () => {
             case: "event" as const,
             value: {
               eventType: "auth.access_token.issued",
+              typedConfig: { case: undefined },
             },
           },
         },
@@ -434,6 +439,7 @@ describe("transform", () => {
             case: "event" as const,
             value: {
               eventType: "user.created",
+              typedConfig: { case: undefined },
               condition: {
                 expr: "true",
               },
@@ -624,6 +630,7 @@ describe("transform", () => {
             case: "event" as const,
             value: {
               eventType: "order.created",
+              typedConfig: { case: undefined },
             },
           },
         },

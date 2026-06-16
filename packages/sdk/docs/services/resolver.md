@@ -240,7 +240,7 @@ Define actual resolver logic in the `body` function. Function arguments include:
 
 ### Using Kysely for Database Access
 
-If you're generating Kysely types with a generator, you can use `getDB` to execute typed queries:
+If you're generating Kysely types with `kyselyTypePlugin`, you can use `getDB` to execute typed queries:
 
 ```typescript
 import { getDB } from "../generated/tailordb";
@@ -306,7 +306,7 @@ createResolver({
 
 - When `publishEvents: true`, resolver execution events are published
 - When not specified, it is **automatically set to `true`** if an executor uses this resolver with `resolverExecutedTrigger`
-- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor apply`
+- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor-sdk deploy`
 
 **Use cases:**
 

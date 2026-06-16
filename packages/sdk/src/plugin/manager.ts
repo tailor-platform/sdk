@@ -5,7 +5,7 @@ import type {
   TailorTypePermission,
   TailorTypeGqlPermission,
 } from "@/configure/services/tailordb/permission";
-import type { DependencyKind } from "@/parser/generator-config/schema";
+import type { DependencyKind } from "@/types/generator-config";
 import type {
   Plugin,
   PluginAttachment,

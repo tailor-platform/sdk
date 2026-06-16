@@ -16,11 +16,11 @@
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.13.1",
+    "@types/node": "24.13.2",
     "graphql": "16.14.1",
     "graphql-request": "7.4.0",
-    "oxfmt": "0.53.0",
-    "oxlint": "1.68.0",
+    "oxfmt": "0.54.0",
+    "oxlint": "1.69.0",
     "oxlint-tsgolint": "0.23.0",
     "typescript": "5.9.3",
     "vitest": "4.1.8"

@@ -53,7 +53,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Login as machine user
-        run: pnpm tailor-sdk login --machineuser
+        run: pnpm tailor-sdk login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}

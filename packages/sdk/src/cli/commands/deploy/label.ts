@@ -36,6 +36,7 @@ export type ResourceKind =
   | "workflow"
   | "workflow_job_function"
   | "staticwebsite"
+  | "aigateway"
   | "tailordb"
   | "vault";
 

@@ -125,6 +125,89 @@ defineIdp("my-idp", {
 });
 ```
 
+### userAuthPolicy
+
+User authentication policy. Controls password requirements, the identifier used for login, allowed email domains, and social login providers. Every field is optional. The boolean options default to disabled, and the password length fields default to a minimum of 6 and a maximum of 4096.
+
+```typescript
+defineIdp("my-idp", {
+  clients: ["my-client"],
+  userAuthPolicy: {
+    useNonEmailIdentifier: false,
+    allowSelfPasswordReset: true,
+    passwordRequireUppercase: true,
+    passwordRequireLowercase: true,
+    passwordRequireNonAlphanumeric: true,
+    passwordRequireNumeric: true,
+    passwordMinLength: 8,
+    passwordMaxLength: 128,
+  },
+});
+```
+
+**Login behavior:**
+
+- `useNonEmailIdentifier` - Allow a non-email identifier (username) instead of requiring an email address. Default `false`.
+- `allowSelfPasswordReset` - Show the "Forgot password?" flow so users can reset their own password. Default `false`.
+- `disablePasswordAuth` - Remove password authentication entirely. Default `false`. Requires at least one social login provider to be enabled.
+
+**Password requirements:**
+
+- `passwordRequireUppercase` - Require at least one uppercase letter. Default `false`.
+- `passwordRequireLowercase` - Require at least one lowercase letter. Default `false`.
+- `passwordRequireNumeric` - Require at least one numeric character. Default `false`.
+- `passwordRequireNonAlphanumeric` - Require at least one non-alphanumeric character. Default `false`.
+- `passwordMinLength` - Minimum password length. Must be between 6 and 30. Default `6`.
+- `passwordMaxLength` - Maximum password length. Must be between 6 and 4096. Default `4096`.
+
+**Email domains and social login:**
+
+- `allowedEmailDomains` - Restrict registration to these email domains. An empty list (the default) allows all domains, but a non-empty list is required when `allowGoogleOauth` or `allowMicrosoftOauth` is enabled.
+- `allowGoogleOauth` - Enable the "Sign in with Google" button. Default `false`.
+- `allowMicrosoftOauth` - Enable the "Sign in with Microsoft" button. Default `false`.
+
+**Constraints:** the following combinations are rejected at parse time.
+
+- `passwordMinLength` must be less than or equal to `passwordMaxLength`.
+- A non-empty `allowedEmailDomains` cannot be combined with `useNonEmailIdentifier: true` (an empty list is allowed). Enabling `allowGoogleOauth` or `allowMicrosoftOauth` is likewise rejected with `useNonEmailIdentifier: true` (leaving them `false` or unset is fine).
+- `allowGoogleOauth` requires a non-empty `allowedEmailDomains`.
+- `allowMicrosoftOauth` requires both a non-empty `allowedEmailDomains` and `disablePasswordAuth: true`.
+- `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
+
+### gqlOperations
+
+Controls which GraphQL user-management operations the IdP exposes. All operations are enabled by default. Use this to turn operations off entirely, independent of the `permission` policies that decide who may call them.
+
+```typescript
+defineIdp("my-idp", {
+  clients: ["my-client"],
+  gqlOperations: {
+    create: true,
+    read: true,
+    update: true,
+    delete: false,
+    sendPasswordResetEmail: false,
+  },
+});
+```
+
+**Fields:** each field defaults to `true` (enabled). Set a field to `false` to disable that operation.
+
+- `create` - The `_createUser` mutation.
+- `read` - The `_users` and `_user` query operations.
+- `update` - The `_updateUser` mutation.
+- `delete` - The `_deleteUser` mutation.
+- `sendPasswordResetEmail` - The `_sendPasswordResetEmail` mutation.
+
+**Shortcut:** pass the string `"query"` to expose a read-only IdP. It enables `read` and disables every mutation.
+
+```typescript
+defineIdp("my-idp", {
+  clients: ["my-client"],
+  gqlOperations: "query",
+});
+```
+
 ### authorization (optional, legacy)
 
 Legacy access control field. Use `permission` instead for fine-grained per-operation control. This field is kept for backward compatibility.
@@ -169,6 +252,19 @@ defineIdp("my-idp", {
 - `passwordResetSubject` - Default subject for password reset emails. Empty means use localized default.
 
 **Validation:** Each field must be 200 characters or less and must not contain newline characters.
+
+### lang
+
+UI language for the IdP-hosted pages such as the login and password reset screens.
+
+```typescript
+defineIdp("my-idp", {
+  clients: ["my-client"],
+  lang: "ja",
+});
+```
+
+**Values:** `"en"` or `"ja"`.
 
 ### publishUserEvents
 

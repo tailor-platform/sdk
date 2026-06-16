@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import "@tailor-platform/sdk/runtime/globals";
 import { mockTailordb, mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
