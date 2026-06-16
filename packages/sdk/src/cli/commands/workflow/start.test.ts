@@ -85,6 +85,10 @@ describe("startWorkflow runtime overload", () => {
     expect(testStartWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowId: "id:legacy-workflow",
+        authInvoker: expect.objectContaining({
+          namespace: "auth-ns",
+          machineUserName: "legacy-user",
+        }),
       }),
     );
   });
@@ -146,6 +150,25 @@ describe("startWorkflow runtime overload", () => {
         }),
       }),
     );
+  });
+
+  test("throws when neither the deployed app nor the config has an auth namespace", async () => {
+    getApplicationMock.mockResolvedValueOnce({
+      application: {},
+    });
+
+    await expect(
+      startWorkflow({
+        workflow: {
+          name: "typed-workflow",
+          mainJob: {
+            body: () => undefined,
+          },
+        },
+        authInvoker: "typed-user",
+      }),
+    ).rejects.toThrow("my-app does not have an auth configuration");
+    expect(testStartWorkflowMock).not.toHaveBeenCalled();
   });
 
   test("start command with jsonMode emits only parseable JSON to stdout", async () => {
