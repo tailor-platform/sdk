@@ -13,4 +13,5 @@ jobs:
           pnpm exec tailor-sdk login
           --machineuser ci
       - run: "pnpm exec tailor-sdk query --machineuser ci"
+      - run: "tailor-sdk query --query \"select 1\" --machineuser ci"
       - run: pnpm exec tailor-sdk workflow start approval --machineuser ci
