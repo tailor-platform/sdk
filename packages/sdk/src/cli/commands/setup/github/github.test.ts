@@ -199,8 +199,9 @@ describe("renderBranchWorkflow", () => {
     const scoped = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/foo" }).content;
     expect(scoped).not.toMatch(NO_MARKER);
     expect(scoped).toContain('paths: ["apps/foo/**"]');
-    // plan job: setup + generate-check + plan action; deploy job: setup + deploy action
-    expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(5);
+    // Install stays at the repo root (single root lockfile), so setup gets no
+    // working-directory. plan job: generate-check + plan action; deploy job: deploy action.
+    expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(3);
     expect(() => parseYAML(scoped)).not.toThrow();
   });
 

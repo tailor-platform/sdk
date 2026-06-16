@@ -44,7 +44,6 @@ jobs:
         uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
-          # __WORKING_DIRECTORY__
       - id: tailor-generate-check
         uses: tailor-platform/actions/generate-check@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
@@ -80,7 +79,6 @@ jobs:
         uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
-          # __WORKING_DIRECTORY__
       - id: tailor-apply
         uses: tailor-platform/actions/deploy@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
