@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import { glob } from "node:fs/promises";
 import * as url from "node:url";
 import chalk from "chalk";
 import { structuredPatch } from "diff";
@@ -48,6 +47,33 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 
 /** Directory names always excluded from file scanning. */
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
+const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
+
+function shouldSkipDirectory(name: string): boolean {
+  return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
+}
+
+async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string> {
+  const absoluteDir = path.join(root, relativeDir);
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(absoluteDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const relative = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
+    if (entry.isDirectory()) {
+      if (shouldSkipDirectory(entry.name)) continue;
+      yield* walkFiles(root, relative);
+      continue;
+    }
+    if (entry.isFile()) {
+      yield relative;
+    }
+  }
+}
 
 /**
  * Print a colorized unified diff for a single file to stderr.
@@ -100,6 +126,20 @@ interface LoadedTransform {
   legacyPatterns: string[];
 }
 
+function legacyPatternWarnings(
+  relative: string,
+  content: string,
+  transforms: LoadedTransform[],
+): string[] {
+  return transforms.flatMap((lt) => {
+    const found = lt.legacyPatterns.filter((p) => content.includes(p));
+    if (found.length === 0) return [];
+    return [
+      `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
+    ];
+  });
+}
+
 /**
  * Run multiple codemods on a project directory using in-memory chaining.
  * Each file is processed through all transforms whose filePatterns match it.
@@ -123,17 +163,9 @@ export async function runCodemods(
     loaded.push({
       id: codemod.id,
       transform: await loadTransform(scriptPath),
-      matches: picomatch(patterns),
+      matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
     });
-  }
-
-  // Collect all unique file patterns for glob scanning
-  const allPatterns = new Set<string>();
-  for (const { codemod } of codemods) {
-    for (const p of codemod.filePatterns ?? DEFAULT_FILE_PATTERNS) {
-      allPatterns.add(p);
-    }
   }
 
   const filesModified: string[] = [];
@@ -141,55 +173,40 @@ export async function runCodemods(
   const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
 
-  // Iterate over all matching files (deduplicate across patterns)
-  for (const pattern of allPatterns) {
-    for await (const relative of glob(pattern, {
-      cwd: targetPath,
-      exclude: (name) => EXCLUDE_DIRS.has(name),
-    })) {
-      const absolute = path.resolve(targetPath, relative);
-      if (seen.has(absolute)) continue;
-      seen.add(absolute);
+  for await (const relative of walkFiles(targetPath)) {
+    const absolute = path.resolve(targetPath, relative);
+    if (seen.has(absolute)) continue;
+    seen.add(absolute);
 
-      let original: string;
-      try {
-        original = await fs.promises.readFile(absolute, "utf-8");
-      } catch {
-        continue;
-      }
+    const matchedTransforms = loaded.filter((lt) => lt.matches(relative));
+    if (matchedTransforms.length === 0) continue;
 
-      // Chain only transforms whose filePatterns match this file
-      let current = original;
-      const matchedTransforms: LoadedTransform[] = [];
-      for (const lt of loaded) {
-        if (!lt.matches(relative)) continue;
-        matchedTransforms.push(lt);
-        const result = await lt.transform(current, absolute);
-        if (result != null) {
-          current = result;
-          appliedCodemodIds.add(lt.id);
-        }
-      }
+    let original: string;
+    try {
+      original = await fs.promises.readFile(absolute, "utf-8");
+    } catch {
+      continue;
+    }
 
-      if (current !== original) {
-        filesModified.push(absolute);
-        if (dryRun) {
-          printDiff(absolute, original, current);
-        } else {
-          await fs.promises.writeFile(absolute, current, "utf-8");
-        }
-      } else {
-        // Check each matched codemod's legacyPatterns for unmodified files
-        for (const lt of matchedTransforms) {
-          const found = lt.legacyPatterns.filter((p) => original.includes(p));
-          if (found.length > 0) {
-            warnings.push(
-              `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
-            );
-          }
-        }
+    let current = original;
+    for (const lt of matchedTransforms) {
+      const result = await lt.transform(current, absolute);
+      if (result != null) {
+        current = result;
+        appliedCodemodIds.add(lt.id);
       }
     }
+
+    if (current !== original) {
+      filesModified.push(absolute);
+      if (dryRun) {
+        printDiff(absolute, original, current);
+      } else {
+        await fs.promises.writeFile(absolute, current, "utf-8");
+      }
+    }
+
+    warnings.push(...legacyPatternWarnings(relative, current, matchedTransforms));
   }
 
   return {

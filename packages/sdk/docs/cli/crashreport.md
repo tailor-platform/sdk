@@ -12,8 +12,6 @@ Commands for managing crash reports.
 
 Manage crash reports.
 
-**Aliases:** `crash-report`
-
 <!-- politty:command:crashreport:description:end -->
 
 <!-- politty:command:crashreport:usage:start -->
