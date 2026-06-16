@@ -47,3 +47,7 @@ export const parsedLocal = reviewer.parse({
 export const parsedOther = zodLike.parse({
   user: unauthenticatedTailorUser,
 });
+
+export function parseWithShadow(reviewer: { parse(arg: unknown): unknown }, user: unknown) {
+  return reviewer.parse({ user });
+}
