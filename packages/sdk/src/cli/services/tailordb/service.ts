@@ -9,9 +9,13 @@ import { assertDefined } from "@/utils/assert";
 import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import { formatTailorDBTypeSourceInfo } from "./type-name-validation";
+import type {
+  TypeSourceInfo,
+  TypeSourceInfoEntry,
+  TailorDBType,
+} from "@/parser/service/tailordb/types";
 import type { PluginManager } from "@/plugin/manager";
-import type { PluginAttachment } from "@/types/plugin";
-import type { TypeSourceInfo, TypeSourceInfoEntry, TailorDBType } from "@/types/tailordb";
+import type { PluginAttachment } from "@/plugin/types";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,

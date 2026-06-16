@@ -1,22 +1,9 @@
-import type { ValueOperand } from "./auth-value";
-import type { BuiltinIdP } from "./auth.generated";
-import type { IdPInput } from "./idp.generated";
-
-declare const idpDefinitionBrand: unique symbol;
-export type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };
-
-export type DefinedIdp<Name extends string, Config, ClientNames extends string> = Config & {
-  name: Name;
-  provider(providerName: string, clientName: ClientNames): BuiltinIdP;
-} & IdpDefinitionBrand;
-
-export type IdPExternalConfig = { name: string; external: true };
-
-export type IdPOwnConfig = Omit<DefinedIdp<string, IdPInput, string>, "provider">;
-
-export type IdPConfig = IdPOwnConfig | IdPExternalConfig;
-
-// IdP Permission standard types (normalized form used between parser and CLI)
+// IdP permission standard types (normalized form shared by parser and CLI).
+//
+// This is a pure type module: it must contain type declarations only and may
+// not reference zod or schema modules, so other layers (including configure)
+// can import it type-only without pulling any runtime dependency.
+import type { ValueOperand } from "@/configure/services/auth/types";
 
 export type StandardIdPPermissionOperator = "eq" | "ne" | "in" | "nin";
 

@@ -1,3 +1,9 @@
+// Shared runtime principal/environment types.
+//
+// This is a pure type module: it must contain type declarations only and may
+// not reference zod or schema modules, so every layer can import it type-only
+// without pulling any runtime dependency.
+
 // Interfaces for module augmentation
 // Users can extend these via: declare module "@tailor-platform/sdk" { interface AttributeMap { ... } }
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -40,15 +46,6 @@ export type TailorUser = {
   attributeList: InferredAttributeList;
 };
 
-/** Represents an unauthenticated user in the Tailor platform. */
-export const unauthenticatedTailorUser: TailorUser = {
-  id: "00000000-0000-0000-0000-000000000000",
-  type: "",
-  workspaceId: "00000000-0000-0000-0000-000000000000",
-  attributes: null,
-  attributeList: [],
-};
-
 /**
  * The invoker of the current function execution.
  *
@@ -73,3 +70,34 @@ export type TailorInvoker = {
   /** A list of the invoker's attribute IDs. */
   attributeList: InferredAttributeList;
 } | null;
+
+/** User type enum values from the Tailor Platform server. */
+export type TailorActorType = "USER_TYPE_USER" | "USER_TYPE_MACHINE_USER" | "USER_TYPE_UNSPECIFIED";
+
+/** Represents an actor in event triggers. */
+export type TailorActor = {
+  /** The ID of the workspace the user belongs to. */
+  workspaceId: string;
+  /** The ID of the user. */
+  userId: string;
+  /**
+   * A map of the user's attributes.
+   * Maps from server's `attributeMap` field.
+   */
+  attributes: InferredAttributeMap | null;
+  /**
+   * A list of the user's attributes.
+   * Maps from server's `attributes` field.
+   */
+  attributeList: InferredAttributeList;
+  /** The type of the user. */
+  userType: TailorActorType;
+};
+
+// Interface for module augmentation
+// Users can extend via: declare module "@tailor-platform/sdk" { interface Env { ... } }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface Env {}
+
+/** Represents environment variables in the Tailor platform. */
+export type TailorEnv = keyof Env extends never ? Record<string, string | number | boolean> : Env;

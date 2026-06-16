@@ -1,5 +1,5 @@
 import { db, type TailorAnyDBType } from "@/configure/services/tailordb";
-import { hasGenerationHooks, getPluginGenerationDependencies } from "@/types/plugin-generation";
+import { hasGenerationHooks, getPluginGenerationDependencies } from "@/plugin/guards";
 import { assertDefined } from "@/utils/assert";
 import type {
   TailorTypePermission,
@@ -14,7 +14,7 @@ import type {
   PluginNamespaceProcessContext,
   PluginOutput,
   TypePluginOutput,
-} from "@/types/plugin";
+} from "@/plugin/types";
 import type { TailorDBTypeRaw } from "@/types/tailordb.generated";
 
 /**

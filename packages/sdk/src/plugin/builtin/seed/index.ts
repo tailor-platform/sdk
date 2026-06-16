@@ -14,8 +14,7 @@ import {
   type PluginSchemaParams,
 } from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
-import type { Plugin } from "@/types/plugin";
-import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-generation";
+import type { Plugin, GeneratorResult, TailorDBReadyContext } from "@/plugin/types";
 
 /** Unique identifier for the seed generator plugin. */
 export const SeedGeneratorID = "@tailor-platform/seed";
