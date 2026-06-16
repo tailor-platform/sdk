@@ -38,7 +38,7 @@
     "@changesets/changelog-github": "1.0.0-next.5",
     "@changesets/cli": "3.0.0-next.5",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.13.1",
+    "@types/node": "24.13.2",
     "knip": "6.16.1",
     "lefthook": "2.1.9",
     "oxfmt": "0.54.0",
