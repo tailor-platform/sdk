@@ -180,7 +180,74 @@ function isCommandSeparator(source: string, index: number): boolean {
     if (prev === ">" || prev === "<" || next === ">") return false;
   }
 
-  return ch === ";" || ch === "&" || ch === "|" || ch === ")";
+  return ch === ";" || ch === "&" || ch === "|";
+}
+
+function startsCommandSubstitution(source: string, index: number): boolean {
+  return source[index] === "$" && source[index + 1] === "(" && source[index - 1] !== "\\";
+}
+
+function findCommandSubstitutionEnd(source: string, start: number): number | undefined {
+  let depth = 1;
+  let index = start + 2;
+  let quote: ActiveQuote | null = null;
+
+  while (index < source.length) {
+    const ch = source[index];
+
+    if (quote !== null) {
+      if (quote.escaped) {
+        if (ch === "\\" && source[index + 1] === quote.char) {
+          quote = null;
+          index += 2;
+          continue;
+        }
+        index += 1;
+        continue;
+      }
+      if (quote.char === '"' && startsCommandSubstitution(source, index)) {
+        depth += 1;
+        index += 2;
+        continue;
+      }
+      if (ch === "\\" && quote.char === '"' && index + 1 < source.length) {
+        index += 2;
+        continue;
+      }
+      if (ch === quote.char) {
+        quote = null;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (ch === "\\" && source[index + 1] === '"') {
+      quote = { char: '"', escaped: true };
+      index += 2;
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = { char: ch, escaped: false };
+      index += 1;
+      continue;
+    }
+
+    if (startsCommandSubstitution(source, index)) {
+      depth += 1;
+      index += 2;
+      continue;
+    }
+
+    if (ch === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+
+    index += 1;
+  }
+
+  return undefined;
 }
 
 function findContainingRange(
@@ -222,6 +289,13 @@ function findTailorCommandEnd(
         end += 1;
         continue;
       }
+      if (quote.char === '"' && startsCommandSubstitution(source, end)) {
+        const substitutionEnd = findCommandSubstitutionEnd(source, end);
+        if (substitutionEnd !== undefined) {
+          end = substitutionEnd + 1;
+          continue;
+        }
+      }
       if (ch === "\\" && quote.char === '"' && end + 1 < commandLimit) {
         end += 2;
         continue;
@@ -245,7 +319,16 @@ function findTailorCommandEnd(
       continue;
     }
 
+    if (startsCommandSubstitution(source, end)) {
+      const substitutionEnd = findCommandSubstitutionEnd(source, end);
+      if (substitutionEnd !== undefined) {
+        end = substitutionEnd + 1;
+        continue;
+      }
+    }
+
     const prev = source[end - 1];
+    if (ch === ")") break;
     if (isCommandSeparator(source, end)) break;
     if (ch === "\n" && prev !== "\\" && !foldedYamlRange) break;
     end += 1;
@@ -285,6 +368,16 @@ function replaceOptionsInCommand(command: string): string {
     const ch = command[index];
 
     if (quote !== null) {
+      if (quote.char === '"' && startsCommandSubstitution(command, index)) {
+        const substitutionEnd = findCommandSubstitutionEnd(command, index);
+        if (substitutionEnd !== undefined) {
+          updated += "$(";
+          updated += replaceAll(command.slice(index + 2, substitutionEnd));
+          updated += ")";
+          index = substitutionEnd + 1;
+          continue;
+        }
+      }
       updated += ch;
       if (quote.escaped) {
         if (ch === "\\" && command[index + 1] === quote.char) {
@@ -316,6 +409,17 @@ function replaceOptionsInCommand(command: string): string {
       updated += ch;
       index += 1;
       continue;
+    }
+
+    if (startsCommandSubstitution(command, index)) {
+      const substitutionEnd = findCommandSubstitutionEnd(command, index);
+      if (substitutionEnd !== undefined) {
+        updated += "$(";
+        updated += replaceAll(command.slice(index + 2, substitutionEnd));
+        updated += ")";
+        index = substitutionEnd + 1;
+        continue;
+      }
     }
 
     const rename = findOptionRename(command, index);
