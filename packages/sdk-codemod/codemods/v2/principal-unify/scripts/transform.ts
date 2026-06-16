@@ -16,11 +16,9 @@ const QUICK_FILTER_NEEDLES = [
   ".hooks",
   ".validate",
   ".parse",
-  ".body",
 ];
 
 function quickFilter(source: string): boolean {
-  if (source.includes(".body")) return true;
   if (!source.includes("@tailor-platform/sdk")) return false;
   return QUICK_FILTER_NEEDLES.some((needle) => source.includes(needle));
 }
@@ -929,191 +927,6 @@ function transformParseArgsObject(
   }
 }
 
-function importDefaultName(importStmt: SgNode): string | null {
-  const importText = importStmt.text();
-  if (/^\s*import\s+type\b/.test(importText)) return null;
-  const match = importText.match(/^\s*import\s+([A-Za-z_$][\w$]*)\s*(?:,|\s+from\b)/);
-  return match?.[1] ?? null;
-}
-
-function collectResolverBodyObjectNames(
-  root: SgNode,
-  createResolverLocalNames: Set<string>,
-): Set<string> {
-  const names = new Set<string>();
-  const imports = root.findAll({ rule: { kind: "import_statement" } });
-  for (const importStmt of imports) {
-    const source = extractModuleSource(importStmt.text());
-    const defaultName = importDefaultName(importStmt);
-    const specNames = [...iterateImportSpecs(importStmt)].map(({ localName }) => localName);
-    const looksLikeResolver =
-      /resolver/i.test(source) ||
-      (defaultName !== null && /resolver/i.test(defaultName)) ||
-      specNames.some((localName) => /resolver/i.test(localName));
-    if (source.startsWith("@tailor-platform/sdk") || !looksLikeResolver) continue;
-    if (defaultName) names.add(defaultName);
-    for (const localName of specNames) names.add(localName);
-  }
-
-  const declarations = root.findAll({ rule: { kind: "variable_declarator" } });
-  for (const decl of declarations) {
-    const name = decl.field("name");
-    const value = decl.field("value");
-    if (!name || name.kind() !== "identifier" || !value || value.kind() !== "call_expression") {
-      continue;
-    }
-    const callee = value.field("function");
-    if (!callee || callee.kind() !== "identifier") continue;
-    if (!createResolverLocalNames.has(callee.text())) continue;
-    const pos = callee.range().start.index;
-    if (isInsideAnyRange(pos, collectAllShadowRanges(root, callee.text()))) continue;
-    names.add(name.text());
-  }
-
-  return names;
-}
-
-function isResolverBodyCall(
-  call: SgNode,
-  resolverBodyObjectNames: Set<string>,
-  root: SgNode,
-): boolean {
-  const object = findMemberCallObject(call);
-  if (!object || object.kind() !== "identifier") return false;
-  if (!resolverBodyObjectNames.has(object.text())) return false;
-  const pos = object.range().start.index;
-  return !isInsideAnyRange(pos, collectAllShadowRanges(root, object.text()));
-}
-
-function directBodyInvokerValue(
-  value: SgNode,
-  unauthenticatedLocalNames: Set<string>,
-  root: SgNode,
-): string {
-  const text = value.text();
-  if (!unauthenticatedLocalNames.has(text)) return text;
-  const shadowRanges = collectAllShadowRanges(root, text);
-  const pos = value.range().start.index;
-  return isInsideAnyRange(pos, shadowRanges) ? text : "null";
-}
-
-function directBodyExpressionValue(
-  value: SgNode,
-  unauthenticatedLocalNames: Set<string>,
-  root: SgNode,
-): string {
-  const text = value.text();
-  const replacements: Array<[number, number, string]> = [];
-  const base = value.range().start.index;
-
-  for (const localName of unauthenticatedLocalNames) {
-    const shadowRanges = collectAllShadowRanges(root, localName);
-    const ids = value.findAll({
-      rule: {
-        kind: "identifier",
-        regex: `^${escapeRegex(localName)}$`,
-      },
-    });
-    for (const id of ids) {
-      if (isInsideImportStatement(id)) continue;
-      if (isMemberExpressionObject(id)) continue;
-      const range = id.range();
-      if (isInsideAnyRange(range.start.index, shadowRanges)) continue;
-      replacements.push([range.start.index - base, range.end.index - base, "null"]);
-    }
-  }
-
-  if (replacements.length === 0) return text;
-  replacements.sort((a, b) => b[0] - a[0]);
-  let result = text;
-  for (const [start, end, replacement] of replacements) {
-    result = `${result.slice(0, start)}${replacement}${result.slice(end)}`;
-  }
-  return result;
-}
-
-function canDuplicateDirectBodyValue(value: SgNode): boolean {
-  return value.kind() === "identifier" || value.text() === "null";
-}
-
-function transformDirectBodyContext(
-  call: SgNode,
-  edits: Edit[],
-  unauthenticatedLocalNames: Set<string>,
-  resolverBodyObjectNames: Set<string>,
-  root: SgNode,
-): void {
-  const memberName = findMemberCallName(call);
-  if (memberName !== "body") return;
-  if (!isResolverBodyCall(call, resolverBodyObjectNames, root)) return;
-
-  const args = call.field("arguments");
-  const objArg = args?.children().find((c: SgNode) => c.kind() === "object");
-  if (!objArg) return;
-
-  let hasInput = false;
-  let hasEnv = false;
-  let hasInvoker = false;
-  let userNode: SgNode | null = null;
-  let userEntry: SgNode | null = null;
-  let userValue: SgNode | null = null;
-  let envNode: SgNode | null = null;
-
-  for (const child of objArg.children()) {
-    const kind = child.kind();
-    if (kind === "pair") {
-      const key = child.field("key")?.text();
-      if (key === "input") hasInput = true;
-      if (key === "env") {
-        hasEnv = true;
-        envNode = child;
-      }
-      if (key === "invoker") hasInvoker = true;
-      if (key === "user") {
-        userNode = child.field("key") ?? child;
-        userEntry = child;
-        userValue = child.field("value");
-      }
-    } else if (kind === "shorthand_property_identifier") {
-      const name = child.text();
-      if (name === "input") hasInput = true;
-      if (name === "env") {
-        hasEnv = true;
-        envNode = child;
-      }
-      if (name === "invoker") hasInvoker = true;
-      if (name === "user") {
-        userNode = child;
-        userEntry = child;
-        userValue = child;
-      }
-    }
-  }
-
-  if (!hasInput || !hasEnv || !userNode || !userEntry || !userValue) return;
-  if (!hasInvoker && !canDuplicateDirectBodyValue(userValue)) {
-    const invokerValue = directBodyExpressionValue(userValue, unauthenticatedLocalNames, root);
-    edits.push(
-      userEntry.replace(`...((user) => ({ caller: user, invoker: user }))(${invokerValue})`),
-    );
-    return;
-  }
-
-  edits.push(
-    userNode.kind() === "shorthand_property_identifier"
-      ? userNode.replace("caller: user")
-      : userNode.replace("caller"),
-  );
-  if (hasInvoker || !envNode) return;
-  const indent = " ".repeat(envNode.range().start.column);
-  const invokerValue = directBodyInvokerValue(userValue, unauthenticatedLocalNames, root);
-  edits.push(
-    envNode.kind() === "shorthand_property_identifier"
-      ? envNode.replace(`invoker: ${invokerValue},\n${indent}env`)
-      : envNode.replace(`invoker: ${invokerValue},\n${indent}${envNode.text()}`),
-  );
-}
-
 /**
  * Migrate user/actor/invoker types and identifiers to the unified TailorPrincipal.
  *
@@ -1242,18 +1055,10 @@ export default function transform(source: string): string | null {
   }
 
   const sdkFieldLocalBindings = collectSdkFieldLocalBindings(tree, sdkFieldRootNames);
-  const resolverBodyObjectNames = collectResolverBodyObjectNames(tree, createResolverLocalNames);
   const memberCalls = tree.findAll({ rule: { kind: "call_expression" } });
   for (const call of memberCalls) {
     transformPrincipalCallbacksInCall(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
     transformParseArgsObject(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
-    transformDirectBodyContext(
-      call,
-      edits,
-      unauthenticatedLocalNames,
-      resolverBodyObjectNames,
-      tree,
-    );
   }
 
   if (edits.length === 0) return null;
