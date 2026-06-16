@@ -270,7 +270,7 @@ const seedData = async (
     workspaceId,
     name: `${label}.js`,
     code: bundled.bundledCode,
-    arg: JSON.stringify({ data, order }),
+    arg: { data, order },
     invoker,
   });
   if (!result.success) {
