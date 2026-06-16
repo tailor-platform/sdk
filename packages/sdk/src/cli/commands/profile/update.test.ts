@@ -102,7 +102,10 @@ describe("profile update --permission", () => {
 
   test("performs remote validation when --user is also passed (permission does not bypass it)", async () => {
     using _logger = silenceLogger("out", "success");
-    vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
+    vi.mocked(fetchLatestToken).mockResolvedValue({
+      accessToken: "mock-token",
+      user: "new@example.com",
+    });
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
     vi.mocked(initOperatorClient).mockResolvedValue({
       listWorkspaces: vi.fn(),
