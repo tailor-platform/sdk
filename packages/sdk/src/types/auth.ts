@@ -1,7 +1,6 @@
 import type { AuthConnectionConfig } from "./auth-connection.generated";
 import type { ValueOperand } from "./auth-value";
 import type {
-  AuthInvoker,
   IdProvider as IdProviderConfig,
   OAuth2Client,
   OAuth2ClientInput,
@@ -20,9 +19,21 @@ import type { IsAny, JsonObject, JsonValue } from "type-fest";
 export type OAuth2ClientGrantType = OAuth2Client["grantTypes"][number];
 export type SCIMAttributeType = SCIMAttribute["type"];
 
-export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUserName"> & {
-  machineUserName: M;
-};
+// Interface for module augmentation
+// Users can extend via: declare module "@tailor-platform/sdk" { interface MachineUserNameRegistry { ... } }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface MachineUserNameRegistry {}
+
+/**
+ * Machine user name.
+ *
+ * When `tailor.d.ts` is generated (via `tailor-sdk deploy`/`generate`), this is narrowed
+ * to the union of defined machine user names. When no machine users are registered yet,
+ * falls back to `string` to avoid blocking editing before the first generate run.
+ */
+export type MachineUserName = keyof MachineUserNameRegistry extends never
+  ? string
+  : keyof MachineUserNameRegistry & string;
 
 /** Result of retrieving a connection token at runtime. */
 export type AuthConnectionTokenResult = {
@@ -320,13 +331,8 @@ type ConnectionNames<Config> = Config extends { connections?: Record<infer K, un
   ? K & string
   : string;
 
-export type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
+export type DefinedAuth<Name extends string, Config> = Config & {
   name: Name;
-  /**
-   * @deprecated Pass the machine user name directly as a string instead, e.g. `authInvoker: "machine-user-name"`.
-   * Using this function pulls config-layer (Node-only) dependencies into runtime bundles.
-   */
-  invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
   getConnectionToken<C extends ConnectionNames<Config>>(
     connectionName: C,
   ): Promise<AuthConnectionTokenResult>;
@@ -342,8 +348,7 @@ export type AuthOwnConfig = DefinedAuth<
   // Intentionally permissive: AuthConfig is the "container" type for AppConfig.auth.
   // We want any concrete `defineAuth(...)` result to be assignable here, while the
   // strong typing remains on the `defineAuth` return type itself.
-  AuthServiceInputLoose,
-  string
+  AuthServiceInputLoose
 >;
 
 export type AuthConfig = AuthOwnConfig | AuthExternalConfig;

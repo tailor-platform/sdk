@@ -73,10 +73,7 @@ describe("startWorkflow runtime overload", () => {
           body: () => undefined,
         },
       },
-      authInvoker: {
-        namespace: "typed-ns",
-        machineUserName: "typed-user",
-      },
+      authInvoker: "typed-user",
     } as never);
 
     expect(loadConfig).toHaveBeenCalledTimes(1);
@@ -90,8 +87,90 @@ describe("startWorkflow runtime overload", () => {
     expect(testStartWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowId: "id:legacy-workflow",
+        authInvoker: expect.objectContaining({
+          namespace: "auth-ns",
+          machineUserName: "legacy-user",
+        }),
       }),
     );
+  });
+
+  test("typed shape resolves auth namespace from config and sends proto authInvoker", async () => {
+    await startWorkflow({
+      workflow: {
+        name: "typed-workflow",
+        mainJob: {
+          body: () => undefined,
+        },
+      },
+      authInvoker: "typed-user",
+    });
+
+    expect(loadConfig).toHaveBeenCalledTimes(1);
+    expect(getApplicationMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      applicationName: "my-app",
+    });
+    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "id:typed-workflow",
+        authInvoker: expect.objectContaining({
+          namespace: "auth-ns",
+          machineUserName: "typed-user",
+        }),
+      }),
+    );
+  });
+
+  test("typed shape falls back to external auth config name", async () => {
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      config: {
+        name: "my-app",
+        auth: { name: "external-auth", external: true },
+      },
+    } as Awaited<ReturnType<typeof loadConfig>>);
+    getApplicationMock.mockResolvedValueOnce({
+      application: {},
+    });
+
+    await startWorkflow({
+      workflow: {
+        name: "typed-workflow",
+        mainJob: {
+          body: () => undefined,
+        },
+      },
+      authInvoker: "typed-user",
+    });
+
+    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "id:typed-workflow",
+        authInvoker: expect.objectContaining({
+          namespace: "external-auth",
+          machineUserName: "typed-user",
+        }),
+      }),
+    );
+  });
+
+  test("throws when neither the deployed app nor the config has an auth namespace", async () => {
+    getApplicationMock.mockResolvedValueOnce({
+      application: {},
+    });
+
+    await expect(
+      startWorkflow({
+        workflow: {
+          name: "typed-workflow",
+          mainJob: {
+            body: () => undefined,
+          },
+        },
+        authInvoker: "typed-user",
+      }),
+    ).rejects.toThrow("my-app does not have an auth configuration");
+    expect(testStartWorkflowMock).not.toHaveBeenCalled();
   });
 
   test("start command with jsonMode emits only parseable JSON to stdout", async () => {

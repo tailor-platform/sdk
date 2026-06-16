@@ -1,25 +1,13 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test, expectTypeOf } from "vitest";
-import { defineAuth } from "@/configure/services/auth";
-import { db } from "@/configure/services/tailordb";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
 import { type StartWorkflowOptions, type StartWorkflowTypedOptions } from "./start";
 
-const userType = db.type("User", {
-  email: db.string().unique(),
-});
-
-const auth = defineAuth("main-auth", {
-  userProfile: {
-    type: userType,
-    usernameField: "email",
-  },
-  machineUsers: {
-    admin: {},
-    worker: {},
-  },
-});
-
+// `authInvoker` is typed as `MachineUserName`, which falls back to `string` until
+// `tailor.d.ts` augments `MachineUserNameRegistry`. Narrowing to the registered
+// machine user union (and rejection of unknown names) is covered against a real
+// generated `tailor.d.ts` in `example/`; here we only assert arg inference and
+// that machine user names are accepted as strings.
 const calculationJob = createWorkflowJob({
   name: "calculation",
   body: (input: { a: number; b: number }) => ({ sum: input.a + input.b }),
@@ -102,13 +90,13 @@ describe("startWorkflow API types", () => {
   test("infers arg type from workflow", () => {
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       arg: { a: 1, b: 2 },
     });
 
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       // @ts-expect-error - arg shape must match workflow input
       arg: { x: 1, y: 2 },
     });
@@ -121,44 +109,41 @@ describe("startWorkflow API types", () => {
     // @ts-expect-error - arg is required for workflows with input
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
     });
   });
 
   test("does not allow arg for workflows without input", () => {
     acceptsNoInputWorkflowOptions({
       workflow: noInputWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
     });
 
     acceptsNoInputWorkflowOptions({
       workflow: noInputWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       // @ts-expect-error - no-input workflow must not receive arg
       arg: { any: "value" },
     });
   });
 
-  test("keeps machine user names type-safe via auth.invoker", () => {
+  test("accepts machine user names as strings", () => {
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
-      authInvoker: auth.invoker("worker"),
+      authInvoker: "worker",
       arg: { a: 1, b: 2 },
     });
-
-    // @ts-expect-error - invalid machine user name
-    auth.invoker("invalid-machine-user");
   });
 
   test("keeps default generic usable when StartWorkflowTypedOptions generic is omitted", () => {
     acceptsDefaultWorkflowOptions({
       workflow: noInputWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
     });
 
     acceptsDefaultWorkflowOptions({
       workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       arg: { a: 1, b: 2 },
     });
   });
@@ -166,26 +151,26 @@ describe("startWorkflow API types", () => {
   test("supports union workflow types without collapsing arg type", () => {
     acceptsUnionWorkflowOptions({
       workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       arg: { a: 1, b: 2 },
     });
 
     acceptsUnionWorkflowOptions({
       workflow: noInputWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
     });
   });
 
   test("supports union workflow input types without collapsing arg type", () => {
     acceptsUnionInputWorkflowOptions({
       workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       arg: { a: 1, b: 2 },
     });
 
     acceptsUnionInputWorkflowOptions({
       workflow: textWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       arg: { message: "hello" },
     });
 
@@ -198,13 +183,13 @@ describe("startWorkflow API types", () => {
   test("supports plain workflow unions without collapsing arg type", () => {
     acceptsPlainUnionWorkflowOptions({
       workflow: plainWorkflowA,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       arg: { foo: 1 },
     });
 
     acceptsPlainUnionWorkflowOptions({
       workflow: plainWorkflowB,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       arg: { bar: "x" },
     });
 
@@ -228,7 +213,7 @@ describe("startWorkflow API types", () => {
     acceptsDeprecatedOptions({
       // @ts-expect-error - deprecated options must keep legacy name/machineUser shape
       workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
+      authInvoker: "admin",
       arg: { a: 1, b: 2 },
     });
   });
