@@ -184,6 +184,7 @@ describe("runCodemods", () => {
       tmpDir = dir;
       await fs.promises.writeFile(path.join(dir, "config.ts"), "hello", "utf-8");
       await fs.promises.writeFile(path.join(dir, "data.json"), "world", "utf-8");
+      using readFileSpy = vi.spyOn(fs.promises, "readFile");
 
       const result = await runCodemods(
         [
@@ -199,6 +200,7 @@ describe("runCodemods", () => {
       // Only JSON file should be modified
       expect(result.filesModified).toHaveLength(1);
       expect(result.filesModified[0]).toContain("data.json");
+      expect(readFileSpy).not.toHaveBeenCalledWith(path.join(dir, "config.ts"), "utf-8");
 
       // TS file should be unchanged
       const tsContent = await fs.promises.readFile(path.join(dir, "config.ts"), "utf-8");
