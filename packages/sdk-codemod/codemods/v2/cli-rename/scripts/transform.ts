@@ -24,6 +24,11 @@ interface TextRange {
   end: number;
 }
 
+interface ActiveQuote {
+  char: "'" | '"';
+  escaped: boolean;
+}
+
 function isOptionBoundaryChar(value: string | undefined): boolean {
   return value === undefined || !/[\w-]/.test(value);
 }
@@ -188,26 +193,41 @@ function findTailorCommandEnd(
   const markdownFencedCodeRange = findContainingRange(markdownFencedCodeRanges, start);
   const delimitedRange = foldedYamlRange ?? markdownFencedCodeRange;
   const commandLimit = delimitedRange ? Math.min(limit, delimitedRange.end) : limit;
-  let quote: "'" | '"' | null = null;
+  let quote: ActiveQuote | null = null;
   let end = start;
 
   while (end < commandLimit) {
     const ch = source[end];
 
     if (quote !== null) {
-      if (ch === "\\" && quote === '"' && end + 1 < commandLimit) {
+      if (quote.escaped) {
+        if (ch === "\\" && source[end + 1] === quote.char) {
+          quote = null;
+          end += 2;
+          continue;
+        }
+        end += 1;
+        continue;
+      }
+      if (ch === "\\" && quote.char === '"' && end + 1 < commandLimit) {
         end += 2;
         continue;
       }
-      if (ch === quote) {
+      if (ch === quote.char) {
         quote = null;
       }
       end += 1;
       continue;
     }
 
+    if (ch === "\\" && source[end + 1] === '"') {
+      quote = { char: '"', escaped: true };
+      end += 2;
+      continue;
+    }
+
     if (ch === "'" || ch === '"') {
-      quote = ch;
+      quote = { char: ch, escaped: false };
       end += 1;
       continue;
     }
@@ -246,25 +266,40 @@ function findOptionRename(command: string, index: number): readonly [string, str
 function replaceOptionsInCommand(command: string): string {
   let updated = "";
   let index = 0;
-  let quote: "'" | '"' | null = null;
+  let quote: ActiveQuote | null = null;
 
   while (index < command.length) {
     const ch = command[index];
 
     if (quote !== null) {
       updated += ch;
-      if (ch === "\\" && quote === '"' && index + 1 < command.length) {
+      if (quote.escaped) {
+        if (ch === "\\" && command[index + 1] === quote.char) {
+          index += 1;
+          updated += command[index];
+          quote = null;
+        }
+      } else if (ch === "\\" && quote.char === '"' && index + 1 < command.length) {
         index += 1;
         updated += command[index];
-      } else if (ch === quote) {
+      } else if (ch === quote.char) {
         quote = null;
       }
       index += 1;
       continue;
     }
 
+    if (ch === "\\" && command[index + 1] === '"') {
+      quote = { char: '"', escaped: true };
+      updated += ch;
+      index += 1;
+      updated += command[index];
+      index += 1;
+      continue;
+    }
+
     if (ch === "'" || ch === '"') {
-      quote = ch;
+      quote = { char: ch, escaped: false };
       updated += ch;
       index += 1;
       continue;
