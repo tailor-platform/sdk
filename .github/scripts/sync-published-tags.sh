@@ -44,17 +44,19 @@ for tag in $(git tag --points-at HEAD); do
   version="${tag##*@}"
   [ -n "$name" ] && [ -n "$version" ] || continue
 
+  # Resolve the package before touching the remote so an unrelated tag that
+  # happens to point at HEAD (e.g. "deploy@prod") is never pushed.
+  if ! dir="$(pkg_dir_for "$name")"; then
+    echo "No package directory matches ${name}; skipping ${tag}"
+    continue
+  fi
+
   if ! git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
     echo "Pushing tag ${tag}"
     git push origin "refs/tags/${tag}"
   fi
 
   if gh release view "$tag" >/dev/null 2>&1; then
-    continue
-  fi
-
-  if ! dir="$(pkg_dir_for "$name")"; then
-    echo "No package directory matches ${name}; skipping release for ${tag}"
     continue
   fi
 
