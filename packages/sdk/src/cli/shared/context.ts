@@ -155,6 +155,11 @@ function inferEmailFromUserId(user: string): string | undefined {
   return z.email().safeParse(user).success ? user : undefined;
 }
 
+export function findConfigUserKey(config: PfConfig, user: string): string | undefined {
+  if (config.users[user]) return user;
+  return Object.entries(config.users).find(([, entry]) => entry?.email === user)?.[0];
+}
+
 function migrateV2ToV3(v2Config: PfConfigV2): PfConfig {
   const users: PfConfig["users"] = {};
 
@@ -628,16 +633,24 @@ function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean
 /**
  * Fetch the latest access token, refreshing if necessary.
  * @param config - Platform config
- * @param user - User ID
+ * @param user - User identifier
  * @returns Latest access token and the canonical user ID it is stored under
  *   (the resolved subject when a legacy email key was migrated during refresh,
- *   otherwise the input user)
+ *   otherwise the matching config user)
  */
 export async function fetchLatestToken(
   config: PfConfig,
   user: string,
 ): Promise<{ accessToken: string; user: string }> {
-  const userEntry = config.users[user];
+  const storedUser = findConfigUserKey(config, user);
+  if (!storedUser) {
+    throw new Error(ml`
+      User "${user}" not found.
+      Please verify your user name and login using 'tailor-sdk login' command.
+    `);
+  }
+
+  const userEntry = config.users[storedUser];
   if (!userEntry) {
     throw new Error(ml`
       User "${user}" not found.
@@ -645,10 +658,10 @@ export async function fetchLatestToken(
     `);
   }
 
-  const tokens = await resolveTokens(userEntry, user);
+  const tokens = await resolveTokens(userEntry, storedUser);
 
   if (new Date(userEntry.token_expires_at) > new Date()) {
-    return { accessToken: tokens.accessToken, user };
+    return { accessToken: tokens.accessToken, user: storedUser };
   }
 
   if (!tokens.refreshToken) {
@@ -677,9 +690,10 @@ export async function fetchLatestToken(
     assertDefined(resp.expiresAt, "token refresh response missing expiresAt"),
   ).toISOString();
 
-  let resolvedUser = user;
-  let email = userEntry.email;
-  if (shouldResolveSubjectOnRefresh(user, userEntry)) {
+  let resolvedUser = storedUser;
+  const previousEmail = userEntry.email ?? inferEmailFromUserId(storedUser);
+  let email = previousEmail;
+  if (shouldResolveSubjectOnRefresh(storedUser, userEntry)) {
     try {
       const userInfo = await fetchUserInfo(resp.accessToken);
       resolvedUser = userInfo.sub;
@@ -699,7 +713,10 @@ export async function fetchLatestToken(
     newExpiresAt,
     { email },
   );
-  await removeLegacyUserAlias(config, user, resolvedUser);
+  await removeLegacyUserAlias(config, storedUser, resolvedUser);
+  if (previousEmail && email && previousEmail !== email) {
+    logger.info(`Updated local user email from "${previousEmail}" to "${email}".`);
+  }
   writePlatformConfig(config);
   return { accessToken: resp.accessToken, user: resolvedUser };
 }

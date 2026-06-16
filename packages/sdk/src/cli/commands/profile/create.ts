@@ -17,7 +17,7 @@ export const createCommand = defineAppCommand({
       }),
       user: arg(z.string(), {
         alias: "u",
-        description: "User ID",
+        description: "User email address or machine user client ID",
       }),
       "workspace-id": arg(z.string(), {
         alias: "w",
