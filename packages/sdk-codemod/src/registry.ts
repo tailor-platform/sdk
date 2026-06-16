@@ -17,6 +17,15 @@ const allCodemods: CodemodPackage[] = [
     legacyPatterns: ["defineGenerators"],
   },
   {
+    id: "v2/plugin-cli-import",
+    name: "@tailor-platform/sdk/cli plugin imports → dedicated subpaths",
+    description:
+      "Rewrite deprecated plugin re-export imports (kyselyTypePlugin, enumConstantsPlugin, fileUtilsPlugin, seedPlugin) from `@tailor-platform/sdk/cli` to their dedicated plugin subpaths",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/plugin-cli-import/scripts/transform.js",
+  },
+  {
     id: "v2/test-run-arg-input",
     name: "function test-run --arg input unwrap",
     description:
@@ -82,7 +91,7 @@ const allCodemods: CodemodPackage[] = [
     id: "v2/tailordb-namespace",
     name: "Tailordb → tailordb (lowercase ambient namespace)",
     description:
-      "Rewrite references to the deprecated capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the new lowercase `tailordb.*` namespace re-published by the SDK in place of `@tailor-platform/function-types`.",
+      "Rewrite references to the removed capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the lowercase `tailordb.*` namespace exposed by `@tailor-platform/sdk/runtime/globals`.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/tailordb-namespace/scripts/transform.js",

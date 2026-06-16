@@ -4,11 +4,11 @@ import { deploymentArgs } from "@/cli/shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
 export interface GetMachineUserTokenOptions {
-  name: string;
+  name?: string;
   workspaceId?: string;
   profile?: string;
   configPath?: string;
@@ -29,6 +29,13 @@ export async function getMachineUserToken(
   options: GetMachineUserTokenOptions,
 ): Promise<MachineUserTokenInfo> {
   // Load and validate options
+  const name = await loadMachineUserName({ machineUser: options.name, profile: options.profile });
+  if (!name) {
+    throw new Error(
+      "Machine user is required. Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+    );
+  }
+
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -52,10 +59,10 @@ export async function getMachineUserToken(
   const { machineUser } = await client.getAuthMachineUser({
     workspaceId,
     authNamespace: application.authNamespace,
-    name: options.name,
+    name,
   });
   if (!machineUser) {
-    throw new Error(`Machine user ${options.name} not found.`);
+    throw new Error(`Machine user ${name} not found.`);
   }
 
   // Fetch machine user token
@@ -80,9 +87,10 @@ export const tokenCommand = defineAppCommand({
   args: z
     .object({
       ...deploymentArgs,
-      name: arg(z.string(), {
+      name: arg(z.string().optional(), {
         positional: true,
-        description: "Machine user name",
+        description: "Machine user name. Falls back to the active profile's default machine user.",
+        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
     })
     .strict(),

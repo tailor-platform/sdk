@@ -39,6 +39,7 @@ import {
   createSnapshotType,
   getLatestMigrationNumber,
   getMigrationFiles,
+  INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "@/cli/commands/tailordb/migrate/snapshot";
@@ -458,21 +459,42 @@ export async function applyTailorDB(
       }
 
       for (const migration of pendingMigrations) {
-        // Pre-migration phase: Create/update types with breaking fields as optional
-        await executeSingleMigrationPrePhase(
-          client,
-          changeSet,
-          migration,
-          migrationContext.tailorDBInputs,
-          migrationContext.executorUsedTypes,
-        );
+        try {
+          // Pre-migration phase: Create/update types with breaking fields as optional
+          await executeSingleMigrationPrePhase(
+            client,
+            changeSet,
+            migration,
+            migrationContext.tailorDBInputs,
+            migrationContext.executorUsedTypes,
+          );
 
-        // Script execution (only if migrate.ts exists for this migration)
-        if (migration.hasScript && migrationCtx) {
-          await executeMigrations(migrationCtx, [migration]);
+          // Script execution (only if migrate.ts exists for this migration)
+          if (migration.hasScript && migrationCtx) {
+            await executeMigrations(migrationCtx, [migration]);
+          }
+        } catch (error) {
+          // Best-effort revert of committed Pre-phase DDL; must not mask the original error.
+          try {
+            await rollbackSingleMigrationPrePhase(
+              client,
+              changeSet,
+              migration,
+              migrationContext.workspaceId,
+              migrationContext.tailorDBInputs,
+              migrationContext.executorUsedTypes,
+            );
+          } catch (rollbackError) {
+            logger.warn(
+              `Failed to roll back migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
+                `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+            );
+          }
+          throw error;
         }
 
-        // Post-migration phase: Apply final types (required: true) and deletions
+        // Post-migration phase: Apply final types (required: true) and deletions.
+        // Not rolled back on failure: deletions here are irreversible.
         await executeSingleMigrationPostPhase(
           client,
           changeSet,
@@ -709,6 +731,23 @@ function buildSnapshotTypeManifest(
 }
 
 /**
+ * Await every promise to settle, then throw the first rejection. Unlike
+ * `Promise.all`, this never leaves sibling operations in flight after a failure,
+ * so a following rollback cannot race with still-pending DDL.
+ * @param promises - Promises (or already-resolved values) to await
+ * @returns {Promise<void>} Resolves once all settle; rejects with the first failure
+ */
+async function awaitAllSettledOrThrow(
+  promises: ReadonlyArray<Promise<unknown> | undefined>,
+): Promise<void> {
+  const results = await Promise.allSettled(promises);
+  const rejected = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (rejected) {
+    throw rejected.reason;
+  }
+}
+
+/**
  * Execute pre-migration phase for a single migration
  * @param {OperatorClient} client - Operator client instance
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
@@ -731,7 +770,9 @@ async function executeSingleMigrationPrePhase(
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
-  await Promise.all([
+  // Settle all DDL before returning so a rollback on failure never races with
+  // a still-pending create/update.
+  await awaitAllSettledOrThrow([
     ...changeSet.type.creates
       .filter((create) => {
         const typeName = create.request.tailordbType?.name;
@@ -829,7 +870,7 @@ async function executeSingleMigrationPrePhase(
       );
     });
     if (missingTypeCreates.length > 0) {
-      await Promise.all(
+      await awaitAllSettledOrThrow(
         missingTypeCreates.map((create) => {
           const typeName = create.request.tailordbType?.name;
           if (typeName) processedTypes.created.add(typeName);
@@ -838,7 +879,7 @@ async function executeSingleMigrationPrePhase(
       );
     }
     processedTypes.gqlPermissionsProcessed.add(migration.namespace);
-    await Promise.all([
+    await awaitAllSettledOrThrow([
       ...gqlPermissionCreatesForNamespace.map((create) =>
         client.createTailorDBGQLPermission(create.request),
       ),
@@ -964,6 +1005,106 @@ async function executeSingleMigrationPostPhase(
       return false;
     });
     await Promise.all(typesToDelete.map((del) => client.deleteTailorDBType(del.request)));
+  }
+}
+
+/**
+ * Revert a single migration's Pre-phase DDL to the prior checkpoint's schema.
+ * @param client - Operator client instance
+ * @param changeSet - TailorDB change set
+ * @param migration - The migration whose Pre-phase DDL must be reverted
+ * @param workspaceId - Workspace ID
+ * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
+ * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
+ * @returns {Promise<void>} Promise that resolves when rollback attempts complete
+ */
+async function rollbackSingleMigrationPrePhase(
+  client: OperatorClient,
+  changeSet: TailorDBChangeSet,
+  migration: PendingMigration,
+  workspaceId: string,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  executorUsedTypes: ReadonlySet<string>,
+): Promise<void> {
+  // The baseline migration has no prior checkpoint to revert to.
+  if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
+
+  // `processedTypes` spans every namespace touched in this apply run; restrict
+  // rollback to this migration's namespace (its diff plus this namespace's
+  // change-set entries). Type names are unique across namespaces, so a name from
+  // another namespace simply won't appear in this set.
+  const namespaceTypes = getAffectedTypeNames(migration);
+  for (const create of changeSet.type.creates) {
+    const name = create.request.tailordbType?.name;
+    if (create.request.namespaceName === migration.namespace && name) namespaceTypes.add(name);
+  }
+  for (const update of changeSet.type.updates) {
+    const name = update.request.tailordbType?.name;
+    if (update.request.namespaceName === migration.namespace && name) namespaceTypes.add(name);
+  }
+
+  // Of those, only the types this apply run actually created or updated (so
+  // rollback is a no-op when nothing was applied and never touches drift).
+  const applied = new Set([...processedTypes.created, ...processedTypes.updated]);
+  const rollbackTypes = new Set([...namespaceTypes].filter((name) => applied.has(name)));
+  if (rollbackTypes.size === 0) return;
+
+  const priorSnapshot = reconstructSnapshotFromMigrations(
+    migration.migrationsDir,
+    migration.number - 1,
+  );
+  // Without the prior snapshot, pre-existing and new types are indistinguishable;
+  // deleting them all would be destructive, so leave the schema untouched.
+  if (!priorSnapshot) {
+    logger.warn(
+      `Cannot roll back migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
+        `prior snapshot (migration ${formatMigrationNumber(migration.number - 1)}) could not be reconstructed. ` +
+        "Leaving schema as-is; manual repair may be required.",
+    );
+    return;
+  }
+  const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
+
+  logger.warn(
+    `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} failed; ` +
+      "rolling back its pre-migration schema changes.",
+  );
+
+  for (const typeName of rollbackTypes) {
+    const priorType = priorSnapshot.types[typeName];
+    try {
+      if (priorType) {
+        const manifest = generateTailorDBTypeManifestFromSnapshot(priorType, {
+          publishRecordEvents: executorUsedTypes.has(priorType.name),
+          namespaceGqlOperations: input?.config.gqlOperations,
+        });
+        await client.updateTailorDBType({
+          workspaceId,
+          namespaceName: migration.namespace,
+          tailordbType: manifest,
+        });
+      } else {
+        // New type: its GQL permission must go first (type deletion does not
+        // cascade). The permission may not exist, so the delete is best-effort.
+        await client
+          .deleteTailorDBGQLPermission({
+            workspaceId,
+            namespaceName: migration.namespace,
+            typeName,
+          })
+          .catch(() => undefined);
+        await client.deleteTailorDBType({
+          workspaceId,
+          namespaceName: migration.namespace,
+          tailordbTypeName: typeName,
+        });
+      }
+    } catch (rollbackError) {
+      logger.warn(
+        `Failed to roll back type '${typeName}' in namespace '${migration.namespace}': ` +
+          `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+      );
+    }
   }
 }
 
@@ -1740,19 +1881,9 @@ async function checkMigrationDiffs(
       continue;
     }
 
-    // Try to reconstruct snapshot from migrations
-    let previousSnapshot;
-    try {
-      previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir);
-    } catch {
-      // No migrations directory - this is fine, no check needed
-      results.push({
-        namespace,
-        migrationsDir,
-        hasDiff: false,
-      });
-      continue;
-    }
+    // Returns null when the migrations directory is missing or empty;
+    // throws when existing migration files are invalid.
+    const previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir);
 
     if (!previousSnapshot) {
       // No snapshots yet - user should run migrate generate first
