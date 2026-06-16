@@ -537,7 +537,7 @@ function propertyName(node: SgNode): string | null {
   return node.field("key")?.text() ?? node.field("name")?.text() ?? null;
 }
 
-function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
+function getFirstFunctionParam(fn: SgNode): SgNode | null {
   const params =
     fn.field("parameters") ??
     fn.field("parameter") ??
@@ -547,24 +547,46 @@ function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
     return params;
   }
 
-  const firstParam = params
-    .children()
-    .find(
-      (c: SgNode) =>
-        c.kind() === "required_parameter" ||
-        c.kind() === "optional_parameter" ||
-        c.kind() === "identifier" ||
-        c.kind() === "object_pattern",
-    );
+  return (
+    params
+      .children()
+      .find(
+        (c: SgNode) =>
+          c.kind() === "required_parameter" ||
+          c.kind() === "optional_parameter" ||
+          c.kind() === "identifier" ||
+          c.kind() === "object_pattern",
+      ) ?? null
+  );
+}
+
+function getFunctionParamPattern(param: SgNode): SgNode | null {
+  if (param.kind() === "object_pattern" || param.kind() === "identifier") return param;
+  return param.field("pattern");
+}
+
+function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
+  const firstParam = getFirstFunctionParam(fn);
   if (!firstParam) return null;
-  if (firstParam.kind() === "object_pattern" || firstParam.kind() === "identifier") {
-    return firstParam;
+  return getFunctionParamPattern(firstParam);
+}
+
+function transformPrincipalCallbackParamType(param: SgNode, edits: Edit[]): void {
+  const typeAnnotation = param.field("type");
+  const objectType = typeAnnotation?.children().find((c: SgNode) => c.kind() === "object_type");
+  if (!objectType) return;
+
+  for (const child of objectType.children()) {
+    if (child.kind() !== "property_signature") continue;
+    const name = child.field("name");
+    if (name?.text() === "user") edits.push(name.replace("invoker"));
   }
-  return firstParam.field("pattern");
 }
 
 function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
-  const pattern = getFirstFunctionParamPattern(fn);
+  const param = getFirstFunctionParam(fn);
+  if (!param) return;
+  const pattern = getFunctionParamPattern(param);
   const body = fn.field("body");
   if (!pattern || !body) return;
 
@@ -614,20 +636,30 @@ function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
 
   if (pattern.kind() !== "object_pattern") return;
 
+  let hasUserParamProperty = false;
   let renamesBinding = false;
   for (const child of pattern.children()) {
     const kind = child.kind();
     if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
+      hasUserParamProperty = true;
       renamesBinding = true;
+    } else if (kind === "pair_pattern") {
+      const key = child.field("key");
+      if (key?.text() === "user") hasUserParamProperty = true;
     } else if (kind === "object_assignment_pattern") {
       const inner = child
         .children()
         .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
-      if (inner?.text() === "user") renamesBinding = true;
+      if (inner?.text() === "user") {
+        hasUserParamProperty = true;
+        renamesBinding = true;
+      }
     }
   }
 
+  if (!hasUserParamProperty) return;
   if (renamesBinding && patternBindsName(pattern, "invoker")) return;
+  transformPrincipalCallbackParamType(param, edits);
 
   const aliasRenamedUser = renamesBinding && collectAllShadowRanges(body, "invoker").length > 0;
 
@@ -965,6 +997,41 @@ function directBodyInvokerValue(
   return isInsideAnyRange(pos, shadowRanges) ? text : "null";
 }
 
+function directBodyExpressionValue(
+  value: SgNode,
+  unauthenticatedLocalNames: Set<string>,
+  root: SgNode,
+): string {
+  const text = value.text();
+  const replacements: Array<[number, number, string]> = [];
+  const base = value.range().start.index;
+
+  for (const localName of unauthenticatedLocalNames) {
+    const shadowRanges = collectAllShadowRanges(root, localName);
+    const ids = value.findAll({
+      rule: {
+        kind: "identifier",
+        regex: `^${escapeRegex(localName)}$`,
+      },
+    });
+    for (const id of ids) {
+      if (isInsideImportStatement(id)) continue;
+      if (isMemberExpressionObject(id)) continue;
+      const range = id.range();
+      if (isInsideAnyRange(range.start.index, shadowRanges)) continue;
+      replacements.push([range.start.index - base, range.end.index - base, "null"]);
+    }
+  }
+
+  if (replacements.length === 0) return text;
+  replacements.sort((a, b) => b[0] - a[0]);
+  let result = text;
+  for (const [start, end, replacement] of replacements) {
+    result = `${result.slice(0, start)}${replacement}${result.slice(end)}`;
+  }
+  return result;
+}
+
 function canDuplicateDirectBodyValue(value: SgNode): boolean {
   return value.kind() === "identifier" || value.text() === "null";
 }
@@ -1025,8 +1092,9 @@ function transformDirectBodyContext(
 
   if (!hasInput || !hasEnv || !userNode || !userEntry || !userValue) return;
   if (!hasInvoker && !canDuplicateDirectBodyValue(userValue)) {
+    const invokerValue = directBodyExpressionValue(userValue, unauthenticatedLocalNames, root);
     edits.push(
-      userEntry.replace(`...((user) => ({ caller: user, invoker: user }))(${userValue.text()})`),
+      userEntry.replace(`...((user) => ({ caller: user, invoker: user }))(${invokerValue})`),
     );
     return;
   }

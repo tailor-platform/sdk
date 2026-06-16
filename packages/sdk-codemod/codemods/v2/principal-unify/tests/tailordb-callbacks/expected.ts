@@ -1,4 +1,4 @@
-import { db, t } from "@tailor-platform/sdk";
+import { db, t, type TailorPrincipal } from "@tailor-platform/sdk";
 
 const role = db
   .string()
@@ -40,6 +40,7 @@ export const user = db
       const labels = ["anonymous"].map((invoker) => invoker);
       return user?.id !== labels[0];
     },
+    typed: ({ invoker }: { invoker: TailorPrincipal | null }) => invoker?.id !== "",
   });
 
 export const parsed = t.string().parse({
