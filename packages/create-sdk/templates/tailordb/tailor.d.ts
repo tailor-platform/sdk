@@ -17,11 +17,4 @@ declare module "@tailor-platform/sdk" {
   interface IdpNameRegistry {}
 }
 
-declare module "@tailor-platform/sdk/cli" {
-  interface MachineUserNameRegistry {
-    admin: true;
-    viewer: true;
-  }
-}
-
 export {};
