@@ -21,7 +21,12 @@ async function createTestProject(
   return { tmpDir, filePath };
 }
 
-function makeCodemod(id: string, scriptPath: string, filePatterns?: string[]): CodemodPackage {
+function makeCodemod(
+  id: string,
+  scriptPath: string,
+  filePatterns?: string[],
+  legacyPatterns?: string[],
+): CodemodPackage {
   return {
     id,
     name: id,
@@ -30,6 +35,7 @@ function makeCodemod(id: string, scriptPath: string, filePatterns?: string[]): C
     until: "2.0.0",
     scriptPath,
     filePatterns,
+    legacyPatterns,
   };
 }
 
@@ -164,6 +170,7 @@ describe("runCodemods", () => {
 
   describe("filePatterns filtering", () => {
     const transformPath = path.join(os.tmpdir(), "transform-upper.ts");
+    const throwingTransformPath = path.join(os.tmpdir(), "transform-throw.ts");
 
     beforeEach(async () => {
       await fs.promises.writeFile(
@@ -173,10 +180,18 @@ describe("runCodemods", () => {
         }`,
         "utf-8",
       );
+      await fs.promises.writeFile(
+        throwingTransformPath,
+        `export default function transform() {
+          throw new Error("nonmatching transform should not run");
+        }`,
+        "utf-8",
+      );
     });
 
     afterEach(async () => {
       await fs.promises.rm(transformPath, { force: true });
+      await fs.promises.rm(throwingTransformPath, { force: true });
     });
 
     test("should only apply transform to files matching filePatterns", async () => {
@@ -184,6 +199,7 @@ describe("runCodemods", () => {
       tmpDir = dir;
       await fs.promises.writeFile(path.join(dir, "config.ts"), "hello", "utf-8");
       await fs.promises.writeFile(path.join(dir, "data.json"), "world", "utf-8");
+      using readFileSpy = vi.spyOn(fs.promises, "readFile");
 
       const result = await runCodemods(
         [
@@ -199,6 +215,7 @@ describe("runCodemods", () => {
       // Only JSON file should be modified
       expect(result.filesModified).toHaveLength(1);
       expect(result.filesModified[0]).toContain("data.json");
+      expect(readFileSpy).not.toHaveBeenCalledWith(path.join(dir, "config.ts"), "utf-8");
 
       // TS file should be unchanged
       const tsContent = await fs.promises.readFile(path.join(dir, "config.ts"), "utf-8");
@@ -207,6 +224,141 @@ describe("runCodemods", () => {
       // JSON file should be uppercased
       const jsonContent = await fs.promises.readFile(path.join(dir, "data.json"), "utf-8");
       expect(jsonContent).toBe("WORLD");
+    });
+
+    test("should not run transforms whose filePatterns do not match a matched file", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-pattern-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "data.json"), "world", "utf-8");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/upper", transformPath, ["**/*.json"]),
+            scriptPath: transformPath,
+          },
+          {
+            codemod: makeCodemod("test/throw", throwingTransformPath, ["**/*.ts"]),
+            scriptPath: throwingTransformPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.filesModified).toEqual([path.join(dir, "data.json")]);
+      await expect(fs.promises.readFile(path.join(dir, "data.json"), "utf-8")).resolves.toBe(
+        "WORLD",
+      );
+    });
+
+    test("should apply transforms to matching files under dot directories", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-dot-test-"));
+      tmpDir = dir;
+      const workflowPath = path.join(dir, ".github/workflows/test.yml");
+      await fs.promises.mkdir(path.dirname(workflowPath), { recursive: true });
+      await fs.promises.writeFile(workflowPath, "hello", "utf-8");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/upper", transformPath, ["**/*.yml"]),
+            scriptPath: transformPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.filesModified).toEqual([workflowPath]);
+      await expect(fs.promises.readFile(workflowPath, "utf-8")).resolves.toBe("HELLO");
+    });
+
+    test("should skip unapproved tool dot directories", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-dot-test-"));
+      tmpDir = dir;
+      const workflowPath = path.join(dir, ".github/workflows/test.yml");
+      const agentPackagePath = path.join(dir, ".agent/worktrees/demo/package.json");
+      const nextYamlPath = path.join(dir, ".next/cache/workflow.yml");
+      await fs.promises.mkdir(path.dirname(workflowPath), { recursive: true });
+      await fs.promises.mkdir(path.dirname(agentPackagePath), { recursive: true });
+      await fs.promises.mkdir(path.dirname(nextYamlPath), { recursive: true });
+      await fs.promises.writeFile(workflowPath, "hello", "utf-8");
+      await fs.promises.writeFile(
+        agentPackagePath,
+        '{"scripts":{"deploy":"tailor-sdk apply"}}',
+        "utf-8",
+      );
+      await fs.promises.writeFile(nextYamlPath, "hello", "utf-8");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/upper", transformPath, ["**/*.yml", "**/package.json"]),
+            scriptPath: transformPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.filesModified).toEqual([workflowPath]);
+      await expect(fs.promises.readFile(workflowPath, "utf-8")).resolves.toBe("HELLO");
+      await expect(fs.promises.readFile(agentPackagePath, "utf-8")).resolves.toBe(
+        '{"scripts":{"deploy":"tailor-sdk apply"}}',
+      );
+      await expect(fs.promises.readFile(nextYamlPath, "utf-8")).resolves.toBe("hello");
+    });
+  });
+
+  describe("legacy pattern warnings", () => {
+    const partialTransformPath = path.join(os.tmpdir(), "transform-partial.ts");
+
+    beforeEach(async () => {
+      await fs.promises.writeFile(
+        partialTransformPath,
+        `export default function transform(source) {
+          return source.replaceAll("tailor-sdk crash-report", "tailor-sdk crashreport");
+        }`,
+        "utf-8",
+      );
+    });
+
+    afterEach(async () => {
+      await fs.promises.rm(partialTransformPath, { force: true });
+    });
+
+    test("warns when legacy patterns remain after a partial migration", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "README.md"),
+        "Run `tailor-sdk crash-report list`.\nRun tailor-sdk login --machineuser.\n",
+        "utf-8",
+      );
+
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod(
+              "test/partial",
+              partialTransformPath,
+              ["**/*.md"],
+              ["tailor-sdk crash-report", "--machineuser"],
+            ),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.filesModified).toEqual([path.join(dir, "README.md")]);
+      expect(result.warnings).toEqual([
+        "README.md: contains --machineuser but was not migrated automatically (rule: test/partial). Manual migration may be needed.",
+      ]);
     });
   });
 });

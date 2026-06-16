@@ -764,7 +764,6 @@ export const queryCommand = defineAppCommand({
       }),
       "machine-user": arg(z.string().optional(), {
         alias: "m",
-        hiddenAlias: "machineuser",
         description:
           "Machine user name for query execution. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",

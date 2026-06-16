@@ -1,4 +1,5 @@
 import {
+  defineAIGateway,
   defineAuth,
   defineConfig,
   defineIdp,
@@ -17,6 +18,11 @@ const website = defineStaticWebSite("my-frontend", {
 
 const erdSite = defineStaticWebSite("my-erd-site", {
   description: "ERD site for TailorDB",
+});
+
+const aiGateway = defineAIGateway("my-aigateway", {
+  authNamespace: "default",
+  cors: [website.url],
 });
 
 const idp = defineIdp("my-idp", {
@@ -133,6 +139,7 @@ export default defineConfig({
     files: ["./adapters/**/*.ts"],
   },
   staticWebsites: [website, erdSite],
+  aiGateways: [aiGateway],
 });
 
 export const plugins = definePlugins(

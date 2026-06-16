@@ -5,7 +5,7 @@
  * different function types on the Tailor Platform server via TestExecScript API.
  *
  * Uses internal APIs directly (detectFunctionType, bundleForTestRun, executeScript)
- * instead of spawning CLI subprocesses. The `apply` step still uses subprocess
+ * instead of spawning CLI subprocesses. The deploy step still uses subprocess
  * since it orchestrates multiple services.
  *
  * Prerequisites:
@@ -135,11 +135,11 @@ describe.sequential("E2E: function test-run", () => {
     console.log(`Workspace created: ${workspaceId}`);
     trackWorkspace(workspaceId);
 
-    // Apply example config to deploy DB schema, auth, machine users
-    console.log("Applying example config...");
+    // Deploy example config to create DB schema, auth, machine users
+    console.log("Deploying example config...");
     execFileSync(
       "node",
-      [cliPath, "apply", "--config", "tailor.config.ts", "--workspace-id", workspaceId, "--yes"],
+      [cliPath, "deploy", "--config", "tailor.config.ts", "--workspace-id", workspaceId, "--yes"],
       {
         cwd: exampleDir,
         stdio: ["ignore", "pipe", "pipe"],
@@ -148,7 +148,7 @@ describe.sequential("E2E: function test-run", () => {
         timeout: 120000,
       },
     );
-    console.log("Apply completed.");
+    console.log("Deploy completed.");
 
     // Resolve machine user from API + config
     let machineUserId = "00000000-0000-0000-0000-000000000000";

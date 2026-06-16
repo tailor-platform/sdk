@@ -68,7 +68,15 @@ export type {
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
 } from "@/types/auth.generated";
-export type { OAuth2ClientGrantType, SCIMAttributeType, BeforeLoginHookArgs } from "@/types/auth";
+export type {
+  OAuth2ClientGrantType,
+  SCIMAttributeType,
+  BeforeLoginHookArgs,
+  BeforeLoginClaims,
+  FederatedIdentity,
+  FederatedIdentityClaims,
+  FederatedIdentityProvider,
+} from "@/types/auth";
 export type {
   AuthConnectionOAuth2Config,
   AuthConnectionConfig,

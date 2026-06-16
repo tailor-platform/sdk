@@ -4,7 +4,7 @@ import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "@/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth } from "./index";
-import type { BeforeLoginHook } from "@/types/auth";
+import type { BeforeLoginHook, BeforeLoginHookArgs, FederatedIdentity } from "@/types/auth";
 import type { JsonObject } from "type-fest";
 
 const userType = db.type("User", {
@@ -231,6 +231,22 @@ describe("defineAuth", () => {
       });
 
       expect(authConfig.hooks!.beforeLogin!.invoker).toBe("admin");
+    });
+
+    test("typed claims expose federated_identity while keeping arbitrary claims", () => {
+      type Claims = BeforeLoginHookArgs["claims"];
+
+      // federated_identity is optional and shaped as { provider, claims }
+      expectTypeOf<Claims["federated_identity"]>().toEqualTypeOf<FederatedIdentity | undefined>();
+
+      // arbitrary IdP claims remain reachable through the JsonObject index signature
+      expectTypeOf<Claims["sub"]>().not.toBeNever();
+
+      const claims: Claims = { federated_identity: { provider: "google", claims: {} } };
+      expectTypeOf(claims.federated_identity?.provider).toEqualTypeOf<
+        "google" | "microsoft" | undefined
+      >();
+      expectTypeOf(claims.federated_identity?.claims.picture).toEqualTypeOf<string | undefined>();
     });
 
     test("is optional — existing tests continue to pass without it", () => {

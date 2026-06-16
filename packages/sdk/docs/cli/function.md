@@ -209,7 +209,7 @@ $ tailor-sdk function logs <execution-id> --json
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function test-run` output).
 
-Stack traces stay accurate even after later redeploys, because the trace is resolved against the exact build that produced the execution. If that build is no longer available, the command falls back to a plain-text error display.
+Stack traces are mapped only when the execution includes a content hash for the exact build that ran. If the content hash is missing or the build is no longer available, the command falls back to a plain-text error display.
 
 <!-- politty:command:function logs:notes:end -->
 
