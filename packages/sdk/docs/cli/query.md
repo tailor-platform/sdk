@@ -33,7 +33,7 @@ tailor-sdk query [options]
 | `--query <QUERY>`               | `-q`  | Query string to execute directly; omit to start REPL mode                                            | No       | -                    | -                                   |
 | `--file <FILE>`                 | `-f`  | Read query string from file; omit to start REPL mode                                                 | No       | -                    | -                                   |
 | `--edit`                        | -     | Open a temporary file in your editor; omit to start REPL mode                                        | No       | `false`              | -                                   |
-| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for query execution                                                                | Yes      | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for query execution. Falls back to the active profile's default machine user.      | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
 | `--newline-on-enter`            | -     | REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap. | No       | -                    | -                                   |
 
 <!-- politty:command:query:options:end -->
