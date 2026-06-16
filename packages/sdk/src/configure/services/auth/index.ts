@@ -77,6 +77,10 @@ export type {
   OAuth2ClientGrantType,
   SCIMAttributeType,
   BeforeLoginHookArgs,
+  BeforeLoginClaims,
+  FederatedIdentity,
+  FederatedIdentityClaims,
+  FederatedIdentityProvider,
 } from "@/configure/services/auth/types";
 export type {
   AuthConnectionOAuth2Config,

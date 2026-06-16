@@ -1,12 +1,13 @@
+// Application configuration input types for defineConfig().
+//
+// This is a pure type module: type declarations only, no zod/schema
+// references, importable type-only from any layer.
+import type { AIGatewayConfig } from "@/configure/services/aigateway/types";
 import type { AuthConfig } from "@/configure/services/auth/types";
 import type { IdPConfig } from "@/configure/services/idp/types";
 import type { SecretsConfig } from "@/configure/services/secrets/types";
 import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite/types";
 import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
-// Application configuration input types for defineConfig().
-//
-// This is a pure type module: type declarations only, no zod/schema
-// references, importable type-only from any layer.
 import type { LogLevelEnum } from "@/types/app-config.generated";
 
 export type LogLevel = LogLevelEnum;
@@ -40,12 +41,14 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `auth`: Single auth config object (not an array)
  * - `idp`: Array of IdP configs, e.g. `[myIdp]`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
+ * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
  * - `db`, `resolver`, `executor`, `workflow`: Service configs with file globs
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
   Idp extends IdPConfig[] = IdPConfig[],
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
+  AIGateways extends AIGatewayConfig[] = AIGatewayConfig[],
   Env extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
 > {
   /** Application name (required). */
@@ -84,6 +87,8 @@ export interface AppConfig<
   httpAdapter?: HttpAdapterServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
+  /** AI Gateway configurations. Must be an array, e.g. `[gateway]`. */
+  aiGateways?: AIGateways;
   /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */
   secrets?: SecretsConfig;
   /**

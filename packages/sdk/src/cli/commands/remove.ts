@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { applyAIGateway, planAIGateway } from "@/cli/commands/deploy/aigateway";
 import { applyApplication, planApplication } from "@/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "@/cli/commands/deploy/auth";
 import { applyExecutor, planExecutor } from "@/cli/commands/deploy/executor";
@@ -66,6 +67,7 @@ async function execRemove(
   };
   const tailorDB = await planTailorDB(ctx);
   const staticWebsite = await planStaticWebsite(ctx);
+  const aiGateway = await planAIGateway(ctx);
   const idp = await planIdP(ctx);
   const auth = await planAuth(ctx);
   const pipeline = await planPipeline(ctx);
@@ -91,6 +93,7 @@ async function execRemove(
   // Print planned deletions (same order as apply dry-run)
   functionRegistry.changeSet.print();
   staticWebsite.changeSet.print();
+  aiGateway.changeSet.print();
   app.print();
   tailorDB.changeSet.service.print();
   tailorDB.changeSet.type.print();
@@ -117,6 +120,7 @@ async function execRemove(
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&
     staticWebsite.changeSet.deletes.length === 0 &&
+    aiGateway.changeSet.deletes.length === 0 &&
     idp.changeSet.service.deletes.length === 0 &&
     auth.changeSet.service.deletes.length === 0 &&
     pipeline.changeSet.service.deletes.length === 0 &&
@@ -139,6 +143,7 @@ async function execRemove(
   await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
   await applyStaticWebsite(client, staticWebsite, "delete");
+  await applyAIGateway(client, aiGateway, "delete");
   await applyApplication(client, app, "delete");
   await applyPipeline(client, pipeline, "delete-resources");
   await applyPipeline(client, pipeline, "delete-services");

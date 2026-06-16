@@ -60,6 +60,12 @@ function emptyResults(): PlanResults {
       unmanaged: [],
       resourceOwners: new Set<string>(),
     },
+    aiGateway: {
+      changeSet: createChangeSet("AIGateways"),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    },
     idp: {
       changeSet: {
         service: createChangeSet("IdP services"),

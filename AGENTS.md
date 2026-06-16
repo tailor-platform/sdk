@@ -70,7 +70,7 @@ Refer to `example/` for working implementations of all patterns (config, models,
 
 Key files:
 
-- `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, definePlugins
+- `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, defineAIGateway, definePlugins
 - `example/tailordb/*.ts` - Model definitions with `db.type()`
 - `example/resolvers/*.ts` - Resolver implementations with `createResolver`
 - `example/executors/*.ts` - Executor implementations with `createExecutor`

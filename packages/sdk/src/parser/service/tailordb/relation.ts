@@ -51,7 +51,7 @@ export function validateRelationConfig(
   rawRelation: RawRelationConfig,
   context: RelationProcessingContext,
 ): void {
-  // platform response may omit the field
+  // raw user config may omit the field
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!rawRelation.type) {
     throw new Error(

@@ -2,7 +2,7 @@ import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "@/cli/shared/context";
 import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { resolveWorkflow } from "./get";
@@ -11,6 +11,7 @@ import { startCommand, startWorkflow } from "./start";
 vi.mock("@/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
+  loadMachineUserName: vi.fn(),
 }));
 
 vi.mock("@/cli/shared/client", () => ({
@@ -34,6 +35,7 @@ describe("startWorkflow runtime overload", () => {
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
+    vi.mocked(loadMachineUserName).mockResolvedValue("legacy-user");
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         name: "my-app",
@@ -101,5 +103,40 @@ describe("startWorkflow runtime overload", () => {
 
     expect(JSON.parse(stdout.output)).toEqual({ executionId: "execution-1" });
     expect(stderr.output).not.toBe("");
+  });
+
+  test("uses machine user from profile default when --machine-user flag is absent", async () => {
+    vi.mocked(loadMachineUserName).mockResolvedValue("profile-bot");
+
+    await startWorkflow({
+      name: "my-workflow",
+    });
+
+    expect(loadMachineUserName).toHaveBeenCalledWith({
+      machineUser: undefined,
+      profile: undefined,
+    });
+    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authInvoker: expect.objectContaining({ machineUserName: "profile-bot" }),
+      }),
+    );
+  });
+
+  test("forwards the machineUser option to machine user resolution", async () => {
+    await startWorkflow({ name: "my-workflow", machineUser: "flag-bot" });
+
+    expect(loadMachineUserName).toHaveBeenCalledWith({
+      machineUser: "flag-bot",
+      profile: undefined,
+    });
+  });
+
+  test("throws when no machine user source is available", async () => {
+    vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
+
+    await expect(startWorkflow({ name: "my-workflow" })).rejects.toThrow(
+      "Machine user is required",
+    );
   });
 });
