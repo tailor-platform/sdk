@@ -4,8 +4,12 @@ const role = db
   .string()
   .hooks({
     create: ({ value, invoker }) => (invoker?.attributes.role === "ADMIN" ? value : "user"),
+    update: (ctx) => ctx.invoker?.id ?? "anonymous",
   })
   .validate([({ invoker }) => invoker?.type === "machine_user", "Machine user required"]);
+
+const reviewer = t.string();
+const zodLike = { parse: (arg: unknown) => arg };
 
 export const user = db
   .type("User", {
@@ -14,12 +18,28 @@ export const user = db
   })
   .hooks({
     note: {
-      create: ({ invoker: currentUser }) => currentUser?.id ?? "anonymous",
+      create: ({ invoker: currentUser }) => {
+        const audit = [{ user: { id: "data-user" } }].map(({ user }) => user.id);
+        return currentUser?.id ?? audit[0] ?? "anonymous";
+      },
     },
+  })
+  .validate({
+    note: (ctx) => ctx.invoker?.type !== "machine_user",
   });
 
 export const parsed = t.string().parse({
   value: "hello",
   data: {},
   invoker: null,
+});
+
+export const parsedLocal = reviewer.parse({
+  value: "hello",
+  data: {},
+  invoker: null,
+});
+
+export const parsedOther = zodLike.parse({
+  user: null,
 });
