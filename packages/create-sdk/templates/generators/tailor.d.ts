@@ -18,10 +18,4 @@ declare module "@tailor-platform/sdk" {
   }
 }
 
-declare module "@tailor-platform/sdk/cli" {
-  interface MachineUserNameRegistry {
-    admin: true;
-  }
-}
-
 export {};
