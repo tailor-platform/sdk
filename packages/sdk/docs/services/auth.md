@@ -515,6 +515,25 @@ export const auth = defineAuth("my-auth", {
 
 **invoker**: The machine user whose permissions are used to execute the hook. Must reference a machine user defined in the same auth configuration.
 
+### Federated identity claims
+
+When a user signs in through a Built-in IdP OAuth provider (Google or Microsoft), the upstream provider's profile is available on `claims.federated_identity`. It is `undefined` for password logins, so guard before reading it. Commonly present claims (`name`, `given_name`, `family_name`, `picture`, `locale`) are typed; any other claim the provider issues is forwarded as-is. Availability varies by provider (for example, Microsoft does not issue `picture`).
+
+```typescript
+hooks: {
+  beforeLogin: {
+    handler: async ({ claims }) => {
+      const federated = claims.federated_identity;
+      if (federated?.provider === "google") {
+        // Populate the user record from the upstream profile
+        const avatarUrl = federated.claims.picture;
+      }
+    },
+    invoker: "hook-invoker",
+  },
+}
+```
+
 ## CLI Commands
 
 Manage Auth resources using the CLI:
