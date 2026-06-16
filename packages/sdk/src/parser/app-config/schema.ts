@@ -39,5 +39,6 @@ export const AppConfigSchema = z.object({
   workflow: z.unknown().optional(),
   httpAdapter: z.unknown().optional(),
   staticWebsites: z.unknown().optional(),
+  aiGateways: z.unknown().optional(),
   secrets: z.unknown().optional(),
 });
