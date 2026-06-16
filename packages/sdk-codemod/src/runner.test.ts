@@ -21,7 +21,12 @@ async function createTestProject(
   return { tmpDir, filePath };
 }
 
-function makeCodemod(id: string, scriptPath: string, filePatterns?: string[]): CodemodPackage {
+function makeCodemod(
+  id: string,
+  scriptPath: string,
+  filePatterns?: string[],
+  legacyPatterns?: string[],
+): CodemodPackage {
   return {
     id,
     name: id,
@@ -30,6 +35,7 @@ function makeCodemod(id: string, scriptPath: string, filePatterns?: string[]): C
     until: "2.0.0",
     scriptPath,
     filePatterns,
+    legacyPatterns,
   };
 }
 
@@ -266,6 +272,57 @@ describe("runCodemods", () => {
 
       expect(result.filesModified).toEqual([workflowPath]);
       await expect(fs.promises.readFile(workflowPath, "utf-8")).resolves.toBe("HELLO");
+    });
+  });
+
+  describe("legacy pattern warnings", () => {
+    const partialTransformPath = path.join(os.tmpdir(), "transform-partial.ts");
+
+    beforeEach(async () => {
+      await fs.promises.writeFile(
+        partialTransformPath,
+        `export default function transform(source) {
+          return source.replaceAll("tailor-sdk crash-report", "tailor-sdk crashreport");
+        }`,
+        "utf-8",
+      );
+    });
+
+    afterEach(async () => {
+      await fs.promises.rm(partialTransformPath, { force: true });
+    });
+
+    test("warns when legacy patterns remain after a partial migration", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "README.md"),
+        "Run `tailor-sdk crash-report list`.\nRun tailor-sdk login --machineuser.\n",
+        "utf-8",
+      );
+
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod(
+              "test/partial",
+              partialTransformPath,
+              ["**/*.md"],
+              ["tailor-sdk crash-report", "--machineuser"],
+            ),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.filesModified).toEqual([path.join(dir, "README.md")]);
+      expect(result.warnings).toEqual([
+        "README.md: contains --machineuser but was not migrated automatically (rule: test/partial). Manual migration may be needed.",
+      ]);
     });
   });
 });
