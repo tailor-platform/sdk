@@ -62,11 +62,11 @@ importers:
         version: 4.4.0
     devDependencies:
       '@connectrpc/connect':
-        specifier: 2.1.1
-        version: 2.1.1(@bufbuild/protobuf@2.12.0)
+        specifier: 2.1.2
+        version: 2.1.2(@bufbuild/protobuf@2.12.0)
       '@connectrpc/connect-node':
-        specifier: 2.1.1
-        version: 2.1.1(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.12.0))
+        specifier: 2.1.2
+        version: 2.1.2(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.0))
       '@types/node':
         specifier: 24.13.2
         version: 24.13.2
@@ -384,11 +384,11 @@ importers:
         specifier: 1.2.0
         version: 1.2.0(@bufbuild/protobuf@2.12.0)
       '@connectrpc/connect':
-        specifier: 2.1.1
-        version: 2.1.1(@bufbuild/protobuf@2.12.0)
+        specifier: 2.1.2
+        version: 2.1.2(@bufbuild/protobuf@2.12.0)
       '@connectrpc/connect-node':
-        specifier: 2.1.1
-        version: 2.1.1(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.12.0))
+        specifier: 2.1.2
+        version: 2.1.2(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.0))
       '@inquirer/core':
         specifier: 11.2.1
         version: 11.2.1(@types/node@24.13.2)
@@ -632,8 +632,8 @@ importers:
         specifier: 2.12.0
         version: 2.12.0
       '@connectrpc/connect':
-        specifier: 2.1.1
-        version: 2.1.1(@bufbuild/protobuf@2.12.0)
+        specifier: 2.1.2
+        version: 2.1.2(@bufbuild/protobuf@2.12.0)
 
 packages:
 
@@ -848,15 +848,15 @@ packages:
     resolution: {integrity: sha512-zccHj2z2oCCO4yrDiRSlFOxWerGqRiysP7a5jPK6uoI9URKAquwY42Dd/iUP8JWHxEzdRe4TlbvZCo8z1/mhrw==}
     engines: {node: '>= 20.12.0'}
 
-  '@connectrpc/connect-node@2.1.1':
-    resolution: {integrity: sha512-s3TfsI1XF+n+1z6MBS9rTnFsxxR4Rw5wmdEnkQINli81ESGxcsfaEet8duzq8LVuuCupmhUsgpRo0Nv9pZkufg==}
+  '@connectrpc/connect-node@2.1.2':
+    resolution: {integrity: sha512-+i/aAOpsI8sIx1mbYp6d99zvxaUSF6t/jP9Ux9maAmjsZPgmIQ3JuIeYi0zJIP9zlCnBlJjkpPosshCgdRuThQ==}
     engines: {node: '>=20'}
     peerDependencies:
       '@bufbuild/protobuf': ^2.7.0
-      '@connectrpc/connect': 2.1.1
+      '@connectrpc/connect': 2.1.2
 
-  '@connectrpc/connect@2.1.1':
-    resolution: {integrity: sha512-JzhkaTvM73m2K1URT6tv53k2RwngSmCXLZJgK580qNQOXRzZRR/BCMfZw3h+90JpnG6XksP5bYT+cz0rpUzUWQ==}
+  '@connectrpc/connect@2.1.2':
+    resolution: {integrity: sha512-MXkBijtcX09R10Eb6sFeIetc6w6746eio6xtfuyVOH7oQAacT1X0GzMIQFux6Qy8cq3W/T5qX5Bei8YbFtmRGA==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.7.0
 
@@ -4086,12 +4086,12 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@connectrpc/connect-node@2.1.1(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.12.0))':
+  '@connectrpc/connect-node@2.1.2(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.0))':
     dependencies:
       '@bufbuild/protobuf': 2.12.0
-      '@connectrpc/connect': 2.1.1(@bufbuild/protobuf@2.12.0)
+      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.12.0)
 
-  '@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.12.0)':
+  '@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.0)':
     dependencies:
       '@bufbuild/protobuf': 2.12.0
 
