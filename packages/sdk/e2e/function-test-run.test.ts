@@ -308,7 +308,7 @@ describe.sequential("E2E: function test-run", () => {
         workspaceId,
         name: "add.js",
         code,
-        arg: '{"a":5,"b":7}',
+        arg: { a: 5, b: 7 },
         invoker: authInvoker,
       });
 
