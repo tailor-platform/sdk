@@ -17,7 +17,7 @@ export const DEFAULT_POLL_INTERVAL = 1000;
 /**
  * Options for script execution
  */
-export interface ScriptExecutionOptions {
+export interface ScriptExecutionOptions<T = unknown> {
   /** Operator client instance */
   client: OperatorClient;
   /** Workspace ID */
@@ -26,8 +26,8 @@ export interface ScriptExecutionOptions {
   name: string;
   /** Bundled script code to execute */
   code: string;
-  /** Optional JSON string argument to pass to the script */
-  arg?: string;
+  /** Optional JSON-serializable argument to pass to the script */
+  arg?: T;
   /** Auth invoker for script execution */
   invoker: AuthInvoker;
   /** Polling interval in milliseconds (default: 1000ms) */
@@ -117,8 +117,8 @@ export async function waitForExecution(
  * @param {ScriptExecutionOptions} options - Execution options
  * @returns {Promise<ScriptExecutionResult>} Execution result
  */
-export async function executeScript(
-  options: ScriptExecutionOptions,
+export async function executeScript<T = unknown>(
+  options: ScriptExecutionOptions<T>,
 ): Promise<ScriptExecutionResult> {
   const { client, workspaceId, name, code, arg, invoker, pollInterval } = options;
 
@@ -127,7 +127,7 @@ export async function executeScript(
     workspaceId,
     name,
     code,
-    arg: arg ?? JSON.stringify({}),
+    arg: JSON.stringify(arg ?? {}),
     invoker,
   });
   const executionId = response.executionId;

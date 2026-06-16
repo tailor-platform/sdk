@@ -193,7 +193,7 @@ describe("executeScript", () => {
       workspaceId: "workspace-1",
       name: "test-script.js",
       code: "export function main() { return { success: true }; }",
-      arg: '{"input":"value"}',
+      arg: { input: "value" },
       invoker: mockAuthInvoker,
     });
 
