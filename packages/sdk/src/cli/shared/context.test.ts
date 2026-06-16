@@ -736,6 +736,48 @@ describe("loadAccessToken", () => {
       expect(config.current_user).toBe("platform-user-sub");
       expect(config.profiles.default?.user).toBe("platform-user-sub");
     });
+
+    test("keeps the legacy email key when subject resolution fails on refresh", async () => {
+      clientMocks.refreshToken.mockResolvedValue({
+        accessToken: "new-access-token",
+        refreshToken: "new-refresh-token",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockRejectedValue(new Error("network down"));
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          "legacy@example.com": {
+            access_token: "expired-access-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {
+          default: {
+            user: "legacy@example.com",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+          },
+        },
+        current_user: "legacy@example.com",
+      });
+
+      const token = await loadAccessToken();
+      const config = await readPlatformConfig();
+
+      expect(token).toBe("new-access-token");
+      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token");
+      expect(config.users["platform-user-sub"]).toBeUndefined();
+      expect(config.users["legacy@example.com"]).toMatchObject({
+        storage: "file",
+        access_token: "new-access-token",
+        refresh_token: "new-refresh-token",
+      });
+      expect(config.current_user).toBe("legacy@example.com");
+      expect(config.profiles.default?.user).toBe("legacy@example.com");
+    });
   });
 
   describe("error case: no token source", () => {
