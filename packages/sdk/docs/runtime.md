@@ -66,7 +66,7 @@ Or register the entry in `tsconfig.json`:
 }
 ```
 
-The globals entry exposes the lowercase `tailordb.*` namespace only. Use `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` before upgrading if your project still references the removed capital-cased `Tailordb.*` namespace from `@tailor-platform/function-types`.
+The globals entry exposes the lowercase `tailordb.*` namespace only. If your project still references the removed capital-cased `Tailordb.*` namespace from `@tailor-platform/function-types`, migrate before upgrading in two steps: run `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` to rewrite `Tailordb.*` references to lowercase `tailordb.*`, then add the `import "@tailor-platform/sdk/runtime/globals"` opt-in above so the rewritten references resolve.
 
 ## Namespaces
 

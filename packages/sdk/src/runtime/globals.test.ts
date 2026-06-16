@@ -1,10 +1,11 @@
 /**
  * Type-level tests confirming that opting into `@tailor-platform/sdk/runtime/globals`
- * activates the ambient `tailor.*` / `tailordb` declarations.
+ * activates the ambient `tailor.*` / `tailordb` declarations, and that the
+ * removed capital-cased `Tailordb` namespace no longer resolves.
  *
- * These assertions are type-only — they reference `tailor`, `tailordb`, and
- * `TailorDBFileError` solely through `typeof` so the test does not require
- * the platform runtime to inject those values into the unit test environment.
+ * These assertions are type-only — the positive checks reference `tailor`,
+ * `tailordb`, and `TailorDBFileError` without depending on the platform
+ * runtime injecting those values into the unit test environment.
  */
 import "@/runtime/globals";
 import { describe, expectTypeOf, test } from "vitest";
