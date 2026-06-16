@@ -65,7 +65,9 @@ jobs:
           fi
       - id: tailor-mask-credentials
         # Fork PRs cannot read secrets; the checks above still run for them.
-        if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+        if: >-
+          (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&
+          vars.TAILOR_PLATFORM_WORKSPACE_ID != ''
         run: |
           echo "::add-mask::$CLIENT_ID"
           echo "::add-mask::$CLIENT_SECRET"
@@ -73,14 +75,18 @@ jobs:
           CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
       - id: tailor-login
-        if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+        if: >-
+          (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&
+          vars.TAILOR_PLATFORM_WORKSPACE_ID != ''
         # __WORKING_DIRECTORY__
         run: __PM_EXEC__ tailor-sdk login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
       - id: tailor-plan
-        if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+        if: >-
+          (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&
+          vars.TAILOR_PLATFORM_WORKSPACE_ID != ''
         # __WORKING_DIRECTORY__
         run: |
           if [ -z "$TAILOR_PLATFORM_WORKSPACE_ID" ]; then
@@ -255,6 +261,14 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       # __SETUP_STEPS__
+      - id: tailor-validate-workspace
+        env:
+          WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+        run: |
+          if [ -z "$WORKSPACE_ID" ]; then
+            echo "::error::Workspace is not provisioned: TAILOR_PLATFORM_WORKSPACE_ID is empty. Provision the workspace and set the variable."
+            exit 1
+          fi
       - id: tailor-mask-credentials
         run: |
           echo "::add-mask::$CLIENT_ID"
@@ -268,14 +282,6 @@ jobs:
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
-      - id: tailor-validate-workspace
-        env:
-          WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
-        run: |
-          if [ -z "$WORKSPACE_ID" ]; then
-            echo "::error::Workspace is not provisioned: TAILOR_PLATFORM_WORKSPACE_ID is empty. Provision the workspace and set the variable."
-            exit 1
-          fi
       - id: tailor-generate
         # __WORKING_DIRECTORY__
         run: __PM_EXEC__ tailor-sdk generate
