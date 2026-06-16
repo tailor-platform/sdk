@@ -9,12 +9,27 @@
  * it from nested Vitest configs that do not resolve `@/` aliases.
  * @internal
  */
-import { AsyncLocalStorage } from "node:async_hooks";
 import type { TailorEnv } from "../../../types/env";
 import type { TailorPrincipal } from "../../../types/user";
 
 const SLOT_KEY = "__tailorWorkflowTestEnv";
-const invokerStorage = new AsyncLocalStorage<TailorPrincipal | null>();
+
+type AsyncLocalStorageLike<T> = {
+  getStore(): T | undefined;
+  run<R>(store: T, callback: () => R): R;
+};
+
+let invokerStorage: AsyncLocalStorageLike<TailorPrincipal | null> | undefined;
+
+function workflowInvokerStorage(): AsyncLocalStorageLike<TailorPrincipal | null> {
+  if (!invokerStorage) {
+    const { AsyncLocalStorage } = process.getBuiltinModule("node:async_hooks") as {
+      AsyncLocalStorage: new <T>() => AsyncLocalStorageLike<T>;
+    };
+    invokerStorage = new AsyncLocalStorage<TailorPrincipal | null>();
+  }
+  return invokerStorage;
+}
 
 /**
  * Read the test-time env slot.
@@ -43,7 +58,7 @@ export function clearWorkflowTestEnv(): void {
 }
 
 export function withWorkflowTestInvoker<T>(invoker: TailorPrincipal | null, run: () => T): T {
-  return invokerStorage.run(invoker, run);
+  return workflowInvokerStorage().run(invoker, run);
 }
 
 /**
@@ -83,7 +98,7 @@ function readRuntimeInvoker(): TailorPrincipal | null {
 // env from `mockWorkflow().setEnv()`, else the deprecated env-var. Shallow-copied
 // to isolate against cross-trigger mutation.
 export function buildJobContext(): { env: TailorEnv; invoker: TailorPrincipal | null } {
-  const storedInvoker = invokerStorage.getStore();
+  const storedInvoker = invokerStorage?.getStore();
   const invoker = storedInvoker === undefined ? readRuntimeInvoker() : storedInvoker;
   const fromGlobal = readWorkflowTestEnv();
   if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker };
