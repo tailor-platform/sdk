@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@92e52761d90ebf66e8d5db83342a4af10bfc19ea # v1.3.0
+        uses: tailor-platform/actions/tag-guard@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           target-branch: "__BRANCH__"
   # __TAG_GUARD_JOB_END__
@@ -45,17 +45,17 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@92e52761d90ebf66e8d5db83342a4af10bfc19ea # v1.3.0
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@92e52761d90ebf66e8d5db83342a4af10bfc19ea # v1.3.0
+        uses: tailor-platform/actions/generate-check@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       - id: tailor-plan
-        uses: tailor-platform/actions/plan@92e52761d90ebf66e8d5db83342a4af10bfc19ea # v1.3.0
+        uses: tailor-platform/actions/plan@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -79,12 +79,12 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@92e52761d90ebf66e8d5db83342a4af10bfc19ea # v1.3.0
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@92e52761d90ebf66e8d5db83342a4af10bfc19ea # v1.3.0
+        uses: tailor-platform/actions/deploy@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
