@@ -10,11 +10,12 @@ const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
 const BOOLEAN_GLOBAL_ARG = "(?:--verbose|--json|-j)";
 const VALUE_GLOBAL_ARG = "(?:--env-file|--env-file-if-exists|-e)";
 const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
+const TAILOR_BINARY = `(?<![\\w-])tailor-sdk(?:@[^\\s'"\`]+)?(?![\\w-])`;
 const COMMAND_PATTERN = new RegExp(
-  `\\btailor-sdk(@[^\\s'"\`]+)?(${GLOBAL_ARG_PATTERN}\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
+  `${TAILOR_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
   "g",
 );
-const TAILOR_BINARY_PATTERN = /\btailor-sdk(?:@[^\s'"`]+)?/g;
+const TAILOR_BINARY_PATTERN = new RegExp(TAILOR_BINARY, "g");
 
 const COMMAND_MAP = new Map(COMMAND_RENAMES);
 
@@ -22,9 +23,6 @@ interface FoldedYamlRange {
   start: number;
   end: number;
 }
-
-const PROSE_BOUNDARY_PATTERN =
-  /^\s+(?:and|or|but|before|after|then|when|while|if|unless|because|so)\b/;
 
 function isOptionBoundaryChar(value: string | undefined): boolean {
   return value === undefined || !/[\w-]/.test(value);
@@ -144,7 +142,6 @@ function findTailorCommandEnd(
   source: string,
   start: number,
   foldedYamlRanges?: FoldedYamlRange[],
-  stopAtProseBoundary = false,
 ): number {
   const inlineCodeSpanEnd = findInlineCodeSpanEnd(source, start);
   const enclosingLineQuoteEnd = findEnclosingLineQuoteEnd(source, start);
@@ -154,11 +151,6 @@ function findTailorCommandEnd(
   );
   const foldedYamlRange = findContainingFoldedYamlRange(foldedYamlRanges, start);
   const commandLimit = foldedYamlRange ? Math.min(limit, foldedYamlRange.end) : limit;
-  const shouldStopAtProseBoundary =
-    stopAtProseBoundary &&
-    inlineCodeSpanEnd === undefined &&
-    enclosingLineQuoteEnd === undefined &&
-    foldedYamlRange === undefined;
   let quote: "'" | '"' | null = null;
   let end = start;
 
@@ -186,10 +178,21 @@ function findTailorCommandEnd(
     const prev = source[end - 1];
     if ((ch === ";" || ch === "&" || ch === "|") && prev !== "\\") break;
     if (ch === "\n" && prev !== "\\" && !foldedYamlRange) break;
-    if (shouldStopAtProseBoundary && PROSE_BOUNDARY_PATTERN.test(source.slice(end))) break;
     end += 1;
   }
   return end;
+}
+
+function isDelimitedCommandContext(
+  source: string,
+  start: number,
+  foldedYamlRanges?: FoldedYamlRange[],
+): boolean {
+  return (
+    findInlineCodeSpanEnd(source, start) !== undefined ||
+    findEnclosingLineQuoteEnd(source, start) !== undefined ||
+    findContainingFoldedYamlRange(foldedYamlRanges, start) !== undefined
+  );
 }
 
 function findOptionRename(command: string, index: number): readonly [string, string] | undefined {
@@ -245,7 +248,7 @@ function replaceOptionsInCommand(command: string): string {
 function replaceOptionsInTailorCommands(
   source: string,
   foldedYamlRanges?: FoldedYamlRange[],
-  stopAtProseBoundary = false,
+  requireDelimitedContext = false,
 ): string {
   let updated = "";
   let cursor = 0;
@@ -258,7 +261,12 @@ function replaceOptionsInTailorCommands(
     const start = match.index;
     if (start < cursor) continue;
 
-    const end = findTailorCommandEnd(source, start, foldedYamlRanges, stopAtProseBoundary);
+    if (requireDelimitedContext && !isDelimitedCommandContext(source, start, foldedYamlRanges)) {
+      TAILOR_BINARY_PATTERN.lastIndex = start + match[0].length;
+      continue;
+    }
+
+    const end = findTailorCommandEnd(source, start, foldedYamlRanges);
     updated += source.slice(cursor, start);
     updated += replaceOptionsInCommand(source.slice(start, end));
     cursor = end;
@@ -268,14 +276,18 @@ function replaceOptionsInTailorCommands(
   return updated + source.slice(cursor);
 }
 
-function replaceAll(value: string, parseFoldedYaml = false, stopAtProseBoundary = false): string {
+function replaceAll(
+  value: string,
+  parseFoldedYaml = false,
+  requireDelimitedContext = false,
+): string {
   const updated = value.replace(
     COMMAND_PATTERN,
-    (_match, ver: string | undefined, prefix: string, cmd: string) =>
-      `tailor-sdk${ver ?? ""}${prefix}${COMMAND_MAP.get(cmd) ?? cmd}`,
+    (match, _prefix: string, cmd: string) =>
+      `${match.slice(0, -cmd.length)}${COMMAND_MAP.get(cmd) ?? cmd}`,
   );
   const foldedYamlRanges = parseFoldedYaml ? findFoldedYamlRanges(updated) : undefined;
-  return replaceOptionsInTailorCommands(updated, foldedYamlRanges, stopAtProseBoundary);
+  return replaceOptionsInTailorCommands(updated, foldedYamlRanges, requireDelimitedContext);
 }
 
 function transformText(source: string, filePath: string): string | null {

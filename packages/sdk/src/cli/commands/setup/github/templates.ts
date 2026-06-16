@@ -207,9 +207,9 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     "tailor-deploy",
     "tailor-deploy/tailor-checkout",
     ...setupIds("tailor-deploy", packageManager),
+    "tailor-deploy/tailor-validate-workspace",
     "tailor-deploy/tailor-mask-credentials",
     "tailor-deploy/tailor-login",
-    "tailor-deploy/tailor-validate-workspace",
     "tailor-deploy/tailor-generate",
     "tailor-deploy/tailor-deploy",
   );
@@ -267,9 +267,9 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
     "tailor-deploy",
     "tailor-deploy/tailor-checkout",
     ...setupIds("tailor-deploy", packageManager),
+    "tailor-deploy/tailor-validate-workspace",
     "tailor-deploy/tailor-mask-credentials",
     "tailor-deploy/tailor-login",
-    "tailor-deploy/tailor-validate-workspace",
     "tailor-deploy/tailor-generate",
     "tailor-deploy/tailor-deploy",
   );

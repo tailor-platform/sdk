@@ -60,9 +60,9 @@ status checks**.
 | `tailor-deploy/tailor-setup-node`         | node projects                                                   |
 | `tailor-deploy/tailor-setup-bun`          | bun projects only                                               |
 | `tailor-deploy/tailor-install`            | Package install                                                 |
+| `tailor-deploy/tailor-validate-workspace` | Fails when `TAILOR_PLATFORM_WORKSPACE_ID` is empty              |
 | `tailor-deploy/tailor-mask-credentials`   | Masks machine-user credentials                                  |
 | `tailor-deploy/tailor-login`              | `tailor-sdk login --machine-user`                               |
-| `tailor-deploy/tailor-validate-workspace` | Fails when `TAILOR_PLATFORM_WORKSPACE_ID` is empty              |
 | `tailor-deploy/tailor-generate`           | `tailor-sdk generate`                                           |
 | `tailor-deploy/tailor-deploy`             | `tailor-sdk deploy --yes`                                       |
 

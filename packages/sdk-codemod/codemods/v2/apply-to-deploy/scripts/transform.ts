@@ -10,16 +10,11 @@ const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
 const BOOLEAN_GLOBAL_ARG = "(?:--verbose|--json|-j)";
 const VALUE_GLOBAL_ARG = "(?:--env-file|--env-file-if-exists|-e)";
 const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
-const APPLY_PATTERN = new RegExp(
-  `\\btailor-sdk(@[^\\s'"\`]+)?(${GLOBAL_ARG_PATTERN}\\s+)apply(?![-\\w])`,
-  "g",
-);
+const TAILOR_BINARY = `(?<![\\w-])tailor-sdk(?:@[^\\s'"\`]+)?(?![\\w-])`;
+const APPLY_PATTERN = new RegExp(`${TAILOR_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)apply(?![-\\w])`, "g");
 
 function replaceApply(value: string): string {
-  return value.replace(
-    APPLY_PATTERN,
-    (_match, ver: string | undefined, prefix: string) => `tailor-sdk${ver ?? ""}${prefix}deploy`,
-  );
+  return value.replace(APPLY_PATTERN, (match) => `${match.slice(0, -"apply".length)}deploy`);
 }
 
 function transformText(source: string): string | null {

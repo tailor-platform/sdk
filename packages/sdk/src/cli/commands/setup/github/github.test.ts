@@ -177,8 +177,22 @@ describe("renderBranchWorkflow", () => {
   test("includes the fork guard on the plan step", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain(
-      "if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork",
+      "(github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&",
     );
+    expect(content).toContain("vars.TAILOR_PLATFORM_WORKSPACE_ID != ''");
+  });
+
+  test("skips plan authentication and dry-run until the workspace is provisioned", () => {
+    const branch = renderBranchWorkflow(branchBase).content;
+    const tag = renderTagWorkflow(tagBase).content;
+    for (const content of [branch, tag]) {
+      for (const stepId of ["tailor-mask-credentials", "tailor-login", "tailor-plan"]) {
+        const start = content.indexOf(`- id: ${stepId}`);
+        const end = content.indexOf("\n      - id:", start + 1);
+        const step = content.slice(start, end === -1 ? undefined : end);
+        expect(step).toContain("vars.TAILOR_PLATFORM_WORKSPACE_ID != ''");
+      }
+    }
   });
 
   test("sets cancel-in-progress: false on the deploy concurrency group", () => {
@@ -196,6 +210,21 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("pnpm exec tailor-sdk deploy --dry-run --yes");
     expect(content).toContain("pnpm exec tailor-sdk deploy --yes");
     expect(content).not.toContain("tailor-sdk apply");
+  });
+
+  test("validates deploy workspace before using machine-user credentials", () => {
+    for (const content of [
+      renderBranchWorkflow(branchBase).content,
+      renderTagWorkflow(tagBase).content,
+    ]) {
+      const deployJob = content.slice(content.indexOf("tailor-deploy:"));
+      expect(deployJob.indexOf("id: tailor-validate-workspace")).toBeLessThan(
+        deployJob.indexOf("id: tailor-mask-credentials"),
+      );
+      expect(deployJob.indexOf("id: tailor-validate-workspace")).toBeLessThan(
+        deployJob.indexOf("id: tailor-login"),
+      );
+    }
   });
 
   test("emits PM exec prefix for generate", () => {
