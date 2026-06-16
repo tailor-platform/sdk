@@ -28,13 +28,18 @@ export const user = db
         const audit = [{ user: { id: "data-user" } }].map(({ user }) => user.id);
         return currentUser?.id ?? audit[0] ?? "anonymous";
       },
-      update({ invoker }) {
-        return invoker?.id ?? "anonymous";
+      update({ invoker: user }) {
+        const invoker = user?.id ?? "anonymous";
+        return invoker;
       },
     },
   })
   .validate({
     note: (ctx) => ctx.invoker?.type !== "machine_user",
+    fallback: ({ invoker: user = null }) => {
+      const labels = ["anonymous"].map((invoker) => invoker);
+      return user?.id !== labels[0];
+    },
   });
 
 export const parsed = t.string().parse({

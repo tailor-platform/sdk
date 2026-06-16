@@ -627,12 +627,18 @@ function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
 
   if (renamesBinding && patternBindsName(pattern, "invoker")) return;
 
+  const aliasRenamedUser = renamesBinding && collectAllShadowRanges(body, "invoker").length > 0;
+
   let renamedShorthandUser = false;
   for (const child of pattern.children()) {
     const kind = child.kind();
     if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
-      edits.push(child.replace("invoker"));
-      renamedShorthandUser = true;
+      if (aliasRenamedUser) {
+        edits.push(child.replace("invoker: user"));
+      } else {
+        edits.push(child.replace("invoker"));
+        renamedShorthandUser = true;
+      }
     } else if (kind === "pair_pattern") {
       const key = child.field("key");
       if (key?.text() === "user") {
@@ -643,8 +649,12 @@ function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
         .children()
         .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
       if (inner?.text() === "user") {
-        edits.push(inner.replace("invoker"));
-        renamedShorthandUser = true;
+        if (aliasRenamedUser) {
+          edits.push(inner.replace("invoker: user"));
+        } else {
+          edits.push(inner.replace("invoker"));
+          renamedShorthandUser = true;
+        }
       }
     }
   }
@@ -884,7 +894,24 @@ function transformParseArgsObject(
   }
 }
 
-function transformDirectBodyContext(call: SgNode, edits: Edit[]): void {
+function directBodyInvokerValue(
+  value: SgNode,
+  unauthenticatedLocalNames: Set<string>,
+  root: SgNode,
+): string {
+  const text = value.text();
+  if (!unauthenticatedLocalNames.has(text)) return text;
+  const shadowRanges = collectAllShadowRanges(root, text);
+  const pos = value.range().start.index;
+  return isInsideAnyRange(pos, shadowRanges) ? text : "null";
+}
+
+function transformDirectBodyContext(
+  call: SgNode,
+  edits: Edit[],
+  unauthenticatedLocalNames: Set<string>,
+  root: SgNode,
+): void {
   const memberName = findMemberCallName(call);
   if (memberName !== "body") return;
 
@@ -896,6 +923,7 @@ function transformDirectBodyContext(call: SgNode, edits: Edit[]): void {
   let hasEnv = false;
   let hasInvoker = false;
   let userNode: SgNode | null = null;
+  let userValue: SgNode | null = null;
   let envNode: SgNode | null = null;
 
   for (const child of objArg.children()) {
@@ -908,7 +936,10 @@ function transformDirectBodyContext(call: SgNode, edits: Edit[]): void {
         envNode = child;
       }
       if (key === "invoker") hasInvoker = true;
-      if (key === "user") userNode = child.field("key") ?? child;
+      if (key === "user") {
+        userNode = child.field("key") ?? child;
+        userValue = child.field("value");
+      }
     } else if (kind === "shorthand_property_identifier") {
       const name = child.text();
       if (name === "input") hasInput = true;
@@ -917,11 +948,14 @@ function transformDirectBodyContext(call: SgNode, edits: Edit[]): void {
         envNode = child;
       }
       if (name === "invoker") hasInvoker = true;
-      if (name === "user") userNode = child;
+      if (name === "user") {
+        userNode = child;
+        userValue = child;
+      }
     }
   }
 
-  if (!hasInput || !hasEnv || !userNode) return;
+  if (!hasInput || !hasEnv || !userNode || !userValue) return;
   edits.push(
     userNode.kind() === "shorthand_property_identifier"
       ? userNode.replace("caller: user")
@@ -929,10 +963,11 @@ function transformDirectBodyContext(call: SgNode, edits: Edit[]): void {
   );
   if (hasInvoker || !envNode) return;
   const indent = " ".repeat(envNode.range().start.column);
+  const invokerValue = directBodyInvokerValue(userValue, unauthenticatedLocalNames, root);
   edits.push(
     envNode.kind() === "shorthand_property_identifier"
-      ? envNode.replace(`invoker: null,\n${indent}env`)
-      : envNode.replace(`invoker: null,\n${indent}${envNode.text()}`),
+      ? envNode.replace(`invoker: ${invokerValue},\n${indent}env`)
+      : envNode.replace(`invoker: ${invokerValue},\n${indent}${envNode.text()}`),
   );
 }
 
@@ -1068,7 +1103,7 @@ export default function transform(source: string): string | null {
   for (const call of memberCalls) {
     transformPrincipalCallbacksInCall(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
     transformParseArgsObject(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
-    transformDirectBodyContext(call, edits);
+    transformDirectBodyContext(call, edits, unauthenticatedLocalNames, tree);
   }
 
   if (edits.length === 0) return null;
