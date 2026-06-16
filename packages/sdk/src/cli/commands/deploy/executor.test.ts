@@ -140,6 +140,7 @@ describe("planExecutor", () => {
       resolverNames?: Record<string, string>;
       idpNames?: ReadonlyArray<string>;
       authName?: string;
+      externalAuthName?: string;
     },
   ): Application {
     const tailorDBServices = Object.entries(
@@ -166,6 +167,9 @@ describe("planExecutor", () => {
       resolverServices,
       idpServices,
       authService: options?.authName ? { config: { name: options.authName } } : undefined,
+      config: options?.externalAuthName
+        ? { auth: { name: options.externalAuthName, external: true } }
+        : {},
     } as unknown as Application;
   }
 
@@ -671,6 +675,46 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("success: !!args.succeeded");
       expect(variablesExpr).toContain("result: args.succeeded?.result.resolver");
       expect(variablesExpr).toContain("error: args.failed?.error");
+    });
+
+    test("string authInvoker uses external auth config name", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "test-executor",
+        description: "Executor test-executor",
+        disabled: false,
+        trigger: {
+          kind: "schedule",
+          timezone: "UTC",
+          cron: "0 * * * *",
+        },
+        operation: {
+          kind: "function",
+          body: () => {},
+          authInvoker: "batch-user",
+        },
+      };
+      const application = createMockApplication([executor], {
+        externalAuthName: "external-auth",
+      });
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const create = result.changeSet.creates[0]!;
+      const targetConfig = create.request.executor?.targetConfig?.config as {
+        case: "function";
+        value: { invoker: { namespace: string; machineUserName: string } };
+      };
+      expect(targetConfig.value.invoker).toEqual({
+        namespace: "external-auth",
+        machineUserName: "batch-user",
+      });
     });
   });
 

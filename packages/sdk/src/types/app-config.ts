@@ -1,3 +1,4 @@
+import type { AIGatewayConfig } from "./aigateway-config";
 import type { LogLevelEnum } from "./app-config.generated";
 import type { AuthConfig } from "./auth";
 import type { IdPConfig } from "./idp";
@@ -36,12 +37,14 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `auth`: Single auth config object (not an array)
  * - `idp`: Array of IdP configs, e.g. `[myIdp]`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
+ * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
  * - `db`, `resolver`, `executor`, `workflow`: Service configs with file globs
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
   Idp extends IdPConfig[] = IdPConfig[],
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
+  AIGateways extends AIGatewayConfig[] = AIGatewayConfig[],
   Env extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
 > {
   /** Application name (required). */
@@ -80,6 +83,8 @@ export interface AppConfig<
   httpAdapter?: HttpAdapterServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
+  /** AI Gateway configurations. Must be an array, e.g. `[gateway]`. */
+  aiGateways?: AIGateways;
   /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */
   secrets?: SecretsConfig;
   /**

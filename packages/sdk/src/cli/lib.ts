@@ -17,24 +17,10 @@ export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { generateUserTypes } from "./shared/type-generator";
-export type {
-  CodeGenerator,
-  TailorDBGenerator,
-  ResolverGenerator,
-  ExecutorGenerator,
-  TailorDBResolverGenerator,
-  FullCodeGenerator,
-  TailorDBInput,
-  ResolverInput,
-  ExecutorInput,
-  FullInput,
-  AggregateArgs,
-  GeneratorResult,
-  DependencyKind,
-  PluginAttachment,
-  TypeSourceInfoEntry,
-} from "./commands/generate/types";
+export type { GeneratorResult } from "@/types/plugin-generation";
+export type { PluginAttachment } from "@/types/plugin";
 export type { TailorDBType } from "@/types/tailordb";
+export type { TypeSourceInfoEntry } from "@/types/tailordb";
 export type { Resolver } from "@/types/resolver.generated";
 export type { Executor } from "@/types/executor.generated";
 
@@ -91,6 +77,7 @@ export {
   type GetWorkflowOptions,
   type GetWorkflowTypedOptions,
 } from "./commands/workflow/get";
+export type { MachineUserName } from "@tailor-platform/sdk";
 export {
   startWorkflow,
   type StartWorkflowOptions,

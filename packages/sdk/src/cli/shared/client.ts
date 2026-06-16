@@ -201,6 +201,7 @@ function connectCodeName(error: unknown): string {
  * @internal
  */
 export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
+  "CreateAIGateway",
   "CreateApplication",
   "CreateAuthConnection",
   "CreateAuthHook",

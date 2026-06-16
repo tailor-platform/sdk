@@ -1,7 +1,6 @@
 import type { AuthConnectionConfig } from "./auth-connection.generated";
 import type { ValueOperand } from "./auth-value";
 import type {
-  AuthInvoker,
   IdProvider as IdProviderConfig,
   OAuth2Client,
   OAuth2ClientInput,
@@ -14,15 +13,27 @@ import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "./fie
 import type { output } from "./helpers";
 import type { TailorDBInstance } from "./tailor-db-field";
 import type { TailorField } from "./tailor-field";
-import type { IsAny, JsonObject } from "type-fest";
+import type { IsAny, JsonObject, JsonValue } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)
 export type OAuth2ClientGrantType = OAuth2Client["grantTypes"][number];
 export type SCIMAttributeType = SCIMAttribute["type"];
 
-export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUserName"> & {
-  machineUserName: M;
-};
+// Interface for module augmentation
+// Users can extend via: declare module "@tailor-platform/sdk" { interface MachineUserNameRegistry { ... } }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface MachineUserNameRegistry {}
+
+/**
+ * Machine user name.
+ *
+ * When `tailor.d.ts` is generated (via `tailor-sdk deploy`/`generate`), this is narrowed
+ * to the union of defined machine user names. When no machine users are registered yet,
+ * falls back to `string` to avoid blocking editing before the first generate run.
+ */
+export type MachineUserName = keyof MachineUserNameRegistry extends never
+  ? string
+  : keyof MachineUserNameRegistry & string;
 
 /** Result of retrieving a connection token at runtime. */
 export type AuthConnectionTokenResult = {
@@ -230,8 +241,49 @@ type MachineUser<
               ? { attributeList?: never }
               : { attributeList: AttributeListToTuple<User, AttributeList> });
 
+/** Upstream OAuth provider that federated a login through the Built-in IdP. */
+export type FederatedIdentityProvider = "google" | "microsoft";
+
+/**
+ * Profile claims forwarded from the upstream OAuth provider's ID token.
+ *
+ * Commonly present claims are typed; any other claim the provider issues is
+ * forwarded as-is and reachable through the index signature. Availability
+ * varies by provider (e.g. Microsoft does not issue `picture`).
+ */
+export type FederatedIdentityClaims = {
+  name?: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+  locale?: string;
+  [claim: string]: JsonValue | undefined;
+};
+
+/**
+ * The upstream identity that federated this login, populated when a user signs
+ * in through a Built-in IdP OAuth provider (Google or Microsoft).
+ *
+ * Available on {@link BeforeLoginClaims.federated_identity}; `undefined` for
+ * password logins.
+ */
+export type FederatedIdentity = {
+  provider: FederatedIdentityProvider;
+  claims: FederatedIdentityClaims;
+};
+
+/**
+ * Token claims passed to the {@link BeforeLoginHook} handler. Carries the IdP's
+ * own claims (e.g. `sub`, `email`) plus, for federated logins, the upstream
+ * provider's profile under {@link BeforeLoginClaims.federated_identity}.
+ */
+export type BeforeLoginClaims = JsonObject & {
+  /** Present only for federated (Google/Microsoft) logins; `undefined` for password logins. */
+  federated_identity?: FederatedIdentity;
+};
+
 export type BeforeLoginHookArgs = {
-  claims: JsonObject;
+  claims: BeforeLoginClaims;
   idpConfigName: string;
   /** Environment variables defined in `defineConfig({ env })`. */
   env: TailorEnv;
@@ -279,13 +331,8 @@ type ConnectionNames<Config> = Config extends { connections?: Record<infer K, un
   ? K & string
   : string;
 
-export type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
+export type DefinedAuth<Name extends string, Config> = Config & {
   name: Name;
-  /**
-   * @deprecated Pass the machine user name directly as a string instead, e.g. `authInvoker: "machine-user-name"`.
-   * Using this function pulls config-layer (Node-only) dependencies into runtime bundles.
-   */
-  invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
   getConnectionToken<C extends ConnectionNames<Config>>(
     connectionName: C,
   ): Promise<AuthConnectionTokenResult>;
@@ -301,8 +348,7 @@ export type AuthOwnConfig = DefinedAuth<
   // Intentionally permissive: AuthConfig is the "container" type for AppConfig.auth.
   // We want any concrete `defineAuth(...)` result to be assignable here, while the
   // strong typing remains on the `defineAuth` return type itself.
-  AuthServiceInputLoose,
-  string
+  AuthServiceInputLoose
 >;
 
 export type AuthConfig = AuthOwnConfig | AuthExternalConfig;
