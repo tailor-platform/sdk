@@ -17,7 +17,7 @@ Unit-test entrypoints exposed by the SDK:
 
 Helpers under `@tailor-platform/sdk/test`:
 
-- `unauthenticatedTailorUser` — default `user` value for resolver contexts
+- `unauthenticatedTailorUser` — default `user` value for resolver contexts (deprecated; see the note under [Testing Resolvers](#testing-resolvers))
 
 Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
@@ -358,6 +358,8 @@ export default defineConfig({
 Unit tests call `.body()` (or `.trigger()`) directly on a resolver, workflow job, or executor and stub any platform-provided globals they touch.
 
 ### Testing Resolvers
+
+> **Note:** `unauthenticatedTailorUser` is deprecated. Represent an absent principal as `null` in your own application code going forward. The test helper and the examples below retain it until the resolver context `user` type accepts `null` in the next major version.
 
 #### Simple resolver
 
