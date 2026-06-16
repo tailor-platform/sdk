@@ -13,13 +13,7 @@ export function defineAIGateway(name: string, config: Omit<AIGatewayInput, "name
   const result = {
     ...config,
     name,
-    get url() {
-      return `${name}:aigateway-url` as const;
-    },
-    get domain() {
-      return `${name}:aigateway-domain` as const;
-    },
-  } as const satisfies AIGatewayInput & { readonly url: string; readonly domain: string };
+  } as const satisfies AIGatewayInput;
 
   return result as typeof result & AIGatewayDefinitionBrand;
 }

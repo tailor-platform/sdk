@@ -201,8 +201,7 @@ export async function planAIGateway(context: PlanContext) {
       });
     }
   }
-  Object.entries(existingGateways).forEach(([name]) => {
-    const entry = existingGateways[name];
+  Object.entries(existingGateways).forEach(([name, entry]) => {
     const label = entry?.label;
     const owned = trackRemainingResourceOwner({
       labels: entry?.allLabels,

@@ -26,12 +26,12 @@ Configure an AI Gateway using `defineAIGateway()`:
 ```typescript
 import { defineAIGateway, defineConfig } from "@tailor-platform/sdk";
 
-const gateway = defineAIGateway("my-gateway", {
+const aiGateway = defineAIGateway("my-aigateway", {
   authNamespace: "default",
 });
 
 export default defineConfig({
-  aiGateways: [gateway],
+  aiGateways: [aiGateway],
 });
 ```
 
@@ -42,7 +42,7 @@ export default defineConfig({
 The auth namespace used to resolve request tokens against your workspace's auth configuration. Must match an existing auth namespace.
 
 ```typescript
-defineAIGateway("my-gateway", {
+defineAIGateway("my-aigateway", {
   authNamespace: "default",
 });
 ```
@@ -59,27 +59,10 @@ Optional list of allowed origins for browser-based clients. Each entry is one of
 An optional `:port` may be appended in all URL forms. Omitting `cors` (or passing `[]`) disables cross-origin access — browsers will block any cross-origin reads.
 
 ```typescript
-defineAIGateway("my-gateway", {
+defineAIGateway("my-aigateway", {
   authNamespace: "default",
   cors: ["https://app.example.com", "https://*.example.com"],
 });
-```
-
-## Type-safe URL / Domain References
-
-The returned gateway object provides `url` and `domain` properties that correspond to the gateway's deployed endpoint:
-
-- `gateway.url` — the full base URL of the deployed gateway.
-- `gateway.domain` — the hostname of the deployed gateway.
-
-```typescript
-const gateway = defineAIGateway("my-gateway", {
-  authNamespace: "default",
-});
-
-// Use for type-safe configuration that depends on the deployed gateway:
-gateway.url;
-gateway.domain;
 ```
 
 ## Complete Example
@@ -96,7 +79,7 @@ const website = defineStaticWebSite("my-frontend", {
   description: "Frontend application",
 });
 
-const gateway = defineAIGateway("my-gateway", {
+const aiGateway = defineAIGateway("my-aigateway", {
   authNamespace: "default",
   cors: [website.url],
 });
@@ -109,6 +92,6 @@ export default defineConfig({
   name: "my-app",
   auth,
   staticWebsites: [website],
-  aiGateways: [gateway],
+  aiGateways: [aiGateway],
 });
 ```
