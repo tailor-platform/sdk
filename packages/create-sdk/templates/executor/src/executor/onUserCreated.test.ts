@@ -10,14 +10,6 @@ describe("onUserCreated executor", () => {
       throw new Error("expected function operation");
     }
     await onUserCreated.operation.body({
-      workspaceId: "workspace-1",
-      appNamespace: "app",
-      env: {},
-      actor: null,
-      invoker: null,
-      event: "created",
-      rawEvent: "tailordb.type_record.created",
-      typeName: "User",
       newRecord: {
         id: "user-1",
         name: "Alice",

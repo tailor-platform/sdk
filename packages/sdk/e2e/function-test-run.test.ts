@@ -198,11 +198,11 @@ describe.sequential("E2E: function test-run", () => {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
       const nilUuid = "00000000-0000-0000-0000-000000000000";
 
-      expect(parsed.user.type).toBe("machine_user");
-      expect(parsed.user.workspaceId).toBe(workspaceId);
-      expect(parsed.user.role).toBe("MANAGER");
-      expect(parsed.user.id).toMatch(uuidRegex);
-      expect(parsed.user.id).not.toBe(nilUuid);
+      expect(parsed.caller.type).toBe("machine_user");
+      expect(parsed.caller.workspaceId).toBe(workspaceId);
+      expect(parsed.caller.role).toBe("MANAGER");
+      expect(parsed.caller.id).toMatch(uuidRegex);
+      expect(parsed.caller.id).not.toBe(nilUuid);
 
       expect(parsed.invoker.type).toBe("machine_user");
       expect(parsed.invoker.workspaceId).toBe(workspaceId);

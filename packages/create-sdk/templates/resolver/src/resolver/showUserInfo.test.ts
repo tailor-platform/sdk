@@ -1,3 +1,4 @@
+import type { TailorPrincipal } from "@tailor-platform/sdk";
 import { describe, expect, test } from "vitest";
 import resolver from "./showUserInfo";
 
@@ -21,9 +22,9 @@ describe("showUserInfo resolver", () => {
       id: "user-123",
       type: "machine_user" as const,
       workspaceId: "ws-456",
-      attributes: {},
+      attributes: { role: "admin" },
       attributeList: [],
-    };
+    } satisfies TailorPrincipal;
     const result = await resolver.body({
       input: undefined as never,
       caller: customCaller,
