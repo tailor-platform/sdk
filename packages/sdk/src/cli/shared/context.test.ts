@@ -4,15 +4,18 @@ import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
 import {
+  fetchLatestToken,
   loadAccessToken,
   loadConfigPath,
   loadMachineUserName,
   loadWorkspaceId,
+  readPlatformConfig,
   writePlatformConfig,
 } from "./context";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { resetKeyringState } from "./token-store";
+import type * as ClientModule from "./client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
 
@@ -29,6 +32,27 @@ vi.mock("@napi-rs/keyring", () => ({
     deletePassword() {}
   },
 }));
+
+const clientMocks = vi.hoisted(() => ({
+  fetchUserInfo: vi.fn(),
+  refreshToken: vi.fn(),
+}));
+
+vi.mock("./client", async (importOriginal) => {
+  const actual = await importOriginal<typeof ClientModule>();
+  return {
+    ...actual,
+    fetchUserInfo: clientMocks.fetchUserInfo,
+    initOAuth2Client: () => ({
+      refreshToken: clientMocks.refreshToken,
+    }),
+  };
+});
+
+beforeEach(() => {
+  clientMocks.fetchUserInfo.mockReset();
+  clientMocks.refreshToken.mockReset();
+});
 
 describe("loadConfigPath", () => {
   const originalEnv = process.env;
@@ -462,6 +486,7 @@ describe("loadAccessToken", () => {
   const validToken = "valid-access-token";
   const otherToken = "other-access-token";
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
+  const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
 
   beforeEach(() => {
     vi.resetModules();
@@ -665,6 +690,156 @@ describe("loadAccessToken", () => {
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
+
+    test("fetchLatestToken resolves a subject-keyed user by email metadata", async () => {
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "platform-user-sub": {
+            storage: "file",
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+            email: "user@example.com",
+          },
+        },
+        profiles: {},
+        current_user: "platform-user-sub",
+      });
+
+      const config = await readPlatformConfig();
+      await expect(fetchLatestToken(config, "user@example.com")).resolves.toEqual({
+        accessToken: validToken,
+        user: "platform-user-sub",
+      });
+    });
+
+    test("refreshes a legacy email-key user into a subject-key V3 config", async () => {
+      clientMocks.refreshToken.mockResolvedValue({
+        accessToken: "new-access-token",
+        refreshToken: "new-refresh-token",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockResolvedValue({
+        sub: "platform-user-sub",
+        email: "legacy@example.com",
+      });
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          "legacy@example.com": {
+            access_token: "expired-access-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {
+          default: {
+            user: "legacy@example.com",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+          },
+        },
+        current_user: "legacy@example.com",
+      });
+
+      const token = await loadAccessToken();
+      const config = await readPlatformConfig();
+
+      expect(token).toBe("new-access-token");
+      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token");
+      expect(config.version).toBe(3);
+      expect(config.users["legacy@example.com"]).toBeUndefined();
+      expect(config.users["platform-user-sub"]).toMatchObject({
+        storage: "file",
+        access_token: "new-access-token",
+        refresh_token: "new-refresh-token",
+        email: "legacy@example.com",
+      });
+      expect(config.current_user).toBe("platform-user-sub");
+      expect(config.profiles.default?.user).toBe("platform-user-sub");
+    });
+
+    test("logs when refresh updates the stored user email", async () => {
+      clientMocks.refreshToken.mockResolvedValue({
+        accessToken: "new-access-token",
+        refreshToken: "new-refresh-token",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockResolvedValue({
+        sub: "platform-user-sub",
+        email: "new@example.com",
+      });
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "platform-user-sub": {
+            access_token: "expired-access-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+            email: "old@example.com",
+          },
+        },
+        profiles: {},
+        current_user: "platform-user-sub",
+      });
+
+      const config = await readPlatformConfig();
+      using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+      await fetchLatestToken(config, "platform-user-sub");
+
+      expect(infoSpy).toHaveBeenCalledWith(
+        'Updated local user email from "old@example.com" to "new@example.com".',
+      );
+      expect(config.users["platform-user-sub"]?.email).toBe("new@example.com");
+    });
+
+    test("keeps the legacy email key when subject resolution fails on refresh", async () => {
+      clientMocks.refreshToken.mockResolvedValue({
+        accessToken: "new-access-token",
+        refreshToken: "new-refresh-token",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockRejectedValue(new Error("network down"));
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          "legacy@example.com": {
+            access_token: "expired-access-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {
+          default: {
+            user: "legacy@example.com",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+          },
+        },
+        current_user: "legacy@example.com",
+      });
+
+      const token = await loadAccessToken();
+      const config = await readPlatformConfig();
+
+      expect(token).toBe("new-access-token");
+      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token");
+      expect(config.users["platform-user-sub"]).toBeUndefined();
+      expect(config.users["legacy@example.com"]).toMatchObject({
+        storage: "file",
+        access_token: "new-access-token",
+        refresh_token: "new-refresh-token",
+      });
+      expect(config.current_user).toBe("legacy@example.com");
+      expect(config.profiles.default?.user).toBe("legacy@example.com");
+    });
   });
 
   describe("error case: no token source", () => {
@@ -701,14 +876,14 @@ describe("profile readonly field", () => {
   });
 });
 
-describe("V1 to V2 migration", () => {
+describe("V1 to V3 migration", () => {
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
 
   beforeEach(() => {
     resetKeyringState();
   });
 
-  test("migrates V1 config to V2 in memory without rewriting disk", async () => {
+  test("migrates V1 config to V3 in memory without rewriting disk", async () => {
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     writePlatformConfig({
       version: 1,
@@ -729,11 +904,12 @@ describe("V1 to V2 migration", () => {
     const { readPlatformConfig } = await import("./context");
     const config = await readPlatformConfig();
 
-    // In-memory: V2 with storage: "file"
-    expect(config.version).toBe(2);
+    // In-memory: V3 with storage: "file" and inferred legacy email metadata.
+    expect(config.version).toBe(3);
     const userEntry = config.users["user@example.com"];
     expect(userEntry).toBeDefined();
     expect(userEntry!.storage).toBe("file");
+    expect(userEntry!.email).toBe("user@example.com");
     expect(userEntry!.token_expires_at).toBe(futureDate);
     if (userEntry!.storage !== "file") {
       throw new Error("Expected file-backed user entry");
@@ -741,7 +917,7 @@ describe("V1 to V2 migration", () => {
     expect(userEntry!.access_token).toBe("v1-access-token");
     expect(userEntry!.refresh_token).toBe("v1-refresh-token");
 
-    // Disk: still V1 (not rewritten to V2)
+    // Disk: still V1 (not rewritten to V3)
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as { version: number };
     expect(diskConfig.version).toBe(1);
   });
@@ -793,12 +969,48 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     expect(diskConfig.users["file@example.com"]?.storage).toBe("file");
     expect(diskConfig.current_user).toBe("keyring@example.com");
 
-    // Round trip: the keyring user (and current_user) survive a re-read.
+    // Round trip: the keyring user (and current_user) survive a re-read and
+    // are exposed through the latest in-memory config version.
     const { readPlatformConfig } = await import("./context");
     const config = await readPlatformConfig();
-    expect(config.version).toBe(2);
+    expect(config.version).toBe(3);
     expect(config.users["keyring@example.com"]?.storage).toBe("keyring");
+    expect(config.users["keyring@example.com"]?.email).toBe("keyring@example.com");
     expect(config.current_user).toBe("keyring@example.com");
+  });
+
+  test("keeps V3 configs as V3 because subject IDs and email metadata cannot downgrade", () => {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "platform-user-sub": {
+          storage: "file",
+          access_token: "file-access-token",
+          refresh_token: "file-refresh-token",
+          token_expires_at: futureDate,
+          email: "user@example.com",
+        },
+      },
+      profiles: {
+        default: {
+          user: "platform-user-sub",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+        },
+      },
+      current_user: "platform-user-sub",
+    });
+
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      version: number;
+      users: Record<string, { email?: string }>;
+      profiles: Record<string, { user: string }>;
+      current_user: string | null;
+    };
+    expect(diskConfig.version).toBe(3);
+    expect(diskConfig.users["platform-user-sub"]?.email).toBe("user@example.com");
+    expect(diskConfig.profiles.default?.user).toBe("platform-user-sub");
+    expect(diskConfig.current_user).toBe("platform-user-sub");
   });
 
   test("still downgrades a file-only config to V1 for backward compatibility", () => {

@@ -22,7 +22,7 @@ export const listCommand = defineAppCommand({
       `);
     }
 
-    const token = await fetchLatestToken(config, config.current_user);
+    const { accessToken: token } = await fetchLatestToken(config, config.current_user);
     const client = await initOperatorClient(token);
 
     const pageDirection = toPageDirection(args.order);

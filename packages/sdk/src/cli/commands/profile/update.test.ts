@@ -102,7 +102,10 @@ describe("profile update --permission", () => {
 
   test("performs remote validation when --user is also passed (permission does not bypass it)", async () => {
     using _logger = silenceLogger("out", "success");
-    vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
+    vi.mocked(fetchLatestToken).mockResolvedValue({
+      accessToken: "mock-token",
+      user: "new@example.com",
+    });
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
     vi.mocked(initOperatorClient).mockResolvedValue({
       listWorkspaces: vi.fn(),
@@ -127,6 +130,40 @@ describe("profile update --permission", () => {
     const config = await readPlatformConfig();
     expect(config.profiles.rw?.user).toBe("new@example.com");
     expect(config.profiles.rw?.readonly).toBe(true);
+  });
+
+  test("persists the resolved subject when only --workspace-id is updated for a legacy email user", async () => {
+    using _logger = silenceLogger("out", "success");
+    const newUUID = "abcdef12-3456-4abc-8def-abcdef123456";
+    vi.mocked(fetchLatestToken).mockResolvedValue({
+      accessToken: "mock-token",
+      user: "platform-user-sub",
+    });
+    vi.mocked(fetchAll).mockResolvedValue([{ id: newUUID }]);
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkspaces: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        rw: { user: "legacy@example.com", workspace_id: validUUID },
+      },
+      current_user: null,
+    });
+
+    await runCommand(updateCommand, ["rw", "--workspace-id", newUUID]);
+
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
+      expect.anything(),
+      "legacy@example.com",
+    );
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.rw?.user).toBe("platform-user-sub");
+    expect(config.profiles.rw?.workspace_id).toBe(newUUID);
   });
 });
 
