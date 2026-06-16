@@ -16,5 +16,7 @@ pnpm exec tailor-sdk login --machineusername ci
 other-cli --machineuser=ci
 tailor-sdk-wrapper --machineuser ci
 my-tailor-sdk --machineuser ci
+# Should not match: same option spelling after a Tailor command substitution
+TOKEN=$(tailor-sdk machineuser token ci) other-cli --machineuser=ci
 # Should not match: option spelling inside quoted arguments
 tailor-sdk query --query 'select --machineuser'
