@@ -1,4 +1,4 @@
-import type { AppConfig } from "@/types/app-config";
+import type { AppConfig } from "@/configure/config/types";
 
 type AuthNamespaceApplication = {
   authService?: { config: { name: string } };

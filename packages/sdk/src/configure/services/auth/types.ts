@@ -1,5 +1,16 @@
-import type { AuthConnectionConfig } from "./auth-connection.generated";
-import type { ValueOperand } from "./auth-value";
+import type { TailorDBInstance } from "@/configure/services/tailordb/types";
+import type {
+  DefinedFieldMetadata,
+  FieldMetadata,
+  TailorFieldType,
+  TailorField,
+} from "@/configure/types/field.types";
+import type { TailorEnv } from "@/runtime/types";
+// Auth configuration input types and user-field type machinery.
+//
+// This is a pure type module: type declarations only, no zod/schema
+// references, importable type-only from any layer.
+import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type {
   IdProvider as IdProviderConfig,
   OAuth2Client,
@@ -7,12 +18,8 @@ import type {
   SCIMAttribute,
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
-} from "./auth.generated";
-import type { TailorEnv } from "./env";
-import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "./field-types";
-import type { output } from "./helpers";
-import type { TailorDBInstance } from "./tailor-db-field";
-import type { TailorField } from "./tailor-field";
+} from "@/types/auth.generated";
+import type { output } from "@/types/helpers";
 import type { IsAny, JsonObject, JsonValue } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)
@@ -43,7 +50,8 @@ export type AuthConnectionTokenResult = {
   expiry?: string;
 };
 
-export type { ValueOperand } from "./auth-value";
+// Helper types for literal permission and auth attribute operands.
+export type ValueOperand = string | boolean | string[] | boolean[];
 export type AuthAttributeValue = ValueOperand | null | undefined;
 
 // User field type helpers

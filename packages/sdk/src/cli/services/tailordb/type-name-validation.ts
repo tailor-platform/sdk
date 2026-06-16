@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll } from "@/cli/shared/client";
-import { isPluginGeneratedType } from "@/types/tailordb";
-import type { TypeSourceInfo, TypeSourceInfoEntry } from "@/types/tailordb";
+import { isPluginGeneratedType } from "@/parser/service/tailordb/type-source";
+import type { TypeSourceInfo, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
 
 type LocalTailorDBService = {
   readonly namespace: string;

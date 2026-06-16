@@ -1,5 +1,5 @@
 import { describe, test, expectTypeOf } from "vitest";
-import type { Plugin } from "@/types/plugin";
+import type { Plugin } from "@/plugin/types";
 import type { PluginConfig } from "@/types/plugin-config.generated";
 
 describe("PluginConfig generated type alignment", () => {
