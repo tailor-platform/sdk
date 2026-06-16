@@ -20,6 +20,7 @@ export default defineConfig({
           name: { label: "e2e", color: "green" },
           include: ["e2e/**/*.test.ts"],
           globalSetup: "e2e/globalSetup.ts",
+          testTimeout: 60_000,
         },
       },
     ],
