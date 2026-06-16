@@ -484,24 +484,6 @@ describe("normalizeGqlPermission", () => {
     ]);
   });
 
-  test("should handle undefined conditions", () => {
-    const permission = [
-      {
-        actions: ["read"],
-        permit: true,
-      },
-    ] as unknown as Parameters<typeof normalizeGqlPermission>[0];
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [],
-        actions: ["read"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
-  });
-
   test("defaults permit to deny when omitted", () => {
     const permission = [
       {

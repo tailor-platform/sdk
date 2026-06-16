@@ -14,7 +14,7 @@ jobs:
 
     if: >-
       github.event.pull_request.user.login != 'renovate[bot]' &&
-      github.event.pull_request.head.ref != 'changeset-release/main' &&
+      !startsWith(github.event.pull_request.head.ref, 'changeset-release/') &&
       !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
 
     steps:
@@ -54,4 +54,6 @@ jobs:
 
       - name: Validate changeset packages
         if: steps.filter.outputs.changeset == 'true'
-        run: pnpm changeset status --since origin/main
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: pnpm changeset status --since "origin/$BASE_REF"

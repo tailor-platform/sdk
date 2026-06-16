@@ -209,7 +209,7 @@ $ tailor-sdk function logs <execution-id> --json
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function test-run` output).
 
-Stack traces stay accurate even after later redeploys, because the trace is resolved against the exact build that produced the execution. If that build is no longer available, the command falls back to a plain-text error display.
+Stack traces are mapped only when the execution includes a content hash for the exact build that ran. If the content hash is missing or the build is no longer available, the command falls back to a plain-text error display.
 
 <!-- politty:command:function logs:notes:end -->
 
@@ -245,14 +245,14 @@ tailor-sdk function test-run [options] <file>
 
 **Options**
 
-| Option                          | Alias | Description                                                              | Required | Default              | Env                                 |
-| ------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | -------------------- | ----------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
-| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    | -                                   |
-| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                    | No       | -                    | -                                   |
-| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication                                     | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                  | No       | `"tailor.config.ts"` | -                                   |
+| Option                          | Alias | Description                                                                                    | Required | Default              | Env                                 |
+| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                   | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
+| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob)                       | No       | -                    | -                                   |
+| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                          | No       | -                    | -                                   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                        | No       | `"tailor.config.ts"` | -                                   |
 
 <!-- politty:command:function test-run:options:end -->
 <!-- politty:command:function test-run:examples:start -->

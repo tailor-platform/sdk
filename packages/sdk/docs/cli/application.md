@@ -99,8 +99,6 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 Deploy your application by applying the Tailor configuration.
 
-**Aliases:** `apply`
-
 <!-- politty:command:deploy:description:end -->
 
 <!-- politty:command:deploy:usage:start -->
