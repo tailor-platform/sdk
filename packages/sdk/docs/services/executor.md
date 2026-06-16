@@ -347,8 +347,6 @@ export default createExecutor({
 });
 ```
 
-> **Deprecated:** `auth.invoker("batch-processor")` still works, but is deprecated. Prefer the string form to avoid importing config-layer modules into runtime files.
-
 ## Event Payloads
 
 Each trigger type provides specific context data in the callback functions.

@@ -13,6 +13,7 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import { getApplicationAuthNamespace } from "@/cli/shared/auth-namespace";
 import { type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
 import { stringifyFunction } from "@/parser/service/tailordb";
@@ -375,10 +376,11 @@ function resolveIdpNamespace(
 }
 
 function resolveAuthNamespace(application: Readonly<Application>): string {
-  if (!application.authService) {
+  const authNamespace = getApplicationAuthNamespace(application);
+  if (!authNamespace) {
     throw new Error("No Auth service configured");
   }
-  return application.authService.config.name;
+  return authNamespace;
 }
 
 function protoExecutor(
@@ -492,7 +494,7 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
-  const authNamespace = application.authService?.config.name;
+  const authNamespace = getApplicationAuthNamespace(application);
   const invokerContext = `Executor "${executor.name}"`;
 
   switch (target.kind) {
