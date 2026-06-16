@@ -273,6 +273,42 @@ describe("runCodemods", () => {
       expect(result.filesModified).toEqual([workflowPath]);
       await expect(fs.promises.readFile(workflowPath, "utf-8")).resolves.toBe("HELLO");
     });
+
+    test("should skip unapproved tool dot directories", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-dot-test-"));
+      tmpDir = dir;
+      const workflowPath = path.join(dir, ".github/workflows/test.yml");
+      const agentPackagePath = path.join(dir, ".agent/worktrees/demo/package.json");
+      const nextYamlPath = path.join(dir, ".next/cache/workflow.yml");
+      await fs.promises.mkdir(path.dirname(workflowPath), { recursive: true });
+      await fs.promises.mkdir(path.dirname(agentPackagePath), { recursive: true });
+      await fs.promises.mkdir(path.dirname(nextYamlPath), { recursive: true });
+      await fs.promises.writeFile(workflowPath, "hello", "utf-8");
+      await fs.promises.writeFile(
+        agentPackagePath,
+        '{"scripts":{"deploy":"tailor-sdk apply"}}',
+        "utf-8",
+      );
+      await fs.promises.writeFile(nextYamlPath, "hello", "utf-8");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/upper", transformPath, ["**/*.yml", "**/package.json"]),
+            scriptPath: transformPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.filesModified).toEqual([workflowPath]);
+      await expect(fs.promises.readFile(workflowPath, "utf-8")).resolves.toBe("HELLO");
+      await expect(fs.promises.readFile(agentPackagePath, "utf-8")).resolves.toBe(
+        '{"scripts":{"deploy":"tailor-sdk apply"}}',
+      );
+      await expect(fs.promises.readFile(nextYamlPath, "utf-8")).resolves.toBe("hello");
+    });
   });
 
   describe("legacy pattern warnings", () => {
