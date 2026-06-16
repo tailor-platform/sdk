@@ -15,6 +15,9 @@ set -euo pipefail
 # embedded in a remote URL (which could leak into logs or process args).
 gh auth setup-git
 
+notes_file=""
+trap '[ -n "$notes_file" ] && rm -f "$notes_file"' EXIT
+
 changelog_entry() { # <changelog-file> <version>
   awk -v ver="## $2" '
     $0 == ver { found = 1; next }
@@ -62,11 +65,12 @@ for tag in $(git tag --points-at HEAD); do
   # A version heading may exist with an empty body (e.g. packages with no
   # direct changes), which is a valid empty release. Only fall back to
   # auto-generated notes when the heading is missing entirely.
-  if grep -qxF "## ${version}" "${dir}/CHANGELOG.md"; then
+  if grep -qxF "## ${version}" "${dir}/CHANGELOG.md" 2>/dev/null; then
     notes_file="$(mktemp)"
     changelog_entry "${dir}/CHANGELOG.md" "$version" >"$notes_file"
     gh release create "$tag" --title "$tag" --notes-file "$notes_file" "${prerelease[@]}"
     rm -f "$notes_file"
+    notes_file=""
   else
     echo "No changelog entry for ${tag}; generating release notes"
     gh release create "$tag" --title "$tag" --generate-notes "${prerelease[@]}"
