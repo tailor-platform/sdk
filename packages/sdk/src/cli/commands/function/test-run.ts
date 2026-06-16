@@ -136,7 +136,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
           );
           args.arg = undefined;
         } else if (detected.inputSchema) {
-          assertResolverArgJson(args.arg);
+          JSON.parse(args.arg);
         }
       }
 
@@ -314,13 +314,4 @@ async function resolveMachineUser(
   }
 
   return { name: machineUserName, id, attributes, attributeList };
-}
-
-/**
- * Assert that the resolver `--arg` value is valid JSON, failing fast before the
- * server round-trip. Schema validation is left to the server.
- * @param argStr - JSON string of the arg
- */
-export function assertResolverArgJson(argStr: string): void {
-  JSON.parse(argStr);
 }

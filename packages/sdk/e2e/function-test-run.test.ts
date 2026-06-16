@@ -26,7 +26,6 @@ import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/aut
 import { describe, test, expect, beforeAll } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";
-import { assertResolverArgJson } from "../src/cli/commands/function/test-run";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
@@ -92,7 +91,7 @@ async function runTestRun(
     if (!detected.hasInput) {
       resolvedArg = undefined;
     } else if (detected.inputSchema) {
-      assertResolverArgJson(resolvedArg);
+      JSON.parse(resolvedArg);
     }
   }
 
