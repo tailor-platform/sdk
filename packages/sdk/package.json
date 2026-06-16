@@ -215,7 +215,7 @@
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.1",
     "@types/semver": "7.7.1",
-    "@typescript/native-preview": "7.0.0-dev.20260605.1",
+    "@typescript/native-preview": "7.0.0-dev.20260612.1",
     "@vitest/coverage-v8": "4.1.8",
     "oxfmt": "0.54.0",
     "oxlint": "1.69.0",
