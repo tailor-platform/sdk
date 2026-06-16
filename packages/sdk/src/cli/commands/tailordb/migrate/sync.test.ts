@@ -90,6 +90,8 @@ function parsedType(name: string): unknown {
     },
     forwardRelationships: {},
     backwardRelationships: {},
+    // type-parser fills settings with `?? {}`, so parsed types always carry it
+    settings: {},
     permissions: {},
   };
 }
