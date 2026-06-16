@@ -29,11 +29,11 @@ export async function runAsCustomUser() {
 export async function runWithFactory() {
   return await resolver.body({
     input: { id: "user-2" },
-    ...((user) => ({ caller: user, invoker: user }))(makeUser()),
+    ...((user) => ({ caller: user, invoker: user }))(makeUser(null)),
     env: {},
   });
 }
 
-function makeUser() {
-  return customUser;
+function makeUser(fallback = customUser) {
+  return fallback;
 }
