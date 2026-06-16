@@ -1,5 +1,12 @@
 # @tailor-platform/sdk
 
+## 1.66.1
+### Patch Changes
+
+
+
+- [#1428](https://github.com/tailor-platform/sdk/pull/1428) [`753ac38`](https://github.com/tailor-platform/sdk/commit/753ac3876319d007322c23a7052a2399d194fb72) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.4
+
 ## 1.66.0
 ### Minor Changes
 
