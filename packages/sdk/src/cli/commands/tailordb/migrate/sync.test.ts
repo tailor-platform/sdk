@@ -88,6 +88,7 @@ function parsedType(name: string): unknown {
       id: { config: { type: "uuid", required: true } },
       name: { config: { type: "string", required: true } },
     },
+    settings: {},
     forwardRelationships: {},
     backwardRelationships: {},
     permissions: {},
