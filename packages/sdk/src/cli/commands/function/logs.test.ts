@@ -217,9 +217,8 @@ describe("downloadScriptForMapping", () => {
     });
 
     test("returns code even when registry was redeployed after the execution", async () => {
-      // Registry metadata reports updatedAt newer than the execution.
-      // The legacy timestamp-based check would skip this, but pinning
-      // by contentHash asks the server for the exact bundle that ran.
+      // Pinning by contentHash asks the server for the exact bundle that
+      // ran, so a newer registry updatedAt does not affect the result.
       const client = makeDownloadClient([new TextEncoder().encode("pinned-code")], {
         updatedAt: new Date("2024-03-01T00:00:00Z"),
       });
