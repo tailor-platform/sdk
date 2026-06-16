@@ -51,7 +51,7 @@ const allCodemods: CodemodPackage[] = [
     id: "v2/apply-to-deploy",
     name: "tailor-sdk apply → tailor-sdk deploy",
     description:
-      "Rewrite `tailor-sdk apply` invocations in package.json scripts, shell scripts, CI configs, and docs to the v2-recommended `tailor-sdk deploy` alias",
+      "Rewrite `tailor-sdk apply` invocations in package.json scripts, shell scripts, CI configs, and docs to the canonical v2 `tailor-sdk deploy` command",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/apply-to-deploy/scripts/transform.js",
