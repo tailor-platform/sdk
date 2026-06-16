@@ -190,7 +190,6 @@ describe("downloadScriptForMapping", () => {
       scriptName: "test-run--throwError.js",
       executionType: FunctionExecution_Type.STANDARD,
       executionContentHash: "abc123",
-      executionStartedAt: new Date("2024-01-01T00:00:00Z"),
     });
 
     expect(result).toBeNull();
@@ -207,7 +206,6 @@ describe("downloadScriptForMapping", () => {
         scriptName: "my-resolver.throwError.body.js",
         executionType: FunctionExecution_Type.STANDARD,
         executionContentHash: "abc123",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
       });
 
       expect(result).toBe("pinned-code");
@@ -232,7 +230,6 @@ describe("downloadScriptForMapping", () => {
         scriptName: "my-resolver.throwError.body.js",
         executionType: FunctionExecution_Type.STANDARD,
         executionContentHash: "abc123",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
       });
 
       expect(result).toBe("pinned-code");
@@ -247,7 +244,6 @@ describe("downloadScriptForMapping", () => {
         scriptName: "billing.retry.v2",
         executionType: FunctionExecution_Type.JOB,
         executionContentHash: "deadbeef",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
       });
 
       expect(result).toBe("job-code");
@@ -267,90 +263,14 @@ describe("downloadScriptForMapping", () => {
         scriptName: "my-resolver.throwError.body.js",
         executionType: FunctionExecution_Type.STANDARD,
         executionContentHash: "abc123",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
       });
 
       expect(result).toBeNull();
     });
   });
 
-  describe("with updatedAt fallback (executionContentHash empty)", () => {
-    test("does not pin contentHash on the RPC", async () => {
-      const client = makeDownloadClient([new TextEncoder().encode("code")], {
-        updatedAt: new Date("2024-01-01T00:00:00Z"),
-      });
-
-      await downloadScriptForMapping({
-        client,
-        workspaceId: "ws-1",
-        scriptName: "my-resolver.throwError.body.js",
-        executionType: FunctionExecution_Type.STANDARD,
-        executionContentHash: "",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
-      });
-
-      expect(client.downloadFunctionRegistryScript).toHaveBeenCalledWith({
-        workspaceId: "ws-1",
-        name: "resolver--my-resolver--throwError",
-        contentHash: undefined,
-      });
-    });
-
-    test("returns code when registry updatedAt is not newer than executionStartedAt", async () => {
-      const client = makeDownloadClient([new TextEncoder().encode("code")], {
-        updatedAt: new Date("2024-01-01T00:00:00Z"),
-      });
-
-      const result = await downloadScriptForMapping({
-        client,
-        workspaceId: "ws-1",
-        scriptName: "my-resolver.throwError.body.js",
-        executionType: FunctionExecution_Type.STANDARD,
-        executionContentHash: "",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
-      });
-
-      expect(result).toBe("code");
-    });
-
-    test("returns null when registry updatedAt is strictly newer than executionStartedAt", async () => {
-      // Registry was redeployed at 2024-03-01, but the execution we are
-      // viewing started at 2024-02-01. Mapping the old stack trace
-      // against the new bundle would show misleading source locations.
-      const client = makeDownloadClient([new TextEncoder().encode("new-code")], {
-        updatedAt: new Date("2024-03-01T00:00:00Z"),
-      });
-
-      const result = await downloadScriptForMapping({
-        client,
-        workspaceId: "ws-1",
-        scriptName: "my-resolver.throwError.body.js",
-        executionType: FunctionExecution_Type.STANDARD,
-        executionContentHash: "",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
-      });
-
-      expect(result).toBeNull();
-    });
-
-    test("returns code when executionStartedAt is null (no staleness check possible)", async () => {
-      const client = makeDownloadClient([new TextEncoder().encode("code")], {
-        updatedAt: new Date("2024-03-01T00:00:00Z"),
-      });
-
-      const result = await downloadScriptForMapping({
-        client,
-        workspaceId: "ws-1",
-        scriptName: "my-resolver.throwError.body.js",
-        executionType: FunctionExecution_Type.STANDARD,
-        executionContentHash: "",
-        executionStartedAt: null,
-      });
-
-      expect(result).toBe("code");
-    });
-
-    test("returns code when registry metadata omits updatedAt", async () => {
+  describe("without executionContentHash", () => {
+    test("skips mapping without downloading the current registry script", async () => {
       const client = makeDownloadClient([new TextEncoder().encode("code")]);
 
       const result = await downloadScriptForMapping({
@@ -359,25 +279,10 @@ describe("downloadScriptForMapping", () => {
         scriptName: "my-resolver.throwError.body.js",
         executionType: FunctionExecution_Type.STANDARD,
         executionContentHash: "",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
-      });
-
-      expect(result).toBe("code");
-    });
-
-    test("returns null when download yields no chunks", async () => {
-      const client = makeDownloadClient([], { updatedAt: new Date("2024-01-01T00:00:00Z") });
-
-      const result = await downloadScriptForMapping({
-        client,
-        workspaceId: "ws-1",
-        scriptName: "my-resolver.throwError.body.js",
-        executionType: FunctionExecution_Type.STANDARD,
-        executionContentHash: "",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
       });
 
       expect(result).toBeNull();
+      expect(client.downloadFunctionRegistryScript).not.toHaveBeenCalled();
     });
   });
 });
