@@ -4,17 +4,23 @@ on:
   pull_request:
     types: [opened, reopened]
 
-permissions:
-  contents: read
-  pull-requests: write
-  id-token: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   dependencies-review:
+    name: Review dependencies
     if: |
       github.event.pull_request.user.login == 'renovate[bot]'
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    permissions:
+      contents: read # checkout the PR branch
+      pull-requests: write # upsert the dependency review comment
+      id-token: write # OIDC for the Claude Code action
     env:
       REVIEW_BODY_FILE: ${{ github.workspace }}/dependency-review.md
     steps:

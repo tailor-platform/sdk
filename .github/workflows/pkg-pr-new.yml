@@ -9,15 +9,22 @@ on:
       - pnpm-lock.yaml
       - .github/workflows/pkg-pr-new.yml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
 jobs:
-  publish:
+  publish: # zizmor: ignore[use-trusted-publishing] pkg.pr.new is a preview registry with no OIDC trusted publishing
+    name: Publish preview packages
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read
-      pull-requests: write
+      contents: read # checkout the repository
+      pull-requests: write # pkg.pr.new posts the preview comment on the PR
     outputs:
       sdk_url: ${{ steps.urls.outputs.sdk_url }}
       create_sdk_url: ${{ steps.urls.outputs.create_sdk_url }}
@@ -159,12 +166,16 @@ jobs:
       # Yarn 4 PnP is not tested here; this validates node_modules-based resolution.
       - name: Install dependencies
         working-directory: /tmp/test-init-app
-        run: ${{ matrix.pm }} install
+        env:
+          PM: ${{ matrix.pm }}
+        run: $PM install
 
       - name: Verify SDK installed
+        env:
+          PM: ${{ matrix.pm }}
         run: |
           test -d /tmp/test-init-app/node_modules/@tailor-platform/sdk
-          echo "SDK dependency successfully installed with ${{ matrix.pm }}"
+          echo "SDK dependency successfully installed with $PM"
 
       - name: Verify SDK import (Node)
         if: matrix.runtime == 'node'

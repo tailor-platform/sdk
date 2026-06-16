@@ -7,11 +7,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   changes:
+    name: Detect changes
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read # checkout to run the paths filter
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.filter.outputs.changes }}
@@ -78,8 +81,10 @@ jobs:
       - name: Create workspace
         if: runner.os != 'Windows'
         working-directory: example
-        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${{ github.run_id }}-${{ matrix.slug }}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --json > workspace.json
         env:
+          RUN_ID: ${{ github.run_id }}
+          SLUG: ${{ matrix.slug }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
@@ -141,6 +146,7 @@ jobs:
         run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   deploy-result:
+    name: Deploy result
     needs: [changes, deploy]
     if: always()
     runs-on: ubuntu-latest

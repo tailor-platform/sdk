@@ -10,15 +10,19 @@ on:
     paths:
       - "packages/sdk/agent-skills/**"
 
-permissions:
-  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   sync:
+    name: Sync skills
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      contents: read # checkout the repository
 
     steps:
       - name: Checkout
