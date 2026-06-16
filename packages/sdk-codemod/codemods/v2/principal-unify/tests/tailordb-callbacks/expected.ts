@@ -4,9 +4,12 @@ const role = db
   .string()
   .hooks({
     create: ({ value, invoker }) => (invoker?.attributes.role === "ADMIN" ? value : "user"),
-    update: (ctx) => ctx.invoker?.id ?? "anonymous",
+    update: ctx => ctx.invoker?.id ?? "anonymous",
   })
-  .validate([({ invoker }) => invoker?.type === "machine_user", "Machine user required"]);
+  .validate([
+    [({ invoker }) => invoker?.type === "machine_user", "Machine user required"],
+    ctx => ctx.invoker?.id !== "",
+  ]);
 
 const reviewer = t.string();
 const zodLike = { parse: (arg: unknown) => arg };

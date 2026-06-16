@@ -533,6 +533,9 @@ function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
     fn.field("parameter") ??
     fn.children().find((c: SgNode) => c.kind() === "formal_parameters");
   if (!params) return null;
+  if (params.kind() === "object_pattern" || params.kind() === "identifier") {
+    return params;
+  }
 
   const firstParam = params
     .children()
@@ -727,8 +730,13 @@ function transformValidateCallbackNode(node: SgNode, edits: Edit[]): void {
   }
 
   if (node.kind() === "array") {
-    const callback = node.children().find(isFunctionNode);
-    if (callback) transformPrincipalCallbackParam(callback, edits);
+    for (const child of node.children()) {
+      if (isFunctionNode(child)) {
+        transformPrincipalCallbackParam(child, edits);
+      } else if (child.kind() === "array") {
+        transformValidateCallbackNode(child, edits);
+      }
+    }
     return;
   }
 
