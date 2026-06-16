@@ -563,12 +563,6 @@ function getFunctionParamPattern(param: SgNode): SgNode | null {
   return param.field("pattern");
 }
 
-function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
-  const firstParam = getFirstFunctionParam(fn);
-  if (!firstParam) return null;
-  return getFunctionParamPattern(firstParam);
-}
-
 function transformPrincipalCallbackParamType(param: SgNode, edits: Edit[]): void {
   const typeAnnotation = param.field("type");
   const objectType = typeAnnotation?.children().find((c: SgNode) => c.kind() === "object_type");
