@@ -211,31 +211,20 @@ interface DownloadScriptForMappingOptions {
    * FunctionExecution.contentHash. When non-empty, the registry
    * download is pinned to this exact bundle so the stack trace maps
    * against the code that actually ran, regardless of subsequent
-   * redeploys. Empty on older servers that did not populate the
-   * field; in that case the caller falls back to a timestamp-based
-   * staleness check using `executionStartedAt`.
+   * redeploys. Empty values cannot be mapped safely.
    */
   executionContentHash: string;
-  /**
-   * When the execution started. Used as a fallback staleness signal
-   * only when `executionContentHash` is empty: if the current registry
-   * entry's `updatedAt` is strictly newer, the downloaded bundle may
-   * differ from what was actually executed, so mapping is skipped to
-   * avoid misleading source locations.
-   */
-  executionStartedAt: Date | null;
 }
 
 /**
  * Download a deployed function script for sourcemap mapping. Logs a
  * debug message on failure but never throws. Error display falls back
- * to a plain-text format when the script cannot be retrieved or when
- * the current registry entry is stale relative to the execution.
+ * to a plain-text format when the script cannot be retrieved.
  *
  * When `executionContentHash` is non-empty, the download is pinned to
  * that exact bundle so mapping stays correct across redeploys. When
- * empty (older servers), falls back to comparing `registryUpdatedAt`
- * against `executionStartedAt`.
+ * empty, mapping is skipped because the exact bundle cannot be
+ * identified.
  *
  * `FunctionExecution.scriptName` does not match the function registry
  * name directly; `scriptNameToRegistryName` translates between the two
@@ -246,20 +235,12 @@ interface DownloadScriptForMappingOptions {
  * @param options.scriptName - Script name (matches FunctionExecution.scriptName)
  * @param options.executionType - Execution type used to discriminate registry name translation
  * @param options.executionContentHash - Content hash of the bundle that ran; pins the download when non-empty
- * @param options.executionStartedAt - Execution start timestamp used as fallback staleness signal
- * @returns Bundled script content, or null when unavailable / stale
+ * @returns Bundled script content, or null when unavailable
  */
 export async function downloadScriptForMapping(
   options: DownloadScriptForMappingOptions,
 ): Promise<string | null> {
-  const {
-    client,
-    workspaceId,
-    scriptName,
-    executionType,
-    executionContentHash,
-    executionStartedAt,
-  } = options;
+  const { client, workspaceId, scriptName, executionType, executionContentHash } = options;
   const registryName = scriptNameToRegistryName(scriptName, executionType);
   if (registryName == null) {
     logger.debug(
@@ -268,44 +249,26 @@ export async function downloadScriptForMapping(
     return null;
   }
 
-  if (executionContentHash !== "") {
-    const pinned = await downloadFunctionScript({
-      client,
-      workspaceId,
-      name: registryName,
-      contentHash: executionContentHash,
-    });
-    if (pinned == null) {
-      logger.debug(
-        `Could not download pinned script "${scriptName}" (registry: "${registryName}", contentHash: "${executionContentHash}") for stack trace mapping; showing raw stack trace.`,
-      );
-      return null;
-    }
-    return pinned.code;
+  if (executionContentHash === "") {
+    logger.debug(
+      `Function execution "${scriptName}" has no contentHash; skipping sourcemap mapping because the exact bundle cannot be identified.`,
+    );
+    return null;
   }
 
-  // Fallback for older servers that did not populate
-  // FunctionExecution.contentHash: download the current bundle and
-  // skip mapping if the registry was updated after the execution
-  // started.
-  const result = await downloadFunctionScript({ client, workspaceId, name: registryName });
-  if (result == null) {
+  const pinned = await downloadFunctionScript({
+    client,
+    workspaceId,
+    name: registryName,
+    contentHash: executionContentHash,
+  });
+  if (pinned == null) {
     logger.debug(
-      `Could not download script "${scriptName}" (registry: "${registryName}") for stack trace mapping; showing raw stack trace.`,
+      `Could not download pinned script "${scriptName}" (registry: "${registryName}", contentHash: "${executionContentHash}") for stack trace mapping; showing raw stack trace.`,
     );
     return null;
   }
-  if (
-    executionStartedAt != null &&
-    result.registryUpdatedAt != null &&
-    result.registryUpdatedAt.getTime() > executionStartedAt.getTime()
-  ) {
-    logger.debug(
-      `Registry script "${registryName}" was updated at ${result.registryUpdatedAt.toISOString()} after execution started at ${executionStartedAt.toISOString()}; skipping sourcemap mapping to avoid stale source locations.`,
-    );
-    return null;
-  }
-  return result.code;
+  return pinned.code;
 }
 
 export const logsCommand = defineAppCommand({
@@ -313,7 +276,7 @@ export const logsCommand = defineAppCommand({
   description: "List or get function execution logs.",
   notes: `When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching \`function test-run\` output).
 
-Stack traces stay accurate even after later redeploys, because the trace is resolved against the exact build that produced the execution. If that build is no longer available, the command falls back to a plain-text error display.`,
+Stack traces are mapped only when the execution includes a content hash for the exact build that ran. If the content hash is missing or the build is no longer available, the command falls back to a plain-text error display.`,
   examples: [
     {
       cmd: "",
@@ -378,7 +341,6 @@ Stack traces stay accurate even after later redeploys, because the trace is reso
               scriptName: detail.scriptName,
               executionType: execution.type,
               executionContentHash: execution.contentHash,
-              executionStartedAt: detail.startedAt,
             })
           : null;
         printFunctionExecutionDetail({ detail, bundledCode });

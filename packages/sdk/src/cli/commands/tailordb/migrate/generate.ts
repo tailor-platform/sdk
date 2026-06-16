@@ -165,13 +165,10 @@ export async function generate(options: GenerateOptions): Promise<void> {
     // Create snapshot from current local types
     const currentSnapshot = createSnapshotFromLocalTypes(localTypesObj, namespace);
 
-    // Check if migrations directory exists and has snapshots
-    let previousSnapshot: SchemaSnapshot | null = null;
-    try {
-      previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir);
-    } catch {
-      // No previous migrations - this is fine
-    }
+    // Returns null when the migrations directory is missing or empty;
+    // throws when existing migration files are invalid.
+    const previousSnapshot: SchemaSnapshot | null =
+      reconstructSnapshotFromMigrations(migrationsDir);
 
     if (!previousSnapshot) {
       // First migration - generate initial schema snapshot

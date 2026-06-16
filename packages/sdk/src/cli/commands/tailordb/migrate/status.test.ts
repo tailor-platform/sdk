@@ -33,8 +33,16 @@ function writeDiff(number: number, description: string): void {
   fs.writeFileSync(
     path.join(dir, "diff.json"),
     JSON.stringify({
+      version: 1,
       namespace: "tailordb",
+      createdAt: new Date().toISOString(),
       description,
+      changes: [],
+      hasBreakingChanges: false,
+      breakingChanges: [],
+      hasWarnings: false,
+      warnings: [],
+      requiresMigrationScript: false,
     }),
   );
 }
