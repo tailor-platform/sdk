@@ -661,27 +661,90 @@ function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
   }
 }
 
+interface SdkFieldLocalBinding {
+  name: string;
+  bindingStart: number;
+  scope: [number, number];
+}
+
+function rangeContains([start, end]: [number, number], pos: number): boolean {
+  return pos >= start && pos < end;
+}
+
+function isShadowedLocalReference(
+  root: SgNode,
+  name: string,
+  pos: number,
+  bindingStart: number,
+): boolean {
+  const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of declarators) {
+    const nameNode = decl.field("name");
+    if (!nameNode || !patternBindsName(nameNode, name)) continue;
+    if (nameNode.range().start.index === bindingStart) continue;
+    const scope = enclosingScopeRange(decl);
+    if (scope && rangeContains(scope, pos)) return true;
+  }
+
+  for (const kind of NESTED_FN_KINDS) {
+    const fns = root.findAll({ rule: { kind } });
+    for (const fn of fns) {
+      if (!functionRebindsName(fn, name)) continue;
+      const range = fn.range();
+      if (pos >= range.start.index && pos < range.end.index) return true;
+    }
+  }
+
+  return false;
+}
+
+function resolvesToSdkFieldLocal(
+  node: SgNode,
+  bindings: SdkFieldLocalBinding[],
+  root: SgNode,
+): boolean {
+  if (node.kind() !== "identifier") return false;
+  const pos = node.range().start.index;
+  return bindings.some(
+    (binding) =>
+      binding.name === node.text() &&
+      rangeContains(binding.scope, pos) &&
+      !isShadowedLocalReference(root, binding.name, pos, binding.bindingStart),
+  );
+}
+
 function isSdkFieldExpression(
   node: SgNode,
   sdkFieldRootNames: Set<string>,
-  sdkFieldLocalNames: Set<string>,
+  sdkFieldLocalBindings: SdkFieldLocalBinding[],
+  root: SgNode,
 ): boolean {
   if (node.kind() === "identifier") {
-    return sdkFieldRootNames.has(node.text()) || sdkFieldLocalNames.has(node.text());
+    return (
+      sdkFieldRootNames.has(node.text()) ||
+      resolvesToSdkFieldLocal(node, sdkFieldLocalBindings, root)
+    );
   }
   if (node.kind() === "member_expression") {
     const object = node.field("object");
-    return object ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalNames) : false;
+    return object
+      ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalBindings, root)
+      : false;
   }
   if (node.kind() === "call_expression") {
     const object = findMemberCallObject(node);
-    return object ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalNames) : false;
+    return object
+      ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalBindings, root)
+      : false;
   }
   return false;
 }
 
-function collectSdkFieldLocalNames(root: SgNode, sdkFieldRootNames: Set<string>): Set<string> {
-  const localNames = new Set<string>();
+function collectSdkFieldLocalBindings(
+  root: SgNode,
+  sdkFieldRootNames: Set<string>,
+): SdkFieldLocalBinding[] {
+  const bindings: SdkFieldLocalBinding[] = [];
   let changed = true;
   while (changed) {
     changed = false;
@@ -690,22 +753,28 @@ function collectSdkFieldLocalNames(root: SgNode, sdkFieldRootNames: Set<string>)
       const name = decl.field("name");
       const value = decl.field("value");
       if (!name || name.kind() !== "identifier" || !value) continue;
-      if (localNames.has(name.text())) continue;
-      if (!isSdkFieldExpression(value, sdkFieldRootNames, localNames)) continue;
-      localNames.add(name.text());
+      const bindingStart = name.range().start.index;
+      if (bindings.some((binding) => binding.bindingStart === bindingStart)) continue;
+      if (!isSdkFieldExpression(value, sdkFieldRootNames, bindings, root)) continue;
+      const rootRange = root.range();
+      const scope = enclosingScopeRange(decl) ?? [rootRange.start.index, rootRange.end.index];
+      bindings.push({ name: name.text(), bindingStart, scope });
       changed = true;
     }
   }
-  return localNames;
+  return bindings;
 }
 
 function isSdkFieldMemberCall(
   call: SgNode,
   sdkFieldRootNames: Set<string>,
-  sdkFieldLocalNames: Set<string>,
+  sdkFieldLocalBindings: SdkFieldLocalBinding[],
+  root: SgNode,
 ): boolean {
   const object = findMemberCallObject(call);
-  return object ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalNames) : false;
+  return object
+    ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalBindings, root)
+    : false;
 }
 
 function transformHookCallbackObject(node: SgNode, edits: Edit[]): void {
@@ -752,11 +821,12 @@ function transformPrincipalCallbacksInCall(
   call: SgNode,
   edits: Edit[],
   sdkFieldRootNames: Set<string>,
-  sdkFieldLocalNames: Set<string>,
+  sdkFieldLocalBindings: SdkFieldLocalBinding[],
+  root: SgNode,
 ): void {
   const memberName = findMemberCallName(call);
   if (memberName !== "hooks" && memberName !== "validate") return;
-  if (!isSdkFieldMemberCall(call, sdkFieldRootNames, sdkFieldLocalNames)) return;
+  if (!isSdkFieldMemberCall(call, sdkFieldRootNames, sdkFieldLocalBindings, root)) return;
 
   const args = call.field("arguments");
   if (!args) return;
@@ -775,11 +845,12 @@ function transformParseArgsObject(
   call: SgNode,
   edits: Edit[],
   sdkFieldRootNames: Set<string>,
-  sdkFieldLocalNames: Set<string>,
+  sdkFieldLocalBindings: SdkFieldLocalBinding[],
+  root: SgNode,
 ): void {
   const memberName = findMemberCallName(call);
   if (memberName !== "parse") return;
-  if (!isSdkFieldMemberCall(call, sdkFieldRootNames, sdkFieldLocalNames)) return;
+  if (!isSdkFieldMemberCall(call, sdkFieldRootNames, sdkFieldLocalBindings, root)) return;
 
   const args = call.field("arguments");
   const objArg = args?.children().find((c: SgNode) => c.kind() === "object");
@@ -923,11 +994,11 @@ export default function transform(source: string): string | null {
     }
   }
 
-  const sdkFieldLocalNames = collectSdkFieldLocalNames(tree, sdkFieldRootNames);
+  const sdkFieldLocalBindings = collectSdkFieldLocalBindings(tree, sdkFieldRootNames);
   const memberCalls = tree.findAll({ rule: { kind: "call_expression" } });
   for (const call of memberCalls) {
-    transformPrincipalCallbacksInCall(call, edits, sdkFieldRootNames, sdkFieldLocalNames);
-    transformParseArgsObject(call, edits, sdkFieldRootNames, sdkFieldLocalNames);
+    transformPrincipalCallbacksInCall(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
+    transformParseArgsObject(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
   }
 
   if (edits.length === 0) return null;
