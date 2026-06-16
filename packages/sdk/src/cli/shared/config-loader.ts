@@ -5,7 +5,6 @@ import { AppConfigSchema } from "@/parser/app-config/schema";
 import { PluginConfigSchema } from "@/parser/plugin-config";
 import { loadConfigPath } from "./context";
 import { installCliTailordbStub } from "./mock";
-import type { AnyCodeGenerator } from "@/cli/commands/generate/types";
 import type { AppConfig } from "@/types/app-config";
 import type { Plugin } from "@/types/plugin";
 
@@ -19,18 +18,16 @@ export interface LoadConfigOptions {
   importNonce?: string;
 }
 
-export type Generator = AnyCodeGenerator;
-
 /**
  * Load Tailor configuration file and associated plugins.
  * @param configPath - Optional explicit config path
  * @param options - Optional module import behavior.
- * @returns Loaded config, generators, plugins, and config path
+ * @returns Loaded config, plugins, and config path
  */
 export async function loadConfig(
   configPath?: string,
   options: LoadConfigOptions = {},
-): Promise<{ config: LoadedConfig; generators: Generator[]; plugins: Plugin[] }> {
+): Promise<{ config: LoadedConfig; plugins: Plugin[] }> {
   installCliTailordbStub();
   const foundPath = loadConfigPath(configPath);
   if (!foundPath) {
@@ -88,7 +85,6 @@ export async function loadConfig(
 
   return {
     config: { ...configModule.default, path: resolvedPath } as LoadedConfig,
-    generators: [],
     plugins: allPlugins,
   };
 }

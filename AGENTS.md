@@ -108,7 +108,7 @@ Args include `event` (short name like `"created"`) and `rawEvent` (full event ty
 
 ### Plugins
 
-`definePlugins()` takes plugin instances as rest arguments (see `example/tailor.config.ts`). The `kyselyTypePlugin` from `@tailor-platform/sdk/plugin/kysely-type` is required for `getDB()` in resolvers/executors/workflows. `defineGenerators()` is deprecated — use `definePlugins()` instead.
+`definePlugins()` takes plugin instances as rest arguments (see `example/tailor.config.ts`). The `kyselyTypePlugin` from `@tailor-platform/sdk/plugin/kysely-type` is required for `getDB()` in resolvers/executors/workflows.
 
 ### Configuration
 
