@@ -10,7 +10,7 @@ import { prompt } from "@/cli/shared/prompt";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { syncCommand } from "./sync";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
-import type { TailorDBType } from "@/types/tailordb";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
