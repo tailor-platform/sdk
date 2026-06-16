@@ -13,6 +13,7 @@
 import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { dirname, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { extractImportSpecifiers } from "./lib/scan-imports.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sdkRoot = resolve(here, "..");
@@ -35,9 +36,6 @@ function listSourceFiles(dir: string): string[] {
   return files;
 }
 
-const importSpecifierPattern =
-  /(?:from\s*|import\s*\(\s*|import\s+|require\s*\(\s*)["']([^"']+)["']/g;
-
 function resolveSpecifier(file: string, specifier: string): string | null {
   let base: string;
   if (specifier.startsWith("@/")) {
@@ -58,17 +56,12 @@ function resolveSpecifier(file: string, specifier: string): string | null {
 const files = listSourceFiles(srcRoot);
 const graph = new Map<string, string[]>();
 for (const file of files) {
-  // Strip block comments and whole-line comments so JSDoc @example imports
-  // are not treated as real edges (inline import() type refs stay in code).
-  const source = readFileSync(file, "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "");
+  // The scanner ignores specifiers inside comments and string/template
+  // literals (JSDoc @example imports, codegen templates), while still seeing
+  // inline `import("...")` type refs in real code.
+  const source = readFileSync(file, "utf8");
   const edges = new Set<string>();
-  for (const match of source.matchAll(importSpecifierPattern)) {
-    const specifier = match[1];
-    if (specifier === undefined) {
-      continue;
-    }
+  for (const specifier of extractImportSpecifiers(source)) {
     const target = resolveSpecifier(file, specifier);
     if (target !== null && target !== file) {
       edges.add(target);

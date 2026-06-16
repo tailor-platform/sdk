@@ -13,6 +13,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { extractImportSpecifiers } from "./lib/scan-imports.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sdkRoot = resolve(here, "..");
@@ -28,17 +29,20 @@ interface ExportTarget {
 }
 
 const pkg = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"), "utf8")) as {
-  exports: Record<string, string | ExportTarget>;
+  exports: Record<string, string | ExportTarget | null>;
 };
-
-// Matches static imports/re-exports, dynamic imports, requires, and the
-// `import("zod").X` type references that appear in .d.mts output.
-const importSpecifierPattern =
-  /(?:from\s*|import\s*\(\s*|import\s+|require\s*\(\s*)["']([^"']+)["']/g;
 
 interface ZodReference {
   file: string;
   specifier: string;
+}
+
+// A built dist chunk a relative specifier should always resolve to. If one of
+// these fails to resolve, the bundler's chunk-reference style likely changed
+// and the walk would terminate early — so we fail loudly rather than pass
+// vacuously (the whole point of this guard is to catch leaks).
+function looksLikeDistChunk(specifier: string): boolean {
+  return /\.(mjs|cjs|js)$/.test(specifier) || /\.d\.(m|c)?ts$/.test(specifier);
 }
 
 function findZodReferences(entryFile: string): ZodReference[] {
@@ -51,33 +55,33 @@ function findZodReferences(entryFile: string): ZodReference[] {
       continue;
     }
     seen.add(file);
-    // Example code embedded in help-text strings can reference paths that do
-    // not exist in dist/; real chunk imports always exist after a build.
-    if (!existsSync(file)) {
-      continue;
-    }
-    // Strip block comments and whole-line comments so import statements in
-    // JSDoc @example blocks are not treated as real module references.
-    const source = readFileSync(file, "utf8")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
-    for (const match of source.matchAll(importSpecifierPattern)) {
-      const specifier = match[1];
-      if (specifier === undefined) {
-        continue;
-      }
+    const source = readFileSync(file, "utf8");
+    for (const specifier of extractImportSpecifiers(source)) {
       if (specifier === "zod" || specifier.startsWith("zod/")) {
         references.push({ file, specifier });
-      } else if (specifier.startsWith(".")) {
-        const target = normalize(resolve(dirname(file), specifier));
-        // .d.mts chunks reference sibling declaration chunks with a .mjs
-        // specifier, which TypeScript resolves to the .d.mts file.
-        if (file.endsWith(".d.mts") && !existsSync(target)) {
-          stack.push(target.replace(/\.mjs$/, ".d.mts"));
-        } else {
-          stack.push(target);
-        }
+        continue;
       }
+      if (!specifier.startsWith(".")) {
+        continue; // external package or node: builtin
+      }
+      const target = normalize(resolve(dirname(file), specifier));
+      // .d.mts chunks reference sibling declaration chunks with a .mjs
+      // specifier, which TypeScript resolves to the .d.mts file.
+      const resolved =
+        existsSync(target) || !file.endsWith(".d.mts")
+          ? target
+          : target.replace(/\.mjs$/, ".d.mts");
+      if (!existsSync(resolved)) {
+        if (looksLikeDistChunk(specifier)) {
+          throw new Error(
+            `Unresolved dist chunk reference ${JSON.stringify(specifier)} from ${file}. ` +
+              "The bundler chunk-reference style may have changed; update check-zod-isolation " +
+              "so the import closure is walked completely (a vacuous pass would hide zod leaks).",
+          );
+        }
+        continue; // non-chunk relative path (e.g. an asset) that legitimately has no further imports
+      }
+      stack.push(resolved);
     }
   }
   return references;
@@ -92,8 +96,17 @@ interface Violation {
 const violations: Violation[] = [];
 
 for (const [entry, target] of Object.entries(pkg.exports)) {
-  if (typeof target !== "object" || ZOD_ALLOWED_ENTRIES.has(entry)) {
+  if (ZOD_ALLOWED_ENTRIES.has(entry)) {
     continue;
+  }
+  if (typeof target !== "object" || target === null) {
+    // A string-form export target would otherwise be skipped silently, leaving
+    // that entry point unchecked. Require the object form so types + runtime are
+    // both verified.
+    throw new Error(
+      `exports[${JSON.stringify(entry)}] is not in object form ({ types, import/default }); ` +
+        "check-zod-isolation cannot verify it. Convert it to the object form.",
+    );
   }
   const checks: { level: "types" | "runtime"; file: string | undefined }[] = [
     { level: "types", file: target.types },
