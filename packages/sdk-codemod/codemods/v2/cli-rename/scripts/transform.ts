@@ -233,7 +233,7 @@ function findTailorCommandEnd(
     }
 
     const prev = source[end - 1];
-    if ((ch === ";" || ch === "&" || ch === "|") && prev !== "\\") break;
+    if ((ch === ";" || ch === "&" || ch === "|" || ch === ")") && prev !== "\\") break;
     if (ch === "\n" && prev !== "\\" && !foldedYamlRange) break;
     end += 1;
   }
