@@ -21,7 +21,7 @@ import { executeScript } from "@/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import { assertDefined } from "@/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
-import { detectFunctionType, type DetectedFunction } from "./detect";
+import { detectFunctionType } from "./detect";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
@@ -136,7 +136,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
           );
           args.arg = undefined;
         } else if (detected.inputSchema) {
-          args.arg = validateResolverArg(args.arg, detected.inputSchema, machineUser, workspaceId);
+          assertResolverArgJson(args.arg);
         }
       }
 
@@ -317,33 +317,10 @@ async function resolveMachineUser(
 }
 
 /**
- * Validate resolver arg format against the detected input schema.
+ * Assert that the resolver `--arg` value is valid JSON, failing fast before the
+ * server round-trip. Schema validation is left to the server.
  * @param argStr - JSON string of the arg
- * @param inputSchema - Pre-built schema object from detect (has .parse())
- * @param machineUser - Resolved machine user info
- * @param workspaceId - Workspace ID
- * @returns The original JSON string
  */
-export function validateResolverArg(
-  argStr: string,
-  inputSchema: NonNullable<DetectedFunction["inputSchema"]>,
-  machineUser: ResolvedMachineUser,
-  workspaceId: string,
-): string {
-  const parsed = JSON.parse(argStr);
-  const user = {
-    id: machineUser.id,
-    type: "machine_user" as const,
-    workspaceId,
-    attributes: machineUser.attributes ?? null,
-    attributeList: machineUser.attributeList,
-  };
-
-  const newResult = inputSchema.parse({ value: parsed, data: parsed, user });
-  if (!newResult.issues) {
-    return argStr;
-  }
-
-  // Pass as-is and let the server report the validation error.
-  return argStr;
+export function assertResolverArgJson(argStr: string): void {
+  JSON.parse(argStr);
 }
