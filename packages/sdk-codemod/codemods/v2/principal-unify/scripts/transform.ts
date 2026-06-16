@@ -20,6 +20,7 @@ const QUICK_FILTER_NEEDLES = [
 ];
 
 function quickFilter(source: string): boolean {
+  if (source.includes(".body")) return true;
   if (!source.includes("@tailor-platform/sdk")) return false;
   return QUICK_FILTER_NEEDLES.some((needle) => source.includes(needle));
 }
@@ -911,12 +912,15 @@ function collectResolverBodyObjectNames(
   const imports = root.findAll({ rule: { kind: "import_statement" } });
   for (const importStmt of imports) {
     const source = extractModuleSource(importStmt.text());
-    if (source.startsWith("@tailor-platform/sdk") || !/resolver/i.test(source)) continue;
     const defaultName = importDefaultName(importStmt);
+    const specNames = [...iterateImportSpecs(importStmt)].map(({ localName }) => localName);
+    const looksLikeResolver =
+      /resolver/i.test(source) ||
+      (defaultName !== null && /resolver/i.test(defaultName)) ||
+      specNames.some((localName) => /resolver/i.test(localName));
+    if (source.startsWith("@tailor-platform/sdk") || !looksLikeResolver) continue;
     if (defaultName) names.add(defaultName);
-    for (const { localName } of iterateImportSpecs(importStmt)) {
-      names.add(localName);
-    }
+    for (const localName of specNames) names.add(localName);
   }
 
   const declarations = root.findAll({ rule: { kind: "variable_declarator" } });
