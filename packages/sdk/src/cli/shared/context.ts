@@ -514,7 +514,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
     user = u;
   }
 
-  return await fetchLatestToken(pfConfig, user);
+  return (await fetchLatestToken(pfConfig, user)).accessToken;
 }
 
 /**
@@ -629,9 +629,14 @@ function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean
  * Fetch the latest access token, refreshing if necessary.
  * @param config - Platform config
  * @param user - User ID
- * @returns Latest access token
+ * @returns Latest access token and the canonical user ID it is stored under
+ *   (the resolved subject when a legacy email key was migrated during refresh,
+ *   otherwise the input user)
  */
-export async function fetchLatestToken(config: PfConfig, user: string): Promise<string> {
+export async function fetchLatestToken(
+  config: PfConfig,
+  user: string,
+): Promise<{ accessToken: string; user: string }> {
   const userEntry = config.users[user];
   if (!userEntry) {
     throw new Error(ml`
@@ -643,7 +648,7 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
   const tokens = await resolveTokens(userEntry, user);
 
   if (new Date(userEntry.token_expires_at) > new Date()) {
-    return tokens.accessToken;
+    return { accessToken: tokens.accessToken, user };
   }
 
   if (!tokens.refreshToken) {
@@ -696,7 +701,7 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
   );
   await removeLegacyUserAlias(config, user, resolvedUser);
   writePlatformConfig(config);
-  return resp.accessToken;
+  return { accessToken: resp.accessToken, user: resolvedUser };
 }
 
 const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
