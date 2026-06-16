@@ -9,11 +9,12 @@
  * it from nested Vitest configs that do not resolve `@/` aliases.
  * @internal
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { TailorEnv } from "../../../types/env";
 import type { TailorPrincipal } from "../../../types/user";
 
 const SLOT_KEY = "__tailorWorkflowTestEnv";
-const INVOKER_SLOT_KEY = "__tailorWorkflowTestInvoker";
+const invokerStorage = new AsyncLocalStorage<TailorPrincipal | null>();
 
 /**
  * Read the test-time env slot.
@@ -41,44 +42,8 @@ export function clearWorkflowTestEnv(): void {
   delete (globalThis as unknown as Record<string, unknown>)[SLOT_KEY];
 }
 
-function invokerSlot(): { hasValue: boolean; value: TailorPrincipal | null | undefined } {
-  const slots = globalThis as unknown as Record<string, TailorPrincipal | null | undefined>;
-  return {
-    hasValue: Object.hasOwn(slots, INVOKER_SLOT_KEY),
-    value: slots[INVOKER_SLOT_KEY],
-  };
-}
-
-function writeWorkflowTestInvoker(invoker: TailorPrincipal | null): void {
-  (globalThis as unknown as Record<string, TailorPrincipal | null>)[INVOKER_SLOT_KEY] = invoker;
-}
-
-function restoreWorkflowTestInvoker(previous: {
-  hasValue: boolean;
-  value: TailorPrincipal | null | undefined;
-}): void {
-  const slots = globalThis as unknown as Record<string, TailorPrincipal | null | undefined>;
-  if (previous.hasValue) {
-    slots[INVOKER_SLOT_KEY] = previous.value;
-  } else {
-    delete slots[INVOKER_SLOT_KEY];
-  }
-}
-
 export function withWorkflowTestInvoker<T>(invoker: TailorPrincipal | null, run: () => T): T {
-  const previous = invokerSlot();
-  writeWorkflowTestInvoker(invoker);
-  try {
-    const result = run();
-    if (result instanceof Promise) {
-      return result.finally(() => restoreWorkflowTestInvoker(previous)) as T;
-    }
-    restoreWorkflowTestInvoker(previous);
-    return result;
-  } catch (cause) {
-    restoreWorkflowTestInvoker(previous);
-    throw cause;
-  }
+  return invokerStorage.run(invoker, run);
 }
 
 /**
@@ -118,8 +83,8 @@ function readRuntimeInvoker(): TailorPrincipal | null {
 // env from `mockWorkflow().setEnv()`, else the deprecated env-var. Shallow-copied
 // to isolate against cross-trigger mutation.
 export function buildJobContext(): { env: TailorEnv; invoker: TailorPrincipal | null } {
-  const currentInvoker = invokerSlot();
-  const invoker = currentInvoker.hasValue ? (currentInvoker.value ?? null) : readRuntimeInvoker();
+  const storedInvoker = invokerStorage.getStore();
+  const invoker = storedInvoker === undefined ? readRuntimeInvoker() : storedInvoker;
   const fromGlobal = readWorkflowTestEnv();
   if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker };
   const raw = process.env[WORKFLOW_TEST_ENV_KEY];

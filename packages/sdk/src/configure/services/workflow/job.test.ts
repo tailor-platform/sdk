@@ -80,6 +80,54 @@ describe("WorkflowJob type inference", () => {
     await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
   });
 
+  test("concurrent direct body calls isolate invokers for child triggers", async () => {
+    const firstInvoker: TailorPrincipal = {
+      id: "principal-1",
+      type: "user",
+      workspaceId: "workspace-1",
+      attributes: {},
+      attributeList: [],
+    };
+    const secondInvoker: TailorPrincipal = {
+      id: "principal-2",
+      type: "machine_user",
+      workspaceId: "workspace-1",
+      attributes: {},
+      attributeList: [],
+    };
+    let releaseFirst: () => void = () => {};
+    let releaseSecond: () => void = () => {};
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const gates = {
+      first: firstGate,
+      second: secondGate,
+    };
+    const child = createWorkflowJob({
+      name: "capture-concurrent-child-invoker",
+      body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+    });
+    const parent = createWorkflowJob({
+      name: "capture-concurrent-parent-invoker",
+      body: async (input: { gate: "first" | "second" }) => {
+        await gates[input.gate];
+        return await child.trigger();
+      },
+    });
+
+    const first = parent.body({ gate: "first" }, { env: {}, invoker: firstInvoker });
+    const second = parent.body({ gate: "second" }, { env: {}, invoker: secondInvoker });
+
+    releaseFirst();
+    await expect(first).resolves.toBe("principal-1");
+    releaseSecond();
+    await expect(second).resolves.toBe("principal-2");
+  });
+
   test("trigger reads the runtime invoker when no body context is active", async () => {
     const previousTailor = (globalThis as { tailor?: unknown }).tailor;
     (globalThis as { tailor?: unknown }).tailor = {

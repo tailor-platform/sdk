@@ -16,6 +16,7 @@ const QUICK_FILTER_NEEDLES = [
   ".hooks",
   ".validate",
   ".parse",
+  ".body",
 ];
 
 function quickFilter(source: string): boolean {
@@ -738,10 +739,11 @@ function isSdkFieldExpression(
   root: SgNode,
 ): boolean {
   if (node.kind() === "identifier") {
-    return (
-      sdkFieldRootNames.has(node.text()) ||
-      resolvesToSdkFieldLocal(node, sdkFieldLocalBindings, root)
-    );
+    const pos = node.range().start.index;
+    const isSdkRoot =
+      sdkFieldRootNames.has(node.text()) &&
+      !isInsideAnyRange(pos, collectAllShadowRanges(root, node.text()));
+    return isSdkRoot || resolvesToSdkFieldLocal(node, sdkFieldLocalBindings, root);
   }
   if (node.kind() === "member_expression") {
     const object = node.field("object");
