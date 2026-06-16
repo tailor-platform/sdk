@@ -145,6 +145,12 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("per_page: 100");
   });
 
+  test("updates only bot-owned plan comments", () => {
+    const { content } = renderBranchWorkflow(branchBase);
+    expect(content).toContain("comment.user?.type === 'Bot'");
+    expect(content).toContain("comment.user?.login === 'github-actions[bot]'");
+  });
+
   test("builds plan comment markdown without YAML indentation", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain("].join('\\n');");

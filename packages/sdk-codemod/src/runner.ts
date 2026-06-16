@@ -121,6 +121,20 @@ interface LoadedTransform {
   legacyPatterns: string[];
 }
 
+function legacyPatternWarnings(
+  relative: string,
+  content: string,
+  transforms: LoadedTransform[],
+): string[] {
+  return transforms.flatMap((lt) => {
+    const found = lt.legacyPatterns.filter((p) => content.includes(p));
+    if (found.length === 0) return [];
+    return [
+      `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
+    ];
+  });
+}
+
 /**
  * Run multiple codemods on a project directory using in-memory chaining.
  * Each file is processed through all transforms whose filePatterns match it.
@@ -185,17 +199,9 @@ export async function runCodemods(
       } else {
         await fs.promises.writeFile(absolute, current, "utf-8");
       }
-    } else {
-      // Check each matched codemod's legacyPatterns for unmodified files
-      for (const lt of matchedTransforms) {
-        const found = lt.legacyPatterns.filter((p) => original.includes(p));
-        if (found.length > 0) {
-          warnings.push(
-            `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
-          );
-        }
-      }
     }
+
+    warnings.push(...legacyPatternWarnings(relative, current, matchedTransforms));
   }
 
   return {
