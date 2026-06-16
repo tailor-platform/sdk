@@ -355,20 +355,21 @@ Coordinate this with your team because everyone else's local migrations will be 
 
 ## Failure Recovery
 
-If a `migrate.ts` throws:
+If the pre-migration phase or `migrate.ts` fails:
 
 - **The transaction rolls back** for that migration's script. Database changes the script made are undone.
-- **The pre-migration phase already ran** before the script. Type-level relaxations (e.g., a field changed to optional) **are not undone**. The post-migration phase, including the label bump, does not run.
-- The whole `apply` aborts. Subsequent migrations in the same run do not execute.
+- **The pre-migration schema changes are rolled back** to the prior checkpoint: types that already existed are restored to their previous shape, and types the migration newly introduced are dropped. The workspace is left at its prior checkpoint and prior schema — not half-applied.
+- The whole `apply` aborts and the checkpoint label is not bumped. Subsequent migrations in the same run do not execute.
+
+The rollback is best-effort per type; if reverting a type fails, a warning is logged and the original migration error is still reported.
 
 After a failure:
 
 1. Read the `Logs:` block in the apply output to find the cause.
 2. Fix `migrate.ts` (or the data it depends on).
-3. Re-run `tailor-sdk deploy`. The same migration runs again because its label was never bumped.
-4. If the pre-migration relaxation is causing problems for application code in the meantime, accept the temporary optionality or roll forward with a fix; do not try to manually re-tighten the schema, or you'll create remote drift.
+3. Re-run `tailor-sdk deploy`. The same migration runs again because its label was never bumped, and the prior-checkpoint schema is a clean baseline to retry against.
 
-If a migration **succeeds in script** but the post-migration phase fails (rare; usually due to constraint violation that the script should have prevented), the situation is the same as above plus the data changes from the script are persisted. Investigate, fix, and re-run.
+If a migration **succeeds in script** but the **post-migration phase** fails (rare; usually a constraint violation the script should have prevented), the pre-migration changes are **not** rolled back: the script's data changes are already committed and the post-migration phase may have dropped removed columns or types, which cannot be reverted without data loss. Investigate, fix, and re-run.
 
 ## Rollback Strategy
 
