@@ -162,7 +162,7 @@ defineIdp("my-idp", {
 
 **Email domains and social login:**
 
-- `allowedEmailDomains` - Restrict registration to these email domains (up to 100). An empty list (the default) allows all domains, but a non-empty list is required when `allowGoogleOauth` or `allowMicrosoftOauth` is enabled.
+- `allowedEmailDomains` - Restrict registration to these email domains. An empty list (the default) allows all domains, but a non-empty list is required when `allowGoogleOauth` or `allowMicrosoftOauth` is enabled.
 - `allowGoogleOauth` - Enable the "Sign in with Google" button. Default `false`.
 - `allowMicrosoftOauth` - Enable the "Sign in with Microsoft" button. Default `false`.
 
