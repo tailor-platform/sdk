@@ -766,7 +766,7 @@ describe("AST Transformer - transformFunctionTriggers", () => {
       const source = `
 const workflowRunId = await orderWorkflow.trigger(
   { orderId: "123", customerId: "456" },
-  { authInvoker: auth.invoker("admin") }
+  { authInvoker: "admin" }
 );
 `;
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
@@ -776,12 +776,12 @@ const workflowRunId = await orderWorkflow.trigger(
 
       expect(result).toContain('tailor.workflow.triggerWorkflow("order-processing"');
       expect(result).toContain('{ orderId: "123", customerId: "456" }');
-      expect(result).toContain('{ authInvoker: auth.invoker("admin") }');
+      expect(result).toContain('{ authInvoker: "admin" }');
     });
 
     test("transforms workflow.trigger() with shorthand authInvoker", () => {
       const source = `
-const authInvoker = auth.invoker("admin");
+const authInvoker = "admin";
 const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
@@ -813,7 +813,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
       expect(result).toContain('{ authInvoker: __tailor_normalizeAuthInvoker("kiosk") }');
       // Helper injected at the top of the file with the namespace baked in
       expect(result).toContain(
-        'const __tailor_normalizeAuthInvoker = (v) => typeof v === "string" ? { namespace: "my-auth", machineUserName: v } : v;',
+        'const __tailor_normalizeAuthInvoker = (machineUserName) => ({ namespace: "my-auth", machineUserName });',
       );
     });
 
@@ -942,7 +942,7 @@ const event = button.trigger("click");
     test("only transforms trigger calls for known workflows and jobs", () => {
       const source = `
 // Known workflow - should be transformed
-const wfResult = await orderWorkflow.trigger({ id: 1 }, { authInvoker: auth.invoker("admin") });
+const wfResult = await orderWorkflow.trigger({ id: 1 }, { authInvoker: "admin" });
 
 // Known job - should be transformed
 const jobResult = await fetchData.trigger({ id: 2 });
@@ -989,7 +989,7 @@ async function processOrder(orderId: string) {
   // Then trigger a workflow for processing
   const workflowRunId = await orderWorkflow.trigger(
     { orderId, data },
-    { authInvoker: auth.invoker("system") }
+    { authInvoker: "system" }
   );
 
   return { data, workflowRunId };

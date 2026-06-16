@@ -17,6 +17,7 @@ import {
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
+import { getApplicationAuthNamespace } from "@/cli/shared/auth-namespace";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-exprs";
 import { assertDefined } from "@/utils/assert";
@@ -137,7 +138,7 @@ export async function planPipeline(context: PlanContext) {
     executors,
     deletedServices,
     application.env,
-    application.authService?.config.name,
+    getApplicationAuthNamespace(application),
     forceApplyAll,
   );
 

@@ -24,7 +24,7 @@ describe("normalizeAuthInvoker", () => {
 
   test("throws when string authInvoker is given without an authNamespace", () => {
     expect(() => normalizeAuthInvoker("kiosk", undefined, 'Resolver "foo"')).toThrow(
-      /Resolver "foo".*no Auth service is configured/,
+      /Resolver "foo".*Configure an Auth service before using authInvoker/,
     );
   });
 });

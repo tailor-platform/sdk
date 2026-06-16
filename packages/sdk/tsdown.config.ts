@@ -73,8 +73,12 @@ export default defineConfig({
     js: ".mjs",
     dts: ".d.mts",
   }),
-  // peer dependencies: prevent bundling, resolve at runtime
-  deps: { neverBundle: ["vite", "vitest"] },
+  // peer dependencies: prevent bundling, resolve at runtime.
+  // `@tailor-platform/sdk` (self-name) is kept external so the `./cli` entry's
+  // types reference `MachineUserName`/`MachineUserNameRegistry` from the main
+  // entry instead of inlining them, letting a single
+  // `declare module "@tailor-platform/sdk"` augmentation narrow both entries.
+  deps: { neverBundle: ["vite", "vitest", /^@tailor-platform\/sdk$/] },
   sourcemap: true,
   plugins,
   onSuccess: (config) => {

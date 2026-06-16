@@ -1,7 +1,6 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "@/utils/brand";
 import { dispatchTriggerWorkflow, registerWorkflow } from "./registry";
-import type { AuthInvoker } from "../auth";
 import type { WorkflowJob } from "./job";
 import type { MachineUserName } from "@/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
@@ -24,7 +23,7 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
   concurrencyPolicy?: ConcurrencyPolicy;
   trigger: (
     args: Parameters<Job["trigger"]>[0],
-    options?: { authInvoker: AuthInvoker<string> | MachineUserName },
+    options?: { authInvoker: MachineUserName },
   ) => Promise<string>;
 }
 
