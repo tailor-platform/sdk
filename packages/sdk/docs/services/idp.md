@@ -127,7 +127,7 @@ defineIdp("my-idp", {
 
 ### userAuthPolicy
 
-User authentication policy. Controls password requirements, the identifier used for login, allowed email domains, and social login providers. Every field is optional and the defaults disable each option.
+User authentication policy. Controls password requirements, the identifier used for login, allowed email domains, and social login providers. Every field is optional. The boolean options default to disabled, and the password length fields default to a minimum of 6 and a maximum of 4096.
 
 ```typescript
 defineIdp("my-idp", {
