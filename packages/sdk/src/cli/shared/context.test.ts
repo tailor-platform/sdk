@@ -4,6 +4,7 @@ import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
 import {
+  fetchLatestToken,
   loadAccessToken,
   loadConfigPath,
   loadMachineUserName,
@@ -690,6 +691,30 @@ describe("loadAccessToken", () => {
       expect(result).toBe(validToken);
     });
 
+    test("fetchLatestToken resolves a subject-keyed user by email metadata", async () => {
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "platform-user-sub": {
+            storage: "file",
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+            email: "user@example.com",
+          },
+        },
+        profiles: {},
+        current_user: "platform-user-sub",
+      });
+
+      const config = await readPlatformConfig();
+      await expect(fetchLatestToken(config, "user@example.com")).resolves.toEqual({
+        accessToken: validToken,
+        user: "platform-user-sub",
+      });
+    });
+
     test("refreshes a legacy email-key user into a subject-key V3 config", async () => {
       clientMocks.refreshToken.mockResolvedValue({
         accessToken: "new-access-token",
@@ -735,6 +760,43 @@ describe("loadAccessToken", () => {
       });
       expect(config.current_user).toBe("platform-user-sub");
       expect(config.profiles.default?.user).toBe("platform-user-sub");
+    });
+
+    test("logs when refresh updates the stored user email", async () => {
+      clientMocks.refreshToken.mockResolvedValue({
+        accessToken: "new-access-token",
+        refreshToken: "new-refresh-token",
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      clientMocks.fetchUserInfo.mockResolvedValue({
+        sub: "platform-user-sub",
+        email: "new@example.com",
+      });
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "platform-user-sub": {
+            access_token: "expired-access-token",
+            refresh_token: "refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+            email: "old@example.com",
+          },
+        },
+        profiles: {},
+        current_user: "platform-user-sub",
+      });
+
+      const config = await readPlatformConfig();
+      using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+      await fetchLatestToken(config, "platform-user-sub");
+
+      expect(infoSpy).toHaveBeenCalledWith(
+        'Updated local user email from "old@example.com" to "new@example.com".',
+      );
+      expect(config.users["platform-user-sub"]?.email).toBe("new@example.com");
     });
 
     test("keeps the legacy email key when subject resolution fails on refresh", async () => {

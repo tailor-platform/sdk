@@ -79,7 +79,7 @@ tailor-sdk workspace create [options]
 | `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                 | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
 | `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
 | `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
-| `--profile-user <PROFILE_USER>`       | -     | User ID for the profile (defaults to current user)                                                          | No       | -         | -                                 |
+| `--profile-user <PROFILE_USER>`       | -     | User email address or machine user client ID for the profile (defaults to current user)                     | No       | -         | -                                 |
 | `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
 
 <!-- politty:command:workspace create:options:end -->
@@ -243,7 +243,7 @@ tailor-sdk profile create [options] <name>
 
 | Option                                            | Alias | Description                                                                                                                            | Required | Default   |
 | ------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- |
-| `--user <USER>`                                   | `-u`  | User ID                                                                                                                                | Yes      | -         |
+| `--user <USER>`                                   | `-u`  | User email address or machine user client ID                                                                                           | Yes      | -         |
 | `--workspace-id <WORKSPACE_ID>`                   | `-w`  | Workspace ID                                                                                                                           | Yes      | -         |
 | `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands while the profile is active.                                                      | No       | `"write"` |
 | `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).                 | No       | -         |
@@ -324,7 +324,7 @@ tailor-sdk profile update [options] <name>
 
 | Option                                            | Alias | Description                                                                                                                                                           | Required | Default |
 | ------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
-| `--user <USER>`                                   | `-u`  | New user ID                                                                                                                                                           | No       | -       |
+| `--user <USER>`                                   | `-u`  | New user email address or machine user client ID                                                                                                                      | No       | -       |
 | `--workspace-id <WORKSPACE_ID>`                   | `-w`  | New workspace ID                                                                                                                                                      | No       | -       |
 | `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.                                                                                  | No       | -       |
 | `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.                 | No       | -       |
