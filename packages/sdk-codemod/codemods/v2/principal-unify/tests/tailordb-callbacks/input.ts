@@ -30,12 +30,17 @@ export const user = db
         return currentUser?.id ?? audit[0] ?? "anonymous";
       },
       update({ user }) {
-        return user?.id ?? "anonymous";
+        const invoker = user?.id ?? "anonymous";
+        return invoker;
       },
     },
   })
   .validate({
     note: (ctx) => ctx.user?.type !== "machine_user",
+    fallback: ({ user = unauthenticatedTailorUser }) => {
+      const labels = ["anonymous"].map((invoker) => invoker);
+      return user?.id !== labels[0];
+    },
   });
 
 export const parsed = t.string().parse({
