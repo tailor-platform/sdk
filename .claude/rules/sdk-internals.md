@@ -3,6 +3,7 @@ paths:
   - "packages/sdk/src/configure/**/*.ts"
   - "packages/sdk/src/parser/**/*.ts"
   - "packages/sdk/src/cli/**/*.ts"
+  - "packages/sdk/src/plugin/**/*.ts"
   - "packages/sdk/src/types/**/*.ts"
 ---
 
@@ -29,29 +30,66 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
    - Performs transform, bundle, apply operations
    - Uses parser module to process user configurations
 
-**Import Restrictions:**
+**Import Restrictions (enforced by oxlint `no-restricted-imports`):**
 
 1. **Configure Module** (`src/configure/**/*.ts`):
    - ❌ Cannot import from `cli` module
-   - ❌ Cannot import from `parser` module
-   - ✅ Can import from `@/types/` (shared type layer)
+   - ❌ Cannot import from `parser` / `plugin` modules — **except their pure type modules, type-only**
    - ⚠️ Can only import types from `zod` (runtime imports are forbidden)
 
 2. **Parser Module** (`src/parser/**/*.ts`):
    - ❌ Cannot import from `cli` module
-   - ❌ Cannot import from `configure` module
-   - ✅ Can import from `@/types/` (shared type layer)
+   - ❌ Cannot import from `configure` module — **except configure pure type modules, type-only**
 
 3. **CLI Module** (`src/cli/**/*.ts`):
+   - ❌ Cannot import from `configure` module — **except configure pure type modules, type-only**
    - Uses parser module to process user configurations
 
-4. **Parser Types Files** (`src/parser/**/types.ts`):
-   - ✅ Can only import types (all imports must be type-only)
-   - Should only re-export from `@/types/` (backward compatibility shims)
+4. **Plugin Module** (`src/plugin/**/*.ts`):
+   - ❌ Cannot import from `cli` module
+   - ❌ Cannot import from `configure` module — **except configure pure type modules, type-only**
 
 5. **Types Module** (`src/types/**/*.ts`):
+   - Contains only zinfer-generated types and `helpers.ts` (generic utilities)
    - ❌ Cannot import from `configure`, `cli`, `parser`, `plugin` modules
-   - ✅ Can import from `@/types/` (self-referencing) and external packages
+
+## Pure Type Modules
+
+Shared hand-written types live in **pure type modules** owned by each layer:
+`parser/**/types.ts`, `configure/**/types.ts`, `configure/**/*.types.ts`,
+`plugin/types.ts`, `runtime/types.ts`. These files define types (they are not
+re-export shims) and are the only files other layers may reach across closed
+boundaries — always type-only.
+
+Pure type module rules (enforced by oxlint):
+
+- All imports must be type-only (`import type`)
+- ❌ No `zod` imports, even type-only
+- ❌ No `**/schema` imports, even type-only — schema-derived types must come
+  from zinfer output (`src/types/*.generated.ts`)
+
+This guarantees, by construction, that importing the SDK's user-facing entry
+points never loads zod — neither its runtime code nor its type machinery. The
+`check:zod-isolation` script (part of `pnpm check`) verifies this on the built
+artifacts: every `package.json#exports` entry except `./cli` must be zod-free
+in both its `.d.mts` and `.mjs` import closures.
+
+## No Import Cycles (Type-Level Included)
+
+The `src/` module graph must stay acyclic, counting type-only imports as
+edges. Two complementary checks enforce this:
+
+- oxlint `import/no-cycle` with `ignoreTypes: false` rejects cycles formed by
+  import declarations in linted files.
+- `check:import-cycles` (part of `pnpm check`) builds the full graph —
+  including lint-ignored generated files and inline `import("...")` type
+  references emitted by zinfer — and fails on any strongly connected
+  component.
+
+When two pure type modules would need each other, move the shared type into
+the module that semantically owns it and re-export from the other (see
+`PluginAttachment`, defined in `configure/services/tailordb/types.ts` and
+re-exported by `plugin/types.ts`).
 
 **Type Import Rules:**
 
@@ -69,13 +107,9 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 - Bundlers follow the module chain and include all runtime imports, even when only types are needed
 - Example: `configure/auth` → `parser/auth` → `parser/auth/schema` → `zod` (runtime import)
 
-**Solution: The `src/types/` Layer**
+**Solution:**
 
-Zod schemas live in `parser/**/schema.ts`. Types derived from those schemas are generated into `src/types/*.generated.ts` by zinfer, cleanly separating runtime schema code from type definitions. See the `schema-types` rule for details.
-
-Key principles:
-
-- Schema files (`parser/**/schema.ts`) export only Zod schemas, never types
-- Types are generated into `src/types/*.generated.ts` — no runtime dependency on zod
-- Configure and parser modules import types from `@/types/`, not from each other
-- This prevents bundlers from including zod runtime code in configure module outputs
+- Zod schemas live in `parser/**/schema.ts` and export only schemas, never types
+- Types derived from schemas are generated into `src/types/*.generated.ts` by zinfer — no runtime dependency on zod
+- Hand-written shared types live in pure type modules, whose import closure contains no runtime modules at all, so even a bundler that resolves the full module graph finds nothing to include
+- See the `schema-types` rule for details

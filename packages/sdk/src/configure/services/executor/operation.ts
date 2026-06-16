@@ -1,12 +1,12 @@
 import type { Workflow } from "@/configure/services/workflow/workflow";
 import type { MachineUserName } from "@/configure/types/machine-user";
+import type { TailorInvoker } from "@/runtime/types";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
   WebhookOperation as ParserWebhookOperation,
   WorkflowOperation as ParserWorkflowOperation,
 } from "@/types/executor.generated";
-import type { TailorInvoker } from "@/types/user";
 import type { Client } from "@urql/core";
 
 /** Function-based executor operation. The body receives the trigger args and the `invoker`. */

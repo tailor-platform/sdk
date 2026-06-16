@@ -11,7 +11,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
 import { HTTP_METHODS, type HttpMethodKey } from "@/parser/service/http-adapter";
-import type { LogLevel } from "@/types/app-config";
+import type { LogLevel } from "@/configure/config/types";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
