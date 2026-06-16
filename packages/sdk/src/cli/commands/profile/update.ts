@@ -17,7 +17,7 @@ export const updateCommand = defineAppCommand({
       }),
       user: arg(z.string().optional(), {
         alias: "u",
-        description: "New user email",
+        description: "New user ID",
       }),
       "workspace-id": arg(z.string().optional(), {
         alias: "w",
