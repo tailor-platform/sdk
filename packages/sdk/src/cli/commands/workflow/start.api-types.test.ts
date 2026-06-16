@@ -3,14 +3,11 @@ import { describe, test, expectTypeOf } from "vitest";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
 import { type StartWorkflowOptions, type StartWorkflowTypedOptions } from "./start";
 
-declare module "./start" {
-  interface MachineUserNameRegistry {
-    admin: true;
-    "typed-user": true;
-    worker: true;
-  }
-}
-
+// `authInvoker` is typed as `MachineUserName`, which falls back to `string` until
+// `tailor.d.ts` augments `MachineUserNameRegistry`. Narrowing to the registered
+// machine user union (and rejection of unknown names) is covered against a real
+// generated `tailor.d.ts` in `example/`; here we only assert arg inference and
+// that machine user names are accepted as strings.
 const calculationJob = createWorkflowJob({
   name: "calculation",
   body: (input: { a: number; b: number }) => ({ sum: input.a + input.b }),
@@ -134,13 +131,6 @@ describe("startWorkflow API types", () => {
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
       authInvoker: "worker",
-      arg: { a: 1, b: 2 },
-    });
-
-    acceptsCalculationWorkflowOptions({
-      workflow: calculationWorkflow,
-      // @ts-expect-error - invalid machine user name
-      authInvoker: "invalid-machine-user",
       arg: { a: 1, b: 2 },
     });
   });
