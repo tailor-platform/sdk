@@ -164,6 +164,7 @@ describe("runCodemods", () => {
 
   describe("filePatterns filtering", () => {
     const transformPath = path.join(os.tmpdir(), "transform-upper.ts");
+    const throwingTransformPath = path.join(os.tmpdir(), "transform-throw.ts");
 
     beforeEach(async () => {
       await fs.promises.writeFile(
@@ -173,10 +174,18 @@ describe("runCodemods", () => {
         }`,
         "utf-8",
       );
+      await fs.promises.writeFile(
+        throwingTransformPath,
+        `export default function transform() {
+          throw new Error("nonmatching transform should not run");
+        }`,
+        "utf-8",
+      );
     });
 
     afterEach(async () => {
       await fs.promises.rm(transformPath, { force: true });
+      await fs.promises.rm(throwingTransformPath, { force: true });
     });
 
     test("should only apply transform to files matching filePatterns", async () => {
@@ -209,6 +218,32 @@ describe("runCodemods", () => {
       // JSON file should be uppercased
       const jsonContent = await fs.promises.readFile(path.join(dir, "data.json"), "utf-8");
       expect(jsonContent).toBe("WORLD");
+    });
+
+    test("should not run transforms whose filePatterns do not match a matched file", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-pattern-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "data.json"), "world", "utf-8");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/upper", transformPath, ["**/*.json"]),
+            scriptPath: transformPath,
+          },
+          {
+            codemod: makeCodemod("test/throw", throwingTransformPath, ["**/*.ts"]),
+            scriptPath: throwingTransformPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.filesModified).toEqual([path.join(dir, "data.json")]);
+      await expect(fs.promises.readFile(path.join(dir, "data.json"), "utf-8")).resolves.toBe(
+        "WORLD",
+      );
     });
 
     test("should apply transforms to matching files under dot directories", async () => {
