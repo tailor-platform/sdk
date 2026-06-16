@@ -1,5 +1,6 @@
 import { brandValue } from "@/utils/brand";
 import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
+import { withWorkflowTestInvoker } from "./test-env-key";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
 import type { TailorPrincipal } from "@/types/user";
@@ -100,7 +101,9 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
 export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> {
-  const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+  const userBody = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+  const body = (input: I, context: WorkflowJobContext): O | Promise<O> =>
+    withWorkflowTestInvoker(context.invoker, () => userBody(input, context));
 
   // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
   if (!process.env.TAILOR_PLATFORM_BUNDLE) {

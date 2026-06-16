@@ -6,6 +6,9 @@ const role = db
   .hooks({
     create: ({ value, user }) => (user?.attributes.role === "ADMIN" ? value : "user"),
     update: ctx => ctx.user?.id ?? "anonymous",
+    delete({ user }) {
+      return user?.id ?? "anonymous";
+    },
   })
   .validate([
     [({ user }) => user?.type === "machine_user", "Machine user required"],
@@ -25,6 +28,9 @@ export const user = db
       create: ({ user: currentUser }) => {
         const audit = [{ user: { id: "data-user" } }].map(({ user }) => user.id);
         return currentUser?.id ?? audit[0] ?? "anonymous";
+      },
+      update({ user }) {
+        return user?.id ?? "anonymous";
       },
     },
   })
