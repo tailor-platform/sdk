@@ -96,7 +96,6 @@ describe("api command body auto-injection", () => {
           auth: { name: "my-auth" },
           path: "/fake",
         },
-        generators: [],
         plugins: [],
       } as never);
 
@@ -116,7 +115,6 @@ describe("api command body auto-injection", () => {
           db: { "my-db": { files: [] } },
           path: "/fake",
         },
-        generators: [],
         plugins: [],
       } as never);
 
@@ -135,7 +133,6 @@ describe("api command body auto-injection", () => {
           db: { "db-1": { files: [] }, "db-2": { files: [] } },
           path: "/fake",
         },
-        generators: [],
         plugins: [],
       } as never);
 
@@ -154,7 +151,6 @@ describe("api command body auto-injection", () => {
           idp: [{ name: "my-idp" }],
           path: "/fake",
         },
-        generators: [],
         plugins: [],
       } as never);
 
@@ -173,7 +169,6 @@ describe("api command body auto-injection", () => {
           resolver: { "my-pipeline": { files: [] } },
           path: "/fake",
         },
-        generators: [],
         plugins: [],
       } as never);
 
@@ -192,7 +187,6 @@ describe("api command body auto-injection", () => {
           auth: { name: "my-auth" },
           path: "/fake",
         },
-        generators: [],
         plugins: [],
       } as never);
 

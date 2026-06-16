@@ -29,7 +29,7 @@ export { type IdpNameRegistry, type IdpName } from "@/configure/types/idp-name";
 
 export * from "@/configure/services";
 
-export { defineConfig, defineGenerators, definePlugins } from "@/configure/config";
+export { defineConfig, definePlugins } from "@/configure/config";
 
 // Plugin types for custom plugin development
 export type {
