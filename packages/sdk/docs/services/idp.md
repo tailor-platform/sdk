@@ -162,16 +162,16 @@ defineIdp("my-idp", {
 
 **Email domains and social login:**
 
-- `allowedEmailDomains` - Restrict registration to these email domains (up to 100). An empty list (the default) allows all domains.
+- `allowedEmailDomains` - Restrict registration to these email domains (up to 100). An empty list (the default) allows all domains, but a non-empty list is required when `allowGoogleOauth` or `allowMicrosoftOauth` is enabled.
 - `allowGoogleOauth` - Enable the "Sign in with Google" button. Default `false`.
 - `allowMicrosoftOauth` - Enable the "Sign in with Microsoft" button. Default `false`.
 
 **Constraints:** the following combinations are rejected at parse time.
 
 - `passwordMinLength` must be less than or equal to `passwordMaxLength`.
-- `allowedEmailDomains`, `allowGoogleOauth`, and `allowMicrosoftOauth` cannot be combined with `useNonEmailIdentifier: true`.
-- `allowGoogleOauth` requires `allowedEmailDomains` to be set.
-- `allowMicrosoftOauth` requires both `allowedEmailDomains` and `disablePasswordAuth: true`.
+- A non-empty `allowedEmailDomains` cannot be combined with `useNonEmailIdentifier: true` (an empty list is allowed). `allowGoogleOauth` and `allowMicrosoftOauth` cannot be combined with `useNonEmailIdentifier: true`.
+- `allowGoogleOauth` requires a non-empty `allowedEmailDomains`.
+- `allowMicrosoftOauth` requires both a non-empty `allowedEmailDomains` and `disablePasswordAuth: true`.
 - `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
 
 ### gqlOperations
