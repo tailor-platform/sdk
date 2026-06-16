@@ -86,8 +86,6 @@ export async function waitForExecution(
       executionId,
     });
 
-    // platform response may omit the field
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!execution) {
       throw new Error(`Execution '${executionId}' not found.`);
     }
