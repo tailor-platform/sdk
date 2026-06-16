@@ -1,5 +1,16 @@
 # @tailor-platform/sdk
 
+## 1.66.0
+### Minor Changes
+
+
+
+- [#1343](https://github.com/tailor-platform/sdk/pull/1343) [`f8ad2f7`](https://github.com/tailor-platform/sdk/commit/f8ad2f7f17b9453fc6ac20d25e780b6c420d4525) Thanks [@dqn](https://github.com/dqn)! - Adopt dispatcher-mode shell completion so generated completion scripts resolve the currently visible `tailor-sdk` binary at completion time, allowing project-local SDK installations to provide matching completions. Published SDK packages now include a bundled zsh completion worker so the dispatcher can skip first-use cache generation.
+
+
+
+- [#1402](https://github.com/tailor-platform/sdk/pull/1402) [`2720c06`](https://github.com/tailor-platform/sdk/commit/2720c06e1b7029df6518449abd7d5b7c480903e3) Thanks [@dragon3](https://github.com/dragon3)! - Add `defineAIGateway()` for declaring AI Gateways in `tailor.config.ts`. Configure with `authNamespace` (required) and an optional `cors` allow-list; reference the deployed gateway domain via the `domain` getter. Gateways are created, updated, and removed by `tailor deploy` / `tailor remove` against the platform's AI Gateway API.
+
 ## 1.65.0
 ### Minor Changes
 
