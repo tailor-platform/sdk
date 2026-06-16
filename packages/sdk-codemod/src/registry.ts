@@ -90,7 +90,7 @@ const allCodemods: CodemodPackage[] = [
     id: "v2/tailordb-namespace",
     name: "Tailordb → tailordb (lowercase ambient namespace)",
     description:
-      "Rewrite references to the deprecated capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the new lowercase `tailordb.*` namespace re-published by the SDK in place of `@tailor-platform/function-types`.",
+      "Rewrite references to the removed capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the lowercase `tailordb.*` namespace exposed by `@tailor-platform/sdk/runtime/globals`.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/tailordb-namespace/scripts/transform.js",
