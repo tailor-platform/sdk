@@ -1,5 +1,0 @@
----
-"@tailor-platform/sdk": minor
----
-
-Add default machine user to CLI profiles. Use `tailor-sdk profile create <name> --machine-user <name>` or `tailor-sdk profile update <name> --machine-user <name>` to store a default machine user on a profile. Commands that require a machine user (`query`, `workflow start`, `function test-run`, `machineuser token`) now fall back to the active profile's default when no machine user is given via the command line (`--machine-user`, or the `NAME` argument for `machineuser token`) or the `TAILOR_PLATFORM_MACHINE_USER_NAME` environment variable. Pass an empty string to `profile update --machine-user ""` to clear the stored default. Profiles also support `--machine-user-override deny`, which locks the machine user to the stored default: any explicit machine user supplied on the command line or via `TAILOR_PLATFORM_MACHINE_USER_NAME` that differs from the profile's value causes commands to fail immediately with error code `PROFILE_MACHINE_USER_OVERRIDE_DENIED`. Use `--machine-user-override allow` (the default) to restore the previous behavior.
