@@ -19,7 +19,7 @@ const TAILOR_BINARY_PATTERN = new RegExp(TAILOR_BINARY, "g");
 
 const COMMAND_MAP = new Map(COMMAND_RENAMES);
 
-interface FoldedYamlRange {
+interface TextRange {
   start: number;
   end: number;
 }
@@ -85,8 +85,8 @@ function isFoldedScalarHeader(line: string): boolean {
   return /^\s*(?:-\s*)?[^#\n]*:\s*>[+-]?(?:\s*(?:#.*)?)?$/.test(line);
 }
 
-function findFoldedYamlRanges(source: string): FoldedYamlRange[] {
-  const ranges: FoldedYamlRange[] = [];
+function findFoldedYamlRanges(source: string): TextRange[] {
+  const ranges: TextRange[] = [];
   const lines = source.match(/^.*(?:\n|$)/gm) ?? [];
   let offset = 0;
 
@@ -131,17 +131,52 @@ function findFoldedYamlRanges(source: string): FoldedYamlRange[] {
   return ranges;
 }
 
-function findContainingFoldedYamlRange(
-  ranges: FoldedYamlRange[] | undefined,
+function findMarkdownFencedCodeRanges(source: string): TextRange[] {
+  const ranges: TextRange[] = [];
+  const lines = source.match(/^.*(?:\n|$)/gm) ?? [];
+  let offset = 0;
+  let open: { char: string; length: number; start: number } | undefined;
+
+  for (const line of lines) {
+    const body = line.replace(/\r?\n$/, "");
+
+    if (open) {
+      const close = body.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+      const marker = close?.[1];
+      if (marker && marker[0] === open.char && marker.length >= open.length) {
+        ranges.push({ start: open.start, end: offset });
+        open = undefined;
+      }
+    } else {
+      const start = body.match(/^ {0,3}(`{3,}|~{3,}).*$/);
+      const marker = start?.[1];
+      if (marker) {
+        open = { char: marker[0], length: marker.length, start: offset + line.length };
+      }
+    }
+
+    offset += line.length;
+  }
+
+  if (open) {
+    ranges.push({ start: open.start, end: source.length });
+  }
+
+  return ranges;
+}
+
+function findContainingRange(
+  ranges: TextRange[] | undefined,
   index: number,
-): FoldedYamlRange | undefined {
+): TextRange | undefined {
   return ranges?.find((range) => range.start <= index && index < range.end);
 }
 
 function findTailorCommandEnd(
   source: string,
   start: number,
-  foldedYamlRanges?: FoldedYamlRange[],
+  foldedYamlRanges?: TextRange[],
+  markdownFencedCodeRanges?: TextRange[],
 ): number {
   const inlineCodeSpanEnd = findInlineCodeSpanEnd(source, start);
   const enclosingLineQuoteEnd = findEnclosingLineQuoteEnd(source, start);
@@ -149,8 +184,10 @@ function findTailorCommandEnd(
     inlineCodeSpanEnd ?? source.length,
     enclosingLineQuoteEnd ?? source.length,
   );
-  const foldedYamlRange = findContainingFoldedYamlRange(foldedYamlRanges, start);
-  const commandLimit = foldedYamlRange ? Math.min(limit, foldedYamlRange.end) : limit;
+  const foldedYamlRange = findContainingRange(foldedYamlRanges, start);
+  const markdownFencedCodeRange = findContainingRange(markdownFencedCodeRanges, start);
+  const delimitedRange = foldedYamlRange ?? markdownFencedCodeRange;
+  const commandLimit = delimitedRange ? Math.min(limit, delimitedRange.end) : limit;
   let quote: "'" | '"' | null = null;
   let end = start;
 
@@ -186,12 +223,14 @@ function findTailorCommandEnd(
 function isDelimitedCommandContext(
   source: string,
   start: number,
-  foldedYamlRanges?: FoldedYamlRange[],
+  foldedYamlRanges?: TextRange[],
+  markdownFencedCodeRanges?: TextRange[],
 ): boolean {
   return (
     findInlineCodeSpanEnd(source, start) !== undefined ||
     findEnclosingLineQuoteEnd(source, start) !== undefined ||
-    findContainingFoldedYamlRange(foldedYamlRanges, start) !== undefined
+    findContainingRange(foldedYamlRanges, start) !== undefined ||
+    findContainingRange(markdownFencedCodeRanges, start) !== undefined
   );
 }
 
@@ -247,8 +286,9 @@ function replaceOptionsInCommand(command: string): string {
 
 function replaceOptionsInTailorCommands(
   source: string,
-  foldedYamlRanges?: FoldedYamlRange[],
+  foldedYamlRanges?: TextRange[],
   requireDelimitedContext = false,
+  markdownFencedCodeRanges?: TextRange[],
 ): string {
   let updated = "";
   let cursor = 0;
@@ -261,12 +301,15 @@ function replaceOptionsInTailorCommands(
     const start = match.index;
     if (start < cursor) continue;
 
-    if (requireDelimitedContext && !isDelimitedCommandContext(source, start, foldedYamlRanges)) {
+    if (
+      requireDelimitedContext &&
+      !isDelimitedCommandContext(source, start, foldedYamlRanges, markdownFencedCodeRanges)
+    ) {
       TAILOR_BINARY_PATTERN.lastIndex = start + match[0].length;
       continue;
     }
 
-    const end = findTailorCommandEnd(source, start, foldedYamlRanges);
+    const end = findTailorCommandEnd(source, start, foldedYamlRanges, markdownFencedCodeRanges);
     updated += source.slice(cursor, start);
     updated += replaceOptionsInCommand(source.slice(start, end));
     cursor = end;
@@ -280,6 +323,7 @@ function replaceAll(
   value: string,
   parseFoldedYaml = false,
   requireDelimitedContext = false,
+  parseMarkdownFencedCode = false,
 ): string {
   const updated = value.replace(
     COMMAND_PATTERN,
@@ -287,13 +331,22 @@ function replaceAll(
       `${match.slice(0, -cmd.length)}${COMMAND_MAP.get(cmd) ?? cmd}`,
   );
   const foldedYamlRanges = parseFoldedYaml ? findFoldedYamlRanges(updated) : undefined;
-  return replaceOptionsInTailorCommands(updated, foldedYamlRanges, requireDelimitedContext);
+  const markdownFencedCodeRanges = parseMarkdownFencedCode
+    ? findMarkdownFencedCodeRanges(updated)
+    : undefined;
+  return replaceOptionsInTailorCommands(
+    updated,
+    foldedYamlRanges,
+    requireDelimitedContext,
+    markdownFencedCodeRanges,
+  );
 }
 
 function transformText(source: string, filePath: string): string | null {
   const ext = path.extname(filePath).toLowerCase();
   const isYaml = ext === ".yml" || ext === ".yaml";
-  const updated = replaceAll(source, isYaml, ext === ".md");
+  const isMarkdown = ext === ".md";
+  const updated = replaceAll(source, isYaml, isMarkdown, isMarkdown);
   return updated === source ? null : updated;
 }
 
