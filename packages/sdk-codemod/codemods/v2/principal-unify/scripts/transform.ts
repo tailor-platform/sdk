@@ -517,6 +517,16 @@ function findMemberCallName(call: SgNode): string | null {
   return property?.text() ?? null;
 }
 
+function findMemberCallObject(call: SgNode): SgNode | null {
+  const fn = call.field("function");
+  if (!fn || fn.kind() !== "member_expression") return null;
+  return fn.field("object");
+}
+
+function isFunctionNode(node: SgNode): boolean {
+  return node.kind() === "arrow_function" || node.kind() === "function_expression";
+}
+
 function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
   const params =
     fn.field("parameters") ??
@@ -543,7 +553,53 @@ function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
 function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
   const pattern = getFirstFunctionParamPattern(fn);
   const body = fn.field("body");
-  if (!pattern || pattern.kind() !== "object_pattern" || !body) return;
+  if (!pattern || !body) return;
+
+  if (pattern.kind() === "identifier") {
+    const ctxName = pattern.text();
+    const ctxShadowRanges = collectCtxShadowRanges(body, ctxName, fn);
+    const propertyAccesses = body.findAll({
+      rule: { kind: "property_identifier", regex: "^user$" },
+    });
+    for (const propId of propertyAccesses) {
+      const parent = propId.parent();
+      if (!parent || parent.kind() !== "member_expression") continue;
+      const obj = parent.field("object");
+      if (!(obj && obj.kind() === "identifier" && obj.text() === ctxName)) continue;
+      const pos = obj.range().start.index;
+      if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
+      edits.push(propId.replace("invoker"));
+    }
+
+    const ctxDestructures = body.findAll({
+      rule: {
+        kind: "variable_declarator",
+        has: {
+          field: "value",
+          kind: "identifier",
+          regex: `^${escapeRegex(ctxName)}$`,
+        },
+      },
+    });
+    for (const decl of ctxDestructures) {
+      const pos = decl.range().start.index;
+      if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
+      const pat = decl.field("name");
+      if (!pat || pat.kind() !== "object_pattern") continue;
+      for (const child of pat.children()) {
+        const kind = child.kind();
+        if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
+          edits.push(child.replace("invoker: user"));
+        } else if (kind === "pair_pattern") {
+          const key = child.field("key");
+          if (key?.text() === "user") edits.push(key.replace("invoker"));
+        }
+      }
+    }
+    return;
+  }
+
+  if (pattern.kind() !== "object_pattern") return;
 
   let renamesBinding = false;
   for (const child of pattern.children()) {
@@ -602,23 +658,120 @@ function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
   }
 }
 
-function transformPrincipalCallbacksInCall(call: SgNode, edits: Edit[]): void {
-  const memberName = findMemberCallName(call);
-  if (memberName !== "hooks" && memberName !== "validate") return;
+function isSdkFieldExpression(
+  node: SgNode,
+  sdkFieldRootNames: Set<string>,
+  sdkFieldLocalNames: Set<string>,
+): boolean {
+  if (node.kind() === "identifier") {
+    return sdkFieldRootNames.has(node.text()) || sdkFieldLocalNames.has(node.text());
+  }
+  if (node.kind() === "member_expression") {
+    const object = node.field("object");
+    return object ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalNames) : false;
+  }
+  if (node.kind() === "call_expression") {
+    const object = findMemberCallObject(node);
+    return object ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalNames) : false;
+  }
+  return false;
+}
 
-  const args = call.field("arguments");
-  if (!args) return;
-  for (const kind of ["arrow_function", "function_expression"]) {
-    const callbacks = args.findAll({ rule: { kind } });
-    for (const callback of callbacks) {
-      transformPrincipalCallbackParam(callback, edits);
+function collectSdkFieldLocalNames(root: SgNode, sdkFieldRootNames: Set<string>): Set<string> {
+  const localNames = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+    for (const decl of declarators) {
+      const name = decl.field("name");
+      const value = decl.field("value");
+      if (!name || name.kind() !== "identifier" || !value) continue;
+      if (localNames.has(name.text())) continue;
+      if (!isSdkFieldExpression(value, sdkFieldRootNames, localNames)) continue;
+      localNames.add(name.text());
+      changed = true;
+    }
+  }
+  return localNames;
+}
+
+function isSdkFieldMemberCall(
+  call: SgNode,
+  sdkFieldRootNames: Set<string>,
+  sdkFieldLocalNames: Set<string>,
+): boolean {
+  const object = findMemberCallObject(call);
+  return object ? isSdkFieldExpression(object, sdkFieldRootNames, sdkFieldLocalNames) : false;
+}
+
+function transformHookCallbackObject(node: SgNode, edits: Edit[]): void {
+  if (node.kind() !== "object") return;
+  const pairs = node.children().filter((child: SgNode) => child.kind() === "pair");
+  for (const pair of pairs) {
+    const key = pair.field("key")?.text();
+    const value = pair.field("value");
+    if (!value) continue;
+    if ((key === "create" || key === "update") && isFunctionNode(value)) {
+      transformPrincipalCallbackParam(value, edits);
+    } else if (value.kind() === "object") {
+      transformHookCallbackObject(value, edits);
     }
   }
 }
 
-function transformParseArgsObject(call: SgNode, edits: Edit[]): void {
+function transformValidateCallbackNode(node: SgNode, edits: Edit[]): void {
+  if (isFunctionNode(node)) {
+    transformPrincipalCallbackParam(node, edits);
+    return;
+  }
+
+  if (node.kind() === "array") {
+    const callback = node.children().find(isFunctionNode);
+    if (callback) transformPrincipalCallbackParam(callback, edits);
+    return;
+  }
+
+  if (node.kind() !== "object") return;
+  const pairs = node.children().filter((child: SgNode) => child.kind() === "pair");
+  for (const pair of pairs) {
+    const value = pair.field("value");
+    if (value) transformValidateCallbackNode(value, edits);
+  }
+}
+
+function transformPrincipalCallbacksInCall(
+  call: SgNode,
+  edits: Edit[],
+  sdkFieldRootNames: Set<string>,
+  sdkFieldLocalNames: Set<string>,
+): void {
+  const memberName = findMemberCallName(call);
+  if (memberName !== "hooks" && memberName !== "validate") return;
+  if (!isSdkFieldMemberCall(call, sdkFieldRootNames, sdkFieldLocalNames)) return;
+
+  const args = call.field("arguments");
+  if (!args) return;
+  if (memberName === "hooks") {
+    const objArg = args.children().find((c: SgNode) => c.kind() === "object");
+    if (objArg) transformHookCallbackObject(objArg, edits);
+    return;
+  }
+
+  for (const arg of args.children()) {
+    transformValidateCallbackNode(arg, edits);
+  }
+}
+
+function transformParseArgsObject(
+  call: SgNode,
+  edits: Edit[],
+  sdkFieldRootNames: Set<string>,
+  sdkFieldLocalNames: Set<string>,
+): void {
   const memberName = findMemberCallName(call);
   if (memberName !== "parse") return;
+  if (!isSdkFieldMemberCall(call, sdkFieldRootNames, sdkFieldLocalNames)) return;
 
   const args = call.field("arguments");
   const objArg = args?.children().find((c: SgNode) => c.kind() === "object");
@@ -729,10 +882,14 @@ export default function transform(source: string): string | null {
   // and unrelated local helpers named `createResolver` (when the SDK import
   // does not actually bring `createResolver` in) are not.
   const createResolverLocalNames = new Set<string>();
+  const sdkFieldRootNames = new Set<string>();
   for (const importStmt of sdkImports) {
     for (const { importedName, localName } of iterateImportSpecs(importStmt)) {
       if (importedName === "createResolver") {
         createResolverLocalNames.add(localName);
+      }
+      if (importedName === "t" || importedName === "db") {
+        sdkFieldRootNames.add(localName);
       }
     }
   }
@@ -758,10 +915,11 @@ export default function transform(source: string): string | null {
     }
   }
 
+  const sdkFieldLocalNames = collectSdkFieldLocalNames(tree, sdkFieldRootNames);
   const memberCalls = tree.findAll({ rule: { kind: "call_expression" } });
   for (const call of memberCalls) {
-    transformPrincipalCallbacksInCall(call, edits);
-    transformParseArgsObject(call, edits);
+    transformPrincipalCallbacksInCall(call, edits, sdkFieldRootNames, sdkFieldLocalNames);
+    transformParseArgsObject(call, edits, sdkFieldRootNames, sdkFieldLocalNames);
   }
 
   if (edits.length === 0) return null;
