@@ -59,6 +59,51 @@ describe("WorkflowJob type inference", () => {
       },
     });
   });
+
+  test("direct body calls propagate invoker to triggered child jobs", async () => {
+    const invoker: TailorPrincipal = {
+      id: "principal-1",
+      type: "user",
+      workspaceId: "workspace-1",
+      attributes: { role: "ADMIN" },
+      attributeList: [],
+    };
+    const child = createWorkflowJob({
+      name: "capture-child-invoker",
+      body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+    });
+    const parent = createWorkflowJob({
+      name: "propagate-parent-invoker",
+      body: async () => await child.trigger(),
+    });
+
+    await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
+  });
+
+  test("trigger reads the runtime invoker when no body context is active", async () => {
+    const previousTailor = (globalThis as { tailor?: unknown }).tailor;
+    (globalThis as { tailor?: unknown }).tailor = {
+      context: {
+        getInvoker: () => ({
+          id: "runtime-principal",
+          type: "machine_user",
+          workspaceId: "workspace-1",
+          attributes: ["role"],
+          attributeMap: { role: "SYSTEM" },
+        }),
+      },
+    };
+    try {
+      const job = createWorkflowJob({
+        name: "capture-runtime-invoker",
+        body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+      });
+
+      await expect(job.trigger()).resolves.toBe("runtime-principal");
+    } finally {
+      (globalThis as { tailor?: unknown }).tailor = previousTailor;
+    }
+  });
 });
 
 describe("WorkflowJob type constraints", () => {

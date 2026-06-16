@@ -524,7 +524,15 @@ function findMemberCallObject(call: SgNode): SgNode | null {
 }
 
 function isFunctionNode(node: SgNode): boolean {
-  return node.kind() === "arrow_function" || node.kind() === "function_expression";
+  return (
+    node.kind() === "arrow_function" ||
+    node.kind() === "function_expression" ||
+    node.kind() === "method_definition"
+  );
+}
+
+function propertyName(node: SgNode): string | null {
+  return node.field("key")?.text() ?? node.field("name")?.text() ?? null;
 }
 
 function getFirstFunctionParamPattern(fn: SgNode): SgNode | null {
@@ -779,10 +787,15 @@ function isSdkFieldMemberCall(
 
 function transformHookCallbackObject(node: SgNode, edits: Edit[]): void {
   if (node.kind() !== "object") return;
-  const pairs = node.children().filter((child: SgNode) => child.kind() === "pair");
-  for (const pair of pairs) {
-    const key = pair.field("key")?.text();
-    const value = pair.field("value");
+  for (const child of node.children()) {
+    if (child.kind() === "method_definition") {
+      const key = propertyName(child);
+      if (key === "create" || key === "update") transformPrincipalCallbackParam(child, edits);
+      continue;
+    }
+    if (child.kind() !== "pair") continue;
+    const key = child.field("key")?.text();
+    const value = child.field("value");
     if (!value) continue;
     if ((key === "create" || key === "update") && isFunctionNode(value)) {
       transformPrincipalCallbackParam(value, edits);
@@ -810,9 +823,13 @@ function transformValidateCallbackNode(node: SgNode, edits: Edit[]): void {
   }
 
   if (node.kind() !== "object") return;
-  const pairs = node.children().filter((child: SgNode) => child.kind() === "pair");
-  for (const pair of pairs) {
-    const value = pair.field("value");
+  for (const child of node.children()) {
+    if (child.kind() === "method_definition") {
+      transformPrincipalCallbackParam(child, edits);
+      continue;
+    }
+    if (child.kind() !== "pair") continue;
+    const value = child.field("value");
     if (value) transformValidateCallbackNode(value, edits);
   }
 }
@@ -865,6 +882,58 @@ function transformParseArgsObject(
       edits.push(child.replace("invoker: user"));
     }
   }
+}
+
+function transformDirectBodyContext(call: SgNode, edits: Edit[]): void {
+  const memberName = findMemberCallName(call);
+  if (memberName !== "body") return;
+
+  const args = call.field("arguments");
+  const objArg = args?.children().find((c: SgNode) => c.kind() === "object");
+  if (!objArg) return;
+
+  let hasInput = false;
+  let hasEnv = false;
+  let hasInvoker = false;
+  let userNode: SgNode | null = null;
+  let envNode: SgNode | null = null;
+
+  for (const child of objArg.children()) {
+    const kind = child.kind();
+    if (kind === "pair") {
+      const key = child.field("key")?.text();
+      if (key === "input") hasInput = true;
+      if (key === "env") {
+        hasEnv = true;
+        envNode = child;
+      }
+      if (key === "invoker") hasInvoker = true;
+      if (key === "user") userNode = child.field("key") ?? child;
+    } else if (kind === "shorthand_property_identifier") {
+      const name = child.text();
+      if (name === "input") hasInput = true;
+      if (name === "env") {
+        hasEnv = true;
+        envNode = child;
+      }
+      if (name === "invoker") hasInvoker = true;
+      if (name === "user") userNode = child;
+    }
+  }
+
+  if (!hasInput || !hasEnv || !userNode) return;
+  edits.push(
+    userNode.kind() === "shorthand_property_identifier"
+      ? userNode.replace("caller: user")
+      : userNode.replace("caller"),
+  );
+  if (hasInvoker || !envNode) return;
+  const indent = " ".repeat(envNode.range().start.column);
+  edits.push(
+    envNode.kind() === "shorthand_property_identifier"
+      ? envNode.replace(`invoker: null,\n${indent}env`)
+      : envNode.replace(`invoker: null,\n${indent}${envNode.text()}`),
+  );
 }
 
 /**
@@ -999,6 +1068,7 @@ export default function transform(source: string): string | null {
   for (const call of memberCalls) {
     transformPrincipalCallbacksInCall(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
     transformParseArgsObject(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
+    transformDirectBodyContext(call, edits);
   }
 
   if (edits.length === 0) return null;
