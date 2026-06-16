@@ -1,5 +1,6 @@
 ---
 "@tailor-platform/sdk": major
+"@tailor-platform/sdk-codemod": patch
 ---
 
 Unify function principal context around `TailorPrincipal`.
