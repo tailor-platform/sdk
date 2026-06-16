@@ -219,8 +219,7 @@ interface DownloadScriptForMappingOptions {
 /**
  * Download a deployed function script for sourcemap mapping. Logs a
  * debug message on failure but never throws. Error display falls back
- * to a plain-text format when the script cannot be retrieved or when
- * the current registry entry is stale relative to the execution.
+ * to a plain-text format when the script cannot be retrieved.
  *
  * When `executionContentHash` is non-empty, the download is pinned to
  * that exact bundle so mapping stays correct across redeploys. When
@@ -236,7 +235,7 @@ interface DownloadScriptForMappingOptions {
  * @param options.scriptName - Script name (matches FunctionExecution.scriptName)
  * @param options.executionType - Execution type used to discriminate registry name translation
  * @param options.executionContentHash - Content hash of the bundle that ran; pins the download when non-empty
- * @returns Bundled script content, or null when unavailable / stale
+ * @returns Bundled script content, or null when unavailable
  */
 export async function downloadScriptForMapping(
   options: DownloadScriptForMappingOptions,
