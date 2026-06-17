@@ -75,7 +75,7 @@ async function runTestRun(
       workspaceId,
       name: scriptName,
       code,
-      arg: options?.arg,
+      arg: options?.arg === undefined ? undefined : JSON.parse(options.arg),
       invoker: authInvoker,
     });
     return { ...result, scriptName };
@@ -87,12 +87,8 @@ async function runTestRun(
   });
 
   let resolvedArg = options?.arg;
-  if (detected.type === "resolver" && resolvedArg) {
-    if (!detected.hasInput) {
-      resolvedArg = undefined;
-    } else if (detected.inputSchema) {
-      JSON.parse(resolvedArg);
-    }
+  if (detected.type === "resolver" && resolvedArg && !detected.hasInput) {
+    resolvedArg = undefined;
   }
 
   const { bundledCode, scriptName } = await bundleForTestRun({
@@ -108,7 +104,7 @@ async function runTestRun(
     workspaceId,
     name: scriptName,
     code: bundledCode,
-    arg: resolvedArg,
+    arg: resolvedArg === undefined ? undefined : JSON.parse(resolvedArg),
     invoker: authInvoker,
   });
 
@@ -312,7 +308,7 @@ describe.sequential("E2E: function test-run", () => {
         workspaceId,
         name: "add.js",
         code,
-        arg: '{"a":5,"b":7}',
+        arg: { a: 5, b: 7 },
         invoker: authInvoker,
       });
 

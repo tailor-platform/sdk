@@ -1,6 +1,20 @@
 # @tailor-platform/sdk-codemod
 
-## 0.4.0-next.0
+## 0.3.0-next.1
+### Patch Changes
+
+
+
+- [#1460](https://github.com/tailor-platform/sdk/pull/1460) [`f49c6d1`](https://github.com/tailor-platform/sdk/commit/f49c6d1b5a856969cb4e04ae7d3a87ed34aa020f) Thanks [@dqn](https://github.com/dqn)! - Remove the v1 runtime globals compatibility layer. Importing from `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` declarations; opt into globals with `@tailor-platform/sdk/runtime/globals` or use the typed wrappers from `@tailor-platform/sdk/runtime`.
+
+  The capital-cased `Tailordb.*` namespace is removed. If your project still references `Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, or `typeof Tailordb.Client`, migrate before upgrading: run `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` to rewrite them to lowercase `tailordb.*`, then add `import "@tailor-platform/sdk/runtime/globals"` so the rewritten references resolve.
+
+
+- [#1457](https://github.com/tailor-platform/sdk/pull/1457) [`84325f8`](https://github.com/tailor-platform/sdk/commit/84325f8602a5631b7c323c997b1425235509920e) Thanks [@dqn](https://github.com/dqn)! - Remove deprecated CLI aliases for the v2 command surface. Use `tailor-sdk deploy` instead of `tailor-sdk apply`, `tailor-sdk crashreport` instead of `tailor-sdk crash-report`, and the hyphenated `--machine-user` option instead of the hidden `--machineuser` alias.
+
+  Fix the v2 CLI rename codemod to migrate the hidden `--machineuser` option to `--machine-user`.
+
+## 0.3.0-next.0
 ### Minor Changes
 
 

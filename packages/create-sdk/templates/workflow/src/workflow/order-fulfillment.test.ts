@@ -1,3 +1,4 @@
+import { runWorkflowLocally } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
@@ -49,16 +50,16 @@ describe("order fulfillment workflow", () => {
 
   describe("orchestration tests with mocked triggers", () => {
     test("fulfillOrder chains all jobs", async () => {
-      using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+      using _validateSpy = vi.spyOn(validateOrder, "trigger").mockReturnValue({
         valid: true,
         orderId: "order-1",
       });
-      using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
+      using _paymentSpy = vi.spyOn(processPayment, "trigger").mockReturnValue({
         transactionId: "txn-order-1",
         amount: 100,
         status: "completed" as const,
       });
-      using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+      using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockReturnValue({
         orderId: "order-1",
         transactionId: "txn-order-1",
         confirmed: true,
@@ -90,16 +91,16 @@ describe("order fulfillment workflow", () => {
     });
 
     test("workflow.mainJob.body() chains all jobs", async () => {
-      using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+      using _validateSpy = vi.spyOn(validateOrder, "trigger").mockReturnValue({
         valid: true,
         orderId: "order-2",
       });
-      using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
+      using _paymentSpy = vi.spyOn(processPayment, "trigger").mockReturnValue({
         transactionId: "txn-order-2",
         amount: 200,
         status: "completed" as const,
       });
-      using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+      using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockReturnValue({
         orderId: "order-2",
         transactionId: "txn-order-2",
         confirmed: true,
@@ -119,9 +120,9 @@ describe("order fulfillment workflow", () => {
     });
   });
 
-  describe("integration tests with .trigger()", () => {
-    test("workflow.mainJob.trigger() executes all jobs", async () => {
-      const result = await workflow.mainJob.trigger({
+  describe("integration tests with runWorkflowLocally()", () => {
+    test("runWorkflowLocally() executes all jobs", async () => {
+      const result = await runWorkflowLocally(workflow, {
         orderId: "order-3",
         amount: 300,
       });

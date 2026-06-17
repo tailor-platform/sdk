@@ -1,5 +1,69 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.1
+### Major Changes
+
+
+
+- [#1442](https://github.com/tailor-platform/sdk/pull/1442) [`07cc256`](https://github.com/tailor-platform/sdk/commit/07cc256b9f1d695694d67438e1b0cb6df096ece8) Thanks [@dqn](https://github.com/dqn)! - Remove the deprecated `auth.invoker("<machine-user>")` helper. Pass machine user names directly as `authInvoker` strings in resolver, executor, and workflow APIs.
+
+
+
+- [#1440](https://github.com/tailor-platform/sdk/pull/1440) [`f0895f4`](https://github.com/tailor-platform/sdk/commit/f0895f4231578e54229004d3aa5bac6bd24361e3) Thanks [@dqn](https://github.com/dqn)! - Remove `defineGenerators()` and legacy `generators` config support. Use `definePlugins()` with the built-in plugin packages for code generation.
+
+
+
+- [#1441](https://github.com/tailor-platform/sdk/pull/1441) [`7604ad5`](https://github.com/tailor-platform/sdk/commit/7604ad5fdf27b791e8f1db880faed156cd6554d5) Thanks [@dqn](https://github.com/dqn)! - Remove support for wrapping `tailor-sdk function test-run --arg` resolver input in an `input` object. Pass resolver input fields directly as the `--arg` JSON value.
+
+
+
+- [#1460](https://github.com/tailor-platform/sdk/pull/1460) [`f49c6d1`](https://github.com/tailor-platform/sdk/commit/f49c6d1b5a856969cb4e04ae7d3a87ed34aa020f) Thanks [@dqn](https://github.com/dqn)! - Remove the v1 runtime globals compatibility layer. Importing from `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` declarations; opt into globals with `@tailor-platform/sdk/runtime/globals` or use the typed wrappers from `@tailor-platform/sdk/runtime`.
+
+  The capital-cased `Tailordb.*` namespace is removed. If your project still references `Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, or `typeof Tailordb.Client`, migrate before upgrading: run `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` to rewrite them to lowercase `tailordb.*`, then add `import "@tailor-platform/sdk/runtime/globals"` so the rewritten references resolve.
+
+
+- [#1459](https://github.com/tailor-platform/sdk/pull/1459) [`2c3d7ad`](https://github.com/tailor-platform/sdk/commit/2c3d7add213b171df2959b8a14e8dc2e3c3a7ec7) Thanks [@dqn](https://github.com/dqn)! - Remove the deprecated `tailor-sdk-skills` binary shim. Use `tailor-sdk skills install` to install the bundled Tailor SDK agent skill.
+
+
+
+- [#1457](https://github.com/tailor-platform/sdk/pull/1457) [`84325f8`](https://github.com/tailor-platform/sdk/commit/84325f8602a5631b7c323c997b1425235509920e) Thanks [@dqn](https://github.com/dqn)! - Remove deprecated CLI aliases for the v2 command surface. Use `tailor-sdk deploy` instead of `tailor-sdk apply`, `tailor-sdk crashreport` instead of `tailor-sdk crash-report`, and the hyphenated `--machine-user` option instead of the hidden `--machineuser` alias.
+
+  Fix the v2 CLI rename codemod to migrate the hidden `--machineuser` option to `--machine-user`.
+
+
+- [#1462](https://github.com/tailor-platform/sdk/pull/1462) [`77e7f45`](https://github.com/tailor-platform/sdk/commit/77e7f4512ddd141a8858ab37a3c48d8ad7e16543) Thanks [@dqn](https://github.com/dqn)! - Require `FunctionExecution.contentHash` for `function logs` stack trace source mapping. Executions without a content hash now show raw stack traces instead of mapping against the current function bundle.
+
+
+
+- [#1458](https://github.com/tailor-platform/sdk/pull/1458) [`ad04913`](https://github.com/tailor-platform/sdk/commit/ad049131d61dfc9f96bff8ffe7c5e5e261523b14) Thanks [@dqn](https://github.com/dqn)! - Store CLI human users by stable subject ID in the platform config instead of email, while preserving email for display and migrating legacy email-keyed entries on login or token refresh.
+
+
+
+- [#1438](https://github.com/tailor-platform/sdk/pull/1438) [`2c552cd`](https://github.com/tailor-platform/sdk/commit/2c552cd716f9abbe90ec4b22e51d0cde155c2bf9) Thanks [@dqn](https://github.com/dqn)! - Align workflow job `.trigger()` with the platform runtime. Job triggers now require a mocked workflow runtime in tests instead of running job bodies locally, and `trigger()` returns the job result directly instead of a Promise wrapper. Use `mockWorkflow()` to mock trigger results in tests, or `runWorkflowLocally()` for full-chain local workflow tests.
+
+
+### Patch Changes
+
+
+
+- [#1425](https://github.com/tailor-platform/sdk/pull/1425) [`644dca8`](https://github.com/tailor-platform/sdk/commit/644dca8ee631ff18550646d3d82bad76fba6bc33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.2
+
+
+
+- [#1429](https://github.com/tailor-platform/sdk/pull/1429) [`b933f29`](https://github.com/tailor-platform/sdk/commit/b933f291b99efb3668077cd7870abe979dc3b10b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown to v1.1.1
+
+
+
+- [#1433](https://github.com/tailor-platform/sdk/pull/1433) [`4d07f2f`](https://github.com/tailor-platform/sdk/commit/4d07f2fd814bda5886c8f0c9546f21128dcce74b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.47.1
+
+
+
+- [#1448](https://github.com/tailor-platform/sdk/pull/1448) [`4ce01dd`](https://github.com/tailor-platform/sdk/commit/4ce01dd851dae7754103a918ba89afe073f942c6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @connectrpc to v2.1.2
+
+
+
+- [#1390](https://github.com/tailor-platform/sdk/pull/1390) [`388f3d6`](https://github.com/tailor-platform/sdk/commit/388f3d69b722589cd5cca7bbbc3667a849ecaa3b) Thanks [@toiroakr](https://github.com/toiroakr)! - Guarantee that importing the SDK never loads zod in user projects — neither zod runtime code in bundled functions nor zod type computation in tsc. Internal type definitions are reorganized into per-layer pure type modules, and new CI checks verify every user-facing entry point stays zod-free at both the type and runtime level and that the internal module graph has no import cycles.
+
 ## 2.0.0-next.0
 ### Major Changes
 
