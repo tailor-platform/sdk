@@ -9,25 +9,96 @@ import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailor
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
-// Since there's naming difference between platform and SDK, use this mapping in
-// all scripts to provide variables that match `TailorPrincipal | null`.
-export const tailorPrincipalMap = /* js */ `(($raw) => {
-  const type = $raw?.type === "USER_TYPE_USER"
-    ? "user"
-    : $raw?.type === "USER_TYPE_MACHINE_USER"
-      ? "machine_user"
-      : $raw?.type;
-  if (!$raw || !type || type === "USER_TYPE_UNSPECIFIED" || $raw.id === "${NIL_UUID}") {
+/**
+ * Per-source field expressions for {@link makePrincipalExpr}. Each value is a JS
+ * snippet evaluated against the raw server payload bound to `$raw`.
+ */
+interface PrincipalFieldExprs {
+  /**
+   * Raw type accessor. `raw` is matched against `USER_TYPE_*` when normalizing;
+   * `fallback` (defaulting to `raw`) supplies the type for non-matching values,
+   * which lets sources whose primary field is empty fall back to a secondary.
+   */
+  type: { raw: string; fallback?: string };
+  /** Raw id accessor. */
+  id: string;
+  workspaceId: string;
+  attributes: string;
+  attributeList: string;
+}
+
+interface MakePrincipalExprOptions {
+  source: string;
+  fields: PrincipalFieldExprs;
+  normalize: boolean;
+  requireId?: boolean;
+}
+
+/**
+ * Build the server→SDK principal mapping expression shared across services.
+ *
+ * All principal-bearing call sites (`caller`, `actor`, `invoker`) must agree on
+ * the `TailorPrincipal | null` shape, so they are generated here rather than
+ * hand-written per service.
+ * @param options - Mapping source and field expressions
+ * @param options.source - Expression yielding the raw server payload (e.g. `user`)
+ * @param options.fields - Per-source accessors for each principal field
+ * @param options.normalize - When true, map `USER_TYPE_*` to SDK type literals and
+ *   return `null` for unspecified types or the nil-UUID id; when false, the
+ *   payload is already in SDK shape and only `null` pass-through is applied
+ * @param options.requireId - When true, missing ids are also mapped to `null`
+ * @returns A JS expression string evaluating to `TailorPrincipal | null`
+ */
+export function makePrincipalExpr(options: MakePrincipalExprOptions): string {
+  const { source, fields, normalize, requireId = false } = options;
+  const body = /* js */ `{
+    id,
+    type,
+    workspaceId: ${fields.workspaceId},
+    attributes: ${fields.attributes},
+    attributeList: ${fields.attributeList},
+  }`;
+  if (!normalize) {
+    return /* js */ `(($raw) => {
+  if (!$raw) {
     return null;
   }
-  return {
-    id: $raw.id,
-    type,
-    workspaceId: $raw.workspace_id ?? $raw.workspaceId,
-    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},
-    attributeList: $raw.attributes ?? [],
-  };
-})(user)`;
+  const id = ${fields.id};
+  const type = ${fields.type.raw};
+  return ${body};
+})(${source})`;
+  }
+  const missingIdGuard = requireId ? " || !id" : "";
+  return /* js */ `(($raw) => {
+  if (!$raw) {
+    return null;
+  }
+  const type = ${fields.type.raw} === "USER_TYPE_USER"
+    ? "user"
+    : ${fields.type.raw} === "USER_TYPE_MACHINE_USER"
+      ? "machine_user"
+      : ${fields.type.fallback ?? fields.type.raw};
+  const id = ${fields.id};
+  if (!type || type === "USER_TYPE_UNSPECIFIED" || id === "${NIL_UUID}"${missingIdGuard}) {
+    return null;
+  }
+  return ${body};
+})(${source})`;
+}
+
+// Since there's naming difference between platform and SDK, use this mapping in
+// all scripts to provide variables that match `TailorPrincipal | null`.
+export const tailorPrincipalMap = makePrincipalExpr({
+  source: "user",
+  normalize: true,
+  fields: {
+    type: { raw: "$raw?.type" },
+    id: "$raw.id",
+    workspaceId: "$raw.workspace_id ?? $raw.workspaceId",
+    attributes: "$raw.attribute_map ?? $raw.attributeMap ?? {}",
+    attributeList: "$raw.attributes ?? []",
+  },
+});
 
 /**
  * Convert a function to a string representation.
