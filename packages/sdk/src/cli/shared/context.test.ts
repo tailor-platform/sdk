@@ -511,7 +511,6 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("TAILOR_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    vi.stubEnv("TAILOR_USE_KEYRING", undefined);
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -912,7 +911,6 @@ describe("saveUserTokens", () => {
     vi.resetModules();
     resetKeyringState();
     process.env = { ...originalEnv };
-    delete process.env.TAILOR_USE_KEYRING;
   });
 
   afterEach(() => {
@@ -941,7 +939,7 @@ describe("saveUserTokens", () => {
   });
 
   test.each(["0", "false", "off"])(
-    "stores tokens in the config file when TAILOR_USE_KEYRING=%s",
+    "ignores TAILOR_USE_KEYRING=%s and stores tokens in the OS keyring",
     async (value) => {
       process.env.TAILOR_USE_KEYRING = value;
       const config = createEmptyConfig();
@@ -954,12 +952,12 @@ describe("saveUserTokens", () => {
       );
 
       expect(config.users["platform-user-sub"]).toEqual({
-        storage: "file",
-        access_token: "access-token",
-        refresh_token: "refresh-token",
+        storage: "keyring",
         token_expires_at: futureDate,
       });
-      expect(keyringPasswords.has("tailor-platform-cli:platform-user-sub")).toBe(false);
+      expect(keyringPasswords.get("tailor-platform-cli:platform-user-sub")).toBe(
+        JSON.stringify({ accessToken: "access-token", refreshToken: "refresh-token" }),
+      );
     },
   );
 
@@ -1075,14 +1073,13 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     vi.resetModules();
     resetKeyringState();
     process.env = { ...originalEnv };
-    delete process.env.TAILOR_USE_KEYRING;
   });
 
   afterEach(() => {
     process.env = originalEnv;
   });
 
-  test("keeps the config V2 and preserves the keyring user when written without TAILOR_USE_KEYRING", async () => {
+  test("keeps the config V2 and preserves the keyring user", async () => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -1154,7 +1151,9 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     expect(diskConfig.current_user).toBe("platform-user-sub");
   });
 
-  test("still downgrades a file-only config to V1 for backward compatibility", () => {
+  test("ignores TAILOR_USE_KEYRING and still downgrades a file-only config to V1", () => {
+    process.env.TAILOR_USE_KEYRING = "1";
+
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",

@@ -186,28 +186,11 @@ function migrateV1ToV3(v1Config: PfConfigV1): PfConfig {
   return migrateV2ToV3(migrateV1ToV2(v1Config));
 }
 
-function parseKeyringPreference(value: string | undefined): boolean | undefined {
-  if (!value) return undefined;
-  switch (value.trim().toLowerCase()) {
-    case "0":
-    case "false":
-    case "off":
-      return false;
-    case "1":
-    case "true":
-    case "on":
-      return true;
-    default:
-      return true;
-  }
-}
-
 function formatUnknownError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 async function trySaveTokensInKeyring(user: string, tokens: UserTokens): Promise<boolean> {
-  if (parseKeyringPreference(process.env.TAILOR_USE_KEYRING) === false) return false;
   if (!(await isKeyringAvailable())) return false;
   try {
     await saveKeyringTokens(user, tokens);
@@ -336,7 +319,6 @@ function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
  * V1 and downgrading it would silently drop the user's login. V3 configs are
  * kept as V3 because user keys are canonical subject IDs and may include email
  * metadata that is not representable in older versions.
- * Set TAILOR_USE_KEYRING=1 to write V2 format unconditionally.
  *
  * The config file may contain access/refresh tokens when the OS keyring is
  * unavailable, so it is written via {@link writeSecretFile} so other users
@@ -347,9 +329,7 @@ export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) 
   const configPath = platformConfigPath();
   const hasKeyringUser =
     config.version === 2 && Object.values(config.users).some((u) => u?.storage === "keyring");
-  const forceV2DiskFormat = parseKeyringPreference(process.env.TAILOR_USE_KEYRING) === true;
-  const diskConfig =
-    config.version === 2 && !forceV2DiskFormat && !hasKeyringUser ? toV1ForDisk(config) : config;
+  const diskConfig = config.version === 2 && !hasKeyringUser ? toV1ForDisk(config) : config;
   writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
