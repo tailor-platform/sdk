@@ -19,7 +19,7 @@ import {
 } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
 import { loadResolver } from "./loader";
-import type { LogLevel } from "@/types/app-config";
+import type { LogLevel } from "@/configure/config/types";
 
 interface ResolverInfo {
   name: string;

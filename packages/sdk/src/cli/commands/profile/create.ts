@@ -17,7 +17,7 @@ export const createCommand = defineAppCommand({
       }),
       user: arg(z.string(), {
         alias: "u",
-        description: "User email",
+        description: "User email address or machine user client ID",
       }),
       "workspace-id": arg(z.string(), {
         alias: "w",
@@ -51,7 +51,7 @@ export const createCommand = defineAppCommand({
     }
 
     // Check if user exists
-    const token = await fetchLatestToken(config, args.user);
+    const { accessToken: token, user: resolvedUser } = await fetchLatestToken(config, args.user);
 
     // Check if workspace exists
     const client = await initOperatorClient(token);
@@ -70,7 +70,7 @@ export const createCommand = defineAppCommand({
 
     // Create new profile
     config.profiles[args.name] = {
-      user: args.user,
+      user: resolvedUser,
       workspace_id: args["workspace-id"],
       ...(args.permission === "read" ? { readonly: true } : {}),
       ...(args["machine-user"] ? { machine_user: args["machine-user"] } : {}),
@@ -87,7 +87,7 @@ export const createCommand = defineAppCommand({
     // Show profile info
     const profileInfo: ProfileInfo = {
       name: args.name,
-      user: args.user,
+      user: resolvedUser,
       workspaceId: args["workspace-id"],
       permission: args.permission,
       ...(args["machine-user"]

@@ -16,8 +16,12 @@ export namespace t {
 }
 
 export { type TailorField } from "@/configure/types/type";
-export { type TailorPrincipal, type AttributeMap, type AttributeList } from "@/types/user";
-export { type Env } from "@/types/env";
+export {
+  type TailorPrincipal,
+  type AttributeMap,
+  type AttributeList,
+  type Env,
+} from "@/runtime/types";
 export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
 export { type IdpNameRegistry, type IdpName } from "@/configure/types/idp-name";
 
@@ -42,7 +46,7 @@ export type {
   PluginExecutorContext,
   PluginExecutorContextBase,
   TailorDBTypeForPlugin,
-} from "@/types/plugin";
+} from "@/plugin/types";
 
 // Generation-time hook context types for plugin development
 export type {
@@ -52,4 +56,4 @@ export type {
   TailorDBNamespaceData,
   ResolverNamespaceData,
   GeneratorResult,
-} from "@/types/plugin-generation";
+} from "@/plugin/types";

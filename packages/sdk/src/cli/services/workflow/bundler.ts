@@ -16,7 +16,7 @@ import ml from "@/utils/multiline";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
-import type { LogLevel } from "@/types/app-config";
+import type { LogLevel } from "@/configure/config/types";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);

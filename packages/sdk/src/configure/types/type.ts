@@ -6,11 +6,11 @@ import type {
   FieldMetadata,
   FieldOptions,
   FieldOutput,
-} from "@/types/field-types";
+  TailorField as TailorFieldBase,
+  FieldValidateInput,
+} from "@/configure/types/field.types";
+import type { TailorPrincipal } from "@/runtime/types";
 import type { InferFieldsOutput, Prettify } from "@/types/helpers";
-import type { TailorField as TailorFieldBase } from "@/types/tailor-field";
-import type { TailorPrincipal } from "@/types/user";
-import type { FieldValidateInput } from "@/types/validation";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // This helper type intentionally uses `any` as a placeholder for unknown field output.

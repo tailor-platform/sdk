@@ -1,4 +1,4 @@
-import type { TailorEnv } from "@/types/env";
+import type { TailorEnv } from "@/runtime/types";
 import type { IncomingWebhookTrigger as ParserIncomingWebhookTrigger } from "@/types/executor.generated";
 import type { JsonValue } from "@/types/helpers";
 

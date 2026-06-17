@@ -17,7 +17,7 @@ export const updateCommand = defineAppCommand({
       }),
       user: arg(z.string().optional(), {
         alias: "u",
-        description: "New user email",
+        description: "New user email address or machine user client ID",
       }),
       "workspace-id": arg(z.string().optional(), {
         alias: "w",
@@ -61,6 +61,7 @@ export const updateCommand = defineAppCommand({
     const newUser = args.user || oldUser;
     const oldWorkspaceId = profile.workspace_id;
     const newWorkspaceId = args["workspace-id"] || oldWorkspaceId;
+    let resolvedUser = newUser;
 
     // Compute the final machine_user and machine_user_override to validate the combination.
     const finalMachineUser =
@@ -89,10 +90,11 @@ export const updateCommand = defineAppCommand({
     // removed, important so a user can always lift their own readonly flag.
     if (args.user !== undefined || args["workspace-id"] !== undefined) {
       // Check if user exists
-      const token = await fetchLatestToken(config, newUser);
+      const refreshed = await fetchLatestToken(config, newUser);
+      resolvedUser = refreshed.user;
 
       // Check if workspace exists
-      const client = await initOperatorClient(token);
+      const client = await initOperatorClient(refreshed.accessToken);
       const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
         const { workspaces, nextPageToken } = await client.listWorkspaces({
           pageToken,
@@ -107,7 +109,7 @@ export const updateCommand = defineAppCommand({
     }
 
     // Update properties
-    profile.user = newUser;
+    profile.user = resolvedUser;
     profile.workspace_id = newWorkspaceId;
     if (args.permission === "read") {
       profile.readonly = true;
@@ -134,7 +136,7 @@ export const updateCommand = defineAppCommand({
     // Show profile info
     const profileInfo: ProfileInfo = {
       name: args.name,
-      user: newUser,
+      user: resolvedUser,
       workspaceId: newWorkspaceId,
       permission: profile.readonly === true ? "read" : "write",
       ...(profile.machine_user

@@ -1,11 +1,9 @@
-import { t } from "@/configure/types/type";
+import { t, type TailorAnyField, type TailorField } from "@/configure/types/type";
 import { brandValue } from "@/utils/brand";
 import type { MachineUserName } from "@/configure/types/machine-user";
-import type { TailorAnyField, TailorField } from "@/configure/types/type";
-import type { TailorEnv } from "@/types/env";
+import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
 import type { InferFieldsOutput, output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
-import type { TailorPrincipal } from "@/types/user";
 
 type Context<Input extends Record<string, TailorAnyField> | undefined> = {
   input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;
