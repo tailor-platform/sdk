@@ -14,6 +14,8 @@ import {
 } from "@tailor-platform/sdk/cli";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const exampleDir = path.resolve(scriptDir, "..", "..");
 const fixtureRoot = path.resolve(exampleDir, "tests", "migration-fixtures");
@@ -270,7 +272,7 @@ const seedData = async (
     workspaceId,
     name: `${label}.js`,
     code: bundled.bundledCode,
-    arg: { data, order },
+    arg: { data, order } as unknown as JsonValue,
     invoker,
   });
   if (!result.success) {
