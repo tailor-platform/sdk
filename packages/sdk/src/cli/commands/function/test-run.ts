@@ -22,7 +22,7 @@ import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import { assertDefined } from "@/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
-import type { JsonValue } from "@/types/helpers";
+import type { Jsonifiable } from "type-fest";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
@@ -163,7 +163,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
     logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
 
-    let parsedArg: JsonValue | undefined;
+    let parsedArg: Jsonifiable | undefined;
     if (args.arg !== undefined) {
       try {
         parsedArg = JSON.parse(args.arg);
