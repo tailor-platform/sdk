@@ -623,6 +623,7 @@ function transformPrincipalCallbackParam(fn: SgNode, edits: Edit[]): void {
         }
       }
     }
+    transformPrincipalCallbackParamType(param, edits);
     return;
   }
 

@@ -4,7 +4,7 @@ const role = db
   .string()
   .hooks({
     create: ({ value, invoker }) => (invoker?.attributes.role === "ADMIN" ? value : "user"),
-    update: ctx => ctx.invoker?.id ?? "anonymous",
+    update: (ctx: { invoker: TailorPrincipal | null }) => ctx.invoker?.id ?? "anonymous",
     delete({ user }) {
       return user?.id ?? "anonymous";
     },
