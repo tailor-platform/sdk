@@ -308,7 +308,7 @@ export default createResolver({
 });
 ```
 
-Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `deploy`) after defining new machine users to refresh it.
+Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `apply`) after defining new machine users to refresh it.
 
 ## OAuth 2.0 Clients
 
@@ -432,7 +432,7 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 
 ### Change Detection
 
-The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `deploy` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
+The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
 
 > [!WARNING]
 > The secret hash lives in `.tailor-sdk/secrets-state.json`, which is gitignored and not shared across machines or CI. When that state is missing — a clean checkout, CI, another machine, or after deleting `.tailor-sdk/` — a deploy cannot confirm the secret is unchanged, so it revokes and recreates the connection and discards the token stored by `authconnection authorize`. For shared and CI workflows, manage the connection and create its token from the Console (`tailor-sdk authconnection open`) instead.
