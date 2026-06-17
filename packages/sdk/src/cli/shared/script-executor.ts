@@ -7,7 +7,7 @@
 
 import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
 import type { OperatorClient } from "@/cli/shared/client";
-import type { JsonCompatible } from "@/types/helpers";
+import type { JsonCompatible, JsonValue } from "@/types/helpers";
 import type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 /**
@@ -18,7 +18,7 @@ export const DEFAULT_POLL_INTERVAL = 1000;
 /**
  * Options for script execution
  */
-export interface ScriptExecutionOptions<T = unknown> {
+export interface ScriptExecutionOptions<T = JsonValue> {
   /** Operator client instance */
   client: OperatorClient;
   /** Workspace ID */
@@ -118,7 +118,7 @@ export async function waitForExecution(
  * @param {ScriptExecutionOptions} options - Execution options
  * @returns {Promise<ScriptExecutionResult>} Execution result
  */
-export async function executeScript<T = unknown>(
+export async function executeScript<T = JsonValue>(
   options: ScriptExecutionOptions<T> & { arg?: JsonCompatible<T> },
 ): Promise<ScriptExecutionResult> {
   const { client, workspaceId, name, code, arg, invoker, pollInterval } = options;
