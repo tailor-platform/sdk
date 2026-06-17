@@ -459,7 +459,7 @@ export function transformFunctionTriggers(
     } else if (call.kind === "job") {
       const jobName = jobNameMap.get(call.identifierName);
       if (jobName) {
-        const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))()`;
+        const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
 
         replacements.push({
           start: call.callRange.start,

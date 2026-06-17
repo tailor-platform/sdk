@@ -3,7 +3,7 @@ import type {
   FileUploadOptions,
   FileUploadResponse,
   FileMetadata,
-  FileStreamIterator,
+  FileDownloadStreamResponse,
 } from "@tailor-platform/sdk/runtime/file";
 
 export interface TypeWithFiles {
@@ -50,10 +50,10 @@ export async function getFileMetadata<T extends keyof TypeWithFiles>(
   return await file.getMetadata(namespaces[type], type, field, recordId);
 }
 
-export async function openFileDownloadStream<T extends keyof TypeWithFiles>(
+export async function downloadFileStream<T extends keyof TypeWithFiles>(
   type: T,
   field: TypeWithFiles[T]["fields"],
   recordId: string,
-): Promise<FileStreamIterator> {
-  return await file.openDownloadStream(namespaces[type], type, field, recordId);
+): Promise<FileDownloadStreamResponse> {
+  return await file.downloadStream(namespaces[type], type, field, recordId);
 }

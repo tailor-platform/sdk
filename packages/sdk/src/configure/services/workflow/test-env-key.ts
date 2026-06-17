@@ -1,7 +1,7 @@
 /**
  * Typed accessors for the test-time globalThis slot used to pass `env` from
  * `mockWorkflow().setEnv()` (in `@tailor-platform/sdk/vitest`) to
- * `createWorkflowJob().trigger()` bodies. The slot key is private to this
+ * `runWorkflowLocally()` job bodies. The slot key is private to this
  * module; callers go through the get/set/clear functions below so both sides
  * share the same access path.
  *
@@ -24,7 +24,7 @@ export function readWorkflowTestEnv(): TailorEnv | undefined {
 
 /**
  * Write the test-time env slot.
- * @param env - Env value to expose to `.trigger()` bodies.
+ * @param env - Env value to expose to `runWorkflowLocally()` job bodies.
  * @internal
  */
 export function writeWorkflowTestEnv(env: TailorEnv): void {
@@ -40,7 +40,7 @@ export function clearWorkflowTestEnv(): void {
 }
 
 /**
- * Env-var fallback read by `.trigger()` when `mockWorkflow().setEnv()` is unset.
+ * Env-var fallback read by `runWorkflowLocally()` when `mockWorkflow().setEnv()` is unset.
  * @deprecated Use `mockWorkflow().setEnv()` from `@tailor-platform/sdk/vitest`.
  * @internal
  */

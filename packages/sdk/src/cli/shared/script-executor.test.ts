@@ -1,6 +1,11 @@
 import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { waitForExecution, executeScript, DEFAULT_POLL_INTERVAL } from "./script-executor";
+import {
+  waitForExecution,
+  executeScript,
+  DEFAULT_POLL_INTERVAL,
+  type ScriptExecutionOptions,
+} from "./script-executor";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
@@ -193,7 +198,7 @@ describe("executeScript", () => {
       workspaceId: "workspace-1",
       name: "test-script.js",
       code: "export function main() { return { success: true }; }",
-      arg: '{"input":"value"}',
+      arg: { input: "value" },
       invoker: mockAuthInvoker,
     });
 
@@ -240,6 +245,29 @@ describe("executeScript", () => {
         arg: "{}",
       }),
     );
+  });
+
+  test("accepts options typed as the bare ScriptExecutionOptions", async () => {
+    const client = createMockClient({
+      testExecScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
+      getFunctionExecution: vi.fn().mockResolvedValue({
+        execution: { status: FunctionExecution_Status.SUCCESS, logs: "", result: "" },
+      }),
+    });
+
+    // Regression: a typed-out options object must stay assignable to
+    // executeScript's parameter (arg is Jsonifiable, usable on its own).
+    const options: ScriptExecutionOptions = {
+      client,
+      workspaceId: "workspace-1",
+      name: "test-script.js",
+      code: "code",
+      arg: { a: 1 },
+      invoker: mockAuthInvoker,
+    };
+
+    const result = await executeScript(options);
+    expect(result.success).toBe(true);
   });
 
   test("returns failure result when script fails", async () => {

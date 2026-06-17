@@ -23,15 +23,10 @@
  */
 
 import { type Mock, vi } from "vitest";
-import {
-  getRegisteredJob,
-  getRegisteredWorkflow,
-  TRIGGER_DEFAULT,
-} from "@/configure/services/workflow/registry";
+import { TRIGGER_DEFAULT } from "@/configure/services/workflow/registry";
 import { assertDefined } from "@/utils/assert";
 import { platformSerialize } from "@/utils/test/platform-serialize";
 import {
-  buildJobContext,
   clearWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
@@ -337,25 +332,21 @@ export function mockWorkflow() {
   const root = tailorRoot();
   const prev = root.workflow;
 
-  // Default impls (also restored by reset): run the registered body by name so a
-  // `.trigger()` with no handler/result executes the real job locally.
-  const defaultTriggerJob = (jobName: string, args?: unknown): unknown => {
-    const body = getRegisteredJob(jobName);
-    return body ? body(args, buildJobContext()) : null;
+  const defaultTriggerJob = (jobName: string, _args?: unknown): unknown => {
+    throw new Error(
+      `No workflow job mock for "${jobName}". Call mockWorkflow().setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
+    );
   };
   const defaultTriggerWorkflow = async (
-    workflowName: string,
-    args?: unknown,
+    _workflowName: string,
+    _args?: unknown,
     _options?: TriggerWorkflowOptions,
   ): Promise<string> => {
-    const wf = getRegisteredWorkflow(workflowName);
-    if (wf) await installedTriggerJobFunction(wf.mainJobName, args);
     return TRIGGER_DEFAULT;
   };
 
   // Inner vi.fns hold the overridable behavior + call recording; the installed
-  // shims below cross the platform JSON boundary (serialize args + results) once
-  // so every path (default body, setJobHandler, enqueueResult) is covered.
+  // shims below cross the platform JSON boundary (serialize args + results) once.
   const triggerJobFunction = vi.fn(defaultTriggerJob);
   const triggerWorkflow = vi.fn(defaultTriggerWorkflow);
   const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
@@ -465,7 +456,7 @@ export function mockWorkflow() {
     }) as SetWaitHandler,
 
     /**
-     * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
+     * Set the `env` passed to job bodies invoked via `runWorkflowLocally()`.
      * Cleared on dispose / reset.
      * @param env - Env passed to job bodies.
      */
@@ -927,83 +918,6 @@ const FILE_DEFAULTS: Record<string, any> = {
   uploadStream: { metadata: { fileSize: 0, sha256sum: "" } },
 };
 
-type FileStream = AsyncIterableIterator<unknown> & { close(): Promise<void> };
-
-function toFileStream(value: unknown): FileStream {
-  if (
-    value !== null &&
-    typeof value === "object" &&
-    Symbol.asyncIterator in value &&
-    typeof (value as { close?: unknown }).close === "function"
-  ) {
-    return value as FileStream;
-  }
-  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
-    throw new TypeError(
-      "openDownloadStream expects an iterable of StreamValue items " +
-        '(e.g. [{ type: "chunk", data, position }, { type: "complete" }]); ' +
-        "got raw bytes. Wrap the bytes in a structured chunk first.",
-    );
-  }
-  if (
-    value !== null &&
-    typeof value === "object" &&
-    (Symbol.iterator in value || Symbol.asyncIterator in value)
-  ) {
-    const source = value as Iterable<unknown> | AsyncIterable<unknown>;
-    const inner =
-      Symbol.asyncIterator in source
-        ? (source as AsyncIterable<unknown>)[Symbol.asyncIterator]()
-        : (source as Iterable<unknown>)[Symbol.iterator]();
-    const stream: FileStream = {
-      async next() {
-        const r = await inner.next();
-        if (!r.done) {
-          assertStreamValue(r.value);
-        }
-        return r.done ? { done: true as const, value: undefined } : r;
-      },
-      async close() {},
-      [Symbol.asyncIterator]() {
-        return stream;
-      },
-    };
-    return stream;
-  }
-  const empty: FileStream = {
-    async next() {
-      return { done: true as const, value: undefined };
-    },
-    async close() {},
-    [Symbol.asyncIterator]() {
-      return empty;
-    },
-  };
-  return empty;
-}
-
-function assertStreamValue(v: unknown): void {
-  if (v === null || typeof v !== "object") {
-    throw new TypeError(
-      'openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
-        `got ${typeof v === "object" ? "null" : typeof v}.`,
-    );
-  }
-  if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
-    throw new TypeError(
-      "openDownloadStream expected a StreamValue item, got raw bytes. " +
-        'Wrap the bytes in a structured chunk first (e.g. { type: "chunk", data, position }).',
-    );
-  }
-  const type = (v as { type?: unknown }).type;
-  if (type !== "metadata" && type !== "chunk" && type !== "complete") {
-    throw new TypeError(
-      'openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
-        `got ${JSON.stringify(type)}.`,
-    );
-  }
-}
-
 /**
  * Acquire a disposable mock for `tailordb.file`. Restored on dispose.
  * @returns Disposable File mock control object
@@ -1062,14 +976,6 @@ export function mockFile() {
     },
     async getMetadata(namespace: string, typeName: string, fieldName: string, recordId: string) {
       return handle("getMetadata", namespace, typeName, fieldName, recordId);
-    },
-    async openDownloadStream(
-      namespace: string,
-      typeName: string,
-      fieldName: string,
-      recordId: string,
-    ) {
-      return toFileStream(handle("openDownloadStream", namespace, typeName, fieldName, recordId));
     },
     async downloadStream(namespace: string, typeName: string, fieldName: string, recordId: string) {
       const resolved = handle("downloadStream", namespace, typeName, fieldName, recordId);

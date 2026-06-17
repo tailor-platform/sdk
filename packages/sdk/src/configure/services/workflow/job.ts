@@ -36,23 +36,20 @@ type JobBody<I, O> = [null] extends [I]
  * Type constraints:
  * - Input: Must be JsonValue-compatible (plain objects/arrays; no class instances or functions) or undefined.
  * - Output: Must be JsonValue-compatible (plain objects/arrays; no class instances or functions), undefined, or void.
- * - Trigger returns `Awaited<Output>` as-is (no Jsonify transformation).
+ * - Trigger returns `Awaited<Output>` as-is (no Promise or Jsonify transformation).
  */
 export interface WorkflowJob<Name extends string = string, Input = undefined, Output = undefined> {
   name: Name;
   /**
-   * Trigger this job with the given input. Returns a Promise that resolves
-   * to the job's output value.
+   * Trigger this job with the given input and return the job's output value.
    * @example
    * body: async (input) => {
-   *   const a = await jobA.trigger({ id: input.id });
-   *   const b = await jobB.trigger({ id: input.id });
+   *   const a = jobA.trigger({ id: input.id });
+   *   const b = jobB.trigger({ id: input.id });
    *   return { a, b };
    * }
    */
-  trigger: [Input] extends [undefined]
-    ? () => Promise<Awaited<Output>>
-    : (input: Input) => Promise<Awaited<Output>>;
+  trigger: [Input] extends [undefined] ? () => Awaited<Output> : (input: Input) => Awaited<Output>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
@@ -74,7 +71,7 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  * class instances exposing methods are rejected via the property walk.
  * @param config - Job configuration with name and body function.
  * @param config.name - Unique job name across the project.
- * @param config.body - Async function that processes the job input.
+ * @param config.body - Function that processes the job input.
  * @returns A WorkflowJob that can be triggered from other jobs.
  * @example
  * // Simple job with async body:
@@ -89,9 +86,9 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  * // Orchestrator job that fans out to other jobs.
  * export const orchestrate = createWorkflowJob({
  *   name: "orchestrate",
- *   body: async (input: { orderId: string }) => {
- *     const inventory = await checkInventory.trigger({ orderId: input.orderId });
- *     const payment = await processPayment.trigger({ orderId: input.orderId });
+ *   body: (input: { orderId: string }) => {
+ *     const inventory = checkInventory.trigger({ orderId: input.orderId });
+ *     const payment = processPayment.trigger({ orderId: input.orderId });
  *     return { inventory, payment };
  *   },
  * });
@@ -101,18 +98,18 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
 ): WorkflowJob<Name, I, Awaited<O>> {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
 
-  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
+  // Test-only local runner registry; the platform bundle sets the flag so it is DCE'd.
   if (!process.env.TAILOR_PLATFORM_BUNDLE) {
     registerJob(config.name, body as RegisteredJobBody);
   }
 
   const trigger = process.env.TAILOR_PLATFORM_BUNDLE
-    ? async () => {
+    ? () => {
         throw new Error(
           "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
         );
       }
-    : async (args?: unknown) => (await dispatchTriggerJob(config.name, args)) as Awaited<O>;
+    : (args?: unknown) => dispatchTriggerJob(config.name, args) as Awaited<O>;
 
   return brandValue(
     { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,

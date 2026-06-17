@@ -22,6 +22,7 @@ import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import { assertDefined } from "@/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
+import type { Jsonifiable } from "type-fest";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
@@ -134,15 +135,11 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       functionName = detected.name;
       logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
 
-      if (detected.type === "resolver" && args.arg) {
-        if (!detected.hasInput) {
-          logger.warn(
-            '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
-          );
-          args.arg = undefined;
-        } else if (detected.inputSchema) {
-          JSON.parse(args.arg);
-        }
+      if (detected.type === "resolver" && args.arg && !detected.hasInput) {
+        logger.warn(
+          '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
+        );
+        args.arg = undefined;
       }
 
       logger.info("Bundling...");
@@ -166,12 +163,23 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
     logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
 
+    let parsedArg: Jsonifiable | undefined;
+    if (args.arg !== undefined) {
+      try {
+        parsedArg = JSON.parse(args.arg);
+      } catch (error) {
+        throw new Error(`Invalid --arg JSON: ${error instanceof Error ? error.message : error}`, {
+          cause: error,
+        });
+      }
+    }
+
     const result = await executeScript({
       client,
       workspaceId,
       name: scriptName,
       code: bundledCode,
-      arg: args.arg,
+      arg: parsedArg,
       invoker: authInvoker,
     });
 

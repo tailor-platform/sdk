@@ -1,7 +1,8 @@
 // Default `tailor.workflow` runner installed by the `tailor-runtime` environment.
 // Must stay free of `vitest` (`vi`): it loads via `./globals` in the environment
 // realm where `vi` is unavailable, hence relative imports only (no `@/` alias).
-import { runRegisteredJob, runRegisteredWorkflow } from "../configure/services/workflow/registry";
+import { TRIGGER_DEFAULT } from "../configure/services/workflow/registry";
+import { platformSerialize } from "../utils/test/platform-serialize";
 
 export interface DefaultWorkflowRuntime {
   triggerJobFunction: (name: string, args?: unknown) => unknown;
@@ -16,8 +17,15 @@ export interface DefaultWorkflowRuntime {
 
 export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
   return {
-    triggerJobFunction: (name, args) => runRegisteredJob(name, args),
-    triggerWorkflow: (name, args) => runRegisteredWorkflow(name, args),
+    triggerJobFunction: (name) => {
+      throw new Error(
+        `No workflow job mock for "${name}". Acquire mockWorkflow() and call setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
+      );
+    },
+    triggerWorkflow: async (_name, args) => {
+      platformSerialize(args);
+      return TRIGGER_DEFAULT;
+    },
     wait: (key: string): unknown => {
       throw new Error(
         `No wait handler for "${key}". Acquire mockWorkflow() and call setWaitHandler(...).`,

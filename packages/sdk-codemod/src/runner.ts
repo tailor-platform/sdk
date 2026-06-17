@@ -125,9 +125,17 @@ interface LoadedTransform {
   id: string;
   transform: TransformFn;
   matches: (relativePath: string) => boolean;
-  legacyPatterns: string[];
+  legacyPatterns: Array<string | string[]>;
   suspiciousPatterns: string[];
   prompt?: string;
+}
+
+/** Resolve a legacy pattern against content, returning its label when matched. */
+function matchLegacyPattern(content: string, pattern: string | string[]): string | null {
+  if (typeof pattern === "string") {
+    return content.includes(pattern) ? pattern : null;
+  }
+  return pattern.every((p) => content.includes(p)) ? pattern.join(" + ") : null;
 }
 
 function legacyPatternWarnings(
@@ -136,7 +144,9 @@ function legacyPatternWarnings(
   transforms: LoadedTransform[],
 ): string[] {
   return transforms.flatMap((lt) => {
-    const found = lt.legacyPatterns.filter((p) => content.includes(p));
+    const found = lt.legacyPatterns
+      .map((p) => matchLegacyPattern(content, p))
+      .filter((label): label is string => label !== null);
     if (found.length === 0) return [];
     return [
       `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,

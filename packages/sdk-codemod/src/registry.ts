@@ -114,6 +114,17 @@ const allCodemods: CodemodPackage[] = [
     scriptPath: "v2/tailordb-namespace/scripts/transform.js",
     legacyPatterns: ["Tailordb."],
   },
+  {
+    id: "v2/execute-script-arg",
+    name: "executeScript arg JSON.stringify → value",
+    description:
+      "Unwrap `JSON.stringify(...)` passed as the `executeScript` `arg` option. In v2 `arg` takes a JSON-serializable value and is serialized internally, so a pre-stringified argument double-encodes.",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/execute-script-arg/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,mjs,cjs,js}"],
+    legacyPatterns: [["executeScript", "JSON.stringify"]],
+  },
 ];
 
 /**
