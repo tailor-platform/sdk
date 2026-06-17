@@ -4,7 +4,7 @@ import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage } from "./types";
+import type { CodemodPackage, LlmReview } from "./types";
 
 /**
  * A transform function that receives source text and file path,
@@ -40,6 +40,8 @@ export interface CodemodRunResult {
   warnings: string[];
   /** IDs of codemods that actually produced changes in at least one file. */
   appliedCodemodIds: Set<string>;
+  /** Files flagged for LLM-assisted review, grouped by codemod. */
+  llmReviews: LlmReview[];
 }
 
 /** Default file patterns for TypeScript files. */
@@ -123,7 +125,17 @@ interface LoadedTransform {
   id: string;
   transform: TransformFn;
   matches: (relativePath: string) => boolean;
-  legacyPatterns: string[];
+  legacyPatterns: Array<string | string[]>;
+  suspiciousPatterns: string[];
+  prompt?: string;
+}
+
+/** Resolve a legacy pattern against content, returning its label when matched. */
+function matchLegacyPattern(content: string, pattern: string | string[]): string | null {
+  if (typeof pattern === "string") {
+    return content.includes(pattern) ? pattern : null;
+  }
+  return pattern.every((p) => content.includes(p)) ? pattern.join(" + ") : null;
 }
 
 function legacyPatternWarnings(
@@ -132,7 +144,9 @@ function legacyPatternWarnings(
   transforms: LoadedTransform[],
 ): string[] {
   return transforms.flatMap((lt) => {
-    const found = lt.legacyPatterns.filter((p) => content.includes(p));
+    const found = lt.legacyPatterns
+      .map((p) => matchLegacyPattern(content, p))
+      .filter((label): label is string => label !== null);
     if (found.length === 0) return [];
     return [
       `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
@@ -165,6 +179,8 @@ export async function runCodemods(
       transform: await loadTransform(scriptPath),
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
+      suspiciousPatterns: codemod.suspiciousPatterns ?? [],
+      prompt: codemod.prompt,
     });
   }
 
@@ -172,6 +188,8 @@ export async function runCodemods(
   const warnings: string[] = [];
   const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
+  // codemod id -> files flagged for LLM-assisted review
+  const suspiciousByCodemod = new Map<string, string[]>();
 
   for await (const relative of walkFiles(targetPath)) {
     const absolute = path.resolve(targetPath, relative);
@@ -207,6 +225,23 @@ export async function runCodemods(
     }
 
     warnings.push(...legacyPatternWarnings(relative, current, matchedTransforms));
+
+    for (const lt of matchedTransforms) {
+      if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
+      if (lt.suspiciousPatterns.some((p) => current.includes(p))) {
+        const files = suspiciousByCodemod.get(lt.id) ?? [];
+        files.push(relative);
+        suspiciousByCodemod.set(lt.id, files);
+      }
+    }
+  }
+
+  const llmReviews: LlmReview[] = [];
+  for (const lt of loaded) {
+    const files = suspiciousByCodemod.get(lt.id);
+    if (!lt.prompt || !files) continue;
+    // Sort for deterministic output regardless of filesystem traversal order.
+    llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
   }
 
   return {
@@ -214,5 +249,6 @@ export async function runCodemods(
     filesModified,
     warnings,
     appliedCodemodIds,
+    llmReviews,
   };
 }
