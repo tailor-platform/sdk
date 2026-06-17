@@ -65,6 +65,8 @@ const strictHookedRole = db
   .hooks({ create: strictHook, update: namedStrictHook })
   .hooks({ create: aliasedStrictHook });
 
+const invoker = { id: "outer-invoker" };
+
 const directHookedRole = db.string().hooks({
   create: ({ invoker }) => {
     const parsed = t.string().parse({ value: "hello", data: {}, invoker });
@@ -75,6 +77,13 @@ const directHookedRole = db.string().hooks({
     const { invoker: user } = ctx;
     const { invoker: currentUser } = ctx;
     return user?.id ?? currentUser?.id;
+  },
+});
+
+const externalInvokerHookedRole = db.string().hooks({
+  create: ({ invoker: user }) => {
+    const parsed = t.string().parse({ value: "hello", data: {}, invoker: user });
+    return user?.id ?? invoker.id ?? parsed.value;
   },
 });
 

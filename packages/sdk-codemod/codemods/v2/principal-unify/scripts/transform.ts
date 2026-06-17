@@ -625,6 +625,35 @@ function collectAllShadowRanges(root: SgNode, name: string): Array<[number, numb
   return ranges;
 }
 
+function hasUnshadowedIdentifierReference(root: SgNode, name: string): boolean {
+  const shadowRanges = collectAllShadowRanges(root, name);
+  const refs = root.findAll({
+    rule: { kind: "identifier", regex: `^${escapeRegex(name)}$` },
+  });
+  for (const ref of refs) {
+    if (!isInsideAnyRange(ref.range().start.index, shadowRanges)) return true;
+  }
+  return false;
+}
+
+function rewriteParseArgumentShorthands(
+  root: SgNode,
+  localName: string,
+  propertyName: string,
+  edits: Edit[],
+): void {
+  const shadowRanges = collectAllShadowRanges(root, localName);
+  const shortRefs = root.findAll({
+    rule: { kind: "shorthand_property_identifier", regex: `^${escapeRegex(localName)}$` },
+  });
+  for (const ref of shortRefs) {
+    const pos = ref.range().start.index;
+    if (isInsideAnyRange(pos, shadowRanges)) continue;
+    if (!isParseArgumentShorthand(ref)) continue;
+    edits.push(ref.replace(`${propertyName}: ${localName}`));
+  }
+}
+
 interface PrincipalLocalBinding {
   name: string;
   bindingStart: number;
@@ -700,22 +729,15 @@ function hasCallerBindingConflict(pattern: SgNode, body: SgNode): boolean {
       if (inner && inner.text() === "caller") return true;
     }
   }
-  const decls = body.findAll({
-    rule: {
-      kind: "identifier",
-      regex: "^caller$",
-      inside: { kind: "variable_declarator" },
-    },
-  });
-  if (decls.length > 0) return true;
-  const shortDecls = body.findAll({
-    rule: {
-      kind: "shorthand_property_identifier_pattern",
-      regex: "^caller$",
-      inside: { kind: "variable_declarator" },
-    },
-  });
-  if (shortDecls.length > 0) return true;
+  const decls = body.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of decls) {
+    const nameNode = decl.field("name");
+    if (nameNode && patternBindsName(nameNode, "caller")) return true;
+  }
+  const functionDecls = body.findAll({ rule: { kind: "function_declaration" } });
+  for (const fn of functionDecls) {
+    if (fn.field("name")?.text() === "caller") return true;
+  }
   for (const k of NESTED_FN_KINDS) {
     const fns = body.findAll({ rule: { kind: k } });
     for (const fn of fns) {
@@ -756,6 +778,8 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
   if (pattern.kind() === "object_pattern") {
     if (hasCallerBindingConflict(pattern, body)) return;
 
+    const aliasRenamedUser = hasUnshadowedIdentifierReference(body, "caller");
+    let aliasedShorthandUser = false;
     let renamedShorthandUser = false;
     const principalAliasBindings: PrincipalLocalBinding[] = [];
     // Only iterate top-level pattern children so nested destructures like
@@ -763,8 +787,17 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
     for (const child of pattern.children()) {
       const kind = child.kind();
       if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
-        edits.push(child.replace("caller"));
-        renamedShorthandUser = true;
+        if (aliasRenamedUser) {
+          edits.push(child.replace("caller: user"));
+          aliasedShorthandUser = true;
+          principalAliasBindings.push({
+            name: "user",
+            bindingStart: child.range().start.index,
+          });
+        } else {
+          edits.push(child.replace("caller"));
+          renamedShorthandUser = true;
+        }
       } else if (kind === "pair_pattern") {
         const key = child.field("key");
         if (key && key.text() === "user") {
@@ -784,10 +817,22 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
           .children()
           .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
         if (inner && inner.text() === "user") {
-          edits.push(inner.replace("caller"));
-          renamedShorthandUser = true;
+          if (aliasRenamedUser) {
+            edits.push(inner.replace("caller: user"));
+            aliasedShorthandUser = true;
+            principalAliasBindings.push({
+              name: "user",
+              bindingStart: inner.range().start.index,
+            });
+          } else {
+            edits.push(inner.replace("caller"));
+            renamedShorthandUser = true;
+          }
         }
       }
+    }
+    if (aliasedShorthandUser) {
+      rewriteParseArgumentShorthands(body, "user", "invoker", edits);
     }
     if (renamedShorthandUser) {
       // Use the broader shadow-range collector here so a nested arrow that
@@ -1276,14 +1321,23 @@ function transformPrincipalCallbackParam(
   if (renamesBinding && patternBindsName(pattern, "invoker")) return;
   transformPrincipalCallbackParamType(param, edits, typeContext);
 
-  const aliasRenamedUser = renamesBinding && collectAllShadowRanges(body, "invoker").length > 0;
+  const aliasRenamedUser =
+    renamesBinding &&
+    (collectAllShadowRanges(body, "invoker").length > 0 ||
+      hasUnshadowedIdentifierReference(body, "invoker"));
 
+  let aliasedShorthandUser = false;
   let renamedShorthandUser = false;
   for (const child of pattern.children()) {
     const kind = child.kind();
     if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
       if (aliasRenamedUser) {
         edits.push(child.replace("invoker: user"));
+        aliasedShorthandUser = true;
+        principalAliasBindings.push({
+          name: "user",
+          bindingStart: child.range().start.index,
+        });
       } else {
         edits.push(child.replace("invoker"));
         renamedShorthandUser = true;
@@ -1300,6 +1354,11 @@ function transformPrincipalCallbackParam(
       if (inner?.text() === "user") {
         if (aliasRenamedUser) {
           edits.push(inner.replace("invoker: user"));
+          aliasedShorthandUser = true;
+          principalAliasBindings.push({
+            name: "user",
+            bindingStart: inner.range().start.index,
+          });
         } else {
           edits.push(inner.replace("invoker"));
           renamedShorthandUser = true;
@@ -1309,6 +1368,9 @@ function transformPrincipalCallbackParam(
   }
 
   if (!renamedShorthandUser) {
+    if (aliasedShorthandUser) {
+      rewriteParseArgumentShorthands(body, "user", "invoker", edits);
+    }
     for (const binding of principalAliasBindings) {
       guardPrincipalMemberAccesses(body, binding, edits);
     }
