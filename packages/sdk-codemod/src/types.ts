@@ -6,6 +6,8 @@ export interface CodemodExample {
   after: string;
   /** Optional one-line caption explaining the example. */
   caption?: string;
+  /** Fenced-code-block language for the example (default: "ts"). */
+  lang?: string;
 }
 
 /**

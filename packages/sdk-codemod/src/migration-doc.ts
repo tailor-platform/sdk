@@ -31,17 +31,34 @@ function renderEntry(codemod: CodemodPackage): string {
   lines.push(codemod.description, "");
 
   for (const example of codemod.examples ?? []) {
+    const fence = "```" + (example.lang ?? "ts");
     if (example.caption) lines.push(example.caption, "");
-    lines.push("```ts", "// Before", example.before, "", "// After", example.after, "```", "");
+    lines.push(
+      "Before:",
+      "",
+      fence,
+      example.before,
+      "```",
+      "",
+      "After:",
+      "",
+      fence,
+      example.after,
+      "```",
+      "",
+    );
   }
 
   if (automationLevel(codemod) !== "Automatic" && codemod.prompt != null) {
     lines.push(
-      "How to finish the cases the codemod cannot migrate on its own:",
+      "<details>",
+      "<summary>Prompt for an AI agent (to finish the cases the codemod cannot migrate on its own)</summary>",
       "",
       "```text",
       codemod.prompt.trim(),
       "```",
+      "",
+      "</details>",
       "",
     );
   }
