@@ -16,7 +16,7 @@ export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 
 /** Minimal schema interface for local format detection (subset of TailorField) */
 interface InputSchema {
-  parse(args: { value: unknown; data: unknown; user: Record<string, unknown> }): {
+  parse(args: { value: unknown; data: unknown; invoker: Record<string, unknown> | null }): {
     issues?: readonly { message: string; path?: readonly (string | number | symbol)[] }[];
   };
 }

@@ -1,4 +1,4 @@
-import type { TailorEnv, TailorInvoker } from "@/runtime/types";
+import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -7,7 +7,7 @@ import type { TailorEnv, TailorInvoker } from "@/runtime/types";
  */
 export type RegisteredJobBody = (
   args: unknown,
-  context: { env: TailorEnv; invoker?: TailorInvoker },
+  context: { env: TailorEnv; invoker: TailorPrincipal | null },
 ) => unknown | Promise<unknown>;
 
 const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-registry");

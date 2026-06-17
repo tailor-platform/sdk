@@ -9,9 +9,24 @@
  * it from nested Vitest configs that do not resolve `@/` aliases.
  * @internal
  */
-import type { TailorEnv, TailorInvoker } from "../../../runtime/types";
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { TailorEnv, TailorPrincipal } from "../../../runtime/types";
 
 const SLOT_KEY = "__tailorWorkflowTestEnv";
+
+type AsyncLocalStorageLike<T> = {
+  getStore(): T | undefined;
+  run<R>(store: T, callback: () => R): R;
+};
+
+let invokerStorage: AsyncLocalStorageLike<TailorPrincipal | null> | undefined;
+
+function workflowInvokerStorage(): AsyncLocalStorageLike<TailorPrincipal | null> {
+  if (!invokerStorage) {
+    invokerStorage = new AsyncLocalStorage<TailorPrincipal | null>();
+  }
+  return invokerStorage;
+}
 
 /**
  * Read the test-time env slot.
@@ -39,6 +54,10 @@ export function clearWorkflowTestEnv(): void {
   delete (globalThis as unknown as Record<string, unknown>)[SLOT_KEY];
 }
 
+export function withWorkflowTestInvoker<T>(invoker: TailorPrincipal | null, run: () => T): T {
+  return workflowInvokerStorage().run(invoker, run);
+}
+
 /**
  * Env-var fallback read by `runWorkflowLocally()` when `mockWorkflow().setEnv()` is unset.
  * @deprecated Use `mockWorkflow().setEnv()` from `@tailor-platform/sdk/vitest`.
@@ -46,13 +65,42 @@ export function clearWorkflowTestEnv(): void {
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
+type RuntimeInvoker = {
+  id: string;
+  type: "user" | "machine_user";
+  workspaceId: string;
+  attributes?: string[] | TailorPrincipal["attributes"];
+  attributeMap?: TailorPrincipal["attributes"];
+  attributeList?: TailorPrincipal["attributeList"];
+};
+
+function readRuntimeInvoker(): TailorPrincipal | null {
+  const runtime = (
+    globalThis as unknown as {
+      tailor?: { context?: { getInvoker?: () => RuntimeInvoker | null } };
+    }
+  ).tailor?.context?.getInvoker;
+  const raw = runtime?.();
+  if (!raw) return null;
+  return {
+    id: raw.id,
+    type: raw.type,
+    workspaceId: raw.workspaceId,
+    attributes: raw.attributeMap ?? (Array.isArray(raw.attributes) ? {} : (raw.attributes ?? {})),
+    attributeList: (raw.attributeList ??
+      (Array.isArray(raw.attributes) ? raw.attributes : [])) as TailorPrincipal["attributeList"],
+  };
+}
+
 // env from `mockWorkflow().setEnv()`, else the deprecated env-var. Shallow-copied
 // to isolate against cross-trigger mutation.
-export function buildJobContext(): { env: TailorEnv; invoker?: TailorInvoker } {
+export function buildJobContext(): { env: TailorEnv; invoker: TailorPrincipal | null } {
+  const storedInvoker = invokerStorage?.getStore();
+  const invoker = storedInvoker === undefined ? readRuntimeInvoker() : storedInvoker;
   const fromGlobal = readWorkflowTestEnv();
-  if (fromGlobal !== undefined) return { env: { ...fromGlobal } };
+  if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker };
   const raw = process.env[WORKFLOW_TEST_ENV_KEY];
-  if (!raw) return { env: {} as TailorEnv };
+  if (!raw) return { env: {} as TailorEnv, invoker };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -67,5 +115,5 @@ export function buildJobContext(): { env: TailorEnv; invoker?: TailorInvoker } {
       `${WORKFLOW_TEST_ENV_KEY} must be a JSON object; provide a record or use mockWorkflow().setEnv().`,
     );
   }
-  return { env: { ...(parsed as TailorEnv) } };
+  return { env: { ...(parsed as TailorEnv) }, invoker };
 }
