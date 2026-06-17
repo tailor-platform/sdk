@@ -15,3 +15,5 @@ export function actorFields(actor: TailorActor | null) {
     type: actor?.userType,
   };
 }
+
+export const actorTypeValue: TailorActorType = "USER_TYPE_USER";
