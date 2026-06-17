@@ -148,8 +148,8 @@ edit or rename them — the SDK tracks them by id.
 
 You can add your own jobs and steps around the managed ones. To add
 project-specific setup (such as private registry authentication or a system
-dependency), add a step _before_ the managed setup steps. For post-install
-extras (such as `playwright install`), add a step _after_ them.
+dependency), add a step _before_ the managed `tailor-setup` step. For
+post-install extras (such as `playwright install`), add a step _after_ it.
 
 Note that re-running `setup github` currently regenerates the whole file: if
 the file differs from what the SDK last wrote — whether you edited a managed
