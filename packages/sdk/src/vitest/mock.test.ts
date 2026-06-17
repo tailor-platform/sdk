@@ -712,48 +712,9 @@ describe("mock", () => {
       expect(file.calls).toHaveLength(0);
     });
 
-    test("openDownloadStream rejects raw bytes to guide callers to structured chunks", async () => {
-      using file = mockFile();
-      file.enqueueResult(new Uint8Array([1, 2, 3]));
-      await expect(
-        (globalThis as any).tailordb.file.openDownloadStream("ns", "T", "f", "r"),
-      ).rejects.toThrow(/iterable of StreamValue items/);
-    });
-
-    test("openDownloadStream rejects non-StreamValue elements yielded by the iterable", async () => {
-      using file = mockFile();
-      // Uint8Array[] is iterable but its elements aren't StreamValue items.
-      file.enqueueResult([new Uint8Array([1]), new Uint8Array([2])]);
-      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
-        "ns",
-        "T",
-        "f",
-        "r",
-      );
-      await expect(stream.next()).rejects.toThrow(/StreamValue/);
-    });
-
-    test("openDownloadStream yields the enqueued StreamValue sequence", async () => {
-      using file = mockFile();
-      const bytes = new Uint8Array([1, 2, 3]);
-      const sequence = [
-        {
-          type: "metadata" as const,
-          metadata: { contentType: "application/octet-stream", fileSize: 3, sha256sum: "h" },
-        },
-        { type: "chunk" as const, data: bytes, position: 0 },
-        { type: "complete" as const },
-      ];
-      file.enqueueResult(sequence);
-      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
-        "ns",
-        "T",
-        "f",
-        "r",
-      );
-      const chunks: unknown[] = [];
-      for await (const chunk of stream) chunks.push(chunk);
-      expect(chunks).toEqual(sequence);
+    test("does not install the removed openDownloadStream file mock", () => {
+      using _file = mockFile();
+      expect("openDownloadStream" in (globalThis as any).tailordb.file).toBe(false);
     });
 
     test("default fallback is cloned so test mutations cannot leak across tests", async () => {
