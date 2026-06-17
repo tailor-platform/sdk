@@ -684,7 +684,7 @@ function hasNestedPropertyPattern(pat: SgNode, name: string): boolean {
     if (child.kind() !== "pair_pattern") continue;
     const key = child.field("key");
     if (key?.text() !== name) continue;
-    return child.field("value")?.kind() !== "identifier";
+    if (child.field("value")?.kind() !== "identifier") return true;
   }
   return false;
 }
