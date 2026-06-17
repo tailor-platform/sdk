@@ -22,6 +22,7 @@ import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import { assertDefined } from "@/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
+import type { JsonValue } from "@/types/helpers";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
@@ -162,12 +163,23 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
     logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
 
+    let parsedArg: JsonValue | undefined;
+    if (args.arg !== undefined) {
+      try {
+        parsedArg = JSON.parse(args.arg);
+      } catch (error) {
+        throw new Error(`Invalid --arg JSON: ${error instanceof Error ? error.message : error}`, {
+          cause: error,
+        });
+      }
+    }
+
     const result = await executeScript({
       client,
       workspaceId,
       name: scriptName,
       code: bundledCode,
-      arg: args.arg === undefined ? undefined : JSON.parse(args.arg),
+      arg: parsedArg,
       invoker: authInvoker,
     });
 

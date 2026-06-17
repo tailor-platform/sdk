@@ -7,6 +7,7 @@
 
 import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
 import type { OperatorClient } from "@/cli/shared/client";
+import type { JsonCompatible } from "@/types/helpers";
 import type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 /**
@@ -118,7 +119,7 @@ export async function waitForExecution(
  * @returns {Promise<ScriptExecutionResult>} Execution result
  */
 export async function executeScript<T = unknown>(
-  options: ScriptExecutionOptions<T>,
+  options: ScriptExecutionOptions<T> & { arg?: JsonCompatible<T> },
 ): Promise<ScriptExecutionResult> {
   const { client, workspaceId, name, code, arg, invoker, pollInterval } = options;
 
@@ -127,7 +128,7 @@ export async function executeScript<T = unknown>(
     workspaceId,
     name,
     code,
-    arg: JSON.stringify(arg ?? {}),
+    arg: JSON.stringify(arg === undefined ? {} : arg),
     invoker,
   });
   const executionId = response.executionId;

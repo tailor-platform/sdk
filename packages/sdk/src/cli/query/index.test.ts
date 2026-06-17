@@ -276,7 +276,7 @@ describe("query", () => {
 
     expect(executeScript).toHaveBeenCalled();
     const call = vi.mocked(executeScript).mock.calls[0]![0]!;
-    const arg = call.arg as { queries: string[] };
+    const arg = call.arg as unknown as { queries: string[] };
     expect(arg.queries).toEqual(["SELECT 1; ", "SELECT 2"]);
   });
 
@@ -292,7 +292,7 @@ describe("query", () => {
     });
 
     const call = vi.mocked(executeScript).mock.calls[0]![0]!;
-    const arg = call.arg as { queries: string[] };
+    const arg = call.arg as unknown as { queries: string[] };
     expect(arg.queries).toHaveLength(1);
   });
 
