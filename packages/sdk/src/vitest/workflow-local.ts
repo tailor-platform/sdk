@@ -8,8 +8,8 @@ import {
 } from "../configure/services/workflow/test-env-key";
 import { platformSerialize } from "../utils/test/platform-serialize";
 import type { Workflow, WorkflowJob } from "../configure/services/workflow";
+import type { TailorEnv } from "../runtime/types";
 import type { TailorWorkflowAPI } from "../runtime/workflow";
-import type { TailorEnv } from "../types/env";
 
 type AnyWorkflowJob = WorkflowJob<string, any, any>;
 type AnyWorkflow = Workflow<AnyWorkflowJob>;

@@ -5,8 +5,8 @@ import { AppConfigSchema } from "@/parser/app-config/schema";
 import { PluginConfigSchema } from "@/parser/plugin-config";
 import { loadConfigPath } from "./context";
 import { installCliTailordbStub } from "./mock";
-import type { AppConfig } from "@/types/app-config";
-import type { Plugin } from "@/types/plugin";
+import type { AppConfig } from "@/configure/config/types";
+import type { Plugin } from "@/plugin/types";
 
 /**
  * Loaded configuration with resolved path

@@ -1,10 +1,136 @@
+// Plugin authoring types: plugin interface, generation-time hook contexts,
+// generator config, and plugin attachments.
+//
+// This is a pure type module: type declarations only, no zod/schema
+// references, importable type-only from any layer.
+
+export type DependencyKind = "tailordb" | "resolver" | "executor";
+
 import type {
-  TailorDBReadyContext,
-  ResolverReadyContext,
-  ExecutorReadyContext,
-  GeneratorResult,
-} from "./plugin-generation";
-import type { TailorAnyDBField, TailorAnyDBType } from "./tailor-db-field";
+  PluginAttachment,
+  TailorAnyDBField,
+  TailorAnyDBType,
+} from "@/configure/services/tailordb/types";
+export type { PluginAttachment };
+
+import type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
+import type { IdProvider as IdProviderConfig, OAuth2Client } from "@/types/auth.generated";
+import type { Executor } from "@/types/executor.generated";
+import type { Resolver } from "@/types/resolver.generated";
+
+/**
+ * A single generated file to write to disk.
+ */
+export interface GeneratedFile {
+  path: string;
+  content: string;
+  skipIfExists?: boolean;
+  executable?: boolean;
+}
+
+/**
+ * Result returned by generation-time hooks.
+ */
+export interface GeneratorResult {
+  files: GeneratedFile[];
+  errors?: string[];
+}
+
+/**
+ * Auth configuration available to generation-time hooks.
+ */
+export interface GeneratorAuthInput {
+  name: string;
+  userProfile?: {
+    typeName: string;
+    namespace: string;
+    usernameField: string;
+  };
+  machineUsers?: Record<string, { attributes?: Record<string, unknown> }>;
+  oauth2Clients?: Record<string, OAuth2Client>;
+  idProvider?: IdProviderConfig;
+}
+
+/**
+ * Namespace-level TailorDB data available to generation-time hooks.
+ */
+export interface TailorDBNamespaceData {
+  /** Namespace name */
+  namespace: string;
+  /** All TailorDB types in this namespace, keyed by type name */
+  types: Record<string, TailorDBType>;
+  /** Source info for each type (file path, export name, plugin info) */
+  sourceInfo: ReadonlyMap<string, TypeSourceInfoEntry>;
+  /** Plugin attachments configured on each type via .plugin() method */
+  pluginAttachments: ReadonlyMap<string, readonly PluginAttachment[]>;
+}
+
+/**
+ * Namespace-level resolver data available to generation-time hooks.
+ */
+export interface ResolverNamespaceData {
+  /** Namespace name */
+  namespace: string;
+  /** All resolvers in this namespace, keyed by resolver name */
+  resolvers: Record<string, Resolver>;
+}
+
+/**
+ * Context passed to plugin's onTailorDBReady hook.
+ * @template PluginConfig - Plugin-level configuration type
+ */
+export interface TailorDBReadyContext<PluginConfig = unknown> {
+  /** All TailorDB namespaces with their types and metadata */
+  tailordb: TailorDBNamespaceData[];
+  /** Auth configuration */
+  auth?: GeneratorAuthInput;
+  /** Base directory for generated files */
+  baseDir: string;
+  /** Path to tailor.config.ts */
+  configPath: string;
+  /** Plugin-level configuration passed via definePlugins() */
+  pluginConfig: PluginConfig;
+}
+
+/**
+ * Context passed to plugin's onResolverReady hook.
+ * @template PluginConfig - Plugin-level configuration type
+ */
+export interface ResolverReadyContext<PluginConfig = unknown> {
+  /** All TailorDB namespaces with their types and metadata */
+  tailordb: TailorDBNamespaceData[];
+  /** All resolver namespaces with their resolvers */
+  resolvers: ResolverNamespaceData[];
+  /** Auth configuration */
+  auth?: GeneratorAuthInput;
+  /** Base directory for generated files */
+  baseDir: string;
+  /** Path to tailor.config.ts */
+  configPath: string;
+  /** Plugin-level configuration passed via definePlugins() */
+  pluginConfig: PluginConfig;
+}
+
+/**
+ * Context passed to plugin's onExecutorReady hook.
+ * @template PluginConfig - Plugin-level configuration type
+ */
+export interface ExecutorReadyContext<PluginConfig = unknown> {
+  /** All TailorDB namespaces with their types and metadata */
+  tailordb: TailorDBNamespaceData[];
+  /** All resolver namespaces with their resolvers */
+  resolvers: ResolverNamespaceData[];
+  /** All executors, keyed by executor name */
+  executors: Record<string, Executor>;
+  /** Auth configuration */
+  auth?: GeneratorAuthInput;
+  /** Base directory for generated files */
+  baseDir: string;
+  /** Path to tailor.config.ts */
+  configPath: string;
+  /** Plugin-level configuration passed via definePlugins() */
+  pluginConfig: PluginConfig;
+}
 
 export type TypeConfigRequired<PluginConfig = unknown> =
   | boolean
@@ -18,8 +144,6 @@ export type TypeConfigRequired<PluginConfig = unknown> =
 export interface PluginConfigs<Fields extends string = string> {
   // Extend this interface via declaration merging to add typed plugin configs
 }
-
-export type { PluginAttachment } from "./plugin-attachment";
 
 /**
  * Context passed to plugin's process method
@@ -153,17 +277,6 @@ export interface PluginGeneratedExecutorLegacy {
 export type PluginGeneratedExecutor =
   | PluginGeneratedExecutorWithFile
   | PluginGeneratedExecutorLegacy;
-
-/**
- * Checks if a plugin executor uses file-based resolution.
- * @param executor - The plugin executor to check.
- * @returns True if the executor uses file-based resolution.
- */
-export function isPluginExecutorWithFile(
-  executor: PluginGeneratedExecutor,
-): executor is PluginGeneratedExecutorWithFile {
-  return "resolve" in executor && "context" in executor;
-}
 
 export interface PluginExtends {
   fields?: Record<string, TailorAnyDBField>;

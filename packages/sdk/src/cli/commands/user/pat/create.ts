@@ -33,7 +33,7 @@ export const createCommand = defineAppCommand({
       `);
     }
 
-    const token = await fetchLatestToken(config, config.current_user);
+    const { accessToken: token } = await fetchLatestToken(config, config.current_user);
     const client = await initOperatorClient(token);
 
     const scopes = getScopesFromWriteFlag(args.write);

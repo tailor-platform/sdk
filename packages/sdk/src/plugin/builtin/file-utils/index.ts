@@ -1,8 +1,7 @@
 import { generateUnifiedFileUtils } from "./generate-file-utils";
 import { processFileType } from "./process-file-type";
 import type { FileUtilMetadata } from "./types";
-import type { Plugin } from "@/types/plugin";
-import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-generation";
+import type { Plugin, GeneratorResult, TailorDBReadyContext } from "@/plugin/types";
 
 /** Unique identifier for the file utilities generator plugin. */
 export const FileUtilsGeneratorID = "@tailor-platform/file-utils";
