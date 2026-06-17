@@ -1,6 +1,6 @@
 # @tailor-platform/sdk-codemod
 
-## 0.3.0-next.0
+## 0.4.0-next.0
 ### Minor Changes
 
 

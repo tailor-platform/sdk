@@ -304,13 +304,18 @@ function transformActorTypeComparisonLiterals(
 function transformTailorActorTypeInitializerLiterals(
   root: SgNode,
   actorTypeLocalNames: Set<string>,
+  sdkNamespaceNames: Set<string>,
   edits: Edit[],
 ): void {
-  if (actorTypeLocalNames.size === 0) return;
+  if (actorTypeLocalNames.size === 0 && sdkNamespaceNames.size === 0) return;
   const transformedLiteralStarts = new Set<number>();
   const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
   for (const decl of declarators) {
-    if (!isTailorActorTypeReference(decl, actorTypeLocalNames)) continue;
+    if (
+      !isSdkTypeReference(decl, actorTypeLocalNames, "TailorActorType", sdkNamespaceNames, root)
+    ) {
+      continue;
+    }
     const value = decl.field("value");
     if (!value) continue;
     transformActorTypeLiteralsInNode(value, edits, transformedLiteralStarts);
@@ -370,15 +375,21 @@ function transformActorTypeBindingComparisons(
 function transformTailorActorTypeBindingComparisons(
   root: SgNode,
   actorTypeLocalNames: Set<string>,
+  sdkNamespaceNames: Set<string>,
   edits: Edit[],
 ): void {
-  if (actorTypeLocalNames.size === 0) return;
+  if (actorTypeLocalNames.size === 0 && sdkNamespaceNames.size === 0) return;
 
   for (const kind of NESTED_FN_KINDS) {
     const fns = root.findAll({ rule: { kind } });
     for (const fn of fns) {
       const param = getFirstFunctionParam(fn);
-      if (!param || !isTailorActorTypeReference(param, actorTypeLocalNames)) continue;
+      if (
+        !param ||
+        !isSdkTypeReference(param, actorTypeLocalNames, "TailorActorType", sdkNamespaceNames, root)
+      ) {
+        continue;
+      }
       const pattern = getFunctionParamPattern(param);
       const body = fn.field("body");
       if (!pattern || pattern.kind() !== "identifier" || !body) continue;
@@ -392,7 +403,11 @@ function transformTailorActorTypeBindingComparisons(
 
   const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
   for (const decl of declarators) {
-    if (!isTailorActorTypeReference(decl, actorTypeLocalNames)) continue;
+    if (
+      !isSdkTypeReference(decl, actorTypeLocalNames, "TailorActorType", sdkNamespaceNames, root)
+    ) {
+      continue;
+    }
     const name = decl.field("name");
     if (!name || name.kind() !== "identifier") continue;
     transformActorTypeBindingComparisons(
@@ -426,26 +441,43 @@ function transformActorBindingMemberAccesses(
   }
 }
 
-function isTailorActorTypeReference(node: SgNode, actorTypeLocalNames: Set<string>): boolean {
+function isSdkTypeReference(
+  node: SgNode,
+  localNames: Set<string>,
+  sdkTypeName: string,
+  sdkNamespaceNames: Set<string>,
+  root: SgNode,
+): boolean {
   const typeAnnotation = node.field("type");
   if (!typeAnnotation) return false;
   const typeIds = typeAnnotation.findAll({ rule: { kind: "type_identifier" } });
-  return typeIds.some((id) => actorTypeLocalNames.has(id.text()));
+  return typeIds.some(
+    (id) =>
+      localNames.has(id.text()) ||
+      (id.text() === sdkTypeName &&
+        isSdkNamespaceQualifiedTypeIdentifier(id, sdkNamespaceNames, root)),
+  );
 }
 
 function transformTailorActorTypedMemberAccesses(
   root: SgNode,
   actorTypeLocalNames: Set<string>,
+  sdkNamespaceNames: Set<string>,
   edits: Edit[],
   transformedActorPropertyStarts: Set<number>,
 ): void {
-  if (actorTypeLocalNames.size === 0) return;
+  if (actorTypeLocalNames.size === 0 && sdkNamespaceNames.size === 0) return;
 
   for (const kind of NESTED_FN_KINDS) {
     const fns = root.findAll({ rule: { kind } });
     for (const fn of fns) {
       const param = getFirstFunctionParam(fn);
-      if (!param || !isTailorActorTypeReference(param, actorTypeLocalNames)) continue;
+      if (
+        !param ||
+        !isSdkTypeReference(param, actorTypeLocalNames, "TailorActor", sdkNamespaceNames, root)
+      ) {
+        continue;
+      }
       const pattern = getFunctionParamPattern(param);
       const body = fn.field("body");
       if (!pattern || pattern.kind() !== "identifier" || !body) continue;
@@ -460,7 +492,9 @@ function transformTailorActorTypedMemberAccesses(
 
   const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
   for (const decl of declarators) {
-    if (!isTailorActorTypeReference(decl, actorTypeLocalNames)) continue;
+    if (!isSdkTypeReference(decl, actorTypeLocalNames, "TailorActor", sdkNamespaceNames, root)) {
+      continue;
+    }
     const name = decl.field("name");
     if (!name || name.kind() !== "identifier") continue;
     transformActorBindingMemberAccesses(
@@ -909,10 +943,28 @@ function isSdkNamespaceQualifiedTypeIdentifier(
   return !!namespaceObject && isUnshadowedNamespaceObject(namespaceObject, namespaceNames, root);
 }
 
-function renamedQualifiedTypeIdentifierText(name: string): string | null {
-  if (name === "TailorInvoker") return "TailorPrincipal | null";
-  if (name === "TailorActorType") return 'TailorPrincipal["type"] | undefined';
-  return TYPE_RENAME_MAP[name] ?? null;
+function namespaceQualifiedTypeReplacement(
+  typeId: SgNode,
+  namespaceNames: Set<string>,
+  root: SgNode,
+): { target: SgNode; text: string } | null {
+  if (typeId.kind() !== "type_identifier") return null;
+  const parent = typeId.parent();
+  if (!parent || parent.kind() !== "nested_type_identifier") return null;
+  const namespaceObject = parent.children().find((c: SgNode) => c.kind() === "identifier");
+  if (!namespaceObject || !isUnshadowedNamespaceObject(namespaceObject, namespaceNames, root)) {
+    return null;
+  }
+
+  const namespace = namespaceObject.text();
+  if (typeId.text() === "TailorInvoker") {
+    return { target: parent, text: `(${namespace}.TailorPrincipal | null)` };
+  }
+  if (typeId.text() === "TailorActorType") {
+    return { target: parent, text: `(${namespace}.TailorPrincipal["type"] | undefined)` };
+  }
+  const renamed = TYPE_RENAME_MAP[typeId.text()];
+  return renamed ? { target: typeId, text: renamed } : null;
 }
 
 /**
@@ -2182,11 +2234,22 @@ export default function transform(source: string): string | null {
   transformTailorActorTypedMemberAccesses(
     tree,
     actorTypeLocalNames,
+    sdkNamespaceNames,
     edits,
     transformedActorPropertyStarts,
   );
-  transformTailorActorTypeInitializerLiterals(tree, actorTypeValueLocalNames, edits);
-  transformTailorActorTypeBindingComparisons(tree, actorTypeValueLocalNames, edits);
+  transformTailorActorTypeInitializerLiterals(
+    tree,
+    actorTypeValueLocalNames,
+    sdkNamespaceNames,
+    edits,
+  );
+  transformTailorActorTypeBindingComparisons(
+    tree,
+    actorTypeValueLocalNames,
+    sdkNamespaceNames,
+    edits,
+  );
 
   let importRemoved = false;
   const globalEmittedRenamed = new Set<string>();
@@ -2390,15 +2453,18 @@ export default function transform(source: string): string | null {
   });
   for (const id of typeIdents) {
     if (typeContext.transformedPrincipalTypeStarts.has(id.range().start.index)) continue;
+    const qualifiedReplacement = namespaceQualifiedTypeReplacement(id, sdkNamespaceNames, tree);
+    if (qualifiedReplacement) {
+      edits.push(qualifiedReplacement.target.replace(qualifiedReplacement.text));
+      continue;
+    }
     const newName = sdkRenameSourceNames.has(id.text())
       ? renamedTypeIdentifierText(id.text())
-      : isSdkNamespaceQualifiedTypeIdentifier(id, sdkNamespaceNames, tree)
-        ? renamedQualifiedTypeIdentifierText(id.text())
-        : nullableInvokerAliasLocalNames.has(id.text())
-          ? renamedTypeIdentifierText("TailorInvoker")
-          : actorTypeAliasLocalNames.has(id.text())
-            ? renamedTypeIdentifierText("TailorActorType")
-            : null;
+      : nullableInvokerAliasLocalNames.has(id.text())
+        ? renamedTypeIdentifierText("TailorInvoker")
+        : actorTypeAliasLocalNames.has(id.text())
+          ? renamedTypeIdentifierText("TailorActorType")
+          : null;
     if (!newName) continue;
     edits.push(id.replace(newName));
   }
