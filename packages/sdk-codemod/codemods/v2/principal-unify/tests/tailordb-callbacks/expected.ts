@@ -9,6 +9,11 @@ function hasMachineUser({ invoker }: { invoker: TailorPrincipal | null }) {
 
 const hasInvoker = (ctx: { invoker: TailorPrincipal | null }) => ctx.invoker?.id !== "";
 
+const sharedHooks = {
+  create: ({ invoker }: { invoker: TailorPrincipal | null }) => invoker?.id ?? "anonymous",
+  update: (ctx: { invoker: TailorPrincipal | null }) => ctx.invoker?.id ?? "anonymous",
+};
+
 const role = db
   .string()
   .hooks({
@@ -23,6 +28,8 @@ const role = db
     ctx => ctx.invoker?.id !== "",
   ])
   .validate(hasInvoker);
+
+const localHookedRole = db.string().hooks(sharedHooks);
 
 const reviewer = t.string();
 const zodLike = { parse: (arg: unknown) => arg };
@@ -51,6 +58,18 @@ export const user = db
       return user?.id !== labels[0];
     },
     typed: ({ invoker }: { invoker: TailorPrincipal | null }) => invoker?.id !== "",
+  });
+
+export const audit = db
+  .type("Audit", {
+    create: db.string(),
+    update: db.string(),
+  })
+  .hooks({
+    create: {
+      create: ({ invoker }: { invoker: TailorPrincipal | null }) => invoker?.id ?? "anonymous",
+      update: (ctx: { invoker: TailorPrincipal | null }) => ctx.invoker?.id ?? "anonymous",
+    },
   });
 
 export const parsed = t.string().parse({
