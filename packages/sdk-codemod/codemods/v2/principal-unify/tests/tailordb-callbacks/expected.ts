@@ -1,4 +1,4 @@
-import { db, t, type TailorPrincipal } from "@tailor-platform/sdk";
+import { db, t, type TailorPrincipal, type TailorPrincipal as MyUser } from "@tailor-platform/sdk";
 
 const roleCreate = ({ value, invoker }: { value: string; invoker: TailorPrincipal | null }) =>
   invoker?.attributes.role === "ADMIN" ? value : "user";
@@ -36,6 +36,8 @@ const namedStrictHook = ({ invoker }: StrictHookArgs) => {
   return id;
 };
 
+const aliasedStrictHook = ({ invoker }: { invoker: MyUser | null }) => invoker?.id;
+
 const sharedHooks = {
   create: ({ invoker }: { invoker: TailorPrincipal | null }) => invoker?.id ?? "anonymous",
   update: namedTypeHook,
@@ -58,14 +60,21 @@ const role = db
   .validate(namedTypeValidator);
 
 const localHookedRole = db.string().hooks(sharedHooks);
-const strictHookedRole = db.string().hooks({ create: strictHook, update: namedStrictHook });
+const strictHookedRole = db
+  .string()
+  .hooks({ create: strictHook, update: namedStrictHook })
+  .hooks({ create: aliasedStrictHook });
 
 const directHookedRole = db.string().hooks({
   create: ({ invoker }) => {
     const { id } = invoker ?? {};
     return id;
   },
-  update: (ctx) => ctx.invoker?.id,
+  update: (ctx) => {
+    const { invoker: user } = ctx;
+    const { invoker: currentUser } = ctx;
+    return user?.id ?? currentUser?.id;
+  },
 });
 
 const reviewer = t.string();

@@ -177,6 +177,71 @@ function transformTailorActorTypeInitializerLiterals(
   }
 }
 
+function transformActorTypeBindingComparisons(
+  root: SgNode,
+  binding: PrincipalLocalBinding,
+  edits: Edit[],
+): void {
+  const refs = root.findAll({
+    rule: { kind: "identifier", regex: `^${escapeRegex(binding.name)}$` },
+  });
+  const transformedLiteralStarts = new Set<number>();
+  for (const ref of refs) {
+    const binary = ref.parent();
+    if (!binary || binary.kind() !== "binary_expression") continue;
+    if (
+      isShadowedLocalReference(root, binding.name, ref.range().start.index, binding.bindingStart)
+    ) {
+      continue;
+    }
+    for (const child of binary.children()) {
+      if (child.kind() !== "string") continue;
+      const replacement = actorTypeLiteralReplacement(child);
+      if (!replacement) continue;
+      const start = child.range().start.index;
+      if (transformedLiteralStarts.has(start)) continue;
+      transformedLiteralStarts.add(start);
+      edits.push(child.replace(replacement));
+    }
+  }
+}
+
+function transformTailorActorTypeBindingComparisons(
+  root: SgNode,
+  actorTypeLocalNames: Set<string>,
+  edits: Edit[],
+): void {
+  if (actorTypeLocalNames.size === 0) return;
+
+  for (const kind of NESTED_FN_KINDS) {
+    const fns = root.findAll({ rule: { kind } });
+    for (const fn of fns) {
+      const param = getFirstFunctionParam(fn);
+      if (!param || !isTailorActorTypeReference(param, actorTypeLocalNames)) continue;
+      const pattern = getFunctionParamPattern(param);
+      const body = fn.field("body");
+      if (!pattern || pattern.kind() !== "identifier" || !body) continue;
+      transformActorTypeBindingComparisons(
+        body,
+        { name: pattern.text(), bindingStart: pattern.range().start.index },
+        edits,
+      );
+    }
+  }
+
+  const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of declarators) {
+    if (!isTailorActorTypeReference(decl, actorTypeLocalNames)) continue;
+    const name = decl.field("name");
+    if (!name || name.kind() !== "identifier") continue;
+    transformActorTypeBindingComparisons(
+      root,
+      { name: name.text(), bindingStart: name.range().start.index },
+      edits,
+    );
+  }
+}
+
 function transformActorBindingMemberAccesses(
   root: SgNode,
   binding: PrincipalLocalBinding,
@@ -953,6 +1018,7 @@ interface CallbackTypeContext {
   bindings: LocalCallbackTypeBinding[];
   transformedTypeStarts: Set<number>;
   transformedPrincipalTypeStarts: Set<number>;
+  tailorUserTypeLocalNames: Set<string>;
   root: SgNode;
 }
 
@@ -960,6 +1026,7 @@ function transformObjectTypeUserProperty(
   objectType: SgNode,
   edits: Edit[],
   transformedPrincipalTypeStarts: Set<number>,
+  tailorUserTypeLocalNames: Set<string>,
 ): void {
   for (const child of objectType.children()) {
     if (child.kind() !== "property_signature") continue;
@@ -971,9 +1038,11 @@ function transformObjectTypeUserProperty(
     if (!typeAnnotation || /\bnull\b/.test(typeAnnotation.text())) continue;
     const typeIds = typeAnnotation.findAll({ rule: { kind: "type_identifier" } });
     for (const typeId of typeIds) {
-      if (typeId.text() !== "TailorUser") continue;
+      if (!tailorUserTypeLocalNames.has(typeId.text())) continue;
       transformedPrincipalTypeStarts.add(typeId.range().start.index);
-      edits.push(typeId.replace("TailorPrincipal | null"));
+      const replacement =
+        typeId.text() === "TailorUser" ? "TailorPrincipal | null" : `${typeId.text()} | null`;
+      edits.push(typeId.replace(replacement));
     }
   }
 }
@@ -1056,7 +1125,12 @@ function transformNamedPrincipalCallbackType(
   const objectType = localCallbackTypeObject(binding.declaration);
   if (!objectType) return;
   context.transformedTypeStarts.add(start);
-  transformObjectTypeUserProperty(objectType, edits, context.transformedPrincipalTypeStarts);
+  transformObjectTypeUserProperty(
+    objectType,
+    edits,
+    context.transformedPrincipalTypeStarts,
+    context.tailorUserTypeLocalNames,
+  );
 }
 
 function transformPrincipalCallbackParamType(
@@ -1072,6 +1146,7 @@ function transformPrincipalCallbackParamType(
         objectType,
         edits,
         typeContext.transformedPrincipalTypeStarts,
+        typeContext.tailorUserTypeLocalNames,
       );
     }
     return;
@@ -1272,7 +1347,8 @@ function isShadowedLocalReference(
   for (const decl of declarators) {
     const nameNode = decl.field("name");
     if (!nameNode || !patternBindsName(nameNode, name)) continue;
-    if (nameNode.range().start.index === bindingStart) continue;
+    const nameRange = nameNode.range();
+    if (bindingStart >= nameRange.start.index && bindingStart < nameRange.end.index) continue;
     const scope = enclosingScopeRange(decl);
     if (scope && rangeContains(scope, pos)) return true;
   }
@@ -1768,6 +1844,7 @@ export default function transform(source: string): string | null {
   // alias. A local `import type { TailorUser } from './domain'` must stay alone
   // even when the file also imports something else from the SDK.
   const sdkRenameSourceNames = new Set<string>();
+  const tailorUserTypeLocalNames = new Set<string>();
   const nullableInvokerAliasLocalNames = new Set<string>();
   const actorTypeAliasLocalNames = new Set<string>();
   const actorTypeLocalNames = new Set<string>();
@@ -1776,6 +1853,9 @@ export default function transform(source: string): string | null {
     for (const { importedName, aliasNode, localName } of iterateImportSpecs(importStmt)) {
       if (TYPE_RENAME_MAP[importedName] && !aliasNode) {
         sdkRenameSourceNames.add(importedName);
+      }
+      if (importedName === "TailorUser") {
+        tailorUserTypeLocalNames.add(localName);
       }
       if (importedName === "TailorActor") {
         actorTypeLocalNames.add(localName);
@@ -1800,6 +1880,7 @@ export default function transform(source: string): string | null {
     transformedActorPropertyStarts,
   );
   transformTailorActorTypeInitializerLiterals(tree, actorTypeValueLocalNames, edits);
+  transformTailorActorTypeBindingComparisons(tree, actorTypeValueLocalNames, edits);
 
   let importRemoved = false;
   const globalEmittedRenamed = new Set<string>();
@@ -1909,6 +1990,7 @@ export default function transform(source: string): string | null {
     bindings: collectLocalCallbackTypeBindings(tree),
     transformedTypeStarts: new Set<number>(),
     transformedPrincipalTypeStarts: new Set<number>(),
+    tailorUserTypeLocalNames,
     root: tree,
   };
   const transformedCallbackStarts = new Set<number>();

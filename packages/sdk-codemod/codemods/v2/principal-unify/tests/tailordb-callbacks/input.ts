@@ -1,4 +1,4 @@
-import { db, t, type TailorUser } from "@tailor-platform/sdk";
+import { db, t, type TailorUser, type TailorUser as MyUser } from "@tailor-platform/sdk";
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 
 const roleCreate = ({ value, user }: { value: string; user: TailorUser | null }) =>
@@ -37,6 +37,8 @@ const namedStrictHook = ({ user }: StrictHookArgs) => {
   return id;
 };
 
+const aliasedStrictHook = ({ user }: { user: MyUser }) => user.id;
+
 const sharedHooks = {
   create: ({ user }: { user: TailorUser | null }) => user?.id ?? "anonymous",
   update: namedTypeHook,
@@ -59,14 +61,21 @@ const role = db
   .validate(namedTypeValidator);
 
 const localHookedRole = db.string().hooks(sharedHooks);
-const strictHookedRole = db.string().hooks({ create: strictHook, update: namedStrictHook });
+const strictHookedRole = db
+  .string()
+  .hooks({ create: strictHook, update: namedStrictHook })
+  .hooks({ create: aliasedStrictHook });
 
 const directHookedRole = db.string().hooks({
   create: ({ user }) => {
     const { id } = user;
     return id;
   },
-  update: (ctx) => ctx.user.id,
+  update: (ctx) => {
+    const { user } = ctx;
+    const { user: currentUser } = ctx;
+    return user.id ?? currentUser.id;
+  },
 });
 
 const reviewer = t.string();

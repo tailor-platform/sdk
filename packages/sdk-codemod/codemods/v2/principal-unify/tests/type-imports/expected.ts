@@ -17,3 +17,7 @@ export function actorFields(actor: TailorPrincipal | null) {
 }
 
 export const actorTypeValue: TailorPrincipal["type"] = "user";
+
+export function isUserType(type: TailorPrincipal["type"]) {
+  return type === "user";
+}
