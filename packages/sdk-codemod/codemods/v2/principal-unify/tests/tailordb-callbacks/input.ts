@@ -72,7 +72,7 @@ const directHookedRole = db.string().hooks({
   create: ({ user }) => {
     const parsed = t.string().parse({ value: "hello", data: {}, user });
     const { id } = user;
-    return parsed.value ?? id;
+    return parsed.value ?? user["id"] ?? id;
   },
   update: (ctx) => {
     const { user } = ctx;

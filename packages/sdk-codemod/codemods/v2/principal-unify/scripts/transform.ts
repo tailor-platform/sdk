@@ -45,30 +45,48 @@ function isInsideImportStatement(node: SgNode): boolean {
   return false;
 }
 
-function isMemberExpressionObject(node: SgNode): boolean {
+function memberObjectParent(node: SgNode): SgNode | null {
   const parent = node.parent();
-  if (!parent || parent.kind() !== "member_expression") return false;
+  if (
+    !parent ||
+    (parent.kind() !== "member_expression" && parent.kind() !== "subscript_expression")
+  ) {
+    return null;
+  }
   const obj = parent.field("object");
-  if (!obj) return false;
+  if (!obj) return null;
   const r = node.range();
   const or = obj.range();
-  return r.start.index === or.start.index && r.end.index === or.end.index;
+  if (r.start.index !== or.start.index || r.end.index !== or.end.index) return null;
+  return parent;
+}
+
+function isMemberExpressionObject(node: SgNode): boolean {
+  return memberObjectParent(node) !== null;
+}
+
+function optionalPrincipalReadKind(node: SgNode): "property" | "computed" | null {
+  const parent = memberObjectParent(node);
+  if (!parent) return null;
+  if (parent.text().startsWith(`${node.text()}?.`)) return null;
+  if (parent.kind() === "subscript_expression") return "computed";
+  return parent.field("property")?.kind() === "property_identifier" ? "property" : null;
 }
 
 function isOptionalizableMemberObject(node: SgNode): boolean {
-  if (!isMemberExpressionObject(node)) return false;
-  const parent = node.parent();
-  if (parent?.text().startsWith(`${node.text()}?.`)) return false;
-  return parent?.field("property")?.kind() === "property_identifier";
+  return optionalPrincipalReadKind(node) !== null;
 }
 
 function principalIdentifierReplacement(node: SgNode, name: string): string {
-  return isOptionalizableMemberObject(node) ? `${name}?` : name;
+  const readKind = optionalPrincipalReadKind(node);
+  if (readKind === "computed") return `${name}?.`;
+  if (readKind === "property") return `${name}?`;
+  return name;
 }
 
 function principalPropertyReplacement(node: SgNode, name: string): string {
   const parent = node.parent();
-  return parent && isOptionalizableMemberObject(parent) ? `${name}?` : name;
+  return parent ? principalIdentifierReplacement(parent, name) : name;
 }
 
 function isObjectDestructureInitializer(node: SgNode): boolean {
