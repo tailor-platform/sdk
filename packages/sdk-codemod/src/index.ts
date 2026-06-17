@@ -7,7 +7,7 @@ import { arg, defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { getApplicableCodemods, resolveCodemodScript } from "./registry";
 import { runCodemods } from "./runner";
-import type { RunOutput } from "./types";
+import type { LlmReview, RunOutput } from "./types";
 
 const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta.url)) + "/..");
 
@@ -17,7 +17,7 @@ const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta
  * deterministic transform could not complete on its own.
  * @param review - The review task (codemod id, prompt, files)
  */
-function printLlmReview(review: { codemodId: string; prompt: string; files: string[] }): void {
+function printLlmReview(review: LlmReview): void {
   process.stderr.write(
     `\n🤖 LLM-assisted review suggested (${review.codemodId}) — the codemod cannot safely migrate these automatically:\n`,
   );

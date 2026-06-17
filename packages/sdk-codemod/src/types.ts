@@ -26,8 +26,8 @@ export interface CodemodPackage {
    * deterministic transform cannot safely complete on its own (e.g. a value
    * reached through a variable or a dynamic expression). Unlike
    * `legacyPatterns`, these do not need to be exhaustive: a broad signal such
-   * as the API name is enough to point an LLM at the right files. Requires
-   * `prompt`.
+   * as the API name is enough to point an LLM at the right files. Has no effect
+   * unless `prompt` is also set.
    */
   suspiciousPatterns?: string[];
   /**
