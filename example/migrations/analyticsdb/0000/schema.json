@@ -32,7 +32,7 @@
           "description": "Record creation timestamp",
           "hooks": {
             "create": {
-              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
             }
           }
         },
