@@ -20,6 +20,7 @@ import {
 } from "./runner";
 import { writeVerificationSummary } from "./verification";
 import { prepareWorkspace, profileForProblem, pruneWorkspaceDeps } from "./workspace";
+import { listWorkspaceFiles } from "./workspace-files";
 import type { Problem } from "./types";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -196,6 +197,21 @@ describe("profile filtering", () => {
         "export const value = 1;",
       ].join("\n"),
     );
+  });
+});
+
+describe("workspace files", () => {
+  test("excludes generated output so verification scans only solver-authored files", async () => {
+    const dir = await makeTempDir();
+    await fs.mkdir(path.join(dir, "src"), { recursive: true });
+    await fs.mkdir(path.join(dir, "generated"), { recursive: true });
+    await fs.writeFile(path.join(dir, "src/app.ts"), "export const value = 1;\n");
+    await fs.writeFile(path.join(dir, "generated/files.ts"), "export const generated = true;\n");
+
+    const files = await listWorkspaceFiles(dir);
+
+    expect(files).toContain("src/app.ts");
+    expect(files).not.toContain("generated/files.ts");
   });
 });
 

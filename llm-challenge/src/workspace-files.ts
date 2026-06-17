@@ -10,6 +10,7 @@ const EXCLUDED_DIRS = new Set([
   ".cache",
   ".turbo",
   "node_modules",
+  "generated",
 ]);
 const EXCLUDED_PATHS = new Set([".tailor-sdk/cache"]);
 
