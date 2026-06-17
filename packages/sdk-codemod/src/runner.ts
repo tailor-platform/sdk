@@ -4,7 +4,7 @@ import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage } from "./types";
+import type { CodemodPackage, LlmReview } from "./types";
 
 /**
  * A transform function that receives source text and file path,
@@ -40,6 +40,8 @@ export interface CodemodRunResult {
   warnings: string[];
   /** IDs of codemods that actually produced changes in at least one file. */
   appliedCodemodIds: Set<string>;
+  /** Files flagged for LLM-assisted review, grouped by codemod. */
+  llmReviews: LlmReview[];
 }
 
 /** Default file patterns for TypeScript files. */
@@ -124,6 +126,8 @@ interface LoadedTransform {
   transform: TransformFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: string[];
+  suspiciousPatterns: string[];
+  prompt?: string;
 }
 
 function legacyPatternWarnings(
@@ -165,6 +169,8 @@ export async function runCodemods(
       transform: await loadTransform(scriptPath),
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
+      suspiciousPatterns: codemod.suspiciousPatterns ?? [],
+      prompt: codemod.prompt,
     });
   }
 
@@ -172,6 +178,8 @@ export async function runCodemods(
   const warnings: string[] = [];
   const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
+  // codemod id -> files flagged for LLM-assisted review
+  const suspiciousByCodemod = new Map<string, string[]>();
 
   for await (const relative of walkFiles(targetPath)) {
     const absolute = path.resolve(targetPath, relative);
@@ -207,12 +215,30 @@ export async function runCodemods(
     }
 
     warnings.push(...legacyPatternWarnings(relative, current, matchedTransforms));
+
+    for (const lt of matchedTransforms) {
+      if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
+      if (lt.suspiciousPatterns.some((p) => current.includes(p))) {
+        const files = suspiciousByCodemod.get(lt.id) ?? [];
+        files.push(relative);
+        suspiciousByCodemod.set(lt.id, files);
+      }
+    }
   }
+
+  const llmReviews: LlmReview[] = loaded
+    .filter((lt) => lt.prompt && suspiciousByCodemod.has(lt.id))
+    .map((lt) => ({
+      codemodId: lt.id,
+      prompt: lt.prompt as string,
+      files: suspiciousByCodemod.get(lt.id) as string[],
+    }));
 
   return {
     changed: filesModified.length > 0,
     filesModified,
     warnings,
     appliedCodemodIds,
+    llmReviews,
   };
 }
