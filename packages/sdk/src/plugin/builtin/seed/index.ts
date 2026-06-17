@@ -99,7 +99,7 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean, idpNamespace: string |
         workspaceId,
         name: "seed-idp-user.ts",
         code: idpSeedCode,
-        arg: JSON.stringify({ users: rows }),
+        arg: { users: rows },
         invoker: {
           namespace: authNamespace,
           machineUserName,
@@ -185,7 +185,6 @@ function generateIdpUserTruncateFunction(hasIdpUser: boolean, idpNamespace: stri
         workspaceId,
         name: "truncate-idp-user.ts",
         code: idpTruncateCode,
-        arg: JSON.stringify({}),
         invoker: {
           namespace: authNamespace,
           machineUserName,
@@ -673,7 +672,7 @@ ${namespaceSelfRefEntries}
           workspaceId,
           name: \`seed-\${namespace}.ts\`,
           code: bundled.bundledCode,
-          arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes }),
+          arg: { data: chunk.data, order: chunk.order, selfRefTypes },
           invoker: {
             namespace: authNamespace,
             machineUserName,

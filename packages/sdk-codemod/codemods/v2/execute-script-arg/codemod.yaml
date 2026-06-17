@@ -1,0 +1,7 @@
+name: "@tailor-platform/execute-script-arg"
+version: "1.0.0"
+description: "Unwrap JSON.stringify(...) passed as the executeScript `arg` option; v2 takes a JSON-serializable value directly"
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"
