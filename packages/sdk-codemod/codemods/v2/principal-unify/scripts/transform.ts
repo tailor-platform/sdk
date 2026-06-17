@@ -71,6 +71,28 @@ function principalPropertyReplacement(node: SgNode, name: string): string {
   return parent && isOptionalizableMemberObject(parent) ? `${name}?` : name;
 }
 
+function isObjectDestructureInitializer(node: SgNode): boolean {
+  const parent = node.parent();
+  if (!parent || parent.kind() !== "variable_declarator") return false;
+  const value = parent.field("value");
+  if (!value) return false;
+  const valueRange = value.range();
+  const nodeRange = node.range();
+  if (
+    valueRange.start.index !== nodeRange.start.index ||
+    valueRange.end.index !== nodeRange.end.index
+  ) {
+    return false;
+  }
+  return parent.field("name")?.kind() === "object_pattern";
+}
+
+function principalReadReplacement(node: SgNode, name: string): string {
+  return isObjectDestructureInitializer(node)
+    ? `${name} ?? {}`
+    : principalIdentifierReplacement(node, name);
+}
+
 function addActorPropertyReplacement(
   property: SgNode,
   edits: Edit[],
@@ -131,6 +153,27 @@ function transformActorTypeComparisonLiterals(
       transformedLiteralStarts.add(start);
       edits.push(child.replace(replacement));
     }
+  }
+}
+
+function transformTailorActorTypeInitializerLiterals(
+  root: SgNode,
+  actorTypeLocalNames: Set<string>,
+  edits: Edit[],
+): void {
+  if (actorTypeLocalNames.size === 0) return;
+  const transformedLiteralStarts = new Set<number>();
+  const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of declarators) {
+    if (!isTailorActorTypeReference(decl, actorTypeLocalNames)) continue;
+    const value = decl.field("value");
+    if (!value || value.kind() !== "string") continue;
+    const replacement = actorTypeLiteralReplacement(value);
+    if (!replacement) continue;
+    const start = value.range().start.index;
+    if (transformedLiteralStarts.has(start)) continue;
+    transformedLiteralStarts.add(start);
+    edits.push(value.replace(replacement));
   }
 }
 
@@ -526,6 +569,16 @@ function guardPrincipalMemberAccesses(
     if (isShadowedLocalReference(root, binding.name, pos, binding.bindingStart)) continue;
     edits.push(ref.replace(`${binding.name}?`));
   }
+
+  const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of declarators) {
+    const value = decl.field("value");
+    if (!value || value.kind() !== "identifier" || value.text() !== binding.name) continue;
+    if (!isObjectDestructureInitializer(value)) continue;
+    const pos = value.range().start.index;
+    if (isShadowedLocalReference(root, binding.name, pos, binding.bindingStart)) continue;
+    edits.push(value.replace(`${binding.name} ?? {}`));
+  }
 }
 
 function findResolverBodyArrow(call: SgNode): SgNode | null {
@@ -899,14 +952,29 @@ interface LocalCallbackTypeBinding {
 interface CallbackTypeContext {
   bindings: LocalCallbackTypeBinding[];
   transformedTypeStarts: Set<number>;
+  transformedPrincipalTypeStarts: Set<number>;
   root: SgNode;
 }
 
-function transformObjectTypeUserProperty(objectType: SgNode, edits: Edit[]): void {
+function transformObjectTypeUserProperty(
+  objectType: SgNode,
+  edits: Edit[],
+  transformedPrincipalTypeStarts: Set<number>,
+): void {
   for (const child of objectType.children()) {
     if (child.kind() !== "property_signature") continue;
     const name = child.field("name");
-    if (name?.text() === "user") edits.push(name.replace("invoker"));
+    if (name?.text() !== "user") continue;
+    edits.push(name.replace("invoker"));
+
+    const typeAnnotation = child.field("type");
+    if (!typeAnnotation || /\bnull\b/.test(typeAnnotation.text())) continue;
+    const typeIds = typeAnnotation.findAll({ rule: { kind: "type_identifier" } });
+    for (const typeId of typeIds) {
+      if (typeId.text() !== "TailorUser") continue;
+      transformedPrincipalTypeStarts.add(typeId.range().start.index);
+      edits.push(typeId.replace("TailorPrincipal | null"));
+    }
   }
 }
 
@@ -988,7 +1056,7 @@ function transformNamedPrincipalCallbackType(
   const objectType = localCallbackTypeObject(binding.declaration);
   if (!objectType) return;
   context.transformedTypeStarts.add(start);
-  transformObjectTypeUserProperty(objectType, edits);
+  transformObjectTypeUserProperty(objectType, edits, context.transformedPrincipalTypeStarts);
 }
 
 function transformPrincipalCallbackParamType(
@@ -999,7 +1067,13 @@ function transformPrincipalCallbackParamType(
   const typeAnnotation = param.field("type");
   const objectType = typeAnnotation?.children().find((c: SgNode) => c.kind() === "object_type");
   if (objectType) {
-    transformObjectTypeUserProperty(objectType, edits);
+    if (typeContext) {
+      transformObjectTypeUserProperty(
+        objectType,
+        edits,
+        typeContext.transformedPrincipalTypeStarts,
+      );
+    }
     return;
   }
 
@@ -1161,7 +1235,7 @@ function transformPrincipalCallbackParam(
   for (const ref of refs) {
     const pos = ref.range().start.index;
     if (isInsideAnyRange(pos, shadowRanges)) continue;
-    edits.push(ref.replace(principalIdentifierReplacement(ref, "invoker")));
+    edits.push(ref.replace(principalReadReplacement(ref, "invoker")));
   }
 
   const shortRefs = body.findAll({
@@ -1697,6 +1771,7 @@ export default function transform(source: string): string | null {
   const nullableInvokerAliasLocalNames = new Set<string>();
   const actorTypeAliasLocalNames = new Set<string>();
   const actorTypeLocalNames = new Set<string>();
+  const actorTypeValueLocalNames = new Set<string>();
   for (const importStmt of sdkImports) {
     for (const { importedName, aliasNode, localName } of iterateImportSpecs(importStmt)) {
       if (TYPE_RENAME_MAP[importedName] && !aliasNode) {
@@ -1704,6 +1779,9 @@ export default function transform(source: string): string | null {
       }
       if (importedName === "TailorActor") {
         actorTypeLocalNames.add(localName);
+      }
+      if (importedName === "TailorActorType") {
+        actorTypeValueLocalNames.add(localName);
       }
       if (importedName === "TailorInvoker" && aliasNode) {
         nullableInvokerAliasLocalNames.add(localName);
@@ -1714,23 +1792,6 @@ export default function transform(source: string): string | null {
     }
   }
 
-  const typeIdents = tree.findAll({
-    rule: {
-      kind: "type_identifier",
-      not: { inside: { kind: "import_statement" } },
-    },
-  });
-  for (const id of typeIdents) {
-    const newName = sdkRenameSourceNames.has(id.text())
-      ? renamedTypeIdentifierText(id.text())
-      : nullableInvokerAliasLocalNames.has(id.text())
-        ? renamedTypeIdentifierText("TailorInvoker")
-        : actorTypeAliasLocalNames.has(id.text())
-          ? renamedTypeIdentifierText("TailorActorType")
-          : null;
-    if (!newName) continue;
-    edits.push(id.replace(newName));
-  }
   const transformedActorPropertyStarts = new Set<number>();
   transformTailorActorTypedMemberAccesses(
     tree,
@@ -1738,6 +1799,7 @@ export default function transform(source: string): string | null {
     edits,
     transformedActorPropertyStarts,
   );
+  transformTailorActorTypeInitializerLiterals(tree, actorTypeValueLocalNames, edits);
 
   let importRemoved = false;
   const globalEmittedRenamed = new Set<string>();
@@ -1846,6 +1908,7 @@ export default function transform(source: string): string | null {
   const typeContext: CallbackTypeContext = {
     bindings: collectLocalCallbackTypeBindings(tree),
     transformedTypeStarts: new Set<number>(),
+    transformedPrincipalTypeStarts: new Set<number>(),
     root: tree,
   };
   const transformedCallbackStarts = new Set<number>();
@@ -1865,6 +1928,25 @@ export default function transform(source: string): string | null {
       tree,
     );
     transformParseArgsObject(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
+  }
+
+  const typeIdents = tree.findAll({
+    rule: {
+      kind: "type_identifier",
+      not: { inside: { kind: "import_statement" } },
+    },
+  });
+  for (const id of typeIdents) {
+    if (typeContext.transformedPrincipalTypeStarts.has(id.range().start.index)) continue;
+    const newName = sdkRenameSourceNames.has(id.text())
+      ? renamedTypeIdentifierText(id.text())
+      : nullableInvokerAliasLocalNames.has(id.text())
+        ? renamedTypeIdentifierText("TailorInvoker")
+        : actorTypeAliasLocalNames.has(id.text())
+          ? renamedTypeIdentifierText("TailorActorType")
+          : null;
+    if (!newName) continue;
+    edits.push(id.replace(newName));
   }
 
   if (edits.length === 0) return null;

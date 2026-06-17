@@ -22,6 +22,21 @@ interface ValidatorArgs {
 const namedTypeHook = ({ user }: HookArgs) => user?.id ?? "anonymous";
 const namedTypeValidator = ({ user }: ValidatorArgs) => user?.id !== "";
 
+type StrictHookArgs = {
+  value: string;
+  user: TailorUser;
+};
+
+const strictHook = ({ user }: { user: TailorUser }) => {
+  const { id } = user;
+  return id;
+};
+
+const namedStrictHook = ({ user }: StrictHookArgs) => {
+  const { id } = user;
+  return id;
+};
+
 const sharedHooks = {
   create: ({ user }: { user: TailorUser | null }) => user?.id ?? "anonymous",
   update: namedTypeHook,
@@ -44,9 +59,13 @@ const role = db
   .validate(namedTypeValidator);
 
 const localHookedRole = db.string().hooks(sharedHooks);
+const strictHookedRole = db.string().hooks({ create: strictHook, update: namedStrictHook });
 
 const directHookedRole = db.string().hooks({
-  create: ({ user }) => user.id,
+  create: ({ user }) => {
+    const { id } = user;
+    return id;
+  },
   update: (ctx) => ctx.user.id,
 });
 
