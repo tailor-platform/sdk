@@ -9,12 +9,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   ci:
+    name: ci # required status check context (ruleset status_check_main) — keep equal to the job id
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: read # checkout the repository
 
     steps:
       - name: Checkout

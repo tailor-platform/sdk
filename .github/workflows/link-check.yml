@@ -8,8 +8,15 @@ on:
       - ".github/workflows/link-check.yml"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
 jobs:
   link-check:
+    name: Link check
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
