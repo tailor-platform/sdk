@@ -840,9 +840,20 @@ interface LocalCallbackBinding {
   scope: [number, number];
 }
 
-function collectLocalCallbackBindings(root: SgNode): LocalCallbackBinding[] {
+interface LocalObjectBinding {
+  name: string;
+  object: SgNode;
+  bindingStart: number;
+  scope: [number, number];
+}
+
+function localBindingRootScope(root: SgNode): [number, number] {
   const rootRange = root.range();
-  const rootScope: [number, number] = [rootRange.start.index, rootRange.end.index];
+  return [rootRange.start.index, rootRange.end.index];
+}
+
+function collectLocalCallbackBindings(root: SgNode): LocalCallbackBinding[] {
+  const rootScope = localBindingRootScope(root);
   const bindings: LocalCallbackBinding[] = [];
 
   const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
@@ -873,11 +884,48 @@ function collectLocalCallbackBindings(root: SgNode): LocalCallbackBinding[] {
   return bindings;
 }
 
+function collectLocalObjectBindings(root: SgNode): LocalObjectBinding[] {
+  const rootScope = localBindingRootScope(root);
+  const bindings: LocalObjectBinding[] = [];
+
+  const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of declarators) {
+    const name = decl.field("name");
+    const value = decl.field("value");
+    if (!name || name.kind() !== "identifier" || value?.kind() !== "object") continue;
+    bindings.push({
+      name: name.text(),
+      object: value,
+      bindingStart: name.range().start.index,
+      scope: enclosingScopeRange(decl) ?? rootScope,
+    });
+  }
+
+  return bindings;
+}
+
 function resolveLocalCallbackBinding(
   node: SgNode,
   bindings: LocalCallbackBinding[],
   root: SgNode,
 ): LocalCallbackBinding | null {
+  if (node.kind() !== "identifier") return null;
+  const pos = node.range().start.index;
+  return (
+    bindings.find(
+      (binding) =>
+        binding.name === node.text() &&
+        rangeContains(binding.scope, pos) &&
+        !isShadowedLocalReference(root, binding.name, pos, binding.bindingStart),
+    ) ?? null
+  );
+}
+
+function resolveLocalObjectBinding(
+  node: SgNode,
+  bindings: LocalObjectBinding[],
+  root: SgNode,
+): LocalObjectBinding | null {
   if (node.kind() !== "identifier") return null;
   const pos = node.range().start.index;
   return (
@@ -932,17 +980,57 @@ function transformHookCallbackObject(
     const value = child.field("value");
     if (!value) continue;
     if (key === "create" || key === "update") {
-      transformPrincipalCallbackNode(
+      const transformed = transformPrincipalCallbackNode(
         value,
         edits,
         callbackBindings,
         transformedCallbackStarts,
         root,
       );
+      if (!transformed && value.kind() === "object") {
+        transformHookCallbackObject(
+          value,
+          edits,
+          callbackBindings,
+          transformedCallbackStarts,
+          root,
+        );
+      }
     } else if (value.kind() === "object") {
       transformHookCallbackObject(value, edits, callbackBindings, transformedCallbackStarts, root);
     }
   }
+}
+
+function transformHookCallbackConfigNode(
+  node: SgNode,
+  edits: Edit[],
+  callbackBindings: LocalCallbackBinding[],
+  objectBindings: LocalObjectBinding[],
+  transformedCallbackStarts: Set<number>,
+  transformedObjectStarts: Set<number>,
+  root: SgNode,
+): boolean {
+  if (node.kind() === "object") {
+    transformHookCallbackObject(node, edits, callbackBindings, transformedCallbackStarts, root);
+    return true;
+  }
+
+  const binding = resolveLocalObjectBinding(node, objectBindings, root);
+  if (!binding) return false;
+
+  const start = binding.object.range().start.index;
+  if (!transformedObjectStarts.has(start)) {
+    transformedObjectStarts.add(start);
+    transformHookCallbackObject(
+      binding.object,
+      edits,
+      callbackBindings,
+      transformedCallbackStarts,
+      root,
+    );
+  }
+  return true;
 }
 
 function transformValidateCallbackNode(
@@ -997,7 +1085,9 @@ function transformPrincipalCallbacksInCall(
   sdkFieldRootNames: Set<string>,
   sdkFieldLocalBindings: SdkFieldLocalBinding[],
   callbackBindings: LocalCallbackBinding[],
+  objectBindings: LocalObjectBinding[],
   transformedCallbackStarts: Set<number>,
+  transformedObjectStarts: Set<number>,
   root: SgNode,
 ): void {
   const memberName = findMemberCallName(call);
@@ -1007,9 +1097,20 @@ function transformPrincipalCallbacksInCall(
   const args = call.field("arguments");
   if (!args) return;
   if (memberName === "hooks") {
-    const objArg = args.children().find((c: SgNode) => c.kind() === "object");
-    if (objArg) {
-      transformHookCallbackObject(objArg, edits, callbackBindings, transformedCallbackStarts, root);
+    for (const arg of args.children()) {
+      if (
+        transformHookCallbackConfigNode(
+          arg,
+          edits,
+          callbackBindings,
+          objectBindings,
+          transformedCallbackStarts,
+          transformedObjectStarts,
+          root,
+        )
+      ) {
+        break;
+      }
     }
     return;
   }
@@ -1174,7 +1275,9 @@ export default function transform(source: string): string | null {
 
   const sdkFieldLocalBindings = collectSdkFieldLocalBindings(tree, sdkFieldRootNames);
   const callbackBindings = collectLocalCallbackBindings(tree);
+  const objectBindings = collectLocalObjectBindings(tree);
   const transformedCallbackStarts = new Set<number>();
+  const transformedObjectStarts = new Set<number>();
   const memberCalls = tree.findAll({ rule: { kind: "call_expression" } });
   for (const call of memberCalls) {
     transformPrincipalCallbacksInCall(
@@ -1183,7 +1286,9 @@ export default function transform(source: string): string | null {
       sdkFieldRootNames,
       sdkFieldLocalBindings,
       callbackBindings,
+      objectBindings,
       transformedCallbackStarts,
+      transformedObjectStarts,
       tree,
     );
     transformParseArgsObject(call, edits, sdkFieldRootNames, sdkFieldLocalBindings, tree);
