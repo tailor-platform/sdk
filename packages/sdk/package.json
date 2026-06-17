@@ -159,7 +159,7 @@
     "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('pnpm oxfmt --write '+f.join(' '),{stdio:'inherit'})\""
   },
   "dependencies": {
-    "@0no-co/graphql.web": "1.2.0",
+    "@0no-co/graphql.web": "1.3.2",
     "@badgateway/oauth2-client": "3.3.1",
     "@bufbuild/protobuf": "2.12.0",
     "@bufbuild/protovalidate": "1.2.0",
