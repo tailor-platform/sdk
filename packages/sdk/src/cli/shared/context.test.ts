@@ -511,6 +511,7 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("TAILOR_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("TAILOR_USE_KEYRING", undefined);
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -982,6 +983,38 @@ describe("saveUserTokens", () => {
       refresh_token: "refresh-token",
       token_expires_at: futureDate,
     });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("keyring denied"));
+  });
+
+  test("deletes stale keyring tokens when falling back to the config file", async () => {
+    const config = createEmptyConfig();
+    config.users["platform-user-sub"] = {
+      storage: "keyring",
+      token_expires_at: futureDate,
+    };
+    keyringPasswords.set(
+      "tailor-platform-cli:platform-user-sub",
+      JSON.stringify({ accessToken: "stale-access-token", refreshToken: "stale-refresh-token" }),
+    );
+
+    expect(await isKeyringAvailable()).toBe(true);
+    keyringSetPasswordFailure.error = new Error("keyring denied");
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await saveUserTokens(
+      config,
+      "platform-user-sub",
+      { accessToken: "access-token", refreshToken: "refresh-token" },
+      futureDate,
+    );
+
+    expect(config.users["platform-user-sub"]).toEqual({
+      storage: "file",
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+      token_expires_at: futureDate,
+    });
+    expect(keyringPasswords.has("tailor-platform-cli:platform-user-sub")).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("keyring denied"));
   });
 });
