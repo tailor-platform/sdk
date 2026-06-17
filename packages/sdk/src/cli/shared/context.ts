@@ -608,6 +608,9 @@ export async function saveUserTokens(
       ...(email ? { email } : {}),
     };
   } else {
+    if (config.users[user]?.storage === "keyring") {
+      await deleteKeyringTokens(user);
+    }
     config.users[user] = {
       access_token: tokens.accessToken,
       refresh_token: tokens.refreshToken,
