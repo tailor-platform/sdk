@@ -72,7 +72,6 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                     |
 | `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                     |
 | `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                                               |
-| `TAILOR_USE_KEYRING`                         | Set to `0`, `false`, or `off` to disable OS keyring token storage                                 |
 | `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                            |
 | `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                                           |
 | `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                                      |
@@ -95,8 +94,7 @@ Token resolution follows this priority order:
 
 `tailor-sdk login` stores local CLI login tokens in the OS keyring by default
 when available. If the keyring is unavailable, tokens are stored in the platform
-config file. Set `TAILOR_USE_KEYRING=0`, `false`, or `off` to force file-based
-token storage.
+config file.
 
 ### Workspace ID Priority
 

@@ -64,7 +64,6 @@ describe("profile create with a migrating legacy email user", () => {
     resetKeyringState();
     keyringPasswords.clear();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    vi.stubEnv("TAILOR_USE_KEYRING", undefined);
   });
 
   afterEach(() => {
