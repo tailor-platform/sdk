@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "namespace": "analyticsdb",
+  "createdAt": "2026-06-17T14:01:59.003Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "Event",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Event",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record update timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": true,
+  "breakingChanges": [
+    {
+      "typeName": "Event",
+      "fieldName": "updatedAt",
+      "reason": "Field changed from optional to required"
+    }
+  ],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": true
+}
