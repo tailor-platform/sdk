@@ -279,11 +279,14 @@ field, files entry, or relation on the same type.
 
 ### Hooks
 
-Add hooks to execute functions during data creation or update. Hooks receive three arguments:
+Add hooks to execute functions during data creation or update. Hooks receive four arguments:
 
 - `value`: User input if provided, otherwise existing value on update or null on create
-- `data`: Entire record data (for accessing other field values)
+- `data`: The submitted record data (for accessing other field values)
 - `invoker`: Principal performing the operation
+- `now`: Operation timestamp (`Date`). The same instant is shared by every field's hook in the same create/update, so multiple fields can be stamped with an identical timestamp.
+
+All of a type's hooks run together as one operation and observe the same submitted input: `data` reflects what the client sent, so a hook does not see another field's hook result. Order between fields is not significant.
 
 #### Field-level Hooks
 
@@ -314,6 +317,20 @@ export const customer = db
       create: ({ data }) => `${data.firstName} ${data.lastName}`,
       update: ({ data }) => `${data.firstName} ${data.lastName}`,
     },
+  });
+```
+
+Use `now` to stamp several fields with the exact same instant:
+
+```typescript
+export const order = db
+  .type("Order", {
+    createdAt: db.datetime(),
+    updatedAt: db.datetime(),
+  })
+  .hooks({
+    createdAt: { create: ({ now }) => now },
+    updatedAt: { create: ({ now }) => now, update: ({ now }) => now },
   });
 ```
 

@@ -386,13 +386,13 @@ export function resolveNeededBindings(
   };
 }
 
-function buildPrecompiledExpr(bundleCode: string): string {
+function buildPrecompiledExpr(bundleCode: string, argsObject: string): string {
   return (
     "(() => {\n" +
     "  const module = { exports: {} };\n" +
     "  const exports = module.exports;\n" +
     `${bundleCode}\n` +
-    `  return module.exports.main({ value: _value, data: _data, invoker: ${tailorPrincipalMap} });\n` +
+    `  return module.exports.main(${argsObject});\n` +
     "})()"
   );
 }
@@ -441,8 +441,12 @@ async function bundleScriptTarget(args: {
   const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
   const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
+  const argsObject =
+    kind === "hooks"
+      ? `{ value: _value, data: _data, invoker: ${tailorPrincipalMap}, now: _now }`
+      : `{ value: _value, data: _data, invoker: ${tailorPrincipalMap} }`;
   const inlineExpr = assertParsableExpression(
-    `(${fnSource})({ value: _value, data: _data, invoker: ${tailorPrincipalMap} })`,
+    `(${fnSource})(${argsObject})`,
     context,
   );
 
@@ -492,7 +496,7 @@ async function bundleScriptTarget(args: {
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;
-  return assertParsableExpression(buildPrecompiledExpr(bundledCode), context);
+  return assertParsableExpression(buildPrecompiledExpr(bundledCode, argsObject), context);
 }
 
 /**
