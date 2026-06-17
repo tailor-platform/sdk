@@ -10,18 +10,24 @@ on:
       - "AGENTS.md"
       - "CLAUDE.md"
 
-permissions:
-  contents: read
-  pull-requests: write
-  id-token: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   docs-consistency:
+    name: Docs consistency
     if: >
       github.event.action == 'ready_for_review'
       || (github.event.action == 'labeled' && github.event.label.name == 'docs-check')
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    permissions:
+      contents: read # checkout the PR branch
+      pull-requests: write # upsert the docs review on the PR
+      id-token: write # OIDC for the Claude Code action
     env:
       PR_NUMBER: ${{ github.event.number }}
       REVIEW_BODY_FILE: ${{ github.workspace }}/docs-consistency-review.md
@@ -31,7 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@4d7e1f0cd85743fdc93b1c8040ab54395da024e2 # v1.0.149
+        uses: anthropics/claude-code-action@9dd8b95a392eb34b6f5fb56cf5a64cb735912d4b # v1.0.150
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -237,4 +243,5 @@ jobs:
         if: always() && github.event.action == 'labeled' && github.event.label.name == 'docs-check'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr edit "$PR_NUMBER" --repo "${{ github.repository }}" --remove-label docs-check
+          REPO: ${{ github.repository }}
+        run: gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label docs-check

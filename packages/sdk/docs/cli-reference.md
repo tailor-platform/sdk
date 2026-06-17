@@ -92,6 +92,10 @@ Token resolution follows this priority order:
 3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 4. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
 
+`tailor-sdk login` stores local CLI login tokens in the OS keyring by default
+when available. If the keyring is unavailable, tokens are stored in the platform
+config file.
+
 ### Workspace ID Priority
 
 Workspace ID resolution follows this priority order:

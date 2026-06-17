@@ -139,18 +139,18 @@ export const user = db.type("User", {
 });
 ```
 
-The `attributeList` values are accessible via `user.attributeList` as a tuple:
+The `attributeList` values are accessible via the runtime principal's `attributeList` as a tuple:
 
 ```typescript
 // In a resolver
 body: (context) => {
-  const [organizationId, teamId] = context.user.attributeList;
+  const [organizationId, teamId] = context.caller?.attributeList ?? [];
 },
 
 // In TailorDB hooks
 .hooks({
   field: {
-    create: ({ user }) => user.attributeList[0], // First UUID from list
+    create: ({ invoker }) => invoker?.attributeList[0] ?? null, // First UUID from list
   },
 })
 ```
@@ -160,7 +160,7 @@ body: (context) => {
 When you want to use machine users without defining a `userProfile`, define `machineUserAttributes` instead. These attributes are used for:
 
 - type-safe `machineUsers[*].attributes`
-- `context.user.attributes` typing (via `tailor.d.ts`)
+- runtime principal `attributes` typing (via `tailor.d.ts`)
 
 ```typescript
 import { defineAuth, t } from "@tailor-platform/sdk";
@@ -200,12 +200,12 @@ machineUsers: {
 },
 ```
 
-**attributes**: Values for attributes enabled in `userProfile.attributes` (or all fields defined in `machineUserAttributes` when `userProfile` is omitted). All enabled fields must be set here. These values are accessible via `user.attributes`:
+**attributes**: Values for attributes enabled in `userProfile.attributes` (or all fields defined in `machineUserAttributes` when `userProfile` is omitted). All enabled fields must be set here. These values are accessible via the runtime principal's `attributes`:
 
 ```typescript
 // In a resolver
 body: (context) => {
-  const role = context.user.attributes?.role;
+  const role = context.caller?.attributes.role;
 },
 ```
 
@@ -230,25 +230,25 @@ machineUsers: {
 },
 ```
 
-These values are accessible via `user.attributeList`:
+These values are accessible via the runtime principal's `attributeList`:
 
 ```typescript
 // In a resolver
 body: (context) => {
-  const [organizationId, teamId] = context.user.attributeList;
+  const [organizationId, teamId] = context.caller?.attributeList ?? [];
 },
 
 // In TailorDB hooks
 .hooks({
   field: {
-    create: ({ user }) => user.attributes?.role === "ADMIN" ? "default" : null,
+    create: ({ invoker }) => invoker?.attributes.role === "ADMIN" ? "default" : null,
   },
 })
 
 // In TailorDB validate
 .validate({
   field: [
-    ({ user }) => user.attributes?.role === "ADMIN",
+    ({ invoker }) => invoker?.attributes.role === "ADMIN",
     "Only admins can set this field",
   ],
 })

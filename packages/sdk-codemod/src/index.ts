@@ -30,6 +30,27 @@ function printLlmReview(review: LlmReview): void {
 const main = defineCommand({
   name: packageJson.name ?? "sdk-codemod",
   description: packageJson.description ?? "Codemod runner for Tailor Platform SDK upgrades",
+  notes: `Applies the codemods matching the \`--from\`/\`--to\` version range to the
+\`--target\` directory, then writes a JSON summary to \`stdout\`:
+
+- \`filesModified\`: files a codemod changed
+- \`warnings\`: files that may still need manual migration
+- \`llmReviews\`: changes the codemods could not fully migrate on their own. Each
+  entry has the affected \`files\` and a \`prompt\` — hand the prompt and files to
+  an LLM (or follow it yourself) to finish those cases.
+
+Progress, warnings, and the LLM-review prompts are also printed to \`stderr\` in
+human-readable form, so \`stdout\` stays pure JSON for piping.`,
+  examples: [
+    {
+      cmd: "--from 1.64.0 --to 2.0.0",
+      desc: "Apply every codemod for the 1.64.0 -> 2.0.0 upgrade to the current project",
+    },
+    {
+      cmd: "--from 1.64.0 --to 2.0.0 --dry-run",
+      desc: "Preview the changes and any LLM-review prompts without writing files",
+    },
+  ],
   args: z
     .object({
       from: arg(z.string(), {

@@ -20,78 +20,18 @@ export type InferredAttributeList = AttributeList["__tuple"] extends []
   ? string[]
   : AttributeList["__tuple"];
 
-/** Represents a user in the Tailor platform. */
-export type TailorUser = {
-  /**
-   * The ID of the user.
-   * For unauthenticated users, this will be a nil UUID.
-   */
+/** Represents a user or machine user principal in the Tailor Platform. */
+export type TailorPrincipal = {
+  /** The ID of the principal. */
   id: string;
-  /**
-   * The type of the user.
-   * For unauthenticated users, this will be an empty string.
-   */
-  type: "user" | "machine_user" | "";
-  /** The ID of the workspace the user belongs to. */
-  workspaceId: string;
-  /**
-   * A map of the user's attributes.
-   * For unauthenticated users, this will be null.
-   */
-  attributes: InferredAttributeMap | null;
-  /**
-   * A list of the user's attributes.
-   * For unauthenticated users, this will be an empty array.
-   */
-  attributeList: InferredAttributeList;
-};
-
-/**
- * The invoker of the current function execution.
- *
- * Reflects `authInvoker` delegation: when `authInvoker` is specified, this is
- * the machine user; otherwise it is the calling user.
- * Distinct from resolver's `user` (the authenticated caller) and executor's
- * `actor` (the subject of the event).
- *
- * `null` for anonymous requests.
- *
- * TODO(v2): unify with `TailorUser` — same underlying principal shape.
- */
-export type TailorInvoker = {
-  /** The ID of the invoker (user ID or machine user ID). */
-  id: string;
-  /** The type of the invoker. */
+  /** The type of the principal. */
   type: "user" | "machine_user";
-  /** The ID of the workspace the invoker belongs to. */
+  /** The ID of the workspace the principal belongs to. */
   workspaceId: string;
-  /** A map of the invoker's attributes. */
+  /** A map of the principal's attributes. */
   attributes: InferredAttributeMap;
-  /** A list of the invoker's attribute IDs. */
+  /** A list of the principal's attribute IDs. */
   attributeList: InferredAttributeList;
-} | null;
-
-/** User type enum values from the Tailor Platform server. */
-export type TailorActorType = "USER_TYPE_USER" | "USER_TYPE_MACHINE_USER" | "USER_TYPE_UNSPECIFIED";
-
-/** Represents an actor in event triggers. */
-export type TailorActor = {
-  /** The ID of the workspace the user belongs to. */
-  workspaceId: string;
-  /** The ID of the user. */
-  userId: string;
-  /**
-   * A map of the user's attributes.
-   * Maps from server's `attributeMap` field.
-   */
-  attributes: InferredAttributeMap | null;
-  /**
-   * A list of the user's attributes.
-   * Maps from server's `attributes` field.
-   */
-  attributeList: InferredAttributeList;
-  /** The type of the user. */
-  userType: TailorActorType;
 };
 
 // Interface for module augmentation

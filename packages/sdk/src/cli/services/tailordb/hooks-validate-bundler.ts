@@ -4,7 +4,7 @@ import { join, resolve } from "pathe";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
-import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
+import { stringifyFunction, tailorPrincipalMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "@/utils/assert";
 import { ES_BUILTINS } from "./es-builtins";
@@ -391,7 +391,7 @@ function buildPrecompiledExpr(bundleCode: string): string {
     "  const module = { exports: {} };\n" +
     "  const exports = module.exports;\n" +
     `${bundleCode}\n` +
-    `  return module.exports.main({ value: _value, data: _data, user: ${tailorUserMap} });\n` +
+    `  return module.exports.main({ value: _value, data: _data, invoker: ${tailorPrincipalMap} });\n` +
     "})()"
   );
 }
@@ -439,7 +439,7 @@ async function bundleScriptTarget(args: {
 }): Promise<string> {
   const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
   const fnSource = stringifyFunction(fn);
-  const inlineExpr = `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+  const inlineExpr = `(${fnSource})({ value: _value, data: _data, invoker: ${tailorPrincipalMap} })`;
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);

@@ -43,7 +43,7 @@ export function generateUnifiedFileUtils(
         FileUploadOptions,
         FileUploadResponse,
         FileMetadata,
-        FileStreamIterator,
+        FileDownloadStreamResponse,
       } from "@tailor-platform/sdk/runtime/file";
     ` + "\n";
 
@@ -116,15 +116,15 @@ export function generateUnifiedFileUtils(
       }
     ` + "\n";
 
-  // Generate openFileDownloadStream helper function
-  const openDownloadStreamFunction =
+  // Generate downloadFileStream helper function
+  const downloadStreamFunction =
     multiline /* ts */ `
-      export async function openFileDownloadStream<T extends keyof TypeWithFiles>(
+      export async function downloadFileStream<T extends keyof TypeWithFiles>(
         type: T,
         field: TypeWithFiles[T]["fields"],
         recordId: string,
-      ): Promise<FileStreamIterator> {
-        return await file.openDownloadStream(namespaces[type], type, field, recordId);
+      ): Promise<FileDownloadStreamResponse> {
+        return await file.downloadStream(namespaces[type], type, field, recordId);
       }
     ` + "\n";
 
@@ -136,6 +136,6 @@ export function generateUnifiedFileUtils(
     uploadFunction,
     deleteFunction,
     getMetadataFunction,
-    openDownloadStreamFunction,
+    downloadStreamFunction,
   ].join("\n");
 }

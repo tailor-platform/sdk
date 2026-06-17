@@ -35,7 +35,7 @@ export default createHttpAdapter({
     get: () => ({
       query: `query Whoami {
         showUserInfo {
-          user {
+          caller {
             id
             type
             role
@@ -53,7 +53,7 @@ export default createHttpAdapter({
     const data = resp.data as
       | {
           showUserInfo?: {
-            user?: Record<string, unknown>;
+            caller?: Record<string, unknown>;
             invoker?: Record<string, unknown>;
           };
         }
@@ -63,7 +63,7 @@ export default createHttpAdapter({
     const xml =
       `<?xml version="1.0" encoding="UTF-8"?>\n` +
       `<whoami>` +
-      actorXml("user", info?.user) +
+      actorXml("caller", info?.caller) +
       actorXml("invoker", info?.invoker) +
       `</whoami>`;
     return {

@@ -1,8 +1,46 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, expect, test, expectTypeOf } from "vitest";
+import { platformSerialize } from "@/utils/test/platform-serialize";
 import { createWorkflowJob, type WorkflowJob } from "./job";
+import { getRegisteredJob } from "./registry";
+import { buildJobContext } from "./test-env-key";
 import { createWorkflow } from "./workflow";
-import type { TailorInvoker } from "@/runtime/types";
+import type { TailorPrincipal } from "@/runtime/types";
+
+async function withRegisteredJobRuntime<T>(run: () => Promise<T>): Promise<T> {
+  const root = globalThis as {
+    tailor?: {
+      workflow?: {
+        triggerJobFunction: (name: string, args?: unknown) => unknown;
+      };
+    };
+  };
+  const previousTailor = root.tailor;
+
+  root.tailor = {
+    ...previousTailor,
+    workflow: {
+      triggerJobFunction: (name, args) => {
+        const body = getRegisteredJob(name);
+        if (!body) return null;
+        const out = body(platformSerialize(args), buildJobContext());
+        return out instanceof Promise
+          ? out.then((value) => platformSerialize(value))
+          : platformSerialize(out);
+      },
+    },
+  };
+
+  try {
+    return await run();
+  } finally {
+    if (previousTailor) {
+      root.tailor = previousTailor;
+    } else {
+      delete root.tailor;
+    }
+  }
+}
 
 describe("WorkflowJob type inference", () => {
   test("preserves literal types in output when using as const", () => {
@@ -10,7 +48,7 @@ describe("WorkflowJob type inference", () => {
       name: "test",
       body: () => ({ status: "ok" as const, count: 42 }),
     });
-    type Output = Awaited<ReturnType<typeof _job.trigger>>;
+    type Output = ReturnType<typeof _job.trigger>;
     expectTypeOf<Output>().toEqualTypeOf<{ status: "ok"; count: number }>();
   });
 
@@ -45,7 +83,7 @@ describe("WorkflowJob type inference", () => {
       name: "test",
       body: (): UserOutput => ({ id: "123", created: true }),
     });
-    type Output = Awaited<ReturnType<typeof _job.trigger>>;
+    type Output = ReturnType<typeof _job.trigger>;
     expectTypeOf<Output>().toEqualTypeOf<UserOutput>();
   });
 
@@ -55,9 +93,143 @@ describe("WorkflowJob type inference", () => {
       body: (_input: undefined, context) => {
         expectTypeOf(context).toHaveProperty("env");
         expectTypeOf(context).toHaveProperty("invoker");
-        expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+        expectTypeOf(context.invoker).toEqualTypeOf<TailorPrincipal | null>();
       },
     });
+  });
+
+  test("direct body calls work when process.getBuiltinModule is unavailable", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, "getBuiltinModule");
+    Object.defineProperty(process, "getBuiltinModule", {
+      configurable: true,
+      value: undefined,
+    });
+    try {
+      const invoker: TailorPrincipal = {
+        id: "principal-1",
+        type: "user",
+        workspaceId: "workspace-1",
+        attributes: {},
+        attributeList: [],
+      };
+      const child = createWorkflowJob({
+        name: "capture-child-invoker-without-get-builtin-module",
+        body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+      });
+      const parent = createWorkflowJob({
+        name: "propagate-parent-invoker-without-get-builtin-module",
+        body: async () => await child.trigger(),
+      });
+
+      await withRegisteredJobRuntime(async () => {
+        await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
+      });
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(process, "getBuiltinModule", descriptor);
+      } else {
+        delete (process as { getBuiltinModule?: unknown }).getBuiltinModule;
+      }
+    }
+  });
+
+  test("direct body calls propagate invoker to triggered child jobs", async () => {
+    const invoker: TailorPrincipal = {
+      id: "principal-1",
+      type: "user",
+      workspaceId: "workspace-1",
+      attributes: { role: "ADMIN" },
+      attributeList: [],
+    };
+    const child = createWorkflowJob({
+      name: "capture-child-invoker",
+      body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+    });
+    const parent = createWorkflowJob({
+      name: "propagate-parent-invoker",
+      body: async () => await child.trigger(),
+    });
+
+    await withRegisteredJobRuntime(async () => {
+      await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
+    });
+  });
+
+  test("concurrent direct body calls isolate invokers for child triggers", async () => {
+    const firstInvoker: TailorPrincipal = {
+      id: "principal-1",
+      type: "user",
+      workspaceId: "workspace-1",
+      attributes: {},
+      attributeList: [],
+    };
+    const secondInvoker: TailorPrincipal = {
+      id: "principal-2",
+      type: "machine_user",
+      workspaceId: "workspace-1",
+      attributes: {},
+      attributeList: [],
+    };
+    let releaseFirst: () => void = () => {};
+    let releaseSecond: () => void = () => {};
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const gates = {
+      first: firstGate,
+      second: secondGate,
+    };
+    const child = createWorkflowJob({
+      name: "capture-concurrent-child-invoker",
+      body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+    });
+    const parent = createWorkflowJob({
+      name: "capture-concurrent-parent-invoker",
+      body: async (input: { gate: "first" | "second" }) => {
+        await gates[input.gate];
+        return await child.trigger();
+      },
+    });
+
+    await withRegisteredJobRuntime(async () => {
+      const first = parent.body({ gate: "first" }, { env: {}, invoker: firstInvoker });
+      const second = parent.body({ gate: "second" }, { env: {}, invoker: secondInvoker });
+
+      releaseFirst();
+      await expect(first).resolves.toBe("principal-1");
+      releaseSecond();
+      await expect(second).resolves.toBe("principal-2");
+    });
+  });
+
+  test("trigger reads the runtime invoker when no body context is active", async () => {
+    const previousTailor = (globalThis as { tailor?: unknown }).tailor;
+    (globalThis as { tailor?: unknown }).tailor = {
+      context: {
+        getInvoker: () => ({
+          id: "runtime-principal",
+          type: "machine_user",
+          workspaceId: "workspace-1",
+          attributes: ["role"],
+          attributeMap: { role: "SYSTEM" },
+        }),
+      },
+    };
+    try {
+      const job = createWorkflowJob({
+        name: "capture-runtime-invoker",
+        body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+      });
+
+      await withRegisteredJobRuntime(async () => {
+        expect(job.trigger()).toBe("runtime-principal");
+      });
+    } finally {
+      (globalThis as { tailor?: unknown }).tailor = previousTailor;
+    }
   });
 });
 
@@ -229,7 +401,7 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: () => ({ result: "ok", count: 42, active: true as boolean }),
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{
+      expectTypeOf(job.trigger).returns.toEqualTypeOf<{
         result: string;
         count: number;
         active: boolean;
@@ -246,7 +418,7 @@ describe("WorkflowJob type constraints", () => {
           },
         }),
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{
+      expectTypeOf(job.trigger).returns.toEqualTypeOf<{
         data: {
           id: string;
           tags: string[];
@@ -259,7 +431,7 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: () => undefined,
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<undefined>();
+      expectTypeOf(job.trigger).returns.toEqualTypeOf<undefined>();
     });
 
     test("returns T | undefined for T | undefined output", () => {
@@ -269,7 +441,7 @@ describe("WorkflowJob type constraints", () => {
           return Math.random() > 0.5 ? { value: 1 } : undefined;
         },
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{ value: number } | undefined>();
+      expectTypeOf(job.trigger).returns.toEqualTypeOf<{ value: number } | undefined>();
     });
   });
 
@@ -279,7 +451,7 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: () => ({ result: "ok" }),
       });
-      const _trigger: () => Promise<{ result: string }> = job.trigger;
+      const _trigger: () => { result: string } = job.trigger;
       expectTypeOf(_trigger).toBeFunction();
     });
 
@@ -288,7 +460,7 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: (input: { id: string }) => ({ result: input.id }),
       });
-      const _trigger: (input: { id: string }) => Promise<{ result: string }> = job.trigger;
+      const _trigger: (input: { id: string }) => { result: string } = job.trigger;
       expectTypeOf(_trigger).toBeFunction();
     });
   });
@@ -305,7 +477,7 @@ describe("WorkflowJob type constraints", () => {
     test("trigger return preserves Output as-is", () => {
       type Job = WorkflowJob<"test", undefined, { id: string; result: string }>;
 
-      expectTypeOf<ReturnType<Job["trigger"]>>().resolves.toEqualTypeOf<{
+      expectTypeOf<ReturnType<Job["trigger"]>>().toEqualTypeOf<{
         id: string;
         result: string;
       }>();
@@ -380,41 +552,24 @@ describe("WorkflowJob type constraints", () => {
 });
 
 // Plain `node` environment (no `tailor-runtime`, no `mockWorkflow()`), so
-// `.trigger()` exercises the no-shim fallback.
-describe("trigger fallback without tailor.workflow", () => {
-  test("runs the registered job body locally", async () => {
+// `.trigger()` should not execute job bodies locally.
+describe("trigger without tailor.workflow", () => {
+  test("job trigger throws instead of running the registered body", () => {
     const double = createWorkflowJob({
       name: "fallback-double",
       body: (input: { n: number }) => ({ doubled: input.n * 2 }),
     });
 
-    expect(await double.trigger({ n: 21 })).toEqual({ doubled: 42 });
+    expect(() => double.trigger({ n: 21 })).toThrow(/tailor\.workflow is not available/);
   });
 
-  test("runs the whole chain via workflow.mainJob.trigger()", async () => {
-    const inner = createWorkflowJob({
-      name: "fallback-inner",
-      body: (input: { n: number }) => ({ n: input.n + 1 }),
-    });
+  test("workflow trigger rejects instead of running the main job", async () => {
     const main = createWorkflowJob({
       name: "fallback-main",
-      body: async (input: { n: number }) => {
-        const a = await inner.trigger({ n: input.n });
-        const b = await inner.trigger({ n: a.n });
-        return { total: b.n };
-      },
+      body: (input: { n: number }) => ({ total: input.n + 1 }),
     });
     const workflow = createWorkflow({ name: "fallback-wf", mainJob: main });
 
-    expect(await workflow.mainJob.trigger({ n: 0 })).toEqual({ total: 2 });
-  });
-
-  test("enforces the JSON boundary on the fallback path", async () => {
-    const bad = createWorkflowJob({
-      name: "fallback-bad",
-      body: () => ({ when: new Date() }) as never,
-    });
-
-    await expect(bad.trigger()).rejects.toThrow(/Date instance/);
+    await expect(workflow.trigger({ n: 0 })).rejects.toThrow(/tailor\.workflow is not available/);
   });
 });

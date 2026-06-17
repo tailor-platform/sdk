@@ -4,7 +4,7 @@
  * context (like type references and namespace) at runtime.
  */
 
-import type { TailorActor, TailorEnv } from "@/runtime/types";
+import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
 
 /**
  * Plugin executor factory function type.
@@ -28,8 +28,8 @@ export interface PluginFunctionArgs {
   appNamespace: string;
   /** Environment variables */
   env: TailorEnv;
-  /** Actor (user) who triggered the event, null for system events */
-  actor: TailorActor | null;
+  /** Principal that triggered the event, null for system events */
+  actor: TailorPrincipal | null;
   /** Name of the TailorDB type */
   typeName: string;
   /** TailorDB connections by namespace */

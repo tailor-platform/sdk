@@ -7,7 +7,7 @@ import type {
   FieldMetadata,
   TailorField,
 } from "@/configure/types/field.types";
-import type { InferredAttributeMap, TailorUser } from "@/runtime/types";
+import type { InferredAttributeMap, TailorPrincipal } from "@/runtime/types";
 import type { InferFieldsOutput, output, Prettify } from "@/types/helpers";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
@@ -148,7 +148,7 @@ type HookFn<TValue, TData, TReturn> = (args: {
   data: TData extends Record<string, unknown>
     ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
     : unknown;
-  user: TailorUser;
+  invoker: TailorPrincipal | null;
 }) => TReturn;
 
 export type Hook<TData, TReturn> = {
