@@ -10,9 +10,21 @@ function hasMachineUser({ user }: { user: TailorUser | null }) {
 
 const hasInvoker = (ctx: { user: TailorUser | null }) => ctx.user?.id !== "";
 
+type HookArgs = {
+  value: string;
+  user: TailorUser | null;
+};
+
+interface ValidatorArgs {
+  user: TailorUser | null;
+}
+
+const namedTypeHook = ({ user }: HookArgs) => user?.id ?? "anonymous";
+const namedTypeValidator = ({ user }: ValidatorArgs) => user?.id !== "";
+
 const sharedHooks = {
   create: ({ user }: { user: TailorUser | null }) => user?.id ?? "anonymous",
-  update: (ctx: { user: TailorUser | null }) => ctx.user?.id ?? "anonymous",
+  update: namedTypeHook,
 };
 
 const role = db
@@ -28,7 +40,8 @@ const role = db
     [hasMachineUser, "Machine user required"],
     ctx => ctx.user?.id !== "",
   ])
-  .validate(hasInvoker);
+  .validate(hasInvoker)
+  .validate(namedTypeValidator);
 
 const localHookedRole = db.string().hooks(sharedHooks);
 
