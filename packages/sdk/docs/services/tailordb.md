@@ -409,7 +409,7 @@ export const user = db.type("User", {
 });
 ```
 
-`db.fields.timestamps()` adds non-null `createdAt` and `updatedAt` datetime fields. Both fields are populated when a record is created; provided values are preserved so seed data can use historical timestamps. Define a custom `updatedAt` field if it should refresh automatically on record updates.
+`db.fields.timestamps()` adds non-null `createdAt` and `updatedAt` datetime fields. Both fields are populated when a record is created; provided values are preserved so seed data can use historical timestamps. `updatedAt` is also refreshed automatically when a record is updated.
 
 ## Type Modifiers
 

@@ -1177,7 +1177,10 @@ export const db = {
         .hooks({ create: ({ value }) => value ?? new Date() })
         .description("Record creation timestamp"),
       updatedAt: datetime()
-        .hooks({ create: ({ value }) => value ?? new Date() })
+        .hooks({
+          create: ({ value }) => value ?? new Date(),
+          update: () => new Date(),
+        })
         .description("Record update timestamp"),
     }),
   },

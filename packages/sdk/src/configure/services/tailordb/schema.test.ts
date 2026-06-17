@@ -655,10 +655,17 @@ describe("TailorDBType withTimestamps option tests", () => {
     expect((result as Date).getTime()).toBeLessThanOrEqual(after);
   });
 
-  test("updatedAt does not define an update hook", () => {
+  test("updatedAt update hook uses current time", () => {
     const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
 
-    expect(updatedAt.metadata.hooks?.update).toBeUndefined();
+    const before = Date.now();
+    const result = updateHook!({ value: null, data: {}, user: timestampHookUser });
+    const after = Date.now();
+    expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
   });
 });
 
