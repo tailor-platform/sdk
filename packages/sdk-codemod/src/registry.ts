@@ -16,6 +16,30 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     scriptPath: "v2/define-generators-to-plugins/scripts/transform.js",
     legacyPatterns: ["defineGenerators"],
+    examples: [
+      {
+        before: [
+          'import { defineGenerators } from "@tailor-platform/sdk";',
+          "",
+          "export const generators = defineGenerators(",
+          '  ["@tailor-platform/kysely-type", { distPath: "db.ts" }],',
+          ");",
+        ].join("\n"),
+        after: [
+          'import { definePlugins } from "@tailor-platform/sdk";',
+          'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+          "",
+          'export const generators = definePlugins(kyselyTypePlugin({ distPath: "db.ts" }));',
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "defineGenerators() is replaced by definePlugins() in v2. The codemod rewrites the",
+      "known plugin tuples (kysely-type, enum-constants, file-utils, seed). For any",
+      "remaining defineGenerators([...]) the codemod left in place — a plugin it does not",
+      "know, or a non-tuple/spread form — convert it to definePlugins(pluginFn(config)),",
+      "importing the matching plugin from its @tailor-platform/sdk/plugin/<name> subpath.",
+    ].join("\n"),
   },
   {
     id: "v2/plugin-cli-import",
@@ -25,6 +49,12 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/plugin-cli-import/scripts/transform.js",
+    examples: [
+      {
+        before: 'import { kyselyTypePlugin } from "@tailor-platform/sdk/cli";',
+        after: 'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+      },
+    ],
   },
   {
     id: "v2/test-run-arg-input",
@@ -35,6 +65,13 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     scriptPath: "v2/test-run-arg-input/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh}", "**/*.md"],
+    examples: [
+      {
+        lang: "sh",
+        before: 'tailor-sdk function test-run resolvers/add.ts --arg \'{"input":{"a":1}}\'',
+        after: "tailor-sdk function test-run resolvers/add.ts --arg '{\"a\":1}'",
+      },
+    ],
   },
   {
     id: "v2/sdk-skills-shim",
@@ -46,6 +83,19 @@ export const allCodemods: CodemodPackage[] = [
     scriptPath: "v2/sdk-skills-shim/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
     legacyPatterns: ["tailor-sdk-skills"],
+    examples: [
+      {
+        lang: "sh",
+        before: "npx tailor-sdk-skills",
+        after: "tailor-sdk skills install",
+      },
+    ],
+    prompt: [
+      "The standalone tailor-sdk-skills binary is removed in v2; call the skills install",
+      "subcommand on the main tailor-sdk CLI instead. Replace any remaining",
+      "tailor-sdk-skills invocations the codemod did not rewrite with",
+      "`tailor-sdk skills install`.",
+    ].join("\n"),
   },
   {
     id: "v2/principal-unify",
@@ -56,6 +106,27 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     scriptPath: "v2/principal-unify/scripts/transform.js",
     legacyPatterns: ["TailorUser", "TailorActor", "TailorInvoker", "unauthenticatedTailorUser"],
+    examples: [
+      {
+        caption: "Type references unify under `TailorPrincipal`:",
+        before: 'import type { TailorUser } from "@tailor-platform/sdk";',
+        after: 'import type { TailorPrincipal } from "@tailor-platform/sdk";',
+      },
+      {
+        caption: "The resolver body `user` becomes `caller`:",
+        before: "body: ({ input, user }) => user.id,",
+        after: "body: ({ input, caller }) => caller.id,",
+      },
+    ],
+    prompt: [
+      "Finish the cases the codemod left for manual migration:",
+      "- Rename user -> caller in resolver bodies the codemod skipped because a `caller`",
+      "  binding already exists or renaming would shadow/collide with another value.",
+      "- Replace member-access on the removed unauthenticatedTailorUser (e.g.",
+      "  unauthenticatedTailorUser.id); the codemod only replaced standalone references",
+      "  with null and left member access to surface a type error.",
+      "Use TailorPrincipal for the unified user/actor/invoker type.",
+    ].join("\n"),
   },
   {
     id: "v2/apply-to-deploy",
@@ -66,6 +137,13 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     scriptPath: "v2/apply-to-deploy/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor-sdk apply --profile prod",
+        after: "tailor-sdk deploy --profile prod",
+      },
+    ],
   },
   {
     id: "v2/cli-rename",
@@ -77,6 +155,19 @@ export const allCodemods: CodemodPackage[] = [
     scriptPath: "v2/cli-rename/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
     legacyPatterns: ["tailor-sdk crash-report", "--machineuser"],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor-sdk crash-report list\ntailor-sdk login --machineuser",
+        after: "tailor-sdk crashreport list\ntailor-sdk login --machine-user",
+      },
+    ],
+    prompt: [
+      "Apply the v2 CLI renames the codemod did not reach (only `tailor-sdk`-prefixed",
+      "invocations are rewritten): `tailor-sdk crash-report` -> `tailor-sdk crashreport`",
+      "and the `--machineuser` option -> `--machine-user`. Leave unrelated commands that",
+      "happen to use `--machineuser` alone.",
+    ].join("\n"),
   },
   {
     id: "v2/auth-invoker-unwrap",
@@ -104,6 +195,12 @@ export const allCodemods: CodemodPackage[] = [
       "",
       "Do not change behavior beyond removing the auth.invoker() indirection.",
     ].join("\n"),
+    examples: [
+      {
+        before: 'createResolver({ invoker: auth.invoker("manager") });',
+        after: 'createResolver({ invoker: "manager" });',
+      },
+    ],
   },
   {
     id: "v2/tailordb-namespace",
@@ -114,6 +211,19 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     scriptPath: "v2/tailordb-namespace/scripts/transform.js",
     legacyPatterns: ["Tailordb."],
+    examples: [
+      {
+        before: 'const command: Tailordb.CommandType = "SELECT";',
+        after: 'const command: tailordb.CommandType = "SELECT";',
+      },
+    ],
+    prompt: [
+      "The capital-cased Tailordb ambient namespace is removed in v2; use the lowercase",
+      "tailordb.* namespace from @tailor-platform/sdk/runtime/globals. The codemod rewrites",
+      "the known members (QueryResult, CommandType, Client). Rewrite any other remaining",
+      "Tailordb.* reference to its tailordb.* equivalent (and confirm the member still",
+      "exists on the lowercase namespace).",
+    ].join("\n"),
   },
   {
     id: "v2/execute-script-arg",

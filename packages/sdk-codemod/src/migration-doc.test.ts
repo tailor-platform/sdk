@@ -48,8 +48,9 @@ describe("renderMigrationDoc", () => {
     expect(doc).toContain("# Migrating to v2");
     expect(doc).toContain("## executeScript arg");
     expect(doc).toContain("**Migration:** Partially automatic");
-    expect(doc).toContain("// Before\narg: JSON.stringify(x)");
-    expect(doc).toContain("// After\narg: x");
+    expect(doc).toContain("Before:\n\n```ts\narg: JSON.stringify(x)\n```");
+    expect(doc).toContain("After:\n\n```ts\narg: x\n```");
+    expect(doc).toContain("<summary>Prompt for an AI agent");
     expect(doc).toContain("```text\nUnwrap JSON.stringify in the arg.\n```");
   });
 
