@@ -518,8 +518,8 @@ const user = db.type("User", {
   ...db.fields.timestamps(),
 });
 
-// Pick id and createdAt, making them optional
-user.pickFields(["id", "createdAt"], { optional: true });
+// Pick id, createdAt, and updatedAt, making them optional
+user.pickFields(["id", "createdAt", "updatedAt"], { optional: true });
 ```
 
 Available options:
@@ -534,8 +534,8 @@ Available options:
 Return all fields except the specified ones:
 
 ```typescript
-// All fields except id and createdAt
-user.omitFields(["id", "createdAt"]);
+// All fields except id, createdAt, and updatedAt
+user.omitFields(["id", "createdAt", "updatedAt"]);
 ```
 
 #### Common Pattern: Input Schema Composition
@@ -550,9 +550,9 @@ export default createResolver({
   name: "createUser",
   operation: "mutation",
   input: {
-    // id/createdAt are optional (auto-generated), other fields are required
-    ...user.pickFields(["id", "createdAt"], { optional: true }),
-    ...user.omitFields(["id", "createdAt"]),
+    // id/createdAt/updatedAt are optional (auto-generated), other fields are required
+    ...user.pickFields(["id", "createdAt", "updatedAt"], { optional: true }),
+    ...user.omitFields(["id", "createdAt", "updatedAt"]),
   },
   output: t.object({ id: t.uuid() }),
   body: async (context) => {
@@ -569,8 +569,8 @@ import { t } from "@tailor-platform/sdk";
 import { invoice } from "../../tailordb/invoice";
 
 const schemaType = t.object({
-  ...invoice.pickFields(["id", "createdAt"], { optional: true }),
-  ...invoice.omitFields(["id", "createdAt", "invoiceNumber", "sequentialId"]),
+  ...invoice.pickFields(["id", "createdAt", "updatedAt"], { optional: true }),
+  ...invoice.omitFields(["id", "createdAt", "updatedAt", "invoiceNumber", "sequentialId"]),
 });
 ```
 
