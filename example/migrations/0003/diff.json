@@ -1,7 +1,7 @@
 {
   "version": 1,
   "namespace": "tailordb",
-  "createdAt": "2026-06-17T13:17:08.592Z",
+  "createdAt": "2026-06-17T15:41:21.506Z",
   "changes": [
     {
       "kind": "field_modified",
@@ -13,7 +13,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -23,10 +23,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -41,7 +41,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -51,10 +51,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -69,7 +69,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -79,10 +79,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -97,7 +97,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -107,10 +107,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -125,7 +125,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -135,10 +135,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -153,7 +153,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -163,10 +163,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -181,7 +181,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -191,10 +191,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -209,7 +209,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -219,10 +219,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -237,7 +237,7 @@
         "description": "Record last update timestamp",
         "hooks": {
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       },
@@ -247,10 +247,10 @@
         "description": "Record update timestamp",
         "hooks": {
           "create": {
-            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           },
           "update": {
-            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
           }
         }
       }
@@ -306,5 +306,6 @@
   ],
   "hasWarnings": false,
   "warnings": [],
-  "requiresMigrationScript": true
+  "requiresMigrationScript": true,
+  "description": "set updatedAt on create"
 }

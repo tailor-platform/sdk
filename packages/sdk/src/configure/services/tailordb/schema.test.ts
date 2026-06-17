@@ -638,7 +638,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     expect(createHook).toBeDefined();
 
     const specified = new Date("2025-02-10T09:00:00Z");
-    const result = createHook!({ value: specified, data: {}, user: timestampHookUser });
+    const result = createHook!({ value: specified, data: {}, invoker: timestampHookInvoker });
     expect(result).toBe(specified);
   });
 
@@ -648,7 +648,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     expect(createHook).toBeDefined();
 
     const before = Date.now();
-    const result = createHook!({ value: null, data: {}, user: timestampHookUser });
+    const result = createHook!({ value: null, data: {}, invoker: timestampHookInvoker });
     const after = Date.now();
     expect(result).toBeInstanceOf(Date);
     expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
@@ -661,7 +661,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     expect(updateHook).toBeDefined();
 
     const before = Date.now();
-    const result = updateHook!({ value: null, data: {}, user: timestampHookUser });
+    const result = updateHook!({ value: null, data: {}, invoker: timestampHookInvoker });
     const after = Date.now();
     expect(result).toBeInstanceOf(Date);
     expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
