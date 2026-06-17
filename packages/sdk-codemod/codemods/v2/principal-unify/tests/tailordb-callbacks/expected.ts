@@ -1,18 +1,28 @@
 import { db, t, type TailorPrincipal } from "@tailor-platform/sdk";
 
+const roleCreate = ({ value, invoker }: { value: string; invoker: TailorPrincipal | null }) =>
+  invoker?.attributes.role === "ADMIN" ? value : "user";
+
+function hasMachineUser({ invoker }: { invoker: TailorPrincipal | null }) {
+  return invoker?.type === "machine_user";
+}
+
+const hasInvoker = (ctx: { invoker: TailorPrincipal | null }) => ctx.invoker?.id !== "";
+
 const role = db
   .string()
   .hooks({
-    create: ({ value, invoker }) => (invoker?.attributes.role === "ADMIN" ? value : "user"),
+    create: roleCreate,
     update: (ctx: { invoker: TailorPrincipal | null }) => ctx.invoker?.id ?? "anonymous",
     delete({ user }) {
       return user?.id ?? "anonymous";
     },
   })
   .validate([
-    [({ invoker }) => invoker?.type === "machine_user", "Machine user required"],
+    [hasMachineUser, "Machine user required"],
     ctx => ctx.invoker?.id !== "",
-  ]);
+  ])
+  .validate(hasInvoker);
 
 const reviewer = t.string();
 const zodLike = { parse: (arg: unknown) => arg };
