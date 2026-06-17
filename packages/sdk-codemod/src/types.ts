@@ -26,6 +26,31 @@ export interface CodemodPackage {
    * together with `JSON.stringify`.
    */
   legacyPatterns?: Array<string | string[]>;
+  /**
+   * Substrings that, when present in a file's post-transform content, mark it
+   * as a candidate for LLM-assisted review. Use this for migrations the
+   * deterministic transform cannot safely complete on its own (e.g. a value
+   * reached through a variable or a dynamic expression). Unlike
+   * `legacyPatterns`, these do not need to be exhaustive: a broad signal such
+   * as the API name is enough to point an LLM at the right files. Requires
+   * `prompt`.
+   */
+  suspiciousPatterns?: string[];
+  /**
+   * Prompt that instructs an LLM how to finish the migration for files matched
+   * by `suspiciousPatterns`.
+   */
+  prompt?: string;
+}
+
+/** A batch of files an LLM should review for one codemod, with its prompt. */
+export interface LlmReview {
+  /** Codemod id that flagged these files. */
+  codemodId: string;
+  /** Prompt describing the migration for an LLM. */
+  prompt: string;
+  /** Files (relative to the target) that matched a suspicious pattern. */
+  files: string[];
 }
 
 /**
@@ -37,4 +62,6 @@ export interface RunOutput {
   filesModified: string[];
   warnings: string[];
   errors: Array<{ codemodId: string; message: string }>;
+  /** Files flagged for LLM-assisted review, grouped by codemod. */
+  llmReviews: LlmReview[];
 }

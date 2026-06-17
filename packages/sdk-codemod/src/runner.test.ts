@@ -26,6 +26,7 @@ function makeCodemod(
   scriptPath: string,
   filePatterns?: string[],
   legacyPatterns?: Array<string | string[]>,
+  extra?: Pick<CodemodPackage, "suspiciousPatterns" | "prompt">,
 ): CodemodPackage {
   return {
     id,
@@ -36,6 +37,7 @@ function makeCodemod(
     scriptPath,
     filePatterns,
     legacyPatterns,
+    ...extra,
   };
 }
 
@@ -394,6 +396,56 @@ describe("runCodemods", () => {
       expect(result.warnings).toEqual([
         "both.ts: contains executeScript + JSON.stringify but was not migrated automatically (rule: test/and-group). Manual migration may be needed.",
       ]);
+    });
+
+    test("flags files matching a suspicious pattern for LLM review", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "a.ts"), "executeScript({ arg: payload });\n");
+      await fs.promises.writeFile(path.join(dir, "b.ts"), "const x = 1;\n");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              suspiciousPatterns: ["executeScript"],
+              prompt: "Rewrite remaining executeScript usages by hand.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/llm",
+          prompt: "Rewrite remaining executeScript usages by hand.",
+          files: ["a.ts"],
+        },
+      ]);
+    });
+
+    test("does not flag for LLM review without a prompt", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-noprompt-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "a.ts"), "executeScript({ arg: payload });\n");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              suspiciousPatterns: ["executeScript"],
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews).toEqual([]);
     });
   });
 });
