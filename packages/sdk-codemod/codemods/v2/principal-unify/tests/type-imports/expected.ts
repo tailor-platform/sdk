@@ -6,4 +6,12 @@ export type Props = {
   invoker: (TailorPrincipal | null);
   nullableInvoker: (TailorPrincipal | null) | null;
   invokers: (TailorPrincipal | null)[];
+  actorType: TailorPrincipal["type"];
 };
+
+export function actorFields(actor: TailorPrincipal | null) {
+  return {
+    id: actor?.id,
+    type: actor?.type,
+  };
+}
