@@ -11,6 +11,22 @@ import type { RunOutput } from "./types";
 
 const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta.url)) + "/..");
 
+/**
+ * Print an LLM-assisted review task to stderr: the flagged files plus the
+ * codemod's migration prompt, ready to hand to an LLM for the cases the
+ * deterministic transform could not complete on its own.
+ * @param review - The review task (codemod id, prompt, files)
+ */
+function printLlmReview(review: { codemodId: string; prompt: string; files: string[] }): void {
+  process.stderr.write(
+    `\n🤖 LLM-assisted review suggested (${review.codemodId}) — the codemod cannot safely migrate these automatically:\n`,
+  );
+  for (const file of review.files) {
+    process.stderr.write(`  - ${file}\n`);
+  }
+  process.stderr.write(`\nPrompt for an LLM:\n${review.prompt.trim()}\n`);
+}
+
 const main = defineCommand({
   name: packageJson.name ?? "sdk-codemod",
   description: packageJson.description ?? "Codemod runner for Tailor Platform SDK upgrades",
@@ -43,6 +59,7 @@ const main = defineCommand({
       filesModified: [],
       warnings: [],
       errors: [],
+      llmReviews: [],
     };
 
     if (codemods.length === 0) {
@@ -67,11 +84,16 @@ const main = defineCommand({
       output.codemodsSkipped = codemods.length - result.appliedCodemodIds.size;
       output.filesModified = result.filesModified;
       output.warnings = result.warnings;
+      output.llmReviews = result.llmReviews;
 
       if (result.changed) {
         process.stderr.write(`  ${result.filesModified.length} file(s) modified\n`);
       } else {
         process.stderr.write("  No changes needed\n");
+      }
+
+      for (const review of output.llmReviews) {
+        printLlmReview(review);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
