@@ -24,8 +24,12 @@ export interface CodemodPackage {
   since: string;
   /** Target version this codemod upgrades to (semver, exclusive upper bound) */
   until: string;
-  /** Path to the jssg transform script relative to the codemods root */
-  scriptPath: string;
+  /**
+   * Path to the jssg transform script relative to the codemods root. Omit for a
+   * codemod-less ("manual") migration that ships only guidance — `prompt`,
+   * `examples`, and/or `suspiciousPatterns` — with no automatic transform.
+   */
+  scriptPath?: string;
   /** Target language for codemod CLI (default: "typescript") */
   language?: string;
   /** Custom file glob patterns. Defaults to TypeScript patterns when omitted. */

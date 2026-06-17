@@ -256,6 +256,27 @@ export const allCodemods: CodemodPackage[] = [
       },
     ],
   },
+  {
+    id: "v2/open-download-stream",
+    name: "openDownloadStream → downloadStream",
+    description:
+      "The deprecated `openDownloadStream` file-streaming API is removed in v2. Use `downloadStream` for streamed file downloads. The generated file utilities now emit `downloadFileStream` (which calls `downloadStream` and returns `FileDownloadStreamResponse`) instead of the removed `openFileDownloadStream` helper.",
+    since: "1.0.0",
+    until: "2.0.0",
+    // No scriptPath: this is a codemod-less ("manual") migration.
+    examples: [
+      {
+        before: "const res = await openDownloadStream(namespace, typeName, fieldName, recordId);",
+        after: "const res = await downloadStream(namespace, typeName, fieldName, recordId);",
+      },
+    ],
+    prompt: [
+      "The openDownloadStream file-streaming API is removed in v2. Replace every call to",
+      "openDownloadStream with downloadStream (same arguments). If you used the generated",
+      "openFileDownloadStream helper, switch to downloadFileStream, which calls",
+      "downloadStream and returns FileDownloadStreamResponse.",
+    ].join("\n"),
+  },
 ];
 
 /**

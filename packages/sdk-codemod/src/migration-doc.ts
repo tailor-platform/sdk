@@ -49,10 +49,15 @@ function renderEntry(codemod: CodemodPackage): string {
     );
   }
 
-  if (automationLevel(codemod) !== "Automatic" && codemod.prompt != null) {
+  const level = automationLevel(codemod);
+  if (level !== "Automatic" && codemod.prompt != null) {
+    const summary =
+      level === "Manual"
+        ? "Prompt for an AI agent (to perform this migration)"
+        : "Prompt for an AI agent (to finish the cases the codemod could not migrate)";
     lines.push(
       "<details>",
-      "<summary>Prompt for an AI agent (to finish the cases the codemod cannot migrate on its own)</summary>",
+      `<summary>${summary}</summary>`,
       "",
       "```text",
       codemod.prompt.trim(),

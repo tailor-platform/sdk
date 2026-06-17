@@ -413,6 +413,53 @@ describe("runCodemods", () => {
       expect(result.llmReviews).toEqual([]);
     });
 
+    test("emits a blanket LLM review for a codemod-less manual entry", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-manual-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "a.ts"), "const x = 1;\n");
+
+      const result = await runCodemods(
+        [
+          {
+            // No scriptPath: a manual entry that ships only a prompt.
+            codemod: makeCodemod("test/manual", "unused.ts", ["**/*.ts"], undefined, {
+              prompt: "Do the manual change.",
+            }),
+            scriptPath: undefined,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.changed).toBe(false);
+      expect(result.llmReviews).toEqual([
+        { codemodId: "test/manual", prompt: "Do the manual change.", files: [] },
+      ]);
+    });
+
+    test("does not emit a blanket review for a legacy-pattern entry with a prompt", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-legacy-prompt-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "a.ts"), "const x = 1;\n");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/legacy", partialTransformPath, ["**/*.ts"], ["needle"], {
+              prompt: "Finish the residual.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      // legacy-pattern entries surface via warnings, not a blanket llmReview.
+      expect(result.llmReviews).toEqual([]);
+    });
+
     test("AND-group legacy pattern warns only when every substring co-occurs", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-and-group-test-"));
       tmpDir = dir;
