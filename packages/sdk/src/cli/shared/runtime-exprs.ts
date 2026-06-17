@@ -10,8 +10,8 @@
  * The user field mapping (server → SDK) shared across services is defined in
  * `@/parser/service/tailordb` as `tailorUserMap`.
  */
-import { tailorUserMap } from "@/parser/service/tailordb";
-import type { Trigger } from "@/types/executor.generated";
+import { tailorUserMap } from "#src/parser/service/tailordb/index";
+import type { Trigger } from "#src/types/executor.generated";
 
 // ---------------------------------------------------------------------------
 // Bundle inline

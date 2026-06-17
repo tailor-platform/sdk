@@ -1,11 +1,11 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { logger, styles } from "@/cli/shared/logger";
-import { WorkflowJobSchema, WorkflowSchema } from "@/parser/service/workflow";
-import { isSdkBranded } from "@/utils/brand";
-import type { WorkflowServiceConfig } from "@/configure/config/types";
-import type { Workflow } from "@/types/workflow.generated";
+import { loadFilesWithIgnores } from "#src/cli/services/file-loader";
+import { logger, styles } from "#src/cli/shared/logger";
+import { WorkflowJobSchema, WorkflowSchema } from "#src/parser/service/workflow/index";
+import { isSdkBranded } from "#src/utils/brand";
+import type { WorkflowServiceConfig } from "#src/configure/config/types";
+import type { Workflow } from "#src/types/workflow.generated";
 
 export interface CollectedJob {
   name: string;

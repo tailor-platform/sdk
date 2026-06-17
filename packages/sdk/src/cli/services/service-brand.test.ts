@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { ZodError } from "zod";
-import { ExecutorSchema } from "@/parser/service/executor";
-import { ResolverSchema } from "@/parser/service/resolver";
-import { TailorDBTypeSchema } from "@/parser/service/tailordb";
-import { WorkflowSchema, WorkflowJobSchema } from "@/parser/service/workflow";
-import { type SdkBrandKind, brandValue, isSdkBranded } from "@/utils/brand";
+import { ExecutorSchema } from "#src/parser/service/executor/index";
+import { ResolverSchema } from "#src/parser/service/resolver/index";
+import { TailorDBTypeSchema } from "#src/parser/service/tailordb/index";
+import { WorkflowSchema, WorkflowJobSchema } from "#src/parser/service/workflow/index";
+import { type SdkBrandKind, brandValue, isSdkBranded } from "#src/utils/brand";
 
 type SafeParseSchema<T> = {
   safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: ZodError };

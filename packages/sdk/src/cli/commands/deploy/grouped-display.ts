@@ -1,5 +1,5 @@
-import { logger, styles, symbols } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { logger, styles, symbols } from "#src/cli/shared/logger";
+import { assertDefined } from "#src/utils/assert";
 import {
   AUTH_HOOK_PREFIX,
   EXECUTOR_PREFIX,

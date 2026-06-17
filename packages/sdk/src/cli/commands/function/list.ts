@@ -1,12 +1,12 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { humanizeRelativeTime } from "@/cli/shared/format";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#src/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#src/cli/shared/client";
+import { defineAppCommand } from "#src/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
+import { humanizeRelativeTime } from "#src/cli/shared/format";
+import { logger } from "#src/cli/shared/logger";
+import { assertDefined } from "#src/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
 const listFunctionRegistriesOptionsSchema = z.object({

@@ -1,10 +1,10 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#src/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#src/cli/shared/client";
+import { defineAppCommand } from "#src/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
+import { logger } from "#src/cli/shared/logger";
 import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
 export interface VaultListOptions {

@@ -4,7 +4,7 @@
  * context (like type references and namespace) at runtime.
  */
 
-import type { TailorActor, TailorEnv } from "@/runtime/types";
+import type { TailorActor, TailorEnv } from "#src/runtime/types";
 
 /**
  * Plugin executor factory function type.

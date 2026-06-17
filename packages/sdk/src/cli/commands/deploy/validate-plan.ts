@@ -60,7 +60,7 @@ import {
   CreateWorkflowRequestSchema,
   UpdateWorkflowRequestSchema,
 } from "@tailor-proto/tailor/v1/workflow_pb";
-import { logger, styles } from "@/cli/shared/logger";
+import { logger, styles } from "#src/cli/shared/logger";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";

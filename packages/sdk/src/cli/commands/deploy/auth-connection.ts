@@ -1,8 +1,8 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { AuthConnection_Type } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { type AuthService } from "@/cli/services/auth/service";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { type AuthService } from "#src/cli/services/auth/service";
+import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -12,9 +12,9 @@ import {
   type WithLabel,
 } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
+import type { AuthConnectionConfig } from "#src/types/auth-connection.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
-import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type {
   CreateAuthConnectionRequestSchema,
   DeleteAuthConnectionRequestSchema,

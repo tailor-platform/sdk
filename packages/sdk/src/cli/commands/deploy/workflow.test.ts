@@ -1,10 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { logger } from "@/cli/shared/logger";
+import { logger } from "#src/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { Workflow, WorkflowJob } from "@/types/workflow.generated";
+import type { OperatorClient } from "#src/cli/shared/client";
+import type { Workflow, WorkflowJob } from "#src/types/workflow.generated";
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {

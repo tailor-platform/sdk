@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { db } from "@/configure/services/tailordb/schema";
-import { parseTypes } from "@/parser/service/tailordb";
-import { toSchemaOutput } from "@/utils/test/internal";
+import { db } from "#src/configure/services/tailordb/schema";
+import { parseTypes } from "#src/parser/service/tailordb/index";
+import { toSchemaOutput } from "#src/utils/test/internal";
 import { processKyselyType } from "./type-processor";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
-import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
+import type { TailorDBType } from "#src/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#src/types/tailordb.generated";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});

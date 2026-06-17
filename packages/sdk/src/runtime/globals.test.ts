@@ -6,7 +6,7 @@
  * `TailorDBFileError` solely through `typeof` so the test does not require
  * the platform runtime to inject those values into the unit test environment.
  */
-import "@/runtime/globals";
+import "#src/runtime/globals";
 import { describe, expectTypeOf, test } from "vitest";
 
 describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () => {

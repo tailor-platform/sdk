@@ -2,7 +2,7 @@ import { glob } from "node:fs/promises";
 import { watch } from "chokidar";
 import * as madgeModule from "madge";
 import * as path from "pathe";
-import { logger, styles } from "@/cli/shared/logger";
+import { logger, styles } from "#src/cli/shared/logger";
 import type { MadgeLoader } from "./types";
 
 /**

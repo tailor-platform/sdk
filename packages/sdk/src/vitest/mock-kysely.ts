@@ -28,7 +28,7 @@ import {
   ValueNode,
   ValuesNode,
 } from "kysely";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#src/utils/assert";
 
 function unwrapValue(node: OperationNode): unknown {
   return ValueNode.is(node) ? node.value : node;

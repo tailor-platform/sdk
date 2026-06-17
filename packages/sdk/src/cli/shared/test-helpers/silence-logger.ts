@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { logger } from "@/cli/shared/logger";
+import { logger } from "#src/cli/shared/logger";
 
 type LoggerMethod = {
   [K in keyof typeof logger]: (typeof logger)[K] extends (...args: never[]) => unknown ? K : never;

@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import type { TailorAnyDBType } from "@/configure/services/tailordb/types";
-import type { Plugin, PluginOutput, TypePluginOutput } from "@/plugin/types";
+import type { TailorAnyDBType } from "#src/configure/services/tailordb/types";
+import type { Plugin, PluginOutput, TypePluginOutput } from "#src/plugin/types";
 
 // ========================================
 // Config loading and caching

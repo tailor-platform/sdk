@@ -1,12 +1,12 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { confirmationArgs, workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { assertWritable } from "@/cli/shared/readonly-guard";
+import { confirmationArgs, workspaceArgs } from "#src/cli/shared/args";
+import { initOperatorClient } from "#src/cli/shared/client";
+import { defineAppCommand } from "#src/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
+import { logger } from "#src/cli/shared/logger";
+import { prompt } from "#src/cli/shared/prompt";
+import { assertWritable } from "#src/cli/shared/readonly-guard";
 import { secretValueArgs } from "./args";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
 

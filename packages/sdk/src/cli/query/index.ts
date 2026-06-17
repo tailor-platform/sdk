@@ -12,7 +12,7 @@ import { parse as parseSql } from "pgsql-ast-parser";
 import { arg } from "politty";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#src/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { deploymentArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";

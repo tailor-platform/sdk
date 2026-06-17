@@ -2,13 +2,13 @@
 //
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
-import type { AIGatewayConfig } from "@/configure/services/aigateway/types";
-import type { AuthConfig } from "@/configure/services/auth/types";
-import type { IdPConfig } from "@/configure/services/idp/types";
-import type { SecretsConfig } from "@/configure/services/secrets/types";
-import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite/types";
-import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
-import type { LogLevelEnum } from "@/types/app-config.generated";
+import type { AIGatewayConfig } from "#src/configure/services/aigateway/types";
+import type { AuthConfig } from "#src/configure/services/auth/types";
+import type { IdPConfig } from "#src/configure/services/idp/types";
+import type { SecretsConfig } from "#src/configure/services/secrets/types";
+import type { StaticWebsiteConfig } from "#src/configure/services/staticwebsite/types";
+import type { TailorDBServiceInput } from "#src/configure/services/tailordb/types";
+import type { LogLevelEnum } from "#src/types/app-config.generated";
 
 export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});

@@ -34,18 +34,18 @@ export type {
   PluginAttachment,
   TypeSourceInfoEntry,
 } from "./commands/generate/types";
-export type { TailorDBType } from "@/parser/service/tailordb/types";
-export type { Resolver } from "@/types/resolver.generated";
-export type { Executor } from "@/types/executor.generated";
+export type { TailorDBType } from "#src/parser/service/tailordb/types";
+export type { Resolver } from "#src/types/resolver.generated";
+export type { Executor } from "#src/types/executor.generated";
 
 /** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
-export { kyselyTypePlugin } from "@/plugin/builtin/kysely-type";
+export { kyselyTypePlugin } from "#src/plugin/builtin/kysely-type/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/enum-constants' instead */
-export { enumConstantsPlugin } from "@/plugin/builtin/enum-constants";
+export { enumConstantsPlugin } from "#src/plugin/builtin/enum-constants/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/file-utils' instead */
-export { fileUtilsPlugin } from "@/plugin/builtin/file-utils";
+export { fileUtilsPlugin } from "#src/plugin/builtin/file-utils/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
-export { seedPlugin } from "@/plugin/builtin/seed";
+export { seedPlugin } from "#src/plugin/builtin/seed/index";
 
 export { show, type ShowOptions, type ApplicationInfo } from "./commands/show";
 export { remove, type RemoveOptions } from "./commands/remove";

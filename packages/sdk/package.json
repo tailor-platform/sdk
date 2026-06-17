@@ -27,6 +27,9 @@
   ],
   "main": "./dist/configure/index.mjs",
   "types": "./dist/configure/index.d.mts",
+  "imports": {
+    "#src/*": "./src/*.ts"
+  },
   "exports": {
     ".": {
       "types": "./dist/configure/index.d.mts",

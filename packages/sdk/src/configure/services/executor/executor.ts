@@ -1,10 +1,10 @@
-import { brandValue } from "@/utils/brand";
+import { brandValue } from "#src/utils/brand";
+import type { AuthInvoker } from "#src/configure/services/auth/index";
+import type { Workflow } from "#src/configure/services/workflow/workflow";
+import type { MachineUserName } from "#src/configure/types/machine-user";
+import type { ExecutorInput } from "#src/types/executor.generated";
 import type { Operation } from "./operation";
 import type { Trigger } from "./trigger";
-import type { AuthInvoker } from "@/configure/services/auth";
-import type { Workflow } from "@/configure/services/workflow/workflow";
-import type { MachineUserName } from "@/configure/types/machine-user";
-import type { ExecutorInput } from "@/types/executor.generated";
 
 /**
  * Extract mainJob's Input type from Workflow.

@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import { isCI } from "std-env";
-import { logger } from "@/cli/shared/logger";
-import { parseBoolean } from "@/cli/shared/parse-boolean";
-import { assertDefined } from "@/utils/assert";
+import { logger } from "#src/cli/shared/logger";
+import { parseBoolean } from "#src/cli/shared/parse-boolean";
+import { assertDefined } from "#src/utils/assert";
 import type { CallExpression, ObjectExpression, ObjectProperty } from "@oxc-project/types";
 
 export interface EnsureConfigIdResult {

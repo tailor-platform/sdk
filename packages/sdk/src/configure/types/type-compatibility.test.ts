@@ -1,28 +1,28 @@
 import { describe, test, expectTypeOf } from "vitest";
-import type { AppConfig as FullAppConfig } from "@/configure/config/types";
+import type { AppConfig as FullAppConfig } from "#src/configure/config/types";
 import type {
   TailorDBField as FullTailorDBField,
   TailorAnyDBField as FullTailorAnyDBField,
   TailorDBType as FullTailorDBType,
   TailorAnyDBType as FullTailorAnyDBType,
   TailorDBInstance as FullTailorDBInstance,
-} from "@/configure/services/tailordb/schema";
+} from "#src/configure/services/tailordb/schema";
 import type {
   TailorDBField as MinimalTailorDBField,
   TailorAnyDBField as MinimalTailorAnyDBField,
   TailorDBType as MinimalTailorDBType,
   TailorAnyDBType as MinimalTailorAnyDBType,
   TailorDBInstance as MinimalTailorDBInstance,
-} from "@/configure/services/tailordb/types";
+} from "#src/configure/services/tailordb/types";
 import type {
   TailorField as MinimalTailorField,
   TailorAnyField as MinimalTailorAnyField,
-} from "@/configure/types/field.types";
+} from "#src/configure/types/field.types";
 import type {
   TailorField as FullTailorField,
   TailorAnyField as FullTailorAnyField,
-} from "@/configure/types/type";
-import type { AppConfigParsed as MinimalAppConfig } from "@/types/app-config.generated";
+} from "#src/configure/types/type";
+import type { AppConfigParsed as MinimalAppConfig } from "#src/types/app-config.generated";
 
 describe("configure/ full types extend types/ minimal structural interfaces", () => {
   test("TailorField (full) extends TailorField (minimal)", () => {

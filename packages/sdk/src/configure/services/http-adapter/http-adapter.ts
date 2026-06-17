@@ -1,5 +1,5 @@
-import { brandValue } from "@/utils/brand";
-import type { HttpAdapterConfigInput } from "@/types/http-adapter.generated";
+import { brandValue } from "#src/utils/brand";
+import type { HttpAdapterConfigInput } from "#src/types/http-adapter.generated";
 
 /**
  * Lowercase HTTP method keys accepted in `input`, derived from the config

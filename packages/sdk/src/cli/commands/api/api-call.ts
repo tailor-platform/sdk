@@ -1,5 +1,5 @@
-import { platformBaseUrl, userAgent } from "@/cli/shared/client";
-import { loadAccessToken } from "@/cli/shared/context";
+import { platformBaseUrl, userAgent } from "#src/cli/shared/client";
+import { loadAccessToken } from "#src/cli/shared/context";
 
 export interface ApiCallOptions {
   profile?: string;

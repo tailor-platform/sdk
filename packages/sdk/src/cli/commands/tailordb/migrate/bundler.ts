@@ -8,9 +8,9 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
-import ml from "@/utils/multiline";
+import { getDistDir } from "#src/cli/shared/dist-dir";
+import { platformBundleDefinePlugin } from "#src/cli/shared/platform-bundle-plugin";
+import ml from "#src/utils/multiline";
 
 export interface MigrationBundleResult {
   namespace: string;

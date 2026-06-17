@@ -1,52 +1,55 @@
 import * as path from "pathe";
-import { generatePluginExecutorFiles } from "@/cli/commands/generate/plugin-executor-generator";
-import { generatePluginTypeFiles } from "@/cli/commands/generate/plugin-type-generator";
-import { bundleAuthHooks } from "@/cli/services/auth/bundler";
-import { createAuthService, type AuthService } from "@/cli/services/auth/service";
-import { bundleExecutors } from "@/cli/services/executor/bundler";
-import { createExecutorService, type ExecutorService } from "@/cli/services/executor/service";
+import { generatePluginExecutorFiles } from "#src/cli/commands/generate/plugin-executor-generator";
+import { generatePluginTypeFiles } from "#src/cli/commands/generate/plugin-type-generator";
+import { bundleAuthHooks } from "#src/cli/services/auth/bundler";
+import { createAuthService, type AuthService } from "#src/cli/services/auth/service";
+import { bundleExecutors } from "#src/cli/services/executor/bundler";
+import { createExecutorService, type ExecutorService } from "#src/cli/services/executor/service";
 import {
   bundleHttpAdapters,
   type HttpAdapterBundleResult,
-} from "@/cli/services/http-adapter/bundler";
+} from "#src/cli/services/http-adapter/bundler";
 import {
   createHttpAdapterService,
   type HttpAdapterService,
-} from "@/cli/services/http-adapter/service";
-import { bundleResolvers } from "@/cli/services/resolver/bundler";
-import { createResolverService, type ResolverService } from "@/cli/services/resolver/service";
-import { createTailorDBService, type TailorDBService } from "@/cli/services/tailordb/service";
-import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
-import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "@/cli/services/workflow/bundler";
-import { createWorkflowService, type WorkflowService } from "@/cli/services/workflow/service";
-import { resolveBundleLogLevel } from "@/cli/shared/bundle-log-level";
-import { type LoadedConfig } from "@/cli/shared/config-loader";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
-import { logger } from "@/cli/shared/logger";
-import { buildTriggerContext } from "@/cli/shared/trigger-context";
+} from "#src/cli/services/http-adapter/service";
+import { bundleResolvers } from "#src/cli/services/resolver/bundler";
+import { createResolverService, type ResolverService } from "#src/cli/services/resolver/service";
+import { createTailorDBService, type TailorDBService } from "#src/cli/services/tailordb/service";
+import { assertUniqueLocalTailorDBTypeNames } from "#src/cli/services/tailordb/type-name-validation";
+import {
+  bundleWorkflowJobs,
+  type BundleWorkflowJobsResult,
+} from "#src/cli/services/workflow/bundler";
+import { createWorkflowService, type WorkflowService } from "#src/cli/services/workflow/service";
+import { resolveBundleLogLevel } from "#src/cli/shared/bundle-log-level";
+import { type LoadedConfig } from "#src/cli/shared/config-loader";
+import { getDistDir } from "#src/cli/shared/dist-dir";
+import { resolveInlineSourcemap } from "#src/cli/shared/inline-sourcemap";
+import { logger } from "#src/cli/shared/logger";
+import { buildTriggerContext } from "#src/cli/shared/trigger-context";
 import {
   type AppConfig,
   type ExecutorServiceInput,
   type HttpAdapterServiceInput,
   type ResolverServiceInput,
   type WorkflowServiceConfig,
-} from "@/configure/config/types";
-import { type AuthConfig } from "@/configure/services/auth/types";
-import { type IdPConfig } from "@/configure/services/idp/types";
-import { AIGatewaySchema } from "@/parser/service/aigateway";
-import { AuthConfigSchema } from "@/parser/service/auth";
-import { IdPSchema } from "@/parser/service/idp";
-import { SecretsSchema } from "@/parser/service/secrets";
-import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
-import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
-import type { BundleCache } from "@/cli/cache/bundle-cache";
-import type { BundledScripts } from "@/cli/commands/deploy/function-registry-types";
-import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
-import type { PluginManager } from "@/plugin/manager";
-import type { AIGateway, AIGatewayInput } from "@/types/aigateway.generated";
-import type { IdP } from "@/types/idp.generated";
-import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
+} from "#src/configure/config/types";
+import { type AuthConfig } from "#src/configure/services/auth/types";
+import { type IdPConfig } from "#src/configure/services/idp/types";
+import { AIGatewaySchema } from "#src/parser/service/aigateway/index";
+import { AuthConfigSchema } from "#src/parser/service/auth/index";
+import { IdPSchema } from "#src/parser/service/idp/index";
+import { SecretsSchema } from "#src/parser/service/secrets/index";
+import { StaticWebsiteSchema } from "#src/parser/service/staticwebsite/index";
+import { TailorDBServiceConfigSchema } from "#src/parser/service/tailordb/index";
+import type { BundleCache } from "#src/cli/cache/bundle-cache";
+import type { BundledScripts } from "#src/cli/commands/deploy/function-registry-types";
+import type { TailorDBServiceInput } from "#src/configure/services/tailordb/types";
+import type { PluginManager } from "#src/plugin/manager";
+import type { AIGateway, AIGatewayInput } from "#src/types/aigateway.generated";
+import type { IdP } from "#src/types/idp.generated";
+import type { StaticWebsite, StaticWebsiteInput } from "#src/types/staticwebsite.generated";
 
 export type SecretVault = {
   readonly vaultName: string;

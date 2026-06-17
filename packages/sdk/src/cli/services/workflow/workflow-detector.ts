@@ -1,4 +1,4 @@
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#src/utils/assert";
 import { type ASTNode, isStringLiteral, findProperty } from "./ast-utils";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
 import type {

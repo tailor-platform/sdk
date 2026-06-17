@@ -18,17 +18,17 @@ import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
   type NamespaceWithMigrations,
-} from "@/cli/commands/tailordb/migrate/config";
+} from "#src/cli/commands/tailordb/migrate/config";
 import {
   hasChanges,
   formatMigrationDiff,
   formatDiffSummary,
   type MigrationDiff,
-} from "@/cli/commands/tailordb/migrate/diff-calculator";
+} from "#src/cli/commands/tailordb/migrate/diff-calculator";
 import {
   applyPreMigrationFieldAdjustments,
   buildPreMigrationChangesMap,
-} from "@/cli/commands/tailordb/migrate/pre-migration-schema";
+} from "#src/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -42,17 +42,17 @@ import {
   INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
-} from "@/cli/commands/tailordb/migrate/snapshot";
+} from "#src/cli/commands/tailordb/migrate/snapshot";
 import {
   generateTailorDBTypeManifestFromSnapshot,
   protoGqlPermission,
-} from "@/cli/commands/tailordb/migrate/snapshot-manifest";
-import { handleOptionalToRequiredError } from "@/cli/commands/tailordb/migrate/types";
-import { type TailorDBService } from "@/cli/services/tailordb/service";
-import { byName } from "@/cli/shared/apply-concurrency";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+} from "#src/cli/commands/tailordb/migrate/snapshot-manifest";
+import { handleOptionalToRequiredError } from "#src/cli/commands/tailordb/migrate/types";
+import { type TailorDBService } from "#src/cli/services/tailordb/service";
+import { byName } from "#src/cli/shared/apply-concurrency";
+import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
+import { logger } from "#src/cli/shared/logger";
+import { assertDefined } from "#src/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
@@ -75,9 +75,9 @@ import type { ApplyPhase, PlanContext } from "../types";
 import type {
   PendingMigration,
   RemoteSchemaVerificationResult,
-} from "@/cli/commands/tailordb/migrate/types";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
+} from "#src/cli/commands/tailordb/migrate/types";
+import type { LoadedConfig } from "#src/cli/shared/config-loader";
+import type { TailorDBServiceConfig } from "#src/types/tailordb.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // ============================================================================

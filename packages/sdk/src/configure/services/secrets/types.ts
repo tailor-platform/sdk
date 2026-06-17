@@ -1,4 +1,4 @@
-import type { SecretsInput } from "@/types/secrets.generated";
+import type { SecretsInput } from "#src/types/secrets.generated";
 
 declare const secretsDefinitionBrand: unique symbol;
 export type SecretsDefinitionBrand = { readonly [secretsDefinitionBrand]: true };

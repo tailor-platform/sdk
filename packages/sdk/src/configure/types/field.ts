@@ -1,4 +1,4 @@
-import type { EnumValue } from "@/configure/types/field.types";
+import type { EnumValue } from "#src/configure/types/field.types";
 
 export type AllowedValues = readonly [string | EnumValue, ...(string | EnumValue)[]];
 

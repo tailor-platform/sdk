@@ -1,16 +1,16 @@
-import type { TailorDBInstance } from "@/configure/services/tailordb/types";
+import type { TailorDBInstance } from "#src/configure/services/tailordb/types";
 import type {
   DefinedFieldMetadata,
   FieldMetadata,
   TailorFieldType,
   TailorField,
-} from "@/configure/types/field.types";
-import type { TailorEnv } from "@/runtime/types";
+} from "#src/configure/types/field.types";
+import type { TailorEnv } from "#src/runtime/types";
 // Auth configuration input types and user-field type machinery.
 //
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
-import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
+import type { AuthConnectionConfig } from "#src/types/auth-connection.generated";
 import type {
   AuthInvoker,
   IdProvider as IdProviderConfig,
@@ -19,8 +19,8 @@ import type {
   SCIMAttribute,
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
-} from "@/types/auth.generated";
-import type { output } from "@/types/helpers";
+} from "#src/types/auth.generated";
+import type { output } from "#src/types/helpers";
 import type { IsAny, JsonObject, JsonValue } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)

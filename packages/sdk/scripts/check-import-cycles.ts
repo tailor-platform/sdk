@@ -38,8 +38,8 @@ function listSourceFiles(dir: string): string[] {
 
 function resolveSpecifier(file: string, specifier: string): string | null {
   let base: string;
-  if (specifier.startsWith("@/")) {
-    base = join(srcRoot, specifier.slice(2));
+  if (specifier.startsWith("#src/")) {
+    base = join(srcRoot, specifier.slice("#src/".length));
   } else if (specifier.startsWith(".")) {
     base = normalize(resolve(dirname(file), specifier));
   } else {

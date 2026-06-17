@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { assertDefined } from "@/utils/assert";
+import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
+import { assertDefined } from "#src/utils/assert";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -11,9 +11,9 @@ import {
   type WithLabel,
 } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
+import type { ApplyPhase, PlanContext } from "#src/cli/commands/deploy/types";
+import type { Application } from "#src/cli/services/application";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { Application } from "@/cli/services/application";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   CreateSecretManagerSecretRequestSchema,

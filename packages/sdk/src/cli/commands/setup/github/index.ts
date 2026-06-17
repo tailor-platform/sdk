@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
+import { defineAppCommand } from "#src/cli/shared/command";
 import { setupGitHub } from "./github";
 
 export const githubCommand = defineAppCommand({

@@ -6,7 +6,7 @@
  */
 
 import * as fs from "node:fs/promises";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#src/utils/assert";
 import {
   getMigrationFilePath,
   type SchemaSnapshot,

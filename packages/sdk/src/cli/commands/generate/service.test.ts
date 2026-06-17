@@ -2,18 +2,18 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vitest";
-import { defineApplication } from "@/cli/services/application";
-import { createResolver } from "@/configure/services/resolver/resolver";
-import { db } from "@/configure/services/tailordb/schema";
-import { t } from "@/configure/types";
-import { parseTypes } from "@/parser/service/tailordb";
-import { toSchemaOutputs } from "@/utils/test/internal";
+import { defineApplication } from "#src/cli/services/application";
+import { createResolver } from "#src/configure/services/resolver/resolver";
+import { db } from "#src/configure/services/tailordb/schema";
+import { t } from "#src/configure/types/index";
+import { parseTypes } from "#src/parser/service/tailordb/index";
+import { toSchemaOutputs } from "#src/utils/test/internal";
 import { createGenerationManager } from "./service";
-import type { Application } from "@/cli/services/application";
-import type { TailorDBService } from "@/cli/services/tailordb/service";
-import type { LoadedConfig, Generator } from "@/cli/shared/config-loader";
-import type { TailorDBType } from "@/configure/services/tailordb/schema";
-import type { Resolver } from "@/types/resolver.generated";
+import type { Application } from "#src/cli/services/application";
+import type { TailorDBService } from "#src/cli/services/tailordb/service";
+import type { LoadedConfig, Generator } from "#src/cli/shared/config-loader";
+import type { TailorDBType } from "#src/configure/services/tailordb/schema";
+import type { Resolver } from "#src/types/resolver.generated";
 
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {
@@ -29,7 +29,7 @@ vi.mock("node:fs", () => {
   };
 });
 
-vi.mock("@/cli/shared/logger", async (importOriginal) => {
+vi.mock("#src/cli/shared/logger", async (importOriginal) => {
   const actual = (await importOriginal()) as {
     logger?: Record<string, unknown>;
     styles?: Record<string, unknown>;

@@ -4,7 +4,7 @@ import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createCacheManager } from "./manager";
 
-vi.mock("@/cli/shared/logger", async (importOriginal) => ({
+vi.mock("#src/cli/shared/logger", async (importOriginal) => ({
   ...(await importOriginal()),
   logger: {
     debug: vi.fn(),
@@ -200,7 +200,7 @@ describe("createCacheManager", () => {
     });
 
     test("cache is cleaned when sdkVersion differs", async () => {
-      const { logger } = await import("@/cli/shared/logger");
+      const { logger } = await import("#src/cli/shared/logger");
 
       // Pre-populate cache with a manifest from an older SDK version
       fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });
@@ -264,7 +264,7 @@ describe("createCacheManager", () => {
     }
 
     test("cache is cleaned when lockfileHash differs", async () => {
-      const { logger } = await import("@/cli/shared/logger");
+      const { logger } = await import("#src/cli/shared/logger");
 
       seedCache({ lockfileHash: "oldhash" });
 
@@ -305,7 +305,7 @@ describe("createCacheManager", () => {
     });
 
     test("cache is cleaned when manifest has lockfileHash but options does not", async () => {
-      const { logger } = await import("@/cli/shared/logger");
+      const { logger } = await import("#src/cli/shared/logger");
 
       seedCache({ lockfileHash: "existinghash" });
 

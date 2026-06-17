@@ -13,16 +13,16 @@ import * as rolldown from "rolldown";
 import {
   createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
-} from "@/cli/shared/bundle-log-level";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
-import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
-import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
-import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+} from "#src/cli/shared/bundle-log-level";
+import { getDistDir } from "#src/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "#src/cli/shared/function-treeshake";
+import { resolveInlineSourcemap } from "#src/cli/shared/inline-sourcemap";
+import { platformBundleDefinePlugin } from "#src/cli/shared/platform-bundle-plugin";
+import { INVOKER_EXPR } from "#src/cli/shared/runtime-exprs";
+import { assertDefined } from "#src/utils/assert";
+import ml from "#src/utils/multiline";
+import type { LogLevelInput } from "#src/configure/config/types";
 import type { DetectedFunction } from "./detect";
-import type { LogLevelInput } from "@/configure/config/types";
 
 /** Machine user info resolved from config and API for bundle-time user context. */
 export interface ResolvedMachineUser {

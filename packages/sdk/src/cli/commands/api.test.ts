@@ -1,20 +1,20 @@
 import { runCommand } from "politty";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
+import { loadConfig } from "#src/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
+import { logger } from "#src/cli/shared/logger";
 import { apiCommand } from "./api";
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#src/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#src/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/readonly-guard", () => ({
+vi.mock("#src/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 

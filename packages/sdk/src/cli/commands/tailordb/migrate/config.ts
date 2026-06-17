@@ -3,7 +3,7 @@
  */
 
 import * as path from "pathe";
-import type { AppConfig } from "@/configure/config/types";
+import type { AppConfig } from "#src/configure/config/types";
 
 // ============================================================================
 // Types

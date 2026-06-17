@@ -1,3 +1,4 @@
+import type { IdPPermission as RawIdPPermission } from "#src/types/idp.generated";
 import type {
   StandardIdPPermission,
   StandardIdPActionPermission,
@@ -5,7 +6,6 @@ import type {
   IdPPermissionOperand,
   IdPUserField,
 } from "./types";
-import type { IdPPermission as RawIdPPermission } from "@/types/idp.generated";
 
 type PermissionOperator = "=" | "!=" | "in" | "not in";
 

@@ -1,8 +1,8 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
+import { defineAppCommand } from "#src/cli/shared/command";
+import { readPlatformConfig, writePlatformConfig } from "#src/cli/shared/context";
+import { logger } from "#src/cli/shared/logger";
 
 export const deleteCommand = defineAppCommand({
   name: "delete",

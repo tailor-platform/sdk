@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
 import { relationTypesKeys } from "./relation";
-import type { TailorDBFieldOutput } from "@/parser/service/tailordb/types";
+import type { TailorDBFieldOutput } from "#src/parser/service/tailordb/types";
 
 /**
  * Normalize GqlOperationsConfig (alias or object) to GqlOperations object.

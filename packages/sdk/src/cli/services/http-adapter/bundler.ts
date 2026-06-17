@@ -3,15 +3,19 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
-import { isNodeBuiltinImport } from "@/cli/services/http-adapter/node-builtins";
-import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
-import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
-import { logger, styles } from "@/cli/shared/logger";
-import { HTTP_METHODS, type HttpMethodKey } from "@/parser/service/http-adapter";
-import type { LogLevel } from "@/configure/config/types";
+import {
+  computeBundlerContextHash,
+  withCache,
+  type BundleCache,
+} from "#src/cli/cache/bundle-cache";
+import { isNodeBuiltinImport } from "#src/cli/services/http-adapter/node-builtins";
+import { withBundleConcurrency } from "#src/cli/shared/bundle-concurrency";
+import { createLogLevelTreeshakeOptions } from "#src/cli/shared/bundle-log-level";
+import { getDistDir } from "#src/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "#src/cli/shared/function-treeshake";
+import { logger, styles } from "#src/cli/shared/logger";
+import { HTTP_METHODS, type HttpMethodKey } from "#src/parser/service/http-adapter/index";
+import type { LogLevel } from "#src/configure/config/types";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;

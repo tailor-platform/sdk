@@ -1,5 +1,5 @@
 import * as inflection from "inflection";
-import { isPluginGeneratedType } from "@/parser/service/tailordb/type-source";
+import { isPluginGeneratedType } from "#src/parser/service/tailordb/type-source";
 import { parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
 import {
@@ -8,14 +8,14 @@ import {
   buildRelationInfo,
   applyRelationMetadataToFieldConfig,
 } from "./relation";
-import type { TailorDBField } from "@/configure/services/tailordb/types";
+import type { TailorDBField } from "#src/configure/services/tailordb/types";
 import type {
   TypeSourceInfo,
   ParsedField,
   ParsedRelationship,
   TailorDBType,
-} from "@/parser/service/tailordb/types";
-import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
+} from "#src/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#src/types/tailordb.generated";
 
 /**
  * Parse multiple TailorDB types, build relationships, and validate uniqueness.

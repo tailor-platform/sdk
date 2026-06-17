@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { initOperatorClient } from "#src/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
 import { triggerExecutor } from "./trigger";
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#src/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#src/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/readonly-guard", () => ({
+vi.mock("#src/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 

@@ -1,10 +1,10 @@
 import open from "open";
 import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadWorkspaceId } from "@/cli/shared/context";
-import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { loadConfig } from "#src/cli/shared/config-loader";
+import { loadWorkspaceId } from "#src/cli/shared/context";
+import { captureStdout } from "#src/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#src/cli/shared/test-helpers/json-mode";
 import { openCommand } from "./open";
 import type { ChildProcess } from "node:child_process";
 
@@ -12,11 +12,11 @@ vi.mock("open", () => ({
   default: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#src/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#src/cli/shared/context", () => ({
   loadWorkspaceId: vi.fn(),
 }));
 

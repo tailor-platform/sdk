@@ -2,8 +2,8 @@ import { dirname, resolve } from "pathe";
 import { resolvePackageJSON } from "pkg-types";
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { runSkillsInstaller } from "@/cli/shared/skills-installer";
+import { defineAppCommand } from "#src/cli/shared/command";
+import { runSkillsInstaller } from "#src/cli/shared/skills-installer";
 
 // Resolve the SDK package root at runtime so the skills directory is found
 // regardless of how the file is bundled (tsdown inlines non-entry modules).

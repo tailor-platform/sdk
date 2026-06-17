@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { RunOutput } from "./types";
 
-vi.mock("@/cli/shared/logger", () => ({
+vi.mock("#src/cli/shared/logger", () => ({
   logger: {
     info: vi.fn(),
     success: vi.fn(),
@@ -144,7 +144,7 @@ describe("upgrade service", () => {
     const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: false, path: "/test" });
 
-    const { logger } = await import("@/cli/shared/logger");
+    const { logger } = await import("#src/cli/shared/logger");
     const infoCalls = vi.mocked(logger.info).mock.calls.map((c) => c[0]);
     expect(infoCalls.some((c) => c.includes("1 applied"))).toBe(true);
   });

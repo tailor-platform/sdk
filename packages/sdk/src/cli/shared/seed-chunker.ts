@@ -5,7 +5,7 @@
  * into multiple chunks at type boundaries (or record boundaries for large types).
  */
 
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#src/utils/assert";
 
 /**
  * Seed data keyed by type name, with an array of records per type.

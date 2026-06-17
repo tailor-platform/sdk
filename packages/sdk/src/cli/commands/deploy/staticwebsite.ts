@@ -7,7 +7,7 @@ import {
   type RemoveCustomDomainRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
-import { type OperatorClient } from "@/cli/shared/client";
+import { type OperatorClient } from "#src/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
@@ -16,8 +16,8 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import type { ApplyPhase, PlanContext } from "#src/cli/commands/deploy/types";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-proto/tailor/v1/staticwebsite_resource_pb";
 

@@ -13,10 +13,10 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { type OperatorClient } from "@/cli/shared/client";
-import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
-import { stringifyFunction } from "@/parser/service/tailordb";
-import { assertDefined } from "@/utils/assert";
+import { type OperatorClient } from "#src/cli/shared/client";
+import { buildExecutorArgsExpr } from "#src/cli/shared/runtime-exprs";
+import { stringifyFunction } from "#src/parser/service/tailordb/index";
+import { assertDefined } from "#src/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
@@ -32,10 +32,10 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import type { ApplyPhase, PlanContext } from "#src/cli/commands/deploy/types";
+import type { Application } from "#src/cli/services/application";
+import type { Executor } from "#src/types/executor.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { Application } from "@/cli/services/application";
-import type { Executor } from "@/types/executor.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 /**

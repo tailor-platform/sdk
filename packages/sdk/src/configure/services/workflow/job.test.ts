@@ -2,7 +2,7 @@
 import { describe, expect, test, expectTypeOf } from "vitest";
 import { createWorkflowJob, type WorkflowJob } from "./job";
 import { createWorkflow } from "./workflow";
-import type { TailorInvoker } from "@/runtime/types";
+import type { TailorInvoker } from "#src/runtime/types";
 
 describe("WorkflowJob type inference", () => {
   test("preserves literal types in output when using as const", () => {

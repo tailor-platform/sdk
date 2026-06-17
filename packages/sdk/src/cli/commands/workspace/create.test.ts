@@ -2,10 +2,10 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
-import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
-import { resetKeyringState } from "@/cli/shared/token-store";
+import { initOperatorClient } from "#src/cli/shared/client";
+import { readPlatformConfig, writePlatformConfig } from "#src/cli/shared/context";
+import { silenceLogger } from "#src/cli/shared/test-helpers/silence-logger";
+import { resetKeyringState } from "#src/cli/shared/token-store";
 import { createCommand } from "./create";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-workspace-create-${Date.now()}-${Math.random()}`);
@@ -24,7 +24,7 @@ vi.mock("@napi-rs/keyring", () => ({
   },
 }));
 
-vi.mock("@/cli/shared/client", async (importOriginal) => ({
+vi.mock("#src/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));

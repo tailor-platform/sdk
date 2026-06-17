@@ -6,15 +6,15 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { defineApplication } from "@/cli/services/application";
-import { logger } from "@/cli/shared/logger";
-import { defineConfig } from "@/configure/config";
-import { defineAuth } from "@/configure/services/auth";
-import { t } from "@/configure/types/type";
+import { defineApplication } from "#src/cli/services/application";
+import { logger } from "#src/cli/shared/logger";
+import { defineConfig } from "#src/configure/config/index";
+import { defineAuth } from "#src/configure/services/auth/index";
+import { t } from "#src/configure/types/type";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
+import type { Application } from "#src/cli/services/application";
+import type { OperatorClient } from "#src/cli/shared/client";
 import type { PlanContext } from "./types";
-import type { Application } from "@/cli/services/application";
-import type { OperatorClient } from "@/cli/shared/client";
 
 vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;

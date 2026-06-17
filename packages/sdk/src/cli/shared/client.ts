@@ -43,7 +43,7 @@ export type OperatorClient = Client<typeof OperatorService>;
  * @returns Configured Operator client
  */
 export async function initOperatorClient(accessToken: string) {
-  const { createTracingInterceptor } = await import("@/cli/telemetry/interceptor");
+  const { createTracingInterceptor } = await import("#src/cli/telemetry/interceptor");
 
   const interceptors: Interceptor[] = [
     await userAgentInterceptor(),

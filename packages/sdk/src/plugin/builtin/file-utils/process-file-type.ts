@@ -1,5 +1,5 @@
+import type { TailorDBType } from "#src/parser/service/tailordb/types";
 import type { FileUtilMetadata } from "./types";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Process a TailorDB type and extract file field metadata.

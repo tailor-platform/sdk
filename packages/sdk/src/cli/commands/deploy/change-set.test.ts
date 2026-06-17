@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { logger } from "@/cli/shared/logger";
+import { logger } from "#src/cli/shared/logger";
 import { createChangeSet, formatPlanSummary, summarizeChangeSets } from "./change-set";
 import type { HasName } from "./change-set";
 

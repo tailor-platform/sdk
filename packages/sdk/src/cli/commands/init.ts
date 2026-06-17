@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { logger } from "@/cli/shared/logger";
-import { readPackageJson } from "@/cli/shared/package-json";
+import { defineAppCommand } from "#src/cli/shared/command";
+import { logger } from "#src/cli/shared/logger";
+import { readPackageJson } from "#src/cli/shared/package-json";
 
 const detectPackageManager = () => {
   const availablePMs = ["npm", "yarn", "pnpm", "bun"];

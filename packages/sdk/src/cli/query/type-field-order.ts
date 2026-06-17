@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
-import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { TailorDBTypeSchema } from "@/parser/service/tailordb";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
+import { loadFilesWithIgnores } from "#src/cli/services/file-loader";
+import { TailorDBTypeSchema } from "#src/parser/service/tailordb/index";
+import type { LoadedConfig } from "#src/cli/shared/config-loader";
 
 type TypeFieldOrderMap = Map<string, string[]>;
 

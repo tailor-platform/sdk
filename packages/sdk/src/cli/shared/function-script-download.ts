@@ -7,8 +7,8 @@
 
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
-import { logger } from "@/cli/shared/logger";
-import type { OperatorClient } from "@/cli/shared/client";
+import { logger } from "#src/cli/shared/logger";
+import type { OperatorClient } from "#src/cli/shared/client";
 
 /**
  * Translate a `FunctionExecution.scriptName` into the corresponding

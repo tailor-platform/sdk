@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+import { defineAppCommand } from "#src/cli/shared/command";
+import { readPlatformConfig } from "#src/cli/shared/context";
+import { logger } from "#src/cli/shared/logger";
+import { assertDefined } from "#src/utils/assert";
+import ml from "#src/utils/multiline";
 import type { ProfileInfo } from "./types";
 
 export const listCommand = defineAppCommand({

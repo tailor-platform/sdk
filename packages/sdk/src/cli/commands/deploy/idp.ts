@@ -18,10 +18,10 @@ import {
   type IdPPermissionSchema as ProtoIdPPermissionSchema,
   type IdPService as ProtoIdPService,
 } from "@tailor-proto/tailor/v1/idp_resource_pb";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
-import { findOmittedPermitRules, parseIdPPermission } from "@/parser/service/idp/permission";
-import { assertDefined } from "@/utils/assert";
+import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
+import { logger } from "#src/cli/shared/logger";
+import { findOmittedPermitRules, parseIdPPermission } from "#src/parser/service/idp/permission";
+import { assertDefined } from "#src/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
@@ -32,15 +32,15 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
+import type { ApplyPhase, PlanContext } from "#src/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
   StandardIdPActionPermission,
   StandardIdPPermission,
   StandardIdPPermissionCondition,
-} from "@/parser/service/idp/types";
-import type { IdP, IdPLang as IdPLangInput } from "@/types/idp.generated";
+} from "#src/parser/service/idp/types";
+import type { IdP, IdPLang as IdPLangInput } from "#src/types/idp.generated";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 /**

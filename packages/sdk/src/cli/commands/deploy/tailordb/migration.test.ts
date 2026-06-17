@@ -4,13 +4,13 @@ import { describe, expect, test, vi, beforeEach, afterAll } from "vitest";
 import {
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
-} from "@/cli/commands/tailordb/migrate/diff-calculator";
+} from "#src/cli/commands/tailordb/migrate/diff-calculator";
 import {
   formatMigrationNumber,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
-} from "@/cli/commands/tailordb/migrate/snapshot";
-import { MIGRATION_LABEL_KEY } from "@/cli/commands/tailordb/migrate/types";
+} from "#src/cli/commands/tailordb/migrate/snapshot";
+import { MIGRATION_LABEL_KEY } from "#src/cli/commands/tailordb/migrate/types";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
@@ -19,9 +19,9 @@ import {
   executeMigrations,
   type MigrationContext,
 } from "./migration";
-import type { NamespaceWithMigrations } from "@/cli/commands/tailordb/migrate/config";
-import type { PendingMigration } from "@/cli/commands/tailordb/migrate/types";
-import type { OperatorClient } from "@/cli/shared/client";
+import type { NamespaceWithMigrations } from "#src/cli/commands/tailordb/migrate/config";
+import type { PendingMigration } from "#src/cli/commands/tailordb/migrate/types";
+import type { OperatorClient } from "#src/cli/shared/client";
 
 // Mock label.ts for resourceTrn
 vi.mock("../label", () => ({
@@ -30,7 +30,7 @@ vi.mock("../label", () => ({
 }));
 
 // Mock logger to suppress output during tests
-vi.mock("@/cli/shared/logger", () => ({
+vi.mock("#src/cli/shared/logger", () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -46,7 +46,7 @@ vi.mock("@/cli/shared/logger", () => ({
 }));
 
 // Mock spinner so tests don't render TTY frames
-vi.mock("@/cli/shared/spinner", () => ({
+vi.mock("#src/cli/shared/spinner", () => ({
   spinner: () => ({
     start: () => ({
       succeed: vi.fn(),
@@ -59,10 +59,10 @@ vi.mock("@/cli/shared/spinner", () => ({
 // touching the network or building real bundles.
 const bundleMigrationScriptMock = vi.fn();
 const executeScriptMock = vi.fn();
-vi.mock("@/cli/commands/tailordb/migrate/bundler", () => ({
+vi.mock("#src/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
 }));
-vi.mock("@/cli/shared/script-executor", () => ({
+vi.mock("#src/cli/shared/script-executor", () => ({
   executeScript: (...args: unknown[]) => executeScriptMock(...args),
 }));
 
@@ -326,7 +326,7 @@ describe("migration", () => {
     });
 
     test("warns when breaking change migration missing script", async () => {
-      const { logger } = await import("@/cli/shared/logger");
+      const { logger } = await import("#src/cli/shared/logger");
       const client = createMockClient({ tailordb: 0 });
 
       // Create migration with breaking change but no script

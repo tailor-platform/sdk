@@ -3,7 +3,7 @@ import {
   GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus,
 } from "@tailor-proto/tailor/v1/application_pb";
 import { ApplicationSchemaUpdateAttemptStatus } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { formatTimestamp } from "@/cli/shared/format";
+import { formatTimestamp } from "#src/cli/shared/format";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface AppInfo {

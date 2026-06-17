@@ -5,16 +5,16 @@ import {
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { symbols } from "@/cli/shared/logger";
-import { HTTP_METHODS } from "@/parser/service/http-adapter";
-import { assertDefined } from "@/utils/assert";
+import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "#src/cli/shared/client";
+import { symbols } from "#src/cli/shared/logger";
+import { HTTP_METHODS } from "#src/parser/service/http-adapter/index";
+import { assertDefined } from "#src/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { Application } from "@/cli/services/application";
-import type { HttpAdapterBundleResult } from "@/cli/services/http-adapter/bundler";
+import type { ApplyPhase, PlanContext } from "#src/cli/commands/deploy/types";
+import type { Application } from "#src/cli/services/application";
+import type { HttpAdapterBundleResult } from "#src/cli/services/http-adapter/bundler";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,

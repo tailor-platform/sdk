@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applyIdP, type planIdP } from "./idp";
-import type { OperatorClient } from "@/cli/shared/client";
+import type { OperatorClient } from "#src/cli/shared/client";
 
 describe("applyIdP phase separation", () => {
   // Helper to create mock client with spies for delete operations

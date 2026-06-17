@@ -4,7 +4,7 @@ import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#src/utils/assert";
 import { logger } from "./logger";
 
 type ArgsShape = Record<string, z.ZodType>;

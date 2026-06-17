@@ -1,5 +1,5 @@
 import * as path from "pathe";
-import { logger, styles } from "@/cli/shared/logger";
+import { logger, styles } from "#src/cli/shared/logger";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { CacheStore } from "./store";

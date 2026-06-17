@@ -4,7 +4,7 @@ import {
   generateIdpUserSchemaFile,
   processIdpUser,
 } from "./idp-user-processor";
-import type { GeneratorAuthInput } from "@/plugin/types";
+import type { GeneratorAuthInput } from "#src/plugin/types";
 
 type TruncateResult = { success: boolean; deleted: number; total: number; errors: string[] };
 

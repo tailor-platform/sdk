@@ -16,10 +16,10 @@ import {
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
-import { type ResolverService } from "@/cli/services/resolver/service";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-exprs";
-import { assertDefined } from "@/utils/assert";
+import { type ResolverService } from "#src/cli/services/resolver/service";
+import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
+import { buildResolverOperationHookExpr } from "#src/cli/shared/runtime-exprs";
+import { assertDefined } from "#src/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
@@ -37,11 +37,11 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
+import type { ApplyPhase, PlanContext } from "#src/cli/commands/deploy/types";
+import type { Executor } from "#src/types/executor.generated";
+import type { TailorField } from "#src/types/field.generated";
+import type { Resolver } from "#src/types/resolver.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { Executor } from "@/types/executor.generated";
-import type { TailorField } from "@/types/field.generated";
-import type { Resolver } from "@/types/resolver.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // Scalar type mapping for field type conversion

@@ -7,7 +7,7 @@
  * and no mock needs to be acquired. `expectTypeOf(fn).returns` inspects the
  * function's declared return type.
  */
-import "@/runtime/globals";
+import "#src/runtime/globals";
 import { describe, expectTypeOf, test } from "vitest";
 
 describe("mock types match @tailor-platform/sdk/runtime/globals", () => {

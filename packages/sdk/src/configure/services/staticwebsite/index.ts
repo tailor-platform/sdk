@@ -1,6 +1,6 @@
-import type { StaticWebsiteDefinitionBrand } from "@/configure/services/staticwebsite/types";
-import type { StaticWebsiteInput } from "@/types/staticwebsite.generated";
-export type { StaticWebsiteConfig } from "@/configure/services/staticwebsite/types";
+import type { StaticWebsiteDefinitionBrand } from "#src/configure/services/staticwebsite/types";
+import type { StaticWebsiteInput } from "#src/types/staticwebsite.generated";
+export type { StaticWebsiteConfig } from "#src/configure/services/staticwebsite/types";
 
 /**
  * Define a static website configuration for the Tailor SDK.

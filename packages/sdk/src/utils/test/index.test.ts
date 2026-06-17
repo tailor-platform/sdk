@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { db } from "@/configure/services/tailordb/schema";
-import { t } from "@/configure/types";
+import { db } from "#src/configure/services/tailordb/schema";
+import { t } from "#src/configure/types/index";
 import { createStandardSchema, createTailorDBHook } from "./index";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

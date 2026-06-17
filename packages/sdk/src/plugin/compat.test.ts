@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
-import { generate } from "@/cli/commands/generate/service";
+import { generate } from "#src/cli/commands/generate/service";
 
 describe("defineGenerators and definePlugins produce identical output", () => {
   const fixtureDir = path.resolve(__dirname, "../cli/commands/deploy/__test_fixtures__");

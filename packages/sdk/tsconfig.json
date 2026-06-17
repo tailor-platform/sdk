@@ -8,7 +8,6 @@
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
     "paths": {
-      "@/*": ["./src/*"],
       "@tailor-proto/*": ["../tailor-proto/src/*"]
     }
   },

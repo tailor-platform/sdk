@@ -1,4 +1,4 @@
-import { formatTimestamp } from "@/cli/shared/format";
+import { formatTimestamp } from "#src/cli/shared/format";
 import type { ListUserOrganizationsResponse_UserOrganization } from "@tailor-proto/tailor/v1/workspace_pb";
 import type { Organization, Folder } from "@tailor-proto/tailor/v1/workspace_resource_pb";
 
