@@ -7,7 +7,10 @@ describe("approval workflow", () => {
     using wf = mockWorkflow();
     wf.setWaitHandler((_key, _payload) => ({ approved: true }));
 
-    const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
+    const result = await processWithApproval.body(
+      { orderId: "order-1" },
+      { env: {}, invoker: null },
+    );
 
     expect(result).toEqual({ orderId: "order-1", status: "approved" });
     expect(wf.waitCalls).toEqual([
@@ -22,7 +25,10 @@ describe("approval workflow", () => {
     using wf = mockWorkflow();
     wf.setWaitHandler({ approved: false });
 
-    const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
+    const result = await processWithApproval.body(
+      { orderId: "order-2" },
+      { env: {}, invoker: null },
+    );
 
     expect(result).toEqual({ orderId: "order-2", status: "rejected" });
   });

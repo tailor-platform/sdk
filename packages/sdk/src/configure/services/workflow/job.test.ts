@@ -1,8 +1,46 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, expect, test, expectTypeOf } from "vitest";
+import { platformSerialize } from "@/utils/test/platform-serialize";
 import { createWorkflowJob, type WorkflowJob } from "./job";
+import { getRegisteredJob } from "./registry";
+import { buildJobContext } from "./test-env-key";
 import { createWorkflow } from "./workflow";
-import type { TailorInvoker } from "@/runtime/types";
+import type { TailorPrincipal } from "@/runtime/types";
+
+async function withRegisteredJobRuntime<T>(run: () => Promise<T>): Promise<T> {
+  const root = globalThis as {
+    tailor?: {
+      workflow?: {
+        triggerJobFunction: (name: string, args?: unknown) => unknown;
+      };
+    };
+  };
+  const previousTailor = root.tailor;
+
+  root.tailor = {
+    ...previousTailor,
+    workflow: {
+      triggerJobFunction: (name, args) => {
+        const body = getRegisteredJob(name);
+        if (!body) return null;
+        const out = body(platformSerialize(args), buildJobContext());
+        return out instanceof Promise
+          ? out.then((value) => platformSerialize(value))
+          : platformSerialize(out);
+      },
+    },
+  };
+
+  try {
+    return await run();
+  } finally {
+    if (previousTailor) {
+      root.tailor = previousTailor;
+    } else {
+      delete root.tailor;
+    }
+  }
+}
 
 describe("WorkflowJob type inference", () => {
   test("preserves literal types in output when using as const", () => {
@@ -55,9 +93,143 @@ describe("WorkflowJob type inference", () => {
       body: (_input: undefined, context) => {
         expectTypeOf(context).toHaveProperty("env");
         expectTypeOf(context).toHaveProperty("invoker");
-        expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+        expectTypeOf(context.invoker).toEqualTypeOf<TailorPrincipal | null>();
       },
     });
+  });
+
+  test("direct body calls work when process.getBuiltinModule is unavailable", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, "getBuiltinModule");
+    Object.defineProperty(process, "getBuiltinModule", {
+      configurable: true,
+      value: undefined,
+    });
+    try {
+      const invoker: TailorPrincipal = {
+        id: "principal-1",
+        type: "user",
+        workspaceId: "workspace-1",
+        attributes: {},
+        attributeList: [],
+      };
+      const child = createWorkflowJob({
+        name: "capture-child-invoker-without-get-builtin-module",
+        body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+      });
+      const parent = createWorkflowJob({
+        name: "propagate-parent-invoker-without-get-builtin-module",
+        body: async () => await child.trigger(),
+      });
+
+      await withRegisteredJobRuntime(async () => {
+        await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
+      });
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(process, "getBuiltinModule", descriptor);
+      } else {
+        delete (process as { getBuiltinModule?: unknown }).getBuiltinModule;
+      }
+    }
+  });
+
+  test("direct body calls propagate invoker to triggered child jobs", async () => {
+    const invoker: TailorPrincipal = {
+      id: "principal-1",
+      type: "user",
+      workspaceId: "workspace-1",
+      attributes: { role: "ADMIN" },
+      attributeList: [],
+    };
+    const child = createWorkflowJob({
+      name: "capture-child-invoker",
+      body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+    });
+    const parent = createWorkflowJob({
+      name: "propagate-parent-invoker",
+      body: async () => await child.trigger(),
+    });
+
+    await withRegisteredJobRuntime(async () => {
+      await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
+    });
+  });
+
+  test("concurrent direct body calls isolate invokers for child triggers", async () => {
+    const firstInvoker: TailorPrincipal = {
+      id: "principal-1",
+      type: "user",
+      workspaceId: "workspace-1",
+      attributes: {},
+      attributeList: [],
+    };
+    const secondInvoker: TailorPrincipal = {
+      id: "principal-2",
+      type: "machine_user",
+      workspaceId: "workspace-1",
+      attributes: {},
+      attributeList: [],
+    };
+    let releaseFirst: () => void = () => {};
+    let releaseSecond: () => void = () => {};
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const gates = {
+      first: firstGate,
+      second: secondGate,
+    };
+    const child = createWorkflowJob({
+      name: "capture-concurrent-child-invoker",
+      body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+    });
+    const parent = createWorkflowJob({
+      name: "capture-concurrent-parent-invoker",
+      body: async (input: { gate: "first" | "second" }) => {
+        await gates[input.gate];
+        return await child.trigger();
+      },
+    });
+
+    await withRegisteredJobRuntime(async () => {
+      const first = parent.body({ gate: "first" }, { env: {}, invoker: firstInvoker });
+      const second = parent.body({ gate: "second" }, { env: {}, invoker: secondInvoker });
+
+      releaseFirst();
+      await expect(first).resolves.toBe("principal-1");
+      releaseSecond();
+      await expect(second).resolves.toBe("principal-2");
+    });
+  });
+
+  test("trigger reads the runtime invoker when no body context is active", async () => {
+    const previousTailor = (globalThis as { tailor?: unknown }).tailor;
+    (globalThis as { tailor?: unknown }).tailor = {
+      context: {
+        getInvoker: () => ({
+          id: "runtime-principal",
+          type: "machine_user",
+          workspaceId: "workspace-1",
+          attributes: ["role"],
+          attributeMap: { role: "SYSTEM" },
+        }),
+      },
+    };
+    try {
+      const job = createWorkflowJob({
+        name: "capture-runtime-invoker",
+        body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+      });
+
+      await withRegisteredJobRuntime(async () => {
+        expect(job.trigger()).toBe("runtime-principal");
+      });
+    } finally {
+      (globalThis as { tailor?: unknown }).tailor = previousTailor;
+    }
   });
 });
 

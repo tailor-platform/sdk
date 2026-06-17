@@ -110,6 +110,7 @@ export default createWorkflow({
         expect(code).not.toContain("job-registry");
         expect(code).not.toContain("registerJob");
         expect(code).not.toContain("platformSerialize");
+        expect(code).not.toContain("async_hooks");
       }
     });
 

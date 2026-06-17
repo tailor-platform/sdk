@@ -1,7 +1,7 @@
 import type { ResolverConfig } from "@/configure/services/resolver/resolver";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { IdpName } from "@/configure/types/idp-name";
-import type { TailorActor, TailorEnv } from "@/runtime/types";
+import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
 import type {
   TailorDBTrigger as ParserTailorDBTrigger,
   ResolverExecutedTrigger as ParserResolverExecutedTrigger,
@@ -14,7 +14,7 @@ interface EventArgs {
   workspaceId: string;
   appNamespace: string;
   env: TailorEnv;
-  actor: TailorActor | null;
+  actor: TailorPrincipal | null;
 }
 
 interface RecordArgs extends EventArgs {

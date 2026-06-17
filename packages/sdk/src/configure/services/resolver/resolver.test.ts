@@ -2,7 +2,7 @@ import { describe, expectTypeOf, test, expect } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
 import { createResolver } from "./resolver";
-import type { TailorInvoker, TailorUser } from "@/runtime/types";
+import type { TailorPrincipal } from "@/runtime/types";
 import type { output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
 
@@ -16,11 +16,11 @@ describe("createResolver", () => {
           result: t.string(),
         }),
         body: (context) => {
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("invoker");
-          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
-          expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+          expectTypeOf(context.caller).toEqualTypeOf<TailorPrincipal | null>();
+          expectTypeOf(context.invoker).toEqualTypeOf<TailorPrincipal | null>();
           expectTypeOf(context.input).toBeNever();
           return { result: "hello" };
         },
@@ -35,9 +35,9 @@ describe("createResolver", () => {
           success: t.bool(),
         }),
         body: (context) => {
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
+          expectTypeOf(context.caller).toEqualTypeOf<TailorPrincipal | null>();
           expectTypeOf(context.input).toBeNever();
           return { success: true };
         },
@@ -59,7 +59,7 @@ describe("createResolver", () => {
         }),
         body: (context) => {
           expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           expectTypeOf(context.input).toEqualTypeOf<{
             name: string;
             age: number;
@@ -241,7 +241,7 @@ describe("createResolver", () => {
         }),
         body: async (context) => {
           expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           await new Promise((resolve) => setTimeout(resolve, 0));
           return { data: context.input.id };
         },
@@ -260,13 +260,13 @@ describe("createResolver", () => {
         }),
         body: async (context) => {
           expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           return { success: true };
         },
       });
     });
 
-    test("user context always available", () => {
+    test("caller context is nullable", () => {
       createResolver({
         name: "withUser",
         operation: "query",
@@ -274,11 +274,12 @@ describe("createResolver", () => {
           userId: t.string(),
         }),
         body: (context) => {
-          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
-          expectTypeOf(context.user.id).toBeString();
-          expectTypeOf(context.user.type).toBeString();
-          expectTypeOf(context.user.workspaceId).toBeString();
-          return { userId: context.user.id };
+          expectTypeOf(context.caller).toEqualTypeOf<TailorPrincipal | null>();
+          if (!context.caller) return { userId: "anonymous" };
+          expectTypeOf(context.caller.id).toBeString();
+          expectTypeOf(context.caller.type).toEqualTypeOf<"user" | "machine_user">();
+          expectTypeOf(context.caller.workspaceId).toBeString();
+          return { userId: context.caller.id };
         },
       });
     });

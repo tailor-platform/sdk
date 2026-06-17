@@ -1,6 +1,7 @@
 import { brandValue } from "@/utils/brand";
 import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
-import type { TailorEnv, TailorInvoker } from "@/runtime/types";
+import { withWorkflowTestInvoker } from "./test-env-key";
+import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
 import type { JsonCompatible } from "@/types/helpers";
 
 /**
@@ -8,7 +9,7 @@ import type { JsonCompatible } from "@/types/helpers";
  */
 export type WorkflowJobContext = {
   env: TailorEnv;
-  invoker?: TailorInvoker;
+  invoker: TailorPrincipal | null;
 };
 
 /**
@@ -96,7 +97,11 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
 export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> {
-  const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+  const userBody = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+  const body = process.env.TAILOR_PLATFORM_BUNDLE
+    ? userBody
+    : (input: I, context: WorkflowJobContext): O | Promise<O> =>
+        withWorkflowTestInvoker(context.invoker, () => userBody(input, context));
 
   // Test-only local runner registry; the platform bundle sets the flag so it is DCE'd.
   if (!process.env.TAILOR_PLATFORM_BUNDLE) {
