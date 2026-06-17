@@ -7,6 +7,7 @@ export default createResolver({
   output: t.object({ id: t.string() }),
   body: ({ input, caller }) => {
     const parsed = t.string().parse({ value: input.id, data: {}, invoker: caller });
+    const parsedOther = { parse: (arg: unknown) => arg }.parse({ user: caller });
     return { id: parsed.value ?? caller?.["id"] ?? caller?.id };
   },
 });
