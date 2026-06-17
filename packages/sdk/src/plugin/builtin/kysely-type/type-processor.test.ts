@@ -284,7 +284,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("UserWithTimestamp: {");
       expect(result.typeDef).toContain("name: string");
       expect(result.typeDef).toContain("createdAt: Generated<Timestamp>;");
-      expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
+      expect(result.typeDef).toContain("updatedAt: Generated<Timestamp>;");
     });
 
     test("should always include Generated<string> for id field", async () => {
