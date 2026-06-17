@@ -6,9 +6,13 @@ import type {
   DefinedAuth,
   UserAttributeListKey,
   UserAttributeMap,
-} from "@/types/auth";
-import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/types/field-types";
-import type { TailorField } from "@/types/tailor-field";
+} from "@/configure/services/auth/types";
+import type {
+  DefinedFieldMetadata,
+  FieldMetadata,
+  TailorFieldType,
+  TailorField,
+} from "@/configure/types/field.types";
 
 type MachineUserAttributeFields = Record<
   string,
@@ -76,7 +80,7 @@ export type {
   FederatedIdentity,
   FederatedIdentityClaims,
   FederatedIdentityProvider,
-} from "@/types/auth";
+} from "@/configure/services/auth/types";
 export type {
   AuthConnectionOAuth2Config,
   AuthConnectionConfig,
@@ -93,7 +97,7 @@ export type {
   AuthExternalConfig,
   AuthOwnConfig,
   DefinedAuth,
-} from "@/types/auth";
+} from "@/configure/services/auth/types";
 
 /**
  * Define an auth service for the Tailor SDK.

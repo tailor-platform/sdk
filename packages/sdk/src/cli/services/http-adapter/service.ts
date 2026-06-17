@@ -2,12 +2,12 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
+import { type HttpAdapterServiceInput } from "@/configure/config/types";
 import {
   HTTP_METHOD_KEYS,
   HttpAdapterConfigSchema,
   type HttpMethodKey,
 } from "@/parser/service/http-adapter";
-import { type HttpAdapterServiceInput } from "@/types/app-config";
 import { type HttpAdapterConfig } from "@/types/http-adapter.generated";
 import { isSdkBranded } from "@/utils/brand";
 

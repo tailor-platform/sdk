@@ -7,15 +7,9 @@ import {
 import { brandValue } from "@/utils/brand";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
 import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures } from "./types";
-import type { FieldOptions, FieldOutput, TailorFieldType, TailorToTs } from "@/types/field-types";
-import type { output, InferFieldsOutput, Prettify } from "@/types/helpers";
-import type { PluginAttachment, PluginConfigs } from "@/types/plugin";
 import type {
   TailorDBField as TailorDBFieldBase,
   TailorDBType as TailorDBTypeBase,
-} from "@/types/tailor-db-field";
-import type { TailorField as TailorFieldMinimal } from "@/types/tailor-field";
-import type {
   DBFieldMetadata,
   DefinedDBFieldMetadata,
   SerialConfig,
@@ -23,10 +17,21 @@ import type {
   TailorDBTypeMetadata,
   RawRelationConfig,
   RelationType,
-} from "@/types/tailordb";
+} from "@/configure/services/tailordb/types";
+import type {
+  FieldOptions,
+  FieldOutput,
+  TailorFieldType,
+  TailorToTs,
+  TailorField as TailorFieldMinimal,
+  FieldValidateInput,
+  ValidateConfig,
+  Validators,
+} from "@/configure/types/field.types";
+import type { PluginAttachment, PluginConfigs } from "@/plugin/types";
+import type { InferredAttributeMap, TailorPrincipal } from "@/runtime/types";
+import type { output, InferFieldsOutput, Prettify } from "@/types/helpers";
 import type { RawPermissions } from "@/types/tailordb.generated";
-import type { InferredAttributeMap, TailorPrincipal } from "@/types/user";
-import type { FieldValidateInput, ValidateConfig, Validators } from "@/types/validation";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.

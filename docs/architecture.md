@@ -29,8 +29,8 @@ The essential constraint: **configure cannot depend on parser/cli at runtime**, 
 The configure module's import boundaries enforced by oxlint:
 
 1. **Cannot import from `cli/`** — CLI is deployment tooling, not user runtime
-2. **Cannot import from `parser/`** (use `@/types/` instead) — prevents Zod from leaking into user bundles
-3. **Cannot import from `plugin/`** — prevents plugin system code from bundling into user output
+2. **Cannot import from `parser/`** (except `parser/**/types.ts`, type-only) — prevents Zod from leaking into user bundles
+3. **Cannot import from `plugin/`** (except `plugin/types.ts`, type-only) — prevents plugin system code from bundling into user output
 4. **Can only import `utils/brand` or `utils/test/*`** — other utils helpers may have dependencies that would inflate user bundle sizes
 
 ## Design Decisions
@@ -49,18 +49,15 @@ configure/auth/index.ts
         → import { z } from "zod"  ← bundled into user output!
 ```
 
-**Solution:** Separate schema files (runtime Zod imports) from types files (type-only imports):
+**Solution:** Three kinds of type homes, none of which can reach Zod:
 
-```
-parser/service/auth/
-├── schema.ts     # Zod schemas — runtime imports, never re-exported from configure
-├── types.ts      # Type definitions using `import type` only
-└── index.ts      # Re-exports: `export { Schema } from "./schema"` + `export type * from "./types"`
-```
+1. **Generated types** — Zod schemas live in `parser/**/schema.ts`; their types are generated into `src/types/*.generated.ts` by zinfer (`pnpm generate`). `src/types/` contains only these and `helpers.ts` (generic utilities).
+2. **Pure type modules** — hand-written shared types live next to the code that owns them, in files named `types.ts` (or `*.types.ts` under `configure/`): e.g. `parser/service/tailordb/types.ts` (parsed structures), `configure/services/auth/types.ts` (config input types), `plugin/types.ts` (plugin authoring types), `runtime/types.ts` (runtime principal types). oxlint enforces that these files contain type-only imports and reference neither `zod` nor `**/schema` — even type-only, so the user's tsc never loads Zod's type machinery either.
+3. **Cross-layer access** — otherwise-closed boundaries (configure → parser, cli → configure, plugin → configure) are open _only_ for pure type modules, _only_ type-only.
 
-Configure modules can safely import types from `parser/**/types.ts` because those files only use `import type`, which bundlers erase completely.
+Because a pure type module's import closure contains no runtime modules at all, even a bundler that resolves the full module graph finds nothing to include.
 
-**Verification:** After changes, check that user bundles don't contain `$ZodType` or similar Zod internals. Bundle size regressions (e.g., 18KB → 68KB) indicate a violated boundary.
+**Verification:** `check:zod-isolation` (part of `pnpm check`) walks the import closure of every `package.json#exports` entry in `dist/` and fails if any entry other than `./cli` can reach a zod import — in its rolled-up `.d.mts` graph (type level) or its `.mjs` graph (runtime level).
 
 ### Plugin Entry Point Separation
 
@@ -68,7 +65,7 @@ Built-in plugins are exported as separate entry points (`@tailor-platform/sdk/pl
 
 ### Parser as Intermediary
 
-The CLI module cannot import from configure directly. Instead, it uses parser as an intermediary. This ensures:
+The CLI module cannot import from configure directly (except configure pure type modules, type-only). Instead, it uses parser as an intermediary. This ensures:
 
 1. Configure stays minimal (user-facing API only)
 2. Validation logic lives in one place (parser)

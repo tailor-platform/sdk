@@ -9,8 +9,7 @@
  * it from nested Vitest configs that do not resolve `@/` aliases.
  * @internal
  */
-import type { TailorEnv } from "../../../types/env";
-import type { TailorPrincipal } from "../../../types/user";
+import type { TailorEnv, TailorPrincipal } from "../../../runtime/types";
 
 const SLOT_KEY = "__tailorWorkflowTestEnv";
 

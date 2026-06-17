@@ -1,7 +1,7 @@
 import type { ResolverConfig } from "@/configure/services/resolver/resolver";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { IdpName } from "@/configure/types/idp-name";
-import type { TailorEnv } from "@/types/env";
+import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
 import type {
   TailorDBTrigger as ParserTailorDBTrigger,
   ResolverExecutedTrigger as ParserResolverExecutedTrigger,
@@ -9,7 +9,6 @@ import type {
   AuthAccessTokenTrigger as ParserAuthAccessTokenTrigger,
 } from "@/types/executor.generated";
 import type { output } from "@/types/helpers";
-import type { TailorPrincipal } from "@/types/user";
 
 interface EventArgs {
   workspaceId: string;

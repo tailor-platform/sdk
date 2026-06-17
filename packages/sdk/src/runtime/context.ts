@@ -12,7 +12,7 @@
  * }
  */
 
-import type { TailorPrincipal } from "@/types/user";
+import type { TailorPrincipal } from "@/runtime/types";
 
 /**
  * Information about the invoker of the current function execution.

@@ -1,3 +1,9 @@
+// Shared runtime principal/environment types.
+//
+// This is a pure type module: it must contain type declarations only and may
+// not reference zod or schema modules, so every layer can import it type-only
+// without pulling any runtime dependency.
+
 // Interfaces for module augmentation
 // Users can extend these via: declare module "@tailor-platform/sdk" { interface AttributeMap { ... } }
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -27,3 +33,11 @@ export type TailorPrincipal = {
   /** A list of the principal's attribute IDs. */
   attributeList: InferredAttributeList;
 };
+
+// Interface for module augmentation
+// Users can extend via: declare module "@tailor-platform/sdk" { interface Env { ... } }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface Env {}
+
+/** Represents environment variables in the Tailor platform. */
+export type TailorEnv = keyof Env extends never ? Record<string, string | number | boolean> : Env;

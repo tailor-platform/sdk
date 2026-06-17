@@ -1,7 +1,6 @@
 import { platformSerialize } from "@/utils/test/platform-serialize";
 import { buildJobContext } from "./test-env-key";
-import type { TailorEnv } from "@/types/env";
-import type { TailorPrincipal } from "@/types/user";
+import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.

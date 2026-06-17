@@ -30,11 +30,11 @@
     "date-fns": "4.4.0"
   },
   "devDependencies": {
-    "@connectrpc/connect": "2.1.1",
-    "@connectrpc/connect-node": "2.1.1",
+    "@connectrpc/connect": "2.1.2",
+    "@connectrpc/connect-node": "2.1.2",
     "@types/node": "24.13.2",
     "@typescript/native-preview": "7.0.0-dev.20260612.1",
-    "graphql": "16.14.1",
+    "graphql": "16.14.2",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
     "oxfmt": "0.54.0",

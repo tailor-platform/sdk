@@ -2,9 +2,9 @@ import { describe, expectTypeOf, test, expect } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
 import { createResolver } from "./resolver";
+import type { TailorPrincipal } from "@/runtime/types";
 import type { output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
-import type { TailorPrincipal } from "@/types/user";
 
 describe("createResolver", () => {
   describe("type inference", () => {
