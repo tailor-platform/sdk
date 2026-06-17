@@ -323,7 +323,7 @@ Add validation rules to fields. Validators receive three arguments (executed aft
 
 - `value`: Field value after hook transformation
 - `data`: Entire record data after hook transformations (for accessing other field values)
-- `user`: User performing the operation
+- `invoker`: Principal performing the operation
 
 Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
 
