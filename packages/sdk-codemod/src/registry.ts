@@ -123,7 +123,21 @@ const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     scriptPath: "v2/execute-script-arg/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,mjs,cjs,js}"],
-    legacyPatterns: [["executeScript", "JSON.stringify"]],
+    suspiciousPatterns: ["executeScript"],
+    prompt: [
+      "In Tailor SDK v2 the executeScript() arg option takes a JSON-serializable value",
+      "and is serialized internally, so a pre-stringified argument double-encodes. The",
+      "codemod already rewrote the direct form arg: JSON.stringify(X) to arg: X. Review",
+      "the executeScript calls in these files for cases it could not rewrite — where the",
+      "arg value is reached indirectly, for example:",
+      "- a variable holding a JSON.stringify(...) result (const s = JSON.stringify(x); ... arg: s)",
+      "- JSON.stringify(x, null, 2) or another multi-argument form",
+      "- an options object built or spread dynamically",
+      "",
+      "For each such call, pass the underlying value directly as arg (drop the",
+      "JSON.stringify wrapper) so executeScript serializes it once. Leave calls that",
+      "already pass a plain value unchanged.",
+    ].join("\n"),
   },
 ];
 
