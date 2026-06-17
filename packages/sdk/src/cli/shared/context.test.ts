@@ -10,6 +10,7 @@ import {
   loadMachineUserName,
   loadWorkspaceId,
   readPlatformConfig,
+  saveUserTokens,
   writePlatformConfig,
 } from "./context";
 import { isCLIError } from "./errors";
@@ -18,6 +19,7 @@ import { resetKeyringState } from "./token-store";
 import type * as ClientModule from "./client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
+const keyringPasswords = vi.hoisted(() => new Map<string, string>());
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
@@ -25,11 +27,19 @@ vi.mock("xdg-basedir", () => ({
 
 vi.mock("@napi-rs/keyring", () => ({
   Entry: class {
-    setPassword() {}
-    getPassword(): string | null {
-      return null;
+    private key: string;
+    constructor(service: string, account: string) {
+      this.key = `${service}:${account}`;
     }
-    deletePassword() {}
+    setPassword(password: string) {
+      keyringPasswords.set(this.key, password);
+    }
+    getPassword(): string | null {
+      return keyringPasswords.get(this.key) ?? null;
+    }
+    deletePassword() {
+      keyringPasswords.delete(this.key);
+    }
   },
 }));
 
@@ -52,6 +62,7 @@ vi.mock("./client", async (importOriginal) => {
 beforeEach(() => {
   clientMocks.fetchUserInfo.mockReset();
   clientMocks.refreshToken.mockReset();
+  keyringPasswords.clear();
 });
 
 describe("loadConfigPath", () => {
@@ -753,11 +764,12 @@ describe("loadAccessToken", () => {
       expect(config.version).toBe(3);
       expect(config.users["legacy@example.com"]).toBeUndefined();
       expect(config.users["platform-user-sub"]).toMatchObject({
-        storage: "file",
-        access_token: "new-access-token",
-        refresh_token: "new-refresh-token",
+        storage: "keyring",
         email: "legacy@example.com",
       });
+      expect(keyringPasswords.get("tailor-platform-cli:platform-user-sub")).toBe(
+        JSON.stringify({ accessToken: "new-access-token", refreshToken: "new-refresh-token" }),
+      );
       expect(config.current_user).toBe("platform-user-sub");
       expect(config.profiles.default?.user).toBe("platform-user-sub");
     });
@@ -833,10 +845,11 @@ describe("loadAccessToken", () => {
       expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token");
       expect(config.users["platform-user-sub"]).toBeUndefined();
       expect(config.users["legacy@example.com"]).toMatchObject({
-        storage: "file",
-        access_token: "new-access-token",
-        refresh_token: "new-refresh-token",
+        storage: "keyring",
       });
+      expect(keyringPasswords.get("tailor-platform-cli:legacy@example.com")).toBe(
+        JSON.stringify({ accessToken: "new-access-token", refreshToken: "new-refresh-token" }),
+      );
       expect(config.current_user).toBe("legacy@example.com");
       expect(config.profiles.default?.user).toBe("legacy@example.com");
     });
@@ -874,6 +887,77 @@ describe("profile readonly field", () => {
     expect(config.profiles.ro?.readonly).toBe(true);
     expect(config.profiles.rw?.readonly).toBeUndefined();
   });
+});
+
+describe("saveUserTokens", () => {
+  const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
+  const originalEnv = process.env;
+  type PlatformConfig = Parameters<typeof saveUserTokens>[0];
+
+  function createEmptyConfig(): PlatformConfig {
+    return {
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    };
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    resetKeyringState();
+    process.env = { ...originalEnv };
+    delete process.env.TAILOR_USE_KEYRING;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  test("stores tokens in the OS keyring by default when available", async () => {
+    const config = createEmptyConfig();
+
+    await saveUserTokens(
+      config,
+      "platform-user-sub",
+      { accessToken: "access-token", refreshToken: "refresh-token" },
+      futureDate,
+      { email: "user@example.com" },
+    );
+
+    expect(config.users["platform-user-sub"]).toEqual({
+      storage: "keyring",
+      token_expires_at: futureDate,
+      email: "user@example.com",
+    });
+    expect(keyringPasswords.get("tailor-platform-cli:platform-user-sub")).toBe(
+      JSON.stringify({ accessToken: "access-token", refreshToken: "refresh-token" }),
+    );
+  });
+
+  test.each(["0", "false", "off"])(
+    "stores tokens in the config file when TAILOR_USE_KEYRING=%s",
+    async (value) => {
+      process.env.TAILOR_USE_KEYRING = value;
+      const config = createEmptyConfig();
+
+      await saveUserTokens(
+        config,
+        "platform-user-sub",
+        { accessToken: "access-token", refreshToken: "refresh-token" },
+        futureDate,
+      );
+
+      expect(config.users["platform-user-sub"]).toEqual({
+        storage: "file",
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        token_expires_at: futureDate,
+      });
+      expect(keyringPasswords.has("tailor-platform-cli:platform-user-sub")).toBe(false);
+    },
+  );
 });
 
 describe("V1 to V3 migration", () => {
@@ -932,8 +1016,6 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     vi.resetModules();
     resetKeyringState();
     process.env = { ...originalEnv };
-    // Downgrade only happens when TAILOR_USE_KEYRING is unset, which is the
-    // default for every command that is not opting into keyring storage.
     delete process.env.TAILOR_USE_KEYRING;
   });
 
