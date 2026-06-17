@@ -294,7 +294,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
-    test("handles hooks configuration", () => {
+    test("aggregates field hooks into a type-level hook script", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -311,11 +311,19 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
-      expect(manifest.schema?.fields?.updatedAt?.hooks?.create?.expr).toBe("now()");
-      expect(manifest.schema?.fields?.updatedAt?.hooks?.update?.expr).toBe("now()");
+      // Field-level hooks are no longer emitted per field.
+      expect(manifest.schema?.fields?.updatedAt?.hooks).toBeUndefined();
+
+      // They are aggregated into a single type-level script that binds a shared
+      // timestamp once and dispatches each field's hook.
+      const createHook = manifest.schema?.typeHook?.create?.expr ?? "";
+      expect(createHook).toContain("const _now = new Date()");
+      expect(createHook).toContain('"updatedAt": ((_value) => (now()))(_input["updatedAt"])');
+      expect(manifest.schema?.typeHook?.update?.expr).toContain('_input["updatedAt"]');
+      expect(manifest.schema?.typeValidate).toBeUndefined();
     });
 
-    test("keeps validate and hooks in nested fields", () => {
+    test("aggregates nested field hooks and validators into type-level scripts", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -366,16 +374,30 @@ describe("snapshot-manifest", () => {
       const displayNameField = profileField?.fields?.displayName;
       const emailField = profileField?.fields?.contact?.fields?.email;
 
-      expect(displayNameField?.validate).toHaveLength(1);
-      expect(displayNameField?.validate?.[0]?.errorMessage).toBe("Display name is required");
-      expect(displayNameField?.validate?.[0]?.script?.expr).toBe("!((_value ?? '').length > 0)");
-      expect(displayNameField?.hooks?.create?.expr).toBe("(_value ?? '').trim()");
-      expect(displayNameField?.hooks?.update?.expr).toBe("(_value ?? '').trim()");
+      // Nested field hooks/validators are not emitted per field.
+      expect(displayNameField?.hooks).toBeUndefined();
+      expect(displayNameField?.validate ?? []).toHaveLength(0);
+      expect(emailField?.hooks).toBeUndefined();
+      expect(emailField?.validate ?? []).toHaveLength(0);
 
-      expect(emailField?.validate).toHaveLength(1);
-      expect(emailField?.validate?.[0]?.errorMessage).toBe("Email must contain @");
-      expect(emailField?.validate?.[0]?.script?.expr).toBe("!((_value ?? '').includes('@'))");
-      expect(emailField?.hooks?.create?.expr).toBe("(_value ?? '').toLowerCase()");
+      // Hooks are aggregated into a type-level script that reconstructs nested
+      // objects so unhooked siblings are preserved.
+      const hookExpr = manifest.schema?.typeHook?.create?.expr ?? "";
+      expect(hookExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
+      expect(hookExpr).toContain("(_value ?? '').trim()");
+      expect(hookExpr).toContain('(_input["profile"] || {})["displayName"]');
+      expect(hookExpr).toContain(
+        '"contact": Object.assign({}, (_input["profile"] || {})["contact"], {',
+      );
+      expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
+
+      // Validators are aggregated into a type-level validate script keyed by the
+      // dotted field path, with the boolean expression negated into a failure.
+      const validateExpr = manifest.schema?.typeValidate?.create?.expr ?? "";
+      expect(validateExpr).toContain('__errs["profile.displayName"] = "Display name is required"');
+      expect(validateExpr).toContain("if (!(((_value ?? '').length > 0)))");
+      expect(validateExpr).toContain('__errs["profile.contact.email"] = "Email must contain @"');
+      expect(manifest.schema?.typeValidate?.update?.expr).toBe(validateExpr);
     });
 
     test("handles serial configuration", () => {

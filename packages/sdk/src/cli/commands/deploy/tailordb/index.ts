@@ -1758,6 +1758,8 @@ function normalizeComparableTailorDBType(type: unknown) {
       indexes?: Record<string, unknown>;
       files?: Record<string, unknown>;
       permission?: Record<string, unknown>;
+      typeHook?: Record<string, unknown>;
+      typeValidate?: Record<string, unknown>;
     };
   } | null;
   return normalizeTailorDBCompareValue(
@@ -1771,6 +1773,10 @@ function normalizeComparableTailorDBType(type: unknown) {
         indexes: normalized?.schema?.indexes ?? {},
         files: normalized?.schema?.files ?? {},
         permission: normalized?.schema?.permission ?? {},
+        // Hooks/validators are sent as type-level scripts; include them so a
+        // changed hook or validator is detected as an update.
+        typeHook: normalized?.schema?.typeHook ?? {},
+        typeValidate: normalized?.schema?.typeValidate ?? {},
       },
     },
     [],
@@ -1802,9 +1808,16 @@ function normalizeTailorDBCompareValue(
   }
 
   if (Array.isArray(value)) {
-    return value
+    const items = value
       .map((item, index) => normalizeTailorDBCompareValue(item, [...path, index]))
       .filter((item) => item !== undefined);
+    // Field-level validators are no longer emitted by the SDK (they are aggregated
+    // into type-level type_validate). The platform still returns an empty `validate`
+    // array per field; treat it as unset so it matches the omitted local value.
+    if (items.length === 0 && path.at(-1) === "validate") {
+      return undefined;
+    }
+    return items;
   }
 
   if (!isPlainObject(value)) {

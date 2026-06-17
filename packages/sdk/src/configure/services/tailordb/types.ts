@@ -149,6 +149,7 @@ type HookFn<TValue, TData, TReturn> = (args: {
     ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
     : unknown;
   invoker: TailorPrincipal | null;
+  now: Date;
 }) => TReturn;
 
 export type Hook<TData, TReturn> = {

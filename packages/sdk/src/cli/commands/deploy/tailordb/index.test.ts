@@ -437,20 +437,21 @@ describe("planTailorDB (service level)", () => {
       const displayNameField = profileField?.fields?.displayName;
       const contactEmailField = profileField?.fields?.contact!.fields?.email;
 
-      expect(displayNameField?.validate).toHaveLength(1);
-      expect(displayNameField?.validate?.[0]?.errorMessage).toBe("Display name is required");
-      expect(displayNameField?.validate?.[0]?.script?.expr).toContain(
-        "!((_value ?? '').length > 0)",
-      );
-      expect(displayNameField?.hooks?.create?.expr).toBe("(_value ?? '').trim()");
-      expect(displayNameField?.hooks?.update?.expr).toBe("(_value ?? '').trim()");
+      // Nested field hooks/validators are aggregated into type-level scripts,
+      // never emitted per field.
+      expect(displayNameField?.hooks).toBeUndefined();
+      expect(displayNameField?.validate ?? []).toHaveLength(0);
+      expect(contactEmailField?.hooks).toBeUndefined();
+      expect(contactEmailField?.validate ?? []).toHaveLength(0);
 
-      expect(contactEmailField?.validate).toHaveLength(1);
-      expect(contactEmailField?.validate?.[0]?.errorMessage).toBe("Email must contain @");
-      expect(contactEmailField?.validate?.[0]?.script?.expr).toContain(
-        "!((_value ?? '').includes('@'))",
-      );
-      expect(contactEmailField?.hooks?.create?.expr).toBe("(_value ?? '').toLowerCase()");
+      const hookExpr = createdType?.schema?.typeHook?.create?.expr ?? "";
+      expect(hookExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
+      expect(hookExpr).toContain("(_value ?? '').trim()");
+      expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
+
+      const validateExpr = createdType?.schema?.typeValidate?.create?.expr ?? "";
+      expect(validateExpr).toContain('__errs["profile.displayName"] = "Display name is required"');
+      expect(validateExpr).toContain('__errs["profile.contact.email"] = "Email must contain @"');
     });
   });
 
