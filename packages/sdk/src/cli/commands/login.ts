@@ -11,7 +11,12 @@ import {
   initOAuth2Client,
 } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig, saveUserTokens, writePlatformConfig } from "@/cli/shared/context";
+import {
+  readPlatformConfig,
+  removeLegacyUserAlias,
+  saveUserTokens,
+  writePlatformConfig,
+} from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertDefined } from "@/utils/assert";
@@ -47,7 +52,7 @@ const startAuthServer = async () => {
         const pfConfig = await readPlatformConfig();
         await saveUserTokens(
           pfConfig,
-          userInfo.email,
+          userInfo.sub,
           {
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken ?? undefined,
@@ -55,8 +60,10 @@ const startAuthServer = async () => {
           new Date(
             assertDefined(tokens.expiresAt, "token response missing expiresAt"),
           ).toISOString(),
+          { email: userInfo.email },
         );
-        pfConfig.current_user = userInfo.email;
+        await removeLegacyUserAlias(pfConfig, userInfo.email, userInfo.sub);
+        pfConfig.current_user = userInfo.sub;
         writePlatformConfig(pfConfig);
 
         res.writeHead(200, { "Content-Type": "application/json" });

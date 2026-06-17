@@ -17,10 +17,8 @@ export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { generateUserTypes } from "./shared/type-generator";
-export type { GeneratorResult } from "@/types/plugin-generation";
-export type { PluginAttachment } from "@/types/plugin";
-export type { TailorDBType } from "@/types/tailordb";
-export type { TypeSourceInfoEntry } from "@/types/tailordb";
+export type { GeneratorResult, PluginAttachment } from "@/plugin/types";
+export type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/types/resolver.generated";
 export type { Executor } from "@/types/executor.generated";
 

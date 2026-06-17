@@ -21,6 +21,8 @@
     "check:knip": "pnpm -r run knip",
     "check:publint": "pnpm -r run publint",
     "check:jsdoc": "pnpm -r run check:public-api-jsdoc",
+    "check:zod-isolation": "pnpm -r run check:zod-isolation",
+    "check:import-cycles": "pnpm -r run check:import-cycles",
     "lint": "pnpm run build && pnpm -r run lint && pnpm run lint:vitest",
     "lint:fix": "pnpm run build && pnpm -r run lint:fix && pnpm run lint:vitest:fix",
     "lint:vitest": "oxlint --config oxlint.vitest.json .",
@@ -51,5 +53,5 @@
   "engines": {
     "node": ">= 22.14.0"
   },
-  "packageManager": "pnpm@11.5.2"
+  "packageManager": "pnpm@11.6.0"
 }
