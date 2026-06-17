@@ -339,7 +339,7 @@ Migration numbers are assigned sequentially, so two developers branching off the
 
 ### CI / CD
 
-- For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
+- For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `deploy`. `deploy` runs migrations automatically when the `migrations/` directory is configured.
 - Run `tailor-sdk tailordb migration status` in CI to detect "developer forgot to commit a migration" situations early. The exit code is non-zero only on errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 
@@ -379,7 +379,7 @@ There is no automatic down-migration. To roll back a schema/data change in produ
 2. `migration generate --name "rollback 0005 email"` produces `0006` with a removal diff.
 3. Apply.
 
-In **development workspaces**, a quicker option is to fix `0005/migrate.ts` in place, run `migration set <previous>` to re-mark it pending, and apply. Do not do this on production — it confuses migration history across environments.
+In **development workspaces**, a quicker option is to fix `0005/migrate.ts` in place, run `migration set <previous>` to re-mark it pending, and deploy. Do not do this on production — it confuses migration history across environments.
 
 ## Machine User and Permissions
 
