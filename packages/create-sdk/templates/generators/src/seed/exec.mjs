@@ -388,7 +388,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
       workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes }),
+      arg: { data: chunk.data, order: chunk.order, selfRefTypes },
       invoker: {
         namespace: authNamespace,
         machineUserName,
