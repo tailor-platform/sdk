@@ -678,6 +678,17 @@ function patternBindsName(pat: SgNode, name: string): boolean {
   return false;
 }
 
+function hasNestedPropertyPattern(pat: SgNode, name: string): boolean {
+  if (pat.kind() !== "object_pattern") return false;
+  for (const child of pat.children()) {
+    if (child.kind() !== "pair_pattern") continue;
+    const key = child.field("key");
+    if (key?.text() !== name) continue;
+    return child.field("value")?.kind() !== "identifier";
+  }
+  return false;
+}
+
 function functionRebindsName(fn: SgNode, name: string): boolean {
   const single = fn.field("parameter");
   if (single && patternBindsName(single, name)) return true;
@@ -980,6 +991,7 @@ function transformResolverBody(
   if (!pattern) return;
 
   if (pattern.kind() === "object_pattern") {
+    if (hasNestedPropertyPattern(pattern, "user")) return;
     if (hasPrincipalAssignmentTarget(body, "user")) return;
     if (hasCallerBindingConflict(pattern, body)) return;
 
@@ -1124,15 +1136,13 @@ function transformResolverBody(
         });
       } else if (k === "pair_pattern") {
         const key = child.field("key");
-        if (key && key.text() === "user") {
+        const value = child.field("value");
+        if (key && key.text() === "user" && value?.kind() === "identifier") {
           edits.push(key.replace("caller"));
-          const value = child.field("value");
-          if (value?.kind() === "identifier") {
-            principalAliasBindings.push({
-              name: value.text(),
-              bindingStart: value.range().start.index,
-            });
-          }
+          principalAliasBindings.push({
+            name: value.text(),
+            bindingStart: value.range().start.index,
+          });
         }
       }
     }
@@ -1482,15 +1492,13 @@ function transformPrincipalCallbackParam(
           });
         } else if (kind === "pair_pattern") {
           const key = child.field("key");
-          if (key?.text() === "user") {
+          const value = child.field("value");
+          if (key?.text() === "user" && value?.kind() === "identifier") {
             edits.push(key.replace("invoker"));
-            const value = child.field("value");
-            if (value?.kind() === "identifier") {
-              principalAliasBindings.push({
-                name: value.text(),
-                bindingStart: value.range().start.index,
-              });
-            }
+            principalAliasBindings.push({
+              name: value.text(),
+              bindingStart: value.range().start.index,
+            });
           }
         }
       }
@@ -1503,6 +1511,7 @@ function transformPrincipalCallbackParam(
   }
 
   if (pattern.kind() !== "object_pattern") return;
+  if (hasNestedPropertyPattern(pattern, "user")) return;
 
   let hasUserParamProperty = false;
   let renamesBinding = false;
