@@ -106,6 +106,12 @@ describe("FileUtilsPlugin", () => {
       expect(result).toContain('"receipt" | "form"');
       expect(result).toContain('User: "tailordb"');
       expect(result).toContain('SalesOrder: "tailordb"');
+      expect(result).toContain("FileDownloadStreamResponse");
+      expect(result).toContain("export async function downloadFileStream");
+      expect(result).toContain("return await file.downloadStream");
+      expect(result).not.toContain("FileStreamIterator");
+      expect(result).not.toContain("openFileDownloadStream");
+      expect(result).not.toContain("openDownloadStream");
     });
 
     test("should merge types from multiple namespaces", () => {
