@@ -3,8 +3,10 @@ import * as path from "pathe";
 import branchTemplate from "./branch.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
+// Bump on material template-structure changes (managed step ids, placeholders)
+// so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 1;
+export const TEMPLATE_VERSION = 2;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
