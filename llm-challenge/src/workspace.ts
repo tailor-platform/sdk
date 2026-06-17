@@ -6,6 +6,7 @@ import { isObject } from "./utils";
 import type { Problem, SdkProfile } from "./types";
 
 const WORKSPACE_SDK_TARBALL = ".challenge/tailor-platform-sdk.tgz";
+const WORKSPACE_CODEMOD_TARBALL = ".challenge/tailor-platform-sdk-codemod.tgz";
 const WORKSPACE_PNPM_STORE = ".pnpm-store";
 const WORKSPACE_PROMPT_PREAMBLE = `You are working in an isolated challenge workspace.
 
@@ -51,6 +52,7 @@ export async function prepareWorkspace(options: {
   problem: Problem;
   runIndex: number;
   sdkTarballPath: string;
+  codemodTarballPath?: string;
 }): Promise<RunArtifactPaths> {
   const paths = buildRunArtifactPaths(options.outputDir, options.problem, options.runIndex);
   await fs.rm(paths.artifactDir, { recursive: true, force: true });
@@ -63,7 +65,13 @@ export async function prepareWorkspace(options: {
   const sdkTarballDest = path.join(paths.worktreePath, WORKSPACE_SDK_TARBALL);
   await fs.mkdir(path.dirname(sdkTarballDest), { recursive: true });
   await fs.copyFile(options.sdkTarballPath, sdkTarballDest);
-  await ensureWorkspacePackage(paths.worktreePath);
+  if (options.codemodTarballPath !== undefined) {
+    await fs.copyFile(
+      options.codemodTarballPath,
+      path.join(paths.worktreePath, WORKSPACE_CODEMOD_TARBALL),
+    );
+  }
+  await ensureWorkspacePackage(paths.worktreePath, options.codemodTarballPath !== undefined);
   await ensurePnpmWorkspace(paths.worktreePath);
   await ensureNpmrc(paths.worktreePath);
   await fs.mkdir(path.join(paths.worktreePath, WORKSPACE_PNPM_STORE), { recursive: true });
@@ -101,7 +109,7 @@ async function copyScaffold(scaffoldPath: string, worktreePath: string): Promise
   );
 }
 
-async function ensureWorkspacePackage(worktreePath: string): Promise<void> {
+async function ensureWorkspacePackage(worktreePath: string, withCodemod: boolean): Promise<void> {
   const packageJsonPath = path.join(worktreePath, "package.json");
   const packageJson = await readJsonObject(packageJsonPath);
   packageJson.private ??= true;
@@ -118,6 +126,7 @@ async function ensureWorkspacePackage(worktreePath: string): Promise<void> {
   };
   packageJson.devDependencies = {
     ...(isObject(packageJson.devDependencies) ? packageJson.devDependencies : {}),
+    ...(withCodemod ? { "@tailor-platform/sdk-codemod": `file:${WORKSPACE_CODEMOD_TARBALL}` } : {}),
     "@types/node": "24.12.4",
     tsx: "4.21.1",
     typescript: "5.9.3",

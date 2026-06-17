@@ -9,6 +9,7 @@ export type PackedSdk = {
   sdkVersion?: string;
   fullTarballPath: string;
   noDocsTarballPath?: string;
+  codemodTarballPath: string;
   cleanup: () => Promise<void>;
 };
 
@@ -25,7 +26,9 @@ export async function packSdk(options: {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "llm-challenge-sdk-"));
   const checkoutDir = path.join(tempRoot, "repo");
   const packDir = path.join(tempRoot, "pack");
+  const codemodPackDir = path.join(tempRoot, "pack-codemod");
   await fs.mkdir(packDir, { recursive: true });
+  await fs.mkdir(codemodPackDir, { recursive: true });
 
   let worktreeCreated = false;
   try {
@@ -34,7 +37,11 @@ export async function packSdk(options: {
     });
     worktreeCreated = true;
     await runCommand("pnpm", ["install", "--frozen-lockfile"], { cwd: checkoutDir });
-    await runCommand("pnpm", ["--filter", "@tailor-platform/sdk", "build"], { cwd: checkoutDir });
+    await runCommand(
+      "pnpm",
+      ["--filter", "@tailor-platform/sdk", "--filter", "@tailor-platform/sdk-codemod", "build"],
+      { cwd: checkoutDir },
+    );
     const packageJson = JSON.parse(
       await fs.readFile(path.join(checkoutDir, "packages/sdk/package.json"), "utf8"),
     ) as { version?: string };
@@ -42,7 +49,13 @@ export async function packSdk(options: {
     await runCommand("pnpm", ["-C", "packages/sdk", "pack", "--pack-destination", packDir], {
       cwd: checkoutDir,
     });
+    await runCommand(
+      "pnpm",
+      ["-C", "packages/sdk-codemod", "pack", "--pack-destination", codemodPackDir],
+      { cwd: checkoutDir },
+    );
     const fullTarballPath = await findOnlyTarball(packDir);
+    const codemodTarballPath = await findOnlyTarball(codemodPackDir);
     const noDocsTarballPath = options.needNoDocs
       ? path.join(packDir, "tailor-platform-sdk-no-docs.tgz")
       : undefined;
@@ -55,6 +68,7 @@ export async function packSdk(options: {
       sdkVersion: packageJson.version,
       fullTarballPath,
       noDocsTarballPath,
+      codemodTarballPath,
       cleanup: async () => {
         if (worktreeCreated) {
           await runCommand("git", ["worktree", "remove", "--force", checkoutDir], {

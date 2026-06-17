@@ -141,6 +141,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         problem: task.problem,
         runIndex: task.runIndex,
         sdkTarballPath,
+        codemodTarballPath: profile === null ? undefined : packedSdk.codemodTarballPath,
       });
       try {
         const result = await runCodexInPodman({
