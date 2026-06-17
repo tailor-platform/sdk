@@ -102,6 +102,7 @@ type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
 type PfConfigV2 = z.output<typeof pfConfigSchemaV2>;
 type PfConfig = z.output<typeof pfConfigSchemaV3>;
 type PfUser = z.output<typeof pfUserSchemaV3>;
+type UserTokens = { accessToken: string; refreshToken?: string };
 type LoadWorkspaceIdOptions = {
   workspaceId?: string;
   profile?: string;
@@ -201,9 +202,22 @@ function parseKeyringPreference(value: string | undefined): boolean | undefined 
   }
 }
 
-async function shouldStoreTokensInKeyring(): Promise<boolean> {
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function trySaveTokensInKeyring(user: string, tokens: UserTokens): Promise<boolean> {
   if (parseKeyringPreference(process.env.TAILOR_USE_KEYRING) === false) return false;
-  return await isKeyringAvailable();
+  if (!(await isKeyringAvailable())) return false;
+  try {
+    await saveKeyringTokens(user, tokens);
+    return true;
+  } catch (error) {
+    logger.warn(
+      `System keyring failed to store credentials. Tokens will be stored in the config file. ${formatUnknownError(error)}`,
+    );
+    return false;
+  }
 }
 
 async function warnIfNewerConfigAvailable(config: {
@@ -582,13 +596,12 @@ export async function resolveTokens(
 export async function saveUserTokens(
   config: PfConfig,
   user: string,
-  tokens: { accessToken: string; refreshToken?: string },
+  tokens: UserTokens,
   expiresAt: string,
   metadata?: { email?: string },
 ): Promise<void> {
   const email = metadata?.email ?? config.users[user]?.email;
-  if (await shouldStoreTokensInKeyring()) {
-    await saveKeyringTokens(user, tokens);
+  if (await trySaveTokensInKeyring(user, tokens)) {
     config.users[user] = {
       token_expires_at: expiresAt,
       storage: "keyring",
