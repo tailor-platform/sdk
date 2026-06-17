@@ -48,6 +48,24 @@ function seedConfig() {
   });
 }
 
+function seedV3Config() {
+  writePlatformConfig({
+    version: 3,
+    min_sdk_version: "2.0.0",
+    users: {
+      "user-subject-1": {
+        storage: "file",
+        token_expires_at: "2099-12-31T00:00:00Z",
+        access_token: "mock-token",
+        refresh_token: undefined,
+        email: "u@example.com",
+      },
+    },
+    profiles: {},
+    current_user: "user-subject-1",
+  });
+}
+
 function stubClient() {
   vi.mocked(initOperatorClient).mockResolvedValue({
     listAvailableWorkspaceRegions: vi.fn().mockResolvedValue({ regions: ["us-west"] }),
@@ -127,6 +145,24 @@ describe("workspace create --permission", () => {
     // We do not store readonly: false; the field should be absent so the
     // YAML output stays compatible with existing v2 configs.
     expect(config.profiles.bootstrap?.readonly).toBeUndefined();
+  });
+
+  test("stores the resolved user key when --profile-user is an email in v3 config", async () => {
+    seedV3Config();
+    using _logger = silenceLogger("out", "success", "warn");
+    await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--profile-name",
+      "bootstrap",
+      "--profile-user",
+      "u@example.com",
+    ]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.bootstrap?.user).toBe("user-subject-1");
   });
 
   test("creates no profile when --permission read is passed without --profile-name", async () => {

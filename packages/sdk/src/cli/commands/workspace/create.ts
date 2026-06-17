@@ -2,7 +2,12 @@ import { arg } from "politty";
 import { z } from "zod";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
+import {
+  findConfigUserKey,
+  loadAccessToken,
+  readPlatformConfig,
+  writePlatformConfig,
+} from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import { assertDefined } from "@/utils/assert";
@@ -139,16 +144,17 @@ export const createCommand = defineAppCommand({
         throw new Error(`Profile "${profileName}" already exists.`);
       }
 
-      const profileUser = args["profile-user"] || config.current_user;
-      if (!profileUser) {
+      const requestedProfileUser = args["profile-user"] || config.current_user;
+      if (!requestedProfileUser) {
         throw new Error(
           "Current user not found. Please login or specify --profile-user to create a profile.",
         );
       }
 
-      if (!config.users[profileUser]) {
+      const profileUser = findConfigUserKey(config, requestedProfileUser);
+      if (!profileUser || !config.users[profileUser]) {
         throw new Error(
-          `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
+          `User "${requestedProfileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
         );
       }
       config.profiles[profileName] = {
