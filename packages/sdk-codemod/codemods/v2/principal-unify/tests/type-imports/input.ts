@@ -1,4 +1,4 @@
-import type { TailorUser, TailorActor, TailorInvoker } from "@tailor-platform/sdk";
+import type { TailorUser, TailorActor, TailorInvoker, TailorActorType } from "@tailor-platform/sdk";
 
 export type Props = {
   user: TailorUser;
@@ -6,4 +6,12 @@ export type Props = {
   invoker: TailorInvoker;
   nullableInvoker: TailorInvoker | null;
   invokers: TailorInvoker[];
+  actorType: TailorActorType;
 };
+
+export function actorFields(actor: TailorActor | null) {
+  return {
+    id: actor?.userId,
+    type: actor?.userType,
+  };
+}

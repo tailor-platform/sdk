@@ -4,6 +4,7 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 const TYPE_RENAME_MAP: Record<string, string> = {
   TailorUser: "TailorPrincipal",
   TailorActor: "TailorPrincipal",
+  TailorActorType: "TailorPrincipal",
   TailorInvoker: "TailorPrincipal",
 };
 
@@ -12,11 +13,23 @@ const UNAUTHENTICATED = "unauthenticatedTailorUser";
 const QUICK_FILTER_NEEDLES = [
   ...Object.keys(TYPE_RENAME_MAP),
   UNAUTHENTICATED,
+  "userId",
+  "userType",
   "createResolver",
   ".hooks",
   ".validate",
   ".parse",
 ];
+
+const ACTOR_PROPERTY_RENAME_MAP: Record<string, string> = {
+  userId: "id",
+  userType: "type",
+};
+
+const ACTOR_TYPE_LITERAL_RENAME_MAP: Record<string, string> = {
+  USER_TYPE_USER: "user",
+  USER_TYPE_MACHINE_USER: "machine_user",
+};
 
 function quickFilter(source: string): boolean {
   if (!source.includes("@tailor-platform/sdk")) return false;
@@ -58,8 +71,166 @@ function principalPropertyReplacement(node: SgNode, name: string): string {
   return parent && isOptionalizableMemberObject(parent) ? `${name}?` : name;
 }
 
+function addActorPropertyReplacement(
+  property: SgNode,
+  edits: Edit[],
+  transformedActorPropertyStarts: Set<number>,
+): void {
+  const newName = ACTOR_PROPERTY_RENAME_MAP[property.text()];
+  if (!newName) return;
+  const start = property.range().start.index;
+  if (transformedActorPropertyStarts.has(start)) return;
+  transformedActorPropertyStarts.add(start);
+  edits.push(property.replace(newName));
+}
+
+function actorTypeLiteralReplacement(literal: SgNode): string | null {
+  const match = literal
+    .text()
+    .match(/^(['"])(USER_TYPE_USER|USER_TYPE_MACHINE_USER|USER_TYPE_UNSPECIFIED)\1$/);
+  if (!match) return null;
+  const [, quote, value] = match;
+  if (value === "USER_TYPE_UNSPECIFIED") return "undefined";
+  return `${quote}${ACTOR_TYPE_LITERAL_RENAME_MAP[value]!}${quote}`;
+}
+
+function isTransformedActorTypeMember(
+  node: SgNode,
+  transformedActorPropertyStarts: Set<number>,
+): boolean {
+  if (node.kind() !== "member_expression") return false;
+  const property = node.field("property");
+  return (
+    property?.text() === "userType" &&
+    transformedActorPropertyStarts.has(property.range().start.index)
+  );
+}
+
+function transformActorTypeComparisonLiterals(
+  root: SgNode,
+  edits: Edit[],
+  transformedActorPropertyStarts: Set<number>,
+): void {
+  if (transformedActorPropertyStarts.size === 0) return;
+  const transformedLiteralStarts = new Set<number>();
+  const binaries = root.findAll({ rule: { kind: "binary_expression" } });
+  for (const binary of binaries) {
+    if (
+      !binary
+        .children()
+        .some((child) => isTransformedActorTypeMember(child, transformedActorPropertyStarts))
+    ) {
+      continue;
+    }
+    for (const child of binary.children()) {
+      if (child.kind() !== "string") continue;
+      const replacement = actorTypeLiteralReplacement(child);
+      if (!replacement) continue;
+      const start = child.range().start.index;
+      if (transformedLiteralStarts.has(start)) continue;
+      transformedLiteralStarts.add(start);
+      edits.push(child.replace(replacement));
+    }
+  }
+}
+
+function transformActorBindingMemberAccesses(
+  root: SgNode,
+  binding: PrincipalLocalBinding,
+  edits: Edit[],
+  transformedActorPropertyStarts: Set<number>,
+): void {
+  const refs = root.findAll({
+    rule: { kind: "identifier", regex: `^${escapeRegex(binding.name)}$` },
+  });
+  for (const ref of refs) {
+    const parent = ref.parent();
+    if (!parent || parent.kind() !== "member_expression") continue;
+    const object = parent.field("object");
+    if (!object || object.range().start.index !== ref.range().start.index) continue;
+    const property = parent.field("property");
+    if (!property || property.kind() !== "property_identifier") continue;
+    if (!ACTOR_PROPERTY_RENAME_MAP[property.text()]) continue;
+    const pos = ref.range().start.index;
+    if (isShadowedLocalReference(root, binding.name, pos, binding.bindingStart)) continue;
+    addActorPropertyReplacement(property, edits, transformedActorPropertyStarts);
+  }
+}
+
+function isTailorActorTypeReference(node: SgNode, actorTypeLocalNames: Set<string>): boolean {
+  const typeAnnotation = node.field("type");
+  if (!typeAnnotation) return false;
+  const typeIds = typeAnnotation.findAll({ rule: { kind: "type_identifier" } });
+  return typeIds.some((id) => actorTypeLocalNames.has(id.text()));
+}
+
+function transformTailorActorTypedMemberAccesses(
+  root: SgNode,
+  actorTypeLocalNames: Set<string>,
+  edits: Edit[],
+  transformedActorPropertyStarts: Set<number>,
+): void {
+  if (actorTypeLocalNames.size === 0) return;
+
+  for (const kind of NESTED_FN_KINDS) {
+    const fns = root.findAll({ rule: { kind } });
+    for (const fn of fns) {
+      const param = getFirstFunctionParam(fn);
+      if (!param || !isTailorActorTypeReference(param, actorTypeLocalNames)) continue;
+      const pattern = getFunctionParamPattern(param);
+      const body = fn.field("body");
+      if (!pattern || pattern.kind() !== "identifier" || !body) continue;
+      transformActorBindingMemberAccesses(
+        body,
+        { name: pattern.text(), bindingStart: pattern.range().start.index },
+        edits,
+        transformedActorPropertyStarts,
+      );
+    }
+  }
+
+  const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of declarators) {
+    if (!isTailorActorTypeReference(decl, actorTypeLocalNames)) continue;
+    const name = decl.field("name");
+    if (!name || name.kind() !== "identifier") continue;
+    transformActorBindingMemberAccesses(
+      root,
+      { name: name.text(), bindingStart: name.range().start.index },
+      edits,
+      transformedActorPropertyStarts,
+    );
+  }
+}
+
+function transformExecutorCtxActorAccesses(
+  body: SgNode,
+  ctxName: string,
+  ctxShadowRanges: Array<[number, number]>,
+  edits: Edit[],
+  transformedActorPropertyStarts: Set<number>,
+): void {
+  const properties = body.findAll({
+    rule: { kind: "property_identifier", regex: "^(userId|userType)$" },
+  });
+  for (const property of properties) {
+    const parent = property.parent();
+    if (!parent || parent.kind() !== "member_expression") continue;
+    const object = parent.field("object");
+    if (!object || object.kind() !== "member_expression") continue;
+    const actorProperty = object.field("property");
+    if (actorProperty?.text() !== "actor") continue;
+    const ctxObject = object.field("object");
+    if (!ctxObject || ctxObject.kind() !== "identifier" || ctxObject.text() !== ctxName) continue;
+    const pos = ctxObject.range().start.index;
+    if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
+    addActorPropertyReplacement(property, edits, transformedActorPropertyStarts);
+  }
+}
+
 function renamedTypeIdentifierText(name: string): string | null {
   if (name === "TailorInvoker") return "(TailorPrincipal | null)";
+  if (name === "TailorActorType") return 'TailorPrincipal["type"]';
   return TYPE_RENAME_MAP[name] ?? null;
 }
 
@@ -111,6 +282,7 @@ function rebuildImportStatement(
   globalEmittedRenamed: Set<string>,
   unauthenticatedLocalNames: Set<string>,
   nullableInvokerAliasLocalNames: Set<string>,
+  actorTypeAliasLocalNames: Set<string>,
 ): ImportRewriteResult {
   const importText = importStmt.text();
   const isImportType = /^\s*import\s+type\b/.test(importText);
@@ -129,19 +301,22 @@ function rebuildImportStatement(
     if (renamed) {
       touched = true;
       const dropsAliasForNullableInvoker = importedName === "TailorInvoker" && !!aliasNode;
+      const dropsAliasForActorType = importedName === "TailorActorType" && !!aliasNode;
+      const dropsAliasForExpandedType = dropsAliasForNullableInvoker || dropsAliasForActorType;
       if (dropsAliasForNullableInvoker) nullableInvokerAliasLocalNames.add(localName);
-      const finalLocal = dropsAliasForNullableInvoker ? renamed : (aliasNode?.text() ?? renamed);
+      if (dropsAliasForActorType) actorTypeAliasLocalNames.add(localName);
+      const finalLocal = dropsAliasForExpandedType ? renamed : (aliasNode?.text() ?? renamed);
       if (seenLocal.has(finalLocal)) continue;
       // Cross-statement dedupe for non-aliased renames so a file with
       // `import { TailorUser } from "@tailor-platform/sdk"` and
       // `import { TailorActor } from "@tailor-platform/sdk"` does not collapse to
       // two duplicate `import { TailorPrincipal } ...` lines.
-      if ((!aliasNode || dropsAliasForNullableInvoker) && globalEmittedRenamed.has(renamed)) {
+      if ((!aliasNode || dropsAliasForExpandedType) && globalEmittedRenamed.has(renamed)) {
         continue;
       }
       seenLocal.add(finalLocal);
-      if (!aliasNode || dropsAliasForNullableInvoker) globalEmittedRenamed.add(renamed);
-      const asPart = aliasNode && !dropsAliasForNullableInvoker ? ` as ${aliasNode.text()}` : "";
+      if (!aliasNode || dropsAliasForExpandedType) globalEmittedRenamed.add(renamed);
+      const asPart = aliasNode && !dropsAliasForExpandedType ? ` as ${aliasNode.text()}` : "";
       newSpecTexts.push(`${isTypeOnly ? "type " : ""}${renamed}${asPart}`);
     } else if (importedName === UNAUTHENTICATED) {
       touched = true;
@@ -635,6 +810,83 @@ function getFirstFunctionParam(fn: SgNode): SgNode | null {
 function getFunctionParamPattern(param: SgNode): SgNode | null {
   if (param.kind() === "object_pattern" || param.kind() === "identifier") return param;
   return param.field("pattern");
+}
+
+function findExecutorBodyFunctions(call: SgNode): SgNode[] {
+  const args = call.field("arguments");
+  const objArg = args?.children().find((c: SgNode) => c.kind() === "object");
+  if (!objArg) return [];
+
+  const functions: SgNode[] = [];
+  const visitObject = (object: SgNode): void => {
+    for (const child of object.children()) {
+      if (child.kind() === "method_definition") {
+        if (propertyName(child) === "body") functions.push(child);
+        continue;
+      }
+      if (child.kind() !== "pair") continue;
+
+      const value = child.field("value");
+      if (!value) continue;
+      if (child.field("key")?.text() === "body" && isFunctionNode(value)) {
+        functions.push(value);
+      } else if (value.kind() === "object") {
+        visitObject(value);
+      }
+    }
+  };
+
+  visitObject(objArg);
+  return functions;
+}
+
+function transformExecutorBodyActorAccesses(
+  fn: SgNode,
+  edits: Edit[],
+  transformedActorPropertyStarts: Set<number>,
+): void {
+  const param = getFirstFunctionParam(fn);
+  const pattern = param ? getFunctionParamPattern(param) : null;
+  const body = fn.field("body");
+  if (!pattern || !body) return;
+
+  if (pattern.kind() === "identifier") {
+    const ctxName = pattern.text();
+    const ctxShadowRanges = collectCtxShadowRanges(body, ctxName, fn);
+    transformExecutorCtxActorAccesses(
+      body,
+      ctxName,
+      ctxShadowRanges,
+      edits,
+      transformedActorPropertyStarts,
+    );
+    return;
+  }
+
+  if (pattern.kind() !== "object_pattern") return;
+
+  for (const child of pattern.children()) {
+    const kind = child.kind();
+    if (kind === "shorthand_property_identifier_pattern" && child.text() === "actor") {
+      transformActorBindingMemberAccesses(
+        body,
+        { name: "actor", bindingStart: child.range().start.index },
+        edits,
+        transformedActorPropertyStarts,
+      );
+    } else if (kind === "pair_pattern") {
+      const key = child.field("key");
+      const value = child.field("value");
+      if (key?.text() === "actor" && value?.kind() === "identifier") {
+        transformActorBindingMemberAccesses(
+          body,
+          { name: value.text(), bindingStart: value.range().start.index },
+          edits,
+          transformedActorPropertyStarts,
+        );
+      }
+    }
+  }
 }
 
 interface LocalCallbackTypeBinding {
@@ -1415,6 +1667,7 @@ function transformParseArgsObject(
  * - Replaces standalone references to `unauthenticatedTailorUser` with `null`. Member-access
  *   forms like `unauthenticatedTailorUser.id` are left alone on purpose so the resulting TS
  *   error after the import is removed points the author at the broken access.
+ * - Rewrites actor member accesses from `userId` / `userType` to `id` / `type`.
  * - Renames `user` to `caller` for top-level destructured resolver bodies (`{ input, user }`),
  *   handles aliased pairs (`{ user: currentUser }`) by rewriting only the property name, and
  *   rewrites `<ctx>.user` for non-destructured single-param bodies — respecting variable
@@ -1442,13 +1695,21 @@ export default function transform(source: string): string | null {
   // even when the file also imports something else from the SDK.
   const sdkRenameSourceNames = new Set<string>();
   const nullableInvokerAliasLocalNames = new Set<string>();
+  const actorTypeAliasLocalNames = new Set<string>();
+  const actorTypeLocalNames = new Set<string>();
   for (const importStmt of sdkImports) {
     for (const { importedName, aliasNode, localName } of iterateImportSpecs(importStmt)) {
       if (TYPE_RENAME_MAP[importedName] && !aliasNode) {
         sdkRenameSourceNames.add(importedName);
       }
+      if (importedName === "TailorActor") {
+        actorTypeLocalNames.add(localName);
+      }
       if (importedName === "TailorInvoker" && aliasNode) {
         nullableInvokerAliasLocalNames.add(localName);
+      }
+      if (importedName === "TailorActorType" && aliasNode) {
+        actorTypeAliasLocalNames.add(localName);
       }
     }
   }
@@ -1464,10 +1725,19 @@ export default function transform(source: string): string | null {
       ? renamedTypeIdentifierText(id.text())
       : nullableInvokerAliasLocalNames.has(id.text())
         ? renamedTypeIdentifierText("TailorInvoker")
-        : null;
+        : actorTypeAliasLocalNames.has(id.text())
+          ? renamedTypeIdentifierText("TailorActorType")
+          : null;
     if (!newName) continue;
     edits.push(id.replace(newName));
   }
+  const transformedActorPropertyStarts = new Set<number>();
+  transformTailorActorTypedMemberAccesses(
+    tree,
+    actorTypeLocalNames,
+    edits,
+    transformedActorPropertyStarts,
+  );
 
   let importRemoved = false;
   const globalEmittedRenamed = new Set<string>();
@@ -1481,6 +1751,7 @@ export default function transform(source: string): string | null {
       globalEmittedRenamed,
       unauthenticatedLocalNames,
       nullableInvokerAliasLocalNames,
+      actorTypeAliasLocalNames,
     );
     if (!touched) continue;
     edits.push(importStmt.replace(newText));
@@ -1509,11 +1780,15 @@ export default function transform(source: string): string | null {
   // and unrelated local helpers named `createResolver` (when the SDK import
   // does not actually bring `createResolver` in) are not.
   const createResolverLocalNames = new Set<string>();
+  const createExecutorLocalNames = new Set<string>();
   const sdkFieldRootNames = new Set<string>();
   for (const importStmt of sdkImports) {
     for (const { importedName, localName } of iterateImportSpecs(importStmt)) {
       if (importedName === "createResolver") {
         createResolverLocalNames.add(localName);
+      }
+      if (importedName === "createExecutor") {
+        createExecutorLocalNames.add(localName);
       }
       if (importedName === "t" || importedName === "db") {
         sdkFieldRootNames.add(localName);
@@ -1541,6 +1816,29 @@ export default function transform(source: string): string | null {
       if (arrow) transformResolverBody(arrow, edits);
     }
   }
+  for (const localName of createExecutorLocalNames) {
+    const shadowRanges = collectAllShadowRanges(tree, localName);
+    const calls = tree.findAll({
+      rule: {
+        kind: "call_expression",
+        has: {
+          field: "function",
+          kind: "identifier",
+          regex: `^${escapeRegex(localName)}$`,
+        },
+      },
+    });
+    for (const call of calls) {
+      const callee = call.field("function");
+      if (!callee) continue;
+      const pos = callee.range().start.index;
+      if (isInsideAnyRange(pos, shadowRanges)) continue;
+      for (const fn of findExecutorBodyFunctions(call)) {
+        transformExecutorBodyActorAccesses(fn, edits, transformedActorPropertyStarts);
+      }
+    }
+  }
+  transformActorTypeComparisonLiterals(tree, edits, transformedActorPropertyStarts);
 
   const sdkFieldLocalBindings = collectSdkFieldLocalBindings(tree, sdkFieldRootNames);
   const callbackBindings = collectLocalCallbackBindings(tree);
