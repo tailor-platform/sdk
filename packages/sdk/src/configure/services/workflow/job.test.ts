@@ -60,6 +60,39 @@ describe("WorkflowJob type inference", () => {
     });
   });
 
+  test("direct body calls work when process.getBuiltinModule is unavailable", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, "getBuiltinModule");
+    Object.defineProperty(process, "getBuiltinModule", {
+      configurable: true,
+      value: undefined,
+    });
+    try {
+      const invoker: TailorPrincipal = {
+        id: "principal-1",
+        type: "user",
+        workspaceId: "workspace-1",
+        attributes: {},
+        attributeList: [],
+      };
+      const child = createWorkflowJob({
+        name: "capture-child-invoker-without-get-builtin-module",
+        body: (_input: undefined, context) => context.invoker?.id ?? "anonymous",
+      });
+      const parent = createWorkflowJob({
+        name: "propagate-parent-invoker-without-get-builtin-module",
+        body: async () => await child.trigger(),
+      });
+
+      await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(process, "getBuiltinModule", descriptor);
+      } else {
+        delete (process as { getBuiltinModule?: unknown }).getBuiltinModule;
+      }
+    }
+  });
+
   test("direct body calls propagate invoker to triggered child jobs", async () => {
     const invoker: TailorPrincipal = {
       id: "principal-1",

@@ -9,6 +9,7 @@
  * it from nested Vitest configs that do not resolve `@/` aliases.
  * @internal
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { TailorEnv, TailorPrincipal } from "../../../runtime/types";
 
 const SLOT_KEY = "__tailorWorkflowTestEnv";
@@ -22,9 +23,6 @@ let invokerStorage: AsyncLocalStorageLike<TailorPrincipal | null> | undefined;
 
 function workflowInvokerStorage(): AsyncLocalStorageLike<TailorPrincipal | null> {
   if (!invokerStorage) {
-    const { AsyncLocalStorage } = process.getBuiltinModule("node:async_hooks") as {
-      AsyncLocalStorage: new <T>() => AsyncLocalStorageLike<T>;
-    };
     invokerStorage = new AsyncLocalStorage<TailorPrincipal | null>();
   }
   return invokerStorage;
