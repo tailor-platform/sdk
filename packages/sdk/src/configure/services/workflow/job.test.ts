@@ -10,7 +10,7 @@ describe("WorkflowJob type inference", () => {
       name: "test",
       body: () => ({ status: "ok" as const, count: 42 }),
     });
-    type Output = Awaited<ReturnType<typeof _job.trigger>>;
+    type Output = ReturnType<typeof _job.trigger>;
     expectTypeOf<Output>().toEqualTypeOf<{ status: "ok"; count: number }>();
   });
 
@@ -45,7 +45,7 @@ describe("WorkflowJob type inference", () => {
       name: "test",
       body: (): UserOutput => ({ id: "123", created: true }),
     });
-    type Output = Awaited<ReturnType<typeof _job.trigger>>;
+    type Output = ReturnType<typeof _job.trigger>;
     expectTypeOf<Output>().toEqualTypeOf<UserOutput>();
   });
 
@@ -229,7 +229,7 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: () => ({ result: "ok", count: 42, active: true as boolean }),
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{
+      expectTypeOf(job.trigger).returns.toEqualTypeOf<{
         result: string;
         count: number;
         active: boolean;
@@ -246,7 +246,7 @@ describe("WorkflowJob type constraints", () => {
           },
         }),
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{
+      expectTypeOf(job.trigger).returns.toEqualTypeOf<{
         data: {
           id: string;
           tags: string[];
@@ -259,7 +259,7 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: () => undefined,
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<undefined>();
+      expectTypeOf(job.trigger).returns.toEqualTypeOf<undefined>();
     });
 
     test("returns T | undefined for T | undefined output", () => {
@@ -269,7 +269,7 @@ describe("WorkflowJob type constraints", () => {
           return Math.random() > 0.5 ? { value: 1 } : undefined;
         },
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{ value: number } | undefined>();
+      expectTypeOf(job.trigger).returns.toEqualTypeOf<{ value: number } | undefined>();
     });
   });
 
@@ -279,7 +279,7 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: () => ({ result: "ok" }),
       });
-      const _trigger: () => Promise<{ result: string }> = job.trigger;
+      const _trigger: () => { result: string } = job.trigger;
       expectTypeOf(_trigger).toBeFunction();
     });
 
@@ -288,7 +288,7 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: (input: { id: string }) => ({ result: input.id }),
       });
-      const _trigger: (input: { id: string }) => Promise<{ result: string }> = job.trigger;
+      const _trigger: (input: { id: string }) => { result: string } = job.trigger;
       expectTypeOf(_trigger).toBeFunction();
     });
   });
@@ -305,7 +305,7 @@ describe("WorkflowJob type constraints", () => {
     test("trigger return preserves Output as-is", () => {
       type Job = WorkflowJob<"test", undefined, { id: string; result: string }>;
 
-      expectTypeOf<ReturnType<Job["trigger"]>>().resolves.toEqualTypeOf<{
+      expectTypeOf<ReturnType<Job["trigger"]>>().toEqualTypeOf<{
         id: string;
         result: string;
       }>();
@@ -380,41 +380,24 @@ describe("WorkflowJob type constraints", () => {
 });
 
 // Plain `node` environment (no `tailor-runtime`, no `mockWorkflow()`), so
-// `.trigger()` exercises the no-shim fallback.
-describe("trigger fallback without tailor.workflow", () => {
-  test("runs the registered job body locally", async () => {
+// `.trigger()` should not execute job bodies locally.
+describe("trigger without tailor.workflow", () => {
+  test("job trigger throws instead of running the registered body", () => {
     const double = createWorkflowJob({
       name: "fallback-double",
       body: (input: { n: number }) => ({ doubled: input.n * 2 }),
     });
 
-    expect(await double.trigger({ n: 21 })).toEqual({ doubled: 42 });
+    expect(() => double.trigger({ n: 21 })).toThrow(/tailor\.workflow is not available/);
   });
 
-  test("runs the whole chain via workflow.mainJob.trigger()", async () => {
-    const inner = createWorkflowJob({
-      name: "fallback-inner",
-      body: (input: { n: number }) => ({ n: input.n + 1 }),
-    });
+  test("workflow trigger rejects instead of running the main job", async () => {
     const main = createWorkflowJob({
       name: "fallback-main",
-      body: async (input: { n: number }) => {
-        const a = await inner.trigger({ n: input.n });
-        const b = await inner.trigger({ n: a.n });
-        return { total: b.n };
-      },
+      body: (input: { n: number }) => ({ total: input.n + 1 }),
     });
     const workflow = createWorkflow({ name: "fallback-wf", mainJob: main });
 
-    expect(await workflow.mainJob.trigger({ n: 0 })).toEqual({ total: 2 });
-  });
-
-  test("enforces the JSON boundary on the fallback path", async () => {
-    const bad = createWorkflowJob({
-      name: "fallback-bad",
-      body: () => ({ when: new Date() }) as never,
-    });
-
-    await expect(bad.trigger()).rejects.toThrow(/Date instance/);
+    await expect(workflow.trigger({ n: 0 })).rejects.toThrow(/tailor\.workflow is not available/);
   });
 });

@@ -307,7 +307,6 @@ const operatorClient = await initOperatorClient(accessToken);
         workspaceId,
         name: "truncate-idp-user.ts",
         code: idpTruncateCode,
-        arg: JSON.stringify({}),
         invoker: {
           namespace: authNamespace,
           machineUserName,
@@ -501,7 +500,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
       workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes }),
+      arg: { data: chunk.data, order: chunk.order, selfRefTypes },
       invoker: {
         namespace: authNamespace,
         machineUserName,
@@ -596,7 +595,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
         workspaceId,
         name: "seed-idp-user.ts",
         code: idpSeedCode,
-        arg: JSON.stringify({ users: rows }),
+        arg: { users: rows },
         invoker: {
           namespace: authNamespace,
           machineUserName,

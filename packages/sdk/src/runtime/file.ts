@@ -39,13 +39,6 @@ export interface FileMetadata {
   lastUploadedAt?: string;
 }
 
-/** Stream metadata (first chunk emitted by {@link openDownloadStream}). */
-export interface StreamMetadata {
-  contentType: string;
-  fileSize: number;
-  sha256sum: string;
-}
-
 /** Upload options. */
 export interface FileUploadOptions {
   contentType?: string;
@@ -78,18 +71,6 @@ export interface FileDownloadAsBase64Response {
 export interface FileDownloadStreamResponse {
   body: ReadableStream<Uint8Array>;
   metadata: DownloadMetadata;
-}
-
-/** Stream chunk types emitted by {@link FileStreamIterator}. */
-export type StreamValue =
-  | { type: "metadata"; metadata: StreamMetadata }
-  | { type: "chunk"; data: Uint8Array; position: number }
-  | { type: "complete" };
-
-/** Stream iterator returned by {@link openDownloadStream}. */
-export interface FileStreamIterator extends AsyncIterableIterator<StreamValue> {
-  next(): Promise<IteratorResult<StreamValue>>;
-  close(): Promise<void>;
 }
 
 /** Error code emitted by {@link TailorDBFileError}. */
@@ -207,22 +188,6 @@ export interface TailorDBFileAPI {
   ): Promise<FileMetadata>;
 
   /**
-   * Open a download stream for large files.
-   * @deprecated Use {@link downloadStream} instead.
-   * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB type name
-   * @param fieldName - File field name on the type
-   * @param recordId - Record ID owning the field
-   * @returns Async iterator yielding file chunks; call `close()` to release resources
-   */
-  openDownloadStream(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-  ): Promise<FileStreamIterator>;
-
-  /**
    * Download a file as a ReadableStream.
    * @param namespace - TailorDB namespace
    * @param typeName - TailorDB type name
@@ -295,15 +260,6 @@ export const deleteFile: TailorDBFileAPI["delete"] = (...args) => api().delete(.
  * @returns Metadata for the stored file
  */
 export const getMetadata: TailorDBFileAPI["getMetadata"] = (...args) => api().getMetadata(...args);
-
-/**
- * See {@link TailorDBFileAPI.openDownloadStream}.
- * @deprecated Use {@link downloadStream} instead.
- * @param args - Forwarded to {@link TailorDBFileAPI.openDownloadStream}
- * @returns Async iterator yielding file chunks; call `close()` to release resources
- */
-export const openDownloadStream: TailorDBFileAPI["openDownloadStream"] = (...args) =>
-  api().openDownloadStream(...args);
 
 /**
  * See {@link TailorDBFileAPI.downloadStream}.

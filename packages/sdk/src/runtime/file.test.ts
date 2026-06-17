@@ -98,28 +98,8 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     ]);
   });
 
-  test("openDownloadStream forwards and yields StreamValue chunks", async () => {
-    using fileM = mockFile();
-    const sequence: file.StreamValue[] = [
-      {
-        type: "metadata",
-        metadata: { contentType: "application/octet-stream", fileSize: 2, sha256sum: "h" },
-      },
-      { type: "chunk", data: new Uint8Array([1]), position: 0 },
-      { type: "chunk", data: new Uint8Array([2]), position: 1 },
-      { type: "complete" },
-    ];
-    fileM.enqueueResult(sequence);
-
-    const stream = await file.openDownloadStream("ns", "Doc", "blob", "rec-1");
-
-    const chunks: file.StreamValue[] = [];
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks).toEqual(sequence);
-    expect(fileM.calls[0]?.method).toBe("openDownloadStream");
+  test("does not export the removed openDownloadStream wrapper", () => {
+    expect("openDownloadStream" in file).toBe(false);
   });
 
   test("downloadStream forwards and returns body with metadata", async () => {

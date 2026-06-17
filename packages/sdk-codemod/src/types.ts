@@ -18,8 +18,14 @@ export interface CodemodPackage {
   language?: string;
   /** Custom file glob patterns. Defaults to TypeScript patterns when omitted. */
   filePatterns?: string[];
-  /** Legacy patterns to detect in unmodified files for manual migration warnings. */
-  legacyPatterns?: string[];
+  /**
+   * Patterns to detect in post-transform file content for manual migration
+   * warnings. A plain string warns when that substring is present; a
+   * `string[]` group warns only when every substring in the group is present
+   * (AND), letting a rule target a co-occurrence such as `executeScript` used
+   * together with `JSON.stringify`.
+   */
+  legacyPatterns?: Array<string | string[]>;
   /**
    * Substrings that, when present in a file's post-transform content, mark it
    * as a candidate for LLM-assisted review. Use this for migrations the

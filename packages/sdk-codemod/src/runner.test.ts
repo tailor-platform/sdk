@@ -25,7 +25,7 @@ function makeCodemod(
   id: string,
   scriptPath: string,
   filePatterns?: string[],
-  legacyPatterns?: string[],
+  legacyPatterns?: Array<string | string[]>,
   extra?: Pick<CodemodPackage, "suspiciousPatterns" | "prompt">,
 ): CodemodPackage {
   return {
@@ -411,6 +411,41 @@ describe("runCodemods", () => {
       );
 
       expect(result.llmReviews).toEqual([]);
+    });
+
+    test("AND-group legacy pattern warns only when every substring co-occurs", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-and-group-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "both.ts"),
+        "executeScript({ arg: payload });\nconst s = JSON.stringify(x);\n",
+        "utf-8",
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "only-stringify.ts"),
+        "const s = JSON.stringify(x);\n",
+        "utf-8",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod(
+              "test/and-group",
+              partialTransformPath,
+              ["**/*.ts"],
+              [["executeScript", "JSON.stringify"]],
+            ),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual([
+        "both.ts: contains executeScript + JSON.stringify but was not migrated automatically (rule: test/and-group). Manual migration may be needed.",
+      ]);
     });
   });
 });
