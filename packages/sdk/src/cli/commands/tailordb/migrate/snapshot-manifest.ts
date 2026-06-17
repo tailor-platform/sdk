@@ -186,6 +186,23 @@ export function generateTailorDBTypeManifestFromSnapshot(
 }
 
 /**
+ * Field-level create-hook placeholder kept solely so the platform treats a
+ * required field as optional in the GraphQL Create input (it derives that from
+ * the presence of a field-level create hook, not from type_hook). The real hook
+ * logic runs in type_hook, which executes after field hooks and overwrites the
+ * value — so this passthrough's result is always replaced.
+ */
+const CREATE_INPUT_OPTIONAL_PLACEHOLDER = "_value";
+
+function createInputOptionalHook(
+  config: Pick<SnapshotFieldConfig, "hooks">,
+): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
+  return config.hooks?.create
+    ? { hooks: { create: { expr: CREATE_INPUT_OPTIONAL_PLACEHOLDER } } }
+    : {};
+}
+
+/**
  * Convert a snapshot field config to proto format
  * @param {SnapshotFieldConfig} config - Snapshot field config
  * @returns {MessageInitShape<typeof TailorDBType_FieldConfigSchema>} Proto field config
@@ -193,8 +210,9 @@ export function generateTailorDBTypeManifestFromSnapshot(
 export function convertFieldConfigToProto(
   config: SnapshotFieldConfig,
 ): MessageInitShape<typeof TailorDBType_FieldConfigSchema> {
-  // Field-level hooks/validators are not sent per field: they are aggregated
-  // into type-level type_hook/type_validate scripts (see buildTypeScripts).
+  // Field hook/validator logic is aggregated into type-level type_hook/type_validate
+  // scripts (see buildTypeScripts). Only a create-hook placeholder is kept per field,
+  // to preserve GraphQL Create-input optionality.
   const fieldEntry: MessageInitShape<typeof TailorDBType_FieldConfigSchema> = {
     type: config.type,
     allowedValues:
@@ -210,6 +228,7 @@ export function convertFieldConfigToProto(
     foreignKeyField: config.foreignKeyField,
     required: config.required,
     vector: config.vector ?? false,
+    ...createInputOptionalHook(config),
     ...(config.serial && {
       serial: {
         start: BigInt(config.serial.start),
@@ -272,6 +291,7 @@ function processNestedFieldsFromSnapshot(
         unique: false,
         foreignKey: false,
         vector: false,
+        ...createInputOptionalHook(fieldConfig),
         ...(fieldConfig.serial && {
           serial: {
             start: BigInt(fieldConfig.serial.start),

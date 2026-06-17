@@ -311,8 +311,10 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
-      // Field-level hooks are no longer emitted per field.
-      expect(manifest.schema?.fields?.updatedAt?.hooks).toBeUndefined();
+      // Per field, only a create-hook placeholder remains (to keep the field
+      // optional in the Create input); the real logic moves to type_hook.
+      expect(manifest.schema?.fields?.updatedAt?.hooks?.create?.expr).toBe("_value");
+      expect(manifest.schema?.fields?.updatedAt?.hooks?.update).toBeUndefined();
 
       // They are aggregated into a single type-level script that binds a shared
       // timestamp once and dispatches each field's hook.
@@ -374,10 +376,11 @@ describe("snapshot-manifest", () => {
       const displayNameField = profileField?.fields?.displayName;
       const emailField = profileField?.fields?.contact?.fields?.email;
 
-      // Nested field hooks/validators are not emitted per field.
-      expect(displayNameField?.hooks).toBeUndefined();
+      // Nested fields keep only a create-hook placeholder; validators are not
+      // emitted per field.
+      expect(displayNameField?.hooks?.create?.expr).toBe("_value");
       expect(displayNameField?.validate ?? []).toHaveLength(0);
-      expect(emailField?.hooks).toBeUndefined();
+      expect(emailField?.hooks?.create?.expr).toBe("_value");
       expect(emailField?.validate ?? []).toHaveLength(0);
 
       // Hooks are aggregated into a type-level script that reconstructs nested
