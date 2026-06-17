@@ -1,4 +1,4 @@
-import { IdPLang, IdPPermissionPermit } from "@tailor-proto/tailor/v1/idp_resource_pb";
+import { IdPLang, IdPPermissionPermit } from "@tailor-platform/tailor-proto/idp_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { planIdP } from "./idp";
 import type { Application } from "#src/cli/services/application";

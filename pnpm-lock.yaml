@@ -531,6 +531,9 @@ importers:
       '@opentelemetry/sdk-trace-base':
         specifier: 2.8.0
         version: 2.8.0(@opentelemetry/api@1.9.1)
+      '@tailor-platform/tailor-proto':
+        specifier: workspace:^
+        version: link:../tailor-proto
       '@types/madge':
         specifier: 5.0.3
         version: 5.0.3

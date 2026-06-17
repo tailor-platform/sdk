@@ -1,4 +1,4 @@
-import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 /**
  * Check if workflow execution status is terminal.

@@ -4,7 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#src/cli/services/application";
 import { logger } from "#src/cli/shared/logger";

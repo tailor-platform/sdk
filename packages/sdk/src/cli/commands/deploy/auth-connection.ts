@@ -1,6 +1,6 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { AuthConnection_Type } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { AuthConnection_Type } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { type AuthService } from "#src/cli/services/auth/service";
 import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
 import { createChangeSet } from "./change-set";
@@ -18,9 +18,9 @@ import type { ApplyPhase } from "./phase";
 import type {
   CreateAuthConnectionRequestSchema,
   DeleteAuthConnectionRequestSchema,
-} from "@tailor-proto/tailor/v1/auth_pb";
-import type { AuthConnection } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "@tailor-platform/tailor-proto/auth_pb";
+import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 type CreateConnection = {
   name: string;

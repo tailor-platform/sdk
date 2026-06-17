@@ -22,7 +22,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { create } from "@bufbuild/protobuf";
-import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import {
+  AuthInvokerSchema,
+  type AuthInvoker,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, test, expect, beforeAll } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";

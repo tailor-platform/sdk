@@ -21,12 +21,12 @@ import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "#src/types/workfl
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
-import type { CreateWorkflowRequestSchema } from "@tailor-proto/tailor/v1/workflow_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+import type { CreateWorkflowRequestSchema } from "@tailor-platform/tailor-proto/workflow_pb";
 import type {
   ConcurrencyPolicySchema,
   RetryPolicySchema,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 /**
  * Apply workflow changes for the given phase.

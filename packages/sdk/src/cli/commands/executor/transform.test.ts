@@ -4,7 +4,7 @@ import {
   ExecutorJobStatus,
   ExecutorTargetType,
   ExecutorTriggerType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, expect, test } from "vitest";
 import {
   toExecutorInfo,
@@ -17,7 +17,7 @@ import type {
   ExecutorExecutor,
   ExecutorJob,
   ExecutorJobAttempt,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
 
 describe("transform", () => {
   describe("toExecutorJobListInfo", () => {

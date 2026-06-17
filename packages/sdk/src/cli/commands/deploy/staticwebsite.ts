@@ -6,7 +6,7 @@ import {
   type DeleteStaticWebsiteRequestSchema,
   type RemoveCustomDomainRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
-} from "@tailor-proto/tailor/v1/staticwebsite_pb";
+} from "@tailor-platform/tailor-proto/staticwebsite_pb";
 import { type OperatorClient } from "#src/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -18,8 +18,8 @@ import {
 } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#src/cli/commands/deploy/types";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
-import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-proto/tailor/v1/staticwebsite_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 
 /**
  * Apply static website changes for the given phase.

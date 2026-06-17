@@ -5,7 +5,7 @@ import { fetchPaged, initOperatorClient } from "#src/cli/shared/client";
 import { defineAppCommand } from "#src/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
 import { logger } from "#src/cli/shared/logger";
-import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
+import type { SecretManagerVault } from "@tailor-platform/tailor-proto/secret_manager_resource_pb";
 
 export interface VaultListOptions {
   workspaceId?: string;

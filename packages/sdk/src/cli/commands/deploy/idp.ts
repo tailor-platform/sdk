@@ -7,7 +7,7 @@ import {
   type DeleteIdPClientRequestSchema,
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
-} from "@tailor-proto/tailor/v1/idp_pb";
+} from "@tailor-platform/tailor-proto/idp_pb";
 import {
   IdPLang,
   IdPPermissionOperator,
@@ -17,7 +17,7 @@ import {
   type IdPPermissionPolicySchema as ProtoIdPPermissionPolicySchema,
   type IdPPermissionSchema as ProtoIdPPermissionSchema,
   type IdPService as ProtoIdPService,
-} from "@tailor-proto/tailor/v1/idp_resource_pb";
+} from "@tailor-platform/tailor-proto/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
 import { logger } from "#src/cli/shared/logger";
 import { findOmittedPermitRules, parseIdPPermission } from "#src/parser/service/idp/permission";
@@ -41,7 +41,7 @@ import type {
 } from "#src/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "#src/types/idp.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Build the vault name for an IdP client.

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";

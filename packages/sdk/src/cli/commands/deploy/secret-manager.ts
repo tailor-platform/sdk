@@ -19,7 +19,7 @@ import type {
   CreateSecretManagerSecretRequestSchema,
   CreateSecretManagerVaultRequestSchema,
   UpdateSecretManagerSecretRequestSchema,
-} from "@tailor-proto/tailor/v1/secret_manager_pb";
+} from "@tailor-platform/tailor-proto/secret_manager_pb";
 
 type CreateVault = {
   name: string;

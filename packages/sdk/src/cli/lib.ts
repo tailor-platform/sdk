@@ -229,4 +229,4 @@ export {
   type ExecutionWaitResult,
 } from "./shared/script-executor";
 export { initOperatorClient, type OperatorClient } from "./shared/client";
-export type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+export type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";

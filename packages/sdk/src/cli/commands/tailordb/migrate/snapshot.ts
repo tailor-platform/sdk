@@ -36,7 +36,7 @@ import type {
   TailorDBSnapshotType,
 } from "./snapshot-types";
 import type { SchemaDrift } from "./types";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 // ============================================================================
 // Constants

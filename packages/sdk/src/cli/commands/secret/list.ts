@@ -7,7 +7,7 @@ import { defineAppCommand } from "#src/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
 import { logger } from "#src/cli/shared/logger";
 import { vaultArgs } from "./args";
-import type { SecretManagerSecret } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
+import type { SecretManagerSecret } from "@tailor-platform/tailor-proto/secret_manager_resource_pb";
 
 export interface SecretListOptions {
   workspaceId?: string;

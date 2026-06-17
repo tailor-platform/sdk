@@ -8,7 +8,7 @@ import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
 import { logger } from "#src/cli/shared/logger";
 import { assertDefined } from "#src/utils/assert";
 import { createWorkspaceNameTransformer, resolveWorkspaceFolderName } from "./workspace/transform";
-import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
+import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export interface ShowOptions {
   workspaceId?: string;

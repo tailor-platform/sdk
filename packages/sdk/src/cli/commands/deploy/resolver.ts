@@ -7,14 +7,14 @@ import {
   type DeletePipelineServiceRequestSchema,
   type UpdatePipelineResolverRequestSchema,
   type UpdatePipelineServiceRequestSchema,
-} from "@tailor-proto/tailor/v1/pipeline_pb";
+} from "@tailor-platform/tailor-proto/pipeline_pb";
 import {
   type PipelineResolver_FieldSchema,
   PipelineResolver_OperationType,
   type PipelineResolver_PipelineSchema,
   type PipelineResolver_TypeSchema,
   type PipelineResolverSchema,
-} from "@tailor-proto/tailor/v1/pipeline_resource_pb";
+} from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "#src/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
@@ -42,7 +42,7 @@ import type { Executor } from "#src/types/executor.generated";
 import type { TailorField } from "#src/types/field.generated";
 import type { Resolver } from "#src/types/resolver.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 // Scalar type mapping for field type conversion
 const SCALAR_TYPE_MAP = {

@@ -26,7 +26,7 @@ import {
 } from "./snapshot";
 import type { ParsedField, TailorDBType } from "#src/parser/service/tailordb/types";
 import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {
   const migDir = path.join(baseDir, formatMigrationNumber(num));

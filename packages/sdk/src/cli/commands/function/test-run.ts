@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
-import { AuthInvokerSchema } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";

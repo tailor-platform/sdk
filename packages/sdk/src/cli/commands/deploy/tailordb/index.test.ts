@@ -15,7 +15,7 @@ import type { LoadedConfig } from "#src/cli/shared/config-loader";
 import type { TailorDBType } from "#src/parser/service/tailordb/types";
 import type { PlanContext } from "../types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {

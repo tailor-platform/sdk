@@ -9,11 +9,11 @@ import {
   type DeleteTailorDBTypeRequestSchema,
   type UpdateTailorDBGQLPermissionRequestSchema,
   type UpdateTailorDBTypeRequestSchema,
-} from "@tailor-proto/tailor/v1/tailordb_pb";
+} from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
   type TailorDBType as ProtoTailorDBType,
   type TailorDBTypeSchema,
-} from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
@@ -78,7 +78,7 @@ import type {
 } from "#src/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "#src/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#src/types/tailordb.generated";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 // ============================================================================
 // Remote Schema Verification

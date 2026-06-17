@@ -1,10 +1,10 @@
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { AuthInvokerSchema } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import { deploymentArgs, parseDuration } from "#src/cli/shared/args";
@@ -18,7 +18,7 @@ import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
 import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
-import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
 type WorkflowLike = {

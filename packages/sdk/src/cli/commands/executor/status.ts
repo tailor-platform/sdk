@@ -2,8 +2,8 @@ import {
   ExecutorJobStatus,
   ExecutorTargetType,
   ExecutorTriggerType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { styles } from "#src/cli/shared/logger";
 
 // ============================================================================

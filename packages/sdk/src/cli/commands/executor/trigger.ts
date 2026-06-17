@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import { ExecutorTriggerType } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import { durationArg, parseDuration, workspaceArgs } from "#src/cli/shared/args";

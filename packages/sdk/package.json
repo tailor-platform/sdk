@@ -216,6 +216,7 @@
   },
   "devDependencies": {
     "@opentelemetry/sdk-trace-base": "2.8.0",
+    "@tailor-platform/tailor-proto": "workspace:^",
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.2",

@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#src/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";

@@ -20,7 +20,7 @@ import {
   type AuthSCIMResourceSchema,
   type TenantProviderConfigSchema,
   type UserProfileProviderConfigSchema,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { type AuthService } from "#src/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "#src/cli/shared/client";
 import { assertDefined } from "#src/utils/assert";
@@ -81,8 +81,8 @@ import type {
   UpdateAuthServiceRequestSchema,
   UpdateTenantConfigRequestSchema,
   UpdateUserProfileConfigRequestSchema,
-} from "@tailor-proto/tailor/v1/auth_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "@tailor-platform/tailor-proto/auth_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply auth-related changes for the given phase.

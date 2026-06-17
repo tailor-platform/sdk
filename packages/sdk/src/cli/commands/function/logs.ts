@@ -1,5 +1,5 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
+import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import { pagedLogArgs, toPageDirection, workspaceArgs } from "#src/cli/shared/args";
@@ -14,7 +14,7 @@ import {
 } from "#src/cli/shared/function-script-download";
 import { logger, styles } from "#src/cli/shared/logger";
 import { formatErrorWithSourcemap } from "#src/cli/shared/stack-trace";
-import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
+import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
 
 interface FunctionExecutionListInfo {
   id: string;

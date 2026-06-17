@@ -6,7 +6,7 @@
  */
 
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
+import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { logger } from "#src/cli/shared/logger";
 import type { OperatorClient } from "#src/cli/shared/client";
 

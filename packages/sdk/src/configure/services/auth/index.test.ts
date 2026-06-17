@@ -9,7 +9,7 @@ import type {
   BeforeLoginHookArgs,
   FederatedIdentity,
 } from "#src/configure/services/auth/types";
-import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type { JsonObject } from "type-fest";
 
 const userType = db.type("User", {

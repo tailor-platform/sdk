@@ -3,7 +3,7 @@ import {
   type CreateExecutorExecutorRequestSchema,
   type DeleteExecutorExecutorRequestSchema,
   type UpdateExecutorExecutorRequestSchema,
-} from "@tailor-proto/tailor/v1/executor_pb";
+} from "@tailor-platform/tailor-proto/executor_pb";
 import {
   type ExecutorExecutorSchema,
   type ExecutorTargetConfigSchema,
@@ -12,7 +12,7 @@ import {
   type ExecutorTriggerConfigSchema,
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { type OperatorClient } from "#src/cli/shared/client";
 import { buildExecutorArgsExpr } from "#src/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#src/parser/service/tailordb/index";
@@ -36,7 +36,7 @@ import type { ApplyPhase, PlanContext } from "#src/cli/commands/deploy/types";
 import type { Application } from "#src/cli/services/application";
 import type { Executor } from "#src/types/executor.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply executor-related changes for the given phase.

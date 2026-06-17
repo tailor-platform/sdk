@@ -10,7 +10,7 @@ import {
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";

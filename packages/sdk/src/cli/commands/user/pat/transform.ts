@@ -1,7 +1,7 @@
-import { PATScope } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { PATScope } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { logger } from "#src/cli/shared/logger";
 import ml from "#src/utils/multiline";
-import type { PersonalAccessToken } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import type { PersonalAccessToken } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface PersonalAccessTokenInfo {
   name: string;

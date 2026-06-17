@@ -6,7 +6,7 @@ import { fetchPaged, initOperatorClient } from "#src/cli/shared/client";
 import { defineAppCommand } from "#src/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
 import { logger } from "#src/cli/shared/logger";
-import type { AuthConnection } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 interface ConnectionInfo {
   name: string;

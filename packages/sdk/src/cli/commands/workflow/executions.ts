@@ -3,8 +3,8 @@ import {
   Condition_Operator,
   ConditionSchema,
   FilterSchema,
-} from "@tailor-proto/tailor/v1/resource_pb";
-import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/resource_pb";
+import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -28,7 +28,7 @@ import {
   toWorkflowExecutionInfo,
   toWorkflowJobExecutionInfo,
 } from "./transform";
-import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
+import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
 
 type WorkflowLike = {
   name: string;

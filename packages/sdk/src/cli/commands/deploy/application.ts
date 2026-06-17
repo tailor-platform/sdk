@@ -4,7 +4,7 @@ import {
   type Application as ProtoApplication,
   Subgraph_ServiceType,
   type SubgraphSchema,
-} from "@tailor-proto/tailor/v1/application_resource_pb";
+} from "@tailor-platform/tailor-proto/application_resource_pb";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "#src/cli/shared/client";
 import { symbols } from "#src/cli/shared/logger";
 import { HTTP_METHODS } from "#src/parser/service/http-adapter/index";
@@ -19,9 +19,9 @@ import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,
   UpdateApplicationRequestSchema,
-} from "@tailor-proto/tailor/v1/application_pb";
-import type { HttpAdapterSchema } from "@tailor-proto/tailor/v1/http_adapter_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "@tailor-platform/tailor-proto/application_pb";
+import type { HttpAdapterSchema } from "@tailor-platform/tailor-proto/http_adapter_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply application changes for the given phase.

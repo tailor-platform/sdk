@@ -9,7 +9,7 @@ import {
   workspaceNameTransformer,
 } from "./transform";
 import type { OperatorClient } from "#src/cli/shared/client";
-import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
+import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
   return {

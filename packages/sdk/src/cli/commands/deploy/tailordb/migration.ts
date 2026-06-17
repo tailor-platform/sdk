@@ -6,7 +6,10 @@
 
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
-import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import {
+  AuthInvokerSchema,
+  type AuthInvoker,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { bundleMigrationScript } from "#src/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "#src/cli/commands/tailordb/migrate/config";
 import {

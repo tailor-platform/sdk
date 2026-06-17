@@ -20,8 +20,8 @@ import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   CreateFunctionRegistryRequestSchema,
   UpdateFunctionRegistryRequestSchema,
-} from "@tailor-proto/tailor/v1/function_registry_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "@tailor-platform/tailor-proto/function_registry_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 export type { BundledScripts, FunctionEntry } from "./function-registry-types";
 

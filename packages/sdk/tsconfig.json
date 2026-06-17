@@ -6,10 +6,7 @@
     "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true,
     "incremental": true,
-    "tsBuildInfoFile": "./.tsbuildinfo",
-    "paths": {
-      "@tailor-proto/*": ["../tailor-proto/src/*"]
-    }
+    "tsBuildInfoFile": "./.tsbuildinfo"
   },
   "include": [
     "./src/**/*.ts",

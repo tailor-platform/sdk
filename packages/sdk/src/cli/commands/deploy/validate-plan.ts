@@ -4,7 +4,7 @@ import { createValidator, type Validator } from "@bufbuild/protovalidate";
 import {
   CreateApplicationRequestSchema,
   UpdateApplicationRequestSchema,
-} from "@tailor-proto/tailor/v1/application_pb";
+} from "@tailor-platform/tailor-proto/application_pb";
 import {
   CreateAuthConnectionRequestSchema,
   CreateAuthHookRequestSchema,
@@ -25,41 +25,41 @@ import {
   UpdateAuthServiceRequestSchema,
   UpdateTenantConfigRequestSchema,
   UpdateUserProfileConfigRequestSchema,
-} from "@tailor-proto/tailor/v1/auth_pb";
+} from "@tailor-platform/tailor-proto/auth_pb";
 import {
   CreateExecutorExecutorRequestSchema,
   UpdateExecutorExecutorRequestSchema,
-} from "@tailor-proto/tailor/v1/executor_pb";
+} from "@tailor-platform/tailor-proto/executor_pb";
 import {
   CreateIdPServiceRequestSchema,
   UpdateIdPServiceRequestSchema,
-} from "@tailor-proto/tailor/v1/idp_pb";
+} from "@tailor-platform/tailor-proto/idp_pb";
 import {
   CreatePipelineResolverRequestSchema,
   CreatePipelineServiceRequestSchema,
   UpdatePipelineResolverRequestSchema,
   UpdatePipelineServiceRequestSchema,
-} from "@tailor-proto/tailor/v1/pipeline_pb";
+} from "@tailor-platform/tailor-proto/pipeline_pb";
 import {
   CreateSecretManagerSecretRequestSchema,
   CreateSecretManagerVaultRequestSchema,
   UpdateSecretManagerSecretRequestSchema,
-} from "@tailor-proto/tailor/v1/secret_manager_pb";
+} from "@tailor-platform/tailor-proto/secret_manager_pb";
 import {
   AddCustomDomainRequestSchema,
   CreateStaticWebsiteRequestSchema,
   UpdateStaticWebsiteRequestSchema,
-} from "@tailor-proto/tailor/v1/staticwebsite_pb";
+} from "@tailor-platform/tailor-proto/staticwebsite_pb";
 import {
   CreateTailorDBServiceRequestSchema,
   CreateTailorDBTypeRequestSchema,
   UpdateTailorDBTypeRequestSchema,
-} from "@tailor-proto/tailor/v1/tailordb_pb";
+} from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
   CreateWorkflowJobFunctionRequestSchema,
   CreateWorkflowRequestSchema,
   UpdateWorkflowRequestSchema,
-} from "@tailor-proto/tailor/v1/workflow_pb";
+} from "@tailor-platform/tailor-proto/workflow_pb";
 import { logger, styles } from "#src/cli/shared/logger";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";

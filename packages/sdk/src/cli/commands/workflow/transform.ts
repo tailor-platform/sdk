@@ -2,12 +2,12 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type {
   Workflow,
   WorkflowExecution,
   WorkflowJobExecution,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 export interface WorkflowListInfo {
   name: string;

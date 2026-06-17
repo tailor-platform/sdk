@@ -13,7 +13,7 @@ import { logger } from "#src/cli/shared/logger";
 import { createProgress, withTimeout } from "#src/cli/shared/progress";
 import { assertWritable } from "#src/cli/shared/readonly-guard";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
+import type { UploadFileRequestSchema } from "@tailor-platform/tailor-proto/staticwebsite_pb";
 
 const CHUNK_SIZE = 64 * 1024; // 64KB
 const IGNORED_FILES = new Set([".DS_Store", "thumbs.db", "desktop.ini"]);

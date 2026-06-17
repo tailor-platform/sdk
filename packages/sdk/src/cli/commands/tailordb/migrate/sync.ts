@@ -37,7 +37,7 @@ import {
   MIGRATION_LABEL_PREFIX,
   parseMigrationLabelNumber,
 } from "./types";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 export interface SyncOptions {
   configPath?: string;

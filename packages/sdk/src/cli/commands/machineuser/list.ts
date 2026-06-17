@@ -7,7 +7,7 @@ import { defineAppCommand } from "#src/cli/shared/command";
 import { loadConfig } from "#src/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
 import { logger } from "#src/cli/shared/logger";
-import type { MachineUser } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import type { MachineUser } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ListMachineUsersOptions {
   workspaceId?: string;

@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { Subgraph_ServiceType } from "@tailor-proto/tailor/v1/application_resource_pb";
+import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger, symbols } from "#src/cli/shared/logger";
 import { diffHttpAdapterDisplay, planApplication } from "./application";
