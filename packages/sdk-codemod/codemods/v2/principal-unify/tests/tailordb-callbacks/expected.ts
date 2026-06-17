@@ -71,7 +71,7 @@ const directHookedRole = db.string().hooks({
   create: ({ invoker }) => {
     const parsed = t.string().parse({ value: "hello", data: {}, invoker });
     const { id } = invoker ?? {};
-    return parsed.value ?? id;
+    return parsed.value ?? invoker?.["id"] ?? id;
   },
   update: (ctx) => {
     const { invoker: user } = ctx;
