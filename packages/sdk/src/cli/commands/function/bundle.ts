@@ -24,7 +24,7 @@ import ml from "@/utils/multiline";
 import type { DetectedFunction } from "./detect";
 import type { LogLevelInput } from "@/configure/config/types";
 
-/** Machine user info resolved from config and API for bundle-time user context. */
+/** Machine user info resolved from config and API for bundle-time principal context. */
 export interface ResolvedMachineUser {
   /** Machine user name */
   name: string;
@@ -47,7 +47,7 @@ interface BundleForTestRunOptions {
   inlineSourcemap?: boolean;
   /** Log level config value from defineConfig */
   logLevel?: LogLevelInput;
-  /** Machine user info for injecting user context into the bundle */
+  /** Machine user info for injecting principal context into the bundle */
   machineUser: ResolvedMachineUser;
   /** Workspace ID for user context */
   workspaceId: string;
@@ -152,23 +152,23 @@ function generateEntry(
 
     case "resolver": {
       // Mirrors the production resolver bundler (services/resolver/bundler.ts).
-      // In production, the operationHook injects user/env into context.
+      // In production, the operationHook injects caller/env into context.
       // For test-run, we embed machine user info since there's no operationHook.
-      const userExpr = buildMachineUserExpr(machineUser, workspaceId);
+      const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
 
         const _env = ${JSON.stringify(env)};
-        const _user = ${userExpr};
+        const _caller = ${principalExpr};
 
         const $tailor_resolver_body = async (context) => {
-          const _invoker = ${INVOKER_EXPR};
+          const _invoker = ${INVOKER_EXPR} ?? _caller;
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
               value: context,
               data: context,
-              user: _user,
+              invoker: _invoker,
             });
 
             if (result.issues) {
@@ -179,7 +179,7 @@ function generateEntry(
             }
           }
 
-          const enrichedContext = { input: context, env: _env, user: _user, invoker: _invoker };
+          const enrichedContext = { input: context, env: _env, caller: _caller, invoker: _invoker };
           return _internalResolver.body(enrichedContext);
         };
 
@@ -191,15 +191,15 @@ function generateEntry(
       // Mirrors the production executor bundler (services/executor/bundler.ts).
       // In production, buildExecutorArgsExpr injects actor/env into args.
       // For test-run, we embed machine user as actor.
-      const actorExpr = buildMachineActorExpr(machineUser, workspaceId);
+      const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
       return ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";
 
         const _env = ${JSON.stringify(env)};
-        const _actor = ${actorExpr};
+        const _actor = ${principalExpr};
 
         const __executor_function = async (args) => {
-          const _invoker = ${INVOKER_EXPR};
+          const _invoker = ${INVOKER_EXPR} ?? _actor;
           return _internalExecutor.operation.body({ ...args, env: _env, actor: _actor, invoker: _invoker });
         };
 
@@ -212,13 +212,15 @@ function generateEntry(
       // Note: user context is not available in TestExecScript for workflow jobs.
       // The production workflow bundler's user mapping is being fixed in fix/workflow-user.
       const exportName = assertDefined(detected.exportName, "workflow job export name missing");
+      const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
       return ml /* js */ `
         import { ${exportName} } from "${absoluteSourcePath}";
 
         const env = ${JSON.stringify(env)};
+        const fallbackInvoker = ${principalExpr};
 
         export async function main(input) {
-          const invoker = ${INVOKER_EXPR};
+          const invoker = ${INVOKER_EXPR} ?? fallbackInvoker;
           return await ${exportName}.body(input, { env, invoker });
         }
       `;
@@ -227,33 +229,17 @@ function generateEntry(
 }
 
 /**
- * Build a JSON expression for a machine user TailorUser object.
+ * Build a JSON expression for a machine user TailorPrincipal object.
  * @param machineUser - Resolved machine user info
  * @param workspaceId - Workspace ID
  * @returns JSON string for the user expression
  */
-function buildMachineUserExpr(machineUser: ResolvedMachineUser, workspaceId: string): string {
+function buildMachinePrincipalExpr(machineUser: ResolvedMachineUser, workspaceId: string): string {
   return JSON.stringify({
     id: machineUser.id,
     type: "machine_user",
     workspaceId,
-    attributes: machineUser.attributes,
+    attributes: machineUser.attributes ?? {},
     attributeList: machineUser.attributeList,
-  });
-}
-
-/**
- * Build a JSON expression for a machine user TailorActor object.
- * @param machineUser - Resolved machine user info
- * @param workspaceId - Workspace ID
- * @returns JSON string for the actor expression
- */
-function buildMachineActorExpr(machineUser: ResolvedMachineUser, workspaceId: string): string {
-  return JSON.stringify({
-    workspaceId,
-    userId: machineUser.id,
-    attributes: machineUser.attributes,
-    attributeList: machineUser.attributeList,
-    userType: "USER_TYPE_MACHINE_USER",
   });
 }

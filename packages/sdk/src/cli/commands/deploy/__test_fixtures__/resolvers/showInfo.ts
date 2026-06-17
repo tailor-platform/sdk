@@ -6,12 +6,12 @@ export default createResolver({
   operation: "query",
   body: (context) => {
     return {
-      id: context.user.id,
-      type: context.user.type,
-      workspaceId: context.user.workspaceId,
+      id: context.caller?.id ?? "",
+      type: context.caller?.type ?? "",
+      workspaceId: context.caller?.workspaceId ?? "",
       // platform response may omit the field
       // oxlint-disable-next-line typescript/no-unnecessary-condition
-      role: (context.user.attributes?.role as string) ?? "ADMIN",
+      role: (context.caller?.attributes.role as string | undefined) ?? "ADMIN",
     };
   },
   output: t

@@ -6,11 +6,11 @@ export default createResolver({
   operation: "query",
   body: (context) => {
     return {
-      user: {
-        id: context.user.id,
-        type: context.user.type,
-        workspaceId: context.user.workspaceId,
-        role: context.user.attributes?.role ?? "MANAGER",
+      caller: {
+        id: context.caller?.id ?? "",
+        type: context.caller?.type ?? "",
+        workspaceId: context.caller?.workspaceId ?? "",
+        role: context.caller?.attributes.role ?? "MANAGER",
       },
       invoker: {
         id: context.invoker!.id,
@@ -22,14 +22,14 @@ export default createResolver({
   },
   output: t
     .object({
-      user: t
+      caller: t
         .object({
           id: t.string().description("User ID"),
           type: t.string().description("User type"),
           workspaceId: t.string().description("Workspace ID"),
           role: t.enum(["MANAGER", "STAFF"]).description("User role"),
         })
-        .description("Authenticated user"),
+        .description("Authenticated caller"),
       invoker: t
         .object({
           id: t.string().description("Invoker ID"),

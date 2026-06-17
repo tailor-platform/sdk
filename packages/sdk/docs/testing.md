@@ -11,15 +11,15 @@ Lean on unit tests for the day-to-day feedback loop — they run fast and exerci
 
 Unit-test entrypoints exposed by the SDK:
 
-- `resolver.body({ input, user, env })` — invoke a resolver
-- `workflowJob.body(input, { env })` — invoke a workflow job body directly
+- `resolver.body({ input, caller, invoker, env })` — invoke a resolver
+- `workflowJob.body(input, { env, invoker })` — invoke a workflow job body directly
 - `workflowJob.trigger(input)` — chain a workflow job through the workflow runtime
 - `runWorkflowLocally(workflow, args)` — run a workflow chain locally with real job bodies
-- `executor.operation.body(args)` — invoke a function-kind executor
+- `executor.operation.body({ ...args, invoker })` — invoke a function-kind executor
 
-Helpers under `@tailor-platform/sdk/test`:
+For anonymous direct calls:
 
-- `unauthenticatedTailorUser` — default `user` value for resolver contexts
+- Pass `null` for anonymous `caller` / `invoker` context in direct unit tests.
 
 Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
@@ -99,7 +99,12 @@ test("resolver queries the database", async () => {
     [], // COMMIT
   );
 
-  const result = await resolver.body({ input: { email: "test@example.com" } });
+  const result = await resolver.body({
+    input: { email: "test@example.com" },
+    caller: null,
+    invoker: null,
+    env: {},
+  });
 
   expect(result).toEqual({ oldAge: 30, newAge: 31 });
   expect(db.executedQueries).toHaveLength(3);
@@ -121,7 +126,12 @@ test("content-based mock", async () => {
     return [];
   });
 
-  const result = await resolver.body({ input: { userId: "1" } });
+  const result = await resolver.body({
+    input: { userId: "1" },
+    caller: null,
+    invoker: null,
+    env: {},
+  });
 
   expect(db.executedQueries[0].query).toContain("SELECT");
 });
@@ -345,7 +355,6 @@ Unit tests call `.body()` (or `.trigger()`) directly on a resolver, workflow job
 For pure logic with no external dependencies, invoke `.body()` directly:
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { describe, expect, test } from "vitest";
 import resolver from "../src/resolver/add";
 
@@ -353,7 +362,8 @@ describe("add resolver", () => {
   test("adds two numbers", async () => {
     const result = await resolver.body({
       input: { left: 1, right: 2 },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
     expect(result).toBe(3);
@@ -370,7 +380,6 @@ Stub the global `tailordb.Client` and queue raw query results in order. Best for
 > If you are running with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta), acquire `using db = mockTailordb()` to install and drive the mock `tailordb.Client` instead of `vi.stubGlobal()`.
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import resolver from "../src/resolver/incrementUserAge";
 
@@ -400,7 +409,8 @@ describe("incrementUserAge resolver", () => {
 
     const result = await resolver.body({
       input: { email: "test@example.com" },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
 
@@ -471,7 +481,6 @@ describe("decrementUserAge", () => {
 Pass `mock.db` to functions that take a Kysely instance. When a resolver or executor calls `getDB()` internally there is no such seam, so spy the generated `getDB` and point it at the mock:
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { createKyselyMock } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test, vi } from "vitest";
 import { getDB, type Namespace } from "../generated/db";
@@ -503,7 +512,8 @@ describe("upsertUsers resolver", () => {
           { name: "Existing", email: "exists@example.com", age: 41 },
         ],
       },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
 
@@ -522,7 +532,6 @@ Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want t
 Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().setResolveHandler` to drive the user-supplied callback and inspect `resolveCalls`:
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import resolver from "./resolveApproval";
@@ -537,7 +546,8 @@ describe("resolveApproval resolver", () => {
 
     const result = await resolver.body({
       input: { executionId: "exec-1", approved: true },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
 
@@ -551,7 +561,7 @@ describe("resolveApproval resolver", () => {
 
 ### Testing Executors
 
-Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `{ newRecord }` typed against the type's output. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
+Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `{ newRecord }` typed against the type's output, plus runtime fields such as `env`, `actor`, and `invoker`. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
 
 The `executor` template extracts shared DB access into a helper (`shared.ts`) and tests the helper directly against a mocked `tailordb.Client` (same TailorDB-mocking pattern as the resolver section). Executor handlers themselves stay thin and can be tested by spying on the helper:
 
@@ -568,6 +578,14 @@ describe("onUserCreated executor", () => {
       throw new Error("expected function operation");
     }
     await onUserCreated.operation.body({
+      workspaceId: "workspace-1",
+      appNamespace: "app",
+      env: {},
+      actor: null,
+      invoker: null,
+      event: "created",
+      rawEvent: "tailordb.type_record.created",
+      typeName: "User",
       newRecord: {
         id: "user-1",
         name: "Alice",
@@ -596,7 +614,7 @@ Workflow jobs expose the same `.body()` entrypoint as resolvers, plus `.trigger(
 
 #### Simple job
 
-Call `.body()` with the input and a stub `{ env: {} }`:
+Call `.body()` with the input and a stub `{ env: {}, invoker: null }`:
 
 ```typescript
 import { describe, expect, test } from "vitest";
@@ -604,14 +622,17 @@ import { validateOrder } from "./order-fulfillment";
 
 describe("validateOrder", () => {
   test("accepts a valid order", () => {
-    const result = validateOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
+    const result = validateOrder.body(
+      { orderId: "order-1", amount: 100 },
+      { env: {}, invoker: null },
+    );
     expect(result).toEqual({ valid: true, orderId: "order-1" });
   });
 
   test("rejects a non-positive amount", () => {
-    expect(() => validateOrder.body({ orderId: "order-1", amount: 0 }, { env: {} })).toThrow(
-      "Order amount must be positive",
-    );
+    expect(() =>
+      validateOrder.body({ orderId: "order-1", amount: 0 }, { env: {}, invoker: null }),
+    ).toThrow("Order amount must be positive");
   });
 });
 ```
@@ -641,7 +662,10 @@ describe("fulfillOrder", () => {
       confirmed: true,
     });
 
-    const result = await fulfillOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
+    const result = await fulfillOrder.body(
+      { orderId: "order-1", amount: 100 },
+      { env: {}, invoker: null },
+    );
 
     expect(validateOrder.trigger).toHaveBeenCalledWith({ orderId: "order-1", amount: 100 });
     expect(result).toMatchObject({ confirmed: true, paymentStatus: "completed" });
@@ -665,7 +689,10 @@ describe("processWithApproval", () => {
     using wf = mockWorkflow();
     wf.setWaitHandler({ approved: true });
 
-    const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
+    const result = await processWithApproval.body(
+      { orderId: "order-1" },
+      { env: {}, invoker: null },
+    );
 
     expect(result).toEqual({ orderId: "order-1", status: "approved" });
     expect(wf.waitCalls[0]).toEqual({
@@ -678,7 +705,10 @@ describe("processWithApproval", () => {
     using wf = mockWorkflow();
     wf.setWaitHandler({ approved: false });
 
-    const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
+    const result = await processWithApproval.body(
+      { orderId: "order-2" },
+      { env: {}, invoker: null },
+    );
 
     expect(result.status).toBe("rejected");
   });
