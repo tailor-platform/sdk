@@ -7,10 +7,13 @@
  * - Bundle inline: interpolated into the generated `.entry.js` wrapper and
  *   evaluated inside the bundled script at function entry.
  *
- * The principal field mapping (server → SDK) shared across services is defined
- * in `@/parser/service/tailordb` as `tailorPrincipalMap`.
+ * The principal field mapping (server → SDK) shared across services is built by
+ * `makePrincipalExpr` from `@/parser/service/tailordb`; `tailorPrincipalMap`
+ * (the `caller` mapping) is one of its outputs. `INVOKER_EXPR` and
+ * `ACTOR_TRANSFORM_EXPR` below come from the same factory so the three stay in
+ * sync.
  */
-import { tailorPrincipalMap } from "@/parser/service/tailordb";
+import { makePrincipalExpr, tailorPrincipalMap } from "@/parser/service/tailordb";
 import type { Trigger } from "@/types/executor.generated";
 
 // ---------------------------------------------------------------------------
@@ -21,16 +24,21 @@ import type { Trigger } from "@/types/executor.generated";
  * `invoker` value expression, inlined into bundler entry wrappers.
  *
  * Calls `tailor.context.getInvoker()` at function entry and maps the server
- * shape to `TailorPrincipal | null`. Anonymous callers (`null`) pass through
- * as `null`.
+ * shape to `TailorPrincipal | null`. The payload is already in SDK type shape,
+ * so no `USER_TYPE_*` normalization is needed; anonymous callers (`null`) pass
+ * through as `null`.
  */
-export const INVOKER_EXPR = `(($raw) => $raw ? ({
-  id: $raw.id,
-  type: $raw.type,
-  workspaceId: $raw.workspaceId,
-  attributes: $raw.attributeMap,
-  attributeList: $raw.attributes,
-}) : null)(tailor.context.getInvoker())`;
+export const INVOKER_EXPR = makePrincipalExpr({
+  source: "tailor.context.getInvoker()",
+  normalize: false,
+  fields: {
+    type: { raw: "$raw.type" },
+    id: "$raw.id",
+    workspaceId: "$raw.workspaceId",
+    attributes: "$raw.attributeMap",
+    attributeList: "$raw.attributes",
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Executor
@@ -41,24 +49,18 @@ export const INVOKER_EXPR = `(($raw) => $raw ? ({
  *
  * Transforms the server's actor object to match `TailorPrincipal | null`.
  */
-const ACTOR_TRANSFORM_EXPR = `actor: (($raw) => {
-  const type = $raw?.userType === "USER_TYPE_USER"
-    ? "user"
-    : $raw?.userType === "USER_TYPE_MACHINE_USER"
-      ? "machine_user"
-      : $raw?.type;
-  const id = $raw?.userId ?? $raw?.id;
-  if (!$raw || !id || !type || type === "USER_TYPE_UNSPECIFIED" || id === "00000000-0000-0000-0000-000000000000") {
-    return null;
-  }
-  return {
-    id,
-    type,
-    workspaceId: $raw.workspaceId,
-    attributes: $raw.attributeMap ?? {},
-    attributeList: $raw.attributes ?? [],
-  };
-})(args.actor)`;
+const ACTOR_TRANSFORM_EXPR = `actor: ${makePrincipalExpr({
+  source: "args.actor",
+  normalize: true,
+  requireId: true,
+  fields: {
+    type: { raw: "$raw?.userType", fallback: "$raw?.type" },
+    id: "$raw?.userId ?? $raw?.id",
+    workspaceId: "$raw.workspaceId",
+    attributes: "$raw.attributeMap ?? {}",
+    attributeList: "$raw.attributes ?? []",
+  },
+})}`;
 
 /**
  * Build the JavaScript expression that transforms server-format executor event
