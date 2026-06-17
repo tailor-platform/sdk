@@ -6,7 +6,7 @@ export type Props = {
   invoker: (TailorPrincipal | null);
   nullableInvoker: (TailorPrincipal | null) | null;
   invokers: (TailorPrincipal | null)[];
-  actorType: TailorPrincipal["type"];
+  actorType: (TailorPrincipal["type"] | undefined);
 };
 
 export function actorFields(actor: TailorPrincipal | null) {
@@ -16,8 +16,9 @@ export function actorFields(actor: TailorPrincipal | null) {
   };
 }
 
-export const actorTypeValue: TailorPrincipal["type"] = "user";
+export const actorTypeValue: (TailorPrincipal["type"] | undefined) = "user";
+export const actorTypeMissing: (TailorPrincipal["type"] | undefined) = undefined;
 
-export function isUserType(type: TailorPrincipal["type"]) {
+export function isUserType(type: (TailorPrincipal["type"] | undefined)) {
   return type === "user";
 }
