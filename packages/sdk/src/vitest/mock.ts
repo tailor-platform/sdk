@@ -23,15 +23,10 @@
  */
 
 import { type Mock, vi } from "vitest";
-import {
-  getRegisteredJob,
-  getRegisteredWorkflow,
-  TRIGGER_DEFAULT,
-} from "@/configure/services/workflow/registry";
+import { TRIGGER_DEFAULT } from "@/configure/services/workflow/registry";
 import { assertDefined } from "@/utils/assert";
 import { platformSerialize } from "@/utils/test/platform-serialize";
 import {
-  buildJobContext,
   clearWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
@@ -337,25 +332,21 @@ export function mockWorkflow() {
   const root = tailorRoot();
   const prev = root.workflow;
 
-  // Default impls (also restored by reset): run the registered body by name so a
-  // `.trigger()` with no handler/result executes the real job locally.
-  const defaultTriggerJob = (jobName: string, args?: unknown): unknown => {
-    const body = getRegisteredJob(jobName);
-    return body ? body(args, buildJobContext()) : null;
+  const defaultTriggerJob = (jobName: string, _args?: unknown): unknown => {
+    throw new Error(
+      `No workflow job mock for "${jobName}". Call mockWorkflow().setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
+    );
   };
   const defaultTriggerWorkflow = async (
-    workflowName: string,
-    args?: unknown,
+    _workflowName: string,
+    _args?: unknown,
     _options?: TriggerWorkflowOptions,
   ): Promise<string> => {
-    const wf = getRegisteredWorkflow(workflowName);
-    if (wf) await installedTriggerJobFunction(wf.mainJobName, args);
     return TRIGGER_DEFAULT;
   };
 
   // Inner vi.fns hold the overridable behavior + call recording; the installed
-  // shims below cross the platform JSON boundary (serialize args + results) once
-  // so every path (default body, setJobHandler, enqueueResult) is covered.
+  // shims below cross the platform JSON boundary (serialize args + results) once.
   const triggerJobFunction = vi.fn(defaultTriggerJob);
   const triggerWorkflow = vi.fn(defaultTriggerWorkflow);
   const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
@@ -465,7 +456,7 @@ export function mockWorkflow() {
     }) as SetWaitHandler,
 
     /**
-     * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
+     * Set the `env` passed to job bodies invoked via `runWorkflowLocally()`.
      * Cleared on dispose / reset.
      * @param env - Env passed to job bodies.
      */
