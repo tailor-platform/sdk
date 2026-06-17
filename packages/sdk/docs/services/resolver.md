@@ -208,7 +208,7 @@ Validation functions receive:
 
 - `value` - The field value being validated
 - `data` - The entire input object
-- `user` - The user performing the operation
+- `invoker` - The principal performing the operation
 
 You can specify validation as:
 
@@ -234,8 +234,8 @@ Validation runs automatically before the `body` function executes. When validati
 Define actual resolver logic in the `body` function. Function arguments include:
 
 - `input` - Input data from GraphQL request
-- `user` - The user who called this resolver; unaffected by `authInvoker`
-- `invoker` - The principal running this function; equals `user` by default, or the machine user set by `authInvoker`. `null` for anonymous calls.
+- `caller` - The user or machine user who called this resolver; unaffected by `authInvoker`. `null` for anonymous calls.
+- `invoker` - The principal running this function; equals `caller` by default, or the machine user set by `authInvoker`. `null` for anonymous calls.
 - `env` - Environment variables declared in `tailor.config.ts`
 
 ### Using Kysely for Database Access
@@ -371,4 +371,4 @@ export default createResolver({
 
 The machine user name is looked up in the auth service configured on your app (`machineUsers` in `defineAuth`). The namespace is resolved automatically — no need to import `auth` from `tailor.config.ts` in resolver files.
 
-**Note:** `authInvoker` controls the permissions for database operations and other platform actions. The `user` object passed to `body` still reflects the original caller, while `invoker` reflects the principal actually running the body.
+**Note:** `authInvoker` controls the permissions for database operations and other platform actions. The `caller` object passed to `body` still reflects the original caller, while `invoker` reflects the principal actually running the body.

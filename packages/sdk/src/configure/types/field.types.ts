@@ -74,14 +74,18 @@ export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
   ? T[]
   : T;
 
-import type { TailorUser } from "@/runtime/types";
+import type { TailorPrincipal } from "@/runtime/types";
 import type { output, InferFieldsOutput } from "@/types/helpers";
 import type { NonEmptyObject } from "type-fest";
 
 /**
  * Validation function type
  */
-export type ValidateFn<O, D = unknown> = (args: { value: O; data: D; user: TailorUser }) => boolean;
+export type ValidateFn<O, D = unknown> = (args: {
+  value: O;
+  data: D;
+  invoker: TailorPrincipal | null;
+}) => boolean;
 
 /**
  * Validation configuration with custom error message

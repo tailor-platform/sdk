@@ -1,5 +1,33 @@
 import { describe, test, expect } from "vitest";
-import { buildExecutorArgsExpr, buildResolverOperationHookExpr } from "./runtime-exprs";
+import {
+  INVOKER_EXPR,
+  buildExecutorArgsExpr,
+  buildResolverOperationHookExpr,
+} from "./runtime-exprs";
+
+const runInvokerExpr = (invoker: unknown): unknown =>
+  Function(
+    "tailor",
+    `return ${INVOKER_EXPR};`,
+  )({
+    context: { getInvoker: () => invoker },
+  });
+
+const runExecutorArgsExpr = (args: Record<string, unknown>): Record<string, unknown> =>
+  Function("args", `return ${buildExecutorArgsExpr("schedule", {})};`)(args) as Record<
+    string,
+    unknown
+  >;
+
+const runResolverOperationHookExpr = (
+  user: unknown,
+  context = { pipeline: {}, args: {} },
+): Record<string, unknown> =>
+  Function(
+    "context",
+    "user",
+    `return ${buildResolverOperationHookExpr({})}`,
+  )(context, user) as Record<string, unknown>;
 
 describe("buildExecutorArgsExpr", () => {
   const env = { API_URL: "https://example.com", DEBUG: true };
@@ -12,7 +40,9 @@ describe("buildExecutorArgsExpr", () => {
         const expr = buildExecutorArgsExpr(kind, env);
         expect(expr).toContain("...args");
         expect(expr).toContain("appNamespace: args.namespaceName");
-        expect(expr).toContain("actor: args.actor");
+        expect(expr).toContain("actor: (($raw)");
+        expect(expr).toContain("})(args.actor)");
+        expect(expr).toContain("userType");
         expect(expr).toContain("attributeMap");
         expect(expr).toContain("attributeList");
         expect(expr).toContain(`env: ${JSON.stringify(env)}`);
@@ -32,6 +62,41 @@ describe("buildExecutorArgsExpr", () => {
       const expr = buildExecutorArgsExpr("schedule", env);
       expect(expr).not.toContain("event:");
     });
+
+    test("maps actor payloads to TailorPrincipal shape", () => {
+      expect(
+        runExecutorArgsExpr({
+          namespaceName: "app",
+          actor: {
+            userType: "USER_TYPE_USER",
+            userId: "user-1",
+            workspaceId: "workspace-1",
+            attributeMap: { role: "admin" },
+            attributes: ["role"],
+          },
+        }).actor,
+      ).toEqual({
+        id: "user-1",
+        type: "user",
+        workspaceId: "workspace-1",
+        attributes: { role: "admin" },
+        attributeList: ["role"],
+      });
+    });
+
+    test("maps absent actor payloads to null", () => {
+      const nilUuid = "00000000-0000-0000-0000-000000000000";
+      const actors = [
+        null,
+        undefined,
+        { userType: "USER_TYPE_UNSPECIFIED", userId: "user-1" },
+        { userType: "USER_TYPE_USER", userId: nilUuid },
+        { userType: "USER_TYPE_USER" },
+      ];
+      for (const actor of actors) {
+        expect(runExecutorArgsExpr({ namespaceName: "app", actor }).actor).toBeNull();
+      }
+    });
   });
 
   describe("resolverExecuted trigger", () => {
@@ -44,7 +109,8 @@ describe("buildExecutorArgsExpr", () => {
 
     test("includes actor transform and appNamespace", () => {
       const expr = buildExecutorArgsExpr("resolverExecuted", env);
-      expect(expr).toContain("actor: args.actor");
+      expect(expr).toContain("actor: (($raw)");
+      expect(expr).toContain("})(args.actor)");
       expect(expr).toContain("appNamespace: args.namespaceName");
     });
 
@@ -98,12 +164,12 @@ describe("buildResolverOperationHookExpr", () => {
     expect(expr).toContain("input: context.args");
   });
 
-  test("includes user transformation via tailorUserMap", () => {
+  test("includes caller transformation via tailorPrincipalMap", () => {
     const expr = buildResolverOperationHookExpr(env);
-    expect(expr).toContain("user:");
-    expect(expr).toContain("user.workspace_id");
-    expect(expr).toContain("user.attribute_map");
-    expect(expr).toContain("user.attributes");
+    expect(expr).toContain("caller:");
+    expect(expr).toContain("workspace_id");
+    expect(expr).toContain("attribute_map");
+    expect(expr).toContain("attributes");
   });
 
   test("includes env injection", () => {
@@ -119,5 +185,60 @@ describe("buildResolverOperationHookExpr", () => {
   test("empty env produces empty object", () => {
     const expr = buildResolverOperationHookExpr({});
     expect(expr).toContain("env: {}");
+  });
+
+  test("maps caller payloads to TailorPrincipal shape", () => {
+    expect(
+      runResolverOperationHookExpr({
+        type: "USER_TYPE_MACHINE_USER",
+        id: "machine-1",
+        workspace_id: "workspace-1",
+        attribute_map: { team: "ops" },
+        attributes: ["team"],
+      }).caller,
+    ).toEqual({
+      id: "machine-1",
+      type: "machine_user",
+      workspaceId: "workspace-1",
+      attributes: { team: "ops" },
+      attributeList: ["team"],
+    });
+  });
+
+  test("maps absent caller payloads to null", () => {
+    const nilUuid = "00000000-0000-0000-0000-000000000000";
+    const users = [
+      null,
+      undefined,
+      { type: "USER_TYPE_UNSPECIFIED", id: "user-1" },
+      { type: "USER_TYPE_USER", id: nilUuid },
+    ];
+    for (const user of users) {
+      expect(runResolverOperationHookExpr(user).caller).toBeNull();
+    }
+  });
+});
+
+describe("INVOKER_EXPR", () => {
+  test("maps invoker payloads to TailorPrincipal shape", () => {
+    expect(
+      runInvokerExpr({
+        id: "user-1",
+        type: "user",
+        workspaceId: "workspace-1",
+        attributeMap: { role: "member" },
+        attributes: ["role"],
+      }),
+    ).toEqual({
+      id: "user-1",
+      type: "user",
+      workspaceId: "workspace-1",
+      attributes: { role: "member" },
+      attributeList: ["role"],
+    });
+  });
+
+  test("maps anonymous invokers to null", () => {
+    expect(runInvokerExpr(null)).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import type { Workflow } from "@/configure/services/workflow/workflow";
 import type { MachineUserName } from "@/configure/types/machine-user";
-import type { TailorInvoker } from "@/runtime/types";
+import type { TailorPrincipal } from "@/runtime/types";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
@@ -11,7 +11,7 @@ import type { Client } from "@urql/core";
 
 /** Function-based executor operation. The body receives the trigger args and the `invoker`. */
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "authInvoker"> & {
-  body: (args: Args & { invoker?: TailorInvoker }) => void | Promise<void>;
+  body: (args: Args & { invoker: TailorPrincipal | null }) => void | Promise<void>;
   authInvoker?: MachineUserName;
 };
 
