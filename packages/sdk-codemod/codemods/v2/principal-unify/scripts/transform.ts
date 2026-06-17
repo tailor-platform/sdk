@@ -110,6 +110,7 @@ function rebuildImportStatement(
   importStmt: SgNode,
   globalEmittedRenamed: Set<string>,
   unauthenticatedLocalNames: Set<string>,
+  nullableInvokerAliasLocalNames: Set<string>,
 ): ImportRewriteResult {
   const importText = importStmt.text();
   const isImportType = /^\s*import\s+type\b/.test(importText);
@@ -127,16 +128,20 @@ function rebuildImportStatement(
     const renamed = TYPE_RENAME_MAP[importedName];
     if (renamed) {
       touched = true;
-      const finalLocal = aliasNode?.text() ?? renamed;
+      const dropsAliasForNullableInvoker = importedName === "TailorInvoker" && !!aliasNode;
+      if (dropsAliasForNullableInvoker) nullableInvokerAliasLocalNames.add(localName);
+      const finalLocal = dropsAliasForNullableInvoker ? renamed : (aliasNode?.text() ?? renamed);
       if (seenLocal.has(finalLocal)) continue;
       // Cross-statement dedupe for non-aliased renames so a file with
       // `import { TailorUser } from "@tailor-platform/sdk"` and
       // `import { TailorActor } from "@tailor-platform/sdk"` does not collapse to
       // two duplicate `import { TailorPrincipal } ...` lines.
-      if (!aliasNode && globalEmittedRenamed.has(renamed)) continue;
+      if ((!aliasNode || dropsAliasForNullableInvoker) && globalEmittedRenamed.has(renamed)) {
+        continue;
+      }
       seenLocal.add(finalLocal);
-      if (!aliasNode) globalEmittedRenamed.add(renamed);
-      const asPart = aliasNode ? ` as ${aliasNode.text()}` : "";
+      if (!aliasNode || dropsAliasForNullableInvoker) globalEmittedRenamed.add(renamed);
+      const asPart = aliasNode && !dropsAliasForNullableInvoker ? ` as ${aliasNode.text()}` : "";
       newSpecTexts.push(`${isTypeOnly ? "type " : ""}${renamed}${asPart}`);
     } else if (importedName === UNAUTHENTICATED) {
       touched = true;
@@ -1436,10 +1441,14 @@ export default function transform(source: string): string | null {
   // alias. A local `import type { TailorUser } from './domain'` must stay alone
   // even when the file also imports something else from the SDK.
   const sdkRenameSourceNames = new Set<string>();
+  const nullableInvokerAliasLocalNames = new Set<string>();
   for (const importStmt of sdkImports) {
-    for (const { importedName, aliasNode } of iterateImportSpecs(importStmt)) {
+    for (const { importedName, aliasNode, localName } of iterateImportSpecs(importStmt)) {
       if (TYPE_RENAME_MAP[importedName] && !aliasNode) {
         sdkRenameSourceNames.add(importedName);
+      }
+      if (importedName === "TailorInvoker" && aliasNode) {
+        nullableInvokerAliasLocalNames.add(localName);
       }
     }
   }
@@ -1451,8 +1460,11 @@ export default function transform(source: string): string | null {
     },
   });
   for (const id of typeIdents) {
-    if (!sdkRenameSourceNames.has(id.text())) continue;
-    const newName = renamedTypeIdentifierText(id.text());
+    const newName = sdkRenameSourceNames.has(id.text())
+      ? renamedTypeIdentifierText(id.text())
+      : nullableInvokerAliasLocalNames.has(id.text())
+        ? renamedTypeIdentifierText("TailorInvoker")
+        : null;
     if (!newName) continue;
     edits.push(id.replace(newName));
   }
@@ -1468,6 +1480,7 @@ export default function transform(source: string): string | null {
       importStmt,
       globalEmittedRenamed,
       unauthenticatedLocalNames,
+      nullableInvokerAliasLocalNames,
     );
     if (!touched) continue;
     edits.push(importStmt.replace(newText));
