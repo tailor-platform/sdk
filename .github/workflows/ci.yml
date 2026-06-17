@@ -71,3 +71,11 @@ jobs:
 
       - name: Check package exports (publint)
         run: pnpm -r run publint
+
+      # zod must not leak into user-facing entry points (operates on dist/,
+      # already built by install-deps).
+      - name: Check zod isolation
+        run: pnpm -r run check:zod-isolation
+
+      - name: Check import cycles
+        run: pnpm -r run check:import-cycles

@@ -1,6 +1,6 @@
-import type { AIGatewayDefinitionBrand } from "@/types/aigateway-config";
+import type { AIGatewayDefinitionBrand } from "./types";
 import type { AIGatewayInput } from "@/types/aigateway.generated";
-export type { AIGatewayConfig } from "@/types/aigateway-config";
+export type { AIGatewayConfig } from "./types";
 
 /**
  * Define an AI Gateway configuration for the Tailor SDK.

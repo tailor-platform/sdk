@@ -10,6 +10,7 @@ import { prompt } from "@/cli/shared/prompt";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { syncCommand } from "./sync";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
@@ -80,13 +81,13 @@ vi.mock("@/cli/services/application", () => ({
 
 // Parsed-type shape consumed by createSnapshotFromLocalTypes; produces the
 // same snapshot type as snapshotType() below.
-function parsedType(name: string): unknown {
+function parsedType(name: string): TailorDBType {
   return {
     name,
     pluralForm: `${name}s`,
     fields: {
-      id: { config: { type: "uuid", required: true } },
-      name: { config: { type: "string", required: true } },
+      id: { name: "id", config: { type: "uuid", required: true } },
+      name: { name: "name", config: { type: "string", required: true } },
     },
     settings: {},
     forwardRelationships: {},

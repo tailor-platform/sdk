@@ -4,7 +4,11 @@ import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "@/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth, type AuthInvoker } from "./index";
-import type { BeforeLoginHook, BeforeLoginHookArgs, FederatedIdentity } from "@/types/auth";
+import type {
+  BeforeLoginHook,
+  BeforeLoginHookArgs,
+  FederatedIdentity,
+} from "@/configure/services/auth/types";
 import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import type { JsonObject } from "type-fest";
 

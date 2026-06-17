@@ -6,10 +6,14 @@ import type {
   DefinedAuth,
   UserAttributeListKey,
   UserAttributeMap,
-} from "@/types/auth";
+} from "@/configure/services/auth/types";
+import type {
+  DefinedFieldMetadata,
+  FieldMetadata,
+  TailorFieldType,
+  TailorField,
+} from "@/configure/types/field.types";
 import type { AuthInvoker as ParserAuthInvoker } from "@/types/auth.generated";
-import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/types/field-types";
-import type { TailorField } from "@/types/tailor-field";
 
 type MachineUserAttributeFields = Record<
   string,
@@ -77,7 +81,7 @@ export type {
   FederatedIdentity,
   FederatedIdentityClaims,
   FederatedIdentityProvider,
-} from "@/types/auth";
+} from "@/configure/services/auth/types";
 export type {
   AuthConnectionOAuth2Config,
   AuthConnectionConfig,
@@ -94,7 +98,7 @@ export type {
   AuthExternalConfig,
   AuthOwnConfig,
   DefinedAuth,
-} from "@/types/auth";
+} from "@/configure/services/auth/types";
 
 /**
  * Invoker type compatible with tailor.v1.AuthInvoker

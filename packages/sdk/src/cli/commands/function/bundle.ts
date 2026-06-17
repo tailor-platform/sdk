@@ -22,7 +22,7 @@ import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
 import type { DetectedFunction } from "./detect";
-import type { LogLevelInput } from "@/types/app-config";
+import type { LogLevelInput } from "@/configure/config/types";
 
 /** Machine user info resolved from config and API for bundle-time user context. */
 export interface ResolvedMachineUser {

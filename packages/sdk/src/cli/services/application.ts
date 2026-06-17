@@ -25,24 +25,24 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger } from "@/cli/shared/logger";
 import { buildTriggerContext } from "@/cli/shared/trigger-context";
-import { AIGatewaySchema } from "@/parser/service/aigateway";
-import { AuthConfigSchema } from "@/parser/service/auth";
-import { IdPSchema } from "@/parser/service/idp";
-import { SecretsSchema } from "@/parser/service/secrets";
-import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
-import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import {
   type AppConfig,
   type ExecutorServiceInput,
   type HttpAdapterServiceInput,
   type ResolverServiceInput,
   type WorkflowServiceConfig,
-} from "@/types/app-config";
-import { type AuthConfig } from "@/types/auth";
-import { type IdPConfig } from "@/types/idp";
-import { type TailorDBServiceInput } from "@/types/tailordb";
+} from "@/configure/config/types";
+import { type AuthConfig } from "@/configure/services/auth/types";
+import { type IdPConfig } from "@/configure/services/idp/types";
+import { AIGatewaySchema } from "@/parser/service/aigateway";
+import { AuthConfigSchema } from "@/parser/service/auth";
+import { IdPSchema } from "@/parser/service/idp";
+import { SecretsSchema } from "@/parser/service/secrets";
+import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
+import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 import type { BundledScripts } from "@/cli/commands/deploy/function-registry-types";
+import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import type { PluginManager } from "@/plugin/manager";
 import type { AIGateway, AIGatewayInput } from "@/types/aigateway.generated";
 import type { IdP } from "@/types/idp.generated";

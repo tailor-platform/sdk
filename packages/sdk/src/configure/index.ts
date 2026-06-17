@@ -19,11 +19,11 @@ export { type TailorField } from "@/configure/types/type";
 export {
   type TailorUser,
   type TailorInvoker,
-  unauthenticatedTailorUser,
   type AttributeMap,
   type AttributeList,
-} from "@/types/user";
-export { type Env } from "@/types/env";
+  type Env,
+} from "@/runtime/types";
+export { unauthenticatedTailorUser } from "@/configure/user";
 export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
 export { type IdpNameRegistry, type IdpName } from "@/configure/types/idp-name";
 
@@ -48,7 +48,7 @@ export type {
   PluginExecutorContext,
   PluginExecutorContextBase,
   TailorDBTypeForPlugin,
-} from "@/types/plugin";
+} from "@/plugin/types";
 
 // Generation-time hook context types for plugin development
 export type {
@@ -58,4 +58,4 @@ export type {
   TailorDBNamespaceData,
   ResolverNamespaceData,
   GeneratorResult,
-} from "@/types/plugin-generation";
+} from "@/plugin/types";
