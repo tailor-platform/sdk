@@ -12,7 +12,9 @@ Lean on unit tests for the day-to-day feedback loop — they run fast and exerci
 Unit-test entrypoints exposed by the SDK:
 
 - `resolver.body({ input, user, env })` — invoke a resolver
-- `workflowJob.body(input, { env })` / `workflowJob.trigger(input)` — invoke or chain a workflow job
+- `workflowJob.body(input, { env })` — invoke a workflow job body directly
+- `workflowJob.trigger(input)` — chain a workflow job through the workflow runtime
+- `runWorkflowLocally(workflow, args)` — run a workflow chain locally with real job bodies
 - `executor.operation.body(args)` — invoke a function-kind executor
 
 Helpers under `@tailor-platform/sdk/test`:
@@ -23,6 +25,7 @@ Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailo
 
 - `mockTailordb` — TailorDB query stubs and call recording
 - `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
+- `runWorkflowLocally` — local full-chain workflow runner
 - `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv` — corresponding platform API mocks
 
 For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
@@ -126,7 +129,7 @@ test("content-based mock", async () => {
 
 ### Workflow Mock
 
-`.trigger()` runs the real job bodies locally out of the box (see [Running a full workflow locally](#running-a-full-workflow-locally)). Acquire `mockWorkflow()` when you want to override responses with `setJobHandler` / `enqueueResult` or assert on `triggeredJobs`:
+Workflow job `.trigger()` calls use the platform workflow runtime. Acquire `mockWorkflow()` when you want to provide trigger responses with `setJobHandler` / `enqueueResult` or assert on `triggeredJobs`. If no response is configured, the mock throws so missing job mocks fail loudly:
 
 ```typescript
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
@@ -645,16 +648,16 @@ import { fulfillOrder, processPayment, sendConfirmation, validateOrder } from ".
 
 describe("fulfillOrder", () => {
   test("chains validate → pay → confirm", async () => {
-    using _validateSpy = vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+    using _validateSpy = vi.spyOn(validateOrder, "trigger").mockReturnValue({
       valid: true,
       orderId: "order-1",
     });
-    using _paymentSpy = vi.spyOn(processPayment, "trigger").mockResolvedValue({
+    using _paymentSpy = vi.spyOn(processPayment, "trigger").mockReturnValue({
       transactionId: "txn-order-1",
       amount: 100,
       status: "completed",
     });
-    using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+    using _confirmSpy = vi.spyOn(sendConfirmation, "trigger").mockReturnValue({
       orderId: "order-1",
       transactionId: "txn-order-1",
       confirmed: true,
@@ -708,22 +711,27 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain with real job bodies, just call `workflow.mainJob.trigger()` — no `mockWorkflow()` needed. Dependent jobs run their real `.body()` functions, and trigger args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
+To exercise the full chain with real job bodies, call `runWorkflowLocally(workflow, args)`. Dependent jobs run their real `.body()` functions, and trigger args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
 
 ```typescript
+import { runWorkflowLocally } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
-  test("mainJob.trigger() executes all jobs", async () => {
-    const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
+  test("runWorkflowLocally() executes all jobs", async () => {
+    const result = await runWorkflowLocally(workflow, { orderId: "order-3", amount: 300 });
 
     expect(result).toMatchObject({ confirmed: true, paymentStatus: "completed" });
   });
 });
 ```
 
-Acquire `mockWorkflow()` only when you need to override a dependent job with `wf.setJobHandler(...)` / `wf.enqueueResult(...)` (the rest still run their real bodies), control the env via `wf.setEnv(...)`, or assert on `wf.triggeredJobs`.
+Pass `{ env }` as the third argument when job bodies need configuration values during the local run.
+
+Like the platform runtime, the local runner re-runs the orchestrator body once per `.trigger()` call (N triggers means N+1 passes), so any side effects outside the trigger results fire on every pass. Keep the body deterministic and move repeatable side effects into the triggered jobs.
+
+This helper is still a local runner. Use E2E tests when you need to verify deployed workflow scheduling, suspension, or replay behavior.
 
 **Use when:** you want to verify orchestration end to end without the cost of a real deployment.
 

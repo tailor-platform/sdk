@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "@/utils/brand";
-import { dispatchTriggerWorkflow, registerWorkflow } from "./registry";
+import { dispatchTriggerWorkflow } from "./registry";
 import type { WorkflowJob } from "./job";
 import type { MachineUserName } from "@/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
@@ -47,8 +47,8 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
  * export const fetchData = createWorkflowJob({ name: "fetch-data", body: async (input: { id: string }) => ({ id: input.id }) });
  * export const processData = createWorkflowJob({
  *   name: "process-data",
- *   body: async (input: { id: string }) => {
- *     const data = await fetchData.trigger({ id: input.id });
+ *   body: (input: { id: string }) => {
+ *     const data = fetchData.trigger({ id: input.id });
  *     return { data };
  *   },
  * });
@@ -62,11 +62,6 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
-  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
-  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
-    registerWorkflow(config.name, config.mainJob.name);
-  }
-
   return brandValue(
     {
       ...config,
