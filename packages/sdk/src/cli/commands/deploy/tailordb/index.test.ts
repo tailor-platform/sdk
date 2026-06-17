@@ -437,11 +437,11 @@ describe("planTailorDB (service level)", () => {
       const displayNameField = profileField?.fields?.displayName;
       const contactEmailField = profileField?.fields?.contact!.fields?.email;
 
-      // Nested field hooks/validators are aggregated into type-level scripts,
-      // never emitted per field.
-      expect(displayNameField?.hooks).toBeUndefined();
+      // Nested fields keep only a create-hook placeholder (to preserve Create-input
+      // optionality); the real logic is aggregated into type-level scripts.
+      expect(displayNameField?.hooks?.create?.expr).toBe("_value");
       expect(displayNameField?.validate ?? []).toHaveLength(0);
-      expect(contactEmailField?.hooks).toBeUndefined();
+      expect(contactEmailField?.hooks?.create?.expr).toBe("_value");
       expect(contactEmailField?.validate ?? []).toHaveLength(0);
 
       const hookExpr = createdType?.schema?.typeHook?.create?.expr ?? "";
