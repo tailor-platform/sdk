@@ -277,6 +277,82 @@ export const allCodemods: CodemodPackage[] = [
       "downloadStream and returns FileDownloadStreamResponse.",
     ].join("\n"),
   },
+  {
+    id: "v2/runtime-globals-opt-in",
+    name: "Runtime globals are opt-in",
+    description:
+      'Importing `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` global declarations. Opt in explicitly with `import "@tailor-platform/sdk/runtime/globals"`, or use the typed wrappers from `@tailor-platform/sdk/runtime`. (The capital-cased `Tailordb.*` namespace is removed separately — see the `Tailordb → tailordb` codemod.)',
+    since: "1.0.0",
+    until: "2.0.0",
+    // No scriptPath: which files rely on the ambient globals cannot be
+    // determined reliably enough to rewrite automatically.
+    examples: [
+      {
+        caption: "Add the opt-in import to files that use the ambient globals:",
+        before:
+          "// relied on ambient `tailordb` / `tailor` just from importing the SDK\nconst result = await tailordb.query(/* ... */);",
+        after:
+          'import "@tailor-platform/sdk/runtime/globals";\n\nconst result = await tailordb.query(/* ... */);',
+      },
+    ],
+    prompt: [
+      "In v2, importing @tailor-platform/sdk no longer activates the ambient tailor.* /",
+      "tailordb.* globals. For each file that uses those globals, add",
+      'import "@tailor-platform/sdk/runtime/globals"; at the top, or migrate it to the',
+      "typed wrappers exported from @tailor-platform/sdk/runtime. Do not add the import to",
+      "files that do not use the globals.",
+    ].join("\n"),
+  },
+  {
+    id: "v2/workflow-trigger-dispatch",
+    name: "Workflow .trigger() and trigger tests",
+    description:
+      "Workflow job `.trigger()` now aligns with the platform runtime: it returns the job result directly instead of a Promise wrapper, and tests no longer run job bodies locally. Mock trigger responses with `mockWorkflow()` (`setJobHandler` / `enqueueResult`, assert via `triggeredJobs`), or use `runWorkflowLocally()` for a full-chain local run.",
+    since: "1.0.0",
+    until: "2.0.0",
+    suspiciousPatterns: [".trigger("],
+    examples: [
+      {
+        caption: "Tests must mock the workflow runtime instead of running bodies locally:",
+        before:
+          'const result = await orderJob.trigger({ id });\nexpect(result.status).toBe("done");',
+        after:
+          'using wf = mockWorkflow();\nwf.setJobHandler((jobName) => (jobName === "order-job" ? { status: "done" } : null));\nconst result = await orderJob.trigger({ id });\nexpect(result.status).toBe("done");',
+      },
+    ],
+    prompt: [
+      "Workflow job .trigger() now uses the platform workflow runtime instead of running",
+      "the job body locally. In tests, acquire `using wf = mockWorkflow()` and provide",
+      "trigger responses (setJobHandler / enqueueResult), or use runWorkflowLocally() for a",
+      "full-chain local run; an unmocked trigger now throws. Outside tests, treat the",
+      "trigger result as the job output directly (no Promise wrapper to unwrap).",
+    ].join("\n"),
+  },
+  {
+    id: "v2/cli-token-keyring-storage",
+    name: "CLI tokens stored in the OS keyring",
+    description:
+      "CLI login tokens are stored in the OS keyring by default when available, falling back to the platform config file when it is not. No source change is required; re-login if you need tokens moved into the keyring.",
+    since: "1.0.0",
+    until: "2.0.0",
+    // Runtime/CLI behavior change — no user source to migrate.
+  },
+  {
+    id: "v2/cli-users-by-subject",
+    name: "CLI users keyed by subject ID",
+    description:
+      "The CLI stores human users by their stable subject ID instead of email (email is kept for display). Legacy email-keyed entries are migrated automatically on the next login or token refresh. No source change is required.",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  {
+    id: "v2/function-logs-content-hash",
+    name: "function logs require a content hash for source mapping",
+    description:
+      "`tailor-sdk function logs` maps stack traces against the function bundle only when the execution recorded a `contentHash`. Executions without one now show raw stack traces instead of mapped frames. No source change is required.",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
 ];
 
 /**

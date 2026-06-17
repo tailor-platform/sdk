@@ -22,12 +22,16 @@ export function automationLevel(codemod: CodemodPackage): AutomationLevel {
 }
 
 function renderEntry(codemod: CodemodPackage): string {
-  const lines: string[] = [
-    `## ${codemod.name}`,
-    "",
-    `**Migration:** ${automationLevel(codemod)}`,
-    "",
-  ];
+  const level = automationLevel(codemod);
+  // A Manual entry that ships no examples and no prompt is an informational
+  // notice (a runtime/behavioral change with nothing in user source to edit),
+  // not a hand-migration.
+  const isNotice =
+    level === "Manual" && (codemod.examples?.length ?? 0) === 0 && codemod.prompt == null;
+  const header = isNotice
+    ? "**Type:** Behavioral change (no code change required)"
+    : `**Migration:** ${level}`;
+  const lines: string[] = [`## ${codemod.name}`, "", header, ""];
   lines.push(codemod.description, "");
 
   for (const example of codemod.examples ?? []) {
@@ -49,7 +53,6 @@ function renderEntry(codemod: CodemodPackage): string {
     );
   }
 
-  const level = automationLevel(codemod);
   if (level !== "Automatic" && codemod.prompt != null) {
     const summary =
       level === "Manual"
