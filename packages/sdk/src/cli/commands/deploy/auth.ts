@@ -43,7 +43,7 @@ import {
 } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { AuthAttributeValue } from "@/types/auth";
+import type { AuthAttributeValue } from "@/configure/services/auth/types";
 import type {
   BuiltinIdP,
   IdProvider as IdProviderConfig,

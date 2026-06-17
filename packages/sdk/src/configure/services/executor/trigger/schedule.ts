@@ -1,4 +1,4 @@
-import type { TailorEnv } from "@/types/env";
+import type { TailorEnv } from "@/runtime/types";
 import type { ScheduleTriggerInput as ParserScheduleTriggerInput } from "@/types/executor.generated";
 import type { StandardCRON } from "ts-cron-validator";
 

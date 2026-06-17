@@ -4,7 +4,11 @@ import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "@/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth } from "./index";
-import type { BeforeLoginHook, BeforeLoginHookArgs, FederatedIdentity } from "@/types/auth";
+import type {
+  BeforeLoginHook,
+  BeforeLoginHookArgs,
+  FederatedIdentity,
+} from "@/configure/services/auth/types";
 import type { JsonObject } from "type-fest";
 
 const userType = db.type("User", {

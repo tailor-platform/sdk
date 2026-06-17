@@ -1,4 +1,5 @@
 import { describe, test, expectTypeOf } from "vitest";
+import type { AppConfig as FullAppConfig } from "@/configure/config/types";
 import type {
   TailorDBField as FullTailorDBField,
   TailorAnyDBField as FullTailorAnyDBField,
@@ -7,22 +8,21 @@ import type {
   TailorDBInstance as FullTailorDBInstance,
 } from "@/configure/services/tailordb/schema";
 import type {
-  TailorField as FullTailorField,
-  TailorAnyField as FullTailorAnyField,
-} from "@/configure/types/type";
-import type { AppConfig as FullAppConfig } from "@/types/app-config";
-import type { AppConfigParsed as MinimalAppConfig } from "@/types/app-config.generated";
-import type {
   TailorDBField as MinimalTailorDBField,
   TailorAnyDBField as MinimalTailorAnyDBField,
   TailorDBType as MinimalTailorDBType,
   TailorAnyDBType as MinimalTailorAnyDBType,
   TailorDBInstance as MinimalTailorDBInstance,
-} from "@/types/tailor-db-field";
+} from "@/configure/services/tailordb/types";
 import type {
   TailorField as MinimalTailorField,
   TailorAnyField as MinimalTailorAnyField,
-} from "@/types/tailor-field";
+} from "@/configure/types/field.types";
+import type {
+  TailorField as FullTailorField,
+  TailorAnyField as FullTailorAnyField,
+} from "@/configure/types/type";
+import type { AppConfigParsed as MinimalAppConfig } from "@/types/app-config.generated";
 
 describe("configure/ full types extend types/ minimal structural interfaces", () => {
   test("TailorField (full) extends TailorField (minimal)", () => {
