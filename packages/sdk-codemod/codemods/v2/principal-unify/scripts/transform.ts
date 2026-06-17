@@ -42,6 +42,27 @@ function isMemberExpressionObject(node: SgNode): boolean {
   return r.start.index === or.start.index && r.end.index === or.end.index;
 }
 
+function isOptionalizableMemberObject(node: SgNode): boolean {
+  if (!isMemberExpressionObject(node)) return false;
+  const parent = node.parent();
+  if (parent?.text().startsWith(`${node.text()}?.`)) return false;
+  return parent?.field("property")?.kind() === "property_identifier";
+}
+
+function principalIdentifierReplacement(node: SgNode, name: string): string {
+  return isOptionalizableMemberObject(node) ? `${name}?` : name;
+}
+
+function principalPropertyReplacement(node: SgNode, name: string): string {
+  const parent = node.parent();
+  return parent && isOptionalizableMemberObject(parent) ? `${name}?` : name;
+}
+
+function renamedTypeIdentifierText(name: string): string | null {
+  if (name === "TailorInvoker") return "(TailorPrincipal | null)";
+  return TYPE_RENAME_MAP[name] ?? null;
+}
+
 interface ImportRewriteResult {
   newText: string;
   touched: boolean;
@@ -306,6 +327,27 @@ function collectAllShadowRanges(root: SgNode, name: string): Array<[number, numb
   return ranges;
 }
 
+interface PrincipalLocalBinding {
+  name: string;
+  bindingStart: number;
+}
+
+function guardPrincipalMemberAccesses(
+  root: SgNode,
+  binding: PrincipalLocalBinding,
+  edits: Edit[],
+): void {
+  const refs = root.findAll({
+    rule: { kind: "identifier", regex: `^${escapeRegex(binding.name)}$` },
+  });
+  for (const ref of refs) {
+    if (!isOptionalizableMemberObject(ref)) continue;
+    const pos = ref.range().start.index;
+    if (isShadowedLocalReference(root, binding.name, pos, binding.bindingStart)) continue;
+    edits.push(ref.replace(`${binding.name}?`));
+  }
+}
+
 function findResolverBodyArrow(call: SgNode): SgNode | null {
   const args = call.field("arguments");
   if (!args) return null;
@@ -407,6 +449,7 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
     if (hasCallerBindingConflict(pattern, body)) return;
 
     let renamedShorthandUser = false;
+    const principalAliasBindings: PrincipalLocalBinding[] = [];
     // Only iterate top-level pattern children so nested destructures like
     // `({ input: { user } })` are not mistaken for the resolver context user.
     for (const child of pattern.children()) {
@@ -418,6 +461,13 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
         const key = child.field("key");
         if (key && key.text() === "user") {
           edits.push(key.replace("caller"));
+          const value = child.field("value");
+          if (value?.kind() === "identifier") {
+            principalAliasBindings.push({
+              name: value.text(),
+              bindingStart: value.range().start.index,
+            });
+          }
         }
       } else if (kind === "object_assignment_pattern") {
         // `{ user = fallback }` — the inner shorthand is the binding; default
@@ -441,7 +491,7 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
       for (const ref of refs) {
         const pos = ref.range().start.index;
         if (isInsideAnyRange(pos, shadowRanges)) continue;
-        edits.push(ref.replace("caller"));
+        edits.push(ref.replace(principalIdentifierReplacement(ref, "caller")));
       }
       // Object literal shorthand (kind: `shorthand_property_identifier`, no
       // `_pattern` suffix) is both the key and the value. Rewriting it to
@@ -457,6 +507,9 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
         if (isInsideAnyRange(pos, shadowRanges)) continue;
         edits.push(ref.replace("user: caller"));
       }
+    }
+    for (const binding of principalAliasBindings) {
+      guardPrincipalMemberAccesses(body, binding, edits);
     }
     return;
   }
@@ -475,7 +528,7 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
     if (!(obj && obj.kind() === "identifier" && obj.text() === ctxName)) continue;
     const pos = obj.range().start.index;
     if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
-    edits.push(propId.replace("caller"));
+    edits.push(propId.replace(principalPropertyReplacement(propId, "caller")));
   }
 
   // Also rewrite destructures of the context, e.g. `const { user } = ctx;` →
@@ -491,6 +544,7 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
       },
     },
   });
+  const principalAliasBindings: PrincipalLocalBinding[] = [];
   for (const decl of ctxDestructures) {
     const pos = decl.range().start.index;
     if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
@@ -500,13 +554,27 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
       const k = child.kind();
       if (k === "shorthand_property_identifier_pattern" && child.text() === "user") {
         edits.push(child.replace("caller: user"));
+        principalAliasBindings.push({
+          name: "user",
+          bindingStart: child.range().start.index,
+        });
       } else if (k === "pair_pattern") {
         const key = child.field("key");
         if (key && key.text() === "user") {
           edits.push(key.replace("caller"));
+          const value = child.field("value");
+          if (value?.kind() === "identifier") {
+            principalAliasBindings.push({
+              name: value.text(),
+              bindingStart: value.range().start.index,
+            });
+          }
         }
       }
     }
+  }
+  for (const binding of principalAliasBindings) {
+    guardPrincipalMemberAccesses(body, binding, edits);
   }
 }
 
@@ -706,7 +774,7 @@ function transformPrincipalCallbackParam(
       if (!(obj && obj.kind() === "identifier" && obj.text() === ctxName)) continue;
       const pos = obj.range().start.index;
       if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
-      edits.push(propId.replace("invoker"));
+      edits.push(propId.replace(principalPropertyReplacement(propId, "invoker")));
     }
 
     const ctxDestructures = body.findAll({
@@ -719,6 +787,7 @@ function transformPrincipalCallbackParam(
         },
       },
     });
+    const principalAliasBindings: PrincipalLocalBinding[] = [];
     for (const decl of ctxDestructures) {
       const pos = decl.range().start.index;
       if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
@@ -728,11 +797,27 @@ function transformPrincipalCallbackParam(
         const kind = child.kind();
         if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
           edits.push(child.replace("invoker: user"));
+          principalAliasBindings.push({
+            name: "user",
+            bindingStart: child.range().start.index,
+          });
         } else if (kind === "pair_pattern") {
           const key = child.field("key");
-          if (key?.text() === "user") edits.push(key.replace("invoker"));
+          if (key?.text() === "user") {
+            edits.push(key.replace("invoker"));
+            const value = child.field("value");
+            if (value?.kind() === "identifier") {
+              principalAliasBindings.push({
+                name: value.text(),
+                bindingStart: value.range().start.index,
+              });
+            }
+          }
         }
       }
+    }
+    for (const binding of principalAliasBindings) {
+      guardPrincipalMemberAccesses(body, binding, edits);
     }
     transformPrincipalCallbackParamType(param, edits, typeContext);
     return;
@@ -742,6 +827,7 @@ function transformPrincipalCallbackParam(
 
   let hasUserParamProperty = false;
   let renamesBinding = false;
+  const principalAliasBindings: PrincipalLocalBinding[] = [];
   for (const child of pattern.children()) {
     const kind = child.kind();
     if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
@@ -749,7 +835,16 @@ function transformPrincipalCallbackParam(
       renamesBinding = true;
     } else if (kind === "pair_pattern") {
       const key = child.field("key");
-      if (key?.text() === "user") hasUserParamProperty = true;
+      if (key?.text() === "user") {
+        hasUserParamProperty = true;
+        const value = child.field("value");
+        if (value?.kind() === "identifier") {
+          principalAliasBindings.push({
+            name: value.text(),
+            bindingStart: value.range().start.index,
+          });
+        }
+      }
     } else if (kind === "object_assignment_pattern") {
       const inner = child
         .children()
@@ -797,14 +892,19 @@ function transformPrincipalCallbackParam(
     }
   }
 
-  if (!renamedShorthandUser) return;
+  if (!renamedShorthandUser) {
+    for (const binding of principalAliasBindings) {
+      guardPrincipalMemberAccesses(body, binding, edits);
+    }
+    return;
+  }
 
   const shadowRanges = collectAllShadowRanges(body, "user");
   const refs = body.findAll({ rule: { kind: "identifier", regex: "^user$" } });
   for (const ref of refs) {
     const pos = ref.range().start.index;
     if (isInsideAnyRange(pos, shadowRanges)) continue;
-    edits.push(ref.replace("invoker"));
+    edits.push(ref.replace(principalIdentifierReplacement(ref, "invoker")));
   }
 
   const shortRefs = body.findAll({
@@ -814,6 +914,10 @@ function transformPrincipalCallbackParam(
     const pos = ref.range().start.index;
     if (isInsideAnyRange(pos, shadowRanges)) continue;
     edits.push(ref.replace("user: invoker"));
+  }
+
+  for (const binding of principalAliasBindings) {
+    guardPrincipalMemberAccesses(body, binding, edits);
   }
 }
 
@@ -1348,7 +1452,8 @@ export default function transform(source: string): string | null {
   });
   for (const id of typeIdents) {
     if (!sdkRenameSourceNames.has(id.text())) continue;
-    const newName = TYPE_RENAME_MAP[id.text()]!;
+    const newName = renamedTypeIdentifierText(id.text());
+    if (!newName) continue;
     edits.push(id.replace(newName));
   }
 

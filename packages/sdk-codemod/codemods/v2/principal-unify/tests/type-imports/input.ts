@@ -4,4 +4,6 @@ export type Props = {
   user: TailorUser;
   actor: TailorActor;
   invoker: TailorInvoker;
+  nullableInvoker: TailorInvoker | null;
+  invokers: TailorInvoker[];
 };
