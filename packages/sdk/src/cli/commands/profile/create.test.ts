@@ -9,17 +9,26 @@ import { createCommand } from "./create";
 import type * as ClientModule from "@/cli/shared/client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-create-${Date.now()}-${Math.random()}`);
+const keyringPasswords = vi.hoisted(() => new Map<string, string>());
 const validUUID = "12345678-1234-4abc-8def-123456789012";
 
 vi.mock("xdg-basedir", () => ({ xdgConfig: xdgTempDir }));
 
 vi.mock("@napi-rs/keyring", () => ({
   Entry: class {
-    setPassword() {}
-    getPassword(): string | null {
-      return null;
+    private key: string;
+    constructor(service: string, account: string) {
+      this.key = `${service}:${account}`;
     }
-    deletePassword() {}
+    setPassword(password: string) {
+      keyringPasswords.set(this.key, password);
+    }
+    getPassword(): string | null {
+      return keyringPasswords.get(this.key) ?? null;
+    }
+    deletePassword() {
+      keyringPasswords.delete(this.key);
+    }
   },
 }));
 
@@ -53,6 +62,7 @@ describe("profile create with a migrating legacy email user", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetKeyringState();
+    keyringPasswords.clear();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
   });
 
@@ -105,7 +115,10 @@ describe("profile create with a migrating legacy email user", () => {
 
     const config = await readPlatformConfig();
     expect(config.profiles.myprofile?.user).toBe("platform-user-sub");
-    expect(config.users["platform-user-sub"]).toMatchObject({ storage: "file" });
+    expect(config.users["platform-user-sub"]).toMatchObject({ storage: "keyring" });
+    expect(keyringPasswords.get("tailor-platform-cli:platform-user-sub")).toBe(
+      JSON.stringify({ accessToken: "new-access-token", refreshToken: "new-refresh-token" }),
+    );
     expect(config.users["legacy@example.com"]).toBeUndefined();
   });
 });
