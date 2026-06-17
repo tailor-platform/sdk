@@ -185,6 +185,27 @@ function migrateV1ToV3(v1Config: PfConfigV1): PfConfig {
   return migrateV2ToV3(migrateV1ToV2(v1Config));
 }
 
+function parseKeyringPreference(value: string | undefined): boolean | undefined {
+  if (!value) return undefined;
+  switch (value.trim().toLowerCase()) {
+    case "0":
+    case "false":
+    case "off":
+      return false;
+    case "1":
+    case "true":
+    case "on":
+      return true;
+    default:
+      return true;
+  }
+}
+
+async function shouldStoreTokensInKeyring(): Promise<boolean> {
+  if (parseKeyringPreference(process.env.TAILOR_USE_KEYRING) === false) return false;
+  return await isKeyringAvailable();
+}
+
 async function warnIfNewerConfigAvailable(config: {
   latest_version?: number;
   latest_min_sdk_version?: string;
@@ -301,7 +322,7 @@ function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
  * V1 and downgrading it would silently drop the user's login. V3 configs are
  * kept as V3 because user keys are canonical subject IDs and may include email
  * metadata that is not representable in older versions.
- * Set TAILOR_USE_KEYRING to write V2 format unconditionally.
+ * Set TAILOR_USE_KEYRING=1 to write V2 format unconditionally.
  *
  * The config file may contain access/refresh tokens when the OS keyring is
  * unavailable, so it is written via {@link writeSecretFile} so other users
@@ -312,10 +333,9 @@ export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) 
   const configPath = platformConfigPath();
   const hasKeyringUser =
     config.version === 2 && Object.values(config.users).some((u) => u?.storage === "keyring");
+  const forceV2DiskFormat = parseKeyringPreference(process.env.TAILOR_USE_KEYRING) === true;
   const diskConfig =
-    config.version === 2 && !process.env.TAILOR_USE_KEYRING && !hasKeyringUser
-      ? toV1ForDisk(config)
-      : config;
+    config.version === 2 && !forceV2DiskFormat && !hasKeyringUser ? toV1ForDisk(config) : config;
   writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
@@ -550,7 +570,7 @@ export async function resolveTokens(
 }
 
 /**
- * Save tokens for a user, writing to keyring or config as appropriate.
+ * Save tokens for a user, writing to keyring by default when available.
  * @param config - Platform config
  * @param user - User identifier
  * @param tokens - Token data to save
@@ -567,7 +587,7 @@ export async function saveUserTokens(
   metadata?: { email?: string },
 ): Promise<void> {
   const email = metadata?.email ?? config.users[user]?.email;
-  if (process.env.TAILOR_USE_KEYRING && (await isKeyringAvailable())) {
+  if (await shouldStoreTokensInKeyring()) {
     await saveKeyringTokens(user, tokens);
     config.users[user] = {
       token_expires_at: expiresAt,
