@@ -1,5 +1,54 @@
 # @tailor-platform/sdk
 
+## 1.67.0
+### Minor Changes
+
+
+
+- [#1488](https://github.com/tailor-platform/sdk/pull/1488) [`7ac8a35`](https://github.com/tailor-platform/sdk/commit/7ac8a35f697088e29d1ccf1c46b603d6ddd030fd) Thanks [@toiroakr](https://github.com/toiroakr)! - Bound the number of concurrent unary platform RPCs during `apply`/`deploy` to
+  make fresh-workspace deploys more reliable (streaming requests such as function
+  uploads are not gated). Previously every resource was created at
+  once, which could overload the platform and surface a flaky
+  `already_exists` error on file-bearing TailorDB types (e.g.
+  `... ShipmentDocument_file: duplicated key not allowed`). Concurrency now
+  defaults to 16 and can be tuned with the `TAILOR_APPLY_CONCURRENCY` environment
+  variable. When that error does surface, it is now routed to crash/error
+  reporting (previously skipped for this error class) so the otherwise-silent
+  race is captured for diagnosis.
+
+### Patch Changes
+
+
+
+- [#1425](https://github.com/tailor-platform/sdk/pull/1425) [`644dca8`](https://github.com/tailor-platform/sdk/commit/644dca8ee631ff18550646d3d82bad76fba6bc33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v16.14.2
+
+
+
+- [#1429](https://github.com/tailor-platform/sdk/pull/1429) [`b933f29`](https://github.com/tailor-platform/sdk/commit/b933f291b99efb3668077cd7870abe979dc3b10b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown to v1.1.1
+
+
+
+- [#1433](https://github.com/tailor-platform/sdk/pull/1433) [`4d07f2f`](https://github.com/tailor-platform/sdk/commit/4d07f2fd814bda5886c8f0c9546f21128dcce74b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.47.1
+
+
+
+- [#1448](https://github.com/tailor-platform/sdk/pull/1448) [`4ce01dd`](https://github.com/tailor-platform/sdk/commit/4ce01dd851dae7754103a918ba89afe073f942c6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @connectrpc to v2.1.2
+
+
+
+- [#1481](https://github.com/tailor-platform/sdk/pull/1481) [`e67f2e4`](https://github.com/tailor-platform/sdk/commit/e67f2e4ae69bbec012afc45c9a15d1cd676a4598) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @0no-co/graphql.web to v1.3.2
+
+
+
+- [#1390](https://github.com/tailor-platform/sdk/pull/1390) [`388f3d6`](https://github.com/tailor-platform/sdk/commit/388f3d69b722589cd5cca7bbbc3667a849ecaa3b) Thanks [@toiroakr](https://github.com/toiroakr)! - Guarantee that importing the SDK never loads zod in user projects — neither zod runtime code in bundled functions nor zod type computation in tsc. Internal type definitions are reorganized into per-layer pure type modules, and new CI checks verify every user-facing entry point stays zod-free at both the type and runtime level and that the internal module graph has no import cycles.
+
+
+
+- [#1437](https://github.com/tailor-platform/sdk/pull/1437) [`eab679e`](https://github.com/tailor-platform/sdk/commit/eab679e253d0fb0749c1981e30d476fb893afd02) Thanks [@toiroakr](https://github.com/toiroakr)! - `setup github` now generates workflows that call the `tailor-platform/actions`
+  composite actions (`setup`, `generate-check`, `tag-guard`) instead of inlining
+  the equivalent steps. The generated workflows are smaller and the setup,
+  generate-check, and tag-guard behavior is delivered through the pinned actions.
+
 ## 1.66.1
 ### Patch Changes
 
