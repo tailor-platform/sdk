@@ -729,6 +729,8 @@ describe("order-fulfillment workflow", () => {
 
 Pass `{ env }` as the third argument when job bodies need configuration values during the local run.
 
+Like the platform runtime, the local runner re-runs the orchestrator body once per `.trigger()` call (N triggers means N+1 passes), so any side effects outside the trigger results fire on every pass. Keep the body deterministic and move repeatable side effects into the triggered jobs.
+
 This helper is still a local runner. Use E2E tests when you need to verify deployed workflow scheduling, suspension, or replay behavior.
 
 **Use when:** you want to verify orchestration end to end without the cost of a real deployment.
