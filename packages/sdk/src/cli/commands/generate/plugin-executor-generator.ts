@@ -13,15 +13,15 @@ import {
   getPluginImportBaseDirs,
   resolveRelativePluginImportPath,
 } from "@/cli/shared/plugin-import";
+import { isPluginExecutorWithFile } from "@/plugin/guards";
 import {
-  isPluginExecutorWithFile,
   type PluginGeneratedExecutorLegacy,
   type PluginGeneratedExecutorWithFile,
   type PluginTriggerConfig,
   type PluginOperationConfig,
   type PluginInjectMap,
   type PluginExecutorContext,
-} from "@/types/plugin";
+} from "@/plugin/types";
 import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
 import type {

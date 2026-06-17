@@ -15,7 +15,7 @@ import {
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
-import type { LogLevel } from "@/types/app-config";
+import type { LogLevel } from "@/configure/config/types";
 
 /**
  * Options for bundling auth hooks

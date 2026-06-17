@@ -13,7 +13,7 @@ import type { ExecutorService } from "@/cli/services/executor/service";
 import type { TailorDBService } from "@/cli/services/tailordb/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { TailorDBType } from "@/types/tailordb";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 

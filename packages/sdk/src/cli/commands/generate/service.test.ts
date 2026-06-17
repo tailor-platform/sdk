@@ -8,8 +8,8 @@ import { createGenerationManager } from "./service";
 import type { Application } from "@/cli/services/application";
 import type { TailorDBService } from "@/cli/services/tailordb/service";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { Plugin } from "@/types/plugin";
-import type { TailorDBType } from "@/types/tailordb";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { Plugin } from "@/plugin/types";
 
 vi.mock("node:fs", () => {
   return {
