@@ -18,9 +18,11 @@ const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta
  * @param review - The review task (codemod id, prompt, files)
  */
 function printLlmReview(review: LlmReview): void {
-  process.stderr.write(
-    `\n🤖 LLM-assisted review suggested (${review.codemodId}) — the codemod cannot safely migrate these automatically:\n`,
-  );
+  const scope =
+    review.files.length > 0
+      ? "the codemod cannot safely migrate these automatically"
+      : "review the project for this manual change";
+  process.stderr.write(`\n🤖 LLM-assisted review suggested (${review.codemodId}) — ${scope}:\n`);
   for (const file of review.files) {
     process.stderr.write(`  - ${file}\n`);
   }
@@ -88,10 +90,10 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
       return;
     }
 
-    // Resolve script paths for all applicable codemods
+    // Resolve script paths for all applicable codemods (manual entries have none)
     const codemodEntries = codemods.map((codemod) => ({
       codemod,
-      scriptPath: resolveCodemodScript(codemod.scriptPath),
+      scriptPath: codemod.scriptPath ? resolveCodemodScript(codemod.scriptPath) : undefined,
     }));
 
     for (const { codemod } of codemodEntries) {
