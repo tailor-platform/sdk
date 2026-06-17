@@ -15,11 +15,12 @@ import {
 } from "./context";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
-import { resetKeyringState } from "./token-store";
+import { isKeyringAvailable, resetKeyringState } from "./token-store";
 import type * as ClientModule from "./client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
 const keyringPasswords = vi.hoisted(() => new Map<string, string>());
+const keyringSetPasswordFailure = vi.hoisted(() => ({ error: undefined as Error | undefined }));
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
@@ -32,6 +33,7 @@ vi.mock("@napi-rs/keyring", () => ({
       this.key = `${service}:${account}`;
     }
     setPassword(password: string) {
+      if (keyringSetPasswordFailure.error) throw keyringSetPasswordFailure.error;
       keyringPasswords.set(this.key, password);
     }
     getPassword(): string | null {
@@ -63,6 +65,7 @@ beforeEach(() => {
   clientMocks.fetchUserInfo.mockReset();
   clientMocks.refreshToken.mockReset();
   keyringPasswords.clear();
+  keyringSetPasswordFailure.error = undefined;
 });
 
 describe("loadConfigPath", () => {
@@ -958,6 +961,29 @@ describe("saveUserTokens", () => {
       expect(keyringPasswords.has("tailor-platform-cli:platform-user-sub")).toBe(false);
     },
   );
+
+  test("falls back to the config file when keyring storage fails", async () => {
+    const config = createEmptyConfig();
+
+    expect(await isKeyringAvailable()).toBe(true);
+    keyringSetPasswordFailure.error = new Error("keyring denied");
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await saveUserTokens(
+      config,
+      "platform-user-sub",
+      { accessToken: "access-token", refreshToken: "refresh-token" },
+      futureDate,
+    );
+
+    expect(config.users["platform-user-sub"]).toEqual({
+      storage: "file",
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+      token_expires_at: futureDate,
+    });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("keyring denied"));
+  });
 });
 
 describe("V1 to V3 migration", () => {
