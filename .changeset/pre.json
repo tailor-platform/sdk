@@ -7,12 +7,20 @@
     "@tailor-platform/sdk-codemod": "0.2.7"
   },
   "changesets": [
-    "docs-idp-user-auth-policy",
-    "fix-lockfile-audit-vulns",
-    "migration-rollback-on-failure",
-    "plugin-cli-import-codemod",
-    "proto-init-shape-optionality",
+    "remove-auth-invoker-helper",
+    "remove-define-generators",
+    "remove-function-test-run-input-wrapper",
+    "remove-runtime-globals-compatibility",
+    "remove-tailor-sdk-skills-shim",
+    "remove-v2-cli-aliases",
+    "renovate-1425",
+    "renovate-1429",
+    "renovate-1433",
+    "renovate-1448",
+    "reorganize-types-zod-isolation",
+    "require-function-log-content-hash",
+    "store-cli-users-by-subject",
     "v2-baseline",
-    "validate-migrate-json"
+    "workflow-trigger-dispatch"
   ]
 }
