@@ -78,7 +78,7 @@ jobs:
         run: pnpm -r run test --project 'unit*'
 
   test-summary:
-    name: Test summary
+    name: test-summary # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: [changes, test]
     if: >-
       always() &&

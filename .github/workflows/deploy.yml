@@ -146,7 +146,7 @@ jobs:
         run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   deploy-result:
-    name: Deploy result
+    name: deploy-result # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: [changes, deploy]
     if: always()
     runs-on: ubuntu-latest
