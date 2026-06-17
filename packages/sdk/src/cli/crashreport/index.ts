@@ -1,6 +1,6 @@
 import { logger } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
-import { userAgent } from "@/cli/shared/user-agent";
+import { userAgentFromVersion } from "@/cli/shared/user-agent";
 import { parseCrashReportConfig } from "./config";
 import { buildCrashReport, type ErrorType } from "./report";
 import { sendCrashReport } from "./sender";
@@ -42,7 +42,7 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
     }
 
     if (config.remoteEnabled) {
-      const ua = await userAgent();
+      const ua = userAgentFromVersion(sdkVersion);
       await sendCrashReport(report, ua);
     }
   } catch {

@@ -5,6 +5,7 @@ import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "@/cli/crashreport";
 import {
+  concurrencyLimitInterceptor,
   createTransport,
   fetchAll,
   fetchPaged,
@@ -333,6 +334,62 @@ describe("retryInterceptor", () => {
     // RETRY_SAFE_CREATE_METHODS to match the OperatorService method name.
     const typos = [...RETRY_SAFE_CREATE_METHODS].filter((name) => !realCreateNames.has(name));
     expect(typos).toEqual([]);
+  });
+});
+
+describe("concurrencyLimitInterceptor", () => {
+  const original = process.env.TAILOR_APPLY_CONCURRENCY;
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.TAILOR_APPLY_CONCURRENCY;
+    } else {
+      process.env.TAILOR_APPLY_CONCURRENCY = original;
+    }
+  });
+
+  const unaryReq = { stream: false } as unknown as UnaryRequest;
+  const streamReq = { stream: true } as unknown as UnaryRequest;
+
+  test("bounds the number of concurrent in-flight unary RPCs to the cap", async () => {
+    process.env.TAILOR_APPLY_CONCURRENCY = "2";
+    let active = 0;
+    let peak = 0;
+    const next = vi.fn(async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await Promise.resolve();
+      await Promise.resolve();
+      active -= 1;
+      return { stream: false, message: {} };
+    });
+
+    const handler = concurrencyLimitInterceptor()(next as never);
+    await Promise.all(Array.from({ length: 8 }, () => handler(unaryReq)));
+
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(next).toHaveBeenCalledTimes(8);
+  });
+
+  test("does not gate streaming requests even when the unary cap is saturated", async () => {
+    process.env.TAILOR_APPLY_CONCURRENCY = "1";
+
+    let releaseUnary: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      releaseUnary = resolve;
+    });
+    const next = vi.fn(async (req: { stream: boolean }) => {
+      if (!req.stream) await blocked;
+      return { stream: req.stream, message: {} };
+    });
+
+    const handler = concurrencyLimitInterceptor()(next as never);
+    // Saturate the single unary slot with a request that stays pending.
+    void handler(unaryReq);
+    // A streaming request must still pass straight through to next().
+    const streamResult = (await handler(streamReq)) as { stream: boolean };
+
+    expect(streamResult.stream).toBe(true);
+    releaseUnary();
   });
 });
 

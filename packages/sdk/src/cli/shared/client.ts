@@ -181,9 +181,10 @@ export function retryInterceptor(): Interceptor {
  * race (#1350). One shared limiter per client bounds total in-flight calls
  * across every deploy resource, not just a single call site. Streaming RPCs
  * (e.g. function uploads) are not gated.
+ * @internal
  * @returns Concurrency-limiting interceptor
  */
-function concurrencyLimitInterceptor(): Interceptor {
+export function concurrencyLimitInterceptor(): Interceptor {
   const limit = createApplyLimiter();
   return (next) => async (req) => {
     if (req.stream) {
