@@ -13,8 +13,9 @@ import {
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
+import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
-import { readPackageJson } from "./package-json";
+import { userAgent } from "./user-agent";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -50,6 +51,9 @@ export async function initOperatorClient(accessToken: string) {
     retryInterceptor(),
     errorHandlingInterceptor(),
     createTracingInterceptor(),
+    // Innermost: gates the actual network attempt so each retry re-acquires a
+    // slot and backoff waits happen outside the cap.
+    concurrencyLimitInterceptor(),
   ];
 
   const transport = await createTransport(platformBaseUrl, interceptors);
@@ -85,14 +89,7 @@ async function userAgentInterceptor(): Promise<Interceptor> {
   };
 }
 
-/**
- * Build the User-Agent string for CLI requests.
- * @returns User-Agent header value
- */
-export async function userAgent() {
-  const packageJson = await readPackageJson();
-  return `tailor-sdk/${packageJson.version ?? "unknown"}`;
-}
+export { userAgent };
 
 /**
  * Create an interceptor that sets the Authorization bearer token.
@@ -115,8 +112,10 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
  * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
- * server-side. Emits `logger.debug` traces on every retry and swallow so the
- * cause of field `already_exists` failures can be diagnosed.
+ * server-side. A first-attempt `AlreadyExists` from such a Create still
+ * surfaces, but is routed to crash/error reporting first (the top-level handler
+ * skips `ConnectError`), so the otherwise-silent compound-create race is
+ * trackable.
  * @internal
  * @returns Retry interceptor
  */
@@ -141,14 +140,22 @@ export function retryInterceptor(): Interceptor {
         // Unavailable/ResourceExhausted under load. The identical retry then
         // races against that committed write and fails with `already_exists`.
         // Restricted to RETRY_SAFE_CREATE_METHODS (deploy creates whose response
-        // body is unused) and to actual retries (i > 0); a first-attempt
-        // AlreadyExists is a genuine conflict and still surfaces.
-        if (i > 0 && isRetrySafeCreateAlreadyExists(error, req.method.name)) {
-          logger.debug(
-            `retry: ${req.method.name} returned AlreadyExists on attempt ${i + 1}; ` +
-              `treating as success (prior attempt likely committed)`,
-          );
-          return synthesizeEmptyUnaryResponse(req);
+        // body is unused) and to actual retries (i > 0).
+        if (isRetrySafeCreateAlreadyExists(error, req.method.name)) {
+          if (i > 0) {
+            logger.debug(
+              `retry: ${req.method.name} returned AlreadyExists on attempt ${i + 1}; ` +
+                `treating as success (prior attempt likely committed)`,
+            );
+            return synthesizeEmptyUnaryResponse(req);
+          }
+          // First-attempt AlreadyExists on a retry-safe create: no retry of ours
+          // preceded it, so the resource was committed out-of-band (a concurrent
+          // or non-idempotent compound create under load — #1350). The top-level
+          // handler skips ConnectError, so route it to error tracking here before
+          // letting it surface as the deploy error.
+          const { reportCrash } = await import("@/cli/crashreport");
+          await reportCrash(error, "handledError");
         }
         if (isRetirable(error, req.method.idempotency)) {
           lastError = error;
@@ -162,6 +169,27 @@ export function retryInterceptor(): Interceptor {
       }
     }
     throw lastError;
+  };
+}
+
+/**
+ * Create an interceptor that caps the number of concurrent unary RPCs.
+ *
+ * A fresh-workspace apply fires one `create*` per resource at once; left
+ * unbounded, the platform sheds load as `Unavailable`/`ResourceExhausted`,
+ * which drives retries into the non-idempotent compound-create `already_exists`
+ * race (#1350). One shared limiter per client bounds total in-flight calls
+ * across every deploy resource, not just a single call site. Streaming RPCs
+ * (e.g. function uploads) are not gated.
+ * @returns Concurrency-limiting interceptor
+ */
+function concurrencyLimitInterceptor(): Interceptor {
+  const limit = createApplyLimiter();
+  return (next) => async (req) => {
+    if (req.stream) {
+      return await next(req);
+    }
+    return await limit(() => next(req));
   };
 }
 

@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
+import { reportCrash } from "@/cli/crashreport";
 import {
   createTransport,
   fetchAll,
@@ -19,6 +20,10 @@ import { logger } from "./logger";
 
 vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
+}));
+
+vi.mock("@/cli/crashreport", () => ({
+  reportCrash: vi.fn(),
 }));
 
 describe("createTransport", () => {
@@ -115,6 +120,7 @@ describe("retryInterceptor", () => {
   // it flaky under load; runAllTimersAsync below drives the awaited setTimeout.
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.mocked(reportCrash).mockClear();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -229,6 +235,32 @@ describe("retryInterceptor", () => {
       settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createIdPClient))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("routes a first-attempt AlreadyExists from a retry-safe create to error tracking, then surfaces it", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
+    ).rejects.toThrow("duplicated key not allowed");
+    expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test("swallows a post-retry AlreadyExists without routing to error tracking", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("resource exhausted", Code.ResourceExhausted))
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+    );
+
+    expect(res.stream).toBe(false);
+    expect(vi.mocked(reportCrash)).not.toHaveBeenCalled();
   });
 
   test("does not retry streaming requests", async () => {
