@@ -236,13 +236,13 @@ export async function runCodemods(
     }
   }
 
-  const llmReviews: LlmReview[] = loaded
-    .filter((lt) => lt.prompt && suspiciousByCodemod.has(lt.id))
-    .map((lt) => ({
-      codemodId: lt.id,
-      prompt: lt.prompt as string,
-      files: suspiciousByCodemod.get(lt.id) as string[],
-    }));
+  const llmReviews: LlmReview[] = [];
+  for (const lt of loaded) {
+    const files = suspiciousByCodemod.get(lt.id);
+    if (!lt.prompt || !files) continue;
+    // Sort for deterministic output regardless of filesystem traversal order.
+    llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
+  }
 
   return {
     changed: filesModified.length > 0,
