@@ -4,5 +4,5 @@ export default createResolver({
   name: "n",
   operation: "query",
   output: t.string(),
-  body: ({ caller: currentUser }) => currentUser.id,
+  body: ({ caller: currentUser }) => currentUser?.id,
 });

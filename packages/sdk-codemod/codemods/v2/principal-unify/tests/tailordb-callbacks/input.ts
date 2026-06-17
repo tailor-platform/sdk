@@ -45,6 +45,11 @@ const role = db
 
 const localHookedRole = db.string().hooks(sharedHooks);
 
+const directHookedRole = db.string().hooks({
+  create: ({ user }) => user.id,
+  update: (ctx) => ctx.user.id,
+});
+
 const reviewer = t.string();
 const zodLike = { parse: (arg: unknown) => arg };
 

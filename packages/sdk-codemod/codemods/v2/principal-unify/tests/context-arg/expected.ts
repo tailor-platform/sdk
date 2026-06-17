@@ -5,7 +5,7 @@ export default createResolver({
   operation: "query",
   output: t.object({ id: t.string(), type: t.string() }),
   body: (ctx) => ({
-    id: ctx.caller.id,
-    type: ctx.caller.type,
+    id: ctx.caller?.id,
+    type: ctx.caller?.type,
   }),
 });

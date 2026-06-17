@@ -6,7 +6,7 @@ export default createResolver({
   input: t.object({ id: t.string() }),
   output: t.object({ id: t.string() }),
   body: ({ input, caller }) => {
-    return { id: caller.id };
+    return { id: caller?.id };
   },
 });
 
