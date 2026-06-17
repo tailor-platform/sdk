@@ -384,12 +384,13 @@ describe("concurrencyLimitInterceptor", () => {
 
     const handler = concurrencyLimitInterceptor()(next as never);
     // Saturate the single unary slot with a request that stays pending.
-    void handler(unaryReq);
+    const pendingUnary = handler(unaryReq);
     // A streaming request must still pass straight through to next().
     const streamResult = (await handler(streamReq)) as { stream: boolean };
 
     expect(streamResult.stream).toBe(true);
     releaseUnary();
+    await pendingUnary;
   });
 });
 

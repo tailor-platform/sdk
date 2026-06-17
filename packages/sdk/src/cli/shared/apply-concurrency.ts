@@ -48,10 +48,15 @@ export function createApplyLimiter(): <R>(task: () => Promise<R>) => Promise<R> 
 /**
  * Comparator that orders `name`-bearing items by `name`, for a stable,
  * reproducible apply order within the concurrency cap.
+ *
+ * Uses a code-point comparison rather than `localeCompare` so the order does
+ * not depend on the runtime's default locale/collation.
  * @param a - Left item
  * @param b - Right item
- * @returns Locale-aware comparison of the two names
+ * @returns Negative, zero, or positive per code-point ordering of the names
  */
 export function byName(a: { name: string }, b: { name: string }): number {
-  return a.name.localeCompare(b.name);
+  if (a.name < b.name) return -1;
+  if (a.name > b.name) return 1;
+  return 0;
 }
