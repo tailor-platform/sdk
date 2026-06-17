@@ -14,7 +14,7 @@ export const fetchCustomer = createWorkflowJob({
     return {
       ...customer,
       createdAt: customer.createdAt.toISOString(),
-      updatedAt: customer.updatedAt?.toISOString() ?? null,
+      updatedAt: customer.updatedAt.toISOString(),
     };
   },
 });
