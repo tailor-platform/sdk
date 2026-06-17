@@ -93,6 +93,16 @@ function principalReadReplacement(node: SgNode, name: string): string {
     : principalIdentifierReplacement(node, name);
 }
 
+function isParseArgumentShorthand(node: SgNode): boolean {
+  if (node.kind() !== "shorthand_property_identifier") return false;
+  const object = node.parent();
+  if (!object || object.kind() !== "object") return false;
+  const args = object.parent();
+  if (!args || args.kind() !== "arguments") return false;
+  const call = args.parent();
+  return !!call && call.kind() === "call_expression" && findMemberCallName(call) === "parse";
+}
+
 function addActorPropertyReplacement(
   property: SgNode,
   edits: Edit[],
@@ -338,7 +348,7 @@ function transformExecutorCtxActorAccesses(
 
 function renamedTypeIdentifierText(name: string): string | null {
   if (name === "TailorInvoker") return "(TailorPrincipal | null)";
-  if (name === "TailorActorType") return 'TailorPrincipal["type"]';
+  if (name === "TailorActorType") return '(TailorPrincipal["type"] | undefined)';
   return TYPE_RENAME_MAP[name] ?? null;
 }
 
@@ -803,7 +813,7 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
       for (const ref of shortRefs) {
         const pos = ref.range().start.index;
         if (isInsideAnyRange(pos, shadowRanges)) continue;
-        edits.push(ref.replace("user: caller"));
+        edits.push(ref.replace(isParseArgumentShorthand(ref) ? "invoker: caller" : "user: caller"));
       }
     }
     for (const binding of principalAliasBindings) {
@@ -1319,7 +1329,7 @@ function transformPrincipalCallbackParam(
   for (const ref of shortRefs) {
     const pos = ref.range().start.index;
     if (isInsideAnyRange(pos, shadowRanges)) continue;
-    edits.push(ref.replace("user: invoker"));
+    edits.push(ref.replace(isParseArgumentShorthand(ref) ? "invoker" : "user: invoker"));
   }
 
   for (const binding of principalAliasBindings) {
