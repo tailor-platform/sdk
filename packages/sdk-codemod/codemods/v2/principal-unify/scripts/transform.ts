@@ -145,14 +145,37 @@ function isAssignmentTargetReference(node: SgNode): boolean {
   return !!left && nodeRangeContains(left, current);
 }
 
-function isParseArgumentShorthand(node: SgNode): boolean {
-  if (node.kind() !== "shorthand_property_identifier") return false;
+function parseArgumentCall(node: SgNode): SgNode | null {
+  if (node.kind() !== "shorthand_property_identifier") return null;
   const object = node.parent();
-  if (!object || object.kind() !== "object") return false;
+  if (!object || object.kind() !== "object") return null;
   const args = object.parent();
-  if (!args || args.kind() !== "arguments") return false;
+  if (!args || args.kind() !== "arguments") return null;
   const call = args.parent();
-  return !!call && call.kind() === "call_expression" && findMemberCallName(call) === "parse";
+  return call && call.kind() === "call_expression" && findMemberCallName(call) === "parse"
+    ? call
+    : null;
+}
+
+interface SdkFieldParseContext {
+  sdkFieldRootNames: Set<string>;
+  sdkFieldLocalBindings: SdkFieldLocalBinding[];
+  root: SgNode;
+}
+
+function isSdkFieldParseArgumentShorthand(
+  node: SgNode,
+  parseContext: SdkFieldParseContext,
+): boolean {
+  const call = parseArgumentCall(node);
+  return call
+    ? isSdkFieldMemberCall(
+        call,
+        parseContext.sdkFieldRootNames,
+        parseContext.sdkFieldLocalBindings,
+        parseContext.root,
+      )
+    : false;
 }
 
 function addActorPropertyReplacement(
@@ -178,6 +201,34 @@ function actorTypeLiteralReplacement(literal: SgNode): string | null {
   return `${quote}${ACTOR_TYPE_LITERAL_RENAME_MAP[value]!}${quote}`;
 }
 
+function addActorTypeLiteralReplacement(
+  literal: SgNode,
+  edits: Edit[],
+  transformedLiteralStarts: Set<number>,
+): void {
+  if (literal.kind() !== "string") return;
+  const replacement = actorTypeLiteralReplacement(literal);
+  if (!replacement) return;
+  const start = literal.range().start.index;
+  if (transformedLiteralStarts.has(start)) return;
+  transformedLiteralStarts.add(start);
+  edits.push(literal.replace(replacement));
+}
+
+function transformActorTypeLiteralsInNode(
+  node: SgNode,
+  edits: Edit[],
+  transformedLiteralStarts: Set<number>,
+): void {
+  if (node.kind() === "string") {
+    addActorTypeLiteralReplacement(node, edits, transformedLiteralStarts);
+  }
+  const literals = node.findAll({ rule: { kind: "string" } });
+  for (const literal of literals) {
+    addActorTypeLiteralReplacement(literal, edits, transformedLiteralStarts);
+  }
+}
+
 function isTransformedActorTypeMember(
   node: SgNode,
   transformedActorPropertyStarts: Set<number>,
@@ -188,6 +239,25 @@ function isTransformedActorTypeMember(
     property?.text() === "userType" &&
     transformedActorPropertyStarts.has(property.range().start.index)
   );
+}
+
+function nodeContainsTransformedActorTypeMember(
+  node: SgNode,
+  transformedActorPropertyStarts: Set<number>,
+): boolean {
+  if (isTransformedActorTypeMember(node, transformedActorPropertyStarts)) return true;
+  const members = node.findAll({ rule: { kind: "member_expression" } });
+  return members.some((member) =>
+    isTransformedActorTypeMember(member, transformedActorPropertyStarts),
+  );
+}
+
+function switchDiscriminant(node: SgNode): SgNode | null {
+  return node.children().find((child) => child.kind() === "parenthesized_expression") ?? null;
+}
+
+function switchBody(node: SgNode): SgNode | null {
+  return node.children().find((child) => child.kind() === "switch_body") ?? null;
 }
 
 function transformActorTypeComparisonLiterals(
@@ -207,13 +277,26 @@ function transformActorTypeComparisonLiterals(
       continue;
     }
     for (const child of binary.children()) {
-      if (child.kind() !== "string") continue;
-      const replacement = actorTypeLiteralReplacement(child);
-      if (!replacement) continue;
-      const start = child.range().start.index;
-      if (transformedLiteralStarts.has(start)) continue;
-      transformedLiteralStarts.add(start);
-      edits.push(child.replace(replacement));
+      addActorTypeLiteralReplacement(child, edits, transformedLiteralStarts);
+    }
+  }
+
+  const switches = root.findAll({ rule: { kind: "switch_statement" } });
+  for (const switchNode of switches) {
+    const discriminant = switchDiscriminant(switchNode);
+    if (
+      !discriminant ||
+      !nodeContainsTransformedActorTypeMember(discriminant, transformedActorPropertyStarts)
+    ) {
+      continue;
+    }
+    const body = switchBody(switchNode);
+    if (!body) continue;
+    const cases = body.findAll({ rule: { kind: "switch_case" } });
+    for (const caseNode of cases) {
+      for (const child of caseNode.children()) {
+        addActorTypeLiteralReplacement(child, edits, transformedLiteralStarts);
+      }
     }
   }
 }
@@ -229,13 +312,8 @@ function transformTailorActorTypeInitializerLiterals(
   for (const decl of declarators) {
     if (!isTailorActorTypeReference(decl, actorTypeLocalNames)) continue;
     const value = decl.field("value");
-    if (!value || value.kind() !== "string") continue;
-    const replacement = actorTypeLiteralReplacement(value);
-    if (!replacement) continue;
-    const start = value.range().start.index;
-    if (transformedLiteralStarts.has(start)) continue;
-    transformedLiteralStarts.add(start);
-    edits.push(value.replace(replacement));
+    if (!value) continue;
+    transformActorTypeLiteralsInNode(value, edits, transformedLiteralStarts);
   }
 }
 
@@ -257,13 +335,34 @@ function transformActorTypeBindingComparisons(
       continue;
     }
     for (const child of binary.children()) {
-      if (child.kind() !== "string") continue;
-      const replacement = actorTypeLiteralReplacement(child);
-      if (!replacement) continue;
-      const start = child.range().start.index;
-      if (transformedLiteralStarts.has(start)) continue;
-      transformedLiteralStarts.add(start);
-      edits.push(child.replace(replacement));
+      addActorTypeLiteralReplacement(child, edits, transformedLiteralStarts);
+    }
+  }
+
+  const switches = root.findAll({ rule: { kind: "switch_statement" } });
+  for (const switchNode of switches) {
+    const discriminant = switchDiscriminant(switchNode);
+    if (!discriminant) continue;
+    const refs = discriminant.findAll({
+      rule: { kind: "identifier", regex: `^${escapeRegex(binding.name)}$` },
+    });
+    const matchesBinding = refs.some(
+      (ref) =>
+        !isShadowedLocalReference(
+          root,
+          binding.name,
+          ref.range().start.index,
+          binding.bindingStart,
+        ),
+    );
+    if (!matchesBinding) continue;
+    const body = switchBody(switchNode);
+    if (!body) continue;
+    const cases = body.findAll({ rule: { kind: "switch_case" } });
+    for (const caseNode of cases) {
+      for (const child of caseNode.children()) {
+        addActorTypeLiteralReplacement(child, edits, transformedLiteralStarts);
+      }
     }
   }
 }
@@ -705,6 +804,7 @@ function rewriteParseArgumentShorthands(
   root: SgNode,
   localName: string,
   propertyName: string,
+  parseContext: SdkFieldParseContext,
   edits: Edit[],
 ): void {
   const shadowRanges = collectAllShadowRanges(root, localName);
@@ -714,7 +814,7 @@ function rewriteParseArgumentShorthands(
   for (const ref of shortRefs) {
     const pos = ref.range().start.index;
     if (isInsideAnyRange(pos, shadowRanges)) continue;
-    if (!isParseArgumentShorthand(ref)) continue;
+    if (!isSdkFieldParseArgumentShorthand(ref, parseContext)) continue;
     edits.push(ref.replace(`${propertyName}: ${localName}`));
   }
 }
@@ -847,7 +947,11 @@ function hasCallerBindingConflict(pattern: SgNode, body: SgNode): boolean {
   return false;
 }
 
-function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
+function transformResolverBody(
+  arrowNode: SgNode,
+  edits: Edit[],
+  parseContext: SdkFieldParseContext,
+): void {
   const params =
     arrowNode.field("parameters") ??
     arrowNode.field("parameter") ??
@@ -933,7 +1037,7 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
       }
     }
     if (aliasedShorthandUser) {
-      rewriteParseArgumentShorthands(body, "user", "invoker", edits);
+      rewriteParseArgumentShorthands(body, "user", "invoker", parseContext, edits);
     }
     if (renamedShorthandUser) {
       // Use the broader shadow-range collector here so a nested arrow that
@@ -959,7 +1063,13 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
       for (const ref of shortRefs) {
         const pos = ref.range().start.index;
         if (isInsideAnyRange(pos, shadowRanges)) continue;
-        edits.push(ref.replace(isParseArgumentShorthand(ref) ? "invoker: caller" : "user: caller"));
+        edits.push(
+          ref.replace(
+            isSdkFieldParseArgumentShorthand(ref, parseContext)
+              ? "invoker: caller"
+              : "user: caller",
+          ),
+        );
       }
     }
     for (const binding of principalAliasBindings) {
@@ -1176,6 +1286,8 @@ interface CallbackTypeContext {
   transformedPrincipalTypeStarts: Set<number>;
   tailorUserTypeLocalNames: Set<string>;
   sdkNamespaceNames: Set<string>;
+  sdkFieldRootNames: Set<string>;
+  sdkFieldLocalBindings: SdkFieldLocalBinding[];
   root: SgNode;
 }
 
@@ -1476,7 +1588,7 @@ function transformPrincipalCallbackParam(
 
   if (!renamedShorthandUser) {
     if (aliasedShorthandUser) {
-      rewriteParseArgumentShorthands(body, "user", "invoker", edits);
+      rewriteParseArgumentShorthands(body, "user", "invoker", typeContext, edits);
     }
     for (const binding of principalAliasBindings) {
       guardPrincipalMemberAccesses(body, binding, edits);
@@ -1498,7 +1610,9 @@ function transformPrincipalCallbackParam(
   for (const ref of shortRefs) {
     const pos = ref.range().start.index;
     if (isInsideAnyRange(pos, shadowRanges)) continue;
-    edits.push(ref.replace(isParseArgumentShorthand(ref) ? "invoker" : "user: invoker"));
+    edits.push(
+      ref.replace(isSdkFieldParseArgumentShorthand(ref, typeContext) ? "invoker" : "user: invoker"),
+    );
   }
 
   for (const binding of principalAliasBindings) {
@@ -2124,6 +2238,12 @@ export default function transform(source: string): string | null {
       }
     }
   }
+  const sdkFieldLocalBindings = collectSdkFieldLocalBindings(tree, sdkFieldRootNames);
+  const parseContext: SdkFieldParseContext = {
+    sdkFieldRootNames,
+    sdkFieldLocalBindings,
+    root: tree,
+  };
   for (const localName of createResolverLocalNames) {
     const shadowRanges = collectAllShadowRanges(tree, localName);
     const calls = tree.findAll({
@@ -2142,7 +2262,7 @@ export default function transform(source: string): string | null {
       const pos = callee.range().start.index;
       if (isInsideAnyRange(pos, shadowRanges)) continue;
       const arrow = findResolverBodyArrow(call);
-      if (arrow) transformResolverBody(arrow, edits);
+      if (arrow) transformResolverBody(arrow, edits, parseContext);
     }
   }
   for (const namespaceName of sdkNamespaceNames) {
@@ -2168,7 +2288,7 @@ export default function transform(source: string): string | null {
       const pos = object.range().start.index;
       if (isInsideAnyRange(pos, shadowRanges)) continue;
       const arrow = findResolverBodyArrow(call);
-      if (arrow) transformResolverBody(arrow, edits);
+      if (arrow) transformResolverBody(arrow, edits, parseContext);
     }
   }
   for (const localName of createExecutorLocalNames) {
@@ -2222,7 +2342,6 @@ export default function transform(source: string): string | null {
   }
   transformActorTypeComparisonLiterals(tree, edits, transformedActorPropertyStarts);
 
-  const sdkFieldLocalBindings = collectSdkFieldLocalBindings(tree, sdkFieldRootNames);
   const callbackBindings = collectLocalCallbackBindings(tree);
   const objectBindings = collectLocalObjectBindings(tree);
   const typeContext: CallbackTypeContext = {
@@ -2231,6 +2350,8 @@ export default function transform(source: string): string | null {
     transformedPrincipalTypeStarts: new Set<number>(),
     tailorUserTypeLocalNames,
     sdkNamespaceNames,
+    sdkFieldRootNames,
+    sdkFieldLocalBindings,
     root: tree,
   };
   const transformedCallbackStarts = new Set<number>();

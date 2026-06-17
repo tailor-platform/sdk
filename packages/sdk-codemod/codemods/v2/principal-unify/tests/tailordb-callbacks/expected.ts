@@ -70,6 +70,7 @@ const invoker = { id: "outer-invoker" };
 const directHookedRole = db.string().hooks({
   create: ({ invoker }) => {
     const parsed = t.string().parse({ value: "hello", data: {}, invoker });
+    const parsedOther = { parse: (arg: unknown) => arg }.parse({ user: invoker });
     const { id } = invoker ?? {};
     return parsed.value ?? invoker?.["id"] ?? id;
   },
