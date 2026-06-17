@@ -5,7 +5,8 @@ import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
 
-const allCodemods: CodemodPackage[] = [
+/** All registered codemods, in registration order. */
+export const allCodemods: CodemodPackage[] = [
   {
     id: "v2/define-generators-to-plugins",
     name: "defineGenerators → definePlugins",
@@ -138,6 +139,12 @@ const allCodemods: CodemodPackage[] = [
       "JSON.stringify wrapper) so executeScript serializes it once. Leave calls that",
       "already pass a plain value unchanged.",
     ].join("\n"),
+    examples: [
+      {
+        before: "await executeScript({ ...opts, arg: JSON.stringify({ a: 1 }) });",
+        after: "await executeScript({ ...opts, arg: { a: 1 } });",
+      },
+    ],
   },
 ];
 

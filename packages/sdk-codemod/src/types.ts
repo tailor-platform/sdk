@@ -1,3 +1,13 @@
+/** A before/after code pair shown in the generated migration doc. */
+export interface CodemodExample {
+  /** Code as written before the migration. */
+  before: string;
+  /** Code after the migration. */
+  after: string;
+  /** Optional one-line caption explaining the example. */
+  caption?: string;
+}
+
 /**
  * Metadata for a codemod package.
  */
@@ -41,6 +51,8 @@ export interface CodemodPackage {
    * by `suspiciousPatterns`.
    */
   prompt?: string;
+  /** Before/after examples shown in the generated migration doc. */
+  examples?: CodemodExample[];
 }
 
 /** A batch of files an LLM should review for one codemod, with its prompt. */
