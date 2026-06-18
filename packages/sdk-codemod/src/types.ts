@@ -59,6 +59,12 @@ export interface CodemodPackage {
   prompt?: string;
   /** Before/after examples shown in the generated migration doc. */
   examples?: CodemodExample[];
+  /**
+   * Marks an informational behavioral change (a runtime/CLI change with no
+   * source to migrate), not a migration. Rendered in a separate "Behavioral
+   * changes" section, never on the automation-level axis.
+   */
+  notice?: boolean;
 }
 
 /** A batch of files an LLM should review for one codemod, with its prompt. */

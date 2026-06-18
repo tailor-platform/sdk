@@ -23,15 +23,7 @@ export function automationLevel(codemod: CodemodPackage): AutomationLevel {
 
 function renderEntry(codemod: CodemodPackage): string {
   const level = automationLevel(codemod);
-  // A Manual entry that ships no examples and no prompt is an informational
-  // notice (a runtime/behavioral change with nothing in user source to edit),
-  // not a hand-migration.
-  const isNotice =
-    level === "Manual" && (codemod.examples?.length ?? 0) === 0 && codemod.prompt == null;
-  const header = isNotice
-    ? "**Type:** Behavioral change (no code change required)"
-    : `**Migration:** ${level}`;
-  const lines: string[] = [`## ${codemod.name}`, "", header, ""];
+  const lines: string[] = [`## ${codemod.name}`, "", `**Migration:** ${level}`, ""];
   lines.push(codemod.description, "");
 
   for (const example of codemod.examples ?? []) {
@@ -74,6 +66,11 @@ function renderEntry(codemod: CodemodPackage): string {
   return lines.join("\n");
 }
 
+/** Render an informational behavioral-change notice (no migration). */
+function renderNotice(codemod: CodemodPackage): string {
+  return [`### ${codemod.name}`, "", codemod.description, ""].join("\n");
+}
+
 /**
  * Render the v2 migration guide from the codemod registry. The registry is the
  * single source of truth; missing detail is added to the codemod definitions.
@@ -94,6 +91,21 @@ export function renderMigrationDoc(codemods: CodemodPackage[]): string {
     "",
   ].join("\n");
 
-  const body = codemods.map(renderEntry).join("\n");
-  return `${header}\n${body}`.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+  const migrations = codemods.filter((c) => !c.notice);
+  const notices = codemods.filter((c) => c.notice);
+
+  const sections = [header, migrations.map(renderEntry).join("\n")];
+  if (notices.length > 0) {
+    sections.push(
+      [
+        "## Behavioral changes (no migration required)",
+        "",
+        "These v2 changes alter runtime or CLI behavior; no source change is needed.",
+        "",
+        notices.map(renderNotice).join("\n"),
+      ].join("\n"),
+    );
+  }
+
+  return `${sections.join("\n")}`.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }

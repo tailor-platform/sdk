@@ -59,4 +59,24 @@ describe("renderMigrationDoc", () => {
     expect(doc).toContain("**Migration:** Automatic");
     expect(doc).not.toContain("How to finish");
   });
+
+  test("renders notices in a separate section without a migration label", () => {
+    const doc = renderMigrationDoc([
+      makeCodemod({ name: "Real migration", description: "Edit your code." }),
+      makeCodemod({
+        name: "Keyring storage",
+        description: "Tokens move to the OS keyring.",
+        scriptPath: undefined as unknown as string,
+        notice: true,
+      }),
+    ]);
+
+    expect(doc).toContain("## Behavioral changes (no migration required)");
+    // The notice is a sub-section, not labelled as a migration.
+    expect(doc).toContain("### Keyring storage");
+    expect(doc.split("### Keyring storage")[1]).not.toContain("**Migration:**");
+    // A real migration keeps its migration label and stays out of the notices section.
+    expect(doc).toContain("## Real migration");
+    expect(doc.indexOf("## Real migration")).toBeLessThan(doc.indexOf("## Behavioral changes"));
+  });
 });
