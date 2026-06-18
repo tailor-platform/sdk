@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { checkGitHub, findTargetDrift, type TargetState } from "./check";
+import { checkGitHub, findTargetDrift, resolveWithinRoot, type TargetState } from "./check";
 import { setupGitHub, type SetupGitHubOptions } from "./github";
 import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
@@ -96,6 +96,45 @@ describe("findTargetDrift", () => {
     expect(findings.map((f) => f.rule).toSorted()).toEqual(
       ["default-branch", "hand-edit", "template-version"].toSorted(),
     );
+  });
+});
+
+describe("resolveWithinRoot", () => {
+  const dir = path.join("/tmp", `rwr-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+  beforeEach(() => fs.mkdirSync(dir, { recursive: true }));
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  test("returns the joined path for a normal relative path", () => {
+    expect(resolveWithinRoot(dir, "a/b.yml")).toBe(path.join(dir, "a/b.yml"));
+  });
+
+  test("rejects an absolute path", () => {
+    expect(resolveWithinRoot(dir, "/etc/passwd")).toBeNull();
+  });
+
+  test("rejects a `..` traversal", () => {
+    expect(resolveWithinRoot(dir, "../escape.yml")).toBeNull();
+  });
+
+  test("rejects a symlink that escapes the repo root", () => {
+    const outside = path.join(
+      "/tmp",
+      `outside-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    fs.writeFileSync(outside, "secret\n");
+    fs.symlinkSync(outside, path.join(dir, "link.yml"));
+    try {
+      expect(resolveWithinRoot(dir, "link.yml")).toBeNull();
+    } finally {
+      fs.rmSync(outside, { force: true });
+    }
+  });
+
+  test("allows a symlink that stays within the repo root", () => {
+    fs.writeFileSync(path.join(dir, "real.yml"), "ok\n");
+    fs.symlinkSync(path.join(dir, "real.yml"), path.join(dir, "inside.yml"));
+    expect(resolveWithinRoot(dir, "inside.yml")).toBe(path.join(dir, "inside.yml"));
   });
 });
 

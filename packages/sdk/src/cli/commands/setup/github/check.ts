@@ -111,14 +111,26 @@ function detectDefaultBranchSafe(cwd: string, run: GitRunner | undefined): strin
   }
 }
 
+function escapesRoot(rel: string): boolean {
+  return (
+    path.isAbsolute(rel) || rel === ".." || rel.startsWith(`..${path.sep}`) || rel.startsWith("../")
+  );
+}
+
 // The lock is machine-owned, but a corrupted or hand-edited lock could carry an
-// absolute or `..`-traversing path. Resolve lock-recorded paths within the repo
-// root and return null when they escape, so the audit never reads outside it.
-function resolveWithinRoot(outputDir: string, relPath: string): string | null {
+// absolute, `..`-traversing, or symlinked path. Reject lexical escapes and, when
+// the path exists, resolve symlinks and reject anything whose real location is
+// outside the repo root, so the audit never reads outside it.
+export function resolveWithinRoot(outputDir: string, relPath: string): string | null {
   if (path.isAbsolute(relPath)) return null;
   const abs = path.join(outputDir, relPath);
-  const rel = path.relative(outputDir, abs);
-  if (rel === ".." || rel.startsWith(`..${path.sep}`) || rel.startsWith("../")) return null;
+  if (escapesRoot(path.relative(outputDir, abs))) return null;
+  try {
+    if (escapesRoot(path.relative(fs.realpathSync(outputDir), fs.realpathSync(abs)))) return null;
+  } catch {
+    // The path does not exist yet; the lexical check above is sufficient and a
+    // missing file is reported as drift downstream.
+  }
   return abs;
 }
 
