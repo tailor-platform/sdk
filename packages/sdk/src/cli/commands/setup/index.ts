@@ -68,6 +68,8 @@ export const setupCommand = defineAppCommand({
       throw new Error("--no-plan cannot be combined with --tag.");
     }
 
+    // `provider` is validated by the enum to the only value supported today;
+    // a second provider would branch here to its own generator.
     await setupGitHub({
       workspaceName: args["workspace-name"],
       branch: args.branch,
