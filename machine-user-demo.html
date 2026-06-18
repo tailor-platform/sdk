@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Show &amp; Tell — Profiles &amp; default machine user</title>
+    <style>
+      :root {
+        --bg: #0f1021;
+        --panel: #1a1c33;
+        --panel2: #232544;
+        --fg: #e7e8f0;
+        --muted: #9aa0c0;
+        --accent: #7775ff;
+        --ok: #3ddc97;
+        --warn: #ffb454;
+        --err: #ff6b6b;
+        --border: #2e3157;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.6;
+      }
+      .wrap {
+        max-width: 940px;
+        margin: 0 auto;
+        padding: 2.5rem 1.5rem 5rem;
+      }
+      h1 {
+        font-size: 1.7rem;
+        margin: 0 0 0.3rem;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 2.2rem 0 0.6rem;
+        color: var(--accent);
+      }
+      .lead {
+        color: var(--muted);
+        margin: 0 0 1.5rem;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.5rem;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.9rem 1.1rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+      }
+      .meta b {
+        color: var(--fg);
+      }
+      .meta span {
+        color: var(--muted);
+      }
+      code.inline {
+        background: var(--panel2);
+        padding: 0.1rem 0.4rem;
+        border-radius: 5px;
+        font-size: 0.85em;
+        color: #c9ccf5;
+      }
+      .step {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.1rem 1.2rem;
+        margin: 1rem 0;
+      }
+      .step-head {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+        margin-bottom: 0.5rem;
+      }
+      .num {
+        flex: none;
+        width: 1.7rem;
+        height: 1.7rem;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+        font-size: 0.9rem;
+      }
+      .num.warn {
+        background: var(--warn);
+        color: #2a1a00;
+      }
+      .num.err {
+        background: var(--err);
+      }
+      .num.ok {
+        background: var(--ok);
+        color: #053a26;
+      }
+      .step-title {
+        font-weight: 600;
+      }
+      .desc {
+        color: var(--muted);
+        font-size: 0.92rem;
+        margin: 0.1rem 0 0.7rem;
+      }
+      .cmd {
+        position: relative;
+      }
+      pre {
+        margin: 0;
+        background: #0a0b18;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.85rem 3.2rem 0.85rem 1rem;
+        overflow-x: auto;
+        font-size: 0.88rem;
+      }
+      pre code {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        color: #d7f7ec;
+        white-space: pre;
+      }
+      .copy {
+        position: absolute;
+        top: 0.55rem;
+        right: 0.55rem;
+        background: var(--panel2);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0.3rem 0.6rem;
+        font-size: 0.78rem;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .copy:hover {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      .copy.copied {
+        background: var(--ok);
+        color: #053a26;
+        border-color: var(--ok);
+      }
+      .expect {
+        margin-top: 0.65rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+        border-left: 3px solid var(--border);
+        padding: 0.2rem 0 0.2rem 0.8rem;
+      }
+      .expect b {
+        color: var(--fg);
+      }
+      .expect.ok {
+        border-color: var(--ok);
+      }
+      .expect.err {
+        border-color: var(--err);
+      }
+      .note {
+        background: #25201a;
+        border: 1px solid #5a4a2a;
+        color: #ffd9a8;
+        border-radius: 8px;
+        padding: 0.7rem 0.9rem;
+        font-size: 0.85rem;
+        margin: 0.6rem 0 0;
+      }
+      .talk {
+        background: linear-gradient(135deg, #1a1c33, #232544);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.1rem 1.3rem;
+        margin-top: 2rem;
+      }
+      .talk ul {
+        margin: 0.4rem 0 0;
+        padding-left: 1.2rem;
+      }
+      .talk li {
+        margin: 0.3rem 0;
+      }
+      footer {
+        margin-top: 2.5rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Profiles &amp; the default machine user</h1>
+      <p class="lead">
+        We start with "what is a profile?" and the handy <code class="inline">.envrc</code> combo,
+        then move on to the main act: pinning a default machine user so the wrong identity can't be
+        used by accident. Every command has a
+        <span class="copy" style="position: static; display: inline-block">Copy</span> button for
+        one-click copy.
+      </p>
+
+      <h2 style="margin-top: 1.2rem">Part 1 — What is a profile? / The .envrc combo</h2>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">i</span
+          ><span class="step-title">A profile = a named "user × workspace" pair</span>
+        </div>
+        <div class="desc">
+          So you don't retype <code class="inline">-w &lt;workspace-id&gt;</code> every time. After
+          authenticating with <code class="inline">tailor-sdk login</code>, a profile decides which
+          workspace your commands talk to. Start by listing them:
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile list</code></pre>
+        </div>
+        <div class="expect">
+          <b>Shows:</b> a table of
+          <code class="inline">name / user / workspaceId / permission</code>.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">i</span><span class="step-title">Creating one (log in first)</span>
+        </div>
+        <div class="desc">
+          Log in to authenticate the user, then a profile binds a workspace to a name.
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk login</code></pre>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile create mu-demo -u akira_higuchi@tailor.tech -w 5d80e666-2f32-499f-b878-213229a558b8 -m manager-machine-user</code></pre>
+        </div>
+        <div class="desc">
+          (This is exactly the command Part 2 / Step 1 runs — shown here for the shape; don't create
+          it twice.) For a workspace you don't want to write to (e.g. production), add
+          <code class="inline">--permission read</code> so all write commands are blocked while the
+          profile is active — see Part 3.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">i</span
+          ><span class="step-title">How the active profile is chosen (precedence)</span>
+        </div>
+        <div class="desc">
+          <code class="inline">--profile &lt;name&gt;</code> &gt; the
+          <code class="inline">TAILOR_PLATFORM_PROFILE</code> env var &gt; the current login.
+          Switching per command with the flag (run from <code class="inline">example/</code>;
+          <code class="inline">-m</code> / <code class="inline">-c</code> are this project's
+          specifics):
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk query --engine gql -q '{ users(first: 1) { edges { node { name } } } }' --profile show-and-tell -m manager-machine-user -c tailor.config.ts</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">i</span
+          ><span class="step-title"
+            >Handy: .envrc + direnv to switch environments just by "cd"</span
+          >
+        </div>
+        <div class="desc">
+          Put an <code class="inline">.envrc</code> in each directory and pin the profile via an env
+          var. direnv loads it the moment you enter the directory, so
+          <b>directory = environment</b> switches automatically. Split dev / stg / prod into
+          separate directories (worktrees) and you stop targeting the wrong workspace.
+        </div>
+        <div class="cmd">
+          <pre><code># .envrc (place it in the directory)
+export TAILOR_PLATFORM_PROFILE="show-and-tell"
+
+# optional default machine user for query / workflow start / etc. (used in Part 2)
+export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
+        </div>
+        <div class="note">
+          You must approve it once with <code class="inline">direnv allow</code>. This show-and-tell
+          worktree itself uses <code class="inline">.envrc</code> with
+          <code class="inline">TAILOR_PLATFORM_PROFILE="show-and-tell"</code> (live example).
+        </div>
+      </div>
+
+      <h2 style="margin-top: 2.6rem">
+        Part 2 — Prevent identity mix-ups with a default machine user (live demo)
+      </h2>
+      <p class="lead" style="margin-top: 0.3rem">
+        The main act: bake a default machine user into the profile and pin it with
+        <code class="inline">--machine-user-override deny</code>, so a shared workspace / CI can't
+        run commands under the wrong identity.
+      </p>
+
+      <div class="meta">
+        <span>Workspace: <b>sdk-show-and-tell</b></span>
+        <span>WS ID: <b>5d80e666-2f32-499f-b878-213229a558b8</b></span>
+        <span>Machine user: <b>manager-machine-user</b></span>
+        <span>User: <b>akira_higuchi@tailor.tech</b></span>
+      </div>
+
+      <div class="note">
+        ⚠️ Run everything from the <code class="inline">example/</code> directory (token/query
+        commands pass <code class="inline">-c tailor.config.ts</code> to point at the config
+        explicitly).
+      </div>
+
+      <h2>0. Go to the working directory</h2>
+      <div class="step">
+        <div class="step-head">
+          <span class="num">0</span
+          ><span class="step-title">Into the show-and-tell worktree's example/</span>
+        </div>
+        <div class="cmd">
+          <pre><code>cd /Users/toiroakr/workspace/sdk-bare/show-and-tell/example</code></pre>
+        </div>
+      </div>
+
+      <h2>1. Setup: create a profile with a default machine user</h2>
+      <div class="step">
+        <div class="step-head">
+          <span class="num">1</span
+          ><span class="step-title">profile create (bake in the default machine user)</span>
+        </div>
+        <div class="desc">
+          At this point <code class="inline">machineUserOverride = allow</code> (override
+          permitted).
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile create mu-demo -u akira_higuchi@tailor.tech -w 5d80e666-2f32-499f-b878-213229a558b8 -m manager-machine-user</code></pre>
+        </div>
+        <div class="expect ok">
+          <b>Expect:</b> a table showing
+          <code class="inline">machineUser = manager-machine-user</code> /
+          <code class="inline">machineUserOverride = allow</code>.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">1</span><span class="step-title">profile list (confirm)</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile list</code></pre>
+        </div>
+        <div class="expect">
+          <b>Expect:</b> <code class="inline">mu-demo</code> appears in the list.
+        </div>
+      </div>
+
+      <h2>2. Fallback: omit the machine user and the default is used</h2>
+      <div class="step">
+        <div class="step-head">
+          <span class="num">2</span
+          ><span class="step-title">query (no machine user) → runs as the profile's default</span>
+        </div>
+        <div class="desc">
+          Run a GraphQL query without passing a machine user anywhere.
+          <code class="inline">env -u TAILOR_PLATFORM_MACHINE_USER_NAME</code>
+          temporarily drops the env var this worktree's .envrc sets, to create a truly "unspecified"
+          state.
+        </div>
+        <div class="cmd">
+          <pre><code>env -u TAILOR_PLATFORM_MACHINE_USER_NAME tailor-sdk query --engine gql -q '{ users(first: 3) { edges { node { name role } } } }' -p mu-demo -c tailor.config.ts</code></pre>
+        </div>
+        <div class="expect ok">
+          <b>Expect:</b> <code class="inline">users</code> returned as JSON (executed as the default
+          manager-machine-user).
+        </div>
+      </div>
+
+      <h2>3. Lock it: set override to deny</h2>
+      <div class="step">
+        <div class="step-head">
+          <span class="num warn">3</span
+          ><span class="step-title">profile update --machine-user-override deny</span>
+        </div>
+        <div class="desc">
+          deny requires <code class="inline">--machine-user</code>. From now on, any different
+          machine user is rejected.
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile update mu-demo -m manager-machine-user --machine-user-override deny</code></pre>
+        </div>
+        <div class="expect ok">
+          <b>Expect:</b> updates to <code class="inline">machineUserOverride = deny</code>.
+        </div>
+      </div>
+
+      <h2>4. The point: a different machine user fails immediately</h2>
+      <div class="step">
+        <div class="step-head">
+          <span class="num err">4a</span
+          ><span class="step-title">Pass a different machine user on the CLI → DENIED</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk query --engine gql -q '{ users(first: 3) { edges { node { name role } } } }' -m other-user -p mu-demo -c tailor.config.ts</code></pre>
+        </div>
+        <div class="expect err">
+          <b>Expect:</b> <code class="inline">Error [PROFILE_MACHINE_USER_OVERRIDE_DENIED]</code> —
+          "fixes the machine user to 'manager-machine-user'".
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num err">4b</span
+          ><span class="step-title">Pass it via the env var → DENIED too</span>
+        </div>
+        <div class="cmd">
+          <pre><code>TAILOR_PLATFORM_MACHINE_USER_NAME=other-user tailor-sdk query --engine gql -q '{ users(first: 3) { edges { node { name role } } } }' -p mu-demo -c tailor.config.ts</code></pre>
+        </div>
+        <div class="expect err">
+          <b>Expect:</b> same <code class="inline">PROFILE_MACHINE_USER_OVERRIDE_DENIED</code>. The
+          pin holds for both CLI and env.
+        </div>
+      </div>
+
+      <h2>5. A value matching the default still works</h2>
+      <div class="step">
+        <div class="step-head">
+          <span class="num ok">5</span
+          ><span class="step-title"
+            >Pass the same machine user as the profile's default → succeeds</span
+          >
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk query --engine gql -q '{ users(first: 3) { edges { node { name role } } } }' -m manager-machine-user -p mu-demo -c tailor.config.ts</code></pre>
+        </div>
+        <div class="expect ok">
+          <b>Expect:</b> <code class="inline">users</code> returned as JSON (deny only rejects a
+          <i>different</i> value).
+        </div>
+      </div>
+
+      <h2>6. (Optional) Unlock</h2>
+      <div class="step">
+        <div class="step-head">
+          <span class="num">6</span
+          ><span class="step-title">profile update --machine-user-override allow</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile update mu-demo --machine-user-override allow</code></pre>
+        </div>
+        <div class="expect">
+          <b>Expect:</b> back to <code class="inline">machineUserOverride = allow</code>; overrides
+          are permitted again.
+        </div>
+      </div>
+
+      <h2>7. Cleanup</h2>
+      <div class="step">
+        <div class="step-head">
+          <span class="num">7</span><span class="step-title">Delete the demo profile</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile delete mu-demo</code></pre>
+        </div>
+        <div class="expect ok">
+          <b>Expect:</b> <code class="inline">Profile "mu-demo" deleted successfully.</code>
+        </div>
+      </div>
+
+      <h2 style="margin-top: 2.6rem">
+        Part 3 — Read-only profile + read-only machine user (staging/prod &amp; AI)
+      </h2>
+      <p class="lead" style="margin-top: 0.3rem">
+        Two complementary guards for an environment you want to inspect but never mutate — handy
+        when you point a local AI agent or MCP server at staging.
+      </p>
+
+      <div class="note">
+        ⚠️ Run from <code class="inline">example/</code>. We use the
+        <b>sdk-show-and-tell</b> workspace as a stand-in for "staging".
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">1</span
+          ><span class="step-title">Layer 1 — create a read-only profile (CLI guard)</span>
+        </div>
+        <div class="desc">
+          With <code class="inline">--permission read</code>, write commands (deploy, truncate,
+          workflow start, secret set, ...) fail fast; reads like <code class="inline">query</code> /
+          <code class="inline">*list</code> / <code class="inline">describe</code> still work.
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile create stg-readonly -u akira_higuchi@tailor.tech -w 5d80e666-2f32-499f-b878-213229a558b8 --permission read</code></pre>
+        </div>
+        <div class="expect ok">
+          <b>Expect:</b> created with <code class="inline">permission = read</code>.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num err">2</span><span class="step-title">A write command is blocked</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk deploy -c tailor.config.ts --dry-run --profile stg-readonly</code></pre>
+        </div>
+        <div class="expect err">
+          <b>Expect:</b> <code class="inline">Error [PROFILE_READONLY]</code> — "blocks
+          platform-state mutations (apply, create/update/delete, deploy, ...). Application-data
+          operations remain available because their permissions are governed by the machine user."
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num ok">3</span><span class="step-title">A read command still works</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk query --engine gql -q '{ users(first: 1) { edges { node { name } } } }' -m manager-machine-user -p stg-readonly -c tailor.config.ts</code></pre>
+        </div>
+        <div class="expect ok">
+          <b>Expect:</b> <code class="inline">users</code> returned as JSON.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">4</span
+          ><span class="step-title">Layer 2 — pin the machine user (server-side guard)</span>
+        </div>
+        <div class="desc">
+          The profile stops the CLI; the machine user's own permissions stop the server. In real
+          staging, point this at a machine user whose TailorDB / IdP permissions only grant read
+          (defined in <code class="inline">tailor.config.ts</code>). Here we pin
+          <code class="inline">manager-machine-user</code> as a stand-in:
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile update stg-readonly -m manager-machine-user --machine-user-override deny</code></pre>
+        </div>
+        <div class="desc">
+          With a read-only-role machine user, even a GraphQL mutation via
+          <code class="inline">query</code> is rejected by the platform, and
+          <code class="inline">deny</code> means the identity can't be swapped.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">5</span><span class="step-title">Cleanup</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile delete stg-readonly</code></pre>
+        </div>
+        <div class="expect ok">
+          <b>Expect:</b> <code class="inline">Profile "stg-readonly" deleted successfully.</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head">
+          <span class="num">i</span><span class="step-title">Why this fits AI agents / MCP</span>
+        </div>
+        <div class="desc">
+          AI agents and MCP servers increasingly run queries against real environments (RAG,
+          analytics, debugging). Point your local agent at this read-only profile + read-only
+          machine user and:
+        </div>
+        <ul style="margin: 0.2rem 0 0; padding-left: 1.2rem; color: var(--muted)">
+          <li>it can read / inspect staging data, but cannot deploy, mutate, or delete;</li>
+          <li>a prompt injection or a buggy tool call can't escalate to writes;</li>
+          <li>
+            <code class="inline">--machine-user-override deny</code> means it can't swap to a more
+            privileged machine user.
+          </li>
+        </ul>
+        <div class="desc" style="margin-top: 0.6rem">
+          One read-only identity, enforced on both the CLI and the platform — scoped to your own
+          local setup.
+        </div>
+      </div>
+
+      <div class="talk">
+        <b>Talking points (wrap-up)</b>
+        <ul>
+          <li>
+            Precedence is <code class="inline">--machine-user</code> &gt;
+            <code class="inline">TAILOR_PLATFORM_MACHINE_USER_NAME</code> &gt; the profile's
+            default.
+          </li>
+          <li>
+            <code class="inline">--machine-user-override deny</code> forbids "acting as a different
+            user" from both the CLI and the env var, at the config level.
+          </li>
+          <li>
+            It applies to application-data commands: <code class="inline">query</code> /
+            <code class="inline">workflow start</code> /
+            <code class="inline">function test-run</code> /
+            <code class="inline">machineuser token</code>.
+          </li>
+          <li>
+            Profiles are local per-developer config, so think of this as a personal safety guard: it
+            stops <i>your own</i> commands — and any AI agent / MCP you run locally — from acting as
+            the wrong identity. It's not an org-wide policy others can't bypass.
+          </li>
+        </ul>
+      </div>
+
+      <footer>Show &amp; Tell demo runbook — generated for the show-and-tell worktree</footer>
+    </div>
+
+    <script>
+      document.querySelectorAll(".cmd").forEach((cmd) => {
+        const code = cmd.querySelector("code");
+        const btn = document.createElement("button");
+        btn.className = "copy";
+        btn.textContent = "Copy";
+        btn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(code.textContent.trim());
+            btn.textContent = "Copied!";
+            btn.classList.add("copied");
+            setTimeout(() => {
+              btn.textContent = "Copy";
+              btn.classList.remove("copied");
+            }, 1400);
+          } catch {
+            const r = document.createRange();
+            r.selectNodeContents(code);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+          }
+        });
+        cmd.appendChild(btn);
+      });
+    </script>
+  </body>
+</html>
