@@ -148,6 +148,31 @@ function findAuthInvokerShorthands(root: SgNode): SgNode[] {
   });
 }
 
+function sameRange(a: SgNode, b: SgNode): boolean {
+  const ar = a.range();
+  const br = b.range();
+  return ar.start.index === br.start.index && ar.end.index === br.end.index;
+}
+
+function findAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
+  return root
+    .findAll({
+      rule: {
+        kind: "property_identifier",
+        regex: "^authInvoker$",
+      },
+    })
+    .filter((node) => {
+      const parent = node.parent();
+      if (!parent) return false;
+      if (parent.kind() === "pair") {
+        const key = parent.field("key");
+        return key ? sameRange(key, node) : false;
+      }
+      return parent.kind() === "property_signature";
+    });
+}
+
 /**
  * Replace `auth.invoker("name")` calls with the bare `"name"` string literal
  * and rename `authInvoker:` option keys to `invoker:`.
@@ -169,6 +194,7 @@ export default function transform(source: string, _filePath: string): string | n
 
   const calls = findInvokerCalls(root);
   const edits: Edit[] = calls.map((c) => c.callNode.replace(c.argText));
+  edits.push(...findAuthInvokerPropertyKeys(root).map((node) => node.replace("invoker")));
   edits.push(
     ...findAuthInvokerShorthands(root).map((node) => node.replace("invoker: authInvoker")),
   );
@@ -187,8 +213,6 @@ export default function transform(source: string, _filePath: string): string | n
   }
 
   let result = edits.length === 0 ? source : root.commitEdits(edits);
-
-  result = result.replace(/\bauthInvoker(\s*):/g, "invoker$1:");
 
   // Normalize: drop the leading blank line that an import removal at the top
   // of the file leaves behind, and collapse runs of 3+ newlines.
