@@ -37,5 +37,4 @@ summary:
   if: true
 # Custom metrics are specified via environment variables:
 # - OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: diagnostics.json
-# - OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: bundle-size.json
 # - OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: runtime-perf.json

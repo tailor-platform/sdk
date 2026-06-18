@@ -141,7 +141,7 @@
     "test:coverage": "vitest --coverage",
     "docs:check": "vitest run --project=unit* src/cli/docs.test.ts",
     "docs:update": "POLITTY_DOCS_UPDATE=true vitest run --project=unit* src/cli/docs.test.ts",
-    "build": "tsdown && politty generate-worker --bin dist/cli/index.mjs --program tailor-sdk --shell zsh --verify",
+    "build": "node scripts/build-tsgo.mjs && politty generate-worker --bin dist/cli/index.mjs --program tailor-sdk --shell zsh --verify",
     "lint": "oxlint --type-aware .",
     "check:public-api-jsdoc": "tsx scripts/check-public-api-jsdoc.ts",
     "check:zod-isolation": "tsx scripts/check-zod-isolation.ts",
@@ -153,7 +153,6 @@
     "perf:runtime": "bash scripts/perf/runtime-perf.sh",
     "prepublish": "pnpm run build",
     "postinstall": "node postinstall.mjs",
-    "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
     "knip": "knip",
     "publint": "publint --strict",
     "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('pnpm oxfmt --write '+f.join(' '),{stdio:'inherit'})\""
@@ -222,8 +221,6 @@
     "oxfmt": "0.54.0",
     "oxlint": "1.69.0",
     "oxlint-tsgolint": "0.23.0",
-    "sonda": "0.13.0",
-    "tsdown": "0.22.2",
     "typescript": "6.0.3",
     "vitest": "4.1.8",
     "zinfer": "0.1.8"

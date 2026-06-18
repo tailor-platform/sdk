@@ -93,31 +93,6 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="$RUN_ID"
 
-  bundle-size:
-    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
-    name: Bundle Size
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
-
-      - name: Install deps
-        uses: ./.github/actions/install-deps
-
-      - name: Measure bundle size
-        run: pnpm --filter @tailor-platform/sdk measure:bundle
-
-      - name: Upload results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bundle-size-results
-          path: packages/sdk/bundle-size.json
-
   type-performance:
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Type Performance
@@ -174,7 +149,7 @@ jobs:
 
   report-metrics:
     name: Report Metrics
-    needs: [coverage-shard, bundle-size, type-performance, runtime-performance]
+    needs: [coverage-shard, type-performance, runtime-performance]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -211,13 +186,6 @@ jobs:
             echo "See octocov report below for coverage details."
             echo ""
 
-            echo "## Bundle Size"
-            echo ""
-            echo "| Metric | Value |"
-            echo "|--------|------:|"
-            jq -r '.metrics[] | "| \(.name) | \(.value) \(.unit) |"' artifacts/bundle-size-results/bundle-size.json
-            echo ""
-
             echo "## Type Check Performance"
             echo ""
             echo "| Feature | Instantiations | Types |"
@@ -240,5 +208,4 @@ jobs:
           config: packages/sdk/.octocov.yml
         env:
           OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: artifacts/type-perf-results/diagnostics.json
-          OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: artifacts/bundle-size-results/bundle-size.json
           OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: artifacts/runtime-perf-results/runtime-perf.json
