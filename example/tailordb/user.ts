@@ -1,5 +1,8 @@
-import { db } from "@tailor-platform/sdk";
-import { defaultGqlPermission, defaultPermission } from "./permissions";
+import {
+  db,
+  unsafeAllowAllGqlPermission,
+  unsafeAllowAllTypePermission,
+} from "@tailor-platform/sdk";
 
 export const user = db
   .type("User", {
@@ -15,5 +18,5 @@ export const user = db
     { fields: ["name", "department"], unique: false },
     { fields: ["status", "createdAt"], unique: false, name: "user_status_created_idx" },
   )
-  .permission(defaultPermission)
-  .gqlPermission(defaultGqlPermission);
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
