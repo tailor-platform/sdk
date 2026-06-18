@@ -5,11 +5,42 @@ import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { arg, defineCommand, runMain } from "politty";
 import { z } from "zod";
-import { getApplicableCodemods, resolveCodemodScript } from "./registry";
+import { automationLevel } from "./migration-doc";
+import { allCodemods, getApplicableCodemods, resolveCodemodScript } from "./registry";
 import { runCodemods } from "./runner";
 import type { LlmReview, RunOutput } from "./types";
 
 const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta.url)) + "/..");
+
+/** One rule in the `list` command output. */
+interface RuleSummary {
+  id: string;
+  name: string;
+  /** Automatic / Partially automatic / Manual, or "Notice" for behavioral changes. */
+  kind: string;
+  since: string;
+  until: string;
+}
+
+const listCommand = defineCommand({
+  name: "list",
+  description: "List the available codemod rules (id, name, kind, version range).",
+  args: z.object({}).strict(),
+  run: () => {
+    const rules: RuleSummary[] = allCodemods.map((codemod) => ({
+      id: codemod.id,
+      name: codemod.name,
+      kind: codemod.notice ? "Notice" : automationLevel(codemod),
+      since: codemod.since,
+      until: codemod.until,
+    }));
+    // Human-readable table to stderr; machine-readable JSON to stdout.
+    for (const rule of rules) {
+      process.stderr.write(`  ${rule.id}  [${rule.kind}]  ${rule.name}\n`);
+    }
+    process.stdout.write(JSON.stringify(rules) + "\n");
+  },
+});
 
 /**
  * Print an LLM-assisted review task to stderr: the flagged files plus the
@@ -32,6 +63,7 @@ function printLlmReview(review: LlmReview): void {
 const main = defineCommand({
   name: packageJson.name ?? "sdk-codemod",
   description: packageJson.description ?? "Codemod runner for Tailor Platform SDK upgrades",
+  subCommands: { list: listCommand },
   notes: `Applies the codemods matching the \`--from\`/\`--to\` version range to the
 \`--target\` directory, then writes a JSON summary to \`stdout\`:
 
