@@ -279,29 +279,12 @@ export const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/runtime-globals-opt-in",
-    name: "Runtime globals are opt-in",
+    name: "Ambient runtime globals are opt-in",
     description:
-      'Importing `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` global declarations. Opt in explicitly with `import "@tailor-platform/sdk/runtime/globals"`, or use the typed wrappers from `@tailor-platform/sdk/runtime`. (The capital-cased `Tailordb.*` namespace is removed separately — see the `Tailordb → tailordb` codemod.)',
+      'Importing `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` global declarations. Normal SDK development does not need them — use the SDK APIs and the typed wrappers from `@tailor-platform/sdk/runtime`. Only if you relied on the ambient globals directly, add `import "@tailor-platform/sdk/runtime/globals"`. (The capital-cased `Tailordb.*` namespace is removed separately — see the `Tailordb → tailordb` codemod.)',
     since: "1.0.0",
     until: "2.0.0",
-    // No scriptPath: which files rely on the ambient globals cannot be
-    // determined reliably enough to rewrite automatically.
-    examples: [
-      {
-        caption: "Add the opt-in import to files that use the ambient globals:",
-        before:
-          "// relied on ambient `tailordb` / `tailor` just from importing the SDK\nconst result = await tailordb.query(/* ... */);",
-        after:
-          'import "@tailor-platform/sdk/runtime/globals";\n\nconst result = await tailordb.query(/* ... */);',
-      },
-    ],
-    prompt: [
-      "In v2, importing @tailor-platform/sdk no longer activates the ambient tailor.* /",
-      "tailordb.* globals. For each file that uses those globals, add",
-      'import "@tailor-platform/sdk/runtime/globals"; at the top, or migrate it to the',
-      "typed wrappers exported from @tailor-platform/sdk/runtime. Do not add the import to",
-      "files that do not use the globals.",
-    ].join("\n"),
+    notice: true,
   },
   {
     id: "v2/workflow-trigger-dispatch",
@@ -335,7 +318,7 @@ export const allCodemods: CodemodPackage[] = [
       "CLI login tokens are stored in the OS keyring by default when available, falling back to the platform config file when it is not. No source change is required; re-login if you need tokens moved into the keyring.",
     since: "1.0.0",
     until: "2.0.0",
-    // Runtime/CLI behavior change — no user source to migrate.
+    notice: true,
   },
   {
     id: "v2/cli-users-by-subject",
@@ -344,6 +327,7 @@ export const allCodemods: CodemodPackage[] = [
       "The CLI stores human users by their stable subject ID instead of email (email is kept for display). Legacy email-keyed entries are migrated automatically on the next login or token refresh. No source change is required.",
     since: "1.0.0",
     until: "2.0.0",
+    notice: true,
   },
   {
     id: "v2/function-logs-content-hash",
@@ -352,6 +336,7 @@ export const allCodemods: CodemodPackage[] = [
       "`tailor-sdk function logs` maps stack traces against the function bundle only when the execution recorded a `contentHash`. Executions without one now show raw stack traces instead of mapped frames. No source change is required.",
     since: "1.0.0",
     until: "2.0.0",
+    notice: true,
   },
 ];
 
