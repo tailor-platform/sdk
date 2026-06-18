@@ -6,6 +6,8 @@ on:
       - aqua.yaml
       - aqua-checksums.json
 
+permissions: {}
+
 jobs:
   update-aqua-checksums:
     # Pin to v1.0.4. v1.0.5 pulls in update-checksum-action v0.2.7 which has

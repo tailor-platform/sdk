@@ -124,7 +124,12 @@ export default defineConfig({
         directory: "./migrations",
       },
     },
-    analyticsdb: { files: ["./analyticsdb/*.ts"] },
+    analyticsdb: {
+      files: ["./analyticsdb/*.ts"],
+      migration: {
+        directory: "./migrations/analyticsdb",
+      },
+    },
   },
   resolver: {
     "my-resolver": { files: ["./resolvers/*.ts"] },

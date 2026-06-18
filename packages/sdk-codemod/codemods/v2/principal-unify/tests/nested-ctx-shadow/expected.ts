@@ -7,7 +7,7 @@ export default createResolver({
   operation: "query",
   output: t.array(t.string()),
   body: (ctx) => ({
-    me: ctx.caller.id,
+    me: ctx.caller?.id,
     others: items.map((ctx) => ctx.user.id),
   }),
 });

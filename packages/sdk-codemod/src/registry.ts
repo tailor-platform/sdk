@@ -99,13 +99,19 @@ export const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/principal-unify",
-    name: "Unify TailorUser/TailorActor/TailorInvoker → TailorPrincipal",
+    name: "Unify TailorUser/TailorActor/TailorActorType/TailorInvoker → TailorPrincipal",
     description:
-      "Rename TailorUser/TailorActor/TailorInvoker to TailorPrincipal, drop unauthenticatedTailorUser, and rename resolver body `user` to `caller`",
+      "Rename TailorUser/TailorActor/TailorActorType/TailorInvoker to TailorPrincipal, drop unauthenticatedTailorUser, rename resolver body `user` to `caller`, and rename TailorDB callback `user` to `invoker`",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/principal-unify/scripts/transform.js",
-    legacyPatterns: ["TailorUser", "TailorActor", "TailorInvoker", "unauthenticatedTailorUser"],
+    legacyPatterns: [
+      "TailorUser",
+      "TailorActor",
+      "TailorActorType",
+      "TailorInvoker",
+      "unauthenticatedTailorUser",
+    ],
     examples: [
       {
         caption: "Type references unify under `TailorPrincipal`:",

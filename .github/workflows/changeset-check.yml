@@ -4,13 +4,19 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
-permissions:
-  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   changeset-check:
+    name: Changeset check
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read # checkout and diff the PR
 
     if: >-
       github.event.pull_request.user.login != 'renovate[bot]' &&

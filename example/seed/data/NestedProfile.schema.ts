@@ -4,8 +4,8 @@ import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/t
 import { nestedProfile } from "../../tailordb/nested";
 
 const schemaType = t.object({
-  ...nestedProfile.pickFields(["id","createdAt"], { optional: true }),
-  ...nestedProfile.omitFields(["id","createdAt"]),
+  ...nestedProfile.pickFields(["id","createdAt","updatedAt"], { optional: true }),
+  ...nestedProfile.omitFields(["id","createdAt","updatedAt"]),
 });
 
 const hook = createTailorDBHook(nestedProfile);

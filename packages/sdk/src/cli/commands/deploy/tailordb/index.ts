@@ -49,6 +49,7 @@ import {
 } from "@/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "@/cli/commands/tailordb/migrate/types";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
+import { byName } from "@/cli/shared/apply-concurrency";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { assertDefined } from "@/utils/assert";
@@ -1189,6 +1190,12 @@ export async function planTailorDB(context: PlanContext) {
     ),
     planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
   ]);
+
+  // Apply type DDL in a stable, name-sorted order so the create burst (capped
+  // by the operator client's concurrency limiter) is reproducible across runs.
+  typeChangeSet.creates.sort(byName);
+  typeChangeSet.updates.sort(byName);
+  typeChangeSet.deletes.sort(byName);
 
   return {
     changeSet: {

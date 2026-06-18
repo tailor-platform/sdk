@@ -21,8 +21,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   lint:
+    name: Lint workflows
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -51,6 +54,7 @@ jobs:
         run: zizmor --no-progress .github/workflows/ .github/actions/
 
   lint-generated-workflows:
+    name: Lint generated workflows
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

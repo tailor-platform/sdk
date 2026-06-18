@@ -11,5 +11,5 @@ registries:
 packages:
   - name: rhysd/actionlint@v1.7.12
   - name: suzuki-shunsuke/ghalint@v1.5.6
-  - name: bufbuild/buf@v1.70.0
+  - name: bufbuild/buf@v1.71.0
   - name: zizmorcore/zizmor@v1.25.2

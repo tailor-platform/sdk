@@ -4,17 +4,23 @@ on:
   pull_request:
     types: [opened, reopened]
 
-permissions:
-  contents: read
-  pull-requests: write
-  id-token: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   dependencies-review:
+    name: Review dependencies
     if: |
       github.event.pull_request.user.login == 'renovate[bot]'
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    permissions:
+      contents: read # checkout the PR branch
+      pull-requests: write # upsert the dependency review comment
+      id-token: write # OIDC for the Claude Code action
     env:
       REVIEW_BODY_FILE: ${{ github.workspace }}/dependency-review.md
     steps:
@@ -23,7 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Review dependencies with Claude
-        uses: anthropics/claude-code-action@4d7e1f0cd85743fdc93b1c8040ab54395da024e2 # v1.0.149
+        uses: anthropics/claude-code-action@9dd8b95a392eb34b6f5fb56cf5a64cb735912d4b # v1.0.150
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_bots: "renovate[bot]"

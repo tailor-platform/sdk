@@ -603,7 +603,7 @@ describe("TailorDBType withTimestamps option tests", () => {
       id: string;
       name: string;
       createdAt: string | Date;
-      updatedAt?: string | Date | null;
+      updatedAt: string | Date;
     }>();
   });
 
@@ -626,6 +626,42 @@ describe("TailorDBType withTimestamps option tests", () => {
 
     const before = Date.now();
     const result = createHook!({ value: null, data: {}, invoker: timestampHookInvoker });
+    const after = Date.now();
+    expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+  });
+
+  test("updatedAt create hook respects a user-specified value", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const createHook = updatedAt.metadata.hooks?.create;
+    expect(createHook).toBeDefined();
+
+    const specified = new Date("2025-02-10T09:00:00Z");
+    const result = createHook!({ value: specified, data: {}, invoker: timestampHookInvoker });
+    expect(result).toBe(specified);
+  });
+
+  test("updatedAt create hook falls back to now when no value is given", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const createHook = updatedAt.metadata.hooks?.create;
+    expect(createHook).toBeDefined();
+
+    const before = Date.now();
+    const result = createHook!({ value: null, data: {}, invoker: timestampHookInvoker });
+    const after = Date.now();
+    expect(result).toBeInstanceOf(Date);
+    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+  });
+
+  test("updatedAt update hook uses current time", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
+
+    const before = Date.now();
+    const result = updateHook!({ value: null, data: {}, invoker: timestampHookInvoker });
     const after = Date.now();
     expect(result).toBeInstanceOf(Date);
     expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
@@ -832,7 +868,7 @@ describe("TailorDBType plural form tests", () => {
       title: string;
       content?: string | null;
       createdAt: string | Date;
-      updatedAt?: string | Date | null;
+      updatedAt: string | Date;
     }>();
 
     expect(_postType.name).toBe("Post");
