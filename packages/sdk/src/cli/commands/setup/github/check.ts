@@ -111,6 +111,27 @@ function detectDefaultBranchSafe(cwd: string, run: GitRunner | undefined): strin
   }
 }
 
+// The lock is machine-owned, but a corrupted or hand-edited lock could carry an
+// absolute or `..`-traversing path. Resolve lock-recorded paths within the repo
+// root and return null when they escape, so the audit never reads outside it.
+function resolveWithinRoot(outputDir: string, relPath: string): string | null {
+  if (path.isAbsolute(relPath)) return null;
+  const abs = path.join(outputDir, relPath);
+  const rel = path.relative(outputDir, abs);
+  if (rel === ".." || rel.startsWith(`..${path.sep}`) || rel.startsWith("../")) return null;
+  return abs;
+}
+
+// Treat any read failure (missing file, EISDIR, TOCTOU race, permissions) as an
+// absent file so the audit reports drift instead of crashing.
+function readHash(absFile: string): string | null {
+  try {
+    return hashContent(fs.readFileSync(absFile, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
 export type CheckGitHubOptions = {
   /** Repository root where `.github` lives. */
   outputDir: string;
@@ -146,15 +167,17 @@ export function checkGitHub(options: CheckGitHubOptions): void {
 
   const findings: DriftFinding[] = [];
   for (const target of lock.targets) {
-    const absFile = path.join(outputDir, target.file);
-    const fileExists = fs.existsSync(absFile);
-    const currentHash = fileExists ? hashContent(fs.readFileSync(absFile, "utf-8")) : null;
-    const configPath = path.join(outputDir, target.inputs.dir, "tailor.config.ts");
+    const absFile = resolveWithinRoot(outputDir, target.file);
+    const currentHash = absFile === null ? null : readHash(absFile);
+    const configAbs = resolveWithinRoot(
+      outputDir,
+      path.join(target.inputs.dir, "tailor.config.ts"),
+    );
     findings.push(
       ...findTargetDrift(target, {
-        fileExists,
+        fileExists: currentHash !== null,
         currentHash,
-        configExists: exists(configPath),
+        configExists: configAbs !== null && exists(configAbs),
         defaultBranch,
         templateVersion: TEMPLATE_VERSION,
       }),

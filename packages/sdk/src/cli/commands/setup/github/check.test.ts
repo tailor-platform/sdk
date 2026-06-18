@@ -3,8 +3,8 @@ import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { checkGitHub, findTargetDrift, type TargetState } from "./check";
 import { setupGitHub, type SetupGitHubOptions } from "./github";
+import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
-import type { LockTarget } from "./lock";
 
 const baseTarget = (overrides: Partial<LockTarget> = {}): LockTarget => ({
   kind: "branch",
@@ -159,6 +159,40 @@ describe("checkGitHub (integration)", () => {
   test("detects a missing config under the recorded dir", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app" }));
     fs.rmSync(path.join(testDir, "tailor.config.ts"));
+    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).toThrow(
+      /drift/,
+    );
+  });
+
+  const lockTarget = (file: string): LockTarget => ({
+    kind: "branch",
+    workspaceName: "my-app",
+    file,
+    templateVersion: TEMPLATE_VERSION,
+    inputs: {
+      branch: "main",
+      tagPattern: null,
+      environment: "my-app",
+      dir: ".",
+      packageManager: "pnpm",
+      plan: true,
+    },
+    generatedIds: [],
+    ejectedIds: [],
+    contentHash: "sha256:abc",
+  });
+
+  test("reports drift instead of reading outside the repo on a traversing lock path", () => {
+    writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget("../escape.yml")] });
+    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).toThrow(
+      /drift/,
+    );
+  });
+
+  test("does not crash when the recorded file path is a directory", () => {
+    const file = ".github/workflows/tailor-my-app.yml";
+    writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget(file)] });
+    fs.mkdirSync(path.join(testDir, file), { recursive: true });
     expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).toThrow(
       /drift/,
     );
