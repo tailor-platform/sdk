@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { checkGitHub, findTargetDrift, resolveWithinRoot, type TargetState } from "./check";
@@ -100,7 +101,7 @@ describe("findTargetDrift", () => {
 });
 
 describe("resolveWithinRoot", () => {
-  const dir = path.join("/tmp", `rwr-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const dir = path.join(os.tmpdir(), `rwr-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   beforeEach(() => fs.mkdirSync(dir, { recursive: true }));
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -119,7 +120,7 @@ describe("resolveWithinRoot", () => {
 
   test("rejects a symlink that escapes the repo root", () => {
     const outside = path.join(
-      "/tmp",
+      os.tmpdir(),
       `outside-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     fs.writeFileSync(outside, "secret\n");
@@ -140,7 +141,7 @@ describe("resolveWithinRoot", () => {
 
 describe("checkGitHub (integration)", () => {
   const testDir = path.join(
-    "/tmp",
+    os.tmpdir(),
     `setup-gh-check-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
 

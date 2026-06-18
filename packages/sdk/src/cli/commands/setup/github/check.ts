@@ -52,7 +52,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     findings.push({
       target: id,
       rule: "missing-file",
-      message: `${target.file} is missing. Re-run setup to restore it.`,
+      message: `${target.file} is missing or unreadable. Re-run setup to restore it.`,
     });
   } else if (state.currentHash !== null && state.currentHash !== target.contentHash) {
     findings.push({
