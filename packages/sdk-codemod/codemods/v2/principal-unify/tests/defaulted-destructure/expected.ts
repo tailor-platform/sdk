@@ -6,5 +6,5 @@ export default createResolver({
   name: "n",
   operation: "query",
   output: t.string(),
-  body: ({ caller = fallback }) => caller.id,
+  body: ({ caller = fallback }) => caller?.id,
 });

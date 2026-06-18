@@ -51,7 +51,7 @@ describe("controlplane", () => {
           },
           updatedAt: {
             type: "datetime",
-            required: false,
+            required: true,
             array: false,
             hooks: expect.any(Object),
           },
@@ -497,8 +497,8 @@ describe("dataplane", () => {
         createUser: {
           id: string;
           name: string;
-          createdAt?: string;
-          updatedAt?: string;
+          createdAt: string;
+          updatedAt: string;
         };
       }
       const createResult = await graphQLClient.rawRequest<Data>(create);
@@ -508,7 +508,7 @@ describe("dataplane", () => {
           id: expect.any(String),
           name: "alice",
           createdAt: expect.any(String),
-          updatedAt: null,
+          updatedAt: expect.any(String),
         },
       });
       const userId = createResult.data.createUser.id;

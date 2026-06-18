@@ -325,6 +325,16 @@ function generateEnumChangeColumnType(
   return `ColumnType<${selectType}, ${afterType}, ${afterType}>`;
 }
 
+function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {
+  if (config.type !== "date" && config.type !== "datetime") return null;
+
+  if (config.array) {
+    return "ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>";
+  }
+
+  return "ColumnType<Date | null, Date | string, Date | string>";
+}
+
 /**
  * Generate field type from snapshot field config
  * @param {SnapshotFieldConfig} config - Field configuration
@@ -373,6 +383,15 @@ function generateFieldType(
 
   // Handle nullable/required modifiers
   if (isOptionalToRequired) {
+    const dateColumnType = generateOptionalToRequiredDateColumnType(config);
+    if (dateColumnType) {
+      return {
+        type: dateColumnType,
+        usedTimestamp: false,
+        usedColumnType: true,
+      };
+    }
+
     // For fields changing from optional to required:
     // SELECT returns T | null (existing data might be null)
     // INSERT/UPDATE requires T (must provide a value)
