@@ -1162,9 +1162,9 @@ export const db = {
   fields: {
     /**
      * Creates standard timestamp fields (createdAt, updatedAt) with auto-hooks.
-     * createdAt is set on create, updatedAt is set on update.
-     * A user-specified createdAt is respected when provided (e.g. seeding historical
-     * records); the current time is used only when the value is omitted.
+     * createdAt and updatedAt are set on create.
+     * User-specified timestamp values are respected when provided (e.g. seeding
+     * historical records); the current time is used only when the value is omitted.
      * @returns An object with createdAt and updatedAt fields
      * @example
      * const model = db.type("Model", {
@@ -1176,9 +1176,12 @@ export const db = {
       createdAt: datetime()
         .hooks({ create: ({ value }) => value ?? new Date() })
         .description("Record creation timestamp"),
-      updatedAt: datetime({ optional: true })
-        .hooks({ update: () => new Date() })
-        .description("Record last update timestamp"),
+      updatedAt: datetime()
+        .hooks({
+          create: ({ value }) => value ?? new Date(),
+          update: () => new Date(),
+        })
+        .description("Record update timestamp"),
     }),
   },
 };

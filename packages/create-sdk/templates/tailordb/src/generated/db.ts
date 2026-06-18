@@ -32,7 +32,7 @@ export interface Namespace {
         isInternal: boolean;
       }>;
       createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
+      updatedAt: Generated<Timestamp>;
     }
 
     Task: {
@@ -46,7 +46,7 @@ export interface Namespace {
       categoryId: string | null;
       isArchived: Generated<boolean>;
       createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
+      updatedAt: Generated<Timestamp>;
     }
 
     User: {
@@ -56,7 +56,7 @@ export interface Namespace {
       role: "ADMIN" | "MEMBER" | "VIEWER";
       bio: string | null;
       createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
+      updatedAt: Generated<Timestamp>;
     }
   }
 }

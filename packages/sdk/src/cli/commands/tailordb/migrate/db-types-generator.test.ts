@@ -386,6 +386,37 @@ describe("db-types-generator", () => {
       expect(content).toContain("email: ColumnType<string | null, string, string>;");
     });
 
+    test("generates ColumnType for optional to required datetime change", async () => {
+      const snapshot = createMockSnapshot({
+        User: {
+          fields: {
+            updatedAt: { type: "datetime", required: true },
+          },
+        },
+      });
+      createMigrationDir(testDir, 1);
+
+      const diff = createMockDiff(
+        [
+          {
+            kind: "field_modified",
+            typeName: "User",
+            fieldName: "updatedAt",
+            before: { type: "datetime", required: false },
+            after: { type: "datetime", required: true },
+          },
+        ],
+        { hasBreakingChanges: true, requiresMigrationScript: true },
+      );
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        "updatedAt: ColumnType<Date | null, Date | string, Date | string>;",
+      );
+    });
+
     test("generates ColumnType for added required fields", async () => {
       const snapshot = createMockSnapshot({
         User: {

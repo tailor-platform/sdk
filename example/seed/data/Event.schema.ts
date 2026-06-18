@@ -4,8 +4,8 @@ import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/t
 import { event } from "../../analyticsdb/event";
 
 const schemaType = t.object({
-  ...event.pickFields(["id","createdAt"], { optional: true }),
-  ...event.omitFields(["id","createdAt"]),
+  ...event.pickFields(["id","createdAt","updatedAt"], { optional: true }),
+  ...event.omitFields(["id","createdAt","updatedAt"]),
 });
 
 const hook = createTailorDBHook(event);
