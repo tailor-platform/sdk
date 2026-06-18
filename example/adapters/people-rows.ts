@@ -1,4 +1,5 @@
 import { createHttpAdapter } from "@tailor-platform/sdk";
+import ml from "multiline-ts";
 
 function esc(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -16,11 +17,23 @@ export default createHttpAdapter({
     get: (req) => {
       const q = req.query.q ?? "";
       return {
-        query: `query Search($q: String!) {
-          users(query: { name: { contains: $q } }, first: 20,
-                order: [{ field: name, direction: Asc }]) {
-            edges { node { id name email role status } }
-          }
+        query: ml /* gql */ `
+          query Search($q: String!) {
+            users(
+              query: { name: { contains: $q } }
+              first: 20,
+              order: [{ field: name, direction: Asc }]
+            ) {
+              edges {
+                node {
+                  id
+                  name
+                  email
+                  role
+                  status
+                }
+              }
+            }
         }`,
         variables: { q },
       };
