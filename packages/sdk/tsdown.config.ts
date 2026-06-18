@@ -32,7 +32,7 @@ const plugins: TsdownPluginOption[] = [
     format: "json",
     filename: "bundle-analysis.json",
     deep: true,
-  }),
+  }) as TsdownPluginOption,
 ];
 
 export default defineConfig({

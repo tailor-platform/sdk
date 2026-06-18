@@ -158,7 +158,7 @@
     "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('pnpm oxfmt --write '+f.join(' '),{stdio:'inherit'})\""
   },
   "dependencies": {
-    "@0no-co/graphql.web": "1.2.0",
+    "@0no-co/graphql.web": "1.3.2",
     "@badgateway/oauth2-client": "3.3.1",
     "@bufbuild/protobuf": "2.12.0",
     "@bufbuild/protovalidate": "1.2.0",
@@ -216,14 +216,14 @@
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.2",
     "@types/semver": "7.7.1",
-    "@typescript/native-preview": "7.0.0-dev.20260612.1",
+    "@typescript/native-preview": "7.0.0-dev.20260614.1",
     "@vitest/coverage-v8": "4.1.8",
     "oxfmt": "0.54.0",
     "oxlint": "1.69.0",
     "oxlint-tsgolint": "0.23.0",
-    "sonda": "0.11.1",
+    "sonda": "0.13.0",
     "tsdown": "0.22.2",
-    "typescript": "5.9.3",
+    "typescript": "6.0.3",
     "vitest": "4.1.8",
     "zinfer": "0.1.8"
   },

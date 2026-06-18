@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
+    "types": ["node"],
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo"
   },
