@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.67.1
+### Patch Changes
+
+
+
+- [#1491](https://github.com/tailor-platform/sdk/pull/1491) [`be30383`](https://github.com/tailor-platform/sdk/commit/be30383e368b01f81f7e019fc509c9b61a33eb37) Thanks [@toiroakr](https://github.com/toiroakr)! - chore(deps): upgrade typescript to 6.0.3
+  
+  Upgrade the workspace dev/build toolchain to TypeScript 6.0.3. Dev-dependency
+  change only — no public API or runtime behavior change.
+
 ## 1.67.0
 ### Minor Changes
 
