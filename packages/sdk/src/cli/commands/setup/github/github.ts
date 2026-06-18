@@ -385,7 +385,7 @@ function printNextSteps(obj: { environment: string; idInjected: boolean }): void
  * @param options - Setup options
  */
 export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
-  logBetaWarning("setup github");
+  logBetaWarning("setup");
 
   const resolved = await resolve(options);
 
