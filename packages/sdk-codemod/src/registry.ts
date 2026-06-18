@@ -87,15 +87,15 @@ const allCodemods: CodemodPackage[] = [
     id: "v2/auth-invoker-unwrap",
     name: 'auth.invoker("name") → invoker: "name"',
     description:
-      'Replace `authInvoker: auth.invoker("name")` with `invoker: "name"` and drop the `auth` import when no other reference remains. The `auth.invoker()` helper is removed in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
+      'Rename `authInvoker` options to `invoker`, replace `auth.invoker("name")` with the bare `"name"` string, and drop the `auth` import when no other reference remains. The `auth.invoker()` helper is removed in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/auth-invoker-unwrap/scripts/transform.js",
-    suspiciousPatterns: ["auth.invoker"],
+    suspiciousPatterns: ["auth.invoker", "authInvoker"],
     prompt: [
       "In Tailor SDK v2 the auth.invoker() helper is removed; an invoker is now the",
       "machine user name passed directly as a string. The codemod already rewrote the",
-      'string-literal form authInvoker: auth.invoker("name") to invoker: "name". These files still contain',
+      'string-literal form authInvoker: auth.invoker("name") to invoker: "name" and renamed plain authInvoker options. These files still contain',
       "auth.invoker(...) because the argument is not a plain string literal (a variable,",
       "template literal, function call, or property access).",
       "",

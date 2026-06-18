@@ -1,10 +1,10 @@
 import { parse, Lang } from "@ast-grep/napi";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
-const QUICK_FILTER_NEEDLE = "auth.invoker";
+const QUICK_FILTER_NEEDLES = ["auth.invoker", "authInvoker"];
 
 function quickFilter(source: string): boolean {
-  return source.includes(QUICK_FILTER_NEEDLE);
+  return QUICK_FILTER_NEEDLES.some((needle) => source.includes(needle));
 }
 
 function isInsideImportStatement(node: SgNode): boolean {
@@ -141,7 +141,7 @@ function findAuthImports(root: SgNode): SgNode[] {
 
 /**
  * Replace `auth.invoker("name")` calls with the bare `"name"` string literal
- * and rename matching `authInvoker:` option keys to `invoker:`.
+ * and rename `authInvoker:` option keys to `invoker:`.
  * If no other `auth` references remain after the rewrite, drop the `auth`
  * specifier (or the entire import line when `auth` was its sole specifier).
  *
@@ -159,24 +159,22 @@ export default function transform(source: string, _filePath: string): string | n
   const root = parse(lang, source).root();
 
   const calls = findInvokerCalls(root);
-  if (calls.length === 0) return null;
-
   const edits: Edit[] = calls.map((c) => c.callNode.replace(c.argText));
 
-  const remaining = countRemainingAuthRefs(
-    root,
-    calls.map((c) => c.range),
-  );
-  if (remaining === 0) {
+  if (
+    calls.length > 0 &&
+    countRemainingAuthRefs(
+      root,
+      calls.map((c) => c.range),
+    ) === 0
+  ) {
     for (const importStmt of findAuthImports(root)) {
       const edit = buildAuthImportRemovalEdit(source, importStmt);
       if (edit) edits.push(edit);
     }
   }
 
-  if (edits.length === 0) return null;
-
-  let result = root.commitEdits(edits);
+  let result = edits.length === 0 ? source : root.commitEdits(edits);
 
   result = result.replace(/\bauthInvoker(\s*):/g, "invoker$1:");
 
