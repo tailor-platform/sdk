@@ -2,14 +2,14 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { resourceTrn } from "#src/cli/commands/deploy/label";
-import { deploymentArgs } from "#src/cli/shared/args";
-import { logBetaWarning } from "#src/cli/shared/beta";
-import { initOperatorClient } from "#src/cli/shared/client";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { loadConfig } from "#src/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
-import { logger, styles } from "#src/cli/shared/logger";
+import { resourceTrn } from "#/cli/commands/deploy/label";
+import { deploymentArgs } from "#/cli/shared/args";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
 import { getNamespacesWithMigrations } from "./config";
 import {
   getMigrationFiles,

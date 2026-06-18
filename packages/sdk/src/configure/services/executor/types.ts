@@ -1,1 +1,1 @@
-export type { ExecutorServiceConfig, ExecutorServiceInput } from "#src/configure/config/types";
+export type { ExecutorServiceConfig, ExecutorServiceInput } from "#/configure/config/types";

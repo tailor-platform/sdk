@@ -1,11 +1,11 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs } from "#src/cli/shared/args";
-import { fetchMachineUserToken, initOperatorClient } from "#src/cli/shared/client";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { loadConfig } from "#src/cli/shared/config-loader";
-import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#src/cli/shared/context";
-import { logger } from "#src/cli/shared/logger";
+import { deploymentArgs } from "#/cli/shared/args";
+import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 
 export interface GetMachineUserTokenOptions {
   name?: string;

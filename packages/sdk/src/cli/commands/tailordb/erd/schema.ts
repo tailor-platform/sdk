@@ -1,15 +1,15 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { hashContent } from "#src/cli/cache/hasher";
-import { logger } from "#src/cli/shared/logger";
-import { isPluginGeneratedType } from "#src/parser/service/tailordb/type-source";
+import { hashContent } from "#/cli/cache/hasher";
+import { logger } from "#/cli/shared/logger";
+import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
 import type {
   OperatorFieldConfig,
   ParsedField,
   TailorDBType,
   TypeSourceInfoEntry,
-} from "#src/parser/service/tailordb/types";
-import type { TailorDBNamespaceData } from "#src/plugin/types";
+} from "#/parser/service/tailordb/types";
+import type { TailorDBNamespaceData } from "#/plugin/types";
 import type {
   TailorDbErdColumn,
   TailorDbErdColumnRelation,

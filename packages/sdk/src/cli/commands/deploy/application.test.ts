@@ -1,10 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { logger, symbols } from "#src/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { diffHttpAdapterDisplay, planApplication } from "./application";
-import type { Application } from "#src/cli/services/application";
-import type { OperatorClient } from "#src/cli/shared/client";
+import type { Application } from "#/cli/services/application";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
 
 vi.mock("./label", async (importOriginal) => {

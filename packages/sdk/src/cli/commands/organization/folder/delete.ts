@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { confirmationArgs, folderArgs, organizationArgs } from "#src/cli/shared/args";
-import { initOperatorClient } from "#src/cli/shared/client";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { loadAccessToken } from "#src/cli/shared/context";
-import { logger } from "#src/cli/shared/logger";
-import { prompt } from "#src/cli/shared/prompt";
-import { assertWritable } from "#src/cli/shared/readonly-guard";
-import { assertDefined } from "#src/utils/assert";
+import { confirmationArgs, folderArgs, organizationArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { assertDefined } from "#/utils/assert";
 
 const deleteFolderOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),

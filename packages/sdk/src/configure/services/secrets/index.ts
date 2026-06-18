@@ -1,5 +1,5 @@
-import type { SecretsDefinitionBrand } from "#src/configure/services/secrets/types";
-export type { SecretsConfig } from "#src/configure/services/secrets/types";
+import type { SecretsDefinitionBrand } from "#/configure/services/secrets/types";
+export type { SecretsConfig } from "#/configure/services/secrets/types";
 
 type SecretsVaultInput = Record<string, string>;
 type SecretsVaultInputNullish = Record<string, string | undefined | null>;

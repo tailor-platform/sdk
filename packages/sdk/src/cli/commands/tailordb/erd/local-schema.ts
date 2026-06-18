@@ -1,9 +1,9 @@
-import { defineApplication } from "#src/cli/services/application";
-import { loadConfig } from "#src/cli/shared/config-loader";
-import { generateUserTypes } from "#src/cli/shared/type-generator";
-import { PluginManager } from "#src/plugin/manager";
-import type { LoadedConfig } from "#src/cli/shared/config-loader";
-import type { TailorDBNamespaceData } from "#src/plugin/types";
+import { defineApplication } from "#/cli/services/application";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { generateUserTypes } from "#/cli/shared/type-generator";
+import { PluginManager } from "#/plugin/manager";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { TailorDBNamespaceData } from "#/plugin/types";
 
 export interface LoadLocalErdSchemaOptions {
   configPath?: string;

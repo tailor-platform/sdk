@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as inflection from "inflection";
 import * as path from "pathe";
 import { z } from "zod";
-import { assertDefined } from "#src/utils/assert";
+import { assertDefined } from "#/utils/assert";
 import {
   type MigrationDiff,
   type DiffChange,
@@ -22,7 +22,7 @@ import type {
   TailorDBType,
   OperatorFieldConfig,
   StandardActionPermission,
-} from "#src/parser/service/tailordb/types";
+} from "#/parser/service/tailordb/types";
 import type {
   SchemaSnapshot,
   SnapshotActionPermission,
@@ -310,7 +310,7 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
 
 /**
  * Create a snapshot field config from an OperatorFieldConfig (for nested fields)
- * @param {import("#src/parser/service/tailordb/types").OperatorFieldConfig} fieldConfig - Field configuration
+ * @param {import("#/parser/service/tailordb/types").OperatorFieldConfig} fieldConfig - Field configuration
  * @returns {SnapshotFieldConfig} Snapshot field configuration
  */
 function createSnapshotFieldConfigFromOperatorConfig(

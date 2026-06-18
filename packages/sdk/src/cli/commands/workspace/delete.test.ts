@@ -1,34 +1,34 @@
 import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "#src/cli/shared/client";
-import { logger } from "#src/cli/shared/logger";
-import { prompt } from "#src/cli/shared/prompt";
+import { initOperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
 import { deleteCommand } from "./delete";
 
-vi.mock("#src/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   readPlatformConfig: vi.fn().mockResolvedValue({ profiles: {} }),
   writePlatformConfig: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", () => ({
   logger: {
     info: vi.fn(),
     success: vi.fn(),
   },
 }));
 
-vi.mock("#src/cli/shared/prompt", () => ({
+vi.mock("#/cli/shared/prompt", () => ({
   prompt: {
     text: vi.fn(),
   },
 }));
 
-vi.mock("#src/cli/shared/readonly-guard", () => ({
+vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 

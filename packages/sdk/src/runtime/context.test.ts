@@ -2,8 +2,8 @@
  * Tests for `@tailor-platform/sdk/runtime/context` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
-import * as context from "#src/runtime/context";
-import { cleanupMocks, injectMocks } from "#src/vitest/mock";
+import * as context from "#/runtime/context";
+import { cleanupMocks, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/context", () => {
   beforeEach(() => {

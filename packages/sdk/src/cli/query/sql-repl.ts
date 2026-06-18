@@ -1,4 +1,4 @@
-import { assertDefined } from "#src/utils/assert";
+import { assertDefined } from "#/utils/assert";
 
 /**
  * Return true when the buffered SQL input ends with a real statement terminator.

@@ -1,6 +1,6 @@
 import * as path from "pathe";
-import { getDistDir } from "#src/cli/shared/dist-dir";
-import { logger } from "#src/cli/shared/logger";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { logger } from "#/cli/shared/logger";
 import { createBundleCache, type BundleCache } from "./bundle-cache";
 import { createCacheStore } from "./store";
 

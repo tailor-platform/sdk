@@ -1,18 +1,18 @@
 import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fetchPaged, initOperatorClient } from "#src/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
-import { captureStdout } from "#src/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "#src/cli/shared/test-helpers/json-mode";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { webhookCommand } from "./webhook";
 import { executorCommand } from ".";
 
-vi.mock("#src/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   fetchPaged: vi.fn(),
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));

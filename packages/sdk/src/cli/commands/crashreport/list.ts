@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { z } from "zod";
-import { parseCrashReportConfig } from "#src/cli/crashreport/config";
-import { CRASH_LOG_EXTENSION } from "#src/cli/crashreport/writer";
-import { type Order, paginationArgs } from "#src/cli/shared/args";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { logger } from "#src/cli/shared/logger";
+import { parseCrashReportConfig } from "#/cli/crashreport/config";
+import { CRASH_LOG_EXTENSION } from "#/cli/crashreport/writer";
+import { type Order, paginationArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
 
 export function orderAndLimitCrashReports(
   entries: string[],

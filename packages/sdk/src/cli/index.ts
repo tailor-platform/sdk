@@ -122,11 +122,11 @@ runMain(mainCommand, {
         (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
       if (shouldReport) {
         // Lazy import to match shutdownTelemetry pattern and keep cleanup handler lightweight.
-        const { reportCrash } = await import("#src/cli/crashreport/index");
+        const { reportCrash } = await import("#/cli/crashreport/index");
         await reportCrash(error, "handledError");
       }
     }
-    const { shutdownTelemetry } = await import("#src/cli/telemetry/index");
+    const { shutdownTelemetry } = await import("#/cli/telemetry/index");
     await shutdownTelemetry();
   },
 });

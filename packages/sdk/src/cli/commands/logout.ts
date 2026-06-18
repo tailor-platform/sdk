@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { initOAuth2Client } from "#src/cli/shared/client";
-import { defineAppCommand } from "#src/cli/shared/command";
+import { initOAuth2Client } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
 import {
   deleteUserTokens,
   readPlatformConfig,
   resolveTokens,
   writePlatformConfig,
-} from "#src/cli/shared/context";
-import { logger } from "#src/cli/shared/logger";
+} from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 
 export const logoutCommand = defineAppCommand({
   name: "logout",

@@ -10,9 +10,9 @@ import {
   workflowJobFunctionName,
 } from "./function-registry";
 import { sdkNameLabelKey } from "./label";
-import type { Application } from "#src/cli/services/application";
-import type { CollectedJob } from "#src/cli/services/workflow/service";
-import type { OperatorClient } from "#src/cli/shared/client";
+import type { Application } from "#/cli/services/application";
+import type { CollectedJob } from "#/cli/services/workflow/service";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { BundledScripts, FunctionEntry } from "./function-registry";
 
 // Mock label.ts

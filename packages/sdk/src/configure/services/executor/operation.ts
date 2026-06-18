@@ -1,13 +1,13 @@
-import type { AuthInvoker } from "#src/configure/services/auth/index";
-import type { Workflow } from "#src/configure/services/workflow/workflow";
-import type { MachineUserName } from "#src/configure/types/machine-user";
-import type { TailorInvoker } from "#src/runtime/types";
+import type { AuthInvoker } from "#/configure/services/auth/index";
+import type { Workflow } from "#/configure/services/workflow/workflow";
+import type { MachineUserName } from "#/configure/types/machine-user";
+import type { TailorInvoker } from "#/runtime/types";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
   WebhookOperation as ParserWebhookOperation,
   WorkflowOperation as ParserWorkflowOperation,
-} from "#src/types/executor.generated";
+} from "#/types/executor.generated";
 import type { Client } from "@urql/core";
 
 /** Function-based executor operation. The body receives the trigger args and the `invoker`. */

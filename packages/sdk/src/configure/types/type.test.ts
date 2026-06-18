@@ -1,8 +1,8 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "./type";
-import type { TailorUser } from "#src/runtime/types";
-import type { output } from "#src/types/helpers";
+import type { TailorUser } from "#/runtime/types";
+import type { output } from "#/types/helpers";
 import type { AllowedValues } from "./field";
 
 describe("TailorType basic field type tests", () => {

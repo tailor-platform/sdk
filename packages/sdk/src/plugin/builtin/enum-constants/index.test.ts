@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { db } from "#src/configure/services/tailordb/index";
-import { parseTypes } from "#src/parser/service/tailordb/index";
-import { toSchemaOutput } from "#src/utils/test/internal";
+import { db } from "#/configure/services/tailordb/index";
+import { parseTypes } from "#/parser/service/tailordb/index";
+import { toSchemaOutput } from "#/utils/test/internal";
 import { generateUnifiedEnumConstants } from "./generate-enum-constants";
 import { processEnumType } from "./process-enum-type";
 import { enumConstantsPlugin, EnumConstantsGeneratorID } from "./index";
-import type { TailorDBType } from "#src/parser/service/tailordb/types";
-import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#src/types/tailordb.generated";
+import type { TailorDBType } from "#/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type { EnumDefinition } from "./types";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {

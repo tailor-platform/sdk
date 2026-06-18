@@ -1,6 +1,6 @@
 import * as inflection from "inflection";
-import type { RawRelationConfig } from "#src/configure/services/tailordb/types";
-import type { OperatorFieldConfig } from "#src/parser/service/tailordb/types";
+import type { RawRelationConfig } from "#/configure/services/tailordb/types";
+import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
 import type { UnionToTuple } from "type-fest";
 
 const relationTypes = {

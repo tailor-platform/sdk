@@ -2,16 +2,16 @@ import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { truncate } from "./truncate";
 
 // Mock dependencies
-vi.mock("#src/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadWorkspaceId: vi.fn().mockResolvedValue("mock-workspace-id"),
 }));
 
-vi.mock("#src/cli/shared/readonly-guard", () => ({
+vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn().mockResolvedValue({
     truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
     truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
@@ -21,7 +21,7 @@ vi.mock("#src/cli/shared/client", () => ({
   }),
 }));
 
-vi.mock("#src/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn().mockResolvedValue({
     config: {
       db: {
@@ -32,7 +32,7 @@ vi.mock("#src/cli/shared/config-loader", () => ({
   }),
 }));
 
-vi.mock("#src/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", () => ({
   logger: {
     success: vi.fn(),
     info: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock("#src/cli/shared/logger", () => ({
   symbols: {},
 }));
 
-vi.mock("#src/cli/shared/prompt", () => ({
+vi.mock("#/cli/shared/prompt", () => ({
   prompt: {
     confirm: vi.fn().mockResolvedValue(true),
     text: vi.fn().mockResolvedValue(""),
@@ -56,7 +56,7 @@ describe("truncate command", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     // Re-setup default mock behavior after clearAllMocks
-    const { prompt } = await import("#src/cli/shared/prompt");
+    const { prompt } = await import("#/cli/shared/prompt");
     vi.mocked(prompt.confirm).mockResolvedValue(true);
   });
 
@@ -104,7 +104,7 @@ describe("truncate command", () => {
 
   describe("truncate with --all flag", () => {
     test("truncates all namespaces", async () => {
-      const { initOperatorClient } = await import("#src/cli/shared/client");
+      const { initOperatorClient } = await import("#/cli/shared/client");
       const client = await initOperatorClient("mock-token");
 
       await truncate({ all: true });
@@ -121,8 +121,8 @@ describe("truncate command", () => {
     });
 
     test("excludes external namespaces", async () => {
-      const { loadConfig } = await import("#src/cli/shared/config-loader");
-      const { initOperatorClient } = await import("#src/cli/shared/client");
+      const { loadConfig } = await import("#/cli/shared/config-loader");
+      const { initOperatorClient } = await import("#/cli/shared/client");
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
@@ -143,9 +143,9 @@ describe("truncate command", () => {
     });
 
     test("warns and returns when only external namespaces exist", async () => {
-      const { loadConfig } = await import("#src/cli/shared/config-loader");
-      const { initOperatorClient } = await import("#src/cli/shared/client");
-      const { logger } = await import("#src/cli/shared/logger");
+      const { loadConfig } = await import("#/cli/shared/config-loader");
+      const { initOperatorClient } = await import("#/cli/shared/client");
+      const { logger } = await import("#/cli/shared/logger");
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
@@ -164,7 +164,7 @@ describe("truncate command", () => {
 
   describe("truncate with --namespace flag", () => {
     test("truncates all types in specified namespace", async () => {
-      const { initOperatorClient } = await import("#src/cli/shared/client");
+      const { initOperatorClient } = await import("#/cli/shared/client");
       const client = await initOperatorClient("mock-token");
 
       await truncate({ namespace: "tailordb" });
@@ -183,7 +183,7 @@ describe("truncate command", () => {
     });
 
     test("rejects external namespaces with a dedicated error", async () => {
-      const { loadConfig } = await import("#src/cli/shared/config-loader");
+      const { loadConfig } = await import("#/cli/shared/config-loader");
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
@@ -201,7 +201,7 @@ describe("truncate command", () => {
 
   describe("truncate with type names", () => {
     test("truncates single type", async () => {
-      const { initOperatorClient } = await import("#src/cli/shared/client");
+      const { initOperatorClient } = await import("#/cli/shared/client");
       const client = await initOperatorClient("mock-token");
 
       await truncate({ types: ["User"] });
@@ -215,7 +215,7 @@ describe("truncate command", () => {
     });
 
     test("truncates multiple types", async () => {
-      const { initOperatorClient } = await import("#src/cli/shared/client");
+      const { initOperatorClient } = await import("#/cli/shared/client");
       const client = await initOperatorClient("mock-token");
 
       await truncate({ types: ["User", "Order"] });
@@ -234,7 +234,7 @@ describe("truncate command", () => {
     });
 
     test("throws error when type not found in any namespace", async () => {
-      const { initOperatorClient } = await import("#src/cli/shared/client");
+      const { initOperatorClient } = await import("#/cli/shared/client");
 
       vi.mocked(initOperatorClient).mockResolvedValue({
         truncateTailorDBType: vi.fn(),

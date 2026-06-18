@@ -43,7 +43,7 @@ export type OperatorClient = Client<typeof OperatorService>;
  * @returns Configured Operator client
  */
 export async function initOperatorClient(accessToken: string) {
-  const { createTracingInterceptor } = await import("#src/cli/telemetry/interceptor");
+  const { createTracingInterceptor } = await import("#/cli/telemetry/interceptor");
 
   const interceptors: Interceptor[] = [
     await userAgentInterceptor(),
@@ -154,7 +154,7 @@ export function retryInterceptor(): Interceptor {
           // or non-idempotent compound create under load — #1350). The top-level
           // handler skips ConnectError, so route it to error tracking here before
           // letting it surface as the deploy error.
-          const { reportCrash } = await import("@/cli/crashreport");
+          const { reportCrash } = await import("#/cli/crashreport/index");
           await reportCrash(error, "handledError");
         }
         if (isRetirable(error, req.method.idempotency)) {

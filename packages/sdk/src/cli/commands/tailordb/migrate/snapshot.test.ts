@@ -24,7 +24,7 @@ import {
   formatMigrationNumber,
   type SchemaSnapshot,
 } from "./snapshot";
-import type { ParsedField, TailorDBType } from "#src/parser/service/tailordb/types";
+import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
 import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 

@@ -1,24 +1,24 @@
 import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "#src/cli/shared/client";
-import { loadConfig } from "#src/cli/shared/config-loader";
-import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#src/cli/shared/context";
-import { captureStderr, captureStdout } from "#src/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "#src/cli/shared/test-helpers/json-mode";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resolveWorkflow } from "./get";
 import { startCommand, startWorkflow } from "./start";
 
-vi.mock("#src/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
   loadMachineUserName: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 

@@ -1,7 +1,7 @@
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { waitForExecution, executeScript, DEFAULT_POLL_INTERVAL } from "./script-executor";
-import type { OperatorClient } from "#src/cli/shared/client";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 // Mock client factory

@@ -7,10 +7,10 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { logger, styles } from "#src/cli/shared/logger";
-import ml from "#src/utils/multiline";
-import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "#src/plugin/manager";
-import type { PluginGeneratedType } from "#src/plugin/types";
+import { logger, styles } from "#/cli/shared/logger";
+import ml from "#/utils/multiline";
+import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "#/plugin/manager";
+import type { PluginGeneratedType } from "#/plugin/types";
 
 type FieldMetadata = {
   required?: boolean;

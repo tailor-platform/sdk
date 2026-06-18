@@ -3,24 +3,20 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import {
-  computeBundlerContextHash,
-  withCache,
-  type BundleCache,
-} from "#src/cli/cache/bundle-cache";
-import { withBundleConcurrency } from "#src/cli/shared/bundle-concurrency";
-import { createLogLevelTreeshakeOptions } from "#src/cli/shared/bundle-log-level";
-import { getDistDir } from "#src/cli/shared/dist-dir";
-import { composeFunctionTreeshakeOptions } from "#src/cli/shared/function-treeshake";
-import { logger, styles } from "#src/cli/shared/logger";
-import { platformBundleDefinePlugin } from "#src/cli/shared/platform-bundle-plugin";
-import { INVOKER_EXPR } from "#src/cli/shared/runtime-exprs";
-import { serializeTriggerContext, type TriggerContext } from "#src/cli/shared/trigger-context";
-import ml from "#src/utils/multiline";
+import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
+import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
+import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import { logger, styles } from "#/cli/shared/logger";
+import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import ml from "#/utils/multiline";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
-import type { LogLevel } from "#src/configure/config/types";
+import type { LogLevel } from "#/configure/config/types";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);

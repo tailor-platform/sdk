@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { AuthInvokerSchema } from "#src/parser/service/auth/schema";
-import { TailorFieldSchema } from "#src/parser/service/field/schema";
+import { AuthInvokerSchema } from "#/parser/service/auth/schema";
+import { TailorFieldSchema } from "#/parser/service/field/schema";
 import { functionSchema } from "../common";
 
 export const QueryTypeSchema = z

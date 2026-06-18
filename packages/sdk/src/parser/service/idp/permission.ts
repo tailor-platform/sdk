@@ -1,4 +1,4 @@
-import type { IdPPermission as RawIdPPermission } from "#src/types/idp.generated";
+import type { IdPPermission as RawIdPPermission } from "#/types/idp.generated";
 import type {
   StandardIdPPermission,
   StandardIdPActionPermission,

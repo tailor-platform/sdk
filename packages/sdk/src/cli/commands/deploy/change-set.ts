@@ -1,4 +1,4 @@
-import { logger, styles, symbols } from "#src/cli/shared/logger";
+import { logger, styles, symbols } from "#/cli/shared/logger";
 
 export interface HasName {
   name: string;

@@ -150,19 +150,19 @@
           {
             "patterns": [
               {
-                "group": ["**/configure/**", "#src/configure/**"],
+                "group": ["**/configure/**", "#/configure/**"],
                 "message": "Types module should not import from configure module."
               },
               {
-                "group": ["**/cli/**", "#src/cli/**"],
+                "group": ["**/cli/**", "#/cli/**"],
                 "message": "Types module should not import from cli module."
               },
               {
-                "group": ["**/parser/**", "#src/parser/**"],
+                "group": ["**/parser/**", "#/parser/**"],
                 "message": "Types module should not import from parser module."
               },
               {
-                "group": ["**/plugin/**", "#src/plugin/**"],
+                "group": ["**/plugin/**", "#/plugin/**"],
                 "message": "Types module should not import from plugin module."
               }
             ]
@@ -178,45 +178,40 @@
           {
             "patterns": [
               {
-                "group": ["**/cli/**", "#src/cli/**"],
+                "group": ["**/cli/**", "#/cli/**"],
                 "message": "Configure module should not import from cli module."
               },
               {
                 "group": [
                   "**/parser/**",
-                  "#src/parser/**",
+                  "#/parser/**",
                   "!**/parser/**/types",
-                  "!#src/parser/**/types"
+                  "!#/parser/**/types"
                 ],
-                "message": "Configure module should not import from parser module. Use #src/types/ or a parser pure type module (parser/**/types.ts) instead."
+                "message": "Configure module should not import from parser module. Use #/types/ or a parser pure type module (parser/**/types.ts) instead."
               },
               {
-                "group": ["**/parser/**/types", "#src/parser/**/types"],
+                "group": ["**/parser/**/types", "#/parser/**/types"],
                 "allowTypeImports": true,
                 "message": "Configure module can import only types from parser pure type modules."
               },
               {
-                "group": [
-                  "**/plugin/**",
-                  "#src/plugin/**",
-                  "!**/plugin/types",
-                  "!#src/plugin/types"
-                ],
+                "group": ["**/plugin/**", "#/plugin/**", "!**/plugin/types", "!#/plugin/types"],
                 "message": "Configure module should not import from plugin module. The plugin pure type module (plugin/types.ts) is the exception."
               },
               {
-                "group": ["**/plugin/types", "#src/plugin/types"],
+                "group": ["**/plugin/types", "#/plugin/types"],
                 "allowTypeImports": true,
                 "message": "Configure module can import only types from the plugin pure type module."
               },
               {
                 "group": [
                   "**/utils/**",
-                  "#src/utils/**",
+                  "#/utils/**",
                   "!**/utils/brand",
-                  "!#src/utils/brand",
+                  "!#/utils/brand",
                   "!**/utils/test/**",
-                  "!#src/utils/test/**"
+                  "!#/utils/test/**"
                 ],
                 "message": "Configure module can only import `brand` or `test/*` from utils module."
               },
@@ -238,26 +233,26 @@
           {
             "patterns": [
               {
-                "group": ["**/cli/**", "#src/cli/**"],
+                "group": ["**/cli/**", "#/cli/**"],
                 "message": "Parser module should not import from cli module."
               },
               {
                 "group": [
                   "**/configure/**",
-                  "#src/configure/**",
+                  "#/configure/**",
                   "!**/configure/**/types",
-                  "!#src/configure/**/types",
+                  "!#/configure/**/types",
                   "!**/configure/**/*.types",
-                  "!#src/configure/**/*.types"
+                  "!#/configure/**/*.types"
                 ],
                 "message": "Parser module should not import from configure module. Pure type modules (configure/**/types.ts, configure/**/*.types.ts) are the exception."
               },
               {
                 "group": [
                   "**/configure/**/types",
-                  "#src/configure/**/types",
+                  "#/configure/**/types",
                   "**/configure/**/*.types",
-                  "#src/configure/**/*.types"
+                  "#/configure/**/*.types"
                 ],
                 "allowTypeImports": true,
                 "message": "Parser module can import only types from configure pure type modules."
@@ -275,7 +270,7 @@
           {
             "patterns": [
               {
-                "group": ["**/cli/**", "#src/cli/**"],
+                "group": ["**/cli/**", "#/cli/**"],
                 "message": "Plugin builtin module should not import from cli module."
               }
             ]
@@ -291,32 +286,32 @@
           {
             "patterns": [
               {
-                "group": ["**/cli/**", "#src/cli/**"],
+                "group": ["**/cli/**", "#/cli/**"],
                 "message": "Plugin module should not import from cli module."
               },
               {
                 "group": [
                   "**/configure/**",
-                  "#src/configure/**",
+                  "#/configure/**",
                   "!**/configure/**/types",
-                  "!#src/configure/**/types",
+                  "!#/configure/**/types",
                   "!**/configure/**/*.types",
-                  "!#src/configure/**/*.types"
+                  "!#/configure/**/*.types"
                 ],
                 "message": "Plugin module should not import from configure module. Pure type modules (configure/**/types.ts, configure/**/*.types.ts) are the exception."
               },
               {
                 "group": [
                   "**/configure/**/types",
-                  "#src/configure/**/types",
+                  "#/configure/**/types",
                   "**/configure/**/*.types",
-                  "#src/configure/**/*.types"
+                  "#/configure/**/*.types"
                 ],
                 "allowTypeImports": true,
                 "message": "Plugin module can import only types from configure pure type modules."
               },
               {
-                "group": ["**/plugin/builtin/**", "#src/plugin/builtin/**"],
+                "group": ["**/plugin/builtin/**", "#/plugin/builtin/**"],
                 "message": "Plugin module should not import from builtin plugins. Built-in plugins are exported separately."
               }
             ]
@@ -365,15 +360,15 @@
               {
                 "name": "node:util",
                 "importNames": ["styleText"],
-                "message": "Use colors/symbols/logger from '#src/cli/shared/logger' instead of styleText for consistent styling."
+                "message": "Use colors/symbols/logger from '#/cli/shared/logger' instead of styleText for consistent styling."
               },
               {
                 "name": "chalk",
-                "message": "Use colors/symbols/logger from '#src/cli/shared/logger' instead of chalk for consistent styling."
+                "message": "Use colors/symbols/logger from '#/cli/shared/logger' instead of chalk for consistent styling."
               },
               {
                 "name": "table",
-                "message": "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '#src/cli/shared/format' instead of table for consistent table styling."
+                "message": "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '#/cli/shared/format' instead of table for consistent table styling."
               },
               {
                 "name": "path",
@@ -385,31 +380,31 @@
               },
               {
                 "name": "@inquirer/prompts",
-                "message": "Use 'prompt' from '#src/cli/shared/prompt' instead of @inquirer/prompts directly."
+                "message": "Use 'prompt' from '#/cli/shared/prompt' instead of @inquirer/prompts directly."
               },
               {
                 "name": "@inquirer/core",
-                "message": "Use 'prompt' from '#src/cli/shared/prompt' instead of @inquirer/core directly."
+                "message": "Use 'prompt' from '#/cli/shared/prompt' instead of @inquirer/core directly."
               }
             ],
             "patterns": [
               {
                 "group": [
                   "**/configure/**",
-                  "#src/configure/**",
+                  "#/configure/**",
                   "!**/configure/**/types",
-                  "!#src/configure/**/types",
+                  "!#/configure/**/types",
                   "!**/configure/**/*.types",
-                  "!#src/configure/**/*.types"
+                  "!#/configure/**/*.types"
                 ],
                 "message": "Cli module should not import from configure module. Pure type modules (configure/**/types.ts, configure/**/*.types.ts) are the exception."
               },
               {
                 "group": [
                   "**/configure/**/types",
-                  "#src/configure/**/types",
+                  "#/configure/**/types",
                   "**/configure/**/*.types",
-                  "#src/configure/**/*.types"
+                  "#/configure/**/*.types"
                 ],
                 "allowTypeImports": true,
                 "message": "Cli module can import only types from configure pure type modules."
@@ -434,7 +429,7 @@
           {
             "patterns": [
               {
-                "group": ["**/cli/**", "#src/cli/**"],
+                "group": ["**/cli/**", "#/cli/**"],
                 "message": "Plugin module should not import from cli module."
               }
             ]

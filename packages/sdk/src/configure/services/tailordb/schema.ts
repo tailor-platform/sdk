@@ -3,8 +3,8 @@ import {
   type AllowedValues,
   type AllowedValuesOutput,
   mapAllowedValues,
-} from "#src/configure/types/field";
-import { brandValue } from "#src/utils/brand";
+} from "#/configure/types/field";
+import { brandValue } from "#/utils/brand";
 import type {
   TailorDBField as TailorDBFieldBase,
   TailorDBType as TailorDBTypeBase,
@@ -15,7 +15,7 @@ import type {
   TailorDBTypeMetadata,
   RawRelationConfig,
   RelationType,
-} from "#src/configure/services/tailordb/types";
+} from "#/configure/services/tailordb/types";
 import type {
   FieldOptions,
   FieldOutput,
@@ -25,11 +25,11 @@ import type {
   FieldValidateInput,
   ValidateConfig,
   Validators,
-} from "#src/configure/types/field.types";
-import type { PluginAttachment, PluginConfigs } from "#src/plugin/types";
-import type { InferredAttributeMap, TailorUser } from "#src/runtime/types";
-import type { output, InferFieldsOutput, Prettify } from "#src/types/helpers";
-import type { RawPermissions } from "#src/types/tailordb.generated";
+} from "#/configure/types/field.types";
+import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
+import type { InferredAttributeMap, TailorUser } from "#/runtime/types";
+import type { output, InferFieldsOutput, Prettify } from "#/types/helpers";
+import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
 import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";

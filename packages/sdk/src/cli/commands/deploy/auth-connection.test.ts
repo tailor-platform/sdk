@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
-import type { AuthService } from "#src/cli/services/auth/service";
-import type { OperatorClient } from "#src/cli/shared/client";
-import type { AuthConnectionConfig } from "#src/types/auth-connection.generated";
+import type { AuthService } from "#/cli/services/auth/service";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 
 const mockLoadSecretsState = vi.fn();
 
@@ -18,9 +18,9 @@ vi.mock("./secrets-state", async (importOriginal) => {
   };
 });
 
-vi.mock("#src/cli/shared/client", async (importOriginal) => {
+vi.mock("#/cli/shared/client", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("#src/cli/shared/client");
+  const actual = (await importOriginal()) as typeof import("#/cli/shared/client");
   return {
     ...actual,
     fetchAll: async <T>(fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>) => {

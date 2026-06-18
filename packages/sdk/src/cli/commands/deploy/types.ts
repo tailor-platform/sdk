@@ -1,6 +1,6 @@
-import type { Application } from "#src/cli/services/application";
-import type { OperatorClient } from "#src/cli/shared/client";
-import type { LoadedConfig } from "#src/cli/shared/config-loader";
+import type { Application } from "#/cli/services/application";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { ApplyPhase } from "./phase";
 
 export type { ApplyPhase };

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { SDK_BRAND, isSdkBranded } from "#src/utils/brand";
+import { SDK_BRAND, isSdkBranded } from "#/utils/brand";
 import { createHttpAdapter } from "./http-adapter";
 
 describe("createHttpAdapter", () => {

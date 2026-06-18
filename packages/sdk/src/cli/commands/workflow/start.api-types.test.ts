@@ -1,8 +1,8 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test, expectTypeOf } from "vitest";
-import { defineAuth } from "#src/configure/services/auth/index";
-import { db } from "#src/configure/services/tailordb/index";
-import { createWorkflow, createWorkflowJob } from "#src/configure/services/workflow/index";
+import { defineAuth } from "#/configure/services/auth/index";
+import { db } from "#/configure/services/tailordb/index";
+import { createWorkflow, createWorkflowJob } from "#/configure/services/workflow/index";
 import { type StartWorkflowOptions, type StartWorkflowTypedOptions } from "./start";
 
 const userType = db.type("User", {

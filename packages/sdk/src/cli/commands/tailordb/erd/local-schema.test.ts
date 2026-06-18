@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { resolveLocalErdSchemaNamespaces } from "./local-schema";
-import type { LoadedConfig } from "#src/cli/shared/config-loader";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 describe("resolveLocalErdSchemaNamespaces", () => {
   const config = {

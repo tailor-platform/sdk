@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { silenceLogger } from "#src/cli/shared/test-helpers/silence-logger";
-import { db } from "#src/configure/services/tailordb/index";
-import { PluginManager } from "#src/plugin/manager";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { db } from "#/configure/services/tailordb/index";
+import { PluginManager } from "#/plugin/manager";
 import { createTailorDBService } from "./service";
-import type { Plugin } from "#src/plugin/types";
+import type { Plugin } from "#/plugin/types";
 
 describe("createTailorDBService.loadTypes", () => {
   let tmpDir: string | undefined;

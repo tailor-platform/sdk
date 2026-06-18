@@ -5,8 +5,8 @@ import type {
   StandardPermissionCondition,
   StandardGqlPermissionPolicy,
   Permissions,
-} from "#src/parser/service/tailordb/types";
-import type { RawPermissions } from "#src/types/tailordb.generated";
+} from "#/parser/service/tailordb/types";
+import type { RawPermissions } from "#/types/tailordb.generated";
 
 // Raw permission types for normalize function parameters
 type PermissionOperator = "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny";

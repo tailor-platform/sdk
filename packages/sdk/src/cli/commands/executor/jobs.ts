@@ -22,14 +22,14 @@ import {
   parseDuration,
   toPageDirection,
   workspaceArgs,
-} from "#src/cli/shared/args";
-import { fetchAll, fetchPaged, initOperatorClient } from "#src/cli/shared/client";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
-import { formatKeyValueTable } from "#src/cli/shared/format";
-import { functionExecutionStatusToString } from "#src/cli/shared/function-execution";
-import { logger, styles } from "#src/cli/shared/logger";
-import { spinner } from "#src/cli/shared/spinner";
+} from "#/cli/shared/args";
+import { fetchAll, fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { formatKeyValueTable } from "#/cli/shared/format";
+import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
+import { logger, styles } from "#/cli/shared/logger";
+import { spinner } from "#/cli/shared/spinner";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {

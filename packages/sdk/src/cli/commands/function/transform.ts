@@ -1,4 +1,4 @@
-import { formatTimestamp } from "#src/cli/shared/format";
+import { formatTimestamp } from "#/cli/shared/format";
 import type { FunctionRegistry } from "@tailor-platform/tailor-proto/function_registry_pb";
 
 export interface FunctionRegistryInfo {

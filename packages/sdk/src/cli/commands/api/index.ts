@@ -1,13 +1,13 @@
 import { ScalarType } from "@bufbuild/protobuf";
 import { arg } from "politty";
 import { z } from "zod";
-import { configArg, workspaceArgs } from "#src/cli/shared/args";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { loadConfig } from "#src/cli/shared/config-loader";
-import { loadWorkspaceId } from "#src/cli/shared/context";
-import { logger } from "#src/cli/shared/logger";
-import { assertWritable } from "#src/cli/shared/readonly-guard";
-import { assertDefined } from "#src/utils/assert";
+import { configArg, workspaceArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { assertDefined } from "#/utils/assert";
 import { apiCall } from "./api-call";
 import { inspectCommand } from "./inspect";
 import { listCommand } from "./list";
@@ -18,7 +18,7 @@ import {
   listMethodChoices,
   resolveLeafField,
 } from "./proto-reflect";
-import type { LoadedConfig } from "#src/cli/shared/config-loader";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { DescField } from "@bufbuild/protobuf";
 
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api-call";

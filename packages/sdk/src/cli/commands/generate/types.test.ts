@@ -9,8 +9,8 @@ import {
   type FullCodeGenerator,
   type AnyCodeGenerator,
   type DependencyKind,
-} from "#src/cli/commands/generate/types";
-import type { CodeGeneratorBase } from "#src/plugin/types";
+} from "#/cli/commands/generate/types";
+import type { CodeGeneratorBase } from "#/plugin/types";
 
 describe("Generator type compatibility", () => {
   describe("TailorDBGenerator", () => {

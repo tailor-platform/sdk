@@ -2,12 +2,12 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { fetchAll, initOperatorClient } from "#src/cli/shared/client";
-import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#src/cli/shared/context";
-import { captureStderr, captureStdout } from "#src/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "#src/cli/shared/test-helpers/json-mode";
-import { silenceLogger } from "#src/cli/shared/test-helpers/silence-logger";
-import { resetKeyringState } from "#src/cli/shared/token-store";
+import { fetchAll, initOperatorClient } from "#/cli/shared/client";
+import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { resetKeyringState } from "#/cli/shared/token-store";
 import { updateCommand } from "./update";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-update-${Date.now()}-${Math.random()}`);
@@ -26,7 +26,7 @@ vi.mock("@napi-rs/keyring", () => ({
   },
 }));
 
-vi.mock("#src/cli/shared/client", async (importOriginal) => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   initOperatorClient: vi.fn(),
   fetchAll: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("#src/cli/shared/client", async (importOriginal) => ({
 
 // Mock fetchLatestToken without disturbing readPlatformConfig / writePlatformConfig,
 // which the run handler also uses and which we want to round-trip on disk.
-vi.mock("#src/cli/shared/context", async (importOriginal) => ({
+vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
   fetchLatestToken: vi.fn(),
 }));

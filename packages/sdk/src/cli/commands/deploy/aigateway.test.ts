@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { planAIGateway } from "./aigateway";
-import type { Application } from "#src/cli/services/application";
-import type { OperatorClient } from "#src/cli/shared/client";
+import type { Application } from "#/cli/services/application";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
 
 vi.mock("./label", async (importOriginal) => {

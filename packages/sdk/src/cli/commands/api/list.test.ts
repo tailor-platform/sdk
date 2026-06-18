@@ -1,6 +1,6 @@
 import { runCommand } from "politty";
 import { describe, expect, test, vi } from "vitest";
-import { jsonMode } from "#src/cli/shared/test-helpers/json-mode";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { apiCommand } from "./index";
 
 describe("api list", () => {

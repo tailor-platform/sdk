@@ -1,6 +1,6 @@
 import { generateUnifiedEnumConstants } from "./generate-enum-constants";
 import { processEnumType } from "./process-enum-type";
-import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#src/plugin/types";
+import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
 import type { EnumDefinition } from "./types";
 
 /** Unique identifier for the enum constants generator plugin. */

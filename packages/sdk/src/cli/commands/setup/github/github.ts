@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { ensureConfigId } from "#src/cli/commands/deploy/config-id-injector";
-import { logBetaWarning } from "#src/cli/shared/beta";
-import { loadConfig } from "#src/cli/shared/config-loader";
-import { logger, styles } from "#src/cli/shared/logger";
+import { ensureConfigId } from "#/cli/commands/deploy/config-id-injector";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { logger, styles } from "#/cli/shared/logger";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,

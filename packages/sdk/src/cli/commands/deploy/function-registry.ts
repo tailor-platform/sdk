@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "#src/cli/shared/client";
-import { logger } from "#src/cli/shared/logger";
+import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import {
   buildMetaRequest,
@@ -11,8 +11,8 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
-import type { Application } from "#src/cli/services/application";
-import type { CollectedJob } from "#src/cli/services/workflow/service";
+import type { Application } from "#/cli/services/application";
+import type { CollectedJob } from "#/cli/services/workflow/service";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BundledScripts, FunctionEntry } from "./function-registry-types";
 import type { ApplyPhase } from "./phase";

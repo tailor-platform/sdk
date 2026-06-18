@@ -1,12 +1,12 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "#src/cli/shared/args";
-import { initOperatorClient } from "#src/cli/shared/client";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
-import { logger } from "#src/cli/shared/logger";
-import { assertWritable } from "#src/cli/shared/readonly-guard";
-import { assertDefined } from "#src/utils/assert";
+import { workspaceArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { assertDefined } from "#/utils/assert";
 import { stringToRole, validRoles } from "./transform";
 
 const updateUserOptionsSchema = z.object({

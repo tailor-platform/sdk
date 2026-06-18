@@ -1,15 +1,15 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { loadFilesWithIgnores } from "#src/cli/services/file-loader";
-import { logger, styles } from "#src/cli/shared/logger";
-import { type HttpAdapterServiceInput } from "#src/configure/config/types";
+import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { logger, styles } from "#/cli/shared/logger";
+import { type HttpAdapterServiceInput } from "#/configure/config/types";
 import {
   HTTP_METHOD_KEYS,
   HttpAdapterConfigSchema,
   type HttpMethodKey,
-} from "#src/parser/service/http-adapter/index";
-import { type HttpAdapterConfig } from "#src/types/http-adapter.generated";
-import { isSdkBranded } from "#src/utils/brand";
+} from "#/parser/service/http-adapter/index";
+import { type HttpAdapterConfig } from "#/types/http-adapter.generated";
+import { isSdkBranded } from "#/utils/brand";
 
 export type HttpAdapterServiceConfig = HttpAdapterServiceInput;
 

@@ -1,8 +1,8 @@
 import { IdPLang, IdPPermissionPermit } from "@tailor-platform/tailor-proto/idp_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { planIdP } from "./idp";
-import type { Application } from "#src/cli/services/application";
-import type { OperatorClient } from "#src/cli/shared/client";
+import type { Application } from "#/cli/services/application";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
 
 vi.mock("./label", async (importOriginal) => {

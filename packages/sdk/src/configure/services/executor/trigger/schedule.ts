@@ -1,5 +1,5 @@
-import type { TailorEnv } from "#src/runtime/types";
-import type { ScheduleTriggerInput as ParserScheduleTriggerInput } from "#src/types/executor.generated";
+import type { TailorEnv } from "#/runtime/types";
+import type { ScheduleTriggerInput as ParserScheduleTriggerInput } from "#/types/executor.generated";
 import type { StandardCRON } from "ts-cron-validator";
 
 type Timezone =

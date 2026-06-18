@@ -2,8 +2,8 @@
 //
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
-import type { BuiltinIdP } from "#src/types/auth.generated";
-import type { IdPInput } from "#src/types/idp.generated";
+import type { BuiltinIdP } from "#/types/auth.generated";
+import type { IdPInput } from "#/types/idp.generated";
 
 declare const idpDefinitionBrand: unique symbol;
 export type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };

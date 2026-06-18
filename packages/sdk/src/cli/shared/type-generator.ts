@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { logger } from "#src/cli/shared/logger";
-import ml from "#src/utils/multiline";
-import type { AppConfig } from "#src/configure/config/types";
+import { logger } from "#/cli/shared/logger";
+import ml from "#/utils/multiline";
+import type { AppConfig } from "#/configure/config/types";
 
 export interface AttributeMapConfig {
   [key: string]: string;

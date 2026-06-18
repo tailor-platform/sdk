@@ -1,8 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
-import type { OperatorClient } from "#src/cli/shared/client";
+import type { OperatorClient } from "#/cli/shared/client";
 
-vi.mock("#src/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", () => ({
   logger: {
     warn: vi.fn(),
     info: vi.fn(),

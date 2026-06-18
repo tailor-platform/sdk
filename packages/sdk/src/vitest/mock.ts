@@ -27,15 +27,15 @@ import {
   getRegisteredJob,
   getRegisteredWorkflow,
   TRIGGER_DEFAULT,
-} from "#src/configure/services/workflow/registry";
-import { assertDefined } from "#src/utils/assert";
-import { platformSerialize } from "#src/utils/test/platform-serialize";
+} from "#/configure/services/workflow/registry";
+import { assertDefined } from "#/utils/assert";
+import { platformSerialize } from "#/utils/test/platform-serialize";
 import {
   buildJobContext,
   clearWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
-import type { TailorEnv } from "#src/runtime/types";
+import type { TailorEnv } from "#/runtime/types";
 import type { User as IdpUser } from "../runtime/idp";
 
 export { RUNTIME_FLAG_KEY } from "./globals";

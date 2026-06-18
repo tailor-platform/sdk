@@ -9,38 +9,38 @@ import {
   type GeneratorResult,
   type DependencyKind,
   hasDependency,
-} from "#src/cli/commands/generate/types";
+} from "#/cli/commands/generate/types";
 import {
   defineApplication,
   generatePluginFilesIfNeeded,
   type Application,
-} from "#src/cli/services/application";
-import { createExecutorService } from "#src/cli/services/executor/service";
-import { assertUniqueLocalTailorDBTypeNames } from "#src/cli/services/tailordb/type-name-validation";
-import { loadConfig, type LoadedConfig, type Generator } from "#src/cli/shared/config-loader";
-import { getDistDir } from "#src/cli/shared/dist-dir";
-import { logger, styles } from "#src/cli/shared/logger";
-import { generateUserTypes } from "#src/cli/shared/type-generator";
-import { withSpan } from "#src/cli/telemetry/index";
-import { PluginManager } from "#src/plugin/manager";
-import { assertDefined } from "#src/utils/assert";
+} from "#/cli/services/application";
+import { createExecutorService } from "#/cli/services/executor/service";
+import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
+import { loadConfig, type LoadedConfig, type Generator } from "#/cli/shared/config-loader";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { logger, styles } from "#/cli/shared/logger";
+import { generateUserTypes } from "#/cli/shared/type-generator";
+import { withSpan } from "#/cli/telemetry/index";
+import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type {
   TypeSourceInfo,
   TypeSourceInfoEntry,
   TailorDBType,
-} from "#src/parser/service/tailordb/types";
+} from "#/parser/service/tailordb/types";
 import type {
   TailorDBNamespaceData,
   ResolverNamespaceData,
   Plugin,
   PluginAttachment,
-} from "#src/plugin/types";
-import type { Executor } from "#src/types/executor.generated";
-import type { Resolver } from "#src/types/resolver.generated";
+} from "#/plugin/types";
+import type { Executor } from "#/types/executor.generated";
+import type { Resolver } from "#/types/resolver.generated";
 import type { GenerateOptions } from "./options";
 
-export type { CodeGenerator } from "#src/cli/commands/generate/types";
+export type { CodeGenerator } from "#/cli/commands/generate/types";
 
 type TypeInfo = {
   types: Record<string, TailorDBType>;

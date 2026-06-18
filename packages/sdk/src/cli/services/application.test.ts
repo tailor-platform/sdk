@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { defineConfig } from "#src/configure/config/index";
-import { defineAuth } from "#src/configure/services/auth/index";
-import { db } from "#src/configure/services/tailordb/schema";
+import { defineConfig } from "#/configure/config/index";
+import { defineAuth } from "#/configure/services/auth/index";
+import { db } from "#/configure/services/tailordb/schema";
 import { defineApplication } from "./application";
 
 describe("defineAuth parse wiring", () => {

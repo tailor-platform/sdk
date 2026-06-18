@@ -1,4 +1,4 @@
-import { logger } from "#src/cli/shared/logger";
+import { logger } from "#/cli/shared/logger";
 
 /**
  * Enables `logger.jsonMode` for the lifetime of the returned disposable and

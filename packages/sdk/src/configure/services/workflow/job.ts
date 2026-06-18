@@ -1,7 +1,7 @@
-import { brandValue } from "#src/utils/brand";
+import { brandValue } from "#/utils/brand";
 import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
-import type { TailorEnv, TailorInvoker } from "#src/runtime/types";
-import type { JsonCompatible } from "#src/types/helpers";
+import type { TailorEnv, TailorInvoker } from "#/runtime/types";
+import type { JsonCompatible } from "#/types/helpers";
 
 /**
  * Context object passed as the second argument to workflow job body functions.

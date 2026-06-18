@@ -1,7 +1,7 @@
-import { logBetaWarning } from "#src/cli/shared/beta";
-import { initOperatorClient } from "#src/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
-import type { OperatorClient } from "#src/cli/shared/client";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import type { OperatorClient } from "#/cli/shared/client";
 
 export interface ErdDeployContext {
   client: OperatorClient;

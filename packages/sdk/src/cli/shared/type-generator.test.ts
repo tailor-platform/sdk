@@ -1,7 +1,7 @@
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { defineAuth } from "#src/configure/services/auth/index";
-import { t } from "#src/configure/types/type";
+import { defineAuth } from "#/configure/services/auth/index";
+import { t } from "#/configure/types/type";
 import {
   extractAttributesFromConfig,
   generateTypeDefinition,

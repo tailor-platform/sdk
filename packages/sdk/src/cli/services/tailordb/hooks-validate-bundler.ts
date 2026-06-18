@@ -2,13 +2,13 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
 import { join, resolve } from "pathe";
 import * as rolldown from "rolldown";
-import { getDistDir } from "#src/cli/shared/dist-dir";
-import { platformBundleDefinePlugin } from "#src/cli/shared/platform-bundle-plugin";
-import { stringifyFunction, tailorUserMap } from "#src/parser/service/tailordb/field";
-import { setPrecompiledScriptExpr } from "#src/parser/service/tailordb/hooks-validate-precompiled-expr";
-import { assertDefined } from "#src/utils/assert";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { stringifyFunction, tailorUserMap } from "#/parser/service/tailordb/field";
+import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
+import { assertDefined } from "#/utils/assert";
 import { ES_BUILTINS } from "./es-builtins";
-import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#src/types/tailordb.generated";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type {
   BindingPattern,
   ExportNamedDeclaration,

@@ -2,18 +2,18 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { resourceTrn } from "#src/cli/commands/deploy/label";
-import { confirmationArgs, deploymentArgs } from "#src/cli/shared/args";
-import { logBetaWarning } from "#src/cli/shared/beta";
-import { fetchAll, initOperatorClient, type OperatorClient } from "#src/cli/shared/client";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { loadConfig } from "#src/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
-import { logger, styles } from "#src/cli/shared/logger";
-import { prompt } from "#src/cli/shared/prompt";
-import { assertWritable } from "#src/cli/shared/readonly-guard";
-import { PluginManager } from "#src/plugin/manager";
-import { assertDefined } from "#src/utils/assert";
+import { resourceTrn } from "#/cli/commands/deploy/label";
+import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { fetchAll, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { parseMigrationNumberArg } from "./migration-number";
@@ -126,7 +126,7 @@ async function assertMigrationsReproduceLocalTypes(
   const { config, plugins } = loaded;
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
   const { defineApplication, generatePluginFilesIfNeeded } =
-    await import("#src/cli/services/application");
+    await import("#/cli/services/application");
   const application = defineApplication({ config, pluginManager });
 
   const tailordbService = application.tailorDBServices.find(
@@ -155,7 +155,7 @@ async function assertMigrationsReproduceLocalTypes(
   const executorService =
     application.executorService ??
     (pluginExecutorFiles.length > 0
-      ? (await import("#src/cli/services/executor/service")).createExecutorService({
+      ? (await import("#/cli/services/executor/service")).createExecutorService({
           config: { files: [] },
         })
       : undefined);

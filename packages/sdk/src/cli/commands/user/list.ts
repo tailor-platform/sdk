@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { readPlatformConfig } from "#src/cli/shared/context";
-import { logger } from "#src/cli/shared/logger";
-import ml from "#src/utils/multiline";
+import { defineAppCommand } from "#/cli/shared/command";
+import { readPlatformConfig } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import ml from "#/utils/multiline";
 
 export const listCommand = defineAppCommand({
   name: "list",

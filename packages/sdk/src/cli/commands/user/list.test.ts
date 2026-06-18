@@ -2,10 +2,10 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { writePlatformConfig } from "#src/cli/shared/context";
-import { captureStderr, captureStdout } from "#src/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "#src/cli/shared/test-helpers/json-mode";
-import { resetKeyringState } from "#src/cli/shared/token-store";
+import { writePlatformConfig } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { resetKeyringState } from "#/cli/shared/token-store";
 import { userCommand } from ".";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-user-list-${Date.now()}-${Math.random()}`);

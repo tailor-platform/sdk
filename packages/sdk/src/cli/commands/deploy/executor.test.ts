@@ -1,11 +1,11 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
-import type { Application } from "#src/cli/services/application";
-import type { ExecutorService } from "#src/cli/services/executor/service";
-import type { OperatorClient } from "#src/cli/shared/client";
-import type { LoadedConfig } from "#src/cli/shared/config-loader";
-import type { Executor } from "#src/types/executor.generated";
+import type { Application } from "#/cli/services/application";
+import type { ExecutorService } from "#/cli/services/executor/service";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { Executor } from "#/types/executor.generated";
 import type { PlanContext } from "./types";
 
 // Mock node:fs to avoid file system access
@@ -15,7 +15,7 @@ vi.mock("node:fs", () => ({
 }));
 
 // Mock dist-dir to avoid getDistDir issues
-vi.mock("#src/cli/shared/dist-dir", () => ({
+vi.mock("#/cli/shared/dist-dir", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
 

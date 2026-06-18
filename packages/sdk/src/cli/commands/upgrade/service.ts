@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { CLIError } from "#src/cli/shared/errors";
-import { logger, styles } from "#src/cli/shared/logger";
+import { CLIError } from "#/cli/shared/errors";
+import { logger, styles } from "#/cli/shared/logger";
 import { detectInstalledVersion } from "./version-detector";
 import type { RunOutput } from "./types";
 

@@ -4,12 +4,12 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "#src/cli/shared/client";
-import { loadConfig } from "#src/cli/shared/config-loader";
-import { prompt } from "#src/cli/shared/prompt";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { prompt } from "#/cli/shared/prompt";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { syncCommand } from "./sync";
-import type { TailorDBType } from "#src/parser/service/tailordb/types";
+import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
 
 const state = vi.hoisted(() => ({
@@ -30,29 +30,29 @@ const state = vi.hoisted(() => ({
   setMetadata: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
 }));
 
-vi.mock("#src/cli/shared/client", async (importOriginal) => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("#src/cli/shared/readonly-guard", () => ({
+vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("#src/cli/shared/prompt", () => ({
+vi.mock("#/cli/shared/prompt", () => ({
   prompt: { confirm: vi.fn() },
 }));
 
-vi.mock("#src/cli/services/application", () => ({
+vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({
     tailorDBServices: [
       {

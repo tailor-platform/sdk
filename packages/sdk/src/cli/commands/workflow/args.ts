@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { durationArg } from "#src/cli/shared/args";
+import { durationArg } from "#/cli/shared/args";
 
 type ArgsShape = Record<string, z.ZodType>;
 

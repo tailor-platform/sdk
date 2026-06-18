@@ -4,7 +4,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { styles } from "#src/cli/shared/logger";
+import { styles } from "#/cli/shared/logger";
 
 // ============================================================================
 // Executor Job Status

@@ -7,7 +7,7 @@ import {
   downloadScriptForMapping,
   formatExecutionError,
 } from "./logs";
-import type { OperatorClient } from "#src/cli/shared/client";
+import type { OperatorClient } from "#/cli/shared/client";
 
 function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }): OperatorClient {
   return {

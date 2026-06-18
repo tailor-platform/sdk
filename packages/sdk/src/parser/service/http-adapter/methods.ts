@@ -1,4 +1,4 @@
-import type { HttpAdapterConfigInput } from "#src/types/http-adapter.generated";
+import type { HttpAdapterConfigInput } from "#/types/http-adapter.generated";
 
 /**
  * Maps the lowercase `input` handler keys to the HTTP methods they serve.

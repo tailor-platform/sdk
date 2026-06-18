@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { ContextInvoker } from "#src/runtime/context";
-import type { TailorInvoker } from "#src/runtime/types";
+import type { ContextInvoker } from "#/runtime/context";
+import type { TailorInvoker } from "#/runtime/types";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];

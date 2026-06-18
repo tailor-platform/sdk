@@ -1,4 +1,4 @@
-import type { TailorDBType } from "#src/parser/service/tailordb/types";
+import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { FileUtilMetadata } from "./types";
 
 /**

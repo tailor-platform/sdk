@@ -13,13 +13,13 @@ import {
   parseDuration,
   toPageDirection,
   workspaceArgs,
-} from "#src/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "#src/cli/shared/client";
-import { defineAppCommand } from "#src/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#src/cli/shared/context";
-import { formatKeyValueTable } from "#src/cli/shared/format";
-import { styles, logger } from "#src/cli/shared/logger";
-import { spinner } from "#src/cli/shared/spinner";
+} from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { formatKeyValueTable } from "#/cli/shared/format";
+import { styles, logger } from "#/cli/shared/logger";
+import { spinner } from "#/cli/shared/spinner";
 import { waitArgs } from "./args";
 import { isWorkflowExecutionTerminalStatus } from "./status";
 import {

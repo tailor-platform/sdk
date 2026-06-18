@@ -1,6 +1,6 @@
-import { brandValue } from "#src/utils/brand";
-import type { TailorWorkflowAPI } from "#src/runtime/workflow";
-import type { JsonCompatible } from "#src/types/helpers";
+import { brandValue } from "#/utils/brand";
+import type { TailorWorkflowAPI } from "#/runtime/workflow";
+import type { JsonCompatible } from "#/types/helpers";
 
 /**
  * A single wait point instance with typed `.wait()` and `.resolve()` methods.

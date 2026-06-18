@@ -1,7 +1,7 @@
-import { type TailorDBService } from "#src/cli/services/tailordb/service";
-import { type AuthConfigSchema } from "#src/parser/service/auth/index";
-import { assertDefined } from "#src/utils/assert";
-import type { AuthConnectionConfig } from "#src/types/auth-connection.generated";
+import { type TailorDBService } from "#/cli/services/tailordb/service";
+import { type AuthConfigSchema } from "#/parser/service/auth/index";
+import { assertDefined } from "#/utils/assert";
+import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type { z } from "zod";
 
 /**
