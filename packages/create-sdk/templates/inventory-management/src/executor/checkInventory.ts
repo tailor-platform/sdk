@@ -21,6 +21,6 @@ export default createExecutor({
         })
         .execute();
     },
-    authInvoker: "manager",
+    invoker: "manager",
   },
 });

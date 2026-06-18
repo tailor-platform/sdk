@@ -269,7 +269,7 @@ tailor-sdk machineuser token <name>
 
 ### Specifying a machine user invoker
 
-Resolvers, executors, and `workflow.trigger()` accept an `authInvoker` option that chooses which machine user runs the operation. Pass the machine user name as a plain string — it is type-narrowed to the names you registered in `machineUsers`.
+Resolvers, executors, and `workflow.trigger()` accept an `invoker` option that chooses which machine user runs the operation. Pass the machine user name as a plain string — it is type-narrowed to the names you registered in `machineUsers`.
 
 ```typescript
 // tailor.config.ts
@@ -298,7 +298,7 @@ export default createResolver({
     // Trigger workflow with machine user permissions
     const workflowRunId = await myWorkflow.trigger(
       { id: input.id },
-      { authInvoker: "admin-machine-user" },
+      { invoker: "admin-machine-user" },
     );
     return { workflowRunId };
   },

@@ -10,13 +10,13 @@ export default createResolver({
     customerId: t.string().description("Customer ID for the order"),
   },
   body: async ({ input }) => {
-    // Trigger the workflow with authInvoker (machine user name is type-narrowed via tailor.d.ts)
+    // Trigger the workflow with invoker (machine user name is type-narrowed via tailor.d.ts)
     const workflowRunId = await orderProcessingWorkflow.trigger(
       {
         orderId: input.orderId,
         customerId: input.customerId,
       },
-      { authInvoker: "manager-machine-user" },
+      { invoker: "manager-machine-user" },
     );
 
     return {

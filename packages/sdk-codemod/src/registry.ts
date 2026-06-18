@@ -85,9 +85,9 @@ const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/auth-invoker-unwrap",
-    name: 'auth.invoker("name") → "name"',
+    name: 'auth.invoker("name") → invoker: "name"',
     description:
-      'Replace `auth.invoker("name")` calls with the bare `"name"` string and drop the `auth` import when no other reference remains. The `auth.invoker()` helper is deprecated in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
+      'Replace `authInvoker: auth.invoker("name")` with `invoker: "name"` and drop the `auth` import when no other reference remains. The `auth.invoker()` helper is removed in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/auth-invoker-unwrap/scripts/transform.js",
@@ -95,7 +95,7 @@ const allCodemods: CodemodPackage[] = [
     prompt: [
       "In Tailor SDK v2 the auth.invoker() helper is removed; an invoker is now the",
       "machine user name passed directly as a string. The codemod already rewrote the",
-      'string-literal form auth.invoker("name") to "name". These files still contain',
+      'string-literal form authInvoker: auth.invoker("name") to invoker: "name". These files still contain',
       "auth.invoker(...) because the argument is not a plain string literal (a variable,",
       "template literal, function call, or property access).",
       "",
@@ -103,7 +103,8 @@ const allCodemods: CodemodPackage[] = [
       "1. Replace the whole call with <expr> as-is (e.g. auth.invoker(name) becomes name).",
       "2. Make sure <expr> evaluates to the machine user name (a string); adjust it if it",
       "   resolves to an object or an auth config value instead.",
-      "3. After removing every auth.invoker usage in a file, delete the now-unused auth",
+      "3. Rename any remaining authInvoker option key to invoker.",
+      "4. After removing every auth.invoker usage in a file, delete the now-unused auth",
       "   import (keeping it pulls Node-only config modules into runtime bundles); leave",
       "   the import if auth is still referenced elsewhere.",
       "",

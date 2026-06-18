@@ -10,7 +10,7 @@ describe("workflow", () => {
 
     const { executionId, wait } = await startWorkflow({
       workflow: userProfileSyncWorkflow,
-      authInvoker: "admin",
+      invoker: "admin",
       arg: {
         name: "workflow-test-user",
         email: testEmail,

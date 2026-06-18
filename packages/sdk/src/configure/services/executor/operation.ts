@@ -10,18 +10,18 @@ import type {
 import type { Client } from "@urql/core";
 
 /** Function-based executor operation. The body receives the trigger args and the `invoker`. */
-export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "authInvoker"> & {
+export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "invoker"> & {
   body: (args: Args & { invoker: TailorPrincipal | null }) => void | Promise<void>;
-  authInvoker?: MachineUserName;
+  invoker?: MachineUserName;
 };
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
 
 /** GraphQL-based executor operation. Executes a GraphQL query or mutation. */
-export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables" | "authInvoker"> & {
+export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables" | "invoker"> & {
   query: UrqlOperationArgs[0];
   variables?: (args: Args) => UrqlOperationArgs[1];
-  authInvoker?: MachineUserName;
+  invoker?: MachineUserName;
 };
 
 type RequestHeader =
@@ -290,11 +290,11 @@ type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
 /** Workflow-triggering executor operation. Triggers a workflow in response to an event. */
 export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
   ParserWorkflowOperation,
-  "workflowName" | "args" | "authInvoker"
+  "workflowName" | "args" | "invoker"
 > & {
   workflow: W;
   args?: WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
-  authInvoker?: MachineUserName;
+  invoker?: MachineUserName;
 };
 
 export type Operation<Args> =

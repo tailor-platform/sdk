@@ -18,7 +18,6 @@ import { type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { assertDefined } from "@/utils/assert";
-import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
@@ -27,6 +26,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
+import { normalizeInvoker } from "./invoker";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
   fetchExistingResourcesWithLabels,
@@ -550,7 +550,7 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.variables)})(${argsExpr})`,
                 }
               : undefined,
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };
@@ -573,7 +573,7 @@ function protoExecutor(
             variables: {
               expr: argsExpr,
             },
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };
@@ -591,7 +591,7 @@ function protoExecutor(
                 ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
                 : { expr: JSON.stringify(target.args) }
               : undefined,
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };

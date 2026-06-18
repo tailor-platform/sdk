@@ -84,7 +84,11 @@ export function dispatchTriggerJob(name: string, args?: unknown): unknown {
 export function dispatchTriggerWorkflow(
   name: string,
   args?: unknown,
-  options?: unknown,
+  options?: { invoker?: unknown },
 ): Promise<string> {
-  return requirePlatformWorkflow().triggerWorkflow(name, args, options);
+  const workflow = requirePlatformWorkflow();
+  if (options?.invoker === undefined) {
+    return workflow.triggerWorkflow(name, args);
+  }
+  return workflow.triggerWorkflow(name, args, { authInvoker: options.invoker });
 }

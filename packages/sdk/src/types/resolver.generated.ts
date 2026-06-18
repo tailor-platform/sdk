@@ -56,7 +56,7 @@ export type Resolver = {
   /** Enable publishing events from this resolver */
   publishEvents?: boolean | undefined;
   /** Machine user to execute this resolver as */
-  authInvoker?:
+  invoker?:
     | string
     | {
         namespace: string;

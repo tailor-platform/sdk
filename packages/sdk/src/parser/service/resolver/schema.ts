@@ -15,5 +15,5 @@ export const ResolverSchema = z.object({
   body: functionSchema.describe("Resolver implementation function"),
   output: TailorFieldSchema.describe("Output field definition"),
   publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
-  authInvoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
+  invoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
 });

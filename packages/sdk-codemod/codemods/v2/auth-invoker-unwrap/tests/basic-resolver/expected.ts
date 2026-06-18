@@ -14,7 +14,7 @@ export default createResolver({
         orderId: input.orderId,
         customerId: input.customerId,
       },
-      { authInvoker: "manager-machine-user" },
+      { invoker: "manager-machine-user" },
     );
     return workflowRunId;
   },

@@ -16,7 +16,7 @@
  * Specifies the machine user that should be used to execute the workflow.
  * This allows workflows to run with specific authentication context.
  */
-export interface AuthInvoker {
+export interface Invoker {
   /** The namespace where the machine user is defined */
   namespace: string;
   /** The name of the machine user to use for workflow execution */
@@ -25,8 +25,12 @@ export interface AuthInvoker {
 
 /** Options for {@link triggerWorkflow}. */
 export interface TriggerWorkflowOptions {
-  /** Optional authentication invoker to specify which machine user should execute the workflow */
-  authInvoker?: AuthInvoker;
+  /** Optional invoker to specify which machine user should execute the workflow */
+  invoker?: Invoker;
+}
+
+export interface PlatformTriggerWorkflowOptions {
+  authInvoker?: Invoker;
 }
 
 /**
@@ -42,13 +46,13 @@ export interface TailorWorkflowAPI {
    * Triggers a workflow and returns its execution ID.
    * @param workflowName - Workflow name as defined in tailor.config
    * @param args - Arguments forwarded to the workflow's main job
-   * @param options - Optional trigger options (e.g. `authInvoker`)
+   * @param options - Optional platform trigger options
    * @returns The execution ID of the triggered workflow
    */
   triggerWorkflow(
     workflowName: string,
     args?: any,
-    options?: TriggerWorkflowOptions,
+    options?: PlatformTriggerWorkflowOptions,
   ): Promise<string>;
 
   /**
@@ -82,11 +86,21 @@ const api = (): TailorWorkflowAPI =>
 
 /**
  * See {@link TailorWorkflowAPI.triggerWorkflow}.
- * @param args - Forwarded to {@link TailorWorkflowAPI.triggerWorkflow}
+ * @param workflowName - Workflow name as defined in tailor.config
+ * @param args - Arguments forwarded to the workflow's main job
+ * @param options - Optional trigger options
  * @returns The execution ID of the triggered workflow
  */
-export const triggerWorkflow: TailorWorkflowAPI["triggerWorkflow"] = (...args) =>
-  api().triggerWorkflow(...args);
+export function triggerWorkflow(
+  workflowName: string,
+  args?: any,
+  options?: TriggerWorkflowOptions,
+): Promise<string> {
+  if (options?.invoker === undefined) {
+    return api().triggerWorkflow(workflowName, args);
+  }
+  return api().triggerWorkflow(workflowName, args, { authInvoker: options.invoker });
+}
 
 /**
  * See {@link TailorWorkflowAPI.triggerJobFunction}.
