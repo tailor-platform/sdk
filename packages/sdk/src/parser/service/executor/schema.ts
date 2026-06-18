@@ -87,7 +87,7 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
 export const FunctionOperationSchema = z.object({
   kind: z.enum(["function", "jobFunction"]),
   body: functionSchema.describe("Function implementation"),
-  authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the function execution"),
+  invoker: AuthInvokerSchema.optional().describe("Invoker for the function execution"),
 });
 
 export const GqlOperationSchema = z.object({
@@ -95,7 +95,7 @@ export const GqlOperationSchema = z.object({
   appName: z.string().optional().describe("Target application name for the GraphQL query"),
   query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
   variables: functionSchema.optional().describe("Function to compute GraphQL variables"),
-  authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the GraphQL execution"),
+  invoker: AuthInvokerSchema.optional().describe("Invoker for the GraphQL execution"),
 });
 
 export const WebhookOperationSchema = z.object({
@@ -130,7 +130,7 @@ export const WorkflowOperationSchema = z.preprocess(
       .union([z.record(z.string(), z.unknown()), functionSchema])
       .optional()
       .describe("Arguments to pass to the workflow"),
-    authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the workflow execution"),
+    invoker: AuthInvokerSchema.optional().describe("Invoker for the workflow execution"),
   }),
 );
 

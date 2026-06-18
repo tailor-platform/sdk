@@ -21,7 +21,6 @@ import { getApplicationAuthNamespace } from "@/cli/shared/auth-namespace";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-exprs";
 import { assertDefined } from "@/utils/assert";
-import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
@@ -30,6 +29,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
+import { normalizeInvoker } from "./invoker";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
@@ -582,11 +582,7 @@ function processResolver(
         expr: buildResolverOperationHookExpr(env),
       },
       postScript: `args.body`,
-      invoker: normalizeAuthInvoker(
-        resolver.authInvoker,
-        authNamespace,
-        `Resolver "${resolver.name}"`,
-      ),
+      invoker: normalizeInvoker(resolver.invoker, authNamespace, `Resolver "${resolver.name}"`),
     },
   ];
 

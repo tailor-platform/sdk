@@ -45,7 +45,7 @@ const exampleDir = path.resolve(sdkRoot, "..", "..", "example");
 
 let workspaceId: string;
 let client: OperatorClient;
-let authInvoker: AuthInvoker;
+let invoker: AuthInvoker;
 let machineUser: ResolvedMachineUser;
 const env = { foo: 1, bar: "hello", baz: true };
 const AUTH_NAMESPACE = "my-auth";
@@ -76,7 +76,7 @@ async function runTestRun(
       name: scriptName,
       code,
       arg: options?.arg === undefined ? undefined : JSON.parse(options.arg),
-      invoker: authInvoker,
+      invoker,
     });
     return { ...result, scriptName };
   }
@@ -105,7 +105,7 @@ async function runTestRun(
     name: scriptName,
     code: bundledCode,
     arg: resolvedArg === undefined ? undefined : JSON.parse(resolvedArg),
-    invoker: authInvoker,
+    invoker,
   });
 
   return { ...result, scriptName, functionType: detected.type, functionName: detected.name };
@@ -166,7 +166,7 @@ describe.sequential("E2E: function test-run", () => {
       attributeList: [],
     };
 
-    authInvoker = create(AuthInvokerSchema, {
+    invoker = create(AuthInvokerSchema, {
       namespace: AUTH_NAMESPACE,
       machineUserName: MACHINE_USER_NAME,
     });
@@ -309,7 +309,7 @@ describe.sequential("E2E: function test-run", () => {
         name: "add.js",
         code,
         arg: { a: 5, b: 7 },
-        invoker: authInvoker,
+        invoker,
       });
 
       expect(result.success).toBe(true);
@@ -338,7 +338,7 @@ describe.sequential("E2E: function test-run", () => {
         workspaceId,
         name: scriptName,
         code: bundledCode,
-        invoker: authInvoker,
+        invoker,
       });
 
       expect(result.success).toBe(false);

@@ -18,7 +18,7 @@ export interface TriggerContext {
   /** Maps file path (without extension) to workflow name for default exports */
   workflowFileMap: Map<string, string>;
   /**
-   * Auth service namespace used to expand a string-literal `authInvoker`
+   * Auth service namespace used to expand a string-literal `invoker`
    * (e.g. `"kiosk"`) to the `{ namespace, machineUserName }` form expected by
    * the runtime. Undefined when no Auth service is configured.
    */
@@ -40,7 +40,7 @@ export function normalizeFilePath(filePath: string): string {
  * Build trigger context from workflow configuration
  * Scans workflow files to collect workflow and job mappings
  * @param workflowConfig - Workflow file loading configuration
- * @param authNamespace - Auth service namespace (optional, used for string-literal authInvoker expansion)
+ * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
  * @returns Trigger context built from workflow sources
  */
 export async function buildTriggerContext(

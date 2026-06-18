@@ -487,21 +487,21 @@ describe("createResolver", () => {
       expect(typeof resolver.body).toBe("function");
     });
 
-    test("creates resolver with authInvoker", () => {
+    test("creates resolver with invoker", () => {
       const outputType = t.object({
         result: t.string(),
       });
 
       const resolver = createResolver({
-        name: "withAuthInvoker",
+        name: "withInvoker",
         operation: "query",
         output: outputType,
         body: () => ({ result: "ok" }),
-        authInvoker: "batch-user",
+        invoker: "batch-user",
       });
 
-      expect(resolver.name).toBe("withAuthInvoker");
-      expect(resolver.authInvoker).toBe("batch-user");
+      expect(resolver.name).toBe("withInvoker");
+      expect(resolver.invoker).toBe("batch-user");
     });
 
     test("creates minimal resolver without optional fields", () => {

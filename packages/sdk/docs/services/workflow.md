@@ -180,8 +180,8 @@ export const processOrder = createWorkflowJob({
   name: "process-order",
   body: (input: { customerId: string }, { env, invoker }) => {
     // `env` contains values from `tailor.config.ts` -> `env`.
-    // `invoker` is the principal running this job, overridden by `authInvoker`
-    // when set; `null` for anonymous calls.
+    // `invoker` is the principal running this job, or the machine user
+    // configured through the trigger `invoker` option; `null` for anonymous calls.
     // Trigger other jobs by calling .trigger() on the job object.
     const customer = fetchCustomer.trigger({
       customerId: input.customerId,
@@ -356,7 +356,7 @@ export default createWorkflow({
 You can start a workflow execution from a resolver using `workflow.trigger()`.
 
 - `workflow.trigger(args, options?)` returns a workflow run ID (`Promise<string>`).
-- To run with machine-user permissions, pass `{ authInvoker: "<machine-user>" }`. The name is type-narrowed to the machine users defined in your auth config.
+- To run with machine-user permissions, pass `{ invoker: "<machine-user>" }`. The name is type-narrowed to the machine users defined in your auth config.
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
@@ -372,7 +372,7 @@ export default createResolver({
   body: async ({ input }) => {
     const workflowRunId = await orderProcessingWorkflow.trigger(
       { orderId: input.orderId, customerId: input.customerId },
-      { authInvoker: "manager-machine-user" },
+      { invoker: "manager-machine-user" },
     );
 
     return { workflowRunId };

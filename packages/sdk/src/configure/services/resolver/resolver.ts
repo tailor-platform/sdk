@@ -34,19 +34,19 @@ type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyFi
 type ResolverReturn<
   Input extends Record<string, TailorAnyField> | undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField>,
-> = Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
+> = Omit<ResolverInput, "input" | "output" | "body" | "invoker"> &
   Readonly<{
     input?: Input;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-    authInvoker?: MachineUserName;
+    invoker?: MachineUserName;
   }>;
 
 /**
  * Create a resolver definition for the Tailor SDK.
  *
  * The `body` function receives a context with `input` (typed from `config.input`),
- * `caller`, `invoker` (reflects `authInvoker` delegation), and `env`.
+ * `caller`, `invoker` (reflects configured machine-user delegation), and `env`.
  * The return value of `body` must match the `output` type.
  *
  * `output` accepts either a single TailorField (e.g. `t.string()`) or a
@@ -85,12 +85,12 @@ export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
 >(
-  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
+  config: Omit<ResolverInput, "input" | "output" | "body" | "invoker"> &
     Readonly<{
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-      authInvoker?: MachineUserName;
+      invoker?: MachineUserName;
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.

@@ -60,7 +60,7 @@ import simpleWorkflow from "./simple";
 export const callerJob = createWorkflowJob({
   name: "caller-job",
   body: async () => {
-    const executionId = await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    const executionId = await simpleWorkflow.trigger({ input: 0 }, { invoker: "admin" });
     return { executionId };
   },
 });
@@ -149,7 +149,7 @@ import simpleWorkflow from "./simple.mjs";
 export const callerJob = createWorkflowJob({
   name: "caller-job",
   body: async () => {
-    const executionId = await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    const executionId = await simpleWorkflow.trigger({ input: 0 }, { invoker: "admin" });
     return { executionId };
   },
 });

@@ -156,7 +156,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     }
 
     // 5. Execute via TestExecScript
-    const authInvoker = create(AuthInvokerSchema, {
+    const invoker = create(AuthInvokerSchema, {
       namespace: authNamespace,
       machineUserName: machineUser.name,
     });
@@ -180,7 +180,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       name: scriptName,
       code: bundledCode,
       arg: parsedArg,
-      invoker: authInvoker,
+      invoker,
     });
 
     // 7. Display result

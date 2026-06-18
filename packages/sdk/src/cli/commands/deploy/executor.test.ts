@@ -677,7 +677,7 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("error: args.failed?.error");
     });
 
-    test("string authInvoker uses external auth config name", async () => {
+    test("string invoker uses external auth config name", async () => {
       const client = createMockClient([]);
       const executor: Executor = {
         name: "test-executor",
@@ -691,7 +691,7 @@ describe("planExecutor", () => {
         operation: {
           kind: "function",
           body: () => {},
-          authInvoker: "batch-user",
+          invoker: "batch-user",
         },
       };
       const application = createMockApplication([executor], {

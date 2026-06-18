@@ -140,13 +140,14 @@ function findAuthImports(root: SgNode): SgNode[] {
 }
 
 /**
- * Replace `auth.invoker("name")` calls with the bare `"name"` string literal.
+ * Replace `auth.invoker("name")` calls with the bare `"name"` string literal
+ * and rename matching `authInvoker:` option keys to `invoker:`.
  * If no other `auth` references remain after the rewrite, drop the `auth`
  * specifier (or the entire import line when `auth` was its sole specifier).
  *
- * `auth.invoker()` was deprecated in favor of passing the machine user name
- * directly; carrying the `auth` import only for `.invoker()` would otherwise
- * pull config-layer (Node-only) modules into runtime bundles.
+ * `auth.invoker()` was removed in favor of passing the machine user name
+ * directly to `invoker`; carrying the `auth` import only for `.invoker()`
+ * would otherwise pull config-layer modules into runtime bundles.
  * @param source - File contents
  * @param filePath - Absolute path to the file (kept for the runner signature)
  * @returns Transformed source or null when nothing matched.
@@ -176,6 +177,8 @@ export default function transform(source: string, _filePath: string): string | n
   if (edits.length === 0) return null;
 
   let result = root.commitEdits(edits);
+
+  result = result.replace(/\bauthInvoker(\s*):/g, "invoker$1:");
 
   // Normalize: drop the leading blank line that an import removal at the top
   // of the file leaves behind, and collapse runs of 3+ newlines.
