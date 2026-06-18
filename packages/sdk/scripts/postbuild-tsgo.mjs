@@ -9,7 +9,8 @@
 //      dist/_proto so the workspace-only package travels with the publish
 //   2. rename .js -> .mjs, .d.ts -> .d.mts, .js.map -> .mjs.map (fix map refs)
 //   3. emit `.mjs` runtime modules for imported YAML files (tsgo skips .yml)
-//   4. rewrite every module specifier in dist:
+//   4. rewrite every module specifier in dist (located via the oxc AST, so
+//      import-like text inside string literals/comments is never touched):
 //        - `@/x`                       -> relative path into dist
 //        - `@tailor-proto/tailor/v1/x` -> relative path into dist/_proto
 //        - extensionless `./x`/`../x`  -> `./x.mjs` or `./x/index.mjs`
@@ -32,6 +33,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseSync } from "oxc-parser";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(__dirname, "..");
@@ -85,7 +87,7 @@ function renameEmitted(root) {
       renameSync(file, `${file.slice(0, -".d.ts".length)}.d.mts`);
     } else if (file.endsWith(".js")) {
       let content = readFileSync(file, "utf-8");
-      content = content.replace(/(\/\/# sourceMappingURL=)(.*?)\.js\.map(\s*)$/, "$1$2.mjs.map$3");
+      content = content.replace(/(\/\/# sourceMappingURL=)(.*?)\.js\.map$/m, "$1$2.mjs.map");
       writeFileSync(file, content, "utf-8");
       renameSync(file, `${file.slice(0, -".js".length)}.mjs`);
     }
@@ -130,18 +132,67 @@ function resolveSpecifier(fromFile, base) {
   return null;
 }
 
-// 4. Rewrite all module specifiers across dist (.mjs and .d.mts).
+// Collect the string-literal source spans of type-level `import("x")` queries
+// (TSImportType), which the module record does not report but `.d.mts` files
+// rely on heavily.
+function collectImportTypeSpans(node, out) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const child of node) collectImportTypeSpans(child, out);
+    return;
+  }
+  if (node.type === "TSImportType" && node.source && typeof node.source.start === "number") {
+    out.push(node.source);
+  }
+  for (const key of Object.keys(node)) {
+    if (key !== "type") collectImportTypeSpans(node[key], out);
+  }
+}
+
+// Collect the quote-inclusive source spans of every real module specifier
+// (static import/export, re-export, runtime dynamic import, and type-level
+// `import("x")`) via the oxc AST, deduped by start offset and sorted descending
+// so splicing keeps offsets valid.
+function specifierSpans(program, moduleRecord) {
+  const byStart = new Map();
+  const add = (mr) => {
+    if (mr && typeof mr.start === "number") byStart.set(mr.start, mr);
+  };
+  for (const s of moduleRecord.staticImports ?? []) add(s.moduleRequest);
+  for (const s of moduleRecord.staticExports ?? []) {
+    for (const e of s.entries ?? []) add(e.moduleRequest);
+  }
+  for (const s of moduleRecord.dynamicImports ?? []) add(s.moduleRequest);
+  const importTypes = [];
+  collectImportTypeSpans(program.body, importTypes);
+  for (const src of importTypes) add(src);
+  return [...byStart.values()].toSorted((a, b) => b.start - a.start);
+}
+
+// 4. Rewrite all module specifiers across dist (.mjs and .d.mts). Specifiers are
+//    located via the parsed AST, so import-like text inside template strings or
+//    comments (e.g. code-generator templates) is left untouched.
 function rewriteSpecifiers() {
-  // Captures the leading keyword/paren, the quote, and the specifier.
-  const re = /((?:from|import|export)\s*(?:\(\s*)?)(["'])([^"']+)\2/g;
   for (const file of walk(distDir)) {
     if (!file.endsWith(".mjs") && !file.endsWith(".d.mts")) continue;
-    const content = readFileSync(file, "utf-8");
-    const next = content.replace(re, (match, lead, quote, spec) => {
+    const source = readFileSync(file, "utf-8");
+    const { program, module: moduleRecord, errors } = parseSync(file, source);
+    if (errors.length) {
+      throw new Error(
+        `failed to parse emitted ${path.relative(distDir, file)}: ${errors[0].message}`,
+      );
+    }
+    let next = source;
+    for (const mr of specifierSpans(program, moduleRecord)) {
+      const quote = source[mr.start];
+      // Skip template-literal or otherwise non-string-literal specifiers.
+      if (quote !== '"' && quote !== "'") continue;
+      const spec = source.slice(mr.start + 1, mr.end - 1);
       const rewritten = rewriteSpec(file, spec);
-      return rewritten === null ? match : `${lead}${quote}${rewritten}${quote}`;
-    });
-    if (next !== content) writeFileSync(file, next, "utf-8");
+      if (rewritten === null) continue;
+      next = `${next.slice(0, mr.start)}${quote}${rewritten}${quote}${next.slice(mr.end)}`;
+    }
+    if (next !== source) writeFileSync(file, next, "utf-8");
   }
 }
 
@@ -207,20 +258,31 @@ function copyErdAssets() {
   cpSync(source, target, { recursive: true });
 }
 
-// Entry .js files tsgo must have emitted; their absence means tsgo failed to
-// emit (as opposed to merely exiting non-zero on benign diagnostics).
-const REQUIRED_ENTRIES = [
-  "configure/index.js",
-  "cli/index.js",
-  "cli/skills.js",
-  "runtime/index.js",
-];
+// Pre-rename `.js` files tsgo must have emitted, derived from every published
+// `package.json` exports/bin target (~24 entries). The build wrapper ignores
+// tsgo's non-zero exit, so without this a broken emit of any published entry —
+// not just the four hand-listed ones — would ship silently.
+function requiredEntries() {
+  const pkg = JSON.parse(readFileSync(path.join(pkgRoot, "package.json"), "utf-8"));
+  const entries = new Set();
+  const add = (target) => {
+    if (typeof target === "string" && target.startsWith("./dist/") && target.endsWith(".mjs")) {
+      entries.add(`${target.slice("./dist/".length, -".mjs".length)}.js`);
+    }
+  };
+  for (const condition of Object.values(pkg.exports ?? {})) {
+    if (typeof condition === "string") add(condition);
+    else for (const target of Object.values(condition ?? {})) add(target);
+  }
+  for (const target of Object.values(pkg.bin ?? {})) add(target);
+  return [...entries];
+}
 
 function main() {
   if (!existsSync(distDir) || !statSync(distDir).isDirectory()) {
     throw new Error(`dist not found at ${distDir}; tsgo did not emit`);
   }
-  for (const rel of REQUIRED_ENTRIES) {
+  for (const rel of requiredEntries()) {
     if (!existsSync(path.join(distDir, rel))) {
       throw new Error(`expected tsgo output missing: dist/${rel}; tsgo emit failed`);
     }
