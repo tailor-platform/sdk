@@ -81,7 +81,7 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(result.typeDef).toContain("lastLogin: Timestamp | null;");
       expect(result.typeDef).toContain("tags: string[];");
       expect(result.typeDef).toContain("createdAt: Generated<Timestamp>;");
-      expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
+      expect(result.typeDef).toContain("updatedAt: Generated<Timestamp>;");
     });
 
     test("should have correct id and description", () => {
