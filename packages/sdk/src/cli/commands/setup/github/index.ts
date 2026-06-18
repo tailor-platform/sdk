@@ -1,6 +1,7 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "@/cli/shared/command";
+import { checkGitHub } from "./check";
 import { setupGitHub } from "./github";
 
 export const githubCommand = defineAppCommand({
@@ -36,9 +37,18 @@ export const githubCommand = defineAppCommand({
       force: arg(z.boolean().default(false), {
         description: "Discard hand edits / take over unmanaged files and regenerate",
       }),
+      check: arg(z.boolean().default(false), {
+        description:
+          "Audit generated workflows for drift against the current config/repo (read-only)",
+      }),
     })
     .strict(),
   run: async (args) => {
+    if (args.check) {
+      checkGitHub({ outputDir: process.cwd() });
+      return;
+    }
+
     if (args["tag-pattern"] !== undefined && !args.tag) {
       throw new Error("--tag-pattern requires --tag.");
     }
