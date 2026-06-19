@@ -1,3 +1,4 @@
-export const cfg = {
+startWorkflow({
+  workflow,
   authInvoker: "kiosk",
-};
+});

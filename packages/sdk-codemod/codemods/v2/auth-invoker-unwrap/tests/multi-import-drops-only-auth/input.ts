@@ -1,6 +1,8 @@
 import { auth, db } from "../tailor.config";
 
-export const cfg = {
+createResolver({
+  name: "orders",
+  operation: "query",
   authInvoker: auth.invoker("kiosk"),
-  table: db.type("Order"),
-};
+  body: () => db.type("Order"),
+});

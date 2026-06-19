@@ -1,9 +1,10 @@
 export interface Options {
-  invoker?: string;
+  authInvoker?: string;
 }
 
-export const cfg = {
+startWorkflow({
+  workflow,
   message: "authInvoker: keep this string",
   // authInvoker: keep this comment
   invoker: "kiosk",
-};
+});
