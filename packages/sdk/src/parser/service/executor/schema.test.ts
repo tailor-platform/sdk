@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { ExecutorSchema, GqlOperationSchema, WorkflowOperationSchema } from "./schema";
+import {
+  ExecutorSchema,
+  FunctionOperationSchema,
+  GqlOperationSchema,
+  WorkflowOperationSchema,
+} from "./schema";
 
 function expectParseSuccess<T>(
   result: { success: true; data: T } | { success: false; error: unknown },
@@ -10,6 +15,43 @@ function expectParseSuccess<T>(
   }
   return result.data;
 }
+
+function expectParseFailure<T>(
+  result: { success: true; data: T } | { success: false; error: { issues: unknown[] } },
+): { issues: unknown[] } {
+  expect(result.success).toBe(false);
+  if (result.success) {
+    throw new Error("Expected schema parsing to fail");
+  }
+  return result.error;
+}
+
+function expectLegacyAuthInvokerRejected<T>(
+  result: { success: true; data: T } | { success: false; error: { issues: unknown[] } },
+) {
+  const error = expectParseFailure(result);
+  expect(error.issues).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        path: ["authInvoker"],
+      }),
+    ]),
+  );
+}
+
+describe("FunctionOperationSchema", () => {
+  test("rejects legacy authInvoker option", () => {
+    expect.hasAssertions();
+
+    expectLegacyAuthInvokerRejected(
+      FunctionOperationSchema.safeParse({
+        kind: "function",
+        body: () => {},
+        authInvoker: "admin",
+      }),
+    );
+  });
+});
 
 describe("GqlOperationSchema", () => {
   test("converts query to string", () => {
@@ -37,6 +79,18 @@ describe("GqlOperationSchema", () => {
     const data = expectParseSuccess(result);
     expect(data.query).toBe("query { users { id } }");
   });
+
+  test("rejects legacy authInvoker option", () => {
+    expect.hasAssertions();
+
+    expectLegacyAuthInvokerRejected(
+      GqlOperationSchema.safeParse({
+        kind: "graphql",
+        query: "query { users { id } }",
+        authInvoker: "admin",
+      }),
+    );
+  });
 });
 
 describe("WorkflowOperationSchema", () => {
@@ -61,6 +115,18 @@ describe("WorkflowOperationSchema", () => {
 
     const data = expectParseSuccess(result);
     expect(data.workflowName).toBe("my-workflow");
+  });
+
+  test("rejects legacy authInvoker option", () => {
+    expect.hasAssertions();
+
+    expectLegacyAuthInvokerRejected(
+      WorkflowOperationSchema.safeParse({
+        kind: "workflow",
+        workflowName: "my-workflow",
+        authInvoker: "admin",
+      }),
+    );
   });
 });
 
@@ -111,5 +177,24 @@ describe("ExecutorSchema", () => {
       throw new Error("Expected graphql operation");
     }
     expect(data.operation.query).toBe("mutation { createUser { id } }");
+  });
+
+  test("rejects legacy authInvoker option on operations", () => {
+    expect.hasAssertions();
+
+    expectParseFailure(
+      ExecutorSchema.safeParse({
+        name: "test-executor",
+        trigger: {
+          kind: "schedule",
+          cron: "0 12 * * *",
+        },
+        operation: {
+          kind: "function",
+          body: () => {},
+          authInvoker: "admin",
+        },
+      }),
+    );
   });
 });
