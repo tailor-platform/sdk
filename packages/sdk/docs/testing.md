@@ -173,6 +173,8 @@ wf.enqueueResult({ valid: true });
 wf.enqueueResults({ valid: true }, { txnId: "txn-1" });
 ```
 
+Use `wf.setEnv(...)` when locally-run workflow job bodies need configuration values. Per-run `runWorkflowLocally(..., { env })` options take precedence over the mock's env.
+
 ### SecretManager Mock
 
 ```typescript
@@ -736,6 +738,8 @@ describe("order-fulfillment workflow", () => {
 ```
 
 Pass `{ env }` as the third argument when job bodies need configuration values during the local run.
+
+If you already acquired `mockWorkflow()`, you can also call `wf.setEnv(...)` to reuse the same env across local workflow runs.
 
 Like the platform runtime, the local runner re-runs the orchestrator body once per `.trigger()` call (N triggers means N+1 passes), so any side effects outside the trigger results fire on every pass. Keep the body deterministic and move repeatable side effects into the triggered jobs.
 

@@ -58,13 +58,6 @@ export function withWorkflowTestInvoker<T>(invoker: TailorPrincipal | null, run:
   return workflowInvokerStorage().run(invoker, run);
 }
 
-/**
- * Env-var fallback read by `runWorkflowLocally()` when `mockWorkflow().setEnv()` is unset.
- * @deprecated Use `mockWorkflow().setEnv()` from `@tailor-platform/sdk/vitest`.
- * @internal
- */
-export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
-
 type RuntimeInvoker = {
   id: string;
   type: "user" | "machine_user";
@@ -92,28 +85,11 @@ function readRuntimeInvoker(): TailorPrincipal | null {
   };
 }
 
-// env from `mockWorkflow().setEnv()`, else the deprecated env-var. Shallow-copied
-// to isolate against cross-trigger mutation.
+// Shallow-copied to isolate against cross-trigger mutation.
 export function buildJobContext(): { env: TailorEnv; invoker: TailorPrincipal | null } {
   const storedInvoker = invokerStorage?.getStore();
   const invoker = storedInvoker === undefined ? readRuntimeInvoker() : storedInvoker;
   const fromGlobal = readWorkflowTestEnv();
   if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker };
-  const raw = process.env[WORKFLOW_TEST_ENV_KEY];
-  if (!raw) return { env: {} as TailorEnv, invoker };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (cause) {
-    throw new Error(
-      `Invalid JSON in ${WORKFLOW_TEST_ENV_KEY}; provide valid JSON or use mockWorkflow().setEnv().`,
-      { cause },
-    );
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(
-      `${WORKFLOW_TEST_ENV_KEY} must be a JSON object; provide a record or use mockWorkflow().setEnv().`,
-    );
-  }
-  return { env: { ...(parsed as TailorEnv) }, invoker };
+  return { env: {} as TailorEnv, invoker };
 }

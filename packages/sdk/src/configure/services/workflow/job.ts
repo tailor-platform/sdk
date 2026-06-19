@@ -54,8 +54,6 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
-export { WORKFLOW_TEST_ENV_KEY } from "./test-env-key";
-
 interface CreateWorkflowJobConfig<Name extends string, I, O> {
   readonly name: Name;
   readonly body: JobBody<I, O>;
