@@ -1,3 +1,15 @@
+/** A before/after code pair shown in the generated migration doc. */
+export interface CodemodExample {
+  /** Code as written before the migration. */
+  before: string;
+  /** Code after the migration. */
+  after: string;
+  /** Optional one-line caption explaining the example. */
+  caption?: string;
+  /** Fenced-code-block language for the example (default: "ts"). */
+  lang?: string;
+}
+
 /**
  * Metadata for a codemod package.
  */
@@ -12,8 +24,12 @@ export interface CodemodPackage {
   since: string;
   /** Target version this codemod upgrades to (semver, exclusive upper bound) */
   until: string;
-  /** Path to the jssg transform script relative to the codemods root */
-  scriptPath: string;
+  /**
+   * Path to the jssg transform script relative to the codemods root. Omit for a
+   * codemod-less ("manual") migration that ships only guidance — `prompt`,
+   * `examples`, and/or `suspiciousPatterns` — with no automatic transform.
+   */
+  scriptPath?: string;
   /** Target language for codemod CLI (default: "typescript") */
   language?: string;
   /** Custom file glob patterns. Defaults to TypeScript patterns when omitted. */
@@ -41,6 +57,14 @@ export interface CodemodPackage {
    * by `suspiciousPatterns`.
    */
   prompt?: string;
+  /** Before/after examples shown in the generated migration doc. */
+  examples?: CodemodExample[];
+  /**
+   * Marks an informational behavioral change (a runtime/CLI change with no
+   * source to migrate), not a migration. Rendered in a separate "Behavioral
+   * changes" section, never on the automation-level axis.
+   */
+  notice?: boolean;
 }
 
 /** A batch of files an LLM should review for one codemod, with its prompt. */
