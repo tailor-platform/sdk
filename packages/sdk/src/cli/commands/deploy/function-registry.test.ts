@@ -132,7 +132,7 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.changeSet.creates).toHaveLength(1);
-      expect(result.changeSet.creates[0].name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.creates[0]!.name).toBe("resolver/ns/getUser");
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
@@ -148,7 +148,7 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.changeSet.creates).toHaveLength(3);
-      expect(result.changeSet.creates.map((c) => c.name).sort()).toEqual([
+      expect(result.changeSet.creates.map((c) => c.name).toSorted()).toEqual([
         "executor/user-created",
         "resolver/ns/getUser",
         "workflow-job/process-order",
@@ -166,7 +166,7 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0].name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.updates[0]!.name).toBe("resolver/ns/getUser");
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
@@ -181,7 +181,7 @@ describe("planFunctionRegistry", () => {
 
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.unchanged).toHaveLength(1);
-      expect(result.changeSet.unchanged[0].name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.unchanged[0]!.name).toBe("resolver/ns/getUser");
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
@@ -245,9 +245,9 @@ describe("planFunctionRegistry", () => {
 
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.unchanged).toHaveLength(1);
-      expect(result.changeSet.unchanged[0].name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.unchanged[0]!.name).toBe("resolver/ns/getUser");
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("resolver/ns/listUsers");
+      expect(result.changeSet.deletes[0]!.name).toBe("resolver/ns/listUsers");
     });
 
     test("all functions are deleted when entries is empty", async () => {
@@ -259,7 +259,7 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(2);
-      expect(result.changeSet.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
         "executor/my-executor",
         "resolver/ns/getUser",
       ]);
@@ -298,7 +298,7 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(1);
-      expect(result.changeSet.deletes[0].name).toBe("resolver/ns/mine");
+      expect(result.changeSet.deletes[0]!.name).toBe("resolver/ns/mine");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
   });
@@ -313,8 +313,8 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.unmanaged).toHaveLength(1);
-      expect(result.unmanaged[0].resourceName).toBe("resolver/ns/getUser");
-      expect(result.unmanaged[0].resourceType).toBe("Function registry");
+      expect(result.unmanaged[0]!.resourceName).toBe("resolver/ns/getUser");
+      expect(result.unmanaged[0]!.resourceType).toBe("Function registry");
     });
 
     test("detects conflict when entry targets function owned by different app", async () => {
@@ -326,8 +326,8 @@ describe("planFunctionRegistry", () => {
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
 
       expect(result.conflicts).toHaveLength(1);
-      expect(result.conflicts[0].resourceName).toBe("resolver/ns/getUser");
-      expect(result.conflicts[0].currentOwner).toBe("other-app");
+      expect(result.conflicts[0]!.resourceName).toBe("resolver/ns/getUser");
+      expect(result.conflicts[0]!.currentOwner).toBe("other-app");
     });
   });
 });
@@ -516,11 +516,11 @@ describe("collectFunctionEntries", () => {
     const entries = collectFunctionEntries(app, [], scripts);
 
     expect(entries).toHaveLength(2);
-    expect(entries[0].name).toBe(resolverFunctionName("my-ns", "getUser"));
-    expect(entries[0].scriptContent).toBe("// getUser code");
-    expect(entries[0].contentHash).toBeTruthy();
-    expect(entries[0].description).toBe("Resolver: my-ns/getUser");
-    expect(entries[1].name).toBe(resolverFunctionName("my-ns", "listUsers"));
+    expect(entries[0]!.name).toBe(resolverFunctionName("my-ns", "getUser"));
+    expect(entries[0]!.scriptContent).toBe("// getUser code");
+    expect(entries[0]!.contentHash).toBeTruthy();
+    expect(entries[0]!.description).toBe("Resolver: my-ns/getUser");
+    expect(entries[1]!.name).toBe(resolverFunctionName("my-ns", "listUsers"));
   });
 
   test("collects executor entries only for function/jobFunction kinds", () => {
@@ -543,8 +543,8 @@ describe("collectFunctionEntries", () => {
     const entries = collectFunctionEntries(app, [], scripts);
 
     expect(entries).toHaveLength(1);
-    expect(entries[0].name).toBe(executorFunctionName("on-created"));
-    expect(entries[0].scriptContent).toBe("// executor code");
+    expect(entries[0]!.name).toBe(executorFunctionName("on-created"));
+    expect(entries[0]!.scriptContent).toBe("// executor code");
   });
 
   test("collects workflow job entries", () => {
@@ -559,8 +559,8 @@ describe("collectFunctionEntries", () => {
     const entries = collectFunctionEntries(createMockApplication(), jobs, scripts);
 
     expect(entries).toHaveLength(1);
-    expect(entries[0].name).toBe(workflowJobFunctionName("process-order"));
-    expect(entries[0].scriptContent).toBe("// job code");
+    expect(entries[0]!.name).toBe(workflowJobFunctionName("process-order"));
+    expect(entries[0]!.scriptContent).toBe("// job code");
   });
 
   test("collects auth hook entries", () => {
@@ -579,8 +579,8 @@ describe("collectFunctionEntries", () => {
     const entries = collectFunctionEntries(app, [], scripts);
 
     expect(entries).toHaveLength(1);
-    expect(entries[0].name).toBe(funcName);
-    expect(entries[0].description).toBe(`Auth hook: ${authName}/before-login`);
+    expect(entries[0]!.name).toBe(funcName);
+    expect(entries[0]!.description).toBe(`Auth hook: ${authName}/before-login`);
   });
 
   test("skips entries with missing bundled code and warns", () => {

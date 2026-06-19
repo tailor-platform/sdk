@@ -18,8 +18,37 @@ export type WithLabel<T> = Partial<
  * @param workspaceId - Workspace ID
  * @returns TRN prefix string
  */
-export function trnPrefix(workspaceId: string): string {
+function trnPrefix(workspaceId: string): string {
   return `trn:v1:workspace:${workspaceId}`;
+}
+
+/**
+ * Resource kind segment used in a TRN (`trn:v1:workspace:<id>:<kind>:<name>`).
+ */
+export type ResourceKind =
+  | "application"
+  | "function_registry"
+  | "pipeline"
+  | "idp"
+  | "auth"
+  | "auth_connection"
+  | "executor"
+  | "workflow"
+  | "workflow_job_function"
+  | "staticwebsite"
+  | "aigateway"
+  | "tailordb"
+  | "vault";
+
+/**
+ * Build the TRN for a workspace resource.
+ * @param workspaceId - Workspace ID
+ * @param kind - Resource kind segment
+ * @param name - Resource name
+ * @returns Fully-qualified TRN string
+ */
+export function resourceTrn(workspaceId: string, kind: ResourceKind, name: string): string {
+  return `${trnPrefix(workspaceId)}:${kind}:${name}`;
 }
 
 export const sdkNameLabelKey = "sdk-name";
@@ -102,7 +131,7 @@ export async function buildMetaRequest(
   return {
     trn,
     labels: {
-      ...(existingLabels ?? {}),
+      ...existingLabels,
       [sdkNameLabelKey]: appName,
       [sdkVersionLabelKey]: sdkVersion,
       ...(appId ? { [sdkAppIdLabelKey]: toAppIdLabelValue(appId) } : {}),

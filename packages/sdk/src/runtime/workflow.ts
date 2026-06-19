@@ -2,7 +2,7 @@
  * Workflow utilities.
  *
  * Thin typed wrapper around the platform-provided `tailor.workflow` runtime API.
- * At runtime this delegates to `globalThis.tailor.workflow`. Use `workflowMock`
+ * At runtime this delegates to `globalThis.tailor.workflow`. Use `mockWorkflow`
  * from `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
  * @example
  * import { workflow } from "@tailor-platform/sdk/runtime";

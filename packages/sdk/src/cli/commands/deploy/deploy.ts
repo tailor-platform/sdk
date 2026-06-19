@@ -5,6 +5,7 @@ import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
+import { assertUniqueTailorDBTypeNamesWithExternal } from "@/cli/services/tailordb/type-name-validation";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
@@ -15,6 +16,7 @@ import { parseBoolean } from "@/cli/shared/parse-boolean";
 import { generateUserTypes } from "@/cli/shared/type-generator";
 import { withSpan } from "@/cli/telemetry";
 import { PluginManager } from "@/plugin/manager";
+import { applyAIGateway, planAIGateway } from "./aigateway";
 import { applyApplication, planApplication } from "./application";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
 import {
@@ -23,7 +25,7 @@ import {
   type HasName,
   type PlanSummary,
 } from "./change-set";
-import { ensureConfigId } from "./config-id-injector";
+import { ensureConfigIdForDeploy } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
@@ -54,11 +56,12 @@ import {
   type NamespaceAction,
 } from "./grouped-display";
 import { applyIdP, planIdP } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
+import { validatePlan } from "./validate-plan";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { PlanContext } from "./types";
 
@@ -69,51 +72,12 @@ export interface DeployOptions {
   dryRun?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
+  noValidate?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
-}
-
-function applicationTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:application:${name}`;
-}
-
-function functionRegistryTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
-}
-
-function pipelineTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:pipeline:${name}`;
-}
-
-function idpTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
-}
-
-function authTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
-}
-
-function executorTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
-}
-
-function workflowTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
-}
-
-function staticWebsiteTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
-}
-
-function tailorDBTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:tailordb:${name}`;
-}
-
-function vaultTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
 }
 
 /**
@@ -135,7 +99,8 @@ function collectIdpUserTriggerTargets(application: Readonly<Application>): Reado
     if (executor.trigger.idp != null) {
       targets.add(executor.trigger.idp);
     } else if (idps.length === 1) {
-      targets.add(idps[0].name);
+      const [idp] = idps;
+      if (idp) targets.add(idp.name);
     }
   }
   return targets;
@@ -149,7 +114,7 @@ async function shouldForceApplyAll(
 ) {
   const desiredLabels = (
     await buildMetaRequest({
-      trn: applicationTrn(workspaceId, application.name),
+      trn: resourceTrn(workspaceId, "application", application.name),
       appName: application.name,
       appId: application.id,
     })
@@ -157,40 +122,43 @@ async function shouldForceApplyAll(
   const candidateTrns = new Set<string>();
 
   if (application.subgraphs.length > 0) {
-    candidateTrns.add(applicationTrn(workspaceId, application.name));
+    candidateTrns.add(resourceTrn(workspaceId, "application", application.name));
   }
   application.staticWebsiteServices.forEach((website) => {
-    candidateTrns.add(staticWebsiteTrn(workspaceId, website.name));
+    candidateTrns.add(resourceTrn(workspaceId, "staticwebsite", website.name));
+  });
+  application.aiGatewayServices.forEach((gateway) => {
+    candidateTrns.add(resourceTrn(workspaceId, "aigateway", gateway.name));
   });
   application.resolverServices.forEach((pipeline) => {
-    candidateTrns.add(pipelineTrn(workspaceId, pipeline.namespace));
+    candidateTrns.add(resourceTrn(workspaceId, "pipeline", pipeline.namespace));
   });
   application.idpServices.forEach((idp) => {
-    candidateTrns.add(idpTrn(workspaceId, idp.name));
+    candidateTrns.add(resourceTrn(workspaceId, "idp", idp.name));
   });
   if (application.authService) {
-    candidateTrns.add(authTrn(workspaceId, application.authService.config.name));
+    candidateTrns.add(resourceTrn(workspaceId, "auth", application.authService.config.name));
   }
   Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
-    candidateTrns.add(executorTrn(workspaceId, executor.name));
+    candidateTrns.add(resourceTrn(workspaceId, "executor", executor.name));
   });
   Object.values(application.workflowService?.workflows ?? {}).forEach((workflow) => {
-    candidateTrns.add(workflowTrn(workspaceId, workflow.name));
+    candidateTrns.add(resourceTrn(workspaceId, "workflow", workflow.name));
   });
   application.tailorDBServices.forEach((service) => {
-    candidateTrns.add(tailorDBTrn(workspaceId, service.namespace));
+    candidateTrns.add(resourceTrn(workspaceId, "tailordb", service.namespace));
   });
   application.secrets.forEach((vault) => {
-    candidateTrns.add(vaultTrn(workspaceId, vault.vaultName));
+    candidateTrns.add(resourceTrn(workspaceId, "vault", vault.vaultName));
   });
   functionEntries.forEach((entry) => {
-    candidateTrns.add(functionRegistryTrn(workspaceId, entry.name));
+    candidateTrns.add(resourceTrn(workspaceId, "function_registry", entry.name));
   });
 
   for (const trn of candidateTrns) {
     try {
       const { metadata } = await client.getMetadata({ trn });
-      if (metadata?.labels?.[sdkNameLabelKey] !== application.name) {
+      if (metadata?.labels[sdkNameLabelKey] !== application.name) {
         continue;
       }
       if (!hasMatchingSdkVersion(metadata.labels, desiredLabels)) {
@@ -233,6 +201,7 @@ type PlanResults = {
   functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
   staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
+  aiGateway: Awaited<ReturnType<typeof planAIGateway>>;
   idp: Awaited<ReturnType<typeof planIdP>>;
   auth: Awaited<ReturnType<typeof planAuth>>;
   pipeline: Awaited<ReturnType<typeof planPipeline>>;
@@ -303,9 +272,7 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], namespaceOf),
     ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], namespaceOf),
     ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], namespaceOf),
-    ...(results.auth.changeSet.connection
-      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf)
-      : []),
+    ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf),
   ];
 
   // Print grouped sections
@@ -321,6 +288,8 @@ function printPlanResults(results: PlanResults) {
   const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
   const authServiceActions = extractServiceActions(results.auth.changeSet.service);
   results.staticWebsite.changeSet.print();
+  results.staticWebsite.customDomainChangeSet.print();
+  results.aiGateway.changeSet.print();
   results.app.print();
   printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
   printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
@@ -391,6 +360,8 @@ export function summarizePlanResults(
   const nonGrouped = summarizeChangeSets([
     otherChanges,
     results.staticWebsite.changeSet,
+    results.staticWebsite.customDomainChangeSet,
+    results.aiGateway.changeSet,
     results.app,
     results.secretManager.vaultChangeSet,
     results.secretManager.secretChangeSet,
@@ -427,12 +398,14 @@ export async function deploy(options?: DeployOptions) {
 
       const { config, plugins } = await withSpan("build.loadConfig", async () => {
         const foundPath = loadConfigPath(options?.configPath);
-        // Skip id injection in dry-run / build-only flows: those modes are
-        // expected to have no on-disk side effects.
-        if (foundPath && !dryRun && !buildOnly) {
+        // Locally inject a missing app id; in CI require an existing id
+        // instead of auto-generating one. CI dry-runs still run the check
+        // read-only (so a forgotten id fails the PR plan); local dry-run and
+        // build-only skip it. See ensureConfigIdForDeploy.
+        if (foundPath) {
           const resolvedPath = path.resolve(process.cwd(), foundPath);
           if (fs.existsSync(resolvedPath)) {
-            await ensureConfigId(resolvedPath);
+            await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
           }
         }
         return loadConfig(options?.configPath);
@@ -515,7 +488,6 @@ export async function deploy(options?: DeployOptions) {
 
     // Initialize client
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: options?.profile,
     });
     const client = await initOperatorClient(accessToken);
@@ -526,6 +498,15 @@ export async function deploy(options?: DeployOptions) {
 
     rootSpan.setAttribute("app.name", application.name);
     rootSpan.setAttribute("workspace.id", workspaceId);
+
+    await withSpan("plan.validateTailorDBTypeNames", () =>
+      assertUniqueTailorDBTypeNamesWithExternal({
+        client,
+        workspaceId,
+        tailorDBServices: application.tailorDBServices,
+        externalTailorDBNamespaces: application.externalTailorDBNamespaces,
+      }),
+    );
 
     // Collect function entries from in-memory bundled scripts (after build, before plan)
     const workflowService = application.workflowService;
@@ -550,6 +531,7 @@ export async function deploy(options?: DeployOptions) {
       functionRegistry,
       tailorDB,
       staticWebsite,
+      aiGateway,
       idp,
       auth,
       pipeline,
@@ -583,32 +565,44 @@ export async function deploy(options?: DeployOptions) {
           .filter((entry) => entry.name.startsWith(WORKFLOW_PREFIX))
           .map((entry) => entry.name.slice(WORKFLOW_PREFIX.length)),
       );
-      const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
-        await Promise.all([
-          withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-          withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-          withSpan("plan.idp", () => planIdP(ctx)),
-          withSpan("plan.auth", () => planAuth(ctx)),
-          withSpan("plan.pipeline", () => planPipeline(ctx)),
-          withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
-          withSpan("plan.executor", () => planExecutor(ctx)),
-          withSpan("plan.workflow", () =>
-            planWorkflow(
-              client,
-              workspaceId,
-              application.name,
-              application.id,
-              workflowService?.workflows ?? {},
-              workflowBuildResult?.mainJobDeps ?? {},
-              unchangedWorkflowJobs,
-            ),
+      const [
+        tailorDB,
+        staticWebsite,
+        aiGateway,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+        secretManager,
+      ] = await Promise.all([
+        withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+        withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+        withSpan("plan.aiGateway", () => planAIGateway(ctx)),
+        withSpan("plan.idp", () => planIdP(ctx)),
+        withSpan("plan.auth", () => planAuth(ctx)),
+        withSpan("plan.pipeline", () => planPipeline(ctx)),
+        withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
+        withSpan("plan.executor", () => planExecutor(ctx)),
+        withSpan("plan.workflow", () =>
+          planWorkflow(
+            client,
+            workspaceId,
+            application.name,
+            application.id,
+            workflowService?.workflows ?? {},
+            workflowBuildResult?.mainJobDeps ?? {},
+            unchangedWorkflowJobs,
           ),
-          withSpan("plan.secretManager", () => planSecretManager(ctx)),
-        ]);
+        ),
+        withSpan("plan.secretManager", () => planSecretManager(ctx)),
+      ]);
       return {
         functionRegistry,
         tailorDB,
         staticWebsite,
+        aiGateway,
         idp,
         auth,
         pipeline,
@@ -625,6 +619,7 @@ export async function deploy(options?: DeployOptions) {
         ...functionRegistry.conflicts,
         ...tailorDB.conflicts,
         ...staticWebsite.conflicts,
+        ...aiGateway.conflicts,
         ...idp.conflicts,
         ...auth.conflicts,
         ...pipeline.conflicts,
@@ -638,6 +633,7 @@ export async function deploy(options?: DeployOptions) {
         ...functionRegistry.unmanaged,
         ...tailorDB.unmanaged,
         ...staticWebsite.unmanaged,
+        ...aiGateway.unmanaged,
         ...idp.unmanaged,
         ...auth.unmanaged,
         ...pipeline.unmanaged,
@@ -660,6 +656,12 @@ export async function deploy(options?: DeployOptions) {
           resourceName: del.name,
         });
       }
+      for (const del of aiGateway.changeSet.deletes) {
+        importantDeletions.push({
+          resourceType: "AIGateway",
+          resourceName: del.name,
+        });
+      }
       for (const del of auth.changeSet.oauth2Client.deletes) {
         importantDeletions.push({
           resourceType: "OAuth2 client",
@@ -670,6 +672,12 @@ export async function deploy(options?: DeployOptions) {
         importantDeletions.push({
           resourceType: "OAuth2 client (client type change)",
           resourceName: replace.name,
+        });
+      }
+      for (const del of auth.changeSet.connection.deletes) {
+        importantDeletions.push({
+          resourceType: "Auth connection",
+          resourceName: del.name,
         });
       }
       for (const del of secretManager.vaultChangeSet.deletes) {
@@ -691,6 +699,7 @@ export async function deploy(options?: DeployOptions) {
         ...functionRegistry.resourceOwners,
         ...tailorDB.resourceOwners,
         ...staticWebsite.resourceOwners,
+        ...aiGateway.resourceOwners,
         ...idp.resourceOwners,
         ...auth.resourceOwners,
         ...pipeline.resourceOwners,
@@ -718,6 +727,7 @@ export async function deploy(options?: DeployOptions) {
       functionRegistry,
       tailorDB,
       staticWebsite,
+      aiGateway,
       idp,
       auth,
       pipeline,
@@ -726,6 +736,23 @@ export async function deploy(options?: DeployOptions) {
       workflow,
       secretManager,
     });
+
+    if (options?.noValidate) {
+      logger.warn("Client-side validation skipped (--no-validate).");
+    } else {
+      await validatePlan({
+        functionRegistry,
+        tailorDB,
+        staticWebsite,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+        secretManager,
+      });
+    }
 
     if (dryRun) {
       logger.info("Dry run enabled. No changes applied.");
@@ -737,6 +764,7 @@ export async function deploy(options?: DeployOptions) {
       await applySecretManager(client, secretManager, "create-update", application);
       await applyFunctionRegistry(client, workspaceId, functionRegistry, "create-update");
       await applyStaticWebsite(client, staticWebsite, "create-update");
+      await applyAIGateway(client, aiGateway, "create-update");
       await applyIdP(client, idp, "create-update");
       await applyAuth(client, auth, "create-update");
       await applyTailorDB(client, tailorDB, "create-update");
@@ -766,6 +794,7 @@ export async function deploy(options?: DeployOptions) {
       await applyWorkflow(client, workflow, "delete");
       await applyExecutor(client, executor, "delete");
       await applyStaticWebsite(client, staticWebsite, "delete");
+      await applyAIGateway(client, aiGateway, "delete");
       await applySecretManager(client, secretManager, "delete");
     });
 

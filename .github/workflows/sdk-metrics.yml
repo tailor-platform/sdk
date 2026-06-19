@@ -12,10 +12,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pull-requests: write
-  actions: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   coverage-shard:
@@ -46,9 +47,10 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Run SDK coverage shard
-        run: pnpm exec vitest run --coverage --coverage.reporter=lcovonly --shard=${{ matrix.shard }}/4
+        run: pnpm exec vitest run --coverage --coverage.reporter=lcovonly --shard="${SHARD}/4"
         working-directory: packages/sdk
         env:
+          SHARD: ${{ matrix.shard }}
           GITHUB_RUN_ID: ${{ github.run_id }}-${{ matrix.shard }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
@@ -87,7 +89,9 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Cleanup e2e workspaces
-        run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="$RUN_ID"
 
   bundle-size:
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
@@ -174,9 +178,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
-      pull-requests: write
-      actions: write
+      contents: read # checkout and read coverage artifacts
+      pull-requests: write # octocov posts the metrics report on the PR
+      actions: write # octocov manages the coverage report artifact
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

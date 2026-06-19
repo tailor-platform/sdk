@@ -1,3 +1,4 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { t } from "@/configure/types";
 import { createResolver } from "../resolver";
@@ -16,7 +17,7 @@ import {
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
 import type { Operation } from "./operation";
-import type { TailorInvoker } from "@/types/user";
+import type { TailorInvoker } from "@/runtime/types";
 
 describe("createExecutor", () => {
   test("can disable executor", () => {

@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { defineConfig } from "@/configure/config";
 import { defineAuth } from "@/configure/services/auth";
 import { db } from "@/configure/services/tailordb/schema";
 import { defineApplication } from "./application";
 
 describe("defineAuth parse wiring", () => {
-  it("preserves an explicit userProfile.namespace through AuthConfigSchema.parse", async () => {
+  test("preserves an explicit userProfile.namespace through AuthConfigSchema.parse", async () => {
     const userType = db.type("User", {
       email: db.string().unique(),
       role: db.string(),

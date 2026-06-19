@@ -27,26 +27,61 @@ export const updateCommand = defineAppCommand({
         description:
           "Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.",
       }),
+      "machine-user": arg(z.string().optional(), {
+        alias: "m",
+        description:
+          "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.",
+      }),
+      "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
+        description:
+          "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction.",
+      }),
     })
     .strict(),
   run: async (args) => {
     const config = await readPlatformConfig();
 
     // Check if profile exists
-    if (!config.profiles[args.name]) {
+    const profile = config.profiles[args.name];
+    if (!profile) {
       throw new Error(`Profile "${args.name}" not found.`);
     }
 
     // Check if at least one property is provided
-    if (!args.user && !args["workspace-id"] && args.permission === undefined) {
+    if (
+      !args.user &&
+      !args["workspace-id"] &&
+      args.permission === undefined &&
+      args["machine-user"] === undefined &&
+      args["machine-user-override"] === undefined
+    ) {
       throw new Error("Please provide at least one property to update.");
     }
-
-    const profile = config.profiles[args.name]!;
     const oldUser = profile.user;
     const newUser = args.user || oldUser;
     const oldWorkspaceId = profile.workspace_id;
     const newWorkspaceId = args["workspace-id"] || oldWorkspaceId;
+
+    // Compute the final machine_user and machine_user_override to validate the combination.
+    const finalMachineUser =
+      args["machine-user"] === "" ? undefined : (args["machine-user"] ?? profile.machine_user);
+    const finalOverride =
+      args["machine-user-override"] === "allow"
+        ? undefined
+        : (args["machine-user-override"] ?? profile.machine_user_override);
+
+    if (
+      (args["machine-user"] !== undefined || args["machine-user-override"] !== undefined) &&
+      finalOverride === "deny" &&
+      !finalMachineUser
+    ) {
+      if (args["machine-user-override"] === "deny") {
+        throw new Error("--machine-user-override deny requires --machine-user.");
+      }
+      throw new Error(
+        `Cannot clear the machine user while machine-user-override is "deny". Also pass --machine-user-override allow.`,
+      );
+    }
 
     // Skip remote validation when neither user nor workspace is changing.
     // This keeps `profile update <name> --permission write|read` working
@@ -79,6 +114,18 @@ export const updateCommand = defineAppCommand({
     } else if (args.permission === "write") {
       delete profile.readonly;
     }
+    if (args["machine-user"] !== undefined) {
+      if (args["machine-user"] === "") {
+        delete profile.machine_user;
+      } else {
+        profile.machine_user = args["machine-user"];
+      }
+    }
+    if (args["machine-user-override"] === "deny") {
+      profile.machine_user_override = "deny";
+    } else if (args["machine-user-override"] === "allow") {
+      delete profile.machine_user_override;
+    }
     writePlatformConfig(config);
     if (!args.json) {
       logger.success(`Profile "${args.name}" updated successfully`);
@@ -90,6 +137,12 @@ export const updateCommand = defineAppCommand({
       user: newUser,
       workspaceId: newWorkspaceId,
       permission: profile.readonly === true ? "read" : "write",
+      ...(profile.machine_user
+        ? {
+            machineUser: profile.machine_user,
+            machineUserOverride: profile.machine_user_override ?? "allow",
+          }
+        : {}),
     };
     logger.out(profileInfo);
   },

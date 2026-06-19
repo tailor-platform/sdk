@@ -6,9 +6,12 @@ import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { isNodeBuiltinImport } from "@/cli/services/http-adapter/node-builtins";
 import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
+import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
 import { HTTP_METHODS, type HttpMethodKey } from "@/parser/service/http-adapter";
+import type { LogLevel } from "@/configure/config/types";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
@@ -33,11 +36,13 @@ export interface HttpAdapterBundleResult {
  * generated dispatcher that routes by `req.method`; `output` is used as is.
  * @param adapters - Detected adapters to bundle
  * @param cache - Optional bundle cache for skipping unchanged builds
+ * @param bundleLogLevel - Controls which console calls are kept in bundled code
  * @returns Bundled scripts keyed by adapter name
  */
 export async function bundleHttpAdapters(
   adapters: HttpAdapterBundleInput[],
   cache?: BundleCache,
+  bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<HttpAdapterBundleResult> {
   if (adapters.length === 0) {
     return { bundledInputs: new Map(), bundledOutputs: new Map() };
@@ -64,7 +69,7 @@ export async function bundleHttpAdapters(
     return kinds.map((kind) => ({ adapter, kind }));
   });
   const results = await withBundleConcurrency(tasks, ({ adapter, kind }) =>
-    bundleAdapterScript(adapter, kind, outputDir, tsconfig, cache),
+    bundleAdapterScript(adapter, kind, outputDir, tsconfig, cache, bundleLogLevel),
   );
 
   const bundledInputs = new Map<string, string>();
@@ -88,12 +93,14 @@ async function bundleAdapterScript(
   outputDir: string,
   tsconfig: string | undefined,
   cache: BundleCache | undefined,
+  bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<[string, "input" | "output", string]> {
   const contextHash = computeBundlerContextHash({
     sourceFile: adapter.sourceFile,
     serializedTriggerContext: kind === "input" ? adapter.methods.join(",") : "",
     tsconfig,
     inlineSourcemap: false,
+    bundleLogLevel,
     prefix: kind,
   });
 
@@ -162,11 +169,9 @@ async function bundleAdapterScript(
           // rejectAsyncInBundle can reject it (lower targets rewrite it into
           // generator+Promise code that evades the check and breaks on Sobek).
           transform: { target: "es2017" },
-          treeshake: {
-            moduleSideEffects: false,
-            annotations: true,
-            unknownGlobalSideEffects: false,
-          },
+          treeshake: composeFunctionTreeshakeOptions([
+            createLogLevelTreeshakeOptions(bundleLogLevel),
+          ]),
           logLevel: "silent",
         } as rolldown.BuildOptions);
         bundled = result.output[0].code;

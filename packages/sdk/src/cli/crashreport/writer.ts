@@ -67,8 +67,8 @@ function cleanupOldFiles(dir: string): void {
     const files = fs
       .readdirSync(dir)
       .filter((f) => f.endsWith(CRASH_LOG_EXTENSION))
-      .sort()
-      .reverse();
+      .toSorted()
+      .toReversed();
 
     for (const file of files.slice(MAX_CRASH_FILES)) {
       fs.unlinkSync(path.join(dir, file));

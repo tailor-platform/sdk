@@ -1,0 +1,89 @@
+# __HEADER__
+name: Tailor (__WORKSPACE_NAME__)
+
+on:
+  # __PULL_REQUEST_START__
+  pull_request:
+    branches: ["__BRANCH__"]
+    # __PATHS__
+  # __PULL_REQUEST_END__
+  push:
+    branches: ["__BRANCH__"]
+    # __PATHS__
+  workflow_dispatch:
+    # __DISPATCH_INPUTS_START__
+    inputs:
+      dry-run:
+        description: Preview changes without deploying
+        type: boolean
+        default: false
+    # __DISPATCH_INPUTS_END__
+
+permissions:
+  contents: read
+
+jobs:
+  # __PLAN_JOB_START__
+  tailor-plan:
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs['dry-run'])
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: __ENVIRONMENT__
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: tailor-plan-__WORKSPACE_NAME__-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-generate-check
+        uses: tailor-platform/actions/generate-check@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+      - id: tailor-plan
+        # Fork PRs cannot read secrets; the checks above still run for them.
+        if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+        uses: tailor-platform/actions/plan@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          package-manager: __PACKAGE_MANAGER__
+          label: __WORKSPACE_NAME__
+          # __WORKING_DIRECTORY__
+          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+  # __PLAN_JOB_END__
+  tailor-deploy:
+    # __DEPLOY_IF__
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    environment: __ENVIRONMENT__
+    concurrency:
+      group: tailor-deploy-__WORKSPACE_NAME__
+      cancel-in-progress: false
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-apply
+        uses: tailor-platform/actions/deploy@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}

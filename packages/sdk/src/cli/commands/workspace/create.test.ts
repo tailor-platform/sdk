@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
@@ -56,9 +56,12 @@ function stubClient() {
         id: validUUID,
         name: "test-ws",
         region: "us-west",
+        organizationId: "organization-1",
+        folderId: "folder-1",
         createdAt: { seconds: 0n, nanos: 0 },
       },
     }),
+    getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "dev" } }),
   } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 }
 
@@ -87,7 +90,7 @@ describe("workspace create --permission", () => {
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
-  it("persists readonly: true when --permission read is combined with --profile-name", async () => {
+  test("persists readonly: true when --permission read is combined with --profile-name", async () => {
     using _logger = silenceLogger("out", "success", "warn");
     await runCommand(createCommand, [
       "--name",
@@ -106,7 +109,7 @@ describe("workspace create --permission", () => {
     expect(config.profiles.bootstrap?.readonly).toBe(true);
   });
 
-  it("omits the readonly key when --profile-name is given without --permission read", async () => {
+  test("omits the readonly key when --profile-name is given without --permission read", async () => {
     using _logger = silenceLogger("out", "success", "warn");
     await runCommand(createCommand, [
       "--name",
@@ -126,7 +129,7 @@ describe("workspace create --permission", () => {
     expect(config.profiles.bootstrap?.readonly).toBeUndefined();
   });
 
-  it("creates no profile when --permission read is passed without --profile-name", async () => {
+  test("creates no profile when --permission read is passed without --profile-name", async () => {
     using _logger = silenceLogger("out", "success", "warn");
     // Matches the existing --profile-user behavior: profile-only flags are
     // silently inert when --profile-name is absent. We don't store the flag

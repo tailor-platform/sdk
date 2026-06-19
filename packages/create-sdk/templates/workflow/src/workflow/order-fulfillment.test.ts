@@ -1,5 +1,4 @@
-import { workflowMock } from "@tailor-platform/sdk/vitest";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
   processPayment,
@@ -8,10 +7,6 @@ import workflow, {
 } from "./order-fulfillment";
 
 describe("order fulfillment workflow", () => {
-  afterEach(() => {
-    workflowMock.reset();
-  });
-
   describe("individual job tests with .body()", () => {
     test("validateOrder accepts valid order", () => {
       const result = validateOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });

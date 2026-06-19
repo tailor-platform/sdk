@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, it, expect, beforeEach, afterEach, vi, afterAll } from "vitest";
+import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vitest";
 import { defineApplication } from "@/cli/services/application";
 import { createResolver } from "@/configure/services/resolver/resolver";
 import { db } from "@/configure/services/tailordb/schema";
@@ -9,6 +9,8 @@ import { t } from "@/configure/types";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { createGenerationManager } from "./service";
+import type { Application } from "@/cli/services/application";
+import type { TailorDBService } from "@/cli/services/tailordb/service";
 import type { LoadedConfig, Generator } from "@/cli/shared/config-loader";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { Resolver } from "@/types/resolver.generated";
@@ -36,7 +38,7 @@ vi.mock("@/cli/shared/logger", async (importOriginal) => {
   return {
     ...actual,
     logger: {
-      ...(actual.logger ?? {}),
+      ...actual.logger,
       log: vi.fn(),
       debug: vi.fn(),
       warn: vi.fn(),
@@ -90,6 +92,39 @@ class TestGenerator {
   }
 }
 
+function loadedTailorDBService(namespace: string, typeNames: string[]): TailorDBService {
+  const types = Object.fromEntries(typeNames.map((typeName) => [typeName, {}]));
+  const typeSourceInfo = Object.fromEntries(
+    typeNames.map((typeName) => [
+      typeName,
+      {
+        filePath: `${namespace}/${typeName}.ts`,
+        exportName: typeName.toLowerCase(),
+      },
+    ]),
+  );
+
+  return {
+    namespace,
+    config: { files: [] },
+    types,
+    typeSourceInfo,
+    pluginAttachments: new Map(),
+    loadTypes: vi.fn().mockResolvedValue(types),
+    processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+  } as unknown as TailorDBService;
+}
+
+function applicationWithTailorDBServices(
+  config: LoadedConfig,
+  tailorDBServices: TailorDBService[],
+): Application {
+  return {
+    ...defineApplication({ config: { ...config, db: {} } }),
+    tailorDBServices,
+  };
+}
+
 describe("GenerationManager", () => {
   let tempDir: string;
   // For test-only access to private members
@@ -128,12 +163,12 @@ describe("GenerationManager", () => {
   });
 
   describe("constructor", () => {
-    it("initializes correctly", () => {
+    test("initializes correctly", () => {
       expect(manager.application).toBeDefined();
       expect(manager.baseDir).toContain("generated");
     });
 
-    it("base directory is created", () => {
+    test("base directory is created", () => {
       expect(fs.mkdirSync).toHaveBeenCalledWith(expect.stringContaining("generated"), {
         recursive: true,
       });
@@ -141,11 +176,11 @@ describe("GenerationManager", () => {
   });
 
   describe("generators", () => {
-    it("generators are passed correctly", () => {
+    test("generators are passed correctly", () => {
       expect(manager.generators.length).toBeGreaterThan(0);
     });
 
-    it("receives custom generator", () => {
+    test("receives custom generator", () => {
       const customApp = defineApplication({ config: mockConfig });
       // For test-only - TestGenerator doesn't have brand symbol
       // oxlint-disable-next-line no-explicit-any
@@ -161,7 +196,7 @@ describe("GenerationManager", () => {
   });
 
   describe("generate", () => {
-    it("executes complete generation process", async () => {
+    test("executes complete generation process", async () => {
       await manager.generate(false);
 
       // Generators are configured but may be 0 if actual type files do not exist
@@ -170,7 +205,7 @@ describe("GenerationManager", () => {
       expect(manager.services).toBeDefined();
     });
 
-    it("processes single application", async () => {
+    test("processes single application", async () => {
       const singleAppConfig = {
         ...mockConfig,
         name: "single-app",
@@ -185,6 +220,34 @@ describe("GenerationManager", () => {
 
       await singleAppManager.generate(false);
       expect(singleAppManager.services).toBeDefined();
+    });
+
+    test("rejects duplicate TailorDB type names between namespaces", async () => {
+      const duplicateApp = applicationWithTailorDBServices(mockConfig, [
+        loadedTailorDBService("main", ["User"]),
+        loadedTailorDBService("analytics", ["User"]),
+      ]);
+      const duplicateManager = createGenerationManager({
+        application: duplicateApp,
+        config: mockConfig,
+      });
+
+      await expect(duplicateManager.generate(false)).rejects.toThrow(
+        /Duplicate TailorDB type names detected/,
+      );
+    });
+
+    test("does not exit watch mode for duplicate TailorDB type names", async () => {
+      const duplicateApp = applicationWithTailorDBServices(mockConfig, [
+        loadedTailorDBService("main", ["User"]),
+        loadedTailorDBService("analytics", ["User"]),
+      ]);
+      const duplicateManager = createGenerationManager({
+        application: duplicateApp,
+        config: mockConfig,
+      });
+
+      await expect(duplicateManager.generate(true)).resolves.not.toThrow();
     });
   });
 
@@ -221,7 +284,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("processes all generators through generate method", async () => {
+    test("processes all generators through generate method", async () => {
       // Spy on the generator's aggregate method to verify it was called
       const testGenerator = manager.generators[0];
       using aggregateSpy = vi.spyOn(testGenerator, "aggregate");
@@ -233,7 +296,7 @@ describe("GenerationManager", () => {
       expect(aggregateSpy).toHaveBeenCalled();
     });
 
-    it("errors in generator processing do not affect others", async () => {
+    test("errors in generator processing do not affect others", async () => {
       const errorGenerator = {
         id: "error-generator",
         description: "Error generator",
@@ -295,7 +358,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("complete processing of single generator", async () => {
+    test("complete processing of single generator", async () => {
       // Clear existing generatorResults (closure pattern - must not reassign)
       Object.keys(manager.generatorResults).forEach((key) => {
         delete manager.generatorResults[key];
@@ -314,7 +377,7 @@ describe("GenerationManager", () => {
       expect(aggregateSpy).toHaveBeenCalled();
     });
 
-    it("types and resolvers are processed in parallel", async () => {
+    test("types and resolvers are processed in parallel", async () => {
       // Clear existing generatorResults (closure pattern - must not reassign)
       Object.keys(manager.generatorResults).forEach((key) => {
         delete manager.generatorResults[key];
@@ -343,7 +406,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("processes all types", async () => {
+    test("processes all types", async () => {
       using processTypeSpy = vi.spyOn(testGenerator, "processType");
       const types = {
         type1: db.type("Type1", {}),
@@ -381,7 +444,7 @@ describe("GenerationManager", () => {
       ).toHaveLength(3);
     });
 
-    it("does not error with empty types", async () => {
+    test("does not error with empty types", async () => {
       // Initialize generatorResults
       manager.generatorResults[testGenerator.id] = {
         tailordbResults: {},
@@ -400,7 +463,7 @@ describe("GenerationManager", () => {
       ).resolves.not.toThrow();
     });
 
-    it("sourceInfo is correctly passed to processType", async () => {
+    test("sourceInfo is correctly passed to processType", async () => {
       using processTypeSpy = vi.spyOn(testGenerator, "processType");
       const types = {
         TestType: db.type("TestType", {}),
@@ -462,7 +525,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("processes all resolvers", async () => {
+    test("processes all resolvers", async () => {
       using processResolverSpy = vi.spyOn(testGenerator, "processResolver");
       const resolvers = {
         resolver1: createResolver({
@@ -512,7 +575,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("calls generator aggregate method", async () => {
+    test("calls generator aggregate method", async () => {
       using aggregateSpy = vi.spyOn(testGenerator, "aggregate");
 
       await manager.aggregate(testGenerator);
@@ -539,14 +602,14 @@ describe("GenerationManager", () => {
       });
     });
 
-    it("writes files correctly", async () => {
+    test("writes files correctly", async () => {
       await manager.aggregate(testGenerator);
 
       expect(fs.writeFile).toHaveBeenCalled();
       expect(fs.mkdirSync).toHaveBeenCalled();
     });
 
-    it("parallel writing of multiple files", async () => {
+    test("parallel writing of multiple files", async () => {
       // Clear previous calls
       vi.mocked(fs.writeFile).mockClear();
 
@@ -577,7 +640,7 @@ describe("GenerationManager", () => {
       expect(fs.writeFile).toHaveBeenCalledTimes(3);
     });
 
-    it("handles file write errors", async () => {
+    test("handles file write errors", async () => {
       const writeFileError = new Error("Write permission denied");
       vi.mocked(fs.writeFile).mockImplementationOnce((_path, _content, callback) => {
         callback(writeFileError);
@@ -606,18 +669,18 @@ describe("GenerationManager", () => {
   });
 
   describe("watch", () => {
-    it("watch method exists", () => {
+    test("watch method exists", () => {
       expect(typeof manager.watch).toBe("function");
     });
 
-    it("application has tailorDBServices for watch", () => {
+    test("application has tailorDBServices for watch", () => {
       expect(manager.application.tailorDBServices).toBeDefined();
       expect(manager.application.tailorDBServices.length).toBeGreaterThan(0);
       expect(manager.application.tailorDBServices[0].namespace).toBe("main");
       expect(manager.application.tailorDBServices[0].config.files).toEqual(["src/types/*.ts"]);
     });
 
-    it("application has resolverServices for watch", () => {
+    test("application has resolverServices for watch", () => {
       expect(manager.application.resolverServices).toBeDefined();
       expect(manager.application.resolverServices.length).toBeGreaterThan(0);
       expect(manager.application.resolverServices[0].namespace).toBe("main");
@@ -636,7 +699,7 @@ describe("generate function", () => {
     };
   });
 
-  it("generate does not automatically call watch", async () => {
+  test("generate does not automatically call watch", async () => {
     const app = defineApplication({ config: mockConfig });
     const manager = createGenerationManager({ application: app, config: mockConfig });
     await expect(manager.generate(false)).resolves.not.toThrow();
@@ -673,7 +736,7 @@ describe("Integration Tests", () => {
     }
   });
 
-  it("complete integration test with multiple generators", async () => {
+  test("complete integration test with multiple generators", async () => {
     const gen1 = new TestGenerator();
     const gen2 = new TestGenerator();
     // For test-only access to private members
@@ -693,7 +756,7 @@ describe("Integration Tests", () => {
     expect(manager.generators.every((g: unknown) => g instanceof TestGenerator)).toBe(true);
   });
 
-  it("integration test for error recovery and performance", async () => {
+  test("integration test for error recovery and performance", async () => {
     const errorApp = defineApplication({ config: fullConfig });
     const manager = createGenerationManager({ application: errorApp, config: fullConfig });
 
@@ -705,7 +768,7 @@ describe("Integration Tests", () => {
   });
 
   describe("Memory Management", () => {
-    it("no memory leak with large data processing", async () => {
+    test("no memory leak with large data processing", async () => {
       // For test-only - TestGenerator doesn't have brand symbol
       // oxlint-disable-next-line no-explicit-any
       const largeGenerators: any[] = Array(10)

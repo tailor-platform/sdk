@@ -6,15 +6,11 @@ minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
   - "@tailor-platform/*"
-  - "@toiroakr/lines-db"
-  - politty
-  - zinfer
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
-  # Pre-existing version pulled in transitively via @liam-hq/cli.
-  # Earlier @swc/core versions had provenance attestation; this one does not.
+  # Pre-existing transitive version without provenance attestation.
   - "@swc/core@1.12.11"
 
 packages:
@@ -38,3 +34,13 @@ allowBuilds:
   "@prisma/engines": false
   protobufjs: false
   unrs-resolver: false
+
+overrides:
+  valibot@>=0.31.0 <1.2.0: 1.4.1
+  esbuild@>=0.17.0 <0.28.1: 0.28.1
+
+peerDependencyRules:
+  allowedVersions:
+    # madge@8 still declares typescript ^5.4.4, but its parser
+    # (detective-typescript) supports typescript 6 and madge runs fine on it.
+    madge>typescript: "6"

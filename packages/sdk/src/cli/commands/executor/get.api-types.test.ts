@@ -1,4 +1,5 @@
-import { describe, it } from "vitest";
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import { describe, test } from "vitest";
 import { createExecutor } from "@/configure/services/executor";
 import { scheduleTrigger } from "@/configure/services/executor/trigger/schedule";
 import { type GetExecutorOptions, type GetExecutorTypedOptions } from "./get";
@@ -13,7 +14,7 @@ const myExecutor = createExecutor({
 });
 
 describe("getExecutor API types", () => {
-  it("accepts typed options with executor definition", () => {
+  test("accepts typed options with executor definition", () => {
     const acceptsOptions = (_options: GetExecutorTypedOptions<typeof myExecutor>): void => {};
 
     acceptsOptions({
@@ -27,7 +28,7 @@ describe("getExecutor API types", () => {
     });
   });
 
-  it("works with default generic when GetExecutorTypedOptions generic is omitted", () => {
+  test("works with default generic when GetExecutorTypedOptions generic is omitted", () => {
     const acceptsDefaultOptions = (_options: GetExecutorTypedOptions): void => {};
 
     acceptsDefaultOptions({
@@ -39,7 +40,7 @@ describe("getExecutor API types", () => {
     });
   });
 
-  it("rejects legacy options shape in typed overload", () => {
+  test("rejects legacy options shape in typed overload", () => {
     const acceptsTypedOptions = (_options: GetExecutorTypedOptions): void => {};
 
     acceptsTypedOptions({
@@ -48,7 +49,7 @@ describe("getExecutor API types", () => {
     });
   });
 
-  it("keeps deprecated GetExecutorOptions shape available", () => {
+  test("keeps deprecated GetExecutorOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: GetExecutorOptions): void => {};
 
     acceptsDeprecatedOptions({

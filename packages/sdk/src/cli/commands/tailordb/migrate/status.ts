@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { trnPrefix } from "@/cli/commands/deploy/label";
+import { resourceTrn } from "@/cli/commands/deploy/label";
 import { deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
@@ -61,7 +61,6 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
   }
 
   const accessToken = await loadAccessToken({
-    useProfile: false,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -73,11 +72,11 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
   const statuses: MigrationStatusInfo[] = [];
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
-    const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+    const trn = resourceTrn(workspaceId, "tailordb", namespace);
     let currentMigration: number;
     try {
       const { metadata } = await client.getMetadata({ trn });
-      const label = metadata?.labels?.["sdk-migration"];
+      const label = metadata?.labels["sdk-migration"];
       currentMigration = label ? (parseMigrationLabelNumber(label) ?? 0) : 0;
     } catch {
       currentMigration = 0;
@@ -87,7 +86,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     const availableNumbers = migrationFiles
       .map((f) => f.number)
       .filter((n, i, arr) => arr.indexOf(n) === i) // deduplicate
-      .sort((a, b) => a - b);
+      .toSorted((a, b) => a - b);
     const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
 
     const pendingMigrations = pendingNumbers.map((num) => {

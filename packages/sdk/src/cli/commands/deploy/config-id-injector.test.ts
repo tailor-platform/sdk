@@ -163,6 +163,27 @@ export default defineConfig({});
     expect(updated).toContain("})");
   });
 
+  test("injects id inline into a single-line defineConfig without breaking syntax", async () => {
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({ name: "my-app" });
+`,
+    );
+
+    const result = await ensureConfigId(filePath);
+    expect(result).not.toBeNull();
+    expect(result?.injected).toBe(true);
+
+    const updated = await fs.promises.readFile(filePath, "utf-8");
+    expect(updated).toContain(`defineConfig({ id: "${result?.id}", name: "my-app" });`);
+
+    // The updated file must still parse as a single defineConfig with the
+    // same id: a second run reads it back instead of failing or re-injecting.
+    const second = await ensureConfigId(filePath);
+    expect(second).toEqual({ id: result?.id, injected: false });
+  });
+
   test("inserts id at the top while preserving formatting", async () => {
     const filePath = await writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";

@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { normalizeFilePath } from "@/cli/shared/trigger-context";
 import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
-  it("does not throw when no workflow jobs are provided", async () => {
+  test("does not throw when no workflow jobs are provided", async () => {
     await expect(bundleWorkflowJobs([], [], {})).resolves.toEqual({
       mainJobDeps: {},
       usedJobNames: [],
@@ -24,7 +24,7 @@ describe("bundleWorkflowJobs", () => {
       }
     });
 
-    it("transforms workflow.trigger() from cross-file default import", async () => {
+    test("transforms workflow.trigger() from cross-file default import", async () => {
       // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
 
@@ -101,9 +101,19 @@ export default createWorkflow({
       expect(callerCode).toContain("triggerWorkflow");
       // The raw simpleWorkflow.trigger() should NOT remain in the bundle
       expect(callerCode).not.toContain("simpleWorkflow.trigger");
+
+      // The platform bundle must fold away the TAILOR_PLATFORM_BUNDLE gate and
+      // tree-shake every test-only symbol; otherwise an unsubstituted process.env.*
+      // reaches the Platform Web runtime (no `process`) and crashes.
+      for (const code of result.bundledCode.values()) {
+        expect(code).not.toContain("process.env.TAILOR_PLATFORM_BUNDLE");
+        expect(code).not.toContain("job-registry");
+        expect(code).not.toContain("registerJob");
+        expect(code).not.toContain("platformSerialize");
+      }
     });
 
-    it("transforms workflow.trigger() in .mts dependency files", async () => {
+    test("transforms workflow.trigger() in .mts dependency files", async () => {
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
 
       // simple.mts: exports a workflow as default export with .mts extension

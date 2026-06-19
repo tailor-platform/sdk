@@ -22,7 +22,7 @@ export interface SnapshotHook {
  * Validation configuration in schema snapshot
  */
 export interface SnapshotValidation {
-  script: { expr: string };
+  script?: { expr: string };
   errorMessage: string;
 }
 
@@ -137,6 +137,8 @@ export type SnapshotPermissionCondition = readonly [
 export function isSnapshotFieldRefOperand(
   operand: SnapshotPermissionOperand,
 ): operand is SnapshotFieldRefOperand {
+  // snapshot JSON may contain null; z.unknown() does not reject it
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
   return typeof operand === "object" && operand !== null && !Array.isArray(operand);
 }
 
@@ -216,4 +218,17 @@ export interface TailorDBSnapshotType {
     record?: SnapshotRecordPermission;
     gql?: SnapshotGqlPermission;
   };
+}
+
+/**
+ * Schema snapshot - full schema state at a point in time.
+ * Stored as XXXX/schema.json. Defined here (leaf module) so that
+ * snapshot-schema.ts can reference it without importing snapshot.ts.
+ */
+export interface SchemaSnapshot {
+  /** Format version for future compatibility */
+  version: number;
+  namespace: string;
+  createdAt: string;
+  types: Record<string, TailorDBSnapshotType>;
 }

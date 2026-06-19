@@ -162,6 +162,7 @@ export async function waitForWorkflowExecution(
   let lastActiveJobs: string | undefined;
 
   try {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (true) {
       const elapsedMs = Date.now() - startedAt;
       const remainingMs = options.timeout === undefined ? undefined : options.timeout - elapsedMs;
@@ -294,7 +295,6 @@ export async function waitForWorkflowExecutionById(
   options: WaitWorkflowExecutionOptions,
 ): Promise<WorkflowWaitResult> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

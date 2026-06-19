@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript"],
+  "plugins": ["typescript", "unicorn"],
   "categories": {
     "correctness": "error"
   },
@@ -9,6 +9,8 @@
   },
   "ignorePatterns": ["dist/", "codemods/**/tests/**"],
   "rules": {
+    "unicorn/no-array-reverse": "error",
+    "unicorn/no-array-sort": "error",
     "getter-return": "error",
     "no-unreachable": "error",
     "no-array-constructor": "error",

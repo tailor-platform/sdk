@@ -83,7 +83,7 @@ describe("planPipeline (resolver service level)", () => {
       listPipelineResolvers: vi
         .fn()
         .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-          pipelineResolvers: existingResolvers[namespaceName] || [],
+          pipelineResolvers: existingResolvers[namespaceName] ?? [],
           nextPageToken: "",
         })),
       getPipelineResolver: vi
@@ -92,7 +92,7 @@ describe("planPipeline (resolver service level)", () => {
           ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
             pipelineResolver:
               resolverDetails[`${namespaceName}:${resolverName}`] ??
-              (existingResolvers[namespaceName] || []).find(
+              (existingResolvers[namespaceName] ?? []).find(
                 (resolver) => resolver.name === resolverName,
               ),
           }),
@@ -148,11 +148,11 @@ describe("planPipeline (resolver service level)", () => {
 
       // "new-resolver" should be created
       expect(result.changeSet.service.creates).toHaveLength(1);
-      expect(result.changeSet.service.creates[0].name).toBe("new-resolver");
+      expect(result.changeSet.service.creates[0]!.name).toBe("new-resolver");
 
       // "old-resolver" should be deleted
       expect(result.changeSet.service.deletes).toHaveLength(1);
-      expect(result.changeSet.service.deletes[0].name).toBe("old-resolver");
+      expect(result.changeSet.service.deletes[0]!.name).toBe("old-resolver");
     });
   });
 
@@ -178,11 +178,11 @@ describe("planPipeline (resolver service level)", () => {
 
       // "resolver-a" should be unchanged
       expect(result.changeSet.service.unchanged).toHaveLength(1);
-      expect(result.changeSet.service.unchanged[0].name).toBe("resolver-a");
+      expect(result.changeSet.service.unchanged[0]!.name).toBe("resolver-a");
 
       // "resolver-b" should be deleted
       expect(result.changeSet.service.deletes).toHaveLength(1);
-      expect(result.changeSet.service.deletes[0].name).toBe("resolver-b");
+      expect(result.changeSet.service.deletes[0]!.name).toBe("resolver-b");
     });
 
     test("all services are deleted when config is empty", async () => {
@@ -204,7 +204,7 @@ describe("planPipeline (resolver service level)", () => {
       const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
+      expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
         "resolver-1",
         "resolver-2",
       ]);
@@ -271,7 +271,7 @@ describe("planPipeline (resolver service level)", () => {
       const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(1);
-      expect(result.changeSet.service.deletes[0].name).toBe("my-resolver");
+      expect(result.changeSet.service.deletes[0]!.name).toBe("my-resolver");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
 
@@ -322,7 +322,7 @@ describe("planPipeline (resolver service level)", () => {
         forRemoval: false,
         config: mockConfig,
       });
-      const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
@@ -336,7 +336,7 @@ describe("planPipeline (resolver service level)", () => {
       });
 
       expect(result.changeSet.resolver.unchanged).toHaveLength(1);
-      expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.unchanged[0]!.name).toBe("test-resolver");
       expect(result.changeSet.resolver.updates).toHaveLength(0);
     });
 
@@ -365,7 +365,7 @@ describe("planPipeline (resolver service level)", () => {
         forRemoval: false,
         config: mockConfig,
       });
-      const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
 
       const client = createMockClient(
         [{ name: "my-resolver", label: appName }],
@@ -385,7 +385,7 @@ describe("planPipeline (resolver service level)", () => {
       });
 
       expect(result.changeSet.resolver.unchanged).toHaveLength(1);
-      expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.unchanged[0]!.name).toBe("test-resolver");
       expect(result.changeSet.resolver.updates).toHaveLength(0);
     });
 
@@ -414,7 +414,7 @@ describe("planPipeline (resolver service level)", () => {
         forRemoval: false,
         config: mockConfig,
       });
-      const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
@@ -476,7 +476,7 @@ describe("planPipeline (resolver service level)", () => {
       });
 
       expect(result.changeSet.resolver.updates).toHaveLength(1);
-      expect(result.changeSet.resolver.updates[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.updates[0]!.name).toBe("test-resolver");
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
     });
   });
@@ -504,7 +504,7 @@ describe("processResolver authInvoker mapping", () => {
       listPipelineResolvers: vi
         .fn()
         .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-          pipelineResolvers: existingResolvers[namespaceName] || [],
+          pipelineResolvers: existingResolvers[namespaceName] ?? [],
           nextPageToken: "",
         })),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {

@@ -9,6 +9,7 @@ Static Website provides:
 - Static file hosting
 - Type-safe URL references for configuration
 - IP address restrictions
+- Custom domain support
 
 For the official Tailor Platform documentation, see [Static Website Guide](https://docs.tailor.tech/guides/static-website-hosting).
 
@@ -60,6 +61,20 @@ defineStaticWebSite("my-website", {
   allowedIpAddresses: ["192.168.0.0/24", "10.0.0.0/8"],
 });
 ```
+
+### customDomains
+
+Associate custom domains with the static website:
+
+```typescript
+defineStaticWebSite("my-website", {
+  customDomains: ["app.example.com"],
+});
+```
+
+After deploying, use `tailor-sdk staticwebsite domain get <domain>` to check domain status and retrieve the CNAME targets required for DNS configuration.
+
+A domain can be associated with only one workspace at a time. To set custom domains only in the workspace that owns the domain, see [Multi-Environment Configuration](../multi-environment.md#settings-that-belong-to-a-single-environment).
 
 ## Type-safe URL References
 

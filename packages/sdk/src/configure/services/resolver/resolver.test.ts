@@ -2,9 +2,9 @@ import { describe, expectTypeOf, test, expect } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
 import { createResolver } from "./resolver";
+import type { TailorInvoker, TailorUser } from "@/runtime/types";
 import type { output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
-import type { TailorInvoker, TailorUser } from "@/types/user";
 
 describe("createResolver", () => {
   describe("type inference", () => {
@@ -539,8 +539,8 @@ describe("createResolver", () => {
       // Verify the output was converted to t.object()
       expect(resolver.output.type).toBe("nested");
       expect(resolver.output.fields).toBeDefined();
-      expect(resolver.output.fields.name.type).toBe("string");
-      expect(resolver.output.fields.age.type).toBe("integer");
+      expect(resolver.output.fields.name!.type).toBe("string");
+      expect(resolver.output.fields.age!.type).toBe("integer");
     });
   });
 
@@ -604,7 +604,7 @@ describe("createResolver", () => {
 
       expect(resolver.input?.name.metadata.description).toBe("User name field");
       expect(resolver.input?.age.metadata.description).toBe("User age field");
-      expect(resolver.output.fields.result.metadata.description).toBe("Result message");
+      expect(resolver.output.fields.result!.metadata.description).toBe("Result message");
     });
 
     test("nested object field supports description", () => {
@@ -628,8 +628,8 @@ describe("createResolver", () => {
       });
 
       expect(resolver.input?.user.metadata.description).toBe("User object field");
-      expect(resolver.input?.user.fields.name.metadata.description).toBe("Name field");
-      expect(resolver.input?.user.fields.age.metadata.description).toBe("Age field");
+      expect(resolver.input?.user.fields.name!.metadata.description).toBe("Name field");
+      expect(resolver.input?.user.fields.age!.metadata.description).toBe("Age field");
     });
   });
 

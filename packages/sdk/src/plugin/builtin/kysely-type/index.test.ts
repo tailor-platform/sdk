@@ -1,16 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutput } from "@/utils/test/internal";
 import { processKyselyType } from "./type-processor";
 import { kyselyTypePlugin, KyselyGeneratorID } from "./index";
-import type { TailorDBReadyContext } from "@/types/plugin-generation";
-import type { TailorDBType } from "@/types/tailordb";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBReadyContext } from "@/plugin/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
-  return types[type.name];
+  return types[type.name]!;
 }
 
 const mockBasicType = db.type("User", {
@@ -66,7 +66,7 @@ describe("KyselyTypePlugin integration tests", () => {
   }
 
   describe("basic functionality tests", () => {
-    it("processKyselyType correctly processes basic TailorDBType", async () => {
+    test("processKyselyType correctly processes basic TailorDBType", async () => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(mockBasicType)));
 
       expect(result.name).toBe("User");
@@ -84,7 +84,7 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 
-    it("should have correct id and description", () => {
+    test("should have correct id and description", () => {
       const plugin = kyselyTypePlugin({ distPath: testDistPath });
       expect(plugin.id).toBe(KyselyGeneratorID);
       expect(plugin.description).toBe("Generates Kysely type definitions for TailorDB types");
@@ -92,14 +92,14 @@ describe("KyselyTypePlugin integration tests", () => {
   });
 
   describe("type mapping tests", () => {
-    it("correctly maps enum type to Kysely type", async () => {
+    test("correctly maps enum type to Kysely type", async () => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(mockEnumType)));
 
       expect(result.typeDef).toContain('status: "active" | "inactive" | "pending";');
       expect(result.typeDef).toContain('priority: "high" | "medium" | "low" | null;');
     });
 
-    it("correctly processes nested object type", async () => {
+    test("correctly processes nested object type", async () => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(mockNestedType)));
 
       expect(result.typeDef).toContain("ComplexUser: {");
@@ -113,7 +113,7 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(result.typeDef).toContain("}[] | null;");
     });
 
-    it("correctly processes required/optional fields", async () => {
+    test("correctly processes required/optional fields", async () => {
       const testType = db.type("TestRequired", {
         requiredField: db.string(),
         optionalField: db.string({ optional: true }),
@@ -127,7 +127,7 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(result.typeDef).toContain("undefinedRequiredField: string | null;");
     });
 
-    it("correctly processes array types", async () => {
+    test("correctly processes array types", async () => {
       const arrayType = db.type("ArrayTest", {
         stringArray: db.string({ array: true }),
         optionalIntArray: db.int({ optional: true, array: true }),
@@ -141,7 +141,7 @@ describe("KyselyTypePlugin integration tests", () => {
   });
 
   describe("onTailorDBReady tests", () => {
-    it("integrates type definitions and returns file generation result", async () => {
+    test("integrates type definitions and returns file generation result", async () => {
       const parsedType = parseTailorDBType(toSchemaOutput(mockBasicType));
       const ctx = createCtx([
         {
@@ -154,9 +154,9 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
-      expect(result.files[0].path).toBe(testDistPath);
+      expect(result.files[0]!.path).toBe(testDistPath);
 
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
       expect(content).toContain("type Generated,");
       expect(content).toContain("type NamespaceTransaction");
       expect(content).toContain("type NamespaceInsertable");
@@ -173,7 +173,7 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(result.errors).toBeUndefined();
     });
 
-    it("complete integration test with multiple types", async () => {
+    test("complete integration test with multiple types", async () => {
       const parsedBasicType = parseTailorDBType(toSchemaOutput(mockBasicType));
       const parsedEnumType = parseTailorDBType(toSchemaOutput(mockEnumType));
       const ctx = createCtx([
@@ -187,9 +187,9 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
-      expect(result.files[0].path).toBe(testDistPath);
+      expect(result.files[0]!.path).toBe(testDistPath);
 
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
       expect(content).toContain("User: {");
       expect(content).toContain("Status: {");
       expect(content).toContain("interface Namespace {");
@@ -198,7 +198,7 @@ describe("KyselyTypePlugin integration tests", () => {
   });
 
   describe("error handling tests", () => {
-    it("handles errors appropriately with invalid type definitions", async () => {
+    test("handles errors appropriately with invalid type definitions", async () => {
       const validType = parseTailorDBType(toSchemaOutput(mockBasicType));
       const invalidType: TailorDBType = {
         ...validType,
@@ -207,10 +207,12 @@ describe("KyselyTypePlugin integration tests", () => {
         fields: null,
       };
 
-      await expect(processKyselyType(invalidType)).rejects.toThrow();
+      await expect(processKyselyType(invalidType)).rejects.toThrow(
+        "Cannot convert undefined or null to object",
+      );
     });
 
-    it("processes unknown type definitions as string type", async () => {
+    test("processes unknown type definitions as string type", async () => {
       const unknownType = db.type("UnknownType", {
         unknownField: db.string(),
       });
@@ -222,7 +224,7 @@ describe("KyselyTypePlugin integration tests", () => {
   });
 
   describe("multiple namespace support", () => {
-    it("aggregates types from multiple namespaces", async () => {
+    test("aggregates types from multiple namespaces", async () => {
       const userType = db.type("User", {
         name: db.string(),
       });
@@ -245,7 +247,7 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
 
       // Check both namespaces are included
       expect(content).toContain('"tailordb": {');
@@ -258,7 +260,7 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(content).toContain("interface Namespace {");
     });
 
-    it("includes only necessary utility types", async () => {
+    test("includes only necessary utility types", async () => {
       const simpleType = db.type("Simple", {
         name: db.string(),
       });
@@ -273,7 +275,7 @@ describe("KyselyTypePlugin integration tests", () => {
       const plugin = kyselyTypePlugin({ distPath: testDistPath });
       const result = await plugin.onTailorDBReady!(ctx);
 
-      const content = result.files[0].content;
+      const content = result.files[0]!.content;
 
       // Timestamp should not be imported (not used)
       expect(content).not.toContain("type Timestamp");

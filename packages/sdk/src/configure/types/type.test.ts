@@ -1,11 +1,12 @@
-import { describe, it, expect, expectTypeOf } from "vitest";
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "./type";
 import type { AllowedValues } from "./field";
+import type { TailorUser } from "@/runtime/types";
 import type { output } from "@/types/helpers";
-import type { TailorUser } from "@/types/user";
 
 describe("TailorType basic field type tests", () => {
-  it("string field outputs string type correctly", () => {
+  test("string field outputs string type correctly", () => {
     const _stringType = t.object({
       name: t.string(),
     });
@@ -14,7 +15,7 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  it("int field outputs number type correctly", () => {
+  test("int field outputs number type correctly", () => {
     const _intType = t.object({
       age: t.int(),
     });
@@ -23,7 +24,7 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  it("bool field outputs boolean type correctly", () => {
+  test("bool field outputs boolean type correctly", () => {
     const _boolType = t.object({
       active: t.bool(),
     });
@@ -32,7 +33,7 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  it("float field outputs number type correctly", () => {
+  test("float field outputs number type correctly", () => {
     const _floatType = t.object({
       price: t.float(),
     });
@@ -41,7 +42,7 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  it("uuid field outputs string type correctly", () => {
+  test("uuid field outputs string type correctly", () => {
     const _uuidType = t.object({
       id: t.uuid(),
     });
@@ -50,7 +51,7 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  it("date field outputs string type correctly", () => {
+  test("date field outputs string type correctly", () => {
     const _dateType = t.object({
       birthDate: t.date(),
     });
@@ -59,7 +60,7 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  it("datetime field outputs string | Date type correctly", () => {
+  test("datetime field outputs string | Date type correctly", () => {
     const _datetimeType = t.object({
       createdAt: t.datetime(),
     });
@@ -68,7 +69,7 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  it("time field outputs string type correctly", () => {
+  test("time field outputs string type correctly", () => {
     const _timeType = t.object({
       openingTime: t.time(),
     });
@@ -79,7 +80,7 @@ describe("TailorType basic field type tests", () => {
 });
 
 describe("TailorField optional option tests", () => {
-  it("optional option generates nullable type", () => {
+  test("optional option generates nullable type", () => {
     const _optionalType = t.object({
       description: t.string({ optional: true }),
     });
@@ -88,7 +89,7 @@ describe("TailorField optional option tests", () => {
     }>();
   });
 
-  it("multiple optional fields work correctly", () => {
+  test("multiple optional fields work correctly", () => {
     const _multiOptionalType = t.object({
       title: t.string(),
       description: t.string({ optional: true }),
@@ -103,7 +104,7 @@ describe("TailorField optional option tests", () => {
 });
 
 describe("TailorField array option tests", () => {
-  it("array option generates array type", () => {
+  test("array option generates array type", () => {
     const _arrayType = t.object({
       tags: t.string({ array: true }),
     });
@@ -112,7 +113,7 @@ describe("TailorField array option tests", () => {
     }>();
   });
 
-  it("optional array works correctly", () => {
+  test("optional array works correctly", () => {
     const _optionalArrayType = t.object({
       items: t.string({ optional: true, array: true }),
     });
@@ -121,7 +122,7 @@ describe("TailorField array option tests", () => {
     }>();
   });
 
-  it("multiple array fields work correctly", () => {
+  test("multiple array fields work correctly", () => {
     const _multiArrayType = t.object({
       tags: t.string({ array: true }),
       numbers: t.int({ array: true }),
@@ -136,7 +137,7 @@ describe("TailorField array option tests", () => {
 });
 
 describe("TailorField enum field tests", () => {
-  it("set enum field by passing string", () => {
+  test("set enum field by passing string", () => {
     const enumField = t.enum(["active", "inactive", "pending"]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
     expect(enumField.metadata.allowedValues).toEqual([
@@ -146,7 +147,7 @@ describe("TailorField enum field tests", () => {
     ]);
   });
 
-  it("set enum field by passing object", () => {
+  test("set enum field by passing object", () => {
     const enumField = t.enum([
       { value: "small", description: "Small size" },
       { value: "medium" },
@@ -160,7 +161,7 @@ describe("TailorField enum field tests", () => {
     ]);
   });
 
-  it("set enum field by mixing string and object", () => {
+  test("set enum field by mixing string and object", () => {
     const enumField = t.enum(["red", { value: "green", description: "Green color" }, "blue"]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"red" | "green" | "blue">();
     expect(enumField.metadata.allowedValues).toEqual([
@@ -170,14 +171,14 @@ describe("TailorField enum field tests", () => {
     ]);
   });
 
-  it("setting enum without values causes type error", () => {
+  test("setting enum without values causes type error", () => {
     // @ts-expect-error AllowedValues requires at least one value
     t.enum([]);
     // @ts-expect-error AllowedValues requires at least one value
     t.enum([], { optional: true });
   });
 
-  it("optional enum() works correctly", () => {
+  test("optional enum() works correctly", () => {
     const _optionalEnumType = t.object({
       priority: t.enum(["high", "medium", "low"], { optional: true }),
     });
@@ -186,7 +187,7 @@ describe("TailorField enum field tests", () => {
     }>();
   });
 
-  it("accepts as const readonly array", () => {
+  test("accepts as const readonly array", () => {
     const STATUSES = ["active", "inactive", "pending"] as const;
     const enumField = t.enum(STATUSES);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
@@ -197,14 +198,14 @@ describe("TailorField enum field tests", () => {
     ]);
   });
 
-  it("AllowedValues type accepts readonly arrays", () => {
+  test("AllowedValues type accepts readonly arrays", () => {
     const STATUSES = ["active", "inactive"] as const;
     // Verify that readonly arrays are assignable to AllowedValues
     const _values: AllowedValues = STATUSES;
     expect(_values).toEqual(STATUSES);
   });
 
-  it("enum array works correctly", () => {
+  test("enum array works correctly", () => {
     const _enumArrayType = t.object({
       categories: t.enum(["a", "b", "c"], { array: true }),
     });
@@ -215,7 +216,7 @@ describe("TailorField enum field tests", () => {
 });
 
 describe("TailorType composite type tests", () => {
-  it("type with multiple fields works correctly", () => {
+  test("type with multiple fields works correctly", () => {
     const _complexType = t.object({
       id: t.uuid(),
       name: t.string(),
@@ -238,7 +239,7 @@ describe("TailorType composite type tests", () => {
 });
 
 describe("TailorType edge case tests", () => {
-  it("type with single field works correctly", () => {
+  test("type with single field works correctly", () => {
     const _singleFieldType = t.object({
       value: t.string(),
     });
@@ -247,7 +248,7 @@ describe("TailorType edge case tests", () => {
     }>();
   });
 
-  it("type with all optional fields works correctly", () => {
+  test("type with all optional fields works correctly", () => {
     const _allOptionalType = t.object({
       a: t.string({ optional: true }),
       b: t.int({ optional: true }),
@@ -260,7 +261,7 @@ describe("TailorType edge case tests", () => {
     }>();
   });
 
-  it("type with all array fields works correctly", () => {
+  test("type with all array fields works correctly", () => {
     const _allArrayType = t.object({
       strings: t.string({ array: true }),
       numbers: t.int({ array: true }),
@@ -275,7 +276,7 @@ describe("TailorType edge case tests", () => {
 });
 
 describe("TailorType type consistency tests", () => {
-  it("same definition generates same type", () => {
+  test("same definition generates same type", () => {
     const _type1 = t.object({
       name: t.string(),
       age: t.int(),
@@ -289,7 +290,7 @@ describe("TailorType type consistency tests", () => {
 });
 
 describe("t.object tests", () => {
-  it("correctly infers basic object type", () => {
+  test("correctly infers basic object type", () => {
     const _objectType = t.object({
       user: t.object({
         name: t.string(),
@@ -304,7 +305,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with optional fields", () => {
+  test("correctly infers object type with optional fields", () => {
     const _objectType = t.object({
       profile: t.object({
         name: t.string(),
@@ -321,7 +322,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with array fields", () => {
+  test("correctly infers object type with array fields", () => {
     const _objectType = t.object({
       data: t.object({
         name: t.string(),
@@ -338,7 +339,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers nested object type", () => {
+  test("correctly infers nested object type", () => {
     const _objectType = t.object({
       user: t.object({
         name: t.string(),
@@ -372,7 +373,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with optional option", () => {
+  test("correctly infers object type with optional option", () => {
     const _objectType = t.object({
       metadata: t.object(
         {
@@ -390,7 +391,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with array option", () => {
+  test("correctly infers object type with array option", () => {
     const _objectType = t.object({
       items: t.object(
         {
@@ -408,7 +409,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with multiple modifiers", () => {
+  test("correctly infers object type with multiple modifiers", () => {
     const _objectType = t.object({
       optionalItems: t.object(
         {
@@ -428,7 +429,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with enum type", () => {
+  test("correctly infers object type with enum type", () => {
     const _objectType = t.object({
       config: t.object({
         name: t.string(),
@@ -445,7 +446,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers object type with single field", () => {
+  test("correctly infers object type with single field", () => {
     const _objectType = t.object({
       settings: t.object({
         theme: t.string(),
@@ -458,7 +459,7 @@ describe("t.object tests", () => {
     }>();
   });
 
-  it("correctly infers empty object", () => {
+  test("correctly infers empty object", () => {
     const _objectType = t.object({
       empty: t.object({}),
     });
@@ -480,7 +481,7 @@ describe("TailorField runtime validation tests", () => {
   const data = {};
 
   describe("validates primitive types", () => {
-    it("validates string type", () => {
+    test("validates string type", () => {
       {
         const result = t.string().parse({ value: "valid string", data, user });
         expect(result.issues).toBeUndefined();
@@ -498,7 +499,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("validates integer type", () => {
+    test("validates integer type", () => {
       {
         const result = t.int().parse({ value: 123, data, user });
         expect(result.issues).toBeUndefined();
@@ -521,7 +522,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("validates float type", () => {
+    test("validates float type", () => {
       {
         const result = t.float().parse({ value: 1.5, data, user });
         expect(result.issues).toBeUndefined();
@@ -544,7 +545,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("validates boolean type", () => {
+    test("validates boolean type", () => {
       {
         const result = t.bool().parse({ value: true, data, user });
         expect(result.issues).toBeUndefined();
@@ -563,7 +564,7 @@ describe("TailorField runtime validation tests", () => {
   });
 
   describe("validates format-specific types", () => {
-    it("validates uuid format", () => {
+    test("validates uuid format", () => {
       {
         const result = t.uuid().parse({
           value: "550e8400-e29b-41d4-a716-446655440000",
@@ -584,7 +585,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("validates date format", () => {
+    test("validates date format", () => {
       {
         const result = t.date().parse({ value: "2025-12-21", data, user });
         expect(result.issues).toBeUndefined();
@@ -603,7 +604,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("validates datetime format", () => {
+    test("validates datetime format", () => {
       {
         const result = t.datetime().parse({
           value: "2025-12-21T10:11:12.123Z",
@@ -626,7 +627,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("vlidates time format", () => {
+    test("vlidates time format", () => {
       {
         const result = t.time().parse({ value: "10:11", data, user });
         expect(result.issues).toBeUndefined();
@@ -647,7 +648,7 @@ describe("TailorField runtime validation tests", () => {
   });
 
   describe("validates complex types", () => {
-    it("validates enum values", () => {
+    test("validates enum values", () => {
       const status = t.enum(["active", "inactive"]);
       {
         const result = status.parse({ value: "active", data, user });
@@ -667,7 +668,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("validates nested object fields", () => {
+    test("validates nested object fields", () => {
       const schema = t.object({
         name: t.string(),
         age: t.int({ optional: true }),
@@ -724,7 +725,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("validates array fields and element paths", () => {
+    test("validates array fields and element paths", () => {
       const schema = t.int({ array: true });
       {
         const result = schema.parse({ value: [1, 2, 3], data, user });
@@ -751,7 +752,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("treats null/undefined as missing when required, and allowed when optional", () => {
+    test("treats null/undefined as missing when required, and allowed when optional", () => {
       {
         const schema = t.string();
         const result = schema.parse({ value: null, data, user });
@@ -786,7 +787,7 @@ describe("TailorField runtime validation tests", () => {
   });
 
   describe("validates decimal type", () => {
-    it("accepts valid decimal strings", () => {
+    test("accepts valid decimal strings", () => {
       for (const value of [
         "123.45",
         "0",
@@ -808,7 +809,7 @@ describe("TailorField runtime validation tests", () => {
       }
     });
 
-    it("rejects invalid decimal values", () => {
+    test("rejects invalid decimal values", () => {
       for (const value of ["abc", "", "1_000_000", "0b1.1p-5", "1e", "e5", "."]) {
         const result = t.decimal().parse({ value, data, user });
         expect(result.issues).toBeDefined();
@@ -818,5 +819,141 @@ describe("TailorField runtime validation tests", () => {
         expect(result.issues).toBeDefined();
       }
     });
+  });
+});
+
+describe("TailorField clone-on-write / no aliasing", () => {
+  const user: TailorUser = {
+    id: "test",
+    type: "user",
+    workspaceId: "workspace-test",
+    attributes: {},
+    attributeList: [],
+  };
+  const data = {};
+
+  test("description() returns a clone and never mutates the original", () => {
+    const original = t.string();
+    const updated = original.description("for A");
+
+    expect(original.metadata.description).toBeUndefined();
+    expect(updated.metadata.description).toBe("for A");
+    expect(updated).not.toBe(original);
+  });
+
+  test("typeName() returns a clone and never mutates the original", () => {
+    const original = t.object({ name: t.string() });
+    const updated = original.typeName("Custom");
+
+    expect(original.metadata.typeName).toBeUndefined();
+    expect(updated.metadata.typeName).toBe("Custom");
+    expect(updated).not.toBe(original);
+  });
+
+  test("validate() returns a clone and never mutates the original", () => {
+    const original = t.string();
+    const updated = original.validate((args) => args.value.length > 0);
+
+    expect(original.metadata.validate).toBeUndefined();
+    expect(updated.metadata.validate).toHaveLength(1);
+    expect(updated).not.toBe(original);
+  });
+
+  test("a field instance shared across places does not leak metadata", () => {
+    const shared = t.string();
+    const a = shared;
+    const b = shared;
+    a.description("for A");
+
+    expect(b.metadata.description).toBeUndefined();
+  });
+
+  test("t.object does not let builder calls leak into the caller's record", () => {
+    const inner = { city: t.string() };
+    const objField = t.object(inner);
+    objField.fields.city!.description("mutated");
+
+    expect(inner.city.metadata.description).toBeUndefined();
+    expect(objField.fields.city!.metadata.description).toBeUndefined();
+  });
+
+  test("chained builders accumulate metadata on the returned clone", () => {
+    const field = t.object({ name: t.string() }).typeName("Custom").description("a custom object");
+
+    expect(field.metadata.typeName).toBe("Custom");
+    expect(field.metadata.description).toBe("a custom object");
+  });
+
+  test("clone-on-write deep-clones nested object fields (no shared instances)", () => {
+    const original = t.object({ city: t.string() });
+    // description() clones the object field; nested fields must be deep-cloned too.
+    const updated = original.description("an object");
+
+    expect(updated).not.toBe(original);
+    expect(updated.fields.city).not.toBe(original.fields.city);
+
+    updated.fields.city!.description("mutated");
+    expect(original.fields.city!.metadata.description).toBeUndefined();
+  });
+
+  test("clone-on-write preserves options and enum values", () => {
+    const original = t.enum(["active", "inactive"], { array: true, optional: true });
+    const cloned = original.description("status");
+
+    expect(cloned.metadata.array).toBe(true);
+    expect(cloned.metadata.required).toBe(false);
+    expect(cloned.metadata.allowedValues).toEqual(original.metadata.allowedValues);
+    expect(cloned.metadata.description).toBe("status");
+  });
+
+  test("clone-on-write deep-copies mutable metadata so clones never share containers", () => {
+    const enumField = t.enum(["active", "inactive"]);
+    const enumClone = enumField.description("status");
+    // Same contents, but separate array AND separate value objects.
+    expect(enumClone.metadata.allowedValues).toEqual(enumField.metadata.allowedValues);
+    expect(enumClone.metadata.allowedValues).not.toBe(enumField.metadata.allowedValues);
+    expect(enumClone.metadata.allowedValues?.[0]).not.toBe(enumField.metadata.allowedValues?.[0]);
+
+    const validated = t.string().validate((args) => args.value.length > 0);
+    const validatedClone = validated.description("name");
+    expect(validatedClone.metadata.validate).not.toBe(validated.metadata.validate);
+  });
+
+  test("clone-on-write rebinds validation closures so parse still works", () => {
+    const status = t.enum(["active", "inactive"]);
+    const cloned = status.description("status field");
+
+    const ok = cloned.parse({ value: "active", data, user });
+    expect(ok.issues).toBeUndefined();
+
+    const ng = cloned.parse({ value: "pending", data, user });
+    expect(ng.issues).toBeDefined();
+    expect(ng.issues?.[0]?.message).toEqual("Must be one of [active, inactive]: received pending");
+  });
+
+  test("validate() preserves function references through cloning", () => {
+    const calls: unknown[] = [];
+    const field = t.string().validate((args) => {
+      calls.push(args.value);
+      return args.value.length > 0;
+    });
+
+    const result = field.parse({ value: "x", data, user });
+    expect(result.issues).toBeUndefined();
+    expect(calls).toEqual(["x"]);
+  });
+
+  test("validators survive a clone triggered by a later builder, leaving the original intact", () => {
+    const validated = t.string().validate((args) => args.value.length > 0);
+    // description() clones the field; the validators must carry over to the clone
+    // and keep working, while the original stays unchanged.
+    const described = validated.description("name");
+
+    expect(described.metadata.validate).toHaveLength(1);
+    expect(described.metadata.description).toBe("name");
+    expect(validated.metadata.description).toBeUndefined();
+
+    const failed = described.parse({ value: "", data, user });
+    expect(failed.issues).toBeDefined();
   });
 });

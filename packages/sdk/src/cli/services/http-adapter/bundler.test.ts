@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { bundleHttpAdapters } from "./bundler";
 
 describe("bundleHttpAdapters", () => {
@@ -14,13 +14,13 @@ describe("bundleHttpAdapters", () => {
     }
   });
 
-  it("returns empty result when no adapters are provided", async () => {
+  test("returns empty result when no adapters are provided", async () => {
     const result = await bundleHttpAdapters([]);
     expect(result.bundledInputs.size).toBe(0);
     expect(result.bundledOutputs.size).toBe(0);
   });
 
-  it("bundles input with a method dispatcher and output that assigns globalThis.transform", async () => {
+  test("bundles input with a method dispatcher and output that assigns globalThis.transform", async () => {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
     const sourceFile = path.join(tmpDir, "adapter.ts");
     fs.writeFileSync(
@@ -61,7 +61,7 @@ export default createHttpAdapter({
     expect(outputCode).toContain("globalThis.transform");
   });
 
-  it("dispatches to the matching method handler at runtime", async () => {
+  test("dispatches to the matching method handler at runtime", async () => {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
     const sourceFile = path.join(tmpDir, "adapter.ts");
     fs.writeFileSync(
@@ -100,7 +100,62 @@ export default createHttpAdapter({
     );
   });
 
-  it("rejects bundles that import Node built-in modules", async () => {
+  test("drops console calls below the configured log level", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
+    const sourceFile = path.join(tmpDir, "adapter.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+
+export default createHttpAdapter({
+  name: "logs",
+  pathPattern: "/logs",
+  input: {
+    get: () => {
+      console.debug("input debug");
+      console.log("input log");
+      console.info("input info");
+      console.warn("input warn");
+      console.error("input error");
+      return { query: "{}" };
+    },
+  },
+  output: () => {
+    console.debug("output debug");
+    console.log("output log");
+    console.info("output info");
+    console.warn("output warn");
+    console.error("output error");
+    return { statusCode: 200 };
+  },
+});
+`,
+    );
+
+    const result = await bundleHttpAdapters(
+      [{ name: "logs", sourceFile, methods: ["get"], hasOutput: true }],
+      undefined,
+      "WARN",
+    );
+
+    const inputCode = result.bundledInputs.get("logs");
+    const outputCode = result.bundledOutputs.get("logs");
+    expect(inputCode).toBeDefined();
+    expect(outputCode).toBeDefined();
+    expect(inputCode).not.toContain("console.debug");
+    expect(inputCode).not.toContain("console.log");
+    expect(inputCode).not.toContain("console.info");
+    expect(inputCode).toContain("console.warn");
+    expect(inputCode).toContain("console.error");
+    expect(outputCode).not.toContain("console.debug");
+    expect(outputCode).not.toContain("console.log");
+    expect(outputCode).not.toContain("console.info");
+    expect(outputCode).toContain("console.warn");
+    expect(outputCode).toContain("console.error");
+  });
+
+  test("rejects bundles that import Node built-in modules", async () => {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
     const sourceFile = path.join(tmpDir, "adapter.ts");
     fs.writeFileSync(
@@ -127,7 +182,7 @@ export default createHttpAdapter({
     ).rejects.toThrow(/Node module/);
   });
 
-  it("rejects bundles where an imported helper introduces async/await", async () => {
+  test("rejects bundles where an imported helper introduces async/await", async () => {
     // The handler itself is synchronous, but it calls a helper from a sibling
     // module which is async. Detector-side checks only see the top-level
     // handler — without the post-bundle scan, this would slip through.

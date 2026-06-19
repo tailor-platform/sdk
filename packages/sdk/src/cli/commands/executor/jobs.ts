@@ -195,7 +195,6 @@ export async function listExecutorJobs<E extends ExecutorLike>(
   // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -265,7 +264,6 @@ export async function getExecutorJob<E extends ExecutorLike>(
   // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -333,7 +331,6 @@ export async function watchExecutorJob<E extends ExecutorLike>(
   // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -402,6 +399,8 @@ export async function watchExecutorJob<E extends ExecutorLike>(
 
     // Phase 1: Wait for executor job to complete
     let job: Awaited<ReturnType<typeof client.getExecutorJob>>["job"];
+    // loop exits when the executor job reaches a terminal status
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (true) {
       const remainingMs = remainingTimeout();
       if (remainingMs !== undefined && remainingMs <= 0) {
@@ -448,10 +447,6 @@ export async function watchExecutorJob<E extends ExecutorLike>(
       await setTimeout(
         nextRemainingMs === undefined ? interval : Math.min(interval, nextRemainingMs),
       );
-    }
-
-    if (!job) {
-      throw new Error(`Job '${options.jobId}' not found.`);
     }
 
     const jobInfo = toExecutorJobInfo(job);
@@ -576,6 +571,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
 
             try {
               let functionStatus: string | undefined;
+              // oxlint-disable-next-line typescript/no-unnecessary-condition
               while (true) {
                 const functionTimeout = remainingTimeout();
                 if (functionTimeout !== undefined && functionTimeout <= 0) {

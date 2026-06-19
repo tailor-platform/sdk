@@ -247,7 +247,6 @@ export const deployCommand = defineAppCommand({
     await assertWritable({ profile: args.profile });
     logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);

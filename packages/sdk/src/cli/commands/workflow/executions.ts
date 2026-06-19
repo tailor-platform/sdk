@@ -146,7 +146,6 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
         ? options.workflow?.name
         : undefined;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -205,7 +204,6 @@ export async function getWorkflowExecution(
   options: GetWorkflowExecutionOptions,
 ): Promise<GetWorkflowExecutionResult> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

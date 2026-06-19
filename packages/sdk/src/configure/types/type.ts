@@ -6,11 +6,11 @@ import type {
   FieldMetadata,
   FieldOptions,
   FieldOutput,
-} from "@/types/field-types";
+  TailorField as TailorFieldBase,
+  FieldValidateInput,
+} from "@/configure/types/field.types";
+import type { TailorUser } from "@/runtime/types";
 import type { InferFieldsOutput, Prettify } from "@/types/helpers";
-import type { TailorField as TailorFieldBase } from "@/types/tailor-field";
-import type { TailorUser } from "@/types/user";
-import type { FieldValidateInput } from "@/types/validation";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // This helper type intentionally uses `any` as a placeholder for unknown field output.
@@ -87,6 +87,17 @@ export interface TailorField<
   _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
 }
 
+/**
+ * Internal shape carried by every runtime field for clone-on-write support.
+ *
+ * `clone()` is intentionally kept off the public {@link TailorField} interface:
+ * adding it there would force `TailorDBField` (which has a differently-typed
+ * `clone`) to stop being assignable to `TailorField`, breaking the supported
+ * `t.object({ field: db.string() })` usage. Every `t.*` and `db.*` field carries
+ * a `clone()` at runtime, so the internal cast in `clone()` is safe.
+ */
+type CloneableField = { clone(): TailorAnyField };
+
 const regex = {
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
@@ -124,6 +135,9 @@ type FieldParseInternalArgs = {
  * @param options - Field options
  * @param fields - Nested fields for object-like types
  * @param values - Allowed values for enum-like fields
+ * @param metadata - Pre-built metadata to clone from (used by `clone()`); when
+ *   given, the mutable containers are deep-copied here and `options`/`values` are
+ *   ignored for metadata construction
  * @returns A new TailorField
  */
 function createTailorField<
@@ -135,22 +149,38 @@ function createTailorField<
   options?: TOptions,
   fields?: Record<string, TailorAnyField>,
   values?: AllowedValues,
+  metadata?: FieldMetadata,
 ): TailorField<
   { type: T; array: TOptions extends { array: true } ? true : false },
   FieldOutput<OutputBase, TOptions>
 > {
-  const _metadata: FieldMetadata = { required: true };
+  // When cloning, take ownership of the source metadata and deep-copy its mutable
+  // containers (enum value objects and `[fn, message]` validator tuples; validator
+  // functions are kept by reference) so no two instances share mutable state.
+  const _metadata: FieldMetadata = metadata
+    ? {
+        ...metadata,
+        ...(metadata.allowedValues && {
+          allowedValues: metadata.allowedValues.map((v) => ({ ...v })),
+        }),
+        ...(metadata.validate && {
+          validate: metadata.validate.map((v) => (Array.isArray(v) ? ([...v] as typeof v) : v)),
+        }),
+      }
+    : { required: true };
 
-  if (options) {
-    if (options.optional === true) {
-      _metadata.required = false;
+  if (!metadata) {
+    if (options) {
+      if (options.optional === true) {
+        _metadata.required = false;
+      }
+      if (options.array === true) {
+        _metadata.array = true;
+      }
     }
-    if (options.array === true) {
-      _metadata.array = true;
+    if (values) {
+      _metadata.allowedValues = mapAllowedValues(values);
     }
-  }
-  if (values) {
-    _metadata.allowedValues = mapAllowedValues(values);
   }
 
   /**
@@ -162,6 +192,7 @@ function createTailorField<
   function validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
+    const path = pathArray.length > 0 ? pathArray : undefined;
 
     // Type-specific validation
     switch (type) {
@@ -169,7 +200,7 @@ function createTailorField<
         if (typeof value !== "string") {
           issues.push({
             message: `Expected a string: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -178,7 +209,7 @@ function createTailorField<
         if (typeof value !== "number" || !Number.isInteger(value)) {
           issues.push({
             message: `Expected an integer: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -187,7 +218,7 @@ function createTailorField<
         if (typeof value !== "number" || !Number.isFinite(value)) {
           issues.push({
             message: `Expected a number: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -196,7 +227,7 @@ function createTailorField<
         if (typeof value !== "boolean") {
           issues.push({
             message: `Expected a boolean: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -205,7 +236,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.uuid.test(value)) {
           issues.push({
             message: `Expected a valid UUID: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -213,7 +244,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.date.test(value)) {
           issues.push({
             message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -221,7 +252,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.datetime.test(value)) {
           issues.push({
             message: `Expected to match ISO format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -229,7 +260,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.time.test(value)) {
           issues.push({
             message: `Expected to match "HH:mm" format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -237,7 +268,7 @@ function createTailorField<
         if (typeof value !== "string" || !regex.decimal.test(value)) {
           issues.push({
             message: `Expected a decimal string: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
         break;
@@ -248,7 +279,7 @@ function createTailorField<
           if (typeof value !== "string" || !allowedValues.includes(value)) {
             issues.push({
               message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
-              path: pathArray.length > 0 ? pathArray : undefined,
+              path,
             });
           }
         }
@@ -256,19 +287,22 @@ function createTailorField<
 
       case "nested":
         // Validate nested object fields
+        // runtime value may not match the declared type
+        // oxlint-disable typescript/no-unnecessary-condition
         if (
           typeof value !== "object" ||
           value === null ||
           Array.isArray(value) ||
           value instanceof Date
         ) {
+          // oxlint-enable typescript/no-unnecessary-condition
           issues.push({
             message: `Expected an object: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
-        } else if (field.fields && Object.keys(field.fields).length > 0) {
+        } else if (Object.keys(field.fields).length > 0) {
           for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-            const fieldValue = value?.[fieldName];
+            const fieldValue = (value as Record<string, unknown>)[fieldName];
             const result = nestedField._parseInternal({
               value: fieldValue,
               data,
@@ -295,7 +329,7 @@ function createTailorField<
         if (!fn({ value, data, user })) {
           issues.push({
             message,
-            path: pathArray.length > 0 ? pathArray : undefined,
+            path,
           });
         }
       }
@@ -314,13 +348,14 @@ function createTailorField<
   ): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
+    const path = pathArray.length > 0 ? pathArray : undefined;
 
     // 1. Check required/optional
     const isNullOrUndefined = value === null || value === undefined;
     if (field._metadata.required && isNullOrUndefined) {
       issues.push({
         message: "Required field is missing",
-        path: pathArray.length > 0 ? pathArray : undefined,
+        path,
       });
       return { issues };
     }
@@ -335,7 +370,7 @@ function createTailorField<
       if (!Array.isArray(value)) {
         issues.push({
           message: "Expected an array",
-          path: pathArray.length > 0 ? pathArray : undefined,
+          path,
         });
         return { issues };
       }
@@ -374,10 +409,24 @@ function createTailorField<
     return { value };
   }
 
+  /**
+   * Clone the field and apply metadata updates to the clone.
+   * The original instance is never mutated, so a field shared across places
+   * cannot leak metadata between them.
+   * @param metadataUpdates - Metadata properties to overwrite on the clone
+   * @returns A new field with the updated metadata
+   */
+  function cloneWith(metadataUpdates: Partial<FieldMetadata>) {
+    const cloned = field.clone();
+    Object.assign(cloned._metadata, metadataUpdates);
+    return cloned;
+  }
+
   const field: TailorField<
     { type: T; array: TOptions extends { array: true } ? true : false },
     FieldOutput<OutputBase, TOptions>
-  > = {
+  > &
+    CloneableField = {
     type,
     fields: fields ?? {},
     _defined: undefined as unknown as {
@@ -392,24 +441,21 @@ function createTailorField<
     },
 
     description(description: string) {
-      this._metadata.description = description;
-      // Fluent API returns this with updated type
+      // Clone-on-write so a shared field instance never leaks metadata.
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ description }) as any;
     },
 
     typeName(typeName: string) {
-      this._metadata.typeName = typeName;
-      // Fluent API returns this with updated type
+      // Clone-on-write so a shared field instance never leaks metadata.
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ typeName }) as any;
     },
 
     validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
-      this._metadata.validate = validateInputs;
-      // Fluent API returns this with updated type
+      // Clone-on-write so a shared field instance never leaks metadata.
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ validate: validateInputs }) as any;
     },
 
     parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
@@ -422,6 +468,25 @@ function createTailorField<
     },
 
     _parseInternal: parseInternal,
+
+    clone() {
+      // Deep clone nested object fields so the new instance shares no mutable state.
+      let clonedFields = fields;
+      if (fields) {
+        const cloned: Record<string, TailorAnyField> = {};
+        for (const [key, nestedField] of Object.entries(fields)) {
+          // Both t.* and db.* fields carry clone() at runtime (see CloneableField).
+          cloned[key] = (nestedField as TailorAnyField & CloneableField).clone();
+        }
+        clonedFields = cloned;
+      }
+
+      // Rebuild via the factory, handing it this field's metadata so the new
+      // parseInternal/validateValue closures rebind to the clone and the factory
+      // owns the metadata deep-copy.
+      // oxlint-disable-next-line no-explicit-any
+      return createTailorField(type, options, clonedFields, values, this._metadata) as any;
+    },
   };
 
   return field;

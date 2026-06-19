@@ -2,17 +2,16 @@
  * Tests for `@tailor-platform/sdk/runtime/iconv` typed wrappers.
  *
  * Verifies that each wrapper forwards to `globalThis.tailor.iconv.*` (recorded
- * via `iconvMock.calls`) and that the return-type narrowing (`UTF-8` →
+ * via `mockIconv().calls`) and that the return-type narrowing (`UTF-8` →
  * `string`, otherwise `Uint8Array`) holds at the type level.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as iconv from "@/runtime/iconv";
-import { cleanupMocks, iconvMock, injectMocks } from "@/vitest/mock";
+import { cleanupMocks, mockIconv, injectMocks } from "@/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/iconv", () => {
   beforeEach(() => {
     injectMocks(globalThis);
-    iconvMock.reset();
   });
 
   afterEach(() => {
@@ -20,7 +19,8 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("convert forwards args and returns string for UTF-8 target", () => {
-    iconvMock.setResolver((method, args) => {
+    using iconvM = mockIconv();
+    iconvM.setResolver((method, args) => {
       if (method === "convert" && args[2] === "UTF-8") return "decoded";
       return undefined;
     });
@@ -29,13 +29,14 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
 
     expect(out).toBe("decoded");
     expectTypeOf(out).toEqualTypeOf<string>();
-    expect(iconvMock.calls).toEqual([
+    expect(iconvM.calls).toEqual([
       { method: "convert", args: [new Uint8Array([0x61]), "Shift_JIS", "UTF-8"] },
     ]);
   });
 
   test("convert returns Uint8Array for non-UTF-8 target", () => {
-    iconvMock.setResolver(() => new Uint8Array([0x82, 0xa0]));
+    using iconvM = mockIconv();
+    iconvM.setResolver(() => new Uint8Array([0x82, 0xa0]));
 
     const out = iconv.convert("あ", "UTF-8", "Shift_JIS");
 
@@ -44,30 +45,33 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("convertBuffer forwards and narrows return type", () => {
-    iconvMock.setResolver(() => "ok");
+    using iconvM = mockIconv();
+    iconvM.setResolver(() => "ok");
 
     const out = iconv.convertBuffer(new Uint8Array(), "Shift_JIS", "UTF-8");
 
     expect(out).toBe("ok");
     expectTypeOf(out).toEqualTypeOf<string>();
-    expect(iconvMock.calls[0]).toMatchObject({ method: "convertBuffer" });
+    expect(iconvM.calls[0]).toMatchObject({ method: "convertBuffer" });
   });
 
   test("decode forwards args and returns string", () => {
-    iconvMock.setResolver(() => "hello");
+    using iconvM = mockIconv();
+    iconvM.setResolver(() => "hello");
 
     const out = iconv.decode(new Uint8Array([0x68]), "ASCII");
 
     expect(out).toBe("hello");
     expectTypeOf(out).toEqualTypeOf<string>();
-    expect(iconvMock.calls[0]).toMatchObject({
+    expect(iconvM.calls[0]).toMatchObject({
       method: "decode",
       args: [new Uint8Array([0x68]), "ASCII"],
     });
   });
 
   test("encode narrows return type by encoding", () => {
-    iconvMock.setResolver((_method, args) => (args[1] === "UTF-8" ? "x" : new Uint8Array([1])));
+    using iconvM = mockIconv();
+    iconvM.setResolver((_method, args) => (args[1] === "UTF-8" ? "x" : new Uint8Array([1])));
 
     const utf8 = iconv.encode("a", "UTF-8");
     const sjis = iconv.encode("a", "Shift_JIS");
@@ -79,7 +83,8 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("encodings forwards and returns string[]", () => {
-    iconvMock.setResolver(() => ["UTF-8", "Shift_JIS"]);
+    using iconvM = mockIconv();
+    iconvM.setResolver(() => ["UTF-8", "Shift_JIS"]);
 
     const list = iconv.encodings();
 
@@ -88,13 +93,14 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
   });
 
   test("Iconv class delegates convert to global Iconv", () => {
-    iconvMock.setResolver((method) => (method === "convert" ? "via-class" : undefined));
+    using iconvM = mockIconv();
+    iconvM.setResolver((method) => (method === "convert" ? "via-class" : undefined));
 
     const conv = new iconv.Iconv("Shift_JIS", "UTF-8");
     const out = conv.convert(new Uint8Array([0x61]));
 
     expect(out).toBe("via-class");
-    expect(iconvMock.calls).toEqual([
+    expect(iconvM.calls).toEqual([
       {
         method: "convert",
         args: [new Uint8Array([0x61]), "Shift_JIS", "UTF-8"],

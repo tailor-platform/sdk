@@ -10,6 +10,7 @@ import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 import { resolveTypeNamespaces } from "@/cli/shared/tailordb-namespace";
+import { assertDefined } from "@/utils/assert";
 
 export interface TruncateOptions {
   workspaceId?: string;
@@ -65,22 +66,21 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
   return await $truncate({ ...options, yes: true });
 }
 
-async function $truncate(options?: InternalTruncateOptions): Promise<void> {
+async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
   // Load and validate options
   const accessToken = await loadAccessToken({
-    useProfile: true,
-    profile: options?.profile,
+    profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: options?.workspaceId,
-    profile: options?.profile,
+    workspaceId: options.workspaceId,
+    profile: options.profile,
   });
 
   // Validate arguments
-  const hasTypes = options?.types && options.types.length > 0;
-  const hasNamespace = !!options?.namespace;
-  const hasAll = !!options?.all;
+  const hasTypes = options.types && options.types.length > 0;
+  const hasNamespace = !!options.namespace;
+  const hasAll = !!options.all;
 
   // All options are mutually exclusive
   const optionCount = [hasAll, hasNamespace, hasTypes].filter(Boolean).length;
@@ -94,7 +94,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
   }
 
   // Validate config and get namespaces before confirmation
-  const { config } = await loadConfig(options?.configPath);
+  const { config } = await loadConfig(options.configPath);
   const namespaces = extractOwnedNamespaces(config);
 
   // Handle --all flag
@@ -104,7 +104,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
       return;
     }
 
-    if (!options?.yes) {
+    if (!options.yes) {
       const namespaceList = namespaces.join(", ");
       const confirmation = await prompt.confirm({
         message: `This will truncate ALL tables in the following owned namespaces (external namespaces are excluded): ${namespaceList}. Continue?`,
@@ -124,13 +124,13 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
   }
 
   // Handle --namespace flag
-  if (hasNamespace && options?.namespace) {
-    const namespace = options.namespace;
+  if (hasNamespace) {
+    const namespace = assertDefined(options.namespace, "namespace option missing");
 
     // Validate namespace exists in config and is not external
     if (!namespaces.includes(namespace)) {
       const dbConfig = config.db?.[namespace];
-      if (dbConfig && "external" in dbConfig && dbConfig.external === true) {
+      if (dbConfig && "external" in dbConfig) {
         throw new Error(
           `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here. Run truncate from the app that owns it.`,
         );
@@ -156,8 +156,8 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
   }
 
   // Handle specific types
-  if (hasTypes && options?.types) {
-    const typeNames = options.types;
+  if (hasTypes) {
+    const typeNames = assertDefined(options.types, "types option missing");
 
     // Validate all types exist and get their namespaces before confirmation
     const typeNamespaceMap = await resolveTypeNamespaces({

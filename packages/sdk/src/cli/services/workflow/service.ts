@@ -4,7 +4,7 @@ import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import { WorkflowJobSchema, WorkflowSchema } from "@/parser/service/workflow";
 import { isSdkBranded } from "@/utils/brand";
-import type { WorkflowServiceConfig } from "@/types/app-config";
+import type { WorkflowServiceConfig } from "@/configure/config/types";
 import type { Workflow } from "@/types/workflow.generated";
 
 export interface CollectedJob {
@@ -103,7 +103,7 @@ async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<Workfl
   const workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
   const collectedJobs: CollectedJob[] = [];
 
-  if (!config.files || config.files.length === 0) {
+  if (config.files.length === 0) {
     return {
       workflows,
       workflowSources,

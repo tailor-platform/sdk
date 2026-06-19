@@ -1,19 +1,52 @@
 /**
- * Mock implementations for Tailor Platform APIs.
+ * Mock controls for Tailor Platform APIs (vitest).
  *
- * Provides singleton mock objects that are automatically injected into
- * globalThis by the tailor-runtime Vitest environment. Tests can configure
- * responses and assert on recorded calls via the exported mock objects.
+ * Each `xMock()` factory installs `vi.fn()`-backed mocks for one platform
+ * namespace onto `globalThis` when acquired, and restores the previous value
+ * when the `using` scope exits. State lives in the per-acquisition vi.fns /
+ * closures — there is no shared global state bag — so nested/sequential scopes
+ * are isolated and namespaces never interfere with each other.
+ *
+ * Acquire a mock with a `using` declaration:
+ *
+ * ```ts
+ * test("...", () => {
+ *   using wf = mockWorkflow();
+ *   wf.setJobHandler(() => ({ ok: true }));
+ * }); // previous workflow mock restored here
+ * ```
+ *
+ * The friendly helpers (`setJobHandler`, `enqueueResult`, `triggeredJobs`, …)
+ * are thin wrappers over the underlying vi.fns, which are also exposed directly
+ * (`wf.triggerJobFunction`) for native matchers like
+ * `expect(wf.triggerJobFunction).toHaveBeenCalledWith(...)`.
  */
 
+import { type Mock, vi } from "vitest";
 import {
+  getRegisteredJob,
+  getRegisteredWorkflow,
+  TRIGGER_DEFAULT,
+} from "@/configure/services/workflow/registry";
+import { assertDefined } from "@/utils/assert";
+import { platformSerialize } from "@/utils/test/platform-serialize";
+import {
+  buildJobContext,
   clearWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
-import type { ContextInvoker } from "../runtime/context";
-import type { TailorDBFileErrorCode } from "../runtime/file";
 import type { User as IdpUser } from "../runtime/idp";
-import type { TailorEnv } from "../types/env";
+import type { TailorEnv } from "@/runtime/types";
+
+export { RUNTIME_FLAG_KEY } from "./globals";
+
+// Re-export the base globals install/cleanup under their historical names so
+// non-environment tests (which run in the plain `node` environment) can set up
+// the base platform surface — `globalThis.tailor`, error classes — themselves.
+export {
+  installPlatformGlobals as injectMocks,
+  cleanupPlatformGlobals as cleanupMocks,
+} from "./globals";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,487 +127,43 @@ interface IconvCall {
   args: unknown[];
 }
 
-interface WorkflowCall {
-  method: "triggerWorkflow" | "wait" | "resolve";
-  args: unknown[];
-}
-
-interface MockState {
-  // TailorDB
-  queryResolver: QueryResolver;
-  queryResultQueue: unknown[][];
-  executedQueries: ExecutedQuery[];
-  createdClients: CreatedClient[];
-  // Workflow
-  jobHandler: JobHandler;
-  jobResultQueue: unknown[];
-  triggeredJobs: TriggeredJob[];
-  triggerHandler: string | TriggerHandlerFn;
-  waitHandler: unknown | WaitHandlerFn;
-  resolveHandler: ResolveHandler | null;
-  workflowCalls: WorkflowCall[];
-  // SecretManager
-  secretStore: Record<string, Record<string, string>>;
-  secretCalls: SecretCall[];
-  // AuthConnection
-  authTokens: Record<string, unknown>;
-  authCalls: AuthConnectionCall[];
-  // IDP
-  idpResolver: IdpResolver;
-  idpResultQueue: unknown[];
-  idpCalls: IdpCall[];
-  // File
-  fileResolver: FileResolver;
-  fileResultQueue: unknown[];
-  fileCalls: FileCall[];
-  // Iconv
-  iconvResolver: IconvResolver | null;
-  iconvCalls: IconvCall[];
-}
-
 // ---------------------------------------------------------------------------
-// State management (shared via globalThis for environment/test interop)
+// Shared helpers
 // ---------------------------------------------------------------------------
 
-export const STATE_KEY = "__tailorMockState";
+// Attach a non-enumerable `Symbol.dispose` to a facade so it works with `using`.
+function withDispose<T extends object>(facade: T, dispose: () => void): T & Disposable {
+  Object.defineProperty(facade, Symbol.dispose, {
+    value: dispose,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+  return facade as T & Disposable;
+}
 
-// Sentinel set by the tailor-runtime environment in injectMocks() and cleared
-// in cleanupMocks(). Distinct from STATE_KEY, which is created lazily by
-// getState() whenever a mock helper runs (even from a non-tailor-runtime
-// project that happens to import the mocks). Use this flag to detect whether
-// the environment itself is active.
-export const RUNTIME_FLAG_KEY = "__tailorRuntimeActive";
-
-function getState(): MockState {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tailorRoot(): Record<string, any> {
   const g = globalThis as Record<string, unknown>;
-  if (!g[STATE_KEY]) {
-    g[STATE_KEY] = createDefaultState();
+  if (!g.tailor) {
+    // Ensure the container (and the always-present context stub) exists even if
+    // the base globals were not installed (e.g. a unit test that only acquires
+    // a single mock without the tailor-runtime environment).
+    g.tailor = { context: { getInvoker: () => null } };
   }
-  return g[STATE_KEY] as MockState;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return g.tailor as Record<string, any>;
 }
 
-function createDefaultState(): MockState {
-  return {
-    queryResolver: () => [],
-    queryResultQueue: [],
-    executedQueries: [],
-    createdClients: [],
-    jobHandler: () => null,
-    jobResultQueue: [],
-    triggeredJobs: [],
-    triggerHandler: "mock-execution-id",
-    waitHandler: null,
-    resolveHandler: null,
-    workflowCalls: [],
-    secretStore: {},
-    secretCalls: [],
-    authTokens: {},
-    authCalls: [],
-    idpResolver: () => null,
-    idpResultQueue: [],
-    idpCalls: [],
-    fileResolver: () => null,
-    fileResultQueue: [],
-    fileCalls: [],
-    iconvResolver: null,
-    iconvCalls: [],
-  };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tailordbRoot(): Record<string, any> {
+  const g = globalThis as Record<string, unknown>;
+  if (!g.tailordb) {
+    g.tailordb = {};
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return g.tailordb as Record<string, any>;
 }
-
-// ---------------------------------------------------------------------------
-// TailorDB Mock
-// ---------------------------------------------------------------------------
-
-/**
- * Mock control object for TailorDB operations.
- *
- * Automatically injected into `globalThis.tailordb` by the tailor-runtime environment.
- * Use this object to configure query responses and assert on executed queries.
- * @example
- * ```typescript
- * import { tailordbMock } from "@tailor-platform/sdk/vitest";
- *
- * beforeEach(() => tailordbMock.reset());
- *
- * test("content-based", () => {
- *   tailordbMock.setQueryResolver((query) => {
- *     if (query.includes("SELECT")) return [{ id: "1" }];
- *     return [];
- *   });
- * });
- *
- * test("order-based", () => {
- *   tailordbMock.enqueueResults(
- *     [],            // BEGIN (empty result)
- *     [{ age: 30 }], // SELECT (one row)
- *     [],            // COMMIT (empty result)
- *   );
- * });
- * ```
- */
-export const tailordbMock = {
-  /**
-   * Set a fallback query resolver. Called when the result queue is empty.
-   * @param resolver - Function that returns rows for a given query and params
-   */
-  setQueryResolver(resolver: QueryResolver): void {
-    getState().queryResolver = resolver;
-  },
-
-  /**
-   * Enqueue rows for the next `queryObject` call. Arguments are the row objects returned
-   * by that single query. Call with no arguments for an empty result. Consumed in FIFO
-   * order; when the queue is exhausted, subsequent calls fall back to `setQueryResolver`
-   * (default: empty rows). Use `enqueueResults` to stage rows for multiple queries in one
-   * call.
-   * @param rows - Row objects to return from the next `queryObject` call
-   */
-  enqueueResult(...rows: unknown[]): void {
-    getState().queryResultQueue.push(rows);
-  },
-
-  /**
-   * Enqueue rows for multiple subsequent `queryObject` calls. Each argument is a rows
-   * array for one query, consumed in FIFO order.
-   * @param rowsList - Rows arrays, one per upcoming query
-   */
-  enqueueResults(...rowsList: unknown[][]): void {
-    getState().queryResultQueue.push(...rowsList);
-  },
-
-  /**
-   * All queries executed via `queryObject`, in order.
-   * @returns Executed queries array
-   */
-  get executedQueries(): ExecutedQuery[] {
-    return getState().executedQueries;
-  },
-
-  /**
-   * All TailorDB clients created, with their namespace and end state.
-   * @returns Created clients array
-   */
-  get createdClients(): CreatedClient[] {
-    return getState().createdClients;
-  },
-
-  /** Reset all TailorDB mock state. Call in `beforeEach`. */
-  reset(): void {
-    const state = getState();
-    state.queryResolver = () => [];
-    state.queryResultQueue.length = 0;
-    state.executedQueries.length = 0;
-    state.createdClients.length = 0;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Workflow Mock
-// ---------------------------------------------------------------------------
-
-/**
- * Mock control object for workflow operations.
- *
- * Automatically injected into `globalThis.tailor.workflow` by the tailor-runtime environment.
- * @example
- * ```typescript
- * import { workflowMock } from "@tailor-platform/sdk/vitest";
- *
- * beforeEach(() => workflowMock.reset());
- *
- * test("job handler", () => {
- *   workflowMock.setJobHandler((jobName, args) => {
- *     if (jobName === "validate") return { valid: true };
- *     return null;
- *   });
- * });
- *
- * test("wait point", () => {
- *   workflowMock.setWaitHandler(() => ({ approved: true }));
- *   // …
- *   expect(workflowMock.waitCalls).toEqual([{ key: "approval", payload: undefined }]);
- * });
- *
- * test("resolve point", () => {
- *   workflowMock.setResolveHandler((_executionId, _key, callback) =>
- *     callback({ approved: true }),
- *   );
- *   // …
- *   expect(workflowMock.resolveCalls).toEqual([
- *     { executionId: "mock-execution-id", key: "approval" },
- *   ]);
- * });
- * ```
- */
-export const workflowMock = {
-  /**
-   * Set a fallback job handler. Called when the result queue is empty.
-   * @param handler - Function that returns a result for a given job name and args
-   */
-  setJobHandler(handler: JobHandler): void {
-    getState().jobHandler = handler;
-  },
-
-  /**
-   * Enqueue a single result for the next `triggerJobFunction` call. Consumed in FIFO
-   * order; when the queue is exhausted, subsequent calls fall back to `setJobHandler`
-   * (default: null). Use `enqueueResults` to stage multiple results in one call.
-   * @param result - Result to return from the next `triggerJobFunction` call
-   */
-  enqueueResult(result: unknown): void {
-    getState().jobResultQueue.push(result);
-  },
-
-  /**
-   * Enqueue results for multiple subsequent `triggerJobFunction` calls.
-   * @param results - Results to enqueue, one per upcoming call
-   */
-  enqueueResults(...results: unknown[]): void {
-    const queue = getState().jobResultQueue;
-    for (const result of results) {
-      queue.push(result);
-    }
-  },
-
-  /**
-   * All jobs triggered via `triggerJobFunction`, in order.
-   * @returns Triggered jobs array
-   */
-  get triggeredJobs(): TriggeredJob[] {
-    return getState().triggeredJobs;
-  },
-
-  /**
-   * Configure what `tailor.workflow.triggerWorkflow` returns. Pass a string to return
-   * the same execution ID for every call, or a function `(name, args, options) => string`
-   * to compute one per call. Default: `"mock-execution-id"`.
-   * @param handler - Static execution ID or a function that returns one
-   */
-  setTriggerHandler(handler: string | TriggerHandlerFn): void {
-    getState().triggerHandler = handler;
-  },
-
-  /**
-   * Configure what `tailor.workflow.wait` returns. Pass a function `(key, payload) => unknown`
-   * to compute one per call, or any other value to return it for every call. Default: `null`.
-   * @param handler - Static value or a function that returns one
-   */
-  setWaitHandler: ((handler: unknown) => {
-    getState().waitHandler = handler;
-  }) as SetWaitHandler,
-
-  /**
-   * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
-   * Cleared by `workflowMock.reset()`.
-   * @param env - Env passed to job bodies.
-   */
-  setEnv(env: TailorEnv): void {
-    writeWorkflowTestEnv({ ...env });
-  },
-
-  /**
-   * Configure how `tailor.workflow.resolve` runs the user-supplied callback. The handler
-   * receives `(executionId, key, callback)` — invoke `callback(payload)` to drive
-   * resolve→wait wiring in tests. Default: callback is not invoked (records the call only).
-   * @param handler - Function invoked per `resolve` call
-   */
-  setResolveHandler(handler: ResolveHandler): void {
-    getState().resolveHandler = handler;
-  },
-
-  /**
-   * Calls to triggerWorkflow, wait, resolve (not triggerJobFunction — use triggeredJobs).
-   * @returns Workflow calls array
-   */
-  get calls(): WorkflowCall[] {
-    return getState().workflowCalls;
-  },
-
-  /**
-   * `tailor.workflow.wait` calls reshaped as `{ key, payload }` for assertions.
-   * @returns Wait call records
-   */
-  get waitCalls(): { key: string; payload: unknown }[] {
-    return getState()
-      .workflowCalls.filter((c) => c.method === "wait")
-      .map((c) => ({ key: c.args[0] as string, payload: c.args[1] }));
-  },
-
-  /**
-   * `tailor.workflow.resolve` calls reshaped as `{ executionId, key }` for assertions.
-   * @returns Resolve call records
-   */
-  get resolveCalls(): { executionId: string; key: string }[] {
-    return getState()
-      .workflowCalls.filter((c) => c.method === "resolve")
-      .map((c) => ({ executionId: c.args[0] as string, key: c.args[1] as string }));
-  },
-
-  /** Reset all workflow mock state. Call in `beforeEach`. */
-  reset(): void {
-    const state = getState();
-    state.jobHandler = () => null;
-    state.jobResultQueue.length = 0;
-    state.triggeredJobs.length = 0;
-    state.triggerHandler = "mock-execution-id";
-    state.waitHandler = null;
-    state.resolveHandler = null;
-    state.workflowCalls.length = 0;
-    clearWorkflowTestEnv();
-  },
-};
-
-// ---------------------------------------------------------------------------
-// SecretManager Mock
-// ---------------------------------------------------------------------------
-
-/** Mock control for `tailor.secretmanager` — secret store and call recording. */
-export const secretmanagerMock = {
-  setSecrets(secrets: Record<string, Record<string, string>>): void {
-    getState().secretStore = secrets;
-  },
-
-  get calls(): SecretCall[] {
-    return getState().secretCalls;
-  },
-
-  reset(): void {
-    const state = getState();
-    state.secretStore = {};
-    state.secretCalls.length = 0;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// AuthConnection Mock
-// ---------------------------------------------------------------------------
-
-/** Mock control for `tailor.authconnection` — token store and call recording. */
-export const authconnectionMock = {
-  setTokens(tokens: Record<string, unknown>): void {
-    getState().authTokens = tokens;
-  },
-
-  get calls(): AuthConnectionCall[] {
-    return getState().authCalls;
-  },
-
-  reset(): void {
-    const state = getState();
-    state.authTokens = {};
-    state.authCalls.length = 0;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// IDP Mock
-// ---------------------------------------------------------------------------
-
-/** Mock control for `tailor.idp` — IDP client responses and call recording. */
-export const idpMock = {
-  setResolver(resolver: IdpResolver): void {
-    getState().idpResolver = resolver;
-  },
-
-  /**
-   * Enqueue a single result for the next IDP call. Consumed in FIFO order; falls back
-   * to `setResolver` when exhausted. Use `enqueueResults` to stage multiple in one call.
-   * @param result - Result to return from the next IDP call
-   */
-  enqueueResult(result: unknown): void {
-    getState().idpResultQueue.push(result);
-  },
-
-  /**
-   * Enqueue results for multiple subsequent IDP calls.
-   * @param results - Results to enqueue, one per upcoming call
-   */
-  enqueueResults(...results: unknown[]): void {
-    const queue = getState().idpResultQueue;
-    for (const result of results) {
-      queue.push(result);
-    }
-  },
-
-  get calls(): IdpCall[] {
-    return getState().idpCalls;
-  },
-
-  reset(): void {
-    const state = getState();
-    state.idpResolver = () => null;
-    state.idpResultQueue.length = 0;
-    state.idpCalls.length = 0;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// File Mock
-// ---------------------------------------------------------------------------
-
-/** Mock control for `tailordb.file` — file operation responses and call recording. */
-export const fileMock = {
-  setResolver(resolver: FileResolver): void {
-    getState().fileResolver = resolver;
-  },
-
-  /**
-   * Enqueue a single result for the next `tailordb.file` call. Consumed in FIFO order;
-   * falls back to `setResolver` when exhausted. Use `enqueueResults` to stage multiple
-   * in one call.
-   * @param result - Result to return from the next file call
-   */
-  enqueueResult(result: unknown): void {
-    getState().fileResultQueue.push(result);
-  },
-
-  /**
-   * Enqueue results for multiple subsequent `tailordb.file` calls.
-   * @param results - Results to enqueue, one per upcoming call
-   */
-  enqueueResults(...results: unknown[]): void {
-    const queue = getState().fileResultQueue;
-    for (const result of results) {
-      queue.push(result);
-    }
-  },
-
-  get calls(): FileCall[] {
-    return getState().fileCalls;
-  },
-
-  reset(): void {
-    const state = getState();
-    state.fileResolver = () => null;
-    state.fileResultQueue.length = 0;
-    state.fileCalls.length = 0;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Iconv Mock
-// ---------------------------------------------------------------------------
-
-/** Mock control for `tailor.iconv` — encoding call recording. */
-export const iconvMock = {
-  setResolver(resolver: IconvResolver): void {
-    getState().iconvResolver = resolver;
-  },
-
-  get calls(): IconvCall[] {
-    return getState().iconvCalls;
-  },
-
-  reset(): void {
-    const state = getState();
-    state.iconvResolver = null;
-    state.iconvCalls.length = 0;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Mock Client implementation (injected as globalThis.tailordb.Client)
-// ---------------------------------------------------------------------------
 
 class MockQueryResult {
   command: string;
@@ -588,161 +177,510 @@ class MockQueryResult {
   }
 }
 
-class MockTransaction {
-  async begin(): Promise<void> {
-    /* noop */
-  }
-  async commit(): Promise<void> {
-    /* noop */
-  }
-  async rollback(): Promise<void> {
-    /* noop */
-  }
+// ---------------------------------------------------------------------------
+// TailorDB Mock
+// ---------------------------------------------------------------------------
 
-  async queryObject(query: string, params: unknown[] = []): Promise<MockQueryResult> {
-    return resolveQuery(query, params);
-  }
-}
+/**
+ * Acquire a disposable mock for TailorDB operations. Installs a mock
+ * `tailordb.Client` whose `queryObject` is a shared `vi.fn()` (so query
+ * responses can be staged before the client is constructed). Restored on
+ * dispose.
+ * @returns Disposable TailorDB mock control object
+ * @example
+ * ```typescript
+ * import { mockTailordb } from "@tailor-platform/sdk/vitest";
+ *
+ * test("order-based", async () => {
+ *   using db = mockTailordb();
+ *   db.enqueueResults([], [{ age: 30 }], []); // BEGIN / SELECT / COMMIT
+ *   // …
+ *   expect(db.queryObject).toHaveBeenCalledTimes(3);
+ *   expect(db.Client).toHaveBeenCalledWith({ namespace: "tailordb" });
+ * });
+ * ```
+ */
+export function mockTailordb() {
+  const root = tailordbRoot();
+  const prevClient = root.Client;
 
-class MockTailordbClient {
-  #record: CreatedClient;
+  const queryObject = vi.fn(
+    async (_query: string, _params: unknown[] = []): Promise<MockQueryResult> =>
+      new MockQueryResult([]),
+  );
+  const connect = vi.fn(async (): Promise<void> => {});
+  const createdClients: CreatedClient[] = [];
 
-  constructor(config?: { namespace?: string }) {
-    this.#record = { namespace: config?.namespace, ended: false };
-    getState().createdClients.push(this.#record);
-  }
+  const Client = vi.fn(function (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this: any,
+    config?: { namespace?: string },
+  ) {
+    const record: CreatedClient = { namespace: config?.namespace, ended: false };
+    createdClients.push(record);
+    this.connect = connect;
+    this.end = vi.fn(async (): Promise<void> => {
+      record.ended = true;
+    });
+    this.queryObject = queryObject;
+    this.createTransaction = (name: string) => {
+      if (!name) {
+        throw new Error("Transaction name must be a non-empty string");
+      }
+      return {
+        begin: async (): Promise<void> => {},
+        commit: async (): Promise<void> => {},
+        rollback: async (): Promise<void> => {},
+        queryObject,
+      };
+    };
+  });
 
-  async connect(): Promise<void> {
-    /* noop */
-  }
+  root.Client = Client;
 
-  async end(): Promise<void> {
-    this.#record.ended = true;
-  }
+  const facade = {
+    /** The mock `tailordb.Client` constructor (`vi.fn`). */
+    Client,
+    /** The shared `queryObject` `vi.fn` used by every client and transaction. */
+    queryObject,
 
-  async queryObject(query: string, params: unknown[] = []): Promise<MockQueryResult> {
-    return resolveQuery(query, params);
-  }
+    /**
+     * Set a fallback query resolver. Called when the enqueue queue is empty.
+     * @param resolver - Function that returns rows for a given query and params
+     */
+    setQueryResolver(resolver: QueryResolver): void {
+      queryObject.mockImplementation(
+        async (query: string, params: unknown[] = []) =>
+          // user resolvers may return undefined
+          // oxlint-disable-next-line typescript/no-unnecessary-condition
+          new MockQueryResult(resolver(query, params) ?? []),
+      );
+    },
 
-  createTransaction(name: string): MockTransaction {
-    if (!name) {
-      throw new Error("Transaction name must be a non-empty string");
-    }
-    return new MockTransaction();
-  }
-}
+    /**
+     * Enqueue rows for the next `queryObject` call (FIFO; takes priority over
+     * `setQueryResolver`). Call with no arguments for an empty result.
+     * @param rows - Row objects to return from the next `queryObject` call
+     */
+    enqueueResult(...rows: unknown[]): void {
+      queryObject.mockImplementationOnce(async () => new MockQueryResult(rows));
+    },
 
-function resolveQuery(query: string, params: unknown[]): MockQueryResult {
-  const state = getState();
-  state.executedQueries.push({ query, params });
+    /**
+     * Enqueue rows for multiple subsequent `queryObject` calls (FIFO).
+     * @param rowsList - Rows arrays, one per upcoming query
+     */
+    enqueueResults(...rowsList: unknown[][]): void {
+      for (const rows of rowsList) {
+        queryObject.mockImplementationOnce(async () => new MockQueryResult(rows));
+      }
+    },
 
-  // 1. Queue takes priority (order-based)
-  if (state.queryResultQueue.length > 0) {
-    return new MockQueryResult(state.queryResultQueue.shift()!);
-  }
+    /**
+     * All queries executed via `queryObject`, in order, derived from the vi.fn
+     * call records.
+     * @returns Executed queries array
+     */
+    get executedQueries(): ExecutedQuery[] {
+      return queryObject.mock.calls.map(([query, params]) => ({
+        query: query as string,
+        // vitest records an omitted argument as undefined
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
+        params: (params as unknown[]) ?? [],
+      }));
+    },
 
-  // 2. Fallback to query resolver (content-based)
-  const rows = state.queryResolver(query, params) ?? [];
-  return new MockQueryResult(rows);
+    /**
+     * All TailorDB clients created, with their namespace and end state.
+     * @returns Created clients array
+     */
+    get createdClients(): CreatedClient[] {
+      return createdClients;
+    },
+
+    /** Reset query responses and recorded calls (keeps the mock installed). */
+    reset(): void {
+      queryObject.mockReset();
+      queryObject.mockImplementation(async () => new MockQueryResult([]));
+      connect.mockClear();
+      Client.mockClear();
+      createdClients.length = 0;
+    },
+  };
+
+  return withDispose(facade, () => {
+    root.Client = prevClient;
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Mock: tailor.workflow
+// Workflow Mock
 // ---------------------------------------------------------------------------
 
-function mockTriggerJobFunction(jobName: string, args?: unknown): unknown {
-  const state = getState();
-  state.triggeredJobs.push({ jobName, args });
-  if (state.jobResultQueue.length > 0) return state.jobResultQueue.shift();
-  return state.jobHandler(jobName, args);
-}
+/**
+ * Acquire a disposable mock for workflow operations (`tailor.workflow`).
+ * Restored on dispose.
+ * @returns Disposable workflow mock control object
+ * @example
+ * ```typescript
+ * import { mockWorkflow } from "@tailor-platform/sdk/vitest";
+ *
+ * test("job handler", async () => {
+ *   using wf = mockWorkflow();
+ *   wf.setJobHandler((name) => (name === "validate" ? { valid: true } : null));
+ *   await runWorkflowUnderTest(); // calls tailor.workflow.triggerJobFunction("validate", {})
+ *   expect(wf.triggerJobFunction).toHaveBeenCalledWith("validate", {});
+ * });
+ * ```
+ */
+export function mockWorkflow() {
+  const root = tailorRoot();
+  const prev = root.workflow;
 
-async function mockTriggerWorkflow(
-  workflowName: string,
-  args?: unknown,
-  options?: TriggerWorkflowOptions,
-): Promise<string> {
-  const state = getState();
-  state.workflowCalls.push({ method: "triggerWorkflow", args: [workflowName, args, options] });
-  const handler = state.triggerHandler;
-  return typeof handler === "function" ? handler(workflowName, args, options) : handler;
-}
+  // Default impls (also restored by reset): run the registered body by name so a
+  // `.trigger()` with no handler/result executes the real job locally.
+  const defaultTriggerJob = (jobName: string, args?: unknown): unknown => {
+    const body = getRegisteredJob(jobName);
+    return body ? body(args, buildJobContext()) : null;
+  };
+  const defaultTriggerWorkflow = async (
+    workflowName: string,
+    args?: unknown,
+    _options?: TriggerWorkflowOptions,
+  ): Promise<string> => {
+    const wf = getRegisteredWorkflow(workflowName);
+    if (wf) await installedTriggerJobFunction(wf.mainJobName, args);
+    return TRIGGER_DEFAULT;
+  };
 
-function mockWait(key: string, payload?: unknown): unknown {
-  const state = getState();
-  state.workflowCalls.push({ method: "wait", args: [key, payload] });
-  const handler = state.waitHandler;
-  return typeof handler === "function" ? (handler as WaitHandlerFn)(key, payload) : handler;
-}
+  // Inner vi.fns hold the overridable behavior + call recording; the installed
+  // shims below cross the platform JSON boundary (serialize args + results) once
+  // so every path (default body, setJobHandler, enqueueResult) is covered.
+  const triggerJobFunction = vi.fn(defaultTriggerJob);
+  const triggerWorkflow = vi.fn(defaultTriggerWorkflow);
+  const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
+  const resolve = vi.fn(
+    async (
+      _executionId: string,
+      _key: string,
+      _callback: (payload: unknown) => unknown,
+    ): Promise<void> => {},
+  );
 
-// Records the resolve call. By default the callback is not invoked, mirroring
-// platform semantics where tailor.workflow.resolve enqueues the callback
-// against the wait point and returns immediately. Tests that need
-// resolve→wait wiring can register a handler via workflowMock.setResolveHandler
-// — the handler receives `(executionId, key, callback)` and decides whether to
-// invoke the callback (typically with a synthesized payload).
-async function mockResolve(
-  executionId: string,
-  key: string,
-  callback: (payload: unknown) => unknown | Promise<unknown>,
-): Promise<void> {
-  const state = getState();
-  state.workflowCalls.push({ method: "resolve", args: [executionId, key, callback] });
-  if (state.resolveHandler) {
-    await state.resolveHandler(executionId, key, callback);
-  }
+  const installedTriggerJobFunction = (jobName: string, args?: unknown): unknown => {
+    const out = triggerJobFunction(jobName, platformSerialize(args));
+    return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
+  };
+
+  root.workflow = {
+    triggerJobFunction: installedTriggerJobFunction,
+    // Preserve arity so a forwarded third `options` arg — even `undefined` — is
+    // recorded, matching the real `.trigger(args, options)` call shape.
+    triggerWorkflow: (...call: [string, unknown?, TriggerWorkflowOptions?]) =>
+      call.length >= 3
+        ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
+        : triggerWorkflow(call[0], platformSerialize(call[1])),
+    wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
+    resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
+      resolve(executionId, key, (payload: unknown) => {
+        const out = callback(payload);
+        return out instanceof Promise
+          ? out.then((v) => platformSerialize(v))
+          : platformSerialize(out);
+      }),
+  };
+
+  const facade = {
+    /** The `triggerJobFunction` `vi.fn`. */
+    triggerJobFunction,
+    /** The `triggerWorkflow` `vi.fn`. */
+    triggerWorkflow,
+    /** The `wait` `vi.fn`. */
+    wait,
+    /** The `resolve` `vi.fn`. */
+    resolve,
+
+    /**
+     * Set a fallback job handler. Called when the enqueue queue is empty.
+     * @param handler - Function returning a result for a job name and args
+     */
+    setJobHandler(handler: JobHandler): void {
+      triggerJobFunction.mockImplementation((name, args) => handler(name, args));
+    },
+
+    /**
+     * Enqueue a single result for the next `triggerJobFunction` call (FIFO;
+     * takes priority over `setJobHandler`).
+     * @param result - Result to return from the next call
+     */
+    enqueueResult(result: unknown): void {
+      triggerJobFunction.mockImplementationOnce(() => result);
+    },
+
+    /**
+     * Enqueue results for multiple subsequent `triggerJobFunction` calls (FIFO).
+     * @param results - Results to enqueue, one per upcoming call
+     */
+    enqueueResults(...results: unknown[]): void {
+      for (const result of results) {
+        triggerJobFunction.mockImplementationOnce(() => result);
+      }
+    },
+
+    /**
+     * All jobs triggered via `triggerJobFunction`, in order.
+     * @returns Triggered jobs array
+     */
+    get triggeredJobs(): TriggeredJob[] {
+      return triggerJobFunction.mock.calls.map(([jobName, args]) => ({
+        jobName: jobName as string,
+        args,
+      }));
+    },
+
+    /**
+     * Configure what `triggerWorkflow` returns. Pass a string (same id every
+     * call) or `(name, args, options) => string`. Default: a placeholder UUID.
+     * @param handler - Static execution ID or a function returning one
+     */
+    setTriggerHandler(handler: string | TriggerHandlerFn): void {
+      triggerWorkflow.mockImplementation(
+        typeof handler === "function"
+          ? async (name, args, options) => handler(name, args, options)
+          : async () => handler,
+      );
+    },
+
+    /**
+     * Configure what `wait` returns. Pass `(key, payload) => unknown` or any
+     * other value to return it for every call. Default: `null`.
+     * @param handler - Static value or a function returning one
+     */
+    setWaitHandler: ((handler: unknown) => {
+      wait.mockImplementation(
+        typeof handler === "function"
+          ? (key, payload) => (handler as WaitHandlerFn)(key, payload)
+          : () => handler,
+      );
+    }) as SetWaitHandler,
+
+    /**
+     * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
+     * Cleared on dispose / reset.
+     * @param env - Env passed to job bodies.
+     */
+    setEnv(env: TailorEnv): void {
+      writeWorkflowTestEnv({ ...env });
+    },
+
+    /**
+     * Configure how `resolve` runs the user-supplied callback. Default: callback
+     * is not invoked (records the call only).
+     * @param handler - Function invoked per `resolve` call
+     */
+    setResolveHandler(handler: ResolveHandler): void {
+      resolve.mockImplementation(async (executionId, key, callback) => {
+        await handler(executionId, key, callback);
+      });
+    },
+
+    /**
+     * `wait` calls reshaped as `{ key, payload }` for assertions.
+     * @returns Wait call records
+     */
+    get waitCalls(): { key: string; payload: unknown }[] {
+      return wait.mock.calls.map(([key, payload]) => ({ key: key as string, payload }));
+    },
+
+    /**
+     * `resolve` calls reshaped as `{ executionId, key }` for assertions.
+     * @returns Resolve call records
+     */
+    get resolveCalls(): { executionId: string; key: string }[] {
+      return resolve.mock.calls.map(([executionId, key]) => ({
+        executionId: executionId as string,
+        key: key as string,
+      }));
+    },
+
+    /** Reset all workflow responses and recorded calls (keeps the mock installed). */
+    reset(): void {
+      triggerJobFunction.mockReset();
+      triggerJobFunction.mockImplementation(defaultTriggerJob);
+      triggerWorkflow.mockReset();
+      triggerWorkflow.mockImplementation(defaultTriggerWorkflow);
+      wait.mockReset();
+      wait.mockImplementation(() => null);
+      resolve.mockReset();
+      resolve.mockImplementation(async () => {});
+      clearWorkflowTestEnv();
+    },
+  };
+
+  return withDispose(facade, () => {
+    root.workflow = prev;
+    clearWorkflowTestEnv();
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Mock: tailor.context
+// SecretManager Mock
 // ---------------------------------------------------------------------------
 
-// Stub-only injection. SDK consumers configure invokers at the body level
-// (resolver/executor/workflow `.body()` `invoker` arg) or, for bundled tests,
-// via `vi.spyOn(globalThis.tailor.context, "getInvoker")`.
-function mockGetInvoker(): ContextInvoker | null {
-  return null;
+// Hidden accessor key used to inherit the previous scope's secret store on
+// acquisition (so secrets seeded once outside tests — e.g. from tailor.config.ts
+// via setup.ts — remain visible) while still isolating per-test overrides.
+const SECRET_STORE = Symbol("tailorSecretStore");
+
+/**
+ * Acquire a disposable mock for `tailor.secretmanager`. The secret store is
+ * inherited (cloned) from the currently-installed mock on acquisition and
+ * restored on dispose, so secrets seeded outside the test survive across
+ * `using` scopes while per-test `setSecrets()` overrides stay isolated.
+ * @returns Disposable SecretManager mock control object
+ * @example
+ * ```typescript
+ * import { mockSecretmanager } from "@tailor-platform/sdk/vitest";
+ *
+ * test("reads secrets from vault", async () => {
+ *   using sm = mockSecretmanager();
+ *   sm.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
+ *   // …
+ * });
+ * ```
+ */
+export function mockSecretmanager() {
+  const root = tailorRoot();
+  const prev = root.secretmanager;
+
+  const holder: { store: Record<string, Record<string, string>> } = {
+    // prior mock state may be absent
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    store: structuredClone((prev?.[SECRET_STORE]?.store as typeof holder.store) ?? {}),
+  };
+
+  const getSecret = vi.fn(
+    async (vault: string, name: string): Promise<string | undefined> => holder.store[vault]?.[name],
+  );
+  const getSecrets = vi.fn(
+    async <const T extends readonly string[]>(
+      vault: string,
+      names: T,
+    ): Promise<Partial<Record<T[number], string>>> => {
+      const vaultData = holder.store[vault] ?? {};
+      const result: Record<string, string> = {};
+      for (const name of names) {
+        if (name in vaultData) {
+          result[name] = assertDefined(vaultData[name], `vault entry missing for: ${name}`);
+        }
+      }
+      return result as Partial<Record<T[number], string>>;
+    },
+  );
+
+  root.secretmanager = { getSecret, getSecrets, [SECRET_STORE]: holder };
+
+  const facade = {
+    /** The `getSecret` `vi.fn`. */
+    getSecret,
+    /** The `getSecrets` `vi.fn`. */
+    getSecrets,
+
+    setSecrets(secrets: Record<string, Record<string, string>>): void {
+      holder.store = secrets;
+    },
+
+    get calls(): SecretCall[] {
+      // Merge both methods' calls back into chronological order via vi.fn's
+      // global invocationCallOrder, so a test mixing getSecret/getSecrets sees
+      // them in the order they actually ran (not all getSecret, then all getSecrets).
+      const entries: { order: number; call: SecretCall }[] = [
+        ...getSecret.mock.calls.map((args, i) => ({
+          order: getSecret.mock.invocationCallOrder[i] ?? 0,
+          call: { method: "getSecret" as const, vault: args[0] as string, name: args[1] as string },
+        })),
+        ...getSecrets.mock.calls.map((args, i) => ({
+          order: getSecrets.mock.invocationCallOrder[i] ?? 0,
+          call: {
+            method: "getSecrets" as const,
+            vault: args[0] as string,
+            names: args[1] as readonly string[],
+          },
+        })),
+      ];
+      return entries.toSorted((a, b) => a.order - b.order).map((e) => e.call);
+    },
+
+    reset(): void {
+      holder.store = {};
+      getSecret.mockClear();
+      getSecrets.mockClear();
+    },
+  };
+
+  return withDispose(facade, () => {
+    root.secretmanager = prev;
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Mock: tailor.secretmanager
+// AuthConnection Mock
 // ---------------------------------------------------------------------------
 
-async function mockGetSecrets<const T extends readonly string[]>(
-  vault: string,
-  names: T,
-): Promise<Partial<Record<T[number], string>>> {
-  const state = getState();
-  state.secretCalls.push({ method: "getSecrets", vault, names });
-  const vaultData = state.secretStore[vault] ?? {};
-  const result: Record<string, string> = {};
-  for (const name of names) {
-    if (name in vaultData) {
-      result[name] = vaultData[name];
-    }
-  }
-  return result as Partial<Record<T[number], string>>;
+/**
+ * Acquire a disposable mock for `tailor.authconnection`. Restored on dispose.
+ * @returns Disposable AuthConnection mock control object
+ * @example
+ * ```typescript
+ * import { mockAuthconnection } from "@tailor-platform/sdk/vitest";
+ *
+ * test("returns configured token", async () => {
+ *   using ac = mockAuthconnection();
+ *   ac.setTokens({ google: { access_token: "ya29.xxx" } });
+ *   // …
+ * });
+ * ```
+ */
+export function mockAuthconnection() {
+  const root = tailorRoot();
+  const prev = root.authconnection;
+
+  let tokens: Record<string, unknown> = {};
+  const getConnectionToken = vi.fn(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async (connectionName: string): Promise<any> =>
+      tokens[connectionName] ?? { access_token: "mock-token" },
+  );
+
+  root.authconnection = { getConnectionToken };
+
+  const facade = {
+    /** The `getConnectionToken` `vi.fn`. */
+    getConnectionToken,
+
+    setTokens(value: Record<string, unknown>): void {
+      tokens = value;
+    },
+
+    get calls(): AuthConnectionCall[] {
+      return getConnectionToken.mock.calls.map(([connectionName]) => ({
+        connectionName: connectionName as string,
+      }));
+    },
+
+    reset(): void {
+      tokens = {};
+      getConnectionToken.mockClear();
+    },
+  };
+
+  return withDispose(facade, () => {
+    root.authconnection = prev;
+  });
 }
 
-async function mockGetSecret(vault: string, name: string): Promise<string | undefined> {
-  const state = getState();
-  state.secretCalls.push({ method: "getSecret", vault, name });
-  return state.secretStore[vault]?.[name];
-}
-
 // ---------------------------------------------------------------------------
-// Mock: tailor.authconnection
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function mockGetConnectionToken(connectionName: string): Promise<any> {
-  const state = getState();
-  state.authCalls.push({ connectionName });
-  return state.authTokens[connectionName] ?? { access_token: "mock-token" };
-}
-
-// ---------------------------------------------------------------------------
-// Mock: tailor.idp
+// IDP Mock
 // ---------------------------------------------------------------------------
 
 const IDP_DEFAULTS: Record<string, unknown> = {
@@ -755,73 +693,125 @@ const IDP_DEFAULTS: Record<string, unknown> = {
   sendPasswordResetEmail: true,
 };
 
-function resolveIdpCall(method: string, args: unknown[], namespace: string): unknown {
-  const state = getState();
-  state.idpCalls.push({ method, args, namespace });
-  if (state.idpResultQueue.length > 0) return state.idpResultQueue.shift();
-  const resolved = state.idpResolver(method, args, namespace);
-  // Treat null and undefined alike as "no override" — resolvers commonly
-  // `return null` for unmatched methods.
-  if (resolved != null) return resolved;
-  // Clone the default so a test mutating the returned value (e.g.
-  // `result.users.push(x)`) cannot corrupt the shared module-level object
-  // for subsequent tests in the same worker.
-  const fallback = IDP_DEFAULTS[method];
-  return fallback === undefined ? undefined : structuredClone(fallback);
-}
+/**
+ * Acquire a disposable mock for `tailor.idp`. Restored on dispose.
+ * @returns Disposable IDP mock control object
+ * @example
+ * ```typescript
+ * import { mockIdp } from "@tailor-platform/sdk/vitest";
+ *
+ * test("resolver-based", async () => {
+ *   using idp = mockIdp();
+ *   idp.setResolver((method) =>
+ *     method === "user" ? { id: "u-1", name: "alice", disabled: false } : null,
+ *   );
+ *   // …
+ * });
+ * ```
+ */
+export function mockIdp() {
+  const root = tailorRoot();
+  const prev = root.idp;
 
-class MockIdpClient {
-  #namespace: string;
-  constructor(config: { namespace: string }) {
-    this.#namespace = config.namespace;
+  const queue: unknown[] = [];
+  let resolver: IdpResolver = () => null;
+  const calls: IdpCall[] = [];
+
+  function handle(method: string, args: unknown[], namespace: string): unknown {
+    calls.push({ method, args, namespace });
+    if (queue.length > 0) return queue.shift();
+    const resolved = resolver(method, args, namespace);
+    // Treat null and undefined alike as "no override".
+    if (resolved != null) return resolved;
+    // Clone the default so a test mutating the returned value cannot corrupt
+    // the shared module-level object for subsequent tests.
+    const fallback = IDP_DEFAULTS[method];
+    return fallback === undefined ? undefined : structuredClone(fallback);
   }
-  async users(options?: {
-    first?: number;
-    after?: string;
-    query?: { ids?: string[]; names?: string[] };
-  }): Promise<{ users: IdpUser[]; nextPageToken: string | null; totalCount: number }> {
-    return resolveIdpCall("users", [options], this.#namespace) as Awaited<
-      ReturnType<typeof this.users>
-    >;
-  }
-  async user(userId: string): Promise<IdpUser> {
-    return resolveIdpCall("user", [userId], this.#namespace) as IdpUser;
-  }
-  async userByName(name: string): Promise<IdpUser> {
-    return resolveIdpCall("userByName", [name], this.#namespace) as IdpUser;
-  }
-  async createUser(input: {
-    name: string;
-    password?: string;
-    disabled?: boolean;
-  }): Promise<IdpUser> {
-    return resolveIdpCall("createUser", [input], this.#namespace) as IdpUser;
-  }
-  async updateUser(input: {
-    id: string;
-    name?: string;
-    password?: string;
-    clearPassword?: boolean;
-    disabled?: boolean;
-  }): Promise<IdpUser> {
-    return resolveIdpCall("updateUser", [input], this.#namespace) as IdpUser;
-  }
-  async deleteUser(userId: string): Promise<boolean> {
-    return resolveIdpCall("deleteUser", [userId], this.#namespace) as boolean;
-  }
-  async sendPasswordResetEmail(input: { userId: string; redirectUri: string }): Promise<boolean> {
-    return resolveIdpCall("sendPasswordResetEmail", [input], this.#namespace) as boolean;
-  }
+
+  const Client = vi.fn(function (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this: any,
+    config: { namespace: string },
+  ) {
+    const namespace = config.namespace;
+    this.users = async (options?: unknown) => handle("users", [options], namespace);
+    this.user = async (userId: string) => handle("user", [userId], namespace);
+    this.userByName = async (name: string) => handle("userByName", [name], namespace);
+    this.createUser = async (input: unknown) => handle("createUser", [input], namespace);
+    this.updateUser = async (input: unknown) => handle("updateUser", [input], namespace);
+    this.deleteUser = async (userId: string) => handle("deleteUser", [userId], namespace);
+    this.sendPasswordResetEmail = async (input: unknown) =>
+      handle("sendPasswordResetEmail", [input], namespace);
+  }) as unknown as new (config: { namespace: string }) => {
+    users(options?: {
+      first?: number;
+      after?: string;
+      query?: { ids?: string[]; names?: string[] };
+    }): Promise<{ users: IdpUser[]; nextPageToken: string | null; totalCount: number }>;
+    user(userId: string): Promise<IdpUser>;
+    userByName(name: string): Promise<IdpUser>;
+    createUser(input: { name: string; password?: string; disabled?: boolean }): Promise<IdpUser>;
+    updateUser(input: {
+      id: string;
+      name?: string;
+      password?: string;
+      clearPassword?: boolean;
+      disabled?: boolean;
+    }): Promise<IdpUser>;
+    deleteUser(userId: string): Promise<boolean>;
+    sendPasswordResetEmail(input: { userId: string; redirectUri: string }): Promise<boolean>;
+  };
+
+  root.idp = { Client };
+
+  const facade = {
+    /** The mock IDP `Client` constructor (`vi.fn`). */
+    Client: Client as unknown as Mock,
+
+    setResolver(value: IdpResolver): void {
+      resolver = value;
+    },
+
+    /**
+     * Enqueue a single result for the next IDP call (FIFO; falls back to
+     * `setResolver` when exhausted).
+     * @param result - Result to return from the next IDP call
+     */
+    enqueueResult(result: unknown): void {
+      queue.push(result);
+    },
+
+    /**
+     * Enqueue results for multiple subsequent IDP calls.
+     * @param results - Results to enqueue, one per upcoming call
+     */
+    enqueueResults(...results: unknown[]): void {
+      queue.push(...results);
+    },
+
+    get calls(): IdpCall[] {
+      return calls;
+    },
+
+    reset(): void {
+      queue.length = 0;
+      resolver = () => null;
+      calls.length = 0;
+    },
+  };
+
+  return withDispose(facade, () => {
+    root.idp = prev;
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Mock: tailor.iconv
+// Iconv Mock
 // ---------------------------------------------------------------------------
 
 // Iconv methods return `string` for UTF-8 target encodings and `Uint8Array`
 // for any other byte-producing encoding (the platform API mirrors this).
-// Default returns must respect that contract so tests that don't configure a
-// resolver still get type-consistent values.
 function isUtf8(encoding: unknown): boolean {
   return encoding === "UTF8" || encoding === "UTF-8";
 }
@@ -842,71 +832,82 @@ function defaultIconvResult(method: string, args: unknown[]): unknown {
   }
 }
 
-function resolveIconvCall(method: string, args: unknown[]): unknown {
-  const state = getState();
-  state.iconvCalls.push({ method, args: [...args] });
-  if (state.iconvResolver) {
-    const result = state.iconvResolver(method, args);
-    // Treat both null and undefined as "no override" so resolvers using
-    // implicit returns (e.g. early `return;` for unhandled methods) still
-    // fall through to the type-consistent default.
-    if (result != null) return result;
-  }
-  return defaultIconvResult(method, args);
-}
+/**
+ * Acquire a disposable mock for `tailor.iconv`. Restored on dispose.
+ * @returns Disposable Iconv mock control object
+ * @example
+ * ```typescript
+ * import { mockIconv } from "@tailor-platform/sdk/vitest";
+ *
+ * test("mock encoding conversion", () => {
+ *   using iconv = mockIconv();
+ *   iconv.setResolver((method) => (method === "decode" ? "decoded-text" : null));
+ *   // …
+ * });
+ * ```
+ */
+export function mockIconv() {
+  const root = tailorRoot();
+  const prev = root.iconv;
 
-function mockConvert<T extends string>(
-  str: string | Uint8Array | ArrayBuffer,
-  fromEncoding: string,
-  toEncoding: T,
-): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return resolveIconvCall("convert", [str, fromEncoding, toEncoding]) as any;
-}
+  let resolver: IconvResolver | null = null;
+  const calls: IconvCall[] = [];
 
-function mockConvertBuffer<T extends string>(
-  buffer: Uint8Array | ArrayBuffer,
-  fromEncoding: string,
-  toEncoding: T,
-): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return resolveIconvCall("convertBuffer", [buffer, fromEncoding, toEncoding]) as any;
-}
-
-function mockDecode(buffer: Uint8Array | ArrayBuffer, encoding: string): string {
-  return resolveIconvCall("decode", [buffer, encoding]) as string;
-}
-
-function mockEncode<T extends string>(
-  str: string,
-  encoding: T,
-): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return resolveIconvCall("encode", [str, encoding]) as any;
-}
-
-function mockEncodings(): string[] {
-  return resolveIconvCall("encodings", []) as string[];
-}
-
-class MockIconv {
-  #fromEncoding: string;
-  #toEncoding: string;
-
-  constructor(fromEncoding: string, toEncoding: string) {
-    this.#fromEncoding = fromEncoding;
-    this.#toEncoding = toEncoding;
+  function handle(method: string, args: unknown[]): unknown {
+    calls.push({ method, args: [...args] });
+    if (resolver) {
+      const result = resolver(method, args);
+      if (result != null) return result;
+    }
+    return defaultIconvResult(method, args);
   }
 
-  convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array {
-    return resolveIconvCall("convert", [input, this.#fromEncoding, this.#toEncoding]) as
-      | string
-      | Uint8Array;
+  class MockIconv {
+    #fromEncoding: string;
+    #toEncoding: string;
+    constructor(fromEncoding: string, toEncoding: string) {
+      this.#fromEncoding = fromEncoding;
+      this.#toEncoding = toEncoding;
+    }
+    convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array {
+      return handle("convert", [input, this.#fromEncoding, this.#toEncoding]) as
+        | string
+        | Uint8Array;
+    }
   }
+
+  root.iconv = {
+    convert: (str: unknown, from: string, to: string) => handle("convert", [str, from, to]),
+    convertBuffer: (buf: unknown, from: string, to: string) =>
+      handle("convertBuffer", [buf, from, to]),
+    decode: (buf: unknown, encoding: string) => handle("decode", [buf, encoding]),
+    encode: (str: string, encoding: string) => handle("encode", [str, encoding]),
+    encodings: () => handle("encodings", []),
+    Iconv: MockIconv,
+  };
+
+  const facade = {
+    setResolver(value: IconvResolver): void {
+      resolver = value;
+    },
+
+    get calls(): IconvCall[] {
+      return calls;
+    },
+
+    reset(): void {
+      resolver = null;
+      calls.length = 0;
+    },
+  };
+
+  return withDispose(facade, () => {
+    root.iconv = prev;
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Mock: tailordb.file
+// File Mock (tailordb.file)
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -926,146 +927,9 @@ const FILE_DEFAULTS: Record<string, any> = {
   uploadStream: { metadata: { fileSize: 0, sha256sum: "" } },
 };
 
-function resolveFileCall(
-  method: string,
-  namespace: string,
-  typeName: string,
-  fieldName: string,
-  recordId: string,
-): unknown {
-  const state = getState();
-  const call: FileCall = { method, namespace, typeName, fieldName, recordId };
-  state.fileCalls.push(call);
-  if (state.fileResultQueue.length > 0) return state.fileResultQueue.shift();
-  const resolved = state.fileResolver(method, call);
-  // Treat null and undefined alike as "no override" — resolvers commonly
-  // `return null` for unmatched methods.
-  if (resolved != null) return resolved;
-  // Clone the default so a test mutating the returned value (e.g. the
-  // `data: Uint8Array` payload from `download`) cannot corrupt the shared
-  // module-level object for subsequent tests in the same worker.
-  const fallback = FILE_DEFAULTS[method];
-  return fallback === undefined ? undefined : structuredClone(fallback);
-}
-
-const mockTailordbFile = {
-  async upload(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-    _data: string | ArrayBuffer | Uint8Array | number[],
-    _options?: { contentType?: string },
-  ): Promise<{ metadata: { fileSize: number; sha256sum: string } }> {
-    return resolveFileCall("upload", namespace, typeName, fieldName, recordId) as Awaited<
-      ReturnType<typeof this.upload>
-    >;
-  },
-  async download(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-  ): Promise<{
-    data: Uint8Array;
-    metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
-  }> {
-    return resolveFileCall("download", namespace, typeName, fieldName, recordId) as Awaited<
-      ReturnType<typeof this.download>
-    >;
-  },
-  async downloadAsBase64(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-  ): Promise<{
-    data: string;
-    metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
-  }> {
-    return resolveFileCall("downloadAsBase64", namespace, typeName, fieldName, recordId) as Awaited<
-      ReturnType<typeof this.downloadAsBase64>
-    >;
-  },
-  async delete(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-  ): Promise<void> {
-    resolveFileCall("delete", namespace, typeName, fieldName, recordId);
-  },
-  async getMetadata(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-  ): Promise<{
-    contentType: string;
-    fileSize: number;
-    sha256sum: string;
-    urlPath: string;
-    lastUploadedAt?: string;
-  }> {
-    return resolveFileCall("getMetadata", namespace, typeName, fieldName, recordId) as Awaited<
-      ReturnType<typeof this.getMetadata>
-    >;
-  },
-  async openDownloadStream(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-  ): Promise<AsyncIterableIterator<unknown> & { close(): Promise<void> }> {
-    const resolved = resolveFileCall(
-      "openDownloadStream",
-      namespace,
-      typeName,
-      fieldName,
-      recordId,
-    );
-    return toFileStream(resolved);
-  },
-  async downloadStream(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-  ): Promise<{
-    body: ReadableStream<Uint8Array>;
-    metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
-  }> {
-    const resolved = resolveFileCall("downloadStream", namespace, typeName, fieldName, recordId);
-    if (resolved != null) {
-      return resolved as Awaited<ReturnType<typeof this.downloadStream>>;
-    }
-    return {
-      body: new ReadableStream({
-        start(c) {
-          c.close();
-        },
-      }),
-      metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
-    };
-  },
-  async uploadStream(
-    namespace: string,
-    typeName: string,
-    fieldName: string,
-    recordId: string,
-    _readableStream: ReadableStream<Uint8Array | ArrayBuffer>,
-    _options?: { contentType?: string; fileSize?: number },
-  ): Promise<{ metadata: { fileSize: number; sha256sum: string } }> {
-    return resolveFileCall("uploadStream", namespace, typeName, fieldName, recordId) as Awaited<
-      ReturnType<typeof this.uploadStream>
-    >;
-  },
-};
-
 type FileStream = AsyncIterableIterator<unknown> & { close(): Promise<void> };
 
 function toFileStream(value: unknown): FileStream {
-  // Already a complete stream-like object: pass through.
   if (
     value !== null &&
     typeof value === "object" &&
@@ -1074,21 +938,13 @@ function toFileStream(value: unknown): FileStream {
   ) {
     return value as FileStream;
   }
-  // Guard against passing raw bytes directly: `Uint8Array` is iterable as
-  // numbers, which would silently yield byte values as chunks. The platform's
-  // stream protocol emits structured `StreamValue` items, so callers must
-  // enqueue an iterable of `StreamValue` instead.
   if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
     throw new TypeError(
-      "fileMock.openDownloadStream expects an iterable of StreamValue items " +
+      "openDownloadStream expects an iterable of StreamValue items " +
         '(e.g. [{ type: "chunk", data, position }, { type: "complete" }]); ' +
         "got raw bytes. Wrap the bytes in a structured chunk first.",
     );
   }
-  // Iterable (array, sync iterator, etc.): wrap as a chunked async iterator
-  // so `fileMock.enqueueResult([{ type: "metadata", ... }, { type: "chunk", ... }, ...])`
-  // controls stream contents. The platform emits structured StreamValue items;
-  // tests should enqueue an iterable of StreamValue to mirror that contract.
   if (
     value !== null &&
     typeof value === "object" &&
@@ -1129,148 +985,143 @@ function toFileStream(value: unknown): FileStream {
 function assertStreamValue(v: unknown): void {
   if (v === null || typeof v !== "object") {
     throw new TypeError(
-      'fileMock.openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
+      'openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
         `got ${typeof v === "object" ? "null" : typeof v}.`,
     );
   }
-  // ArrayBuffer / TypedArray are objects but never valid StreamValue items.
   if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
     throw new TypeError(
-      "fileMock.openDownloadStream expected a StreamValue item, got raw bytes. " +
+      "openDownloadStream expected a StreamValue item, got raw bytes. " +
         'Wrap the bytes in a structured chunk first (e.g. { type: "chunk", data, position }).',
     );
   }
   const type = (v as { type?: unknown }).type;
   if (type !== "metadata" && type !== "chunk" && type !== "complete") {
     throw new TypeError(
-      'fileMock.openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
+      'openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
         `got ${JSON.stringify(type)}.`,
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Error class mocks
-// ---------------------------------------------------------------------------
-
-interface TailorErrorItem {
-  message: string;
-  path: (string | number)[];
-}
-
-class TailorErrorsMock extends Error {
-  errors: TailorErrorItem[];
-
-  constructor(errors: TailorErrorItem[]) {
-    if (!Array.isArray(errors)) {
-      throw new TypeError("TailorErrors: errors must be an array");
-    }
-    const validated = errors.map((e, i) => {
-      if (typeof e.message !== "string") {
-        throw new TypeError(`TailorErrors: errors[${i}].message must be a string`);
-      }
-      if (!Array.isArray(e.path)) {
-        throw new TypeError(`TailorErrors: errors[${i}].path must be an array`);
-      }
-      return { message: e.message, path: e.path };
-    });
-    // Match the PF runtime's TailorErrors serialization, which prefixes the
-    // JSON payload with "TailorErrors: ". Other SDK code (e.g. apply
-    // integration fixtures) strips this prefix before JSON.parse.
-    super(`TailorErrors: ${JSON.stringify({ errors: validated })}`);
-    this.name = "TailorErrors";
-    this.errors = validated;
-  }
-}
-
-class TailorErrorMessageMock extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TailorErrorMessage";
-  }
-}
-
-class TailorDBFileErrorMock extends Error {
-  code?: TailorDBFileErrorCode;
-  override cause: unknown;
-
-  constructor(message: string, code?: TailorDBFileErrorCode, cause?: unknown) {
-    super(message);
-    this.name = "TailorDBFileError";
-    this.code = code;
-    this.cause = cause;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Injection / Cleanup (called by environment.ts)
-// ---------------------------------------------------------------------------
-
 /**
- * Inject all platform API mocks into globalThis.
- * Called by the tailor-runtime Vitest environment during setup.
- * @param global - The global object to inject mocks into
+ * Acquire a disposable mock for `tailordb.file`. Restored on dispose.
+ * @returns Disposable File mock control object
+ * @example
+ * ```typescript
+ * import { mockFile } from "@tailor-platform/sdk/vitest";
+ *
+ * test("mock file download", async () => {
+ *   using file = mockFile();
+ *   file.enqueueResult({ data: new Uint8Array([1, 2, 3]), metadata: { ... } });
+ *   // …
+ * });
+ * ```
  */
-export function injectMocks(global: typeof globalThis): void {
-  const g = global as Record<string, unknown>;
+export function mockFile() {
+  const root = tailordbRoot();
+  const prev = root.file;
 
-  // Ensure fresh state and mark the environment as active so setup.ts can
-  // distinguish "tailor-runtime is selected" from "some test code happened
-  // to read a mock helper and lazily created STATE_KEY".
-  g[STATE_KEY] = createDefaultState();
-  g[RUNTIME_FLAG_KEY] = true;
+  const queue: unknown[] = [];
+  let resolver: FileResolver = () => null;
+  const calls: FileCall[] = [];
 
-  g.tailordb = {
-    Client: MockTailordbClient,
-    file: mockTailordbFile,
-  };
+  function handle(
+    method: string,
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): unknown {
+    const call: FileCall = { method, namespace, typeName, fieldName, recordId };
+    calls.push(call);
+    if (queue.length > 0) return queue.shift();
+    const resolved = resolver(method, call);
+    if (resolved != null) return resolved;
+    const fallback = FILE_DEFAULTS[method];
+    return fallback === undefined ? undefined : structuredClone(fallback);
+  }
 
-  g.tailor = {
-    secretmanager: {
-      getSecrets: mockGetSecrets,
-      getSecret: mockGetSecret,
+  root.file = {
+    async upload(namespace: string, typeName: string, fieldName: string, recordId: string) {
+      return handle("upload", namespace, typeName, fieldName, recordId);
     },
-    authconnection: {
-      getConnectionToken: mockGetConnectionToken,
+    async download(namespace: string, typeName: string, fieldName: string, recordId: string) {
+      return handle("download", namespace, typeName, fieldName, recordId);
     },
-    workflow: {
-      triggerJobFunction: mockTriggerJobFunction,
-      triggerWorkflow: mockTriggerWorkflow,
-      wait: mockWait,
-      resolve: mockResolve,
+    async downloadAsBase64(
+      namespace: string,
+      typeName: string,
+      fieldName: string,
+      recordId: string,
+    ) {
+      return handle("downloadAsBase64", namespace, typeName, fieldName, recordId);
     },
-    context: {
-      getInvoker: mockGetInvoker,
+    async delete(namespace: string, typeName: string, fieldName: string, recordId: string) {
+      handle("delete", namespace, typeName, fieldName, recordId);
     },
-    idp: { Client: MockIdpClient },
-    iconv: {
-      convert: mockConvert,
-      convertBuffer: mockConvertBuffer,
-      decode: mockDecode,
-      encode: mockEncode,
-      encodings: mockEncodings,
-      Iconv: MockIconv,
+    async getMetadata(namespace: string, typeName: string, fieldName: string, recordId: string) {
+      return handle("getMetadata", namespace, typeName, fieldName, recordId);
+    },
+    async openDownloadStream(
+      namespace: string,
+      typeName: string,
+      fieldName: string,
+      recordId: string,
+    ) {
+      return toFileStream(handle("openDownloadStream", namespace, typeName, fieldName, recordId));
+    },
+    async downloadStream(namespace: string, typeName: string, fieldName: string, recordId: string) {
+      const resolved = handle("downloadStream", namespace, typeName, fieldName, recordId);
+      if (resolved != null) return resolved;
+      return {
+        body: new ReadableStream({
+          start(c) {
+            c.close();
+          },
+        }),
+        metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+      };
+    },
+    async uploadStream(namespace: string, typeName: string, fieldName: string, recordId: string) {
+      return handle("uploadStream", namespace, typeName, fieldName, recordId);
     },
   };
 
-  g.TailorErrors = TailorErrorsMock;
-  g.TailorErrorMessage = TailorErrorMessageMock;
-  g.TailorDBFileError = TailorDBFileErrorMock;
-}
+  const facade = {
+    setResolver(value: FileResolver): void {
+      resolver = value;
+    },
 
-/**
- * Remove all injected mocks from globalThis.
- * Called by the tailor-runtime Vitest environment during teardown.
- * @param global - The global object to clean up mocks from
- */
-export function cleanupMocks(global: typeof globalThis): void {
-  const g = global as Record<string, unknown>;
-  delete g.tailordb;
-  delete g.tailor;
-  delete g.TailorErrors;
-  delete g.TailorErrorMessage;
-  delete g.TailorDBFileError;
-  delete g[STATE_KEY];
-  delete g[RUNTIME_FLAG_KEY];
-  clearWorkflowTestEnv();
+    /**
+     * Enqueue a single result for the next `tailordb.file` call (FIFO; falls
+     * back to `setResolver` when exhausted).
+     * @param result - Result to return from the next file call
+     */
+    enqueueResult(result: unknown): void {
+      queue.push(result);
+    },
+
+    /**
+     * Enqueue results for multiple subsequent `tailordb.file` calls.
+     * @param results - Results to enqueue, one per upcoming call
+     */
+    enqueueResults(...results: unknown[]): void {
+      queue.push(...results);
+    },
+
+    get calls(): FileCall[] {
+      return calls;
+    },
+
+    reset(): void {
+      queue.length = 0;
+      resolver = () => null;
+      calls.length = 0;
+    },
+  };
+
+  return withDispose(facade, () => {
+    root.file = prev;
+  });
 }

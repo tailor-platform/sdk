@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AuthConnectionConfigSchema } from "@/parser/service/auth-connection";
 import { TailorFieldSchema } from "@/parser/service/field/schema";
-import type { ValueOperand } from "@/types/auth";
+import type { ValueOperand } from "@/configure/services/auth/types";
 
 export const AuthInvokerObjectSchema = z.object({
   namespace: z.string().describe("Auth namespace"),
@@ -273,7 +273,11 @@ export const AuthConfigSchema = z
     ],
     {
       error: (iss) => {
+        // zod may report error codes not covered by its type definitions
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (iss.code !== "invalid_union") return undefined;
+        // zod may report error codes not covered by its type definitions
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         if (iss.errors.length < 2) return undefined;
         const isOnlyMutexViolation = iss.errors.every((variantErrors) =>
           variantErrors.every(

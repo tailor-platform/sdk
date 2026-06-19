@@ -6,6 +6,7 @@
  */
 
 import * as fs from "node:fs/promises";
+import { assertDefined } from "@/utils/assert";
 import {
   getMigrationFilePath,
   type SchemaSnapshot,
@@ -47,21 +48,22 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
 
   for (const change of diff.changes) {
-    if (change.kind === "field_modified" && change.fieldName) {
+    if (change.kind === "field_modified") {
       const { before, after } = change;
 
       // Check if this is an optional -> required change
-      if (before && after && !before.required && after.required) {
+      if (!before.required && after.required) {
         if (!optionalToRequired.has(change.typeName)) {
           optionalToRequired.set(change.typeName, new Set());
         }
-        optionalToRequired.get(change.typeName)!.add(change.fieldName);
+        assertDefined(
+          optionalToRequired.get(change.typeName),
+          "optionalToRequired entry missing",
+        ).add(change.fieldName);
       }
 
       // Check if this is an enum value change
       if (
-        before &&
-        after &&
         before.type === "enum" &&
         after.type === "enum" &&
         before.allowedValues &&
@@ -79,22 +81,28 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
           if (!enumValueChanges.has(change.typeName)) {
             enumValueChanges.set(change.typeName, new Map());
           }
-          enumValueChanges.get(change.typeName)!.set(change.fieldName, {
+          assertDefined(
+            enumValueChanges.get(change.typeName),
+            "enumValueChanges entry missing",
+          ).set(change.fieldName, {
             beforeValues,
             afterValues,
           });
         }
       }
-    } else if (change.kind === "field_added" && change.fieldName) {
+    } else if (change.kind === "field_added") {
       const { after } = change;
 
       // Required field added is a breaking change - add it as optional in db.ts
       // so migration script can set values for existing records
-      if (after && after.required) {
+      if (after.required) {
         if (!addedRequiredFields.has(change.typeName)) {
           addedRequiredFields.set(change.typeName, new Map());
         }
-        addedRequiredFields.get(change.typeName)!.set(change.fieldName, after);
+        assertDefined(
+          addedRequiredFields.get(change.typeName),
+          "addedRequiredFields entry missing",
+        ).set(change.fieldName, after);
       }
     }
   }

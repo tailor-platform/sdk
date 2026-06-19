@@ -7,8 +7,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   changes:
+    name: Detect changes
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     runs-on: ubuntu-latest
@@ -60,8 +63,9 @@ jobs:
 
       - name: Create workspace
         working-directory: example
-        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-migration-${{ github.run_id }}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-migration-${RUN_ID}" --region asia-northeast --json > workspace.json
         env:
+          RUN_ID: ${{ github.run_id }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
@@ -79,22 +83,35 @@ jobs:
       - name: Destroy workspace
         if: always()
         working-directory: example
-        run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
+        run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   migration-result:
+    name: Migration result
     needs: [changes, migration]
-    if: always()
+    if: >-
+      always() &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          MIGRATION_RESULT: ${{ needs.migration.result }}
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.migration.result }}" != "success" ]]; then
+          if [[ "$MIGRATION_RESULT" != "success" ]]; then
             echo "Migration job failed"
             exit 1
           fi

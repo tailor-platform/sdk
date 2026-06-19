@@ -1,5 +1,5 @@
 import ml from "@/utils/multiline";
-import type { GeneratorAuthInput } from "@/types/plugin-generation";
+import type { GeneratorAuthInput } from "@/plugin/types";
 
 export interface IdpUserMetadata {
   name: "_User";
@@ -85,13 +85,13 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
       let deleted = 0;
 
       // List all users with pagination
-      let nextToken = undefined;
+      let after = undefined;
       const allUsers = [];
       do {
-        const response = await client.users(nextToken ? { nextToken } : undefined);
+        const response = await client.users(after ? { after } : undefined);
         allUsers.push(...(response.users || []));
-        nextToken = response.nextToken;
-      } while (nextToken);
+        after = response.nextPageToken;
+      } while (after);
 
       console.log(\`Found \${allUsers.length} IDP users to delete\`);
 

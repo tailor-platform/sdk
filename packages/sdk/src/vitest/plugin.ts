@@ -95,7 +95,9 @@ function isSafeBindingName(name: string): boolean {
   // Restrict to ASCII identifiers — Unicode bindings are valid JS but rare
   // for re-exports of node:* modules, and a regex over the full
   // ID_Start/ID_Continue sets adds substantial weight for marginal gain.
-  return ID_START.test(name[0] ?? "") && ID_CONT.test(name.slice(1));
+  const firstChar = name[0];
+  if (firstChar === undefined) return false;
+  return ID_START.test(firstChar) && ID_CONT.test(name.slice(1));
 }
 
 function buildBlockedReplacement(node: ImportLikeNode, message: string): string {
@@ -204,7 +206,7 @@ export function createBlockPlugin(): Plugin {
         { root, patterns: testConfig?.include ?? DEFAULT_TEST_INCLUDE },
       ];
       for (const project of testConfig?.projects ?? []) {
-        const projectTest = project?.test;
+        const projectTest = project.test;
         if (!projectTest) continue;
         const projectRoot = projectTest.root ?? root;
         for (const f of toAbsolutePaths(projectTest.setupFiles, projectRoot)) {
@@ -274,7 +276,7 @@ export function createBlockPlugin(): Plugin {
       if (replacements.length === 0) return undefined;
 
       let transformed = code;
-      for (const r of replacements.sort((a, b) => b.start - a.start)) {
+      for (const r of replacements.toSorted((a, b) => b.start - a.start)) {
         transformed = transformed.slice(0, r.start) + r.replacement + transformed.slice(r.end);
       }
 

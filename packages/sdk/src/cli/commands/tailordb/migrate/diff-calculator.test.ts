@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   hasChanges,
   formatMigrationDiff,
@@ -37,12 +37,12 @@ function createDiff(
 
 describe("diff-calculator", () => {
   describe("hasChanges", () => {
-    it("should return false for empty changes", () => {
+    test("should return false for empty changes", () => {
       const diff = createDiff([]);
       expect(hasChanges(diff)).toBe(false);
     });
 
-    it("should return true when there are changes", () => {
+    test("should return true when there are changes", () => {
       const diff = createDiff([
         {
           kind: "field_added",
@@ -56,13 +56,13 @@ describe("diff-calculator", () => {
   });
 
   describe("formatMigrationDiff", () => {
-    it("should format empty result", () => {
+    test("should format empty result", () => {
       const diff = createDiff([]);
       const result = formatMigrationDiff(diff);
       expect(result).toBe("No schema differences detected.");
     });
 
-    it("should format added field", () => {
+    test("should format added field", () => {
       const diff = createDiff([
         {
           kind: "field_added",
@@ -76,7 +76,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("+ email: string (optional)");
     });
 
-    it("should format added required field", () => {
+    test("should format added required field", () => {
       const diff = createDiff([
         {
           kind: "field_added",
@@ -89,7 +89,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("+ email: string (required)");
     });
 
-    it("should format removed field", () => {
+    test("should format removed field", () => {
       const diff = createDiff([
         {
           kind: "field_removed",
@@ -102,7 +102,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("- email: string");
     });
 
-    it("should format modified field", () => {
+    test("should format modified field", () => {
       const diff = createDiff([
         {
           kind: "field_modified",
@@ -116,7 +116,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("~ email: required: false → true");
     });
 
-    it("should format type addition", () => {
+    test("should format type addition", () => {
       const diff = createDiff([
         {
           kind: "type_added",
@@ -128,7 +128,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("+ [Type] NewType (new type)");
     });
 
-    it("should format type removal", () => {
+    test("should format type removal", () => {
       const diff = createDiff([
         {
           kind: "type_removed",
@@ -140,7 +140,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("- [Type] OldType (removed)");
     });
 
-    it("should format array field", () => {
+    test("should format array field", () => {
       const diff = createDiff([
         {
           kind: "field_added",
@@ -153,7 +153,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("+ tags: string[] (optional)");
     });
 
-    it("should group changes by type", () => {
+    test("should group changes by type", () => {
       const diff = createDiff([
         {
           kind: "field_added",
@@ -181,12 +181,12 @@ describe("diff-calculator", () => {
   });
 
   describe("formatBreakingChanges", () => {
-    it("should return empty string for no breaking changes", () => {
+    test("should return empty string for no breaking changes", () => {
       const result = formatBreakingChanges([]);
       expect(result).toBe("");
     });
 
-    it("should format breaking changes with field", () => {
+    test("should format breaking changes with field", () => {
       const breakingChanges: BreakingChangeInfo[] = [
         {
           typeName: "User",
@@ -199,7 +199,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("User.email: Required field added");
     });
 
-    it("should format breaking changes without field (type-level)", () => {
+    test("should format breaking changes without field (type-level)", () => {
       const breakingChanges: BreakingChangeInfo[] = [
         {
           typeName: "OldType",
@@ -210,7 +210,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("OldType: Type removed");
     });
 
-    it("should format multiple breaking changes", () => {
+    test("should format multiple breaking changes", () => {
       const breakingChanges: BreakingChangeInfo[] = [
         {
           typeName: "User",
@@ -230,12 +230,12 @@ describe("diff-calculator", () => {
   });
 
   describe("formatWarnings", () => {
-    it("should return empty string for no warnings", () => {
+    test("should return empty string for no warnings", () => {
       const result = formatWarnings([]);
       expect(result).toBe("");
     });
 
-    it("should format warnings with field", () => {
+    test("should format warnings with field", () => {
       const warnings: WarningChangeInfo[] = [
         {
           typeName: "User",
@@ -250,7 +250,7 @@ describe("diff-calculator", () => {
       );
     });
 
-    it("should format warnings without field (type-level)", () => {
+    test("should format warnings without field (type-level)", () => {
       const warnings: WarningChangeInfo[] = [
         {
           typeName: "OldType",
@@ -264,7 +264,7 @@ describe("diff-calculator", () => {
       );
     });
 
-    it("should format multiple warnings", () => {
+    test("should format multiple warnings", () => {
       const warnings: WarningChangeInfo[] = [
         { typeName: "User", fieldName: "legacyId", reason: "Field removed" },
         { typeName: "OldType", reason: "Type removed" },
@@ -276,13 +276,13 @@ describe("diff-calculator", () => {
   });
 
   describe("formatDiffSummary", () => {
-    it("should return 'No changes' for empty diff", () => {
+    test("should return 'No changes' for empty diff", () => {
       const diff = createDiff([]);
       const result = formatDiffSummary(diff);
       expect(result).toBe("No changes");
     });
 
-    it("should count types added", () => {
+    test("should count types added", () => {
       const diff = createDiff([
         { kind: "type_added", typeName: "NewType1", after: snapshotType("NewType1") },
         { kind: "type_added", typeName: "NewType2", after: snapshotType("NewType2") },
@@ -291,7 +291,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("2 type(s) added");
     });
 
-    it("should count types removed", () => {
+    test("should count types removed", () => {
       const diff = createDiff([
         { kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") },
       ]);
@@ -299,7 +299,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("1 type(s) removed");
     });
 
-    it("should count fields added", () => {
+    test("should count fields added", () => {
       const diff = createDiff([
         {
           kind: "field_added",
@@ -312,7 +312,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("1 field(s) added");
     });
 
-    it("should count fields removed", () => {
+    test("should count fields removed", () => {
       const diff = createDiff([
         {
           kind: "field_removed",
@@ -325,7 +325,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("1 field(s) removed");
     });
 
-    it("should count fields modified", () => {
+    test("should count fields modified", () => {
       const diff = createDiff([
         {
           kind: "field_modified",
@@ -339,7 +339,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("1 field(s) modified");
     });
 
-    it("should combine multiple counts", () => {
+    test("should combine multiple counts", () => {
       const diff = createDiff([
         { kind: "type_added", typeName: "NewType", after: snapshotType("NewType") },
         {

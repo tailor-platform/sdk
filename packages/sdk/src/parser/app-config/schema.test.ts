@@ -21,9 +21,10 @@ describe("AppConfigSchema", () => {
       name: "my-app",
     });
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0]?.path).toEqual(["id"]);
+    if (result.success) {
+      throw new Error("Expected AppConfigSchema parsing to fail");
     }
+    expect(result.error.issues[0]?.path).toEqual(["id"]);
   });
 
   test("rejects when name is missing", () => {
@@ -60,5 +61,25 @@ describe("AppConfigSchema", () => {
       env: { foo: { nested: true } },
     });
     expect(result.success).toBe(false);
+  });
+
+  test("accepts supported log levels case-insensitively", () => {
+    const result = AppConfigSchema.safeParse({
+      name: "my-app",
+      logLevel: "warn",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("rejects unsupported log levels", () => {
+    const result = AppConfigSchema.safeParse({
+      name: "my-app",
+      logLevel: "OFF",
+    });
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AppConfigSchema parsing to fail");
+    }
+    expect(result.error.issues[0]?.path).toEqual(["logLevel"]);
   });
 });

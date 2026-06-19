@@ -13,15 +13,16 @@ import {
   getPluginImportBaseDirs,
   resolveRelativePluginImportPath,
 } from "@/cli/shared/plugin-import";
+import { isPluginExecutorWithFile } from "@/plugin/guards";
 import {
-  isPluginExecutorWithFile,
   type PluginGeneratedExecutorLegacy,
   type PluginGeneratedExecutorWithFile,
   type PluginTriggerConfig,
   type PluginOperationConfig,
   type PluginInjectMap,
   type PluginExecutorContext,
-} from "@/types/plugin";
+} from "@/plugin/types";
+import { assertDefined } from "@/utils/assert";
 import ml from "@/utils/multiline";
 import type {
   PluginExecutorInfoExtended,
@@ -223,7 +224,10 @@ function collectTypeImports(
 
       if (typeGenerationResult?.typeFilePaths.has(typeName)) {
         // It's a generated type - import from plugin types directory
-        const typeFilePath = typeGenerationResult.typeFilePaths.get(typeName)!;
+        const typeFilePath = assertDefined(
+          typeGenerationResult.typeFilePaths.get(typeName),
+          "type file path missing",
+        );
         const absoluteTypePath = path.join(outputDir, typeFilePath);
         importPath = path.relative(executorDir, absoluteTypePath).replace(/\.ts$/, "");
         if (!importPath.startsWith(".")) {
@@ -486,7 +490,7 @@ function extractDynamicImportSpecifier(resolve: () => Promise<{ default: unknown
       `resolve() must return a dynamic import, e.g. \`async () => await import("./executors/on-create")\`.`,
     );
   }
-  return match[1];
+  return assertDefined(match[1], "dynamic import specifier capture group missing");
 }
 
 /**

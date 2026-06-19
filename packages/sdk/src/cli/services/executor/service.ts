@@ -4,7 +4,7 @@ import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import { ExecutorSchema } from "@/parser/service/executor";
 import { isSdkBranded } from "@/utils/brand";
-import type { ExecutorServiceConfig } from "@/types/app-config";
+import type { ExecutorServiceConfig } from "@/configure/config/types";
 import type { Executor } from "@/types/executor.generated";
 
 /**
@@ -81,7 +81,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
     loadExecutors: async () => {
       if (!loadPromise) {
         loadPromise = (async () => {
-          if (!config.files || config.files.length === 0) {
+          if (config.files.length === 0) {
             return undefined;
           }
 

@@ -35,7 +35,6 @@ function vaultInfo(vault: SecretManagerVault): VaultInfo {
  */
 async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { normalizeIdPActionPermission, normalizeIdPPermission } from "./permission";
+import { describe, expect, test } from "vitest";
+import {
+  findOmittedPermitRules,
+  normalizeIdPActionPermission,
+  normalizeIdPPermission,
+} from "./permission";
 
 describe("normalizeIdPActionPermission", () => {
   describe("object format", () => {
-    it("normalizes object with conditions array and permit true", () => {
+    test("normalizes object with conditions array and permit true", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "role" }, "=", "ADMIN"]],
         permit: true,
@@ -15,7 +19,7 @@ describe("normalizeIdPActionPermission", () => {
       });
     });
 
-    it("normalizes object with permit false to deny", () => {
+    test("normalizes object with permit false to deny", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "role" }, "=", "ADMIN"]],
         permit: false,
@@ -27,14 +31,14 @@ describe("normalizeIdPActionPermission", () => {
       });
     });
 
-    it("defaults permit to deny when omitted", () => {
+    test("defaults permit to deny when omitted", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "role" }, "=", "ADMIN"]],
       });
       expect(result.permit).toBe("deny");
     });
 
-    it("preserves description", () => {
+    test("preserves description", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "role" }, "=", "ADMIN"]],
         permit: true,
@@ -43,7 +47,7 @@ describe("normalizeIdPActionPermission", () => {
       expect(result.description).toBe("Admin only");
     });
 
-    it("normalizes single condition (not wrapped in array)", () => {
+    test("normalizes single condition (not wrapped in array)", () => {
       const result = normalizeIdPActionPermission({
         conditions: [{ user: "role" }, "=", "ADMIN"],
         permit: true,
@@ -55,7 +59,7 @@ describe("normalizeIdPActionPermission", () => {
       });
     });
 
-    it("normalizes empty conditions", () => {
+    test("normalizes empty conditions", () => {
       const result = normalizeIdPActionPermission({
         conditions: [],
         permit: true,
@@ -69,100 +73,100 @@ describe("normalizeIdPActionPermission", () => {
   });
 
   describe("operator mapping", () => {
-    it("maps = to eq", () => {
+    test("maps = to eq", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ idpUser: "name" }, "=", "test@example.com"]],
         permit: true,
       });
-      expect(result.conditions[0][1]).toBe("eq");
+      expect(result.conditions[0]![1]).toBe("eq");
     });
 
-    it("maps != to ne", () => {
+    test("maps != to ne", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ idpUser: "name" }, "!=", "test@example.com"]],
         permit: true,
       });
-      expect(result.conditions[0][1]).toBe("ne");
+      expect(result.conditions[0]![1]).toBe("ne");
     });
 
-    it("maps in to in", () => {
+    test("maps in to in", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "role" }, "in", ["ADMIN", "MANAGER"]]],
         permit: true,
       });
-      expect(result.conditions[0][1]).toBe("in");
+      expect(result.conditions[0]![1]).toBe("in");
     });
 
-    it("maps not in to nin", () => {
+    test("maps not in to nin", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "role" }, "not in", ["GUEST"]]],
         permit: true,
       });
-      expect(result.conditions[0][1]).toBe("nin");
+      expect(result.conditions[0]![1]).toBe("nin");
     });
   });
 
   describe("operand mapping", () => {
-    it("maps { user: 'id' } to { user: '_id' }", () => {
+    test("maps { user: 'id' } to { user: '_id' }", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "id" }, "=", "some-id"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ user: "_id" });
+      expect(result.conditions[0]![0]).toEqual({ user: "_id" });
     });
 
-    it("passes through { user: 'role' } as-is", () => {
+    test("passes through { user: 'role' } as-is", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "role" }, "=", "ADMIN"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ user: "role" });
+      expect(result.conditions[0]![0]).toEqual({ user: "role" });
     });
 
-    it("passes through { idpUser: 'name' } as-is", () => {
+    test("passes through { idpUser: 'name' } as-is", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ idpUser: "name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ idpUser: "name" });
+      expect(result.conditions[0]![0]).toEqual({ idpUser: "name" });
     });
 
-    it("passes through { oldIdpUser: 'name' } as-is", () => {
+    test("passes through { oldIdpUser: 'name' } as-is", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ oldIdpUser: "name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ oldIdpUser: "name" });
+      expect(result.conditions[0]![0]).toEqual({ oldIdpUser: "name" });
     });
 
-    it("passes through { newIdpUser: 'name' } as-is", () => {
+    test("passes through { newIdpUser: 'name' } as-is", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ newIdpUser: "name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ newIdpUser: "name" });
+      expect(result.conditions[0]![0]).toEqual({ newIdpUser: "name" });
     });
 
-    it("passes through string literals", () => {
+    test("passes through string literals", () => {
       const result = normalizeIdPActionPermission({
         conditions: [["value", "=", "other"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toBe("value");
-      expect(result.conditions[0][2]).toBe("other");
+      expect(result.conditions[0]![0]).toBe("value");
+      expect(result.conditions[0]![2]).toBe("other");
     });
 
-    it("passes through boolean literals", () => {
+    test("passes through boolean literals", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "_loggedIn" }, "=", true]],
         permit: true,
       });
-      expect(result.conditions[0][2]).toBe(true);
+      expect(result.conditions[0]![2]).toBe(true);
     });
   });
 
   describe("array shorthand format", () => {
-    it("normalizes single condition array", () => {
+    test("normalizes single condition array", () => {
       const result = normalizeIdPActionPermission([{ user: "role" }, "=", "ADMIN"]);
       expect(result).toEqual({
         conditions: [[{ user: "role" }, "eq", "ADMIN"]],
@@ -170,7 +174,7 @@ describe("normalizeIdPActionPermission", () => {
       });
     });
 
-    it("normalizes single condition array with explicit permit", () => {
+    test("normalizes single condition array with explicit permit", () => {
       const result = normalizeIdPActionPermission([{ user: "role" }, "=", "ADMIN", false]);
       expect(result).toEqual({
         conditions: [[{ user: "role" }, "eq", "ADMIN"]],
@@ -181,7 +185,7 @@ describe("normalizeIdPActionPermission", () => {
 });
 
 describe("normalizeIdPPermission", () => {
-  it("normalizes all 5 action types", () => {
+  test("normalizes all 5 action types", () => {
     const raw: Parameters<typeof normalizeIdPPermission>[0] = {
       create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
@@ -200,11 +204,11 @@ describe("normalizeIdPPermission", () => {
     expect(result.delete).toHaveLength(1);
     expect(result.sendPasswordResetEmail).toHaveLength(1);
 
-    expect(result.create[0].permit).toBe("allow");
-    expect(result.update[0].conditions[0][1]).toBe("ne");
+    expect(result.create[0]!.permit).toBe("allow");
+    expect(result.update[0]!.conditions[0]![1]).toBe("ne");
   });
 
-  it("handles empty permission arrays", () => {
+  test("handles empty permission arrays", () => {
     const raw: Parameters<typeof normalizeIdPPermission>[0] = {
       create: [],
       read: [],
@@ -220,5 +224,46 @@ describe("normalizeIdPPermission", () => {
     expect(result.update).toHaveLength(0);
     expect(result.delete).toHaveLength(0);
     expect(result.sendPasswordResetEmail).toHaveLength(0);
+  });
+});
+
+describe("findOmittedPermitRules", () => {
+  type RawIdPPermission = NonNullable<Parameters<typeof findOmittedPermitRules>[0]>;
+
+  test("flags object-form rules that omit permit", () => {
+    const result = findOmittedPermitRules({
+      create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]] }],
+      read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+      update: [],
+      delete: [],
+      sendPasswordResetEmail: [],
+    } as RawIdPPermission);
+    expect(result).toEqual(["create[0]"]);
+  });
+
+  test("ignores array-shorthand rules (they default to allow)", () => {
+    const result = findOmittedPermitRules({
+      create: [[{ user: "role" }, "=", "ADMIN"]],
+      read: [],
+      update: [],
+      delete: [],
+      sendPasswordResetEmail: [],
+    } as RawIdPPermission);
+    expect(result).toEqual([]);
+  });
+
+  test("flags single-array object form", () => {
+    const result = findOmittedPermitRules({
+      create: [{ conditions: [{ user: "role" }, "=", "ADMIN"] }],
+      read: [],
+      update: [],
+      delete: [],
+      sendPasswordResetEmail: [],
+    } as RawIdPPermission);
+    expect(result).toEqual(["create[0]"]);
+  });
+
+  test("returns empty for undefined permission", () => {
+    expect(findOmittedPermitRules(undefined)).toEqual([]);
   });
 });

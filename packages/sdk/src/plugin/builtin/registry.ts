@@ -2,7 +2,7 @@ import { enumConstantsPlugin, EnumConstantsGeneratorID } from "./enum-constants"
 import { fileUtilsPlugin, FileUtilsGeneratorID } from "./file-utils";
 import { kyselyTypePlugin, KyselyGeneratorID } from "./kysely-type";
 import { seedPlugin, SeedGeneratorID } from "./seed";
-import type { Plugin } from "@/types/plugin";
+import type { Plugin } from "@/plugin/types";
 
 // Map of builtin generator IDs to plugin factory functions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- builtin plugins accept heterogeneous options

@@ -1,4 +1,5 @@
-import { describe, expectTypeOf, it } from "vitest";
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import { describe, test, expectTypeOf } from "vitest";
 import { defineAuth } from "@/configure/services/auth";
 import { db } from "@/configure/services/tailordb";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
@@ -98,7 +99,7 @@ const acceptsPlainUnionWorkflowOptions = (
 ): void => {};
 
 describe("startWorkflow API types", () => {
-  it("infers arg type from workflow", () => {
+  test("infers arg type from workflow", () => {
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
       authInvoker: auth.invoker("admin"),
@@ -116,7 +117,7 @@ describe("startWorkflow API types", () => {
     expectTypeOf<CalculationArg>().toEqualTypeOf<{ a: number; b: number }>();
   });
 
-  it("requires arg when workflow input exists", () => {
+  test("requires arg when workflow input exists", () => {
     // @ts-expect-error - arg is required for workflows with input
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
@@ -124,7 +125,7 @@ describe("startWorkflow API types", () => {
     });
   });
 
-  it("does not allow arg for workflows without input", () => {
+  test("does not allow arg for workflows without input", () => {
     acceptsNoInputWorkflowOptions({
       workflow: noInputWorkflow,
       authInvoker: auth.invoker("admin"),
@@ -138,7 +139,7 @@ describe("startWorkflow API types", () => {
     });
   });
 
-  it("keeps machine user names type-safe via auth.invoker", () => {
+  test("keeps machine user names type-safe via auth.invoker", () => {
     acceptsCalculationWorkflowOptions({
       workflow: calculationWorkflow,
       authInvoker: auth.invoker("worker"),
@@ -149,7 +150,7 @@ describe("startWorkflow API types", () => {
     auth.invoker("invalid-machine-user");
   });
 
-  it("keeps default generic usable when StartWorkflowTypedOptions generic is omitted", () => {
+  test("keeps default generic usable when StartWorkflowTypedOptions generic is omitted", () => {
     acceptsDefaultWorkflowOptions({
       workflow: noInputWorkflow,
       authInvoker: auth.invoker("admin"),
@@ -162,7 +163,7 @@ describe("startWorkflow API types", () => {
     });
   });
 
-  it("supports union workflow types without collapsing arg type", () => {
+  test("supports union workflow types without collapsing arg type", () => {
     acceptsUnionWorkflowOptions({
       workflow: calculationWorkflow,
       authInvoker: auth.invoker("admin"),
@@ -175,7 +176,7 @@ describe("startWorkflow API types", () => {
     });
   });
 
-  it("supports union workflow input types without collapsing arg type", () => {
+  test("supports union workflow input types without collapsing arg type", () => {
     acceptsUnionInputWorkflowOptions({
       workflow: calculationWorkflow,
       authInvoker: auth.invoker("admin"),
@@ -194,7 +195,7 @@ describe("startWorkflow API types", () => {
     expectTypeOf<UnionInputArg>().toEqualTypeOf<{ a: number; b: number } | { message: string }>();
   });
 
-  it("supports plain workflow unions without collapsing arg type", () => {
+  test("supports plain workflow unions without collapsing arg type", () => {
     acceptsPlainUnionWorkflowOptions({
       workflow: plainWorkflowA,
       authInvoker: auth.invoker("admin"),
@@ -211,7 +212,7 @@ describe("startWorkflow API types", () => {
     expectTypeOf<PlainUnionArg>().toEqualTypeOf<{ foo: number } | { bar: string }>();
   });
 
-  it("keeps deprecated StartWorkflowOptions shape available", () => {
+  test("keeps deprecated StartWorkflowOptions shape available", () => {
     acceptsDeprecatedOptions({
       name: "legacy-workflow",
       machineUser: "admin",

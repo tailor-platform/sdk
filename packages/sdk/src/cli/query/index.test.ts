@@ -34,6 +34,7 @@ const mockClient = {
 vi.mock("../shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
+  loadMachineUserName: vi.fn(),
 }));
 
 vi.mock("../shared/client", () => ({
@@ -85,7 +86,8 @@ describe("query", () => {
 
     const { readFile } = await import("node:fs/promises");
     const { getEditorCommand, openInEditor } = await import("../shared/editor");
-    const { loadAccessToken, loadWorkspaceId } = await import("../shared/context");
+    const { loadAccessToken, loadWorkspaceId, loadMachineUserName } =
+      await import("../shared/context");
     const { initOperatorClient, fetchMachineUserToken } = await import("../shared/client");
     const { loadConfig } = await import("../shared/config-loader");
     const { extractAllNamespaces } = await import("../shared/config");
@@ -100,6 +102,7 @@ describe("query", () => {
     vi.mocked(openInEditor).mockResolvedValue(true);
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
+    vi.mocked(loadMachineUserName).mockImplementation(async (opts) => opts?.machineUser ?? "bot");
     vi.mocked(initOperatorClient).mockResolvedValue(mockClient as never);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
@@ -208,7 +211,7 @@ describe("query", () => {
         machineUser: "bot",
         query: "   ",
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Unexpected end of input");
   });
 
   test("throws helpful error when SQL namespace cannot be inferred", async () => {
@@ -239,21 +242,19 @@ describe("query", () => {
       error: "sqlaccess error: failed to parse: expected token at line 1",
     });
 
-    try {
-      await query({
+    await expect(
+      query({
         workspaceId: "workspace-1",
         configPath: "tailor.config.ts",
         engine: "sql",
         machineUser: "bot",
         query: "select 1",
-      });
-      throw new Error("expected query() to throw");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).name).toBe("CLIError");
-      expect((error as Error).message).toBe("SQL parse error.");
-      expect((error as { suggestion?: string }).suggestion).toBe("expected token at line 1");
-    }
+      }),
+    ).rejects.toMatchObject({
+      name: "CLIError",
+      message: "SQL parse error.",
+      suggestion: "expected token at line 1",
+    });
   });
 
   test("splits multiple SQL statements and passes queries array to executeScript", async () => {
@@ -273,8 +274,9 @@ describe("query", () => {
       query: "SELECT 1; SELECT 2",
     });
 
-    const call = vi.mocked(executeScript).mock.calls[0]?.[0];
-    const arg = JSON.parse(call?.arg ?? "{}");
+    expect(executeScript).toHaveBeenCalled();
+    const call = vi.mocked(executeScript).mock.calls[0]![0]!;
+    const arg = JSON.parse(call.arg ?? "{}");
     expect(arg.queries).toEqual(["SELECT 1; ", "SELECT 2"]);
   });
 
@@ -289,8 +291,8 @@ describe("query", () => {
       query: `INSERT INTO t VALUES ('hello;world')`,
     });
 
-    const call = vi.mocked(executeScript).mock.calls[0]?.[0];
-    const arg = JSON.parse(call?.arg ?? "{}");
+    const call = vi.mocked(executeScript).mock.calls[0]![0]!;
+    const arg = JSON.parse(call.arg ?? "{}");
     expect(arg.queries).toHaveLength(1);
   });
 
@@ -407,7 +409,7 @@ describe("query", () => {
       rows: Record<string, unknown>[];
       rowCount: number;
     };
-    expect(Object.keys(sqlResult.rows[0])).toEqual([
+    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
       "id",
       "name",
       "email",
@@ -464,7 +466,7 @@ describe("query", () => {
       rows: Record<string, unknown>[];
       rowCount: number;
     };
-    expect(Object.keys(sqlResult.rows[0])).toEqual([
+    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
       "orderId",
       "id",
       "name",
@@ -502,7 +504,7 @@ describe("query", () => {
       rows: Record<string, unknown>[];
       rowCount: number;
     };
-    expect(Object.keys(sqlResult.rows[0])).toEqual(["email", "name"]);
+    expect(Object.keys(sqlResult.rows[0]!)).toEqual(["email", "name"]);
   });
 
   test("matches columns case-insensitively for unquoted SQL aliases", async () => {
@@ -547,13 +549,71 @@ describe("query", () => {
       rows: Record<string, unknown>[];
       rowCount: number;
     };
-    expect(Object.keys(sqlResult.rows[0])).toEqual([
+    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
       "UID",
       "id",
       "customerID",
       "total",
       "createdAt",
     ]);
+  });
+
+  test("uses machine user resolved from profile default when machineUser option is absent", async () => {
+    const { loadMachineUserName } = await import("../shared/context");
+    vi.mocked(loadMachineUserName).mockResolvedValue("profile-bot");
+
+    await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      query: 'select * from "User";',
+    });
+
+    expect(mockClient.getAuthMachineUser).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "profile-bot" }),
+    );
+  });
+
+  test("execution error names the resolved machine user when machineUser option is absent", async () => {
+    const { loadMachineUserName } = await import("../shared/context");
+    const { executeScript } = await import("../shared/script-executor");
+    vi.mocked(loadMachineUserName).mockResolvedValue("profile-bot");
+    mockClient.getAuthMachineUser.mockResolvedValue({
+      machineUser: {
+        name: "profile-bot",
+        clientId: "client-id",
+        clientSecret: "client-secret",
+      },
+    });
+    vi.mocked(executeScript).mockResolvedValue({
+      success: false,
+      logs: "",
+      result: "",
+      error: "machine user does not exist",
+    });
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        query: 'select * from "User";',
+      }),
+    ).rejects.toThrow("Machine user 'profile-bot' was not found.");
+  });
+
+  test("throws 'Machine user is required' error when no machine user source resolves", async () => {
+    const { loadMachineUserName } = await import("../shared/context");
+    vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        query: 'select * from "User";',
+      }),
+    ).rejects.toThrow("Machine user is required");
   });
 });
 

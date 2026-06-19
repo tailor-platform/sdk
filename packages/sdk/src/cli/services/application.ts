@@ -16,31 +16,35 @@ import {
 import { bundleResolvers } from "@/cli/services/resolver/bundler";
 import { createResolverService, type ResolverService } from "@/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/services/tailordb/service";
+import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "@/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "@/cli/services/workflow/service";
+import { resolveBundleLogLevel } from "@/cli/shared/bundle-log-level";
 import { type LoadedConfig } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger } from "@/cli/shared/logger";
 import { buildTriggerContext } from "@/cli/shared/trigger-context";
+import {
+  type AppConfig,
+  type ExecutorServiceInput,
+  type HttpAdapterServiceInput,
+  type ResolverServiceInput,
+  type WorkflowServiceConfig,
+} from "@/configure/config/types";
+import { type AuthConfig } from "@/configure/services/auth/types";
+import { type IdPConfig } from "@/configure/services/idp/types";
+import { AIGatewaySchema } from "@/parser/service/aigateway";
 import { AuthConfigSchema } from "@/parser/service/auth";
 import { IdPSchema } from "@/parser/service/idp";
 import { SecretsSchema } from "@/parser/service/secrets";
 import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
 import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
-import {
-  type AppConfig,
-  type ExecutorServiceInput,
-  type ResolverServiceInput,
-  type WorkflowServiceConfig,
-} from "@/types/app-config";
-import { type HttpAdapterServiceInput } from "@/types/app-config";
-import { type AuthConfig } from "@/types/auth";
-import { type IdPConfig } from "@/types/idp";
-import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 import type { BundledScripts } from "@/cli/commands/deploy/function-registry-types";
+import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import type { PluginManager } from "@/plugin/manager";
+import type { AIGateway, AIGatewayInput } from "@/types/aigateway.generated";
 import type { IdP } from "@/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
 
@@ -63,6 +67,7 @@ export type Application = {
   readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly httpAdapterService: Readonly<HttpAdapterService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
+  readonly aiGatewayServices: ReadonlyArray<AIGateway>;
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
@@ -107,7 +112,11 @@ function defineTailorDB(
     } else {
       // Parse config through schema to normalize gqlOperations
       const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
-      const tailorDB = createTailorDBService({ namespace, config: parsedConfig, pluginManager });
+      const tailorDB = createTailorDBService({
+        namespace,
+        config: parsedConfig,
+        pluginManager,
+      });
       tailorDBServices.push(tailorDB);
     }
     subgraphs.push({ Type: "tailordb", Name: namespace });
@@ -243,6 +252,22 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
+function defineAIGateways(gateways: readonly AIGatewayInput[] | undefined): AIGateway[] {
+  const aiGatewayServices: AIGateway[] = [];
+  const gatewayNames = new Set<string>();
+
+  (gateways ?? []).forEach((config) => {
+    const gateway = AIGatewaySchema.parse(config);
+    if (gatewayNames.has(gateway.name)) {
+      throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
+    }
+    gatewayNames.add(gateway.name);
+    aiGatewayServices.push(gateway);
+  });
+
+  return aiGatewayServices;
+}
+
 function parseSecretManager(config: AppConfig["secrets"]): {
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
@@ -282,6 +307,7 @@ type DefineServicesResult = {
   idpResult: DefineIdpResult;
   authResult: DefineAuthResult;
   staticWebsiteServices: StaticWebsite[];
+  aiGatewayServices: AIGateway[];
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
 };
@@ -296,6 +322,7 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     tailordbResult.externalTailorDBNamespaces,
   );
   const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
+  const aiGatewayServices = defineAIGateways(config.aiGateways);
   const { secrets, ignoreNullishValues } = parseSecretManager(config.secrets);
   return {
     tailordbResult,
@@ -303,6 +330,7 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     idpResult,
     authResult,
     staticWebsiteServices,
+    aiGatewayServices,
     secrets,
     ignoreNullishValues: ignoreNullishValues,
   };
@@ -318,6 +346,7 @@ function buildApplication(params: {
   workflowService: WorkflowService | undefined;
   httpAdapterService: HttpAdapterService | undefined;
   staticWebsiteServices: StaticWebsite[];
+  aiGatewayServices: AIGateway[];
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
   env: Record<string, string | number | boolean>;
@@ -341,6 +370,7 @@ function buildApplication(params: {
     workflowService: params.workflowService,
     httpAdapterService: params.httpAdapterService,
     staticWebsiteServices: params.staticWebsiteServices,
+    aiGatewayServices: params.aiGatewayServices,
     secrets: params.secrets,
     ignoreNullishValues: params.ignoreNullishValues,
     env: params.env,
@@ -444,6 +474,7 @@ export async function loadApplication(
     idpResult,
     authResult,
     staticWebsiteServices,
+    aiGatewayServices,
     secrets,
     ignoreNullishValues,
   } = defineServices(config, pluginManager);
@@ -453,6 +484,9 @@ export async function loadApplication(
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();
   }
+  assertUniqueLocalTailorDBTypeNames({
+    tailorDBServices: tailordbResult.tailorDBServices,
+  });
 
   // 3. Generate plugin files and determine executor file paths
   const pluginExecutorFiles = generatePluginFilesIfNeeded(
@@ -482,8 +516,9 @@ export async function loadApplication(
     authResult.authService?.config.name,
   );
 
-  // 8. Resolve inline sourcemap setting
+  // 8. Resolve bundle settings
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
+  const bundleLogLevel = resolveBundleLogLevel(config.logLevel);
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -501,6 +536,7 @@ export async function loadApplication(
       triggerContext,
       bundleCache,
       inlineSourcemap,
+      bundleLogLevel,
     );
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(name, code);
@@ -515,6 +551,7 @@ export async function loadApplication(
       additionalFiles: [...pluginExecutorFiles],
       cache: bundleCache,
       inlineSourcemap,
+      bundleLogLevel,
     });
   }
 
@@ -529,6 +566,7 @@ export async function loadApplication(
       triggerContext,
       bundleCache,
       inlineSourcemap,
+      bundleLogLevel,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -544,6 +582,7 @@ export async function loadApplication(
         hasOutput: a.hasOutput,
       })),
       bundleCache,
+      bundleLogLevel,
     );
   }
 
@@ -558,6 +597,7 @@ export async function loadApplication(
       triggerContext,
       cache: bundleCache,
       inlineSourcemap,
+      bundleLogLevel,
     });
   }
 
@@ -590,6 +630,7 @@ export async function loadApplication(
     workflowService,
     httpAdapterService,
     staticWebsiteServices,
+    aiGatewayServices,
     secrets,
     ignoreNullishValues,
     env: config.env ?? {},

@@ -7,7 +7,7 @@ import { deploymentArgs, parseDuration } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
@@ -53,7 +53,7 @@ type StartWorkflowArgOption<W extends WorkflowLike> = W extends WorkflowLike
  */
 export interface StartWorkflowOptions {
   name: string;
-  machineUser: string;
+  machineUser?: string;
   arg?: Jsonifiable;
   workspaceId?: string;
   profile?: string;
@@ -141,8 +141,17 @@ async function startWorkflowCore(
 async function startWorkflowByName(
   options: StartWorkflowOptions,
 ): Promise<StartWorkflowResultWithWait> {
+  const machineUser = await loadMachineUserName({
+    machineUser: options.machineUser,
+    profile: options.profile,
+  });
+  if (!machineUser) {
+    throw new Error(
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+    );
+  }
+
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -166,7 +175,7 @@ async function startWorkflowByName(
     workflowName: options.name,
     authInvoker: {
       namespace: application.authNamespace,
-      machineUserName: options.machineUser,
+      machineUserName: machineUser,
     },
     arg: options.arg,
     interval: options.interval,
@@ -193,7 +202,6 @@ export async function startWorkflow<W extends WorkflowLike>(
   }
 
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -219,10 +227,10 @@ export const startCommand = defineAppCommand({
     .object({
       ...deploymentArgs,
       ...nameArgs,
-      "machine-user": arg(z.string(), {
+      "machine-user": arg(z.string().optional(), {
         alias: "m",
         hiddenAlias: "machineuser",
-        description: "Machine user name",
+        description: "Machine user name. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
       arg: arg(z.string().optional(), {

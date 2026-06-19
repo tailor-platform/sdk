@@ -93,11 +93,7 @@ export function applyPreMigrationFieldAdjustments(
 ): void {
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
-      // Guard against malformed diff.json: `before` is typed required but
-      // the file is parsed without validation.
-      if (change.before) {
-        fields[fieldName] = convertFieldConfigToProto(change.before);
-      }
+      fields[fieldName] = convertFieldConfigToProto(change.before);
       continue;
     }
 
@@ -105,7 +101,7 @@ export function applyPreMigrationFieldAdjustments(
     if (!field) continue;
 
     if (change.kind === "field_added") {
-      if (change.after?.required) {
+      if (change.after.required) {
         field.required = false;
       }
       continue;
@@ -113,15 +109,15 @@ export function applyPreMigrationFieldAdjustments(
 
     const { before, after } = change;
 
-    if (!before?.required && after?.required) {
+    if (!before.required && after.required) {
       field.required = false;
     }
 
-    if (!(before?.unique ?? false) && (after?.unique ?? false)) {
+    if (!(before.unique ?? false) && (after.unique ?? false)) {
       field.unique = false;
     }
 
-    if (before?.allowedValues && after?.allowedValues) {
+    if (before.allowedValues && after.allowedValues) {
       const afterValues = new Set(after.allowedValues.map((v) => v.value));
       const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));
       if (removedValues.length > 0) {

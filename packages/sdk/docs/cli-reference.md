@@ -65,23 +65,24 @@ tailor-sdk deploy --env-file .env --env-file .env.production
 
 You can use environment variables to configure workspace and authentication:
 
-| Variable                                     | Description                                                                                       |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                                              |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                         |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                     |
-| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                     |
-| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                                               |
-| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                            |
-| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                                           |
-| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                                      |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                              |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                          |
-| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`                      |
-| `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count |
-| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                       |
-| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                  |
-| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                        |
+| Variable                                     | Description                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                                                         |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                                    |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                                |
+| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                                |
+| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                                                          |
+| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                                       |
+| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                                                      |
+| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                                                 |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                         |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                                     |
+| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`, `machineuser token`            |
+| `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count            |
+| `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent unary platform RPCs during `apply`/`deploy` (streaming uploads are not gated). Defaults to 16 |
+| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                                  |
+| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                             |
+| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                                   |
 
 ### Authentication Token Priority
 
@@ -130,8 +131,9 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration script](./cli/tailordb.md#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
 | [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
-| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export Liam ERD dist from applied TailorDB schema.                                                                        |
-| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve ERD locally (liam build + serve dist). (beta)                                                          |
+| [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
+| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
+| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
 | [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
 
 ### [Query Commands](./cli/query.md)
@@ -200,15 +202,17 @@ Commands for managing workspaces and profiles.
 
 Commands for managing Auth service resources.
 
-| Command                                                            | Description                                              |
-| ------------------------------------------------------------------ | -------------------------------------------------------- |
-| [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.            |
-| [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections.                               |
-| [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection.                               |
-| [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.               |
-| [machineuser token](./cli/auth.md#machineuser-token)               | Get an access token for a machine user.                  |
-| [oauth2client list](./cli/auth.md#oauth2client-list)               | List all OAuth2 clients in the application.              |
-| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret). |
+| Command                                                            | Description                                                                           |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.                                         |
+| [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections.                                                            |
+| [authconnection open](./cli/auth.md#authconnection-open)           | Open the auth connections page in the Tailor Platform Console.                        |
+| [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it). |
+| [authconnection delete](./cli/auth.md#authconnection-delete)       | Delete an auth connection entirely.                                                   |
+| [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.                                            |
+| [machineuser token](./cli/auth.md#machineuser-token)               | Get an access token for a machine user.                                               |
+| [oauth2client list](./cli/auth.md#oauth2client-list)               | List all OAuth2 clients in the application.                                           |
+| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret).                              |
 
 ### [Workflow Commands](./cli/workflow.md)
 
@@ -264,11 +268,13 @@ Commands for managing secrets and vaults.
 
 Commands for managing and deploying static websites.
 
-| Command                                                             | Description                                           |
-| ------------------------------------------------------------------- | ----------------------------------------------------- |
-| [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy) | Deploy a static website from a local build directory. |
-| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List all static websites in a workspace.              |
-| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a specific static website.             |
+| Command                                                                       | Description                                           |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy)           | Deploy a static website from a local build directory. |
+| [staticwebsite domain list](./cli/staticwebsite.md#staticwebsite-domain-list) | List custom domains for a static website.             |
+| [staticwebsite domain get](./cli/staticwebsite.md#staticwebsite-domain-get)   | Get details of a custom domain.                       |
+| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)               | List all static websites in a workspace.              |
+| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)                 | Get details of a specific static website.             |
 
 ### [Crash Report Commands](./cli/crashreport.md)
 
@@ -283,9 +289,9 @@ Commands for managing crash reports.
 
 Commands for setting up project infrastructure.
 
-| Command                                     | Description                                             |
-| ------------------------------------------- | ------------------------------------------------------- |
-| [setup github](./cli/setup.md#setup-github) | Generate GitHub Actions workflow for deployment. (beta) |
+| Command                                     | Description                                       |
+| ------------------------------------------- | ------------------------------------------------- |
+| [setup github](./cli/setup.md#setup-github) | Generate a GitHub Actions deploy workflow. (beta) |
 
 ### [Upgrade Commands](./cli/upgrade.md)
 

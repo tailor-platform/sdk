@@ -5,7 +5,7 @@ import type {
   StandardPermissionCondition,
   StandardGqlPermissionPolicy,
   Permissions,
-} from "@/types/tailordb";
+} from "@/parser/service/tailordb/types";
 import type { RawPermissions } from "@/types/tailordb.generated";
 
 // Raw permission types for normalize function parameters
@@ -103,7 +103,7 @@ export function normalizeGqlPermission(
 
 function normalizeGqlPolicy(policy: GqlPermissionPolicy): StandardGqlPermissionPolicy {
   return {
-    conditions: policy.conditions ? normalizeConditions(policy.conditions) : [],
+    conditions: normalizeConditions(policy.conditions),
     actions: policy.actions === "all" ? ["all"] : policy.actions,
     permit: policy.permit ? "allow" : "deny",
     description: policy.description,
@@ -183,4 +183,42 @@ export function normalizeActionPermission(permission: unknown): StandardActionPe
     conditions: normalizeConditions(conditions),
     permit: conditionArrayPermit ? "allow" : "deny",
   };
+}
+
+/**
+ * Find object-format permission rules that omit `permit`.
+ *
+ * Object-format rules default to `deny` when `permit` is omitted, whereas the
+ * array shorthand defaults to `allow`. Omitting `permit` on an object rule is
+ * therefore an easy way to accidentally deny access you meant to grant, so the
+ * CLI warns about these locations to nudge authors toward setting `permit`
+ * explicitly.
+ * @param rawPermissions - Raw permissions definition
+ * @returns Dotted locations of offending rules, e.g. `record.read[0]`, `gql[1]`
+ */
+export function findOmittedPermitRules(rawPermissions: RawPermissions): string[] {
+  const locations: string[] = [];
+
+  const record = rawPermissions.record;
+  if (record) {
+    for (const action of Object.keys(record) as Array<keyof typeof record>) {
+      record[action].forEach((rule: unknown, index: number) => {
+        if (isObjectFormat(rule) && rule.permit === undefined) {
+          locations.push(`record.${String(action)}[${index}]`);
+        }
+      });
+    }
+  }
+
+  // GQL policies are always object form, so no isObjectFormat guard is needed.
+  const gql = rawPermissions.gql;
+  if (gql) {
+    (gql as readonly GqlPermissionPolicy[]).forEach((policy, index) => {
+      if (policy.permit === undefined) {
+        locations.push(`gql[${index}]`);
+      }
+    });
+  }
+
+  return locations;
 }

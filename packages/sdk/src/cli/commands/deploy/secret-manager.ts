@@ -1,10 +1,12 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { assertDefined } from "@/utils/assert";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resourceTrn,
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
@@ -12,6 +14,12 @@ import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
 import type { Application } from "@/cli/services/application";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  CreateSecretManagerSecretRequestSchema,
+  CreateSecretManagerVaultRequestSchema,
+  UpdateSecretManagerSecretRequestSchema,
+} from "@tailor-proto/tailor/v1/secret_manager_pb";
 
 type CreateVault = {
   name: string;
@@ -50,6 +58,52 @@ type DeleteSecret = {
   workspaceId: string;
   vaultName: string;
 };
+
+/**
+ * Build the CreateSecretManagerVault request for a planned vault create.
+ * @param create - Planned vault create
+ * @returns Request init shape
+ */
+export function vaultCreateRequest(
+  create: CreateVault,
+): MessageInitShape<typeof CreateSecretManagerVaultRequestSchema> {
+  return {
+    workspaceId: create.workspaceId,
+    secretmanagerVaultName: create.name,
+  };
+}
+
+/**
+ * Build the CreateSecretManagerSecret request for a planned secret create.
+ * @param create - Planned secret create
+ * @returns Request init shape
+ */
+export function secretCreateRequest(
+  create: CreateSecret,
+): MessageInitShape<typeof CreateSecretManagerSecretRequestSchema> {
+  return {
+    workspaceId: create.workspaceId,
+    secretmanagerVaultName: create.vaultName,
+    secretmanagerSecretName: create.secretName,
+    secretmanagerSecretValue: create.value,
+  };
+}
+
+/**
+ * Build the UpdateSecretManagerSecret request for a planned secret update.
+ * @param update - Planned secret update
+ * @returns Request init shape
+ */
+export function secretUpdateRequest(
+  update: UpdateSecret,
+): MessageInitShape<typeof UpdateSecretManagerSecretRequestSchema> {
+  return {
+    workspaceId: update.workspaceId,
+    secretmanagerVaultName: update.vaultName,
+    secretmanagerSecretName: update.secretName,
+    secretmanagerSecretValue: update.value,
+  };
+}
 
 /**
  * Plan secret manager changes based on current and desired state.
@@ -91,7 +145,7 @@ export async function planSecretManager(context: PlanContext) {
   await Promise.all(
     existingVaultList.map(async (resource) => {
       const { metadata } = await client.getMetadata({
-        trn: vaultTrn(workspaceId, resource.name),
+        trn: resourceTrn(workspaceId, "vault", resource.name),
       });
       existingVaults[resource.name] = {
         resource,
@@ -111,7 +165,7 @@ export async function planSecretManager(context: PlanContext) {
 
       if (existing) {
         const metaRequest = await buildMetaRequest({
-          trn: vaultTrn(workspaceId, vaultName),
+          trn: resourceTrn(workspaceId, "vault", vaultName),
           appName: application.name,
           appId: application.id,
         });
@@ -260,10 +314,6 @@ export async function planSecretManager(context: PlanContext) {
   return { vaultChangeSet, secretChangeSet, skippedSecrets, conflicts, unmanaged, resourceOwners };
 }
 
-function vaultTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
-}
-
 /**
  * Apply secret manager changes for the given phase.
  * @param client - Operator client instance
@@ -284,13 +334,10 @@ export async function applySecretManager(
     // Create vaults first and set metadata
     await Promise.all(
       vaultChangeSet.creates.map(async (create) => {
-        await client.createSecretManagerVault({
-          workspaceId: create.workspaceId,
-          secretmanagerVaultName: create.name,
-        });
+        await client.createSecretManagerVault(vaultCreateRequest(create));
         if (application) {
           const metaRequest = await buildMetaRequest({
-            trn: vaultTrn(create.workspaceId, create.name),
+            trn: resourceTrn(create.workspaceId, "vault", create.name),
             appName: application.name,
             appId: application.id,
           });
@@ -304,7 +351,7 @@ export async function applySecretManager(
       await Promise.all(
         vaultChangeSet.updates.map(async (update) => {
           const metaRequest = await buildMetaRequest({
-            trn: vaultTrn(update.workspaceId, update.name),
+            trn: resourceTrn(update.workspaceId, "vault", update.name),
             appName: application.name,
             appId: application.id,
           });
@@ -316,24 +363,14 @@ export async function applySecretManager(
     // Create new secrets
     await Promise.all(
       secretChangeSet.creates.map((create) =>
-        client.createSecretManagerSecret({
-          workspaceId: create.workspaceId,
-          secretmanagerVaultName: create.vaultName,
-          secretmanagerSecretName: create.secretName,
-          secretmanagerSecretValue: create.value,
-        }),
+        client.createSecretManagerSecret(secretCreateRequest(create)),
       ),
     );
 
     // Update existing secrets
     await Promise.all(
       secretChangeSet.updates.map((update) =>
-        client.updateSecretManagerSecret({
-          workspaceId: update.workspaceId,
-          secretmanagerVaultName: update.vaultName,
-          secretmanagerSecretName: update.secretName,
-          secretmanagerSecretValue: update.value,
-        }),
+        client.updateSecretManagerSecret(secretUpdateRequest(update)),
       ),
     );
 
@@ -341,18 +378,19 @@ export async function applySecretManager(
     if (application) {
       const state = loadSecretsState();
       for (const vault of application.secrets) {
-        if (!state.vaults[vault.vaultName]) {
+        if (!Object.hasOwn(state.vaults, vault.vaultName)) {
           state.vaults[vault.vaultName] = {};
         }
         for (const secret of vault.secrets) {
           if (secret.value != null) {
-            state.vaults[vault.vaultName][secret.name] = hashValue(secret.value);
+            assertDefined(state.vaults[vault.vaultName], "vault state entry missing")[secret.name] =
+              hashValue(secret.value);
           }
         }
       }
       saveSecretsState(state);
     }
-  } else if (phase === "delete") {
+  } else {
     // Delete orphan secrets
     await Promise.all(
       secretChangeSet.deletes.map((del) =>
@@ -378,9 +416,14 @@ export async function applySecretManager(
     if (secretChangeSet.deletes.length > 0 || vaultChangeSet.deletes.length > 0) {
       const state = loadSecretsState();
       for (const del of secretChangeSet.deletes) {
-        if (state.vaults[del.vaultName]) {
-          delete state.vaults[del.vaultName][del.secretName];
-          if (Object.keys(state.vaults[del.vaultName]).length === 0) {
+        if (Object.hasOwn(state.vaults, del.vaultName)) {
+          delete assertDefined(state.vaults[del.vaultName], "vault state entry missing")[
+            del.secretName
+          ];
+          if (
+            Object.keys(assertDefined(state.vaults[del.vaultName], "vault state entry missing"))
+              .length === 0
+          ) {
             delete state.vaults[del.vaultName];
           }
         }

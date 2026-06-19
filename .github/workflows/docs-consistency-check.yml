@@ -1,4 +1,4 @@
-name: Docs Implementation Consistency Check
+name: Docs Quality & Consistency Check
 
 on:
   pull_request:
@@ -10,33 +10,43 @@ on:
       - "AGENTS.md"
       - "CLAUDE.md"
 
-permissions:
-  contents: read
-  pull-requests: write
-  id-token: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   docs-consistency:
+    name: Docs consistency
     if: >
       github.event.action == 'ready_for_review'
       || (github.event.action == 'labeled' && github.event.label.name == 'docs-check')
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    permissions:
+      contents: read # checkout the PR branch
+      pull-requests: write # upsert the docs review on the PR
+      id-token: write # OIDC for the Claude Code action
     env:
       PR_NUMBER: ${{ github.event.number }}
+      REVIEW_BODY_FILE: ${{ github.workspace }}/docs-consistency-review.md
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@0b1b62002952733671bde978d429b50b51c51c85 # v1.0.136
+        uses: anthropics/claude-code-action@9dd8b95a392eb34b6f5fb56cf5a64cb735912d4b # v1.0.150
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            # Documentation vs Implementation Consistency Check
+            # Documentation Quality & Consistency Check
 
-            Analyze the PR changes and verify that documentation stays consistent with the implementation.
+            Review the PR changes along two axes:
+
+            1. **Consistency** — documentation stays accurate with the implementation (no factual mismatches).
+            2. **Reader perspective** — user-facing docs describe only what an SDK *user* needs, and do not leak SDK/Platform internal implementation details.
 
             ## Target Documentation
 
@@ -47,6 +57,13 @@ jobs:
             - `AGENTS.md` - Developer guide and code patterns
             - `CLAUDE.md` - Compatibility adapter for agent instructions
             - `example/` - Working example code
+            - Published JSDoc on **exported** symbols in `packages/sdk/src/**` - shipped to users' IDEs via the package's `.d.ts` files
+
+            ### Audience scope (important)
+
+            - `packages/sdk/docs/**` ships inside the published npm package (`@tailor-platform/sdk`), `example/` is read by SDK users, and JSDoc on exported symbols reaches users through editor tooltips/autocompletion. Apply **both** the Consistency and Reader-Perspective checks to these.
+            - `AGENTS.md` / `CLAUDE.md` are developer/contributor instructions, **not** user-facing. Apply **only** the Consistency check to them; do **not** raise reader-perspective issues for them.
+            - JSDoc on non-exported / internal symbols is not user-facing — skip it for the reader-perspective check.
 
             ## Investigation Steps
 
@@ -67,53 +84,72 @@ jobs:
             - **Executors/Resolvers/Workflows**: Changes to creation APIs or trigger types
             - **Example code**: Changes that should reflect current best practices
 
-            ### 3. Cross-Reference Documentation
+            ### 3. Cross-Reference Documentation (Consistency)
 
             For each changed area, check the corresponding documentation:
 
-            #### 3.1 CLI Changes
+            #### CLI Changes
             - Read `packages/sdk/docs/cli-reference.md` and relevant `packages/sdk/docs/cli/*.md` files
             - Verify all CLI commands, options, and their descriptions match the implementation
             - Compare source code command definitions with docs
 
-            #### 3.2 API / Config Changes
+            #### API / Config Changes
             - Read `packages/sdk/docs/services/*.md` and `packages/sdk/docs/configuration.md`
             - Verify documented function signatures, parameters, and return types match the implementation
             - Check if new exports are documented
 
-            #### 3.3 Pattern / Example Changes
+            #### Pattern / Example Changes
             - Read relevant files in `example/` directory
             - Verify examples use current API patterns (not deprecated ones)
             - Check `AGENTS.md` "Code Patterns" and "Non-obvious Rules and Gotchas" sections
 
-            #### 3.4 Reverse Check (docs changed but implementation not updated)
+            #### Reverse Check (docs changed but implementation not updated)
             - If documentation was changed, verify the implementation matches
             - Look for docs describing features that don't exist yet or have been removed
 
-            ### 4. Post Results
+            ### 4. Reader-Perspective Review (`packages/sdk/docs/**`, `example/`, and published JSDoc)
 
-            Search for an existing comment and update it, or create a new one.
+            For changed user-facing docs, check that they describe only what an SDK *user* needs and do not leak SDK/Platform internals. Flag the following:
 
-            ```bash
-            COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments \
-              --jq '.[] | select(.body | contains("<!-- docs-consistency-check -->")) | .id' | head -n 1)
-            ```
+            - **Internal implementation details**: internal API / RPC / method / class names (e.g. `TestExecScript`), transport or wire-format terms the user never types (`proto` / `protobuf` / `gRPC` / `unary RPC` / `streaming method`), internal layer structure (`parser` / `configure` / `types` modules), runtime-internal delegation mechanics, internal wrapping behavior, internal on-disk layout or sanitization algorithms (e.g. how `.tailor-sdk/<id>` names are derived), and AST / code-injection internals.
+            - **JSDoc duplication (SSOT)**: detailed API reference — full interface/type definitions, exhaustive field tables — copied into prose. JSDoc/IDE autocompletion is the single source of truth; the docs should explain intent and link out, not mirror every field.
+            - **Private references**: links to or mentions of private/internal repositories or internal issue trackers (e.g. a `<org>/<private-repo>` link or an `<org>/<tracker>#NNN` reference).
+            - **Wrong-audience notes**: content addressed to someone other than the reader (e.g. a "Note for Platform developers" block inside user docs).
 
-            **If inconsistencies are found**, post a comment in this format:
+            **Do NOT over-prune.** A reference to internal mechanics is acceptable when the reader must understand it to use the API correctly — for example, the workflow *deterministic execution* requirement, or why `migrate.ts` sees a particular schema state. Only flag descriptions that exist purely for internal convenience or naming and that a user never acts on.
+
+            ### 5. Write the Review Report
+
+            Compile your findings into one of the markdown formats below and
+            **write it to the file `${{ env.REVIEW_BODY_FILE }}` using the Write
+            tool**.
+
+            Do **not** post a review yourself — you have no tools to do so. A
+            later workflow step reads this file, neutralizes any `@mentions`, and
+            posts (or updates) the PR review for you. Your only deliverable is
+            the file.
+
+            **If any issues are found** (consistency and/or reader-perspective), write a review summary in this format. Omit a subsection if it has no findings:
 
             ```markdown
-            ## 📖 Docs Consistency Check
+            ## 📖 Docs Quality & Consistency Check
 
-            ### ⚠️ Inconsistencies Found
+            ### ⚠️ Consistency Issues
 
             | File | Issue | Suggested Fix |
             |------|-------|---------------|
-            | `path/to/doc.md` | Description of mismatch | What should be updated |
+            | `path/to/doc.md` | Description of mismatch with the implementation | What should be updated |
+
+            ### 📝 Reader-Perspective Issues
+
+            | File | Issue | Suggested Fix |
+            |------|-------|---------------|
+            | `packages/sdk/docs/...` | Internal detail / JSDoc duplication / private reference that a user does not need | What to remove or rephrase |
 
             ### Details
 
-            (For each inconsistency, explain what the implementation does vs what the documentation says,
-            with references to specific file paths and line numbers.)
+            (For each issue, explain the mismatch — what the implementation does vs what the docs say — or
+            why the flagged content is internal-only, with specific file paths and line numbers.)
 
             ### Recommended Actions
             - ...
@@ -124,12 +160,12 @@ jobs:
             <!-- docs-consistency-check -->
             ```
 
-            **If no inconsistencies are found**, post:
+            **If no issues are found**, write a review summary in this format:
 
             ```markdown
-            ## 📖 Docs Consistency Check
+            ## 📖 Docs Quality & Consistency Check
 
-            ✅ No inconsistencies found between documentation and implementation.
+            ✅ Docs are consistent with the implementation and contain no user-facing internal-detail leaks.
 
             **Checked areas:**
             - (list what was checked)
@@ -140,21 +176,72 @@ jobs:
             <!-- docs-consistency-check -->
             ```
 
-            Use `gh api --method PATCH` to update if `COMMENT_ID` is set, otherwise use `gh pr comment` to create.
+            Always keep the `<!-- docs-consistency-check -->` marker at the end
+            so the post step can de-duplicate the review.
 
             ## Important Notes
             - The PR branch is already checked out
-            - Always post results as a PR comment using `gh` commands, not as a conversational response
-            - Be specific: include file paths and line numbers for every inconsistency
-            - Only flag real inconsistencies, not stylistic differences
-            - If unsure whether something is an inconsistency, mention it with a note that it may be intentional
+            - Do not produce a conversational response; your output is the file
+              `${{ env.REVIEW_BODY_FILE }}`
+            - Be specific: include file paths and line numbers for every issue
+            - Only flag real issues, not stylistic differences
+            - Reader-perspective issues apply **only** to user-facing documentation: `packages/sdk/docs/**`, `example/`, and published JSDoc on exported symbols in `packages/sdk/src/**`. Do **not** raise reader-perspective issues for `AGENTS.md` / `CLAUDE.md` (developer-facing) or for non-exported / internal code.
+            - Do not flag internal mechanics that a user must understand to use the API correctly (see the note in step 4)
+            - If unsure whether something is an issue, mention it with a note that it may be intentional
 
           claude_args: |
             --model claude-sonnet-4-5-20250929
-            --allowedTools "Bash(gh pr:*),Bash(gh api:*),Read,Glob,Grep"
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Read,Glob,Grep,Write"
+
+      - name: Post docs consistency review
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          REPO: ${{ github.repository }}
+          MARKER: "<!-- docs-consistency-check -->"
+        run: |
+          if [ ! -s "$REVIEW_BODY_FILE" ]; then
+            echo "No review body was produced; nothing to post."
+            exit 0
+          fi
+
+          # --- Static mention guard (deterministic, not AI-dependent) ----------
+          # Insert a zero-width space (U+200B) right after EVERY '@' so the text
+          # renders identically but GitHub never parses it as a mention. We do
+          # not try to match only "real" handles: ZWSP is invisible, so
+          # over-inserting is harmless, while missing one would notify someone.
+          # Node is guaranteed present (the Claude action runs on it).
+          node -e '
+            const fs = require("fs");
+            const file = process.argv[1];
+            let text = fs.readFileSync(file, "utf8");
+            text = text.replace(/@/g, "@\u200b");
+            fs.writeFileSync(file, text);
+          ' "$REVIEW_BODY_FILE"
+
+          # Guarantee the upsert marker is present even if the model omitted it.
+          if ! grep -qF "$MARKER" "$REVIEW_BODY_FILE"; then
+            printf '\n\n%s\n' "$MARKER" >> "$REVIEW_BODY_FILE"
+          fi
+
+          # --- Upsert the review (event=COMMENT so it never blocks merge) ------
+          REVIEW_ID=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/reviews" \
+            --jq ".[] | select((.body // \"\") | contains(\"$MARKER\")) | select(.state != \"DISMISSED\") | .id" \
+            | tail -n 1)
+
+          if [ -n "$REVIEW_ID" ]; then
+            gh api --method PUT "repos/$REPO/pulls/$PR_NUMBER/reviews/$REVIEW_ID" \
+              -F body=@"$REVIEW_BODY_FILE"
+          else
+            gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/reviews" \
+              -f event=COMMENT \
+              -F body=@"$REVIEW_BODY_FILE"
+          fi
 
       - name: Remove trigger label
         if: always() && github.event.action == 'labeled' && github.event.label.name == 'docs-check'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr edit "$PR_NUMBER" --repo "${{ github.repository }}" --remove-label docs-check
+          REPO: ${{ github.repository }}
+        run: gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label docs-check

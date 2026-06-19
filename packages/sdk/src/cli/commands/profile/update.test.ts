@@ -1,9 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
+import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "@/cli/shared/token-store";
 import { updateCommand } from "./update";
@@ -71,7 +73,7 @@ describe("profile update --permission", () => {
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
-  it("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
+  test("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["rw", "--permission", "read"]);
 
@@ -86,7 +88,7 @@ describe("profile update --permission", () => {
     expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
   });
 
-  it("clears readonly when --permission write is passed and skips remote validation", async () => {
+  test("clears readonly when --permission write is passed and skips remote validation", async () => {
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["ro", "--permission", "write"]);
 
@@ -98,7 +100,7 @@ describe("profile update --permission", () => {
     expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
   });
 
-  it("performs remote validation when --user is also passed (permission does not bypass it)", async () => {
+  test("performs remote validation when --user is also passed (permission does not bypass it)", async () => {
     using _logger = silenceLogger("out", "success");
     vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
@@ -125,5 +127,217 @@ describe("profile update --permission", () => {
     const config = await readPlatformConfig();
     expect(config.profiles.rw?.user).toBe("new@example.com");
     expect(config.profiles.rw?.readonly).toBe(true);
+  });
+});
+
+describe("profile update --machine-user", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u@example.com", workspace_id: validUUID },
+      },
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("sets machine_user on disk and skips remote validation", async () => {
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--machine-user", "bot"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.machine_user).toBe("bot");
+
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
+  });
+
+  test("clears machine_user when empty string is passed", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--machine-user", ""]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.machine_user).toBeUndefined();
+  });
+});
+
+describe("profile update --machine-user-override", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
+      },
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("persists machine_user_override: deny and skips remote validation", async () => {
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--machine-user-override", "deny"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.machine_user_override).toBe("deny");
+
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
+  });
+
+  test("removes machine_user_override when allow is passed", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          machine_user: "bot",
+          machine_user_override: "deny",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--machine-user-override", "allow"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.machine_user_override).toBeUndefined();
+  });
+
+  test("errors when deny is set with no machine user present", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u@example.com", workspace_id: validUUID },
+      },
+      current_user: null,
+    });
+    const result = await runCommand(updateCommand, [
+      "myprofile",
+      "--machine-user-override",
+      "deny",
+    ]);
+    expect(result.success).toBe(false);
+    expect((result as { error?: Error }).error?.message).toContain(
+      "--machine-user-override deny requires --machine-user.",
+    );
+  });
+
+  test("errors when machine-user is cleared while deny remains", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          machine_user: "bot",
+          machine_user_override: "deny",
+        },
+      },
+      current_user: null,
+    });
+    const result = await runCommand(updateCommand, ["myprofile", "--machine-user", ""]);
+    expect(result.success).toBe(false);
+    expect((result as { error?: Error }).error?.message).toContain("--machine-user-override allow");
+  });
+
+  test("clears machine_user and machine_user_override together", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          machine_user: "bot",
+          machine_user_override: "deny",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, [
+      "myprofile",
+      "--machine-user",
+      "",
+      "--machine-user-override",
+      "allow",
+    ]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.machine_user).toBeUndefined();
+    expect(config.profiles.myprofile?.machine_user_override).toBeUndefined();
+  });
+
+  test("unrelated update succeeds when stored deny has no machine user (hand-edited config)", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          machine_user_override: "deny",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+    await runCommand(updateCommand, ["myprofile", "--permission", "write"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.readonly).toBeUndefined();
+    expect(config.profiles.myprofile?.machine_user_override).toBe("deny");
+  });
+
+  test("output includes machineUserOverride when machine_user is present", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+    await runCommand(updateCommand, ["myprofile", "--machine-user-override", "deny"]);
+
+    const parsed = JSON.parse(stdout.output) as Record<string, unknown>;
+    expect(parsed.machineUser).toBe("bot");
+    expect(parsed.machineUserOverride).toBe("deny");
   });
 });

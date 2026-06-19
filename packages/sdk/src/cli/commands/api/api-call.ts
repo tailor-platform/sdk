@@ -20,7 +20,6 @@ export interface ApiCallResult {
  */
 export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
 

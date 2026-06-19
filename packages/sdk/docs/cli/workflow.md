@@ -168,18 +168,18 @@ tailor-sdk workflow start [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description                                               | Required | Default              | Env                                 |
-| ------------------------------- | ----- | --------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                              | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                         | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH`   |
-| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name                                         | Yes      | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
-| `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                           | No       | -                    | -                                   |
-| `--wait`                        | `-W`  | Wait for execution to complete                            | No       | `false`              | -                                   |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting (e.g., '3s', '500ms', '1m') | No       | `"3s"`               | -                                   |
-| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait (e.g., '30s', '10m')                 | No       | `"10m"`              | -                                   |
-| `--until <UNTIL>`               | `-u`  | Wait target (success, suspended, terminal)                | No       | `"terminal"`         | -                                   |
-| `--logs`                        | `-l`  | Display job execution logs after completion               | No       | `false`              | -                                   |
+| Option                          | Alias | Description                                                                 | Required | Default              | Env                                 |
+| ------------------------------- | ----- | --------------------------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                           | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                     | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH`   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                             | No       | -                    | -                                   |
+| `--wait`                        | `-W`  | Wait for execution to complete                                              | No       | `false`              | -                                   |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting (e.g., '3s', '500ms', '1m')                   | No       | `"3s"`               | -                                   |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait (e.g., '30s', '10m')                                   | No       | `"10m"`              | -                                   |
+| `--until <UNTIL>`               | `-u`  | Wait target (success, suspended, terminal)                                  | No       | `"terminal"`         | -                                   |
+| `--logs`                        | `-l`  | Display job execution logs after completion                                 | No       | `false`              | -                                   |
 
 <!-- politty:command:workflow start:options:end -->
 

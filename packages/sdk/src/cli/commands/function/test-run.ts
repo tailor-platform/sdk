@@ -15,10 +15,11 @@ import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
+import { assertDefined } from "@/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType, type DetectedFunction } from "./detect";
 
@@ -41,7 +42,8 @@ export const testRunCommand = defineAppCommand({
     }),
     "machine-user": arg(z.string().optional(), {
       alias: "m",
-      description: "Machine user name for authentication",
+      description:
+        "Machine user name for authentication. Falls back to the active profile's default machine user.",
       env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
     }),
     config: arg(z.string().default("tailor.config.ts"), {
@@ -83,10 +85,13 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
     // 3. Resolve auth, workspace, and machine user info (needed before bundling)
     const authNamespace = resolveAuthNamespace(config.auth);
-    const machineUserName = resolveMachineUserName(args["machine-user"], config.auth);
+    const machineUserName = await resolveMachineUserName({
+      cliMachineUser: args["machine-user"],
+      profile: args.profile,
+      authConfig: config.auth,
+    });
 
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
@@ -146,6 +151,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         sourceFile: filePath,
         env: config.env ?? {},
         inlineSourcemap: config.inlineSourcemap,
+        logLevel: config.logLevel,
         machineUser,
         workspaceId,
       }));
@@ -187,7 +193,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         logger.error("Execution failed");
       }
 
-      if (result.logs?.trim()) {
+      if (result.logs.trim()) {
         logger.log(styles.bold("\nLogs:"));
         for (const line of result.logs.split("\n")) {
           logger.log(`  ${line}`);
@@ -235,32 +241,39 @@ function resolveAuthNamespace(
   throw new Error("Auth namespace is required. Ensure tailor.config.ts has an auth config.");
 }
 
-/**
- * Resolve machine user name from CLI args or config. Priority: --machine-user > first key of config.auth.machineUsers
- * @param cliMachineUser - CLI --machine-user value
- * @param authConfig - Auth configuration from tailor.config.ts
- * @returns Resolved machine user name
- */
-function resolveMachineUserName(
-  cliMachineUser: string | undefined,
+type ResolveMachineUserNameOptions = {
+  cliMachineUser: string | undefined;
+  profile: string | undefined;
   authConfig:
     | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
-    | undefined,
-): string {
-  if (cliMachineUser) {
-    return cliMachineUser;
+    | undefined;
+};
+
+/**
+ * Resolve machine user name from CLI args, profile default, or config.
+ * Priority: --machine-user / env > profile default > first key of config.auth.machineUsers > error
+ * @param options - Resolution options
+ * @returns Resolved machine user name
+ */
+async function resolveMachineUserName(options: ResolveMachineUserNameOptions): Promise<string> {
+  const { cliMachineUser, profile, authConfig } = options;
+
+  const resolved = await loadMachineUserName({ machineUser: cliMachineUser, profile });
+  if (resolved) {
+    return resolved;
   }
+
   if (authConfig && !("external" in authConfig && authConfig.external)) {
     const machineUsers = authConfig.machineUsers;
     if (machineUsers) {
       const keys = Object.keys(machineUsers);
       if (keys.length > 0) {
-        return keys[0];
+        return assertDefined(keys[0], "machine user key missing");
       }
     }
   }
   throw new Error(
-    "Machine user is required. Provide --machine-user or ensure tailor.config.ts has machine users configured.",
+    "Machine user is required. Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
   );
 }
 
@@ -337,7 +350,7 @@ export function resolveResolverArg(
     type: "machine_user" as const,
     workspaceId,
     attributes: machineUser.attributes ?? null,
-    attributeList: machineUser.attributeList ?? [],
+    attributeList: machineUser.attributeList,
   };
 
   const newResult = inputSchema.parse({ value: parsed, data: parsed, user });

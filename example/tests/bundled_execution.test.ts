@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { tailordbMock, workflowMock } from "@tailor-platform/sdk/vitest";
+import { mockTailordb, mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -37,27 +37,22 @@ describe("bundled execution tests", () => {
     vi.useRealTimers();
   });
 
-  beforeEach(() => {
-    tailordbMock.reset();
-    workflowMock.reset();
-  });
-
   const importActualMain = createImportMain(actualDir);
 
   test("bundled JS files should not be excessively large", () => {
     // Define maximum acceptable sizes (current size + 10KB buffer)
     const sizeBuffer = 1024 * 10; // 10KB
     const maxSizes: Record<string, number> = {
-      "executors/user-created.js": 159065 + sizeBuffer,
+      "executors/user-created.js": 169078 + sizeBuffer,
       "resolvers/add.js": 5459 + sizeBuffer,
       "resolvers/showUserInfo.js": 5999 + sizeBuffer,
-      "resolvers/stepChain.js": 172428 + sizeBuffer,
+      "resolvers/stepChain.js": 182391 + sizeBuffer,
       "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
-      // workflow-jobs: Kysely jobs (~148KB), date-fns jobs (~20KB), simple jobs (<2KB)
+      // workflow-jobs: Kysely jobs (~158KB), date-fns jobs (~20KB), simple jobs (<2KB)
       "workflow-jobs/check-inventory.js": 19967 + sizeBuffer,
-      "workflow-jobs/fetch-customer.js": 147682 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 157770 + sizeBuffer,
       "workflow-jobs/process-order.js": 1137 + sizeBuffer,
-      "workflow-jobs/process-payment.js": 147576 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 157664 + sizeBuffer,
       "workflow-jobs/send-notification.js": 20075 + sizeBuffer,
       "workflow-jobs/validate-order.js": 893 + sizeBuffer,
     };
@@ -117,7 +112,8 @@ describe("bundled execution tests", () => {
     });
 
     test("resolvers/stepChain.js returns result with summary", async () => {
-      tailordbMock.setQueryResolver((query) => {
+      using db = mockTailordb();
+      db.setQueryResolver((query) => {
         const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
         if (normalizedQuery.includes("SELECT NAME FROM USER ORDER BY CREATEDAT DESC")) {
           return [{ name: "Alice" }];
@@ -156,9 +152,9 @@ describe("bundled execution tests", () => {
 
   describe("executors", () => {
     test("executors/user-created.js uses the tailordb client", async () => {
-      tailordbMock.setQueryResolver((query, params) => {
+      using db = mockTailordb();
+      db.setQueryResolver((query) => {
         if (query.includes("select * from User where id = $1")) {
-          expect(params).toEqual(["user-1"]);
           return [
             {
               name: "Expected User",
@@ -174,20 +170,21 @@ describe("bundled execution tests", () => {
       const result = await main(payload);
 
       expect(result).toBeUndefined();
-      expect(tailordbMock.executedQueries).toEqual([
+      expect(db.executedQueries).toEqual([
         { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
         {
           query: 'insert into "UserLog" ("userID", "message") values ($1, $2)',
           params: ["user-1", "User created: undefined (undefined)"],
         },
       ]);
-      expect(tailordbMock.createdClients).toMatchObject([{ namespace: "tailordb" }]);
+      expect(db.createdClients).toMatchObject([{ namespace: "tailordb" }]);
     });
   });
 
   describe("workflow-jobs", () => {
     test("workflow-jobs/process-order.js calls dependent jobs correctly", async () => {
-      workflowMock.setJobHandler((jobName, args) => {
+      using wf = mockWorkflow();
+      wf.setJobHandler((jobName, args) => {
         if (jobName === "fetch-customer") {
           const { customerId } = args as { customerId: string };
           return { id: customerId, email: "customer@example.com" };
@@ -212,7 +209,7 @@ describe("bundled execution tests", () => {
         processedAt: "2025-01-01 12:00:00",
       });
 
-      expect(workflowMock.triggeredJobs).toEqual([
+      expect(wf.triggeredJobs).toEqual([
         { jobName: "fetch-customer", args: { customerId: "customer-456" } },
         {
           jobName: "send-notification",
@@ -225,7 +222,8 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/process-order.js throws error when customer not found", async () => {
-      workflowMock.setJobHandler(() => null);
+      using wf = mockWorkflow();
+      wf.setJobHandler(() => null);
 
       const main = await importActualMain("workflow-jobs/process-order.js");
 
@@ -265,7 +263,8 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/validate-order.js triggers check-inventory job", async () => {
-      workflowMock.setJobHandler((jobName) => {
+      using wf = mockWorkflow();
+      wf.setJobHandler((jobName) => {
         if (jobName === "check-inventory") {
           return formatExpectation;
         }
@@ -280,7 +279,7 @@ describe("bundled execution tests", () => {
         paymentResult: null,
       });
 
-      expect(workflowMock.triggeredJobs).toEqual([
+      expect(wf.triggeredJobs).toEqual([
         { jobName: "check-inventory", args: undefined },
         { jobName: "process-payment", args: undefined },
       ]);

@@ -36,5 +36,5 @@ export async function listWorkspaceFiles(worktreePath: string): Promise<string[]
     }
   }
   await walk(worktreePath);
-  return files.sort();
+  return files.toSorted();
 }

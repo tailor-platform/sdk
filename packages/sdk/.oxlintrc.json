@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "import", "jsdoc"],
+  "plugins": ["typescript", "import", "jsdoc", "unicorn"],
   "categories": {
     "correctness": "error"
   },
@@ -18,6 +18,8 @@
     "**/__test_fixtures__/*-compat-out/"
   ],
   "rules": {
+    "unicorn/no-array-reverse": "error",
+    "unicorn/no-array-sort": "error",
     "no-unsafe-optional-chaining": "off",
     "getter-return": "error",
     "no-unreachable": "error",
@@ -46,6 +48,8 @@
     "typescript/require-array-sort-compare": "off",
     "typescript/restrict-template-expressions": "off",
     "typescript/unbound-method": "off",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-non-null-assertion": "error",
     "jsdoc/check-access": "warn",
     "jsdoc/check-property-names": "warn",
     "jsdoc/check-tag-names": [
@@ -123,7 +127,12 @@
             "varsIgnorePattern": "^_"
           }
         ],
-        "import/no-cycle": ["error", { "ignoreTypes": false }],
+        "import/no-cycle": [
+          "error",
+          {
+            "ignoreTypes": false
+          }
+        ],
         "typescript/consistent-type-imports": [
           "error",
           {
@@ -173,12 +182,27 @@
                 "message": "Configure module should not import from cli module."
               },
               {
-                "group": ["**/parser/**", "@/parser/**"],
-                "message": "Configure module should not import from parser module. Use @/types/ instead."
+                "group": [
+                  "**/parser/**",
+                  "@/parser/**",
+                  "!**/parser/**/types",
+                  "!@/parser/**/types"
+                ],
+                "message": "Configure module should not import from parser module. Use @/types/ or a parser pure type module (parser/**/types.ts) instead."
               },
               {
-                "group": ["**/plugin/**", "@/plugin/**"],
-                "message": "Configure module should not import from plugin module."
+                "group": ["**/parser/**/types", "@/parser/**/types"],
+                "allowTypeImports": true,
+                "message": "Configure module can import only types from parser pure type modules."
+              },
+              {
+                "group": ["**/plugin/**", "@/plugin/**", "!**/plugin/types", "!@/plugin/types"],
+                "message": "Configure module should not import from plugin module. The plugin pure type module (plugin/types.ts) is the exception."
+              },
+              {
+                "group": ["**/plugin/types", "@/plugin/types"],
+                "allowTypeImports": true,
+                "message": "Configure module can import only types from the plugin pure type module."
               },
               {
                 "group": [
@@ -213,8 +237,25 @@
                 "message": "Parser module should not import from cli module."
               },
               {
-                "group": ["**/configure/**", "@/configure/**"],
-                "message": "Parser module should not import from configure module."
+                "group": [
+                  "**/configure/**",
+                  "@/configure/**",
+                  "!**/configure/**/types",
+                  "!@/configure/**/types",
+                  "!**/configure/**/*.types",
+                  "!@/configure/**/*.types"
+                ],
+                "message": "Parser module should not import from configure module. Pure type modules (configure/**/types.ts, configure/**/*.types.ts) are the exception."
+              },
+              {
+                "group": [
+                  "**/configure/**/types",
+                  "@/configure/**/types",
+                  "**/configure/**/*.types",
+                  "@/configure/**/*.types"
+                ],
+                "allowTypeImports": true,
+                "message": "Parser module can import only types from configure pure type modules."
               }
             ]
           }
@@ -249,8 +290,25 @@
                 "message": "Plugin module should not import from cli module."
               },
               {
-                "group": ["**/configure/**", "@/configure/**"],
-                "message": "Plugin module should not import from configure module. Please use parser module as an intermediary."
+                "group": [
+                  "**/configure/**",
+                  "@/configure/**",
+                  "!**/configure/**/types",
+                  "!@/configure/**/types",
+                  "!**/configure/**/*.types",
+                  "!@/configure/**/*.types"
+                ],
+                "message": "Plugin module should not import from configure module. Pure type modules (configure/**/types.ts, configure/**/*.types.ts) are the exception."
+              },
+              {
+                "group": [
+                  "**/configure/**/types",
+                  "@/configure/**/types",
+                  "**/configure/**/*.types",
+                  "@/configure/**/*.types"
+                ],
+                "allowTypeImports": true,
+                "message": "Plugin module can import only types from configure pure type modules."
               },
               {
                 "group": ["**/plugin/builtin/**", "@/plugin/builtin/**"],
@@ -262,7 +320,13 @@
       }
     },
     {
-      "files": ["src/parser/**/types.ts"],
+      "files": [
+        "src/parser/**/types.ts",
+        "src/configure/**/types.ts",
+        "src/configure/**/*.types.ts",
+        "src/plugin/types.ts",
+        "src/runtime/types.ts"
+      ],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -272,6 +336,14 @@
                 "group": ["**"],
                 "allowTypeImports": true,
                 "message": "types.ts can import only types."
+              },
+              {
+                "group": ["zod", "zod/**"],
+                "message": "Pure type modules must not reference zod even type-only — derive types from zinfer output (src/types/*.generated.ts) instead."
+              },
+              {
+                "group": ["**/schema", "./schema", "../schema"],
+                "message": "Pure type modules must not import schema modules even type-only — schema-derived types come from zinfer output (src/types/*.generated.ts)."
               }
             ]
           }
@@ -317,8 +389,25 @@
             ],
             "patterns": [
               {
-                "group": ["**/configure/**", "@/configure/**"],
-                "message": "Cli module should not import from configure module. Please use parser module as an intermediary."
+                "group": [
+                  "**/configure/**",
+                  "@/configure/**",
+                  "!**/configure/**/types",
+                  "!@/configure/**/types",
+                  "!**/configure/**/*.types",
+                  "!@/configure/**/*.types"
+                ],
+                "message": "Cli module should not import from configure module. Pure type modules (configure/**/types.ts, configure/**/*.types.ts) are the exception."
+              },
+              {
+                "group": [
+                  "**/configure/**/types",
+                  "@/configure/**/types",
+                  "**/configure/**/*.types",
+                  "@/configure/**/*.types"
+                ],
+                "allowTypeImports": true,
+                "message": "Cli module can import only types from configure pure type modules."
               }
             ]
           }
@@ -365,6 +454,12 @@
       "rules": {
         "no-restricted-imports": "off",
         "no-console": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "e2e/**/*.ts", "**/__test_fixtures__/**"],
+      "rules": {
+        "typescript/no-non-null-assertion": "off"
       }
     }
   ],

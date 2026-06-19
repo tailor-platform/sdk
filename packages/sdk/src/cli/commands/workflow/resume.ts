@@ -32,7 +32,6 @@ export async function resumeWorkflow(
   options: ResumeWorkflowOptions,
 ): Promise<ResumeWorkflowResultWithWait> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

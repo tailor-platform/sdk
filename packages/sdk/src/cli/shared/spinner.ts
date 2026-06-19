@@ -1,3 +1,4 @@
+import { assertDefined } from "@/utils/assert";
 import { styles, symbols } from "./logger";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -57,7 +58,7 @@ function installSignalHook(): void {
   // the spinner frame on the same line — by the time we got control. Running
   // first lets us tear down the spinner line cleanly first.
   const handler = (): void => {
-    for (const s of [...activeSpinners]) s.stop();
+    for (const s of activeSpinners) s.stop();
   };
   process.prependListener("SIGINT", handler);
   process.prependListener("SIGTERM", handler);
@@ -166,7 +167,9 @@ export class Spinner {
   #renderFrame(): void {
     this.#stream.write(SYNC_BEGIN);
     this.#clearDrawn();
-    const frame = styles.info(FRAMES[this.#frame] ?? FRAMES[0]!);
+    const frame = styles.info(
+      FRAMES[this.#frame] ?? assertDefined(FRAMES[0], "spinner frames empty"),
+    );
     this.#frame = (this.#frame + 1) % FRAMES.length;
     const indent = " ".repeat(this.#indent);
     const line = `${indent}${frame} ${this.text}`;

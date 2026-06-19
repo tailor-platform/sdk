@@ -5,14 +5,18 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
+import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
 import { logger, styles } from "@/cli/shared/logger";
+import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "@/cli/shared/trigger-context";
 import ml from "@/utils/multiline";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
+import type { LogLevel } from "@/configure/config/types";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);
@@ -54,6 +58,7 @@ export interface BundleWorkflowJobsResult {
  * @param triggerContext - Trigger context for transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
+ * @param bundleLogLevel - Controls which console calls are kept in bundled code
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -63,6 +68,7 @@ export async function bundleWorkflowJobs(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
+  bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
@@ -111,6 +117,7 @@ export async function bundleWorkflowJobs(
       triggerContext,
       cache,
       inlineSourcemap,
+      bundleLogLevel,
     ),
   );
 
@@ -201,7 +208,6 @@ async function filterUsedJobs(
           for (const call of triggerCalls) {
             // Check if this trigger call is inside the job's body
             if (
-              detectedJob.bodyValueRange &&
               call.callRange.start >= detectedJob.bodyValueRange.start &&
               call.callRange.end <= detectedJob.bodyValueRange.end
             ) {
@@ -278,18 +284,20 @@ async function bundleSingleJob(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
+  bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<[string, string]> {
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
   // Include sorted env variables as a prefix so that env changes invalidate the cache
   const sortedEnvPrefix = JSON.stringify(
-    Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
+    Object.fromEntries(Object.entries(env).toSorted(([a], [b]) => a.localeCompare(b))),
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: job.sourceFile,
     serializedTriggerContext,
     tsconfig,
     inlineSourcemap,
+    bundleLogLevel,
     prefix: sortedEnvPrefix,
   });
 
@@ -384,7 +392,11 @@ async function bundleSingleJob(
         },
       };
 
-      const plugins: rolldown.Plugin[] = [transformPlugin, ...cachePlugins];
+      const plugins: rolldown.Plugin[] = [
+        transformPlugin,
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      ];
 
       const result = await rolldown.build({
         input: entryPath,
@@ -403,11 +415,9 @@ async function bundleSingleJob(
         },
         tsconfig,
         plugins,
-        treeshake: {
-          moduleSideEffects: false,
-          annotations: true,
-          unknownGlobalSideEffects: false,
-        },
+        treeshake: composeFunctionTreeshakeOptions([
+          createLogLevelTreeshakeOptions(bundleLogLevel),
+        ]),
         logLevel: "silent",
       } as rolldown.BuildOptions);
 

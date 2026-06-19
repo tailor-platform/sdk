@@ -28,9 +28,9 @@ tailor-sdk setup [command]
 
 **Commands**
 
-| Command                         | Description                                             |
-| ------------------------------- | ------------------------------------------------------- |
-| [`setup github`](#setup-github) | Generate GitHub Actions workflow for deployment. (beta) |
+| Command                         | Description                                       |
+| ------------------------------- | ------------------------------------------------- |
+| [`setup github`](#setup-github) | Generate a GitHub Actions deploy workflow. (beta) |
 
 <!-- politty:command:setup:subcommands:end -->
 
@@ -47,7 +47,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:setup github:description:start -->
 
-Generate GitHub Actions workflow for deployment. (beta)
+Generate a GitHub Actions deploy workflow. (beta)
 
 <!-- politty:command:setup github:description:end -->
 
@@ -65,14 +65,17 @@ tailor-sdk setup github [options]
 
 **Options**
 
-| Option                                  | Alias | Description                         | Required | Default |
-| --------------------------------------- | ----- | ----------------------------------- | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>`     | `-n`  | Workspace name                      | Yes      | -       |
-| `--workspace-region <WORKSPACE_REGION>` | `-r`  | Workspace region                    | Yes      | -       |
-| `--organization-id <ORGANIZATION_ID>`   | `-o`  | Organization ID                     | Yes      | -       |
-| `--folder-id <FOLDER_ID>`               | `-f`  | Folder ID                           | Yes      | -       |
-| `--dir <DIR>`                           | `-d`  | App directory (for monorepo setups) | No       | `"."`   |
-| `--with-plan`                           | `-p`  | Include plan job for PR previews    | No       | `false` |
+| Option                              | Alias | Description                                                                                                                                       | Required | Default |
+| ----------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
+| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name')                                                                                                    | No       | -       |
+| `--branch <BRANCH>`                 | -     | Branch target: deploy trigger branch (defaults to the detected default branch). Tag target: tag-reachability guard branch (no guard when omitted) | No       | -       |
+| `--tag`                             | -     | Generate a tag target (deploy on tag push)                                                                                                        | No       | `false` |
+| `--tag-pattern <TAG_PATTERN>`       | -     | Tag glob to match (requires --tag; defaults to v\*)                                                                                               | No       | -       |
+| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)                                                                      | No       | -       |
+| `--no-plan`                         | -     | Disable the plan job for a branch target (cannot be combined with --tag)                                                                          | No       | `false` |
+| `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                                                                                               | No       | `"."`   |
+| `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                                                                                     | No       | `false` |
+| `--check`                           | -     | Audit generated workflows for drift against the current config/repo (read-only)                                                                   | No       | `false` |
 
 <!-- politty:command:setup github:options:end -->
 
@@ -81,3 +84,7 @@ tailor-sdk setup github [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:setup github:global-options-link:end -->
+
+## Further reading
+
+- [GitHub Actions Integration](../github-actions.md) — usage guide: targets, generated files, secrets, approval gates, and rollback.

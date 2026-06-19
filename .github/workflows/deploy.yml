@@ -7,11 +7,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   changes:
+    name: Detect changes
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read # checkout to run the paths filter
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.filter.outputs.changes }}
@@ -25,9 +28,12 @@ jobs:
           filters: |
             changes:
               - .github/workflows/deploy.yml
+              - .github/actions/**
               - example/**
               - packages/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   deploy:
@@ -75,8 +81,10 @@ jobs:
       - name: Create workspace
         if: runner.os != 'Windows'
         working-directory: example
-        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${{ github.run_id }}-${{ matrix.slug }}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --json > workspace.json
         env:
+          RUN_ID: ${{ github.run_id }}
+          SLUG: ${{ matrix.slug }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
@@ -135,9 +143,10 @@ jobs:
       - name: Destroy workspace
         if: always() && runner.os != 'Windows'
         working-directory: example
-        run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
+        run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   deploy-result:
+    name: deploy-result # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: [changes, deploy]
     if: always()
     runs-on: ubuntu-latest
@@ -145,12 +154,22 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.deploy.result }}" != "success" ]]; then
+          if [[ "$DEPLOY_RESULT" != "success" ]]; then
             echo "Deploy jobs failed"
             exit 1
           fi

@@ -258,7 +258,7 @@ const appInfo = await show({ configPath, profile: values.profile });
 const authNamespace = appInfo.auth;
 
 // Initialize operator client (once for all namespaces)
-const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
+const accessToken = await loadAccessToken({ profile: values.profile });
 const workspaceId = await loadWorkspaceId({ profile: values.profile });
 const operatorClient = await initOperatorClient(accessToken);
 
@@ -272,13 +272,13 @@ const operatorClient = await initOperatorClient(accessToken);
   let deleted = 0;
 
   // List all users with pagination
-  let nextToken = undefined;
+  let after = undefined;
   const allUsers = [];
   do {
-    const response = await client.users(nextToken ? { nextToken } : undefined);
+    const response = await client.users(after ? { after } : undefined);
     allUsers.push(...(response.users || []));
-    nextToken = response.nextToken;
-  } while (nextToken);
+    after = response.nextPageToken;
+  } while (after);
 
   console.log(\`Found \${allUsers.length} IDP users to delete\`);
 
