@@ -27,9 +27,7 @@ describe("automationLevel", () => {
   });
 
   test("no scriptPath is Manual", () => {
-    expect(automationLevel(makeCodemod({ scriptPath: undefined as unknown as string }))).toBe(
-      "Manual",
-    );
+    expect(automationLevel(makeCodemod({ scriptPath: undefined }))).toBe("Manual");
   });
 });
 
@@ -66,7 +64,7 @@ describe("renderMigrationDoc", () => {
       makeCodemod({
         name: "Keyring storage",
         description: "Tokens move to the OS keyring.",
-        scriptPath: undefined as unknown as string,
+        scriptPath: undefined,
         notice: true,
       }),
     ]);

@@ -55,7 +55,7 @@ function renderEntry(codemod: CodemodPackage): string {
       `<summary>${summary}</summary>`,
       "",
       "```text",
-      codemod.prompt.trim(),
+      codemod.prompt.trimEnd(),
       "```",
       "",
       "</details>",

@@ -212,7 +212,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/tailordb-namespace",
     name: "Tailordb → tailordb (lowercase ambient namespace)",
     description:
-      "Rewrite references to the removed capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the lowercase `tailordb.*` namespace exposed by `@tailor-platform/sdk/runtime/globals`.",
+      'Rewrite references to the removed capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the lowercase `tailordb.*` namespace exposed by `@tailor-platform/sdk/runtime/globals`. Because v2 no longer activates ambient declarations automatically, each file that contains `tailordb.*` references after the rewrite must also add `import "@tailor-platform/sdk/runtime/globals"`.',
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/tailordb-namespace/scripts/transform.js",
@@ -220,7 +220,8 @@ export const allCodemods: CodemodPackage[] = [
     examples: [
       {
         before: 'const command: Tailordb.CommandType = "SELECT";',
-        after: 'const command: tailordb.CommandType = "SELECT";',
+        after:
+          'import "@tailor-platform/sdk/runtime/globals";\nconst command: tailordb.CommandType = "SELECT";',
       },
     ],
     prompt: [
@@ -229,6 +230,9 @@ export const allCodemods: CodemodPackage[] = [
       "the known members (QueryResult, CommandType, Client). Rewrite any other remaining",
       "Tailordb.* reference to its tailordb.* equivalent (and confirm the member still",
       "exists on the lowercase namespace).",
+      'Also add `import "@tailor-platform/sdk/runtime/globals"` at the top of each file',
+      "that contains any tailordb.* type reference — v2 no longer activates ambient",
+      "declarations automatically on SDK import.",
     ].join("\n"),
   },
   {
