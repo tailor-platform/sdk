@@ -91,7 +91,15 @@ const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/auth-invoker-unwrap/scripts/transform.js",
-    suspiciousPatterns: ["auth.invoker", "authInvoker:", "authInvoker :"],
+    suspiciousPatterns: [
+      "auth.invoker",
+      "authInvoker:",
+      "authInvoker :",
+      '"authInvoker":',
+      '"authInvoker" :',
+      "'authInvoker':",
+      "'authInvoker' :",
+    ],
     prompt: [
       "In Tailor SDK v2 the auth.invoker() helper is removed; an invoker is now the",
       "machine user name passed directly as a string. The codemod already rewrote the",

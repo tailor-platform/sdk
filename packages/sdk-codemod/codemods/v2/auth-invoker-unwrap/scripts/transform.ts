@@ -173,6 +173,30 @@ function findAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
     });
 }
 
+function findQuotedAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
+  return root
+    .findAll({
+      rule: {
+        kind: "string",
+        regex: "^['\"]authInvoker['\"]$",
+      },
+    })
+    .filter((node) => {
+      const parent = node.parent();
+      if (!parent) return false;
+      if (parent.kind() === "pair") {
+        const key = parent.field("key");
+        return key ? sameRange(key, node) : false;
+      }
+      return parent.kind() === "property_signature";
+    });
+}
+
+function renameQuotedKey(node: SgNode): string {
+  const quote = node.text().startsWith("'") ? "'" : '"';
+  return `${quote}invoker${quote}`;
+}
+
 /**
  * Replace `auth.invoker("name")` calls with the bare `"name"` string literal
  * and rename `authInvoker:` option keys to `invoker:`.
@@ -195,6 +219,9 @@ export default function transform(source: string, _filePath: string): string | n
   const calls = findInvokerCalls(root);
   const edits: Edit[] = calls.map((c) => c.callNode.replace(c.argText));
   edits.push(...findAuthInvokerPropertyKeys(root).map((node) => node.replace("invoker")));
+  edits.push(
+    ...findQuotedAuthInvokerPropertyKeys(root).map((node) => node.replace(renameQuotedKey(node))),
+  );
   edits.push(
     ...findAuthInvokerShorthands(root).map((node) => node.replace("invoker: authInvoker")),
   );
