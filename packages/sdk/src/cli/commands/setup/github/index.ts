@@ -45,6 +45,21 @@ export const githubCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     if (args.check) {
+      const genOnlyFlags = [
+        args.force && "--force",
+        args.tag && "--tag",
+        args["tag-pattern"] !== undefined && "--tag-pattern",
+        args.branch !== undefined && "--branch",
+        args["no-plan"] && "--no-plan",
+        args.dir !== "." && "--dir",
+        args["workspace-name"] !== undefined && "--workspace-name",
+        args.environment !== undefined && "--environment",
+      ].filter(Boolean) as string[];
+      if (genOnlyFlags.length > 0) {
+        throw new Error(
+          `--check is read-only and cannot be combined with generation flags: ${genOnlyFlags.join(", ")}.`,
+        );
+      }
       checkGitHub({ outputDir: process.cwd() });
       return;
     }

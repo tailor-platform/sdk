@@ -89,6 +89,33 @@ describe("findTargetDrift", () => {
     expect(findings).toEqual([]);
   });
 
+  test("skips default-branch drift when branch was explicitly set", () => {
+    const findings = findTargetDrift(
+      baseTarget({
+        inputs: { ...baseTarget().inputs, branch: "staging", branchAutoDetected: false },
+      }),
+      cleanState({ defaultBranch: "main" }),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  test("reports default-branch drift when branchAutoDetected is true", () => {
+    const findings = findTargetDrift(
+      baseTarget({
+        inputs: { ...baseTarget().inputs, branch: "main", branchAutoDetected: true },
+      }),
+      cleanState({ defaultBranch: "develop" }),
+    );
+    expect(findings.map((f) => f.rule)).toEqual(["default-branch"]);
+  });
+
+  test("reports default-branch drift when branchAutoDetected is undefined (legacy lock)", () => {
+    const target = baseTarget();
+    delete target.inputs.branchAutoDetected;
+    const findings = findTargetDrift(target, cleanState({ defaultBranch: "develop" }));
+    expect(findings.map((f) => f.rule)).toEqual(["default-branch"]);
+  });
+
   test("accumulates multiple findings", () => {
     const findings = findTargetDrift(
       baseTarget({ templateVersion: TEMPLATE_VERSION - 1 }),
@@ -189,11 +216,18 @@ describe("checkGitHub (integration)", () => {
     );
   });
 
-  test("detects a default-branch change", async () => {
-    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+  test("detects a default-branch change for auto-detected branch", async () => {
+    await setupGitHub(
+      setupOptions({ workspaceName: "my-app", branch: undefined, gitRunner: () => "origin/main" }),
+    );
     expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/develop" })).toThrow(
       /drift/,
     );
+  });
+
+  test("skips default-branch drift when branch was explicitly set", async () => {
+    await setupGitHub(setupOptions({ workspaceName: "my-app", branch: "staging" }));
+    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).not.toThrow();
   });
 
   test("detects a missing config under the recorded dir", async () => {
