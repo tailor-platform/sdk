@@ -140,18 +140,102 @@ function findAuthImports(root: SgNode): SgNode[] {
 }
 
 function findAuthInvokerShorthands(root: SgNode): SgNode[] {
-  return root.findAll({
-    rule: {
-      kind: "shorthand_property_identifier",
-      regex: "^authInvoker$",
-    },
-  });
+  return root
+    .findAll({
+      rule: {
+        kind: "shorthand_property_identifier",
+        regex: "^authInvoker$",
+      },
+    })
+    .filter(isSupportedInvokerOptionKey);
 }
 
 function sameRange(a: SgNode, b: SgNode): boolean {
   const ar = a.range();
   const br = b.range();
   return ar.start.index === br.start.index && ar.end.index === br.end.index;
+}
+
+function keyText(node: SgNode | null): string | null {
+  if (!node) return null;
+  return node.text().replace(/^['"]|['"]$/g, "");
+}
+
+function expressionArguments(args: SgNode): SgNode[] {
+  return args.children().filter((child) => !["(", ")", ","].includes(child.kind()));
+}
+
+function argumentCallForObject(objectNode: SgNode): { call: SgNode; index: number } | null {
+  const args = objectNode.parent();
+  const call = args?.parent();
+  if (args?.kind() !== "arguments" || call?.kind() !== "call_expression") return null;
+  const index = expressionArguments(args).findIndex((arg) => sameRange(arg, objectNode));
+  return index === -1 ? null : { call, index };
+}
+
+function calleeText(call: SgNode): string {
+  return call.field("function")?.text() ?? "";
+}
+
+function isCreateCallOptionObject(objectNode: SgNode, functionName: string): boolean {
+  const callInfo = argumentCallForObject(objectNode);
+  return (
+    callInfo?.index === 0 &&
+    callInfo.call.field("function")?.kind() === "identifier" &&
+    calleeText(callInfo.call) === functionName
+  );
+}
+
+function isWorkflowTriggerOptionsObject(objectNode: SgNode): boolean {
+  const callInfo = argumentCallForObject(objectNode);
+  if (callInfo?.index !== 1) return false;
+  const fn = callInfo.call.field("function");
+  return fn?.kind() === "member_expression" && calleeText(callInfo.call).endsWith(".trigger");
+}
+
+function isExecutorOperationObject(objectNode: SgNode): boolean {
+  const operationPair = objectNode.parent();
+  if (operationPair?.kind() !== "pair" || keyText(operationPair.field("key")) !== "operation") {
+    return false;
+  }
+  const configObject = operationPair.parent();
+  return (
+    configObject?.kind() === "object" && isCreateCallOptionObject(configObject, "createExecutor")
+  );
+}
+
+function isSupportedInvokerOptionObject(objectNode: SgNode): boolean {
+  return (
+    isCreateCallOptionObject(objectNode, "createResolver") ||
+    isCreateCallOptionObject(objectNode, "startWorkflow") ||
+    isWorkflowTriggerOptionsObject(objectNode) ||
+    isExecutorOperationObject(objectNode)
+  );
+}
+
+function optionObjectForPairKey(node: SgNode): SgNode | null {
+  const parent = node.parent();
+  if (!parent || parent.kind() !== "pair") return null;
+  const key = parent.field("key");
+  if (!key || !sameRange(key, node)) return null;
+  const objectNode = parent.parent();
+  return objectNode?.kind() === "object" ? objectNode : null;
+}
+
+function isSupportedInvokerOptionKey(node: SgNode): boolean {
+  const objectNode = optionObjectForPairKey(node) ?? node.parent();
+  return objectNode?.kind() === "object" && isSupportedInvokerOptionObject(objectNode);
+}
+
+function isSupportedInvokerValueCall(node: SgNode): boolean {
+  const pair = node.parent();
+  if (pair?.kind() !== "pair") return false;
+  const value = pair.field("value");
+  if (!value || !sameRange(value, node)) return false;
+  const key = keyText(pair.field("key"));
+  if (key !== "authInvoker" && key !== "invoker") return false;
+  const objectNode = pair.parent();
+  return objectNode?.kind() === "object" && isSupportedInvokerOptionObject(objectNode);
 }
 
 function findAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
@@ -162,15 +246,7 @@ function findAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
         regex: "^authInvoker$",
       },
     })
-    .filter((node) => {
-      const parent = node.parent();
-      if (!parent) return false;
-      if (parent.kind() === "pair") {
-        const key = parent.field("key");
-        return key ? sameRange(key, node) : false;
-      }
-      return parent.kind() === "property_signature";
-    });
+    .filter(isSupportedInvokerOptionKey);
 }
 
 function findQuotedAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
@@ -181,15 +257,7 @@ function findQuotedAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
         regex: "^['\"]authInvoker['\"]$",
       },
     })
-    .filter((node) => {
-      const parent = node.parent();
-      if (!parent) return false;
-      if (parent.kind() === "pair") {
-        const key = parent.field("key");
-        return key ? sameRange(key, node) : false;
-      }
-      return parent.kind() === "property_signature";
-    });
+    .filter(isSupportedInvokerOptionKey);
 }
 
 function renameQuotedKey(node: SgNode): string {
@@ -216,7 +284,7 @@ export default function transform(source: string, _filePath: string): string | n
   const lang = source.includes("</") || source.includes("/>") ? Lang.Tsx : Lang.TypeScript;
   const root = parse(lang, source).root();
 
-  const calls = findInvokerCalls(root);
+  const calls = findInvokerCalls(root).filter((c) => isSupportedInvokerValueCall(c.callNode));
   const edits: Edit[] = calls.map((c) => c.callNode.replace(c.argText));
   edits.push(...findAuthInvokerPropertyKeys(root).map((node) => node.replace("invoker")));
   edits.push(

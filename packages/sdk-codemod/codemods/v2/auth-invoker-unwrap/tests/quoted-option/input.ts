@@ -1,9 +1,11 @@
-export interface Options {
-  "authInvoker"?: string;
-  'authInvoker': string;
-}
-
-export const cfg = {
+startWorkflow({
+  workflow,
   "authInvoker": "kiosk",
+});
+
+workflow.trigger(
+  { orderId },
+  {
   'authInvoker': "manager",
-};
+  },
+);

@@ -1,8 +1,10 @@
 import { auth, db } from "../tailor.config";
 
-export const cfg = {
+createResolver({
+  name: "orders",
+  operation: "query",
   invoker: "kiosk",
   // `auth` is still referenced below, so the import must be preserved.
   ownerType: auth.machineUser,
-  table: db.type("Order"),
-};
+  body: () => db.type("Order"),
+});

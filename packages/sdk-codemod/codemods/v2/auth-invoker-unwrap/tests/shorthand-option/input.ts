@@ -1,5 +1,8 @@
 const authInvoker = "kiosk";
 
-export const cfg = {
+workflow.trigger(
+  { orderId },
+  {
   authInvoker,
-};
+  },
+);
