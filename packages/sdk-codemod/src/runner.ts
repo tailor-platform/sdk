@@ -123,7 +123,8 @@ async function loadTransform(scriptPath: string): Promise<TransformFn> {
 /** A loaded transform with its file matcher. */
 interface LoadedTransform {
   id: string;
-  transform: TransformFn;
+  /** Undefined for codemod-less ("manual") entries that ship only guidance. */
+  transform?: TransformFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: Array<string | string[]>;
   suspiciousPatterns: string[];
@@ -166,7 +167,7 @@ function legacyPatternWarnings(
  * @returns Combined result of all codemod executions
  */
 export async function runCodemods(
-  codemods: Array<{ codemod: CodemodPackage; scriptPath: string }>,
+  codemods: Array<{ codemod: CodemodPackage; scriptPath?: string }>,
   targetPath: string,
   dryRun: boolean,
 ): Promise<CodemodRunResult> {
@@ -176,7 +177,7 @@ export async function runCodemods(
     const patterns = codemod.filePatterns ?? DEFAULT_FILE_PATTERNS;
     loaded.push({
       id: codemod.id,
-      transform: await loadTransform(scriptPath),
+      transform: scriptPath ? await loadTransform(scriptPath) : undefined,
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
@@ -208,6 +209,7 @@ export async function runCodemods(
 
     let current = original;
     for (const lt of matchedTransforms) {
+      if (!lt.transform) continue;
       const result = await lt.transform(current, absolute);
       if (result != null) {
         current = result;
@@ -238,10 +240,17 @@ export async function runCodemods(
 
   const llmReviews: LlmReview[] = [];
   for (const lt of loaded) {
-    const files = suspiciousByCodemod.get(lt.id);
-    if (!lt.prompt || !files) continue;
-    // Sort for deterministic output regardless of filesystem traversal order.
-    llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
+    if (!lt.prompt) continue;
+    if (lt.suspiciousPatterns.length > 0) {
+      // File-scoped: only surface when a suspicious pattern actually matched.
+      const files = suspiciousByCodemod.get(lt.id);
+      // Sort for deterministic output regardless of filesystem traversal order.
+      if (files) llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
+    } else if (lt.legacyPatterns.length === 0) {
+      // Codemod-less manual change with no pattern to scope by: surface as
+      // project-wide guidance (legacyPattern-only entries warn instead).
+      llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: [] });
+    }
   }
 
   return {
