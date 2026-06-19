@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { legacyAuthInvokerOption } from "@/parser/service/auth/legacy-invoker";
 import { AuthInvokerSchema } from "@/parser/service/auth/schema";
 import { TailorFieldSchema } from "@/parser/service/field/schema";
 import { functionSchema } from "../common";
@@ -16,4 +17,5 @@ export const ResolverSchema = z.object({
   output: TailorFieldSchema.describe("Output field definition"),
   publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
   invoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
+  authInvoker: legacyAuthInvokerOption,
 });

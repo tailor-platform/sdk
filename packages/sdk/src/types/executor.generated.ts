@@ -111,6 +111,7 @@ export type FunctionOperation = {
         machineUserName: string;
       }
     | undefined;
+  authInvoker?: undefined;
 };
 export type FunctionOperationInput = FunctionOperation;
 
@@ -129,6 +130,7 @@ export type GqlOperationInput = {
         machineUserName: string;
       }
     | undefined;
+  authInvoker?: undefined;
 };
 
 export type GqlOperation = {
@@ -146,6 +148,7 @@ export type GqlOperation = {
         machineUserName: string;
       }
     | undefined;
+  authInvoker?: undefined;
 };
 
 export type WebhookOperation = {
@@ -186,6 +189,7 @@ export type WorkflowOperation = {
         machineUserName: string;
       }
     | undefined;
+  authInvoker?: undefined;
 };
 
 export type ExecutorInput = {
@@ -310,6 +314,7 @@ export type Executor = {
               machineUserName: string;
             }
           | undefined;
+        authInvoker?: undefined;
       }
     | {
         kind: "function" | "jobFunction";
@@ -321,6 +326,7 @@ export type Executor = {
               machineUserName: string;
             }
           | undefined;
+        authInvoker?: undefined;
       }
     | {
         kind: "graphql";
@@ -334,6 +340,7 @@ export type Executor = {
               machineUserName: string;
             }
           | undefined;
+        authInvoker?: undefined;
       }
     | {
         kind: "webhook";

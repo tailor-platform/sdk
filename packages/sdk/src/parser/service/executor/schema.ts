@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
+import { legacyAuthInvokerOption } from "../auth/legacy-invoker";
 import { functionSchema } from "../common";
 
 export const TailorDBTriggerSchema = z.object({
@@ -88,6 +89,7 @@ export const FunctionOperationSchema = z.object({
   kind: z.enum(["function", "jobFunction"]),
   body: functionSchema.describe("Function implementation"),
   invoker: AuthInvokerSchema.optional().describe("Invoker for the function execution"),
+  authInvoker: legacyAuthInvokerOption,
 });
 
 export const GqlOperationSchema = z.object({
@@ -96,6 +98,7 @@ export const GqlOperationSchema = z.object({
   query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
   variables: functionSchema.optional().describe("Function to compute GraphQL variables"),
   invoker: AuthInvokerSchema.optional().describe("Invoker for the GraphQL execution"),
+  authInvoker: legacyAuthInvokerOption,
 });
 
 export const WebhookOperationSchema = z.object({
@@ -131,6 +134,7 @@ export const WorkflowOperationSchema = z.preprocess(
       .optional()
       .describe("Arguments to pass to the workflow"),
     invoker: AuthInvokerSchema.optional().describe("Invoker for the workflow execution"),
+    authInvoker: legacyAuthInvokerOption,
   }),
 );
 
