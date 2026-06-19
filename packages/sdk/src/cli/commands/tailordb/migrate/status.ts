@@ -61,7 +61,6 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
   }
 
   const accessToken = await loadAccessToken({
-    useProfile: false,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

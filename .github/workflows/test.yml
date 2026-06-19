@@ -9,8 +9,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   changes:
+    name: Detect changes
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     runs-on: ubuntu-latest
@@ -75,6 +78,7 @@ jobs:
         run: pnpm -r run test --project 'unit*'
 
   test-summary:
+    name: test-summary # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: [changes, test]
     if: >-
       always() &&

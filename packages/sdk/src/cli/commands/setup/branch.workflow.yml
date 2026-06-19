@@ -40,24 +40,22 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      # __SETUP_STEPS__
-      - id: tailor-generate
-        # __WORKING_DIRECTORY__
-        run: __PM_EXEC__ tailor-sdk generate
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        run: |
-          git add -A
-          if ! git diff --cached --quiet; then
-            git --no-pager diff --cached --stat
-            echo "::error::Generated files are out of date. Run 'tailor-sdk generate' locally and commit the result."
-            exit 1
-          fi
+        uses: tailor-platform/actions/generate-check@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
       - id: tailor-plan
         # Fork PRs cannot read secrets; the checks above still run for them.
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-        uses: tailor-platform/actions/plan@4d0f160b6b5cc2f02594776665471497c297181e # v1.2.0
+        uses: tailor-platform/actions/plan@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          package-manager: __PACKAGE_MANAGER__
           label: __WORKSPACE_NAME__
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
@@ -77,11 +75,15 @@ jobs:
     steps:
       - id: tailor-checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      # __SETUP_STEPS__
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@4d0f160b6b5cc2f02594776665471497c297181e # v1.2.0
+        uses: tailor-platform/actions/deploy@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}

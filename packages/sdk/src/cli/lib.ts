@@ -34,7 +34,7 @@ export type {
   PluginAttachment,
   TypeSourceInfoEntry,
 } from "./commands/generate/types";
-export type { TailorDBType } from "@/types/tailordb";
+export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/types/resolver.generated";
 export type { Executor } from "@/types/executor.generated";
 

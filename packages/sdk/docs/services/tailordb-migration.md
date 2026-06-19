@@ -312,6 +312,21 @@ Use cases:
 
 `migration set` does not perform a true rollback. To undo a schema/data change in production, write a new forward migration that reverses it (see [Rollback Strategy](#rollback-strategy)).
 
+## `migration sync` Semantics
+
+`tailor-sdk tailordb migration sync <N>` reconstructs the schema snapshot at migration `N` from the working tree's migration history and **overwrites the remote schema to match it**, then sets the `sdk-migration` label to `N`. Unlike `migration set`, it changes the remote schema as well as the bookkeeping. Like `set`, it never runs `migrate.ts` scripts itself — it only changes what the next `apply` considers pending:
+
+| Movement                         | Effect on next `apply`                                                                    | Effect on data                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Backward (e.g., `0003` → `0001`) | Migrations `0002` and `0003` become pending and re-execute, including their `migrate.ts`. | Types absent from snapshot `0001` are deleted along with their data; re-executed scripts may rewrite data. |
+| Forward (e.g., `0001` → `0003`)  | Migrations `0002` and `0003` are skipped — their `migrate.ts` scripts will not run.       | Data the skipped scripts would have migrated stays as-is.                                                  |
+
+Before anything is sent to the remote, `sync` verifies that replaying the full migration history reproduces the current local type definitions. If it does not — because migration files were edited and no longer match, or because a schema change has not been recorded with `migration generate` yet — the command fails without touching the remote. This means a rewritten migration history is validated before it can overwrite the deployed schema.
+
+Because syncing backward causes already-applied scripts to re-execute on the next deploy, **write `migrate.ts` scripts to be idempotent** (see [Performance and Large Tables](#performance-and-large-tables) for resumable `where` clauses).
+
+The main use case is recovering from drift after a `deploy --no-schema-check` from an older revision: instead of checking out that revision, run `migration sync <N>` to restore the remote to a known snapshot, then `tailor-sdk deploy` to apply the remaining migrations from the working tree.
+
 ## Team Workflow and CI/CD
 
 ### Branch coordination
@@ -340,20 +355,21 @@ Coordinate this with your team because everyone else's local migrations will be 
 
 ## Failure Recovery
 
-If a `migrate.ts` throws:
+If the pre-migration phase or `migrate.ts` fails:
 
 - **The transaction rolls back** for that migration's script. Database changes the script made are undone.
-- **The pre-migration phase already ran** before the script. Type-level relaxations (e.g., a field changed to optional) **are not undone**. The post-migration phase, including the label bump, does not run.
-- The whole `apply` aborts. Subsequent migrations in the same run do not execute.
+- **The pre-migration schema changes are rolled back** to the prior checkpoint: types that already existed are restored to their previous shape, and types the migration newly introduced are dropped. The workspace is left at its prior checkpoint and prior schema — not half-applied.
+- The whole `apply` aborts and the checkpoint label is not bumped. Subsequent migrations in the same run do not execute.
+
+The rollback is best-effort per type; if reverting a type fails, a warning is logged and the original migration error is still reported.
 
 After a failure:
 
 1. Read the `Logs:` block in the apply output to find the cause.
 2. Fix `migrate.ts` (or the data it depends on).
-3. Re-run `tailor-sdk deploy`. The same migration runs again because its label was never bumped.
-4. If the pre-migration relaxation is causing problems for application code in the meantime, accept the temporary optionality or roll forward with a fix; do not try to manually re-tighten the schema, or you'll create remote drift.
+3. Re-run `tailor-sdk deploy`. The same migration runs again because its label was never bumped, and the prior-checkpoint schema is a clean baseline to retry against.
 
-If a migration **succeeds in script** but the post-migration phase fails (rare; usually due to constraint violation that the script should have prevented), the situation is the same as above plus the data changes from the script are persisted. Investigate, fix, and re-run.
+If a migration **succeeds in script** but the **post-migration phase** fails (rare; usually a constraint violation the script should have prevented), the pre-migration changes are **not** rolled back: the script's data changes are already committed and the post-migration phase may have dropped removed columns or types, which cannot be reverted without data loss. Investigate, fix, and re-run.
 
 ## Rollback Strategy
 
@@ -426,7 +442,18 @@ For genuinely different schemas across environments, prefer separate workspaces 
 1. `tailor-sdk tailordb migration status` to see local vs remote.
 2. Compare with teammates — has someone applied different migrations?
 3. If remote was changed manually, decide whether to update local migrations to match or to use `migration set <N>` to align bookkeeping.
-4. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround.
+4. To force the remote schema back to a known snapshot, use `migration sync <N>` (see [`migration sync` Semantics](#migration-sync-semantics)).
+5. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround.
+
+### "Invalid schema snapshot" or "Invalid migration diff" error
+
+**Cause:** A `schema.json` or `diff.json` file in the `migrations/` directory is corrupted or does not match the expected structure. Merge conflicts left in these files are a common cause.
+
+**Resolution:**
+
+1. Read the error message — it includes the file path and the offending field.
+2. Restore the file from version control (`git checkout -- <path>`), or regenerate migration files with `migration generate` / `migration script`.
+3. Do not hand-edit `schema.json` or `diff.json`; they are managed by the CLI.
 
 ### "No machine user available for migration execution"
 

@@ -1,6 +1,6 @@
 import type { IdPPermission } from "./permission";
+import type { IdpDefinitionBrand } from "@/configure/services/idp/types";
 import type { BuiltinIdP } from "@/types/auth.generated";
-import type { IdpDefinitionBrand } from "@/types/idp";
 import type { IdPInput } from "@/types/idp.generated";
 
 export type {
@@ -42,7 +42,7 @@ export function defineIdp<const TClients extends string[]>(
   return result as typeof result & IdpDefinitionBrand;
 }
 
-export type { IdPConfig, IdPExternalConfig } from "@/types/idp";
+export type { IdPConfig, IdPExternalConfig } from "@/configure/services/idp/types";
 
 export type { IdPPermission, IdPPermissionCondition } from "./permission";
 export { unsafeAllowAllIdPPermission } from "./permission";

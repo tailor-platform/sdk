@@ -6,6 +6,8 @@ on:
       - aqua.yaml
       - aqua-checksums.json
 
+permissions: {}
+
 jobs:
   update-aqua-checksums:
     # Pin to v1.0.4. v1.0.5 pulls in update-checksum-action v0.2.7 which has
@@ -16,7 +18,7 @@ jobs:
     permissions:
       contents: read
     with:
-      aqua_version: v2.60.0
+      aqua_version: v2.60.1
       prune: true
     secrets:
       gh_app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}

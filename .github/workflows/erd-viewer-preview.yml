@@ -12,8 +12,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   preview:
@@ -21,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: read # checkout the repository
     strategy:
       fail-fast: false
       matrix:
@@ -73,8 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
-      pull-requests: write
+      contents: read # checkout the repository
+      pull-requests: write # upsert the sticky preview comment
       actions: read # required to list the run's artifacts
 
     steps:

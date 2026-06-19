@@ -86,6 +86,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
 
   if (
     target.kind === "branch" &&
+    target.inputs.branchAutoDetected !== false &&
     state.defaultBranch !== null &&
     target.inputs.branch !== null &&
     target.inputs.branch !== state.defaultBranch

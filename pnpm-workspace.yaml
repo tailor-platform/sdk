@@ -37,3 +37,10 @@ allowBuilds:
 
 overrides:
   valibot@>=0.31.0 <1.2.0: 1.4.1
+  esbuild@>=0.17.0 <0.28.1: 0.28.1
+
+peerDependencyRules:
+  allowedVersions:
+    # madge@8 still declares typescript ^5.4.4, but its parser
+    # (detective-typescript) supports typescript 6 and madge runs fine on it.
+    madge>typescript: "6"

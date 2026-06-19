@@ -39,7 +39,7 @@ import type {
   StandardIdPActionPermission,
   StandardIdPPermission,
   StandardIdPPermissionCondition,
-} from "@/types/idp";
+} from "@/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "@/types/idp.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 

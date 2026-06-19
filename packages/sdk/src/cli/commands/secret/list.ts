@@ -38,7 +38,6 @@ function secretInfo(secret: SecretManagerSecret): SecretInfo {
  */
 async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
