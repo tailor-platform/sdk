@@ -1,4 +1,5 @@
 import { auth } from "../tailor.config";
+import workflow from "../workflows/order-processing";
 
 const machineUserName = "kiosk";
 
