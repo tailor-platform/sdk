@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } from "../configure/services/workflow/job";
+import { createWorkflowJob } from "../configure/services/workflow/job";
 import { createWorkflow } from "../configure/services/workflow/workflow";
 import {
   mockTailordb,
@@ -211,54 +211,19 @@ describe("mock", () => {
       expect(await runWorkflowLocally(workflow)).toEqual({});
     });
 
-    describe("backward-compat: deprecated WORKFLOW_TEST_ENV_KEY env-var", () => {
-      test("setEnv takes priority over the env-var", async () => {
-        using wf = mockWorkflow();
-        const captureEnv = createWorkflowJob({
-          name: "capture-env-compat-priority",
-          body: (_input: undefined, ctx) => ctx.env,
-        });
-        const workflow = createWorkflow({
-          name: "capture-env-compat-priority-workflow",
-          mainJob: captureEnv,
-        });
-
-        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
-        wf.setEnv({ STAGE: "from-setenv" });
-
-        expect(await runWorkflowLocally(workflow)).toEqual({ STAGE: "from-setenv" });
+    test("ignores the legacy TAILOR_TEST_WORKFLOW_ENV env-var", async () => {
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-ignore-legacy-env",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+      const workflow = createWorkflow({
+        name: "capture-env-ignore-legacy-env-workflow",
+        mainJob: captureEnv,
       });
 
-      test("env-var is used when setEnv has not been called", async () => {
-        const captureEnv = createWorkflowJob({
-          name: "capture-env-compat-fallback",
-          body: (_input: undefined, ctx) => ctx.env,
-        });
-        const workflow = createWorkflow({
-          name: "capture-env-compat-fallback-workflow",
-          mainJob: captureEnv,
-        });
+      vi.stubEnv("TAILOR_TEST_WORKFLOW_ENV", JSON.stringify({ STAGE: "from-env-var" }));
 
-        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
-
-        expect(await runWorkflowLocally(workflow)).toEqual({ STAGE: "from-env-var" });
-      });
-
-      test("throws when the env-var is valid JSON but not an object", async () => {
-        using _wf = mockWorkflow();
-        const captureEnv = createWorkflowJob({
-          name: "capture-env-compat-nonobject",
-          body: (_input: undefined, ctx) => ctx.env,
-        });
-        const workflow = createWorkflow({
-          name: "capture-env-compat-nonobject-workflow",
-          mainJob: captureEnv,
-        });
-
-        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, "42");
-
-        await expect(runWorkflowLocally(workflow)).rejects.toThrow(/must be a JSON object/);
-      });
+      expect(await runWorkflowLocally(workflow)).toEqual({});
     });
   });
 

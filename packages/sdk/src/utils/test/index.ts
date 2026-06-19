@@ -3,7 +3,6 @@ import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { TailorField } from "@/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
-export { WORKFLOW_TEST_ENV_KEY } from "@/configure/services/workflow/job";
 export {
   setupTailordbMock,
   setupTailorErrorsMock,
