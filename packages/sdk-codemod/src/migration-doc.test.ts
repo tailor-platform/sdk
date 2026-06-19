@@ -55,7 +55,7 @@ describe("renderMigrationDoc", () => {
   test("omits the prompt block for Automatic entries", () => {
     const doc = renderMigrationDoc([makeCodemod({ name: "Auto", description: "Auto change." })]);
     expect(doc).toContain("**Migration:** Automatic");
-    expect(doc).not.toContain("How to finish");
+    expect(doc).not.toContain("<details>");
   });
 
   test("renders notices in a separate section without a migration label", () => {

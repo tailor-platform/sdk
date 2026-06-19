@@ -23,7 +23,7 @@ async function createTestProject(
 
 function makeCodemod(
   id: string,
-  scriptPath: string,
+  scriptPath?: string,
   filePatterns?: string[],
   legacyPatterns?: Array<string | string[]>,
   extra?: Pick<CodemodPackage, "suspiciousPatterns" | "prompt">,
@@ -421,8 +421,7 @@ describe("runCodemods", () => {
       const result = await runCodemods(
         [
           {
-            // No scriptPath: a manual entry that ships only a prompt.
-            codemod: makeCodemod("test/manual", "unused.ts", ["**/*.ts"], undefined, {
+            codemod: makeCodemod("test/manual", undefined, ["**/*.ts"], undefined, {
               prompt: "Do the manual change.",
             }),
             scriptPath: undefined,
