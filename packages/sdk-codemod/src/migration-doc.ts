@@ -78,12 +78,10 @@ function renderNotice(codemod: CodemodPackage): string {
  * @returns The migration guide as Markdown
  */
 export function renderMigrationDoc(codemods: CodemodPackage[]): string {
-  // NOTE: This generator (and the registry it reads) is shaped around the v1->v2
-  // migration: the title, the `v2.md` output path, and the `v2/*` rule ids /
-  // `until: "2.0.0"` ranges are all hardcoded. Before this lands on `main`,
-  // either clean up the v2-specific scaffolding or generalize it to be
-  // version-agnostic (parameterize the target version, output path, and rule
-  // namespace) so it can serve future major migrations too.
+  // NOTE: This generator is currently v1→v2-specific: the title, `v2.md` output
+  // path, and `v2/*` rule ids / `until: "2.0.0"` ranges are all hardcoded.
+  // Supporting future major migrations would require parameterizing the target
+  // version, output path, and rule namespace.
   const header = [
     "# Migrating to v2",
     "",
