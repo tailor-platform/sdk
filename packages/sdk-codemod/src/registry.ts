@@ -87,7 +87,7 @@ const allCodemods: CodemodPackage[] = [
     id: "v2/auth-invoker-unwrap",
     name: 'auth.invoker("name") → invoker: "name"',
     description:
-      'Rename supported SDK `authInvoker` options to `invoker`, replace `auth.invoker("name")` there with the bare `"name"` string, and drop the `auth` import when no other reference remains. The `auth.invoker()` helper is removed in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
+      'Rename statically identified SDK `authInvoker` options to `invoker`, replace `auth.invoker("name")` there with the bare `"name"` string, and drop the `auth` import when no other reference remains. Ambiguous workflow `.trigger()` calls are left for manual review. The `auth.invoker()` helper is removed in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/auth-invoker-unwrap/scripts/transform.js",
@@ -111,7 +111,7 @@ const allCodemods: CodemodPackage[] = [
     prompt: [
       "In Tailor SDK v2 the auth.invoker() helper is removed; an invoker is now the",
       "machine user name passed directly as a string. The codemod already rewrote the",
-      'supported SDK option form authInvoker: auth.invoker("name") to invoker: "name" and renamed supported authInvoker option keys. These files still contain',
+      'statically identified SDK option form authInvoker: auth.invoker("name") to invoker: "name" and renamed supported authInvoker option keys. These files still contain',
       "auth.invoker(...) calls or authInvoker keys that need manual review.",
       "",
       "For each remaining auth.invoker(<expr>) call:",
