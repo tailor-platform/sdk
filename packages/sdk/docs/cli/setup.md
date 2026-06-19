@@ -75,6 +75,7 @@ tailor-sdk setup github [options]
 | `--no-plan`                         | -     | Disable the plan job for a branch target (cannot be combined with --tag)                                                                          | No       | `false` |
 | `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                                                                                               | No       | `"."`   |
 | `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                                                                                     | No       | `false` |
+| `--check`                           | -     | Audit generated workflows for drift against the current config/repo (read-only)                                                                   | No       | `false` |
 
 <!-- politty:command:setup github:options:end -->
 

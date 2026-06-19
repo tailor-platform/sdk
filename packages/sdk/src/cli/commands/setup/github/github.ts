@@ -222,8 +222,10 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   }
 
   let branch: string | null = null;
+  let branchAutoDetected = false;
   let render: RenderResult;
   if (kind === "branch") {
+    branchAutoDetected = options.branch === undefined;
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
     validateBranch(branch);
     render = renderBranchWorkflow({
@@ -252,6 +254,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   const file = `.github/workflows/tailor-${workspaceName}.yml`;
   const inputs: LockInputs = {
     branch,
+    branchAutoDetected: kind === "branch" ? branchAutoDetected : undefined,
     tagPattern: kind === "tag" ? options.tagPattern : null,
     environment,
     dir,
