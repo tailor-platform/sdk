@@ -49,6 +49,8 @@ When editing files matching these globs, read and follow the linked rule documen
 
 - `pnpm agent:rules:update` - Regenerate `AGENTS.md`'s path-scoped rule index and `.claude/rules/*.md`
 - `pnpm agent:rules:check` - Verify generated agent rule files are up to date
+- `pnpm codemod:docs:update` - Regenerate `packages/sdk/docs/migration/v2.md` from the codemod registry
+- `pnpm codemod:docs:check` - Verify migration docs are up to date
 
 ### CLI
 
