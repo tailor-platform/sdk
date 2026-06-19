@@ -7,3 +7,7 @@ tailor.workflow.triggerWorkflow("daily", {}, {
 tailor.workflow.triggerWorkflow("daily", {}, {
   authInvoker: auth.invoker("kiosk"),
 });
+
+paymentGateway.trigger("charge", {
+  authInvoker: "secret",
+});

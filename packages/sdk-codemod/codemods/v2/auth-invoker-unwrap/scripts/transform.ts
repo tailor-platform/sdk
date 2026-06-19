@@ -139,17 +139,6 @@ function findAuthImports(root: SgNode): SgNode[] {
   });
 }
 
-function findAuthInvokerShorthands(root: SgNode): SgNode[] {
-  return root
-    .findAll({
-      rule: {
-        kind: "shorthand_property_identifier",
-        regex: "^authInvoker$",
-      },
-    })
-    .filter(isSupportedInvokerOptionKey);
-}
-
 function sameRange(a: SgNode, b: SgNode): boolean {
   const ar = a.range();
   const br = b.range();
@@ -177,6 +166,38 @@ function calleeText(call: SgNode): string {
   return call.field("function")?.text() ?? "";
 }
 
+interface TransformContext {
+  workflowTriggerReceivers: Set<string>;
+}
+
+function unquoteString(text: string): string {
+  return text.replace(/^['"]|['"]$/g, "");
+}
+
+function findWorkflowTriggerReceivers(root: SgNode): Set<string> {
+  const out = new Set<string>();
+  for (const stmt of root.findAll({ rule: { kind: "import_statement" } })) {
+    const source = stmt.field("source");
+    if (!source) continue;
+    const sourceText = unquoteString(source.text());
+    if (!sourceText.startsWith(".") || !sourceText.toLowerCase().includes("workflow")) continue;
+
+    for (const { localName } of iterateImportSpecs(stmt)) {
+      out.add(localName);
+    }
+    for (const clause of stmt.findAll({ rule: { kind: "import_clause" } })) {
+      for (const ident of clause.children().filter((child) => child.kind() === "identifier")) {
+        out.add(ident.text());
+      }
+    }
+    for (const ns of stmt.findAll({ rule: { kind: "namespace_import" } })) {
+      const ident = ns.children().find((child) => child.kind() === "identifier");
+      if (ident) out.add(ident.text());
+    }
+  }
+  return out;
+}
+
 function isCreateCallOptionObject(objectNode: SgNode, functionName: string): boolean {
   const callInfo = argumentCallForObject(objectNode);
   return (
@@ -186,11 +207,15 @@ function isCreateCallOptionObject(objectNode: SgNode, functionName: string): boo
   );
 }
 
-function isWorkflowTriggerOptionsObject(objectNode: SgNode): boolean {
+function isWorkflowTriggerOptionsObject(objectNode: SgNode, context: TransformContext): boolean {
   const callInfo = argumentCallForObject(objectNode);
   if (callInfo?.index !== 1) return false;
   const fn = callInfo.call.field("function");
-  return fn?.kind() === "member_expression" && calleeText(callInfo.call).endsWith(".trigger");
+  if (fn?.kind() !== "member_expression") return false;
+  const text = calleeText(callInfo.call);
+  if (!text.endsWith(".trigger")) return false;
+  const receiver = text.slice(0, -".trigger".length);
+  return context.workflowTriggerReceivers.has(receiver);
 }
 
 function isExecutorOperationObject(objectNode: SgNode): boolean {
@@ -204,11 +229,11 @@ function isExecutorOperationObject(objectNode: SgNode): boolean {
   );
 }
 
-function isSupportedInvokerOptionObject(objectNode: SgNode): boolean {
+function isSupportedInvokerOptionObject(objectNode: SgNode, context: TransformContext): boolean {
   return (
     isCreateCallOptionObject(objectNode, "createResolver") ||
     isCreateCallOptionObject(objectNode, "startWorkflow") ||
-    isWorkflowTriggerOptionsObject(objectNode) ||
+    isWorkflowTriggerOptionsObject(objectNode, context) ||
     isExecutorOperationObject(objectNode)
   );
 }
@@ -222,12 +247,12 @@ function optionObjectForPairKey(node: SgNode): SgNode | null {
   return objectNode?.kind() === "object" ? objectNode : null;
 }
 
-function isSupportedInvokerOptionKey(node: SgNode): boolean {
+function isSupportedInvokerOptionKey(node: SgNode, context: TransformContext): boolean {
   const objectNode = optionObjectForPairKey(node) ?? node.parent();
-  return objectNode?.kind() === "object" && isSupportedInvokerOptionObject(objectNode);
+  return objectNode?.kind() === "object" && isSupportedInvokerOptionObject(objectNode, context);
 }
 
-function isSupportedInvokerValueCall(node: SgNode): boolean {
+function isSupportedInvokerValueCall(node: SgNode, context: TransformContext): boolean {
   const pair = node.parent();
   if (pair?.kind() !== "pair") return false;
   const value = pair.field("value");
@@ -235,10 +260,21 @@ function isSupportedInvokerValueCall(node: SgNode): boolean {
   const key = keyText(pair.field("key"));
   if (key !== "authInvoker" && key !== "invoker") return false;
   const objectNode = pair.parent();
-  return objectNode?.kind() === "object" && isSupportedInvokerOptionObject(objectNode);
+  return objectNode?.kind() === "object" && isSupportedInvokerOptionObject(objectNode, context);
 }
 
-function findAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
+function findAuthInvokerShorthands(root: SgNode, context: TransformContext): SgNode[] {
+  return root
+    .findAll({
+      rule: {
+        kind: "shorthand_property_identifier",
+        regex: "^authInvoker$",
+      },
+    })
+    .filter((node) => isSupportedInvokerOptionKey(node, context));
+}
+
+function findAuthInvokerPropertyKeys(root: SgNode, context: TransformContext): SgNode[] {
   return root
     .findAll({
       rule: {
@@ -246,10 +282,10 @@ function findAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
         regex: "^authInvoker$",
       },
     })
-    .filter(isSupportedInvokerOptionKey);
+    .filter((node) => isSupportedInvokerOptionKey(node, context));
 }
 
-function findQuotedAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
+function findQuotedAuthInvokerPropertyKeys(root: SgNode, context: TransformContext): SgNode[] {
   return root
     .findAll({
       rule: {
@@ -257,7 +293,7 @@ function findQuotedAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
         regex: "^['\"]authInvoker['\"]$",
       },
     })
-    .filter(isSupportedInvokerOptionKey);
+    .filter((node) => isSupportedInvokerOptionKey(node, context));
 }
 
 function renameQuotedKey(node: SgNode): string {
@@ -283,15 +319,22 @@ export default function transform(source: string, _filePath: string): string | n
 
   const lang = source.includes("</") || source.includes("/>") ? Lang.Tsx : Lang.TypeScript;
   const root = parse(lang, source).root();
+  const context: TransformContext = {
+    workflowTriggerReceivers: findWorkflowTriggerReceivers(root),
+  };
 
-  const calls = findInvokerCalls(root).filter((c) => isSupportedInvokerValueCall(c.callNode));
+  const calls = findInvokerCalls(root).filter((c) =>
+    isSupportedInvokerValueCall(c.callNode, context),
+  );
   const edits: Edit[] = calls.map((c) => c.callNode.replace(c.argText));
-  edits.push(...findAuthInvokerPropertyKeys(root).map((node) => node.replace("invoker")));
+  edits.push(...findAuthInvokerPropertyKeys(root, context).map((node) => node.replace("invoker")));
   edits.push(
-    ...findQuotedAuthInvokerPropertyKeys(root).map((node) => node.replace(renameQuotedKey(node))),
+    ...findQuotedAuthInvokerPropertyKeys(root, context).map((node) =>
+      node.replace(renameQuotedKey(node)),
+    ),
   );
   edits.push(
-    ...findAuthInvokerShorthands(root).map((node) => node.replace("invoker: authInvoker")),
+    ...findAuthInvokerShorthands(root, context).map((node) => node.replace("invoker: authInvoker")),
   );
 
   if (
