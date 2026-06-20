@@ -127,12 +127,12 @@ interface LoadedTransform {
   transform?: TransformFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: Array<string | string[]>;
-  suspiciousPatterns: string[];
+  suspiciousPatterns: Array<string | string[]>;
   prompt?: string;
 }
 
-/** Resolve a legacy pattern against content, returning its label when matched. */
-function matchLegacyPattern(content: string, pattern: string | string[]): string | null {
+/** Resolve a residual pattern against content, returning its label when matched. */
+function matchResidualPattern(content: string, pattern: string | string[]): string | null {
   if (typeof pattern === "string") {
     return content.includes(pattern) ? pattern : null;
   }
@@ -146,7 +146,7 @@ function legacyPatternWarnings(
 ): string[] {
   return transforms.flatMap((lt) => {
     const found = lt.legacyPatterns
-      .map((p) => matchLegacyPattern(content, p))
+      .map((p) => matchResidualPattern(content, p))
       .filter((label): label is string => label !== null);
     if (found.length === 0) return [];
     return [
@@ -230,7 +230,7 @@ export async function runCodemods(
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => current.includes(p))) {
+      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(current, p) !== null)) {
         const files = suspiciousByCodemod.get(lt.id) ?? [];
         files.push(relative);
         suspiciousByCodemod.set(lt.id, files);
