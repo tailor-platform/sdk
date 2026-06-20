@@ -538,6 +538,37 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("keeps LLM review patterns after nested template substitutions", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "a.ts"),
+        "const message = `${`prefix ${foo}`.toString(executeScript())}`;\n",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              suspiciousPatterns: ["executeScript"],
+              prompt: "Rewrite remaining executeScript usages by hand.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/llm",
+          prompt: "Rewrite remaining executeScript usages by hand.",
+          files: ["a.ts"],
+        },
+      ]);
+    });
+
     test("emits a blanket LLM review for a codemod-less manual entry", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-manual-test-"));
       tmpDir = dir;
