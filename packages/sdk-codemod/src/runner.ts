@@ -50,6 +50,7 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 /** Directory names always excluded from file scanning. */
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
@@ -131,12 +132,155 @@ interface LoadedTransform {
   prompt?: string;
 }
 
+function maskSourceNonCode(content: string): string {
+  let output = "";
+  let i = 0;
+  let state: "code" | "lineComment" | "blockComment" | "single" | "double" | "template" = "code";
+  let templateExpressionDepth = 0;
+  const mask = (char: string): string => (char === "\n" || char === "\r" ? char : " ");
+
+  while (i < content.length) {
+    const char = content[i]!;
+    const next = content[i + 1];
+
+    if (state === "code") {
+      if (char === "/" && next === "/") {
+        output += "  ";
+        i += 2;
+        state = "lineComment";
+        continue;
+      }
+      if (char === "/" && next === "*") {
+        output += "  ";
+        i += 2;
+        state = "blockComment";
+        continue;
+      }
+      if (char === "'") {
+        output += " ";
+        i += 1;
+        state = "single";
+        continue;
+      }
+      if (char === '"') {
+        output += " ";
+        i += 1;
+        state = "double";
+        continue;
+      }
+      if (char === "`") {
+        output += " ";
+        i += 1;
+        state = "template";
+        continue;
+      }
+      if (templateExpressionDepth > 0 && char === "{") {
+        output += char;
+        i += 1;
+        templateExpressionDepth += 1;
+        continue;
+      }
+      if (templateExpressionDepth > 0 && char === "}") {
+        output += char;
+        i += 1;
+        templateExpressionDepth -= 1;
+        if (templateExpressionDepth === 0) state = "template";
+        continue;
+      }
+      output += char;
+      i += 1;
+      continue;
+    }
+
+    if (state === "lineComment") {
+      output += mask(char);
+      i += 1;
+      if (char === "\n" || char === "\r") state = "code";
+      continue;
+    }
+
+    if (state === "blockComment") {
+      if (char === "*" && next === "/") {
+        output += "  ";
+        i += 2;
+        state = "code";
+        continue;
+      }
+      output += mask(char);
+      i += 1;
+      continue;
+    }
+
+    if (state === "template") {
+      if (char === "$" && next === "{") {
+        output += "  ";
+        i += 2;
+        state = "code";
+        templateExpressionDepth += 1;
+        continue;
+      }
+      output += mask(char);
+      i += 1;
+      if (char === "\\") {
+        if (i < content.length) {
+          output += mask(content[i]!);
+          i += 1;
+        }
+        continue;
+      }
+      if (char === "`") state = "code";
+      continue;
+    }
+
+    output += mask(char);
+    i += 1;
+    if (char === "\\") {
+      if (i < content.length) {
+        output += mask(content[i]!);
+        i += 1;
+      }
+      continue;
+    }
+    if ((state === "single" && char === "'") || (state === "double" && char === '"')) {
+      state = "code";
+    } else if (char === "\n" || char === "\r") {
+      state = "code";
+    }
+  }
+
+  return output;
+}
+
+function contentForResidualMatching(relative: string, content: string): string {
+  const ext = path.extname(relative).toLowerCase();
+  return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(content) : content;
+}
+
+function isIdentifierChar(char: string | undefined): boolean {
+  return char != null && /^[A-Za-z0-9_$]$/.test(char);
+}
+
+function includesResidualPattern(content: string, pattern: string): boolean {
+  const checkLeft = isIdentifierChar(pattern[0]);
+  const checkRight = isIdentifierChar(pattern.at(-1));
+  let index = content.indexOf(pattern);
+  while (index !== -1) {
+    const before = index > 0 ? content[index - 1] : undefined;
+    const after = content[index + pattern.length];
+    if ((!checkLeft || !isIdentifierChar(before)) && (!checkRight || !isIdentifierChar(after))) {
+      return true;
+    }
+    index = content.indexOf(pattern, index + 1);
+  }
+  return false;
+}
+
 /** Resolve a legacy pattern against content, returning its label when matched. */
 function matchLegacyPattern(content: string, pattern: string | string[]): string | null {
   if (typeof pattern === "string") {
-    return content.includes(pattern) ? pattern : null;
+    return includesResidualPattern(content, pattern) ? pattern : null;
   }
-  return pattern.every((p) => content.includes(p)) ? pattern.join(" + ") : null;
+  return pattern.every((p) => includesResidualPattern(content, p)) ? pattern.join(" + ") : null;
 }
 
 function legacyPatternWarnings(
@@ -226,11 +370,12 @@ export async function runCodemods(
       }
     }
 
-    warnings.push(...legacyPatternWarnings(relative, current, matchedTransforms));
+    const residualContent = contentForResidualMatching(relative, current);
+    warnings.push(...legacyPatternWarnings(relative, residualContent, matchedTransforms));
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => current.includes(p))) {
+      if (lt.suspiciousPatterns.some((p) => includesResidualPattern(residualContent, p))) {
         const files = suspiciousByCodemod.get(lt.id) ?? [];
         files.push(relative);
         suspiciousByCodemod.set(lt.id, files);
