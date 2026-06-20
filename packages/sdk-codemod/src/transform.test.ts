@@ -38,9 +38,7 @@ async function discoverCases(codemodPath: string): Promise<FixtureCase[]> {
 }
 
 async function runFixtureCases(codemodPath: string): Promise<void> {
-  const scriptPath = path.join(CODEMODS_DIR, codemodPath, "scripts/transform.ts");
-  const mod = await import(scriptPath);
-  const transform = mod.default as TransformFn;
+  const transform = await loadTransform(codemodPath);
 
   const cases = await discoverCases(codemodPath);
   expect(cases.length, `expected at least one fixture under ${codemodPath}/tests`).toBeGreaterThan(
@@ -56,6 +54,12 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
       : null;
     expect(result).toBe(expected);
   }
+}
+
+async function loadTransform(codemodPath: string): Promise<TransformFn> {
+  const scriptPath = path.join(CODEMODS_DIR, codemodPath, "scripts/transform.ts");
+  const mod = await import(scriptPath);
+  return mod.default as TransformFn;
 }
 
 describe("codemod transforms", () => {
@@ -97,5 +101,59 @@ describe("codemod transforms", () => {
 
   test("v2/execute-script-arg transforms correctly", async () => {
     await expect(runFixtureCases("v2/execute-script-arg")).resolves.toBeUndefined();
+  });
+
+  test("v2/runtime-globals-opt-in transforms correctly", async () => {
+    await expect(runFixtureCases("v2/runtime-globals-opt-in")).resolves.toBeUndefined();
+  });
+
+  test("v2/runtime-globals-opt-in recognizes multiline type-only syntax", async () => {
+    const transform = await loadTransform("v2/runtime-globals-opt-in");
+    const importInput = [
+      "import type",
+      '{ tailor } from "pkg";',
+      "",
+      "const client = tailor.idp.Client;",
+      "",
+    ].join("\n");
+
+    expect(await transform(importInput, "/tmp/input.ts")).toBe(
+      [
+        "import type",
+        '{ tailor } from "pkg";',
+        'import "@tailor-platform/sdk/runtime/globals";',
+        "",
+        "const client = tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const specifierInput = [
+      "import { type",
+      'tailor } from "pkg";',
+      "",
+      "const client = tailor.idp.Client;",
+      "",
+    ].join("\n");
+
+    expect(await transform(specifierInput, "/tmp/input.ts")).toBe(
+      [
+        "import { type",
+        'tailor } from "pkg";',
+        'import "@tailor-platform/sdk/runtime/globals";',
+        "",
+        "const client = tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const exportInput = [
+      'import type { tailor } from "pkg";',
+      "export type",
+      "{ tailor };",
+      "",
+    ].join("\n");
+
+    expect(await transform(exportInput, "/tmp/input.ts")).toBeNull();
   });
 });

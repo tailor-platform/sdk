@@ -294,7 +294,15 @@ export const allCodemods: CodemodPackage[] = [
       'Importing `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` global declarations. Normal SDK development does not need them — use the SDK APIs and the typed wrappers from `@tailor-platform/sdk/runtime`. Only if you relied on the ambient globals directly, add `import "@tailor-platform/sdk/runtime/globals"`. (The capital-cased `Tailordb.*` namespace is removed separately — see the `Tailordb → tailordb` codemod.)',
     since: "1.0.0",
     until: "2.0.0",
-    notice: true,
+    scriptPath: "v2/runtime-globals-opt-in/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts}"],
+    examples: [
+      {
+        before: "const client = new tailor.idp.Client();",
+        after:
+          'import "@tailor-platform/sdk/runtime/globals";\nconst client = new tailor.idp.Client();',
+      },
+    ],
   },
   {
     id: "v2/workflow-trigger-dispatch",
