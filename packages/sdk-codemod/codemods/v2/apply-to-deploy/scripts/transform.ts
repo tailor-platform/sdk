@@ -12,6 +12,7 @@ const VALUE_GLOBAL_ARG = "(?:--env-file|--env-file-if-exists|-e)";
 const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
 const TAILOR_BINARY = `(?<![\\w-])tailor-sdk(?:@[^\\s'"\`]+)?(?![\\w-])`;
 const APPLY_PATTERN = new RegExp(`${TAILOR_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)apply(?![-\\w])`, "g");
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
 
 function replaceApply(value: string): string {
   return value.replace(APPLY_PATTERN, (match) => `${match.slice(0, -"apply".length)}deploy`);
@@ -21,6 +22,14 @@ function transformText(source: string): string | null {
   if (!APPLY_PATTERN.test(source)) return null;
   APPLY_PATTERN.lastIndex = 0;
   const updated = replaceApply(source);
+  return updated === source ? null : updated;
+}
+
+function transformSourceText(source: string): string | null {
+  const updated = source
+    .split(/(\r\n|\n|\r)/)
+    .map((part, index) => (index % 2 === 0 ? replaceApply(part) : part))
+    .join("");
   return updated === source ? null : updated;
 }
 
@@ -64,5 +73,6 @@ export default function transform(source: string, filePath: string): string | nu
 
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".json") return transformPackageJson(source);
+  if (SOURCE_EXTENSIONS.has(ext)) return transformSourceText(source);
   return transformText(source);
 }
