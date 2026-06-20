@@ -36,20 +36,23 @@ export interface CodemodPackage {
   filePatterns?: string[];
   /**
    * Patterns to detect in post-transform file content for manual migration
-   * warnings. A plain string warns when that substring is present; a
-   * `string[]` group warns only when every substring in the group is present
+   * warnings. A plain string warns when that residual pattern is present; a
+   * `string[]` group warns only when every pattern in the group is present
    * (AND), letting a rule target a co-occurrence such as `executeScript` used
-   * together with `JSON.stringify`.
+   * together with `JSON.stringify`. In source files, comments and string
+   * literals are ignored, and identifier-like patterns must match token
+   * boundaries.
    */
   legacyPatterns?: Array<string | string[]>;
   /**
-   * Substrings that, when present in a file's post-transform content, mark it
-   * as a candidate for LLM-assisted review. Use this for migrations the
+   * Residual patterns that, when present in a file's post-transform content,
+   * mark it as a candidate for LLM-assisted review. Use this for migrations the
    * deterministic transform cannot safely complete on its own (e.g. a value
    * reached through a variable or a dynamic expression). Unlike
    * `legacyPatterns`, these do not need to be exhaustive: a broad signal such
-   * as the API name is enough to point an LLM at the right files. Has no effect
-   * unless `prompt` is also set.
+   * as the API name is enough to point an LLM at the right files. Source files
+   * use the same comment/string and token-boundary matching as
+   * `legacyPatterns`. Has no effect unless `prompt` is also set.
    */
   suspiciousPatterns?: string[];
   /**
