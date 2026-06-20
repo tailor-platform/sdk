@@ -142,7 +142,12 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/apply-to-deploy/scripts/transform.js",
-    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,yml,yaml}",
+      "**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
+      "**/*.md",
+    ],
     examples: [
       {
         lang: "sh",
