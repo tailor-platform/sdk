@@ -136,7 +136,7 @@ function maskSourceNonCode(content: string): string {
   let output = "";
   let i = 0;
   let state: "code" | "lineComment" | "blockComment" | "single" | "double" | "template" = "code";
-  let templateExpressionDepth = 0;
+  const templateExpressionStack: number[] = [];
   const mask = (char: string): string => (char === "\n" || char === "\r" ? char : " ");
 
   while (i < content.length) {
@@ -174,17 +174,21 @@ function maskSourceNonCode(content: string): string {
         state = "template";
         continue;
       }
-      if (templateExpressionDepth > 0 && char === "{") {
+      const topTemplateExpression = templateExpressionStack.length - 1;
+      if (topTemplateExpression >= 0 && char === "{") {
         output += char;
         i += 1;
-        templateExpressionDepth += 1;
+        templateExpressionStack[topTemplateExpression]! += 1;
         continue;
       }
-      if (templateExpressionDepth > 0 && char === "}") {
+      if (topTemplateExpression >= 0 && char === "}") {
         output += char;
         i += 1;
-        templateExpressionDepth -= 1;
-        if (templateExpressionDepth === 0) state = "template";
+        templateExpressionStack[topTemplateExpression]! -= 1;
+        if (templateExpressionStack[topTemplateExpression] === 0) {
+          templateExpressionStack.pop();
+          state = "template";
+        }
         continue;
       }
       output += char;
@@ -216,7 +220,7 @@ function maskSourceNonCode(content: string): string {
         output += "  ";
         i += 2;
         state = "code";
-        templateExpressionDepth += 1;
+        templateExpressionStack.push(1);
         continue;
       }
       output += mask(char);
