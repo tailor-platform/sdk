@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getApplicableCodemods } from "./registry";
+import { allCodemods, getApplicableCodemods } from "./registry";
 
 describe("getApplicableCodemods", () => {
   test("returns codemods when upgrading across their version boundary", () => {
@@ -23,5 +23,11 @@ describe("getApplicableCodemods", () => {
   test("throws for invalid semver versions", () => {
     expect(() => getApplicableCodemods("invalid", "2.0.0")).toThrow("Invalid fromVersion");
     expect(() => getApplicableCodemods("1.0.0", "invalid")).toThrow("Invalid toVersion");
+  });
+
+  test("includes CommonJS TypeScript files in the runtime globals codemod", () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
+
+    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts}");
   });
 });
