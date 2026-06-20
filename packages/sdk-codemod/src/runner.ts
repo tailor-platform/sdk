@@ -53,7 +53,12 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
-const MASKED_SOURCE_NODE_KINDS = new Set(["comment", "string", "regex", "string_fragment"]);
+const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
+  "comment",
+  "string",
+  "regex",
+  "string_fragment",
+]);
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
