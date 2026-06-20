@@ -4,7 +4,7 @@ import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage, LlmReview } from "./types";
+import type { CodemodPackage, CodemodPattern, CodemodPatternGroup, LlmReview } from "./types";
 
 /**
  * A transform function that receives source text and file path,
@@ -126,17 +126,29 @@ interface LoadedTransform {
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
   matches: (relativePath: string) => boolean;
-  legacyPatterns: Array<string | string[]>;
-  suspiciousPatterns: Array<string | string[]>;
+  legacyPatterns: CodemodPatternGroup[];
+  suspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
 }
 
+function matchesPattern(content: string, pattern: CodemodPattern): boolean {
+  if (typeof pattern === "string") return content.includes(pattern);
+  pattern.lastIndex = 0;
+  return pattern.test(content);
+}
+
+function patternLabel(pattern: CodemodPattern): string {
+  return typeof pattern === "string" ? pattern : pattern.toString();
+}
+
 /** Resolve a residual pattern against content, returning its label when matched. */
-function matchResidualPattern(content: string, pattern: string | string[]): string | null {
-  if (typeof pattern === "string") {
-    return content.includes(pattern) ? pattern : null;
+function matchResidualPattern(content: string, pattern: CodemodPatternGroup): string | null {
+  if (!Array.isArray(pattern)) {
+    return matchesPattern(content, pattern) ? patternLabel(pattern) : null;
   }
-  return pattern.every((p) => content.includes(p)) ? pattern.join(" + ") : null;
+  return pattern.every((p) => matchesPattern(content, p))
+    ? pattern.map((p) => patternLabel(p)).join(" + ")
+    : null;
 }
 
 function legacyPatternWarnings(
