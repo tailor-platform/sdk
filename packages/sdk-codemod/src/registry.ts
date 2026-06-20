@@ -265,6 +265,8 @@ export const allCodemods: CodemodPackage[] = [
       ["executeScript", "JSON.stringify", "arg:"],
       ["executeScript", "JSON.stringify", '"arg"'],
       ["executeScript", "JSON.stringify", "'arg'"],
+      ["executeScript", "JSON.stringify", "arg ="],
+      ["executeScript", "JSON.stringify", "arg="],
     ],
     prompt: [
       "In Tailor SDK v2 the executeScript() arg option takes a JSON-serializable value",

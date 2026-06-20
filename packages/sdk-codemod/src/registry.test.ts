@@ -25,6 +25,7 @@ describe("getApplicableCodemods", () => {
     expect(() => getApplicableCodemods("1.0.0", "invalid")).toThrow("Invalid toVersion");
   });
 
+<<<<<<< HEAD
   test("apply-to-deploy scans source files with embedded CLI strings", () => {
     const applyToDeploy = getApplicableCodemods("1.67.1", "2.0.0").find(
       (codemod) => codemod.id === "v2/apply-to-deploy",
@@ -49,6 +50,19 @@ describe("getApplicableCodemods", () => {
     expect(codemod?.prompt).toContain('import { idp } from "@tailor-platform/sdk/runtime"');
     expect(codemod?.examples?.[0]?.after).toContain(
       'import { idp } from "@tailor-platform/sdk/runtime"',
+=======
+  test("execute-script-arg reviews unresolved arg stringification patterns", () => {
+    const executeScriptArg = getApplicableCodemods("1.67.1", "2.0.0").find(
+      (codemod) => codemod.id === "v2/execute-script-arg",
+    );
+
+    expect(executeScriptArg?.suspiciousPatterns).toEqual(
+      expect.arrayContaining([
+        ["executeScript", "JSON.stringify", "arg:"],
+        ["executeScript", "JSON.stringify", "arg ="],
+        ["executeScript", "JSON.stringify", "arg="],
+      ]),
+>>>>>>> 75828cd8c (fix(sdk-codemod): include arg assignment review patterns)
     );
   });
 
