@@ -43,15 +43,16 @@ export interface CodemodPackage {
    */
   legacyPatterns?: Array<string | string[]>;
   /**
-   * Substrings that, when present in a file's post-transform content, mark it
+   * Patterns that, when present in a file's post-transform content, mark it
    * as a candidate for LLM-assisted review. Use this for migrations the
    * deterministic transform cannot safely complete on its own (e.g. a value
-   * reached through a variable or a dynamic expression). Unlike
+   * reached through a variable or a dynamic expression). A `string[]` group
+   * matches only when every pattern in the group is present (AND). Unlike
    * `legacyPatterns`, these do not need to be exhaustive: a broad signal such
    * as the API name is enough to point an LLM at the right files. Has no effect
    * unless `prompt` is also set.
    */
-  suspiciousPatterns?: string[];
+  suspiciousPatterns?: Array<string | string[]>;
   /**
    * Prompt that instructs an LLM how to finish the migration for files matched
    * by `suspiciousPatterns`.
