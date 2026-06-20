@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 import * as url from "node:url";
+import { parse, Lang } from "@ast-grep/napi";
 import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import type { CodemodPackage, LlmReview } from "./types";
+import type { SgNode } from "@ast-grep/napi";
 
 /**
  * A transform function that receives source text and file path,
@@ -51,6 +53,7 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const MASKED_SOURCE_NODE_KINDS = new Set(["comment", "string", "regex", "string_fragment"]);
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
@@ -132,132 +135,44 @@ interface LoadedTransform {
   prompt?: string;
 }
 
-function maskSourceNonCode(content: string): string {
-  let output = "";
-  let i = 0;
-  let state: "code" | "lineComment" | "blockComment" | "single" | "double" | "template" = "code";
-  const templateExpressionStack: number[] = [];
-  const mask = (char: string): string => (char === "\n" || char === "\r" ? char : " ");
-
-  while (i < content.length) {
-    const char = content[i]!;
-    const next = content[i + 1];
-
-    if (state === "code") {
-      if (char === "/" && next === "/") {
-        output += "  ";
-        i += 2;
-        state = "lineComment";
-        continue;
-      }
-      if (char === "/" && next === "*") {
-        output += "  ";
-        i += 2;
-        state = "blockComment";
-        continue;
-      }
-      if (char === "'") {
-        output += " ";
-        i += 1;
-        state = "single";
-        continue;
-      }
-      if (char === '"') {
-        output += " ";
-        i += 1;
-        state = "double";
-        continue;
-      }
-      if (char === "`") {
-        output += " ";
-        i += 1;
-        state = "template";
-        continue;
-      }
-      const topTemplateExpression = templateExpressionStack.length - 1;
-      if (topTemplateExpression >= 0 && char === "{") {
-        output += char;
-        i += 1;
-        templateExpressionStack[topTemplateExpression]! += 1;
-        continue;
-      }
-      if (topTemplateExpression >= 0 && char === "}") {
-        output += char;
-        i += 1;
-        templateExpressionStack[topTemplateExpression]! -= 1;
-        if (templateExpressionStack[topTemplateExpression] === 0) {
-          templateExpressionStack.pop();
-          state = "template";
-        }
-        continue;
-      }
-      output += char;
-      i += 1;
-      continue;
-    }
-
-    if (state === "lineComment") {
-      output += mask(char);
-      i += 1;
-      if (char === "\n" || char === "\r") state = "code";
-      continue;
-    }
-
-    if (state === "blockComment") {
-      if (char === "*" && next === "/") {
-        output += "  ";
-        i += 2;
-        state = "code";
-        continue;
-      }
-      output += mask(char);
-      i += 1;
-      continue;
-    }
-
-    if (state === "template") {
-      if (char === "$" && next === "{") {
-        output += "  ";
-        i += 2;
-        state = "code";
-        templateExpressionStack.push(1);
-        continue;
-      }
-      output += mask(char);
-      i += 1;
-      if (char === "\\") {
-        if (i < content.length) {
-          output += mask(content[i]!);
-          i += 1;
-        }
-        continue;
-      }
-      if (char === "`") state = "code";
-      continue;
-    }
-
-    output += mask(char);
-    i += 1;
-    if (char === "\\") {
-      if (i < content.length) {
-        output += mask(content[i]!);
-        i += 1;
-      }
-      continue;
-    }
-    if ((state === "single" && char === "'") || (state === "double" && char === '"')) {
-      state = "code";
-    } else if (char === "\n" || char === "\r") {
-      state = "code";
-    }
-  }
-
-  return output;
-}
-
 function contentForResidualMatching(relative: string, content: string): string {
   const ext = path.extname(relative).toLowerCase();
-  return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(content) : content;
+  return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
+}
+
+function sourceLang(relative: string): Lang {
+  const ext = path.extname(relative).toLowerCase();
+  return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
+}
+
+function collectMaskedRanges(node: SgNode, ranges: Array<[number, number]>): void {
+  if (MASKED_SOURCE_NODE_KINDS.has(node.kind())) {
+    const range = node.range();
+    ranges.push([range.start.index, range.end.index]);
+    return;
+  }
+  for (const child of node.children()) {
+    collectMaskedRanges(child, ranges);
+  }
+}
+
+function maskSourceNonCode(relative: string, content: string): string {
+  let ranges: Array<[number, number]> = [];
+  try {
+    const root = parse(sourceLang(relative), content).root();
+    collectMaskedRanges(root, ranges);
+  } catch {
+    return content;
+  }
+
+  ranges = ranges.toSorted(([a], [b]) => a - b);
+  const chars = content.split("");
+  for (const [start, end] of ranges) {
+    for (let i = start; i < end && i < chars.length; i++) {
+      if (chars[i] !== "\n" && chars[i] !== "\r") chars[i] = " ";
+    }
+  }
+  return chars.join("");
 }
 
 function isIdentifierChar(char: string | undefined): boolean {
