@@ -12,7 +12,7 @@ const VALUE_GLOBAL_ARG = "(?:--env-file|--env-file-if-exists|-e)";
 const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
 const TAILOR_BINARY = `(?<![\\w-])tailor-sdk(?:@[^\\s'"\`]+)?(?![\\w-])`;
 const APPLY_PATTERN = new RegExp(`${TAILOR_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)apply(?![-\\w])`, "g");
-const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 
 function replaceApply(value: string): string {
   return value.replace(APPLY_PATTERN, (match) => `${match.slice(0, -"apply".length)}deploy`);

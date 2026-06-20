@@ -31,7 +31,7 @@ describe("getApplicableCodemods", () => {
     );
 
     expect(applyToDeploy?.filePatterns).toEqual(
-      expect.arrayContaining(["**/*.{ts,tsx,mts,cts,js,mjs,cjs}"]),
+      expect.arrayContaining(["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]),
     );
   });
 });
