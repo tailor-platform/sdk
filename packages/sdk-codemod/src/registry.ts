@@ -145,7 +145,7 @@ export const allCodemods: CodemodPackage[] = [
     filePatterns: [
       "**/package.json",
       "**/*.{sh,bash,zsh,yml,yaml}",
-      "**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
       "**/*.md",
     ],
     examples: [
