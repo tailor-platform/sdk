@@ -25,9 +25,11 @@ describe("getApplicableCodemods", () => {
     expect(() => getApplicableCodemods("1.0.0", "invalid")).toThrow("Invalid toVersion");
   });
 
-  test("includes CommonJS TypeScript files in the runtime globals codemod", () => {
+  test("flags CommonJS TypeScript files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
     expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts}");
+    expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
+    expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 });
