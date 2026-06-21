@@ -8,7 +8,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { assertWritable } from "@/cli/shared/readonly-guard";
-import { watchExecutorJob } from "./jobs";
+import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
 import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "@/types/executor.generated";
 import type { JsonObject } from "@bufbuild/protobuf";
@@ -209,6 +209,10 @@ The \`--logs\` option displays logs from the downstream execution when available
         alias: "i",
         description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
       }),
+      timeout: arg(durationArg.default("5m"), {
+        alias: "t",
+        description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
+      }),
       logs: arg(z.boolean().default(false), {
         alias: "l",
         description: "Display function execution logs after completion (requires --wait)",
@@ -216,6 +220,7 @@ The \`--logs\` option displays logs from the downstream execution when available
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = logger.jsonMode || args.json;
     await assertWritable({ profile: args.profile });
     // Validate trigger type before processing
     const accessToken = await loadAccessToken({
@@ -296,11 +301,13 @@ The \`--logs\` option displays logs from the downstream execution when available
         workspaceId: args["workspace-id"],
         profile: args.profile,
         interval: parseDuration(args.interval),
+        timeout: parseDuration(args.timeout),
         logs: args.logs,
+        showProgress: !jsonOutput,
       });
 
       // Print result
-      if (!args.json) {
+      if (!jsonOutput) {
         logger.log(styles.bold(`\nTarget Type: ${watchResult.targetType}`));
         logger.log(`Job Status: ${watchResult.job.status}`);
 
@@ -349,6 +356,10 @@ The \`--logs\` option displays logs from the downstream execution when available
         }
       } else {
         logger.out(watchResult);
+      }
+      const failureMessage = getExecutorWaitFailureMessage(watchResult);
+      if (failureMessage) {
+        throw new Error(failureMessage);
       }
     }
   },

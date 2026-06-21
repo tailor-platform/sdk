@@ -1,7 +1,16 @@
+import {
+  ExecutorJobStatus,
+  ExecutorTargetType,
+  ExecutorTriggerType,
+} from "@tailor-proto/tailor/v1/executor_resource_pb";
+import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { triggerExecutor } from "./trigger";
+import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { triggerCommand, triggerExecutor } from "./trigger";
+import type { ExecutorJob } from "@tailor-proto/tailor/v1/executor_resource_pb";
 
 vi.mock("@/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -9,6 +18,12 @@ vi.mock("@/cli/shared/context", () => ({
 }));
 
 vi.mock("@/cli/shared/client", () => ({
+  fetchAll: async <T>(
+    fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
+  ): Promise<T[]> => {
+    const [items] = await fn("", 1000);
+    return items;
+  },
   initOperatorClient: vi.fn(),
 }));
 
@@ -57,6 +72,54 @@ describe("triggerExecutor runtime overload", () => {
         body: {
           message: "hello",
         },
+      },
+    });
+  });
+
+  test("trigger command wait with jsonMode emits only parseable JSON to stdout", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getExecutorExecutor: vi.fn().mockResolvedValue({
+        executor: {
+          triggerType: ExecutorTriggerType.INCOMING_WEBHOOK,
+          targetType: ExecutorTargetType.WEBHOOK,
+        },
+      }),
+      triggerExecutor: triggerExecutorMock,
+      getExecutorJob: vi.fn().mockResolvedValue({
+        job: {
+          id: "job-1",
+          executorName: "my-executor",
+          status: ExecutorJobStatus.SUCCESS,
+        } as ExecutorJob,
+      }),
+      listExecutorJobAttempts: vi.fn().mockResolvedValue({
+        attempts: [],
+        nextPageToken: "",
+      }),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+
+    await runCommand(triggerCommand, [
+      "my-executor",
+      "--wait",
+      "--timeout",
+      "1s",
+      "--interval",
+      "1ms",
+    ]);
+
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      targetType: "WEBHOOK",
+      attempts: 1,
+      timedOut: false,
+      lastError: null,
+      job: {
+        id: "job-1",
+        executorName: "my-executor",
+        status: "SUCCESS",
       },
     });
   });

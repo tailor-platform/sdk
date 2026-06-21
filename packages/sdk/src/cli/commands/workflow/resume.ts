@@ -9,7 +9,7 @@ import { logger } from "@/cli/shared/logger";
 import { waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { waitForExecution, type WaitOptions } from "./start";
-import { type WorkflowExecutionInfo } from "./transform";
+import { getWorkflowWaitFailureMessage, type WorkflowWaitResult } from "./waiter";
 
 export interface ResumeWorkflowOptions {
   executionId: string;
@@ -20,7 +20,7 @@ export interface ResumeWorkflowOptions {
 
 export interface ResumeWorkflowResultWithWait {
   executionId: string;
-  wait: (options?: WaitOptions) => Promise<WorkflowExecutionInfo>;
+  wait: (options?: WaitOptions) => Promise<WorkflowWaitResult>;
 }
 
 /**
@@ -54,6 +54,8 @@ export async function resumeWorkflow(
           workspaceId,
           executionId,
           interval: options.interval ?? 3000,
+          timeout: waitOptions?.timeout,
+          until: waitOptions?.until,
           showProgress: waitOptions?.showProgress,
         }),
     };
@@ -86,6 +88,7 @@ export const resumeCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = logger.jsonMode || args.json;
     const { executionId, wait } = await resumeWorkflow({
       executionId: args.executionId,
       workspaceId: args["workspace-id"],
@@ -93,13 +96,17 @@ export const resumeCommand = defineAppCommand({
       interval: parseDuration(args.interval),
     });
 
-    if (!args.json) {
+    if (!jsonOutput) {
       logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
     }
 
     if (args.wait) {
-      const result = await wait({ showProgress: !args.json });
-      if (args.logs && !args.json) {
+      const result = await wait({
+        showProgress: !jsonOutput,
+        timeout: parseDuration(args.timeout),
+        until: args.until,
+      });
+      if (args.logs && !jsonOutput) {
         const { execution } = await getWorkflowExecution({
           executionId,
           workspaceId: args["workspace-id"],
@@ -107,8 +114,20 @@ export const resumeCommand = defineAppCommand({
           logs: true,
         });
         printExecutionWithLogs(execution);
+      } else if (args.logs) {
+        const { execution } = await getWorkflowExecution({
+          executionId,
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+          logs: true,
+        });
+        logger.out({ ...result, jobDetails: execution.jobDetails });
       } else {
         logger.out(result);
+      }
+      const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
+      if (failureMessage) {
+        throw new Error(failureMessage);
       }
     } else {
       logger.out({ executionId });

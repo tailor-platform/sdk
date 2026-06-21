@@ -131,6 +131,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "workflow/list.ts",
   "workflow/resume.ts",
   "workflow/start.ts",
+  "workflow/wait.ts",
   // Workspace (read-only branches)
   "workspace/index.ts",
   "workspace/get.ts",
