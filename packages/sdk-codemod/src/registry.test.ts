@@ -51,4 +51,12 @@ describe("getApplicableCodemods", () => {
       'import { idp } from "@tailor-platform/sdk/runtime"',
     );
   });
+
+  test("flags principal migration follow-ups for review", () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/principal-unify");
+
+    expect(codemod?.suspiciousPatterns).toContain("context.user");
+    expect(codemod?.suspiciousPatterns).toContain("caller?.");
+    expect(codemod?.prompt).toContain("anonymous callers");
+  });
 });
