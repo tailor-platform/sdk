@@ -112,6 +112,12 @@ export const allCodemods: CodemodPackage[] = [
       "TailorInvoker",
       "unauthenticatedTailorUser",
     ],
+    suspiciousPatterns: [
+      "caller?.",
+      "context.user",
+      "context.invoker ?? context.user",
+      "ResolverContext",
+    ],
     examples: [
       {
         caption: "Type references unify under `TailorPrincipal`:",
@@ -131,6 +137,12 @@ export const allCodemods: CodemodPackage[] = [
       "- Replace member-access on the removed unauthenticatedTailorUser (e.g.",
       "  unauthenticatedTailorUser.id); the codemod only replaced standalone references",
       "  with null and left member access to surface a type error.",
+      "- Review helper adapters that still accept or read `context.user`; v2 resolver",
+      "  context uses nullable `caller` and `invoker`, so project-specific helper",
+      "  semantics for anonymous callers and command invokers must be chosen explicitly.",
+      "- Review `caller?.` values passed to APIs that require non-null values. If the",
+      "  resolver requires authentication, throw or otherwise narrow before the call;",
+      "  if anonymous callers are allowed, keep the nullable flow explicit.",
       "Use TailorPrincipal for the unified user/actor/invoker type.",
     ].join("\n"),
   },
