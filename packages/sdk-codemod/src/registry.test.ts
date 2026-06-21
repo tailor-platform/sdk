@@ -32,4 +32,13 @@ describe("getApplicableCodemods", () => {
     expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
+
+  test("leads runtime globals migration with the typed wrappers", () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
+
+    expect(codemod?.prompt).toContain('import { idp } from "@tailor-platform/sdk/runtime"');
+    expect(codemod?.examples?.[0]?.after).toContain(
+      'import { idp } from "@tailor-platform/sdk/runtime"',
+    );
+  });
 });

@@ -313,6 +313,15 @@ export const allCodemods: CodemodPackage[] = [
     ],
     examples: [
       {
+        caption:
+          "Preferred: switch to the typed wrappers from `@tailor-platform/sdk/runtime` and drop the ambient globals:",
+        before: "const client = new tailor.idp.Client();",
+        after:
+          'import { idp } from "@tailor-platform/sdk/runtime";\nconst client = new idp.Client({ namespace: "my-namespace" });',
+      },
+      {
+        caption:
+          "Fallback: only if you must keep referencing the bare `tailor.*` names, opt into the global declarations:",
         before: "const client = new tailor.idp.Client();",
         after:
           'import "@tailor-platform/sdk/runtime/globals";\nconst client = new tailor.idp.Client();',
@@ -320,16 +329,21 @@ export const allCodemods: CodemodPackage[] = [
     ],
     prompt: [
       "The v2 SDK no longer enables ambient Tailor runtime globals from",
-      "`@tailor-platform/sdk`. For each flagged file that intentionally uses",
-      "`tailor.*`, `tailordb.*`, or Tailor runtime error globals, opt into the",
-      "global declarations by adding one of these:",
+      "`@tailor-platform/sdk`. For each flagged file that uses `tailor.*`,",
+      "`tailordb.*`, or Tailor runtime error globals, prefer migrating to the",
+      "typed wrappers from `@tailor-platform/sdk/runtime` (e.g. replace",
+      '`new tailor.idp.Client()` with `import { idp } from "@tailor-platform/sdk/runtime"`',
+      "and `new idp.Client({ namespace })`). The wrappers are self-contained, so the",
+      "ambient globals are no longer needed.",
+      "",
+      "Only when the file must keep referencing the bare `tailor.*` names directly,",
+      "opt into the global declarations instead by adding one of these:",
       '- per-file: `import "@tailor-platform/sdk/runtime/globals";`',
       '- project-wide: `"types": ["@tailor-platform/sdk/runtime/globals"]` in',
       "  the relevant tsconfig compilerOptions",
       "",
       "Leave files unchanged when the matching name is local, imported from another",
-      "module, or appears only in comments or strings. Prefer the typed runtime",
-      "wrappers from `@tailor-platform/sdk/runtime` for new code.",
+      "module, or appears only in comments or strings.",
     ].join("\n"),
   },
   {
