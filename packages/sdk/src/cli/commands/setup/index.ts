@@ -61,20 +61,6 @@ export const setupCommand = defineAppCommand({
     check: checkCommand,
   },
   run: async (args) => {
-    // politty's strict() rejects unknown flags but silently drops positional
-    // tokens; inspect argv directly so stray tokens like
-    // `tailor-sdk setup github …` (old syntax) are rejected before any writes.
-    const raw = process.argv.slice(2);
-    const setupAt = raw.indexOf("setup");
-    if (setupAt >= 0) {
-      for (const a of raw.slice(setupAt + 1)) {
-        if (a === "--") break;
-        if (!a.startsWith("-") && a !== "check") {
-          throw new Error(`Unexpected argument "${a}". Use --provider/-p to set the CI provider.`);
-        }
-      }
-    }
-
     if (args["tag-pattern"] !== undefined && !args.tag) {
       throw new Error("--tag-pattern requires --tag.");
     }
