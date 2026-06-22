@@ -112,6 +112,12 @@ export const allCodemods: CodemodPackage[] = [
       "TailorInvoker",
       "unauthenticatedTailorUser",
     ],
+    suspiciousPatterns: [
+      "caller?.",
+      "context.user",
+      "context.invoker ?? context.user",
+      "ResolverContext",
+    ],
     examples: [
       {
         caption: "Type references unify under `TailorPrincipal`:",
@@ -131,6 +137,12 @@ export const allCodemods: CodemodPackage[] = [
       "- Replace member-access on the removed unauthenticatedTailorUser (e.g.",
       "  unauthenticatedTailorUser.id); the codemod only replaced standalone references",
       "  with null and left member access to surface a type error.",
+      "- Review helper adapters that still accept or read `context.user`; v2 resolver",
+      "  context uses nullable `caller` and `invoker`, so project-specific helper",
+      "  semantics for anonymous callers and command invokers must be chosen explicitly.",
+      "- Review `caller?.` values passed to APIs that require non-null values. If the",
+      "  resolver requires authentication, throw or otherwise narrow before the call;",
+      "  if anonymous callers are allowed, keep the nullable flow explicit.",
       "Use TailorPrincipal for the unified user/actor/invoker type.",
     ].join("\n"),
   },
@@ -142,7 +154,12 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/apply-to-deploy/scripts/transform.js",
-    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,yml,yaml}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+      "**/*.md",
+    ],
     examples: [
       {
         lang: "sh",
@@ -244,7 +261,9 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     scriptPath: "v2/execute-script-arg/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,mjs,cjs,js}"],
-    suspiciousPatterns: ["executeScript"],
+    suspiciousPatterns: [
+      ["executeScript", "JSON.stringify", /\barg\s*[:=]|["']arg["']\s*(?::|\]\s*[:=])/],
+    ],
     prompt: [
       "In Tailor SDK v2 the executeScript() arg option takes a JSON-serializable value",
       "and is serialized internally, so a pre-stringified argument double-encodes. The",
@@ -274,6 +293,8 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     // No scriptPath: this is a codemod-less ("manual") migration.
+    filePatterns: ["**/*.{ts,tsx,mts,cts,mjs,cjs,js}"],
+    suspiciousPatterns: ["openDownloadStream", "openFileDownloadStream"],
     examples: [
       {
         before: "const res = await openDownloadStream(namespace, typeName, fieldName, recordId);",
@@ -294,7 +315,57 @@ export const allCodemods: CodemodPackage[] = [
       'Importing `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` global declarations. Normal SDK development does not need them — use the SDK APIs and the typed wrappers from `@tailor-platform/sdk/runtime`. Only if you relied on the ambient globals directly, add `import "@tailor-platform/sdk/runtime/globals"`. (The capital-cased `Tailordb.*` namespace is removed separately — see the `Tailordb → tailordb` codemod.)',
     since: "1.0.0",
     until: "2.0.0",
-    notice: true,
+    filePatterns: ["**/*.{ts,tsx,mts,cts}"],
+    suspiciousPatterns: [
+      "tailor.context",
+      "tailor.iconv",
+      "tailor.idp",
+      "tailor.workflow",
+      "tailor[",
+      "tailordb.Client",
+      "tailordb.CommandType",
+      "tailordb.QueryResult",
+      "tailordb.file",
+      "tailordb[",
+      "TailorDBFileError",
+      "TailorErrorItem",
+      "TailorErrorMessage",
+      "TailorErrors",
+    ],
+    examples: [
+      {
+        caption:
+          "Preferred: switch to the typed wrappers from `@tailor-platform/sdk/runtime` and drop the ambient globals:",
+        before: "const client = new tailor.idp.Client();",
+        after:
+          'import { idp } from "@tailor-platform/sdk/runtime";\nconst client = new idp.Client({ namespace: "my-namespace" });',
+      },
+      {
+        caption:
+          "Fallback: only if you must keep referencing the bare `tailor.*` names, opt into the global declarations:",
+        before: "const client = new tailor.idp.Client();",
+        after:
+          'import "@tailor-platform/sdk/runtime/globals";\nconst client = new tailor.idp.Client();',
+      },
+    ],
+    prompt: [
+      "The v2 SDK no longer enables ambient Tailor runtime globals from",
+      "`@tailor-platform/sdk`. For each flagged file that uses `tailor.*`,",
+      "`tailordb.*`, or Tailor runtime error globals, prefer migrating to the",
+      "typed wrappers from `@tailor-platform/sdk/runtime` (e.g. replace",
+      '`new tailor.idp.Client()` with `import { idp } from "@tailor-platform/sdk/runtime"`',
+      "and `new idp.Client({ namespace })`). The wrappers are self-contained, so the",
+      "ambient globals are no longer needed.",
+      "",
+      "Only when the file must keep referencing the bare `tailor.*` names directly,",
+      "opt into the global declarations instead by adding one of these:",
+      '- per-file: `import "@tailor-platform/sdk/runtime/globals";`',
+      '- project-wide: `"types": ["@tailor-platform/sdk/runtime/globals"]` in',
+      "  the relevant tsconfig compilerOptions",
+      "",
+      "Leave files unchanged when the matching name is local, imported from another",
+      "module, or appears only in comments or strings.",
+    ].join("\n"),
   },
   {
     id: "v2/workflow-trigger-dispatch",
