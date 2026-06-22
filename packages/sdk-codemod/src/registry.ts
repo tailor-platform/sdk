@@ -294,7 +294,57 @@ export const allCodemods: CodemodPackage[] = [
       'Importing `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` global declarations. Normal SDK development does not need them — use the SDK APIs and the typed wrappers from `@tailor-platform/sdk/runtime`. Only if you relied on the ambient globals directly, add `import "@tailor-platform/sdk/runtime/globals"`. (The capital-cased `Tailordb.*` namespace is removed separately — see the `Tailordb → tailordb` codemod.)',
     since: "1.0.0",
     until: "2.0.0",
-    notice: true,
+    filePatterns: ["**/*.{ts,tsx,mts,cts}"],
+    suspiciousPatterns: [
+      "tailor.context",
+      "tailor.iconv",
+      "tailor.idp",
+      "tailor.workflow",
+      "tailor[",
+      "tailordb.Client",
+      "tailordb.CommandType",
+      "tailordb.QueryResult",
+      "tailordb.file",
+      "tailordb[",
+      "TailorDBFileError",
+      "TailorErrorItem",
+      "TailorErrorMessage",
+      "TailorErrors",
+    ],
+    examples: [
+      {
+        caption:
+          "Preferred: switch to the typed wrappers from `@tailor-platform/sdk/runtime` and drop the ambient globals:",
+        before: "const client = new tailor.idp.Client();",
+        after:
+          'import { idp } from "@tailor-platform/sdk/runtime";\nconst client = new idp.Client({ namespace: "my-namespace" });',
+      },
+      {
+        caption:
+          "Fallback: only if you must keep referencing the bare `tailor.*` names, opt into the global declarations:",
+        before: "const client = new tailor.idp.Client();",
+        after:
+          'import "@tailor-platform/sdk/runtime/globals";\nconst client = new tailor.idp.Client();',
+      },
+    ],
+    prompt: [
+      "The v2 SDK no longer enables ambient Tailor runtime globals from",
+      "`@tailor-platform/sdk`. For each flagged file that uses `tailor.*`,",
+      "`tailordb.*`, or Tailor runtime error globals, prefer migrating to the",
+      "typed wrappers from `@tailor-platform/sdk/runtime` (e.g. replace",
+      '`new tailor.idp.Client()` with `import { idp } from "@tailor-platform/sdk/runtime"`',
+      "and `new idp.Client({ namespace })`). The wrappers are self-contained, so the",
+      "ambient globals are no longer needed.",
+      "",
+      "Only when the file must keep referencing the bare `tailor.*` names directly,",
+      "opt into the global declarations instead by adding one of these:",
+      '- per-file: `import "@tailor-platform/sdk/runtime/globals";`',
+      '- project-wide: `"types": ["@tailor-platform/sdk/runtime/globals"]` in',
+      "  the relevant tsconfig compilerOptions",
+      "",
+      "Leave files unchanged when the matching name is local, imported from another",
+      "module, or appears only in comments or strings.",
+    ].join("\n"),
   },
   {
     id: "v2/workflow-trigger-dispatch",
