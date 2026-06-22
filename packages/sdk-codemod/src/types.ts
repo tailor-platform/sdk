@@ -43,7 +43,9 @@ export interface CodemodPackage {
    * warnings. A plain string warns when that substring is present, a `RegExp`
    * warns when it matches, and an array group warns only when every member is
    * present (AND), letting a rule target a co-occurrence such as
-   * `executeScript` used together with `JSON.stringify`.
+   * `executeScript` used together with `JSON.stringify`. In source files,
+   * comments and string literals are masked before matching, and identifier-like
+   * string patterns must match token boundaries.
    */
   legacyPatterns?: CodemodPatternGroup[];
   /**
@@ -53,8 +55,9 @@ export interface CodemodPackage {
    * reached through a variable or a dynamic expression). An array group
    * matches only when every pattern in the group is present (AND). Unlike
    * `legacyPatterns`, these do not need to be exhaustive: a broad signal such
-   * as the API name is enough to point an LLM at the right files. Has no effect
-   * unless `prompt` is also set.
+   * as the API name is enough to point an LLM at the right files. Source files
+   * use the same comment/string and token-boundary matching as
+   * `legacyPatterns`. Has no effect unless `prompt` is also set.
    */
   suspiciousPatterns?: CodemodPatternGroup[];
   /**
