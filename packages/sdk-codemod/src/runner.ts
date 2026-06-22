@@ -5,7 +5,7 @@ import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage, LlmReview } from "./types";
+import type { CodemodPackage, CodemodPattern, CodemodPatternGroup, LlmReview } from "./types";
 import type { SgNode } from "@ast-grep/napi";
 
 /**
@@ -135,8 +135,8 @@ interface LoadedTransform {
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
   matches: (relativePath: string) => boolean;
-  legacyPatterns: Array<string | string[]>;
-  suspiciousPatterns: string[];
+  legacyPatterns: CodemodPatternGroup[];
+  suspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
 }
 
@@ -189,27 +189,37 @@ function isIdentifierChar(char: string | undefined): boolean {
   return char != null && /^[A-Za-z0-9_$]$/.test(char);
 }
 
-function includesResidualPattern(content: string, pattern: string): boolean {
-  const checkLeft = isIdentifierChar(pattern[0]);
-  const checkRight = isIdentifierChar(pattern.at(-1));
-  let index = content.indexOf(pattern);
-  while (index !== -1) {
-    const before = index > 0 ? content[index - 1] : undefined;
-    const after = content[index + pattern.length];
-    if ((!checkLeft || !isIdentifierChar(before)) && (!checkRight || !isIdentifierChar(after))) {
-      return true;
+function matchesPattern(content: string, pattern: CodemodPattern): boolean {
+  if (typeof pattern === "string") {
+    const checkLeft = isIdentifierChar(pattern[0]);
+    const checkRight = isIdentifierChar(pattern.at(-1));
+    let index = content.indexOf(pattern);
+    while (index !== -1) {
+      const before = index > 0 ? content[index - 1] : undefined;
+      const after = content[index + pattern.length];
+      if ((!checkLeft || !isIdentifierChar(before)) && (!checkRight || !isIdentifierChar(after))) {
+        return true;
+      }
+      index = content.indexOf(pattern, index + 1);
     }
-    index = content.indexOf(pattern, index + 1);
+    return false;
   }
-  return false;
+  pattern.lastIndex = 0;
+  return pattern.test(content);
 }
 
-/** Resolve a legacy pattern against content, returning its label when matched. */
-function matchLegacyPattern(content: string, pattern: string | string[]): string | null {
-  if (typeof pattern === "string") {
-    return includesResidualPattern(content, pattern) ? pattern : null;
+function patternLabel(pattern: CodemodPattern): string {
+  return typeof pattern === "string" ? pattern : pattern.toString();
+}
+
+/** Resolve a residual pattern against content, returning its label when matched. */
+function matchResidualPattern(content: string, pattern: CodemodPatternGroup): string | null {
+  if (!Array.isArray(pattern)) {
+    return matchesPattern(content, pattern) ? patternLabel(pattern) : null;
   }
-  return pattern.every((p) => includesResidualPattern(content, p)) ? pattern.join(" + ") : null;
+  return pattern.every((p) => matchesPattern(content, p))
+    ? pattern.map((p) => patternLabel(p)).join(" + ")
+    : null;
 }
 
 function legacyPatternWarnings(
@@ -219,7 +229,7 @@ function legacyPatternWarnings(
 ): string[] {
   return transforms.flatMap((lt) => {
     const found = lt.legacyPatterns
-      .map((p) => matchLegacyPattern(content, p))
+      .map((p) => matchResidualPattern(content, p))
       .filter((label): label is string => label !== null);
     if (found.length === 0) return [];
     return [
@@ -304,7 +314,7 @@ export async function runCodemods(
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => includesResidualPattern(residualContent, p))) {
+      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
         const files = suspiciousByCodemod.get(lt.id) ?? [];
         files.push(relative);
         suspiciousByCodemod.set(lt.id, files);
