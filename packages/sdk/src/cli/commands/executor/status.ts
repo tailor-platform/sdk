@@ -89,6 +89,7 @@ export function classifyExecutorJobStatus(status: ExecutorJobStatus): ExecutorJo
   if (isExecutorJobTransientStatus(status)) {
     return "transient";
   }
+  // Safety net: unknown future statuses are treated as transient
   return "transient";
 }
 
