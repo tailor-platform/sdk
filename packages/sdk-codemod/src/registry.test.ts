@@ -59,4 +59,14 @@ describe("getApplicableCodemods", () => {
     expect(codemod?.suspiciousPatterns).toContain("caller?.");
     expect(codemod?.prompt).toContain("anonymous callers");
   });
+
+  test("open-download-stream review is scoped to deprecated API names", () => {
+    const openDownloadStream = getApplicableCodemods("1.67.1", "2.0.0").find(
+      (codemod) => codemod.id === "v2/open-download-stream",
+    );
+
+    expect(openDownloadStream?.suspiciousPatterns).toEqual(
+      expect.arrayContaining(["openDownloadStream", "openFileDownloadStream"]),
+    );
+  });
 });
