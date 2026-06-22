@@ -30,6 +30,7 @@ import { formatKeyValueTable } from "@/cli/shared/format";
 import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
 import { logger, styles } from "@/cli/shared/logger";
 import { spinner } from "@/cli/shared/spinner";
+import { formatWaitError, isRetryableWaitError } from "@/cli/shared/wait-error";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {
@@ -145,21 +146,6 @@ export interface WatchExecutorJobResult {
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString("en-US", { hour12: false });
-}
-
-function formatWaitError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isRetryableWaitError(error: unknown): boolean {
-  if (!(error instanceof ConnectError)) {
-    return false;
-  }
-  return (
-    error.code === Code.Aborted ||
-    error.code === Code.ResourceExhausted ||
-    error.code === Code.Unavailable
-  );
 }
 
 function createUnknownExecutorJob(executorName: string, jobId: string): ExecutorJobDetailInfo {

@@ -106,6 +106,7 @@ export function classifyWorkflowExecutionStatus(
   if (isWorkflowExecutionTransientStatus(execution.status)) {
     return { statusClass: "transient", status: execution.status };
   }
+  // Safety net: unknown future statuses are treated as transient
   return { statusClass: "transient", status: execution.status };
 }
 

@@ -5,7 +5,6 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import { workflowWaitControlArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
-import { type WorkflowWaitUntil } from "./status";
 import {
   getWorkflowWaitFailureMessage,
   waitForWorkflowExecutionById,
@@ -55,24 +54,6 @@ export async function addWorkflowLogsToWaitResult(
   };
 }
 
-/**
- * Print or emit a workflow wait result and fail the command if needed.
- * @param result - Workflow wait result
- * @param output - Output object
- * @param until - Requested wait target
- */
-export function emitWorkflowWaitResult(
-  result: WorkflowWaitResult,
-  output: WorkflowWaitOutput,
-  until: WorkflowWaitUntil,
-): void {
-  logger.out(output);
-  const failureMessage = getWorkflowWaitFailureMessage(result, until);
-  if (failureMessage) {
-    throw new Error(failureMessage);
-  }
-}
-
 export const waitCommand = defineAppCommand({
   name: "wait",
   description: "Wait for a workflow execution.",
@@ -112,39 +93,31 @@ export const waitCommand = defineAppCommand({
       showProgress: !jsonOutput,
     });
 
-    if (args.logs && !jsonOutput) {
-      const output = await addWorkflowLogsToWaitResult(result, {
-        executionId: args.executionId,
-        workspaceId: args["workspace-id"],
-        profile: args.profile,
-      });
-      if (output.jobDetails) {
-        printExecutionWithLogs({
-          id: output.id,
-          workflowName: output.workflowName,
-          status: output.status,
-          jobExecutions: output.jobExecutions,
-          startedAt: output.startedAt,
-          finishedAt: output.finishedAt,
-          jobDetails: output.jobDetails,
-        });
-      } else {
-        logger.out(output);
-      }
-      const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
-      if (failureMessage) {
-        throw new Error(failureMessage);
-      }
-      return;
-    }
-
-    const output = args.logs
+    const output: WorkflowWaitOutput = args.logs
       ? await addWorkflowLogsToWaitResult(result, {
           executionId: args.executionId,
           workspaceId: args["workspace-id"],
           profile: args.profile,
         })
       : result;
-    emitWorkflowWaitResult(result, output, args.until);
+
+    if (!jsonOutput && output.jobDetails) {
+      printExecutionWithLogs({
+        id: output.id,
+        workflowName: output.workflowName,
+        status: output.status,
+        jobExecutions: output.jobExecutions,
+        startedAt: output.startedAt,
+        finishedAt: output.finishedAt,
+        jobDetails: output.jobDetails,
+      });
+    } else {
+      logger.out(output);
+    }
+
+    const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
+    if (failureMessage) {
+      throw new Error(failureMessage);
+    }
   },
 });

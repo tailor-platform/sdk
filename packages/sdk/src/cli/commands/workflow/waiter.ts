@@ -1,5 +1,4 @@
 import { setTimeout } from "node:timers/promises";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
@@ -8,6 +7,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { spinner } from "@/cli/shared/spinner";
+import { formatWaitError, isRetryableWaitError } from "@/cli/shared/wait-error";
 import {
   classifyWorkflowExecutionStatus,
   hasReachedWorkflowWaitTarget,
@@ -86,21 +86,6 @@ function getActiveJobs(execution: WorkflowExecution): string {
     )
     .map((job) => job.stackedJobName)
     .join(", ");
-}
-
-function formatWaitError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isRetryableWaitError(error: unknown): boolean {
-  if (!(error instanceof ConnectError)) {
-    return false;
-  }
-  return (
-    error.code === Code.Aborted ||
-    error.code === Code.ResourceExhausted ||
-    error.code === Code.Unavailable
-  );
 }
 
 interface CreateWorkflowWaitResultOptions {
