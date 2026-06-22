@@ -52,6 +52,22 @@ describe("getApplicableCodemods", () => {
     );
   });
 
+  test("execute-script-arg reviews unresolved arg stringification patterns", () => {
+    const executeScriptArg = getApplicableCodemods("1.67.1", "2.0.0").find(
+      (codemod) => codemod.id === "v2/execute-script-arg",
+    );
+    const argPattern = executeScriptArg?.suspiciousPatterns?.find(
+      (pattern): pattern is [string, string, RegExp] =>
+        Array.isArray(pattern) && pattern[2] instanceof RegExp,
+    )?.[2];
+
+    expect(argPattern?.test("arg: value")).toBe(true);
+    expect(argPattern?.test("arg : value")).toBe(true);
+    expect(argPattern?.test("arg = value")).toBe(true);
+    expect(argPattern?.test('"arg" : value')).toBe(true);
+    expect(argPattern?.test('["arg"] = value')).toBe(true);
+  });
+
   test("flags principal migration follow-ups for review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/principal-unify");
 
