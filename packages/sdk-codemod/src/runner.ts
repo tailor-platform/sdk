@@ -4,7 +4,7 @@ import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage, LlmReview } from "./types";
+import type { CodemodPackage, CodemodPattern, CodemodPatternGroup, LlmReview } from "./types";
 
 /**
  * A transform function that receives source text and file path,
@@ -126,17 +126,29 @@ interface LoadedTransform {
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
   matches: (relativePath: string) => boolean;
-  legacyPatterns: Array<string | string[]>;
-  suspiciousPatterns: string[];
+  legacyPatterns: CodemodPatternGroup[];
+  suspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
 }
 
-/** Resolve a legacy pattern against content, returning its label when matched. */
-function matchLegacyPattern(content: string, pattern: string | string[]): string | null {
-  if (typeof pattern === "string") {
-    return content.includes(pattern) ? pattern : null;
+function matchesPattern(content: string, pattern: CodemodPattern): boolean {
+  if (typeof pattern === "string") return content.includes(pattern);
+  pattern.lastIndex = 0;
+  return pattern.test(content);
+}
+
+function patternLabel(pattern: CodemodPattern): string {
+  return typeof pattern === "string" ? pattern : pattern.toString();
+}
+
+/** Resolve a residual pattern against content, returning its label when matched. */
+function matchResidualPattern(content: string, pattern: CodemodPatternGroup): string | null {
+  if (!Array.isArray(pattern)) {
+    return matchesPattern(content, pattern) ? patternLabel(pattern) : null;
   }
-  return pattern.every((p) => content.includes(p)) ? pattern.join(" + ") : null;
+  return pattern.every((p) => matchesPattern(content, p))
+    ? pattern.map((p) => patternLabel(p)).join(" + ")
+    : null;
 }
 
 function legacyPatternWarnings(
@@ -146,7 +158,7 @@ function legacyPatternWarnings(
 ): string[] {
   return transforms.flatMap((lt) => {
     const found = lt.legacyPatterns
-      .map((p) => matchLegacyPattern(content, p))
+      .map((p) => matchResidualPattern(content, p))
       .filter((label): label is string => label !== null);
     if (found.length === 0) return [];
     return [
@@ -230,7 +242,7 @@ export async function runCodemods(
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => current.includes(p))) {
+      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(current, p) !== null)) {
         const files = suspiciousByCodemod.get(lt.id) ?? [];
         files.push(relative);
         suspiciousByCodemod.set(lt.id, files);

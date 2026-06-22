@@ -261,7 +261,9 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     scriptPath: "v2/execute-script-arg/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,mjs,cjs,js}"],
-    suspiciousPatterns: ["executeScript"],
+    suspiciousPatterns: [
+      ["executeScript", "JSON.stringify", /\barg\s*[:=]|["']arg["']\s*(?::|\]\s*[:=])/],
+    ],
     prompt: [
       "In Tailor SDK v2 the executeScript() arg option takes a JSON-serializable value",
       "and is serialized internally, so a pre-stringified argument double-encodes. The",

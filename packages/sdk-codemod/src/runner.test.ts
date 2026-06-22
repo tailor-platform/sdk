@@ -392,6 +392,80 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("AND-group suspicious pattern flags only when every substring co-occurs", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-and-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "unresolved.ts"),
+        "const serialized = JSON.stringify(payload);\nawait executeScript({ arg: serialized });\n",
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "already-plain.ts"),
+        "await executeScript({ arg: payload });\n",
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "non-arg-json.ts"),
+        "await executeScript({ code: JSON.stringify(meta) });\n",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              suspiciousPatterns: [["executeScript", "JSON.stringify", "arg:"]],
+              prompt: "Rewrite remaining executeScript usages by hand.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/llm",
+          prompt: "Rewrite remaining executeScript usages by hand.",
+          files: ["unresolved.ts"],
+        },
+      ]);
+    });
+
+    test("AND-group suspicious pattern supports regex members", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-regex-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "spaced-colon.ts"),
+        "const serialized = JSON.stringify(payload);\nawait executeScript({ arg : serialized });\n",
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "already-plain.ts"),
+        "await executeScript({ arg : payload });\n",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              suspiciousPatterns: [["executeScript", "JSON.stringify", /\barg\s*:/]],
+              prompt: "Rewrite remaining executeScript usages by hand.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/llm",
+          prompt: "Rewrite remaining executeScript usages by hand.",
+          files: ["spaced-colon.ts"],
+        },
+      ]);
+    });
+
     test("does not flag for LLM review without a prompt", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-noprompt-test-"));
       tmpDir = dir;
