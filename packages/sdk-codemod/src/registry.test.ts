@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getApplicableCodemods } from "./registry";
+import { allCodemods, getApplicableCodemods } from "./registry";
 
 describe("getApplicableCodemods", () => {
   test("returns codemods when upgrading across their version boundary", () => {
@@ -32,6 +32,23 @@ describe("getApplicableCodemods", () => {
 
     expect(applyToDeploy?.filePatterns).toEqual(
       expect.arrayContaining(["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]),
+    );
+  });
+
+  test("flags CommonJS TypeScript files for runtime globals review", () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
+
+    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts}");
+    expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
+    expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
+  });
+
+  test("leads runtime globals migration with the typed wrappers", () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
+
+    expect(codemod?.prompt).toContain('import { idp } from "@tailor-platform/sdk/runtime"');
+    expect(codemod?.examples?.[0]?.after).toContain(
+      'import { idp } from "@tailor-platform/sdk/runtime"',
     );
   });
 });
