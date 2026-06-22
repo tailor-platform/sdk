@@ -169,7 +169,7 @@ async function assertConfigIdInCI(configPath: string): Promise<void> {
     throw new Error(
       `tailor.config.ts is missing an 'id'. CI does not auto-generate one ` +
         `(each run would be treated as a separate app and break resource ownership). ` +
-        `Run 'tailor-sdk setup github' or 'tailor-sdk apply' locally and commit the injected id.`,
+        `Run 'tailor-sdk setup' or 'tailor-sdk apply' locally and commit the injected id.`,
     );
   }
   // Keep CI and local behavior aligned: ensureConfigId() enforces the same

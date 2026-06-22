@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { decideAction, setupGitHub, type SetupGitHubOptions } from "./generate";
 import { detectDefaultBranch } from "./git";
-import { decideAction, setupGitHub, type SetupGitHubOptions } from "./github";
 import { hashContent, readLock } from "./lock";
 import {
   detectPackageManager,

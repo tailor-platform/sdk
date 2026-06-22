@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { checkGitHub, findTargetDrift, resolveWithinRoot, type TargetState } from "./check";
-import { setupGitHub, type SetupGitHubOptions } from "./github";
+import { setupGitHub, type SetupGitHubOptions } from "./generate";
 import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
 
