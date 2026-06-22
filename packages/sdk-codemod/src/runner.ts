@@ -150,22 +150,27 @@ function sourceLang(relative: string): Lang {
   return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
 }
 
-function collectMaskedRanges(node: SgNode, ranges: Array<[number, number]>): void {
-  if (MASKED_SOURCE_NODE_KINDS.has(node.kind())) {
-    const range = node.range();
-    ranges.push([range.start.index, range.end.index]);
-    return;
-  }
-  for (const child of node.children()) {
-    collectMaskedRanges(child, ranges);
-  }
+function collectMaskedRanges(root: SgNode): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const visit = (node: SgNode): void => {
+    if (MASKED_SOURCE_NODE_KINDS.has(node.kind())) {
+      const range = node.range();
+      ranges.push([range.start.index, range.end.index]);
+      return;
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return ranges;
 }
 
 function maskSourceNonCode(relative: string, content: string): string {
-  let ranges: Array<[number, number]> = [];
+  let ranges: Array<[number, number]>;
   try {
     const root = parse(sourceLang(relative), content).root();
-    collectMaskedRanges(root, ranges);
+    ranges = collectMaskedRanges(root);
   } catch {
     return content;
   }
