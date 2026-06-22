@@ -25,6 +25,16 @@ describe("getApplicableCodemods", () => {
     expect(() => getApplicableCodemods("1.0.0", "invalid")).toThrow("Invalid toVersion");
   });
 
+  test("apply-to-deploy scans source files with embedded CLI strings", () => {
+    const applyToDeploy = getApplicableCodemods("1.67.1", "2.0.0").find(
+      (codemod) => codemod.id === "v2/apply-to-deploy",
+    );
+
+    expect(applyToDeploy?.filePatterns).toEqual(
+      expect.arrayContaining(["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]),
+    );
+  });
+
   test("flags CommonJS TypeScript files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
