@@ -291,6 +291,8 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     // No scriptPath: this is a codemod-less ("manual") migration.
+    filePatterns: ["**/*.{ts,tsx,mts,cts,mjs,cjs,js}"],
+    suspiciousPatterns: ["openDownloadStream", "openFileDownloadStream"],
     examples: [
       {
         before: "const res = await openDownloadStream(namespace, typeName, fieldName, recordId);",
