@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 import * as url from "node:url";
+import { parse, Lang } from "@ast-grep/napi";
 import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import type { CodemodPackage, CodemodPattern, CodemodPatternGroup, LlmReview } from "./types";
+import type { SgNode } from "@ast-grep/napi";
 
 /**
  * A transform function that receives source text and file path,
@@ -50,6 +52,13 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 /** Directory names always excluded from file scanning. */
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
+  "comment",
+  "string",
+  "regex",
+  "string_fragment",
+]);
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
@@ -131,8 +140,70 @@ interface LoadedTransform {
   prompt?: string;
 }
 
+function contentForResidualMatching(relative: string, content: string): string {
+  const ext = path.extname(relative).toLowerCase();
+  return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
+}
+
+function sourceLang(relative: string): Lang {
+  const ext = path.extname(relative).toLowerCase();
+  return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
+}
+
+function collectMaskedRanges(root: SgNode): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const visit = (node: SgNode): void => {
+    if (MASKED_SOURCE_NODE_KINDS.has(node.kind())) {
+      const range = node.range();
+      ranges.push([range.start.index, range.end.index]);
+      return;
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return ranges;
+}
+
+function maskSourceNonCode(relative: string, content: string): string {
+  let ranges: Array<[number, number]>;
+  try {
+    const root = parse(sourceLang(relative), content).root();
+    ranges = collectMaskedRanges(root);
+  } catch {
+    return content;
+  }
+
+  ranges = ranges.toSorted(([a], [b]) => a - b);
+  const chars = content.split("");
+  for (const [start, end] of ranges) {
+    for (let i = start; i < end && i < chars.length; i++) {
+      if (chars[i] !== "\n" && chars[i] !== "\r") chars[i] = " ";
+    }
+  }
+  return chars.join("");
+}
+
+function isIdentifierChar(char: string | undefined): boolean {
+  return char != null && /^[A-Za-z0-9_$]$/.test(char);
+}
+
 function matchesPattern(content: string, pattern: CodemodPattern): boolean {
-  if (typeof pattern === "string") return content.includes(pattern);
+  if (typeof pattern === "string") {
+    const checkLeft = isIdentifierChar(pattern[0]);
+    const checkRight = isIdentifierChar(pattern.at(-1));
+    let index = content.indexOf(pattern);
+    while (index !== -1) {
+      const before = index > 0 ? content[index - 1] : undefined;
+      const after = content[index + pattern.length];
+      if ((!checkLeft || !isIdentifierChar(before)) && (!checkRight || !isIdentifierChar(after))) {
+        return true;
+      }
+      index = content.indexOf(pattern, index + 1);
+    }
+    return false;
+  }
   pattern.lastIndex = 0;
   return pattern.test(content);
 }
@@ -238,11 +309,12 @@ export async function runCodemods(
       }
     }
 
-    warnings.push(...legacyPatternWarnings(relative, current, matchedTransforms));
+    const residualContent = contentForResidualMatching(relative, current);
+    warnings.push(...legacyPatternWarnings(relative, residualContent, matchedTransforms));
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(current, p) !== null)) {
+      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
         const files = suspiciousByCodemod.get(lt.id) ?? [];
         files.push(relative);
         suspiciousByCodemod.set(lt.id, files);
