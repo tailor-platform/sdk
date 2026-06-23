@@ -129,6 +129,7 @@ export function normalizeIdPPermission(permission: RawIdPPermission): StandardId
     sendPasswordResetEmail: permission.sendPasswordResetEmail.map((p) =>
       normalizeIdPActionPermission(p),
     ),
+    unenrollMfa: permission.unenrollMfa.map((p) => normalizeIdPActionPermission(p)),
   } as StandardIdPPermission;
 }
 

@@ -437,6 +437,152 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.passwordRequireLowercase).toBeUndefined();
     expect(result.passwordMaxLength).toBeUndefined();
   });
+
+  test("accepts enableMfa with allowedReturnOrigins", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["https://app.example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.enableMfa).toBe(true);
+    expect(result.allowedReturnOrigins).toEqual(["https://app.example.com"]);
+  });
+
+  test("rejects enableMfa without allowedReturnOrigins", () => {
+    const policy = {
+      enableMfa: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "enableMfa requires allowedReturnOrigins to list at least one origin",
+    );
+  });
+
+  test("rejects enableMfa with empty allowedReturnOrigins", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: [],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "enableMfa requires allowedReturnOrigins to list at least one origin",
+    );
+  });
+
+  test("accepts requireMfa with enableMfa and allowedReturnOrigins", () => {
+    const policy = {
+      enableMfa: true,
+      requireMfa: true,
+      allowedReturnOrigins: ["https://app.example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.requireMfa).toBe(true);
+  });
+
+  test("rejects requireMfa without enableMfa", () => {
+    const policy = {
+      requireMfa: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "requireMfa requires enableMfa to be enabled",
+    );
+  });
+
+  test("rejects requireMfa when enableMfa is false", () => {
+    const policy = {
+      enableMfa: false,
+      requireMfa: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "requireMfa requires enableMfa to be enabled",
+    );
+  });
+
+  test("accepts allowedReturnOrigins with http origins", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["http://localhost:3000", "https://app.example.com:8443"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedReturnOrigins).toEqual([
+      "http://localhost:3000",
+      "https://app.example.com:8443",
+    ]);
+  });
+
+  test("rejects allowedReturnOrigins with non-http scheme", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["ftp://app.example.com"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
+  });
+
+  test("rejects allowedReturnOrigins with path component", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["https://app.example.com/return"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
+  });
+
+  test("rejects allowedReturnOrigins with query string", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["https://app.example.com?foo=bar"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
+  });
+
+  test("accepts mfaIssuer", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["https://app.example.com"],
+      mfaIssuer: "My App",
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.mfaIssuer).toBe("My App");
+  });
+
+  test("rejects mfaIssuer exceeding 64 characters", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["https://app.example.com"],
+      mfaIssuer: "a".repeat(65),
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "mfaIssuer must be 64 characters or less",
+    );
+  });
+
+  test("accepts mfaIssuer at exactly 64 characters", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["https://app.example.com"],
+      mfaIssuer: "a".repeat(64),
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.mfaIssuer).toHaveLength(64);
+  });
+
+  test("MFA fields default to undefined when omitted", () => {
+    const result = IdPUserAuthPolicySchema.parse({});
+    expect(result.enableMfa).toBeUndefined();
+    expect(result.requireMfa).toBeUndefined();
+    expect(result.allowedReturnOrigins).toBeUndefined();
+    expect(result.mfaIssuer).toBeUndefined();
+  });
 });
 
 describe("IdPSchema validation", () => {
@@ -717,6 +863,7 @@ describe("IdPSchema permission tests", () => {
         ],
         delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
         sendPasswordResetEmail: [{ conditions: [], permit: true }],
+        unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       },
     };
 
@@ -748,6 +895,7 @@ describe("IdPSchema permission tests", () => {
         update: [],
         delete: [],
         sendPasswordResetEmail: [],
+        unenrollMfa: [],
       },
     };
 
@@ -766,6 +914,7 @@ describe("IdPSchema permission tests", () => {
         update: [[{ user: "role" }, "=", "ADMIN"]],
         delete: [[{ user: "role" }, "=", "ADMIN"]],
         sendPasswordResetEmail: [[{ user: "role" }, "=", "ADMIN"]],
+        unenrollMfa: [[{ user: "role" }, "=", "ADMIN"]],
       },
     };
 
@@ -784,6 +933,7 @@ describe("IdPSchema permission tests", () => {
         update: [],
         delete: [],
         sendPasswordResetEmail: [],
+        unenrollMfa: [],
       },
     };
 

@@ -54,6 +54,11 @@ export const IdPGqlOperationsSchema = z
 
 export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
 
+// Origins are either a literal http(s) origin (scheme + host + optional port,
+// no path/query/fragment) or a static-website `:url` placeholder that the CLI
+// resolves to a real origin at apply time.
+const allowedReturnOriginPattern = /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[^\s]+:url)$/;
+
 export const IdPUserAuthPolicySchema = z
   .object({
     useNonEmailIdentifier: z
@@ -103,6 +108,34 @@ export const IdPUserAuthPolicySchema = z
     allowGoogleOauth: z.boolean().optional().describe("Enable Google OAuth login"),
     allowMicrosoftOauth: z.boolean().optional().describe("Enable Microsoft OAuth login"),
     disablePasswordAuth: z.boolean().optional().describe("Disable password-based authentication"),
+    enableMfa: z
+      .boolean()
+      .optional()
+      .describe("Make TOTP MFA available for users in this namespace"),
+    requireMfa: z
+      .boolean()
+      .optional()
+      .describe(
+        "Require TOTP MFA enrollment and challenge for password-authenticated users (requires enableMfa)",
+      ),
+    allowedReturnOrigins: z
+      .array(
+        z
+          .string()
+          .regex(
+            allowedReturnOriginPattern,
+            "must be an http(s) origin like https://app.example.com (scheme + host + optional port, no path/query/fragment)",
+          ),
+      )
+      .optional()
+      .describe(
+        "Application origins (scheme + host + optional port) allowed as MFA self-service return targets",
+      ),
+    mfaIssuer: z
+      .string()
+      .max(64, "mfaIssuer must be 64 characters or less")
+      .optional()
+      .describe("Label shown next to the user account in authenticator apps"),
   })
   .refine(
     (data) =>
@@ -172,7 +205,20 @@ export const IdPUserAuthPolicySchema = z
   .refine((data) => !data.disablePasswordAuth || !data.allowSelfPasswordReset, {
     message: "disablePasswordAuth cannot be used with allowSelfPasswordReset",
     path: ["disablePasswordAuth"],
-  });
+  })
+  .refine((data) => !data.requireMfa || data.enableMfa === true, {
+    message: "requireMfa requires enableMfa to be enabled",
+    path: ["requireMfa"],
+  })
+  .refine(
+    (data) =>
+      !data.enableMfa || (data.allowedReturnOrigins && data.allowedReturnOrigins.length > 0),
+    {
+      message:
+        "enableMfa requires allowedReturnOrigins to list at least one origin so MFA self-service has a valid return target",
+      path: ["enableMfa"],
+    },
+  );
 
 const emailFieldSchema = z
   .string()
@@ -248,6 +294,7 @@ export const IdPPermissionSchema = z
     update: z.array(IdPActionPermissionSchema).readonly(),
     delete: z.array(IdPActionPermissionSchema).readonly(),
     sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly(),
+    unenrollMfa: z.array(IdPActionPermissionSchema).readonly(),
   })
   .describe("Per-operation permission policies for IdP users");
 

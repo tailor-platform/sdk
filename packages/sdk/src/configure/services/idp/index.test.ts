@@ -386,6 +386,36 @@ describe("defineIdp", () => {
     expect(idpNoEmailConfig.emailConfig).toBeUndefined();
   });
 
+  test("should preserve userAuthPolicy MFA fields", () => {
+    const idpWithMfa = defineIdp("idp-with-mfa", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        enableMfa: true,
+        requireMfa: true,
+        allowedReturnOrigins: ["https://app.example.com", "http://localhost:3000"],
+        mfaIssuer: "My App",
+      },
+    });
+    expect(idpWithMfa.userAuthPolicy?.enableMfa).toBe(true);
+    expect(idpWithMfa.userAuthPolicy?.requireMfa).toBe(true);
+    expect(idpWithMfa.userAuthPolicy?.allowedReturnOrigins).toEqual([
+      "https://app.example.com",
+      "http://localhost:3000",
+    ]);
+    expect(idpWithMfa.userAuthPolicy?.mfaIssuer).toBe("My App");
+
+    const idpNoMfa = defineIdp("idp-no-mfa", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoMfa.userAuthPolicy?.enableMfa).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.requireMfa).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.allowedReturnOrigins).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.mfaIssuer).toBeUndefined();
+  });
+
   test("gqlOperations: 'query' works with other config options", () => {
     const idpWithQueryAndOtherOptions = defineIdp("idp-with-query-and-options", {
       authorization: "loggedIn",
