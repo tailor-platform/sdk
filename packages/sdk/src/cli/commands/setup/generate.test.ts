@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { decideAction, setupGitHub, type SetupGitHubOptions } from "./generate";
 import { detectDefaultBranch } from "./git";
-import { decideAction, setupGitHub, type SetupGitHubOptions } from "./github";
 import { hashContent, readLock } from "./lock";
 import {
   detectPackageManager,
@@ -68,12 +68,15 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("name: Tailor (my-app)");
   });
 
-  test("pins actions with SHA + version comment", () => {
+  test("pins actions with SHA + version comment, including the tailor actions", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
-    expect(content).toMatch(/uses: pnpm\/action-setup@[a-f0-9]+ # v\d+\.\d+\.\d+/);
-    expect(content).toMatch(/uses: actions\/github-script@[a-f0-9]+ # v\d+/);
-    expect(content).not.toContain("tailor-platform/actions/");
+    expect(content).toMatch(/uses: tailor-platform\/actions\/setup@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(
+      /uses: tailor-platform\/actions\/generate-check@[0-9a-f]{40} # v\d+\.\d+\.\d+/,
+    );
+    expect(content).toMatch(/uses: tailor-platform\/actions\/plan@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
   });
 
   test("pins every `uses:` to a full commit SHA (no moving tags/branches)", () => {
@@ -99,14 +102,12 @@ describe("renderBranchWorkflow", () => {
   test("uses the unified secret names and targets the workspace-id variable", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain(
-      "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
+      "platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}",
     );
     expect(content).toContain(
-      "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
+      "platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
     );
-    expect(content).toContain(
-      "TAILOR_PLATFORM_WORKSPACE_ID: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}",
-    );
+    expect(content).toContain("workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}");
     expect(content).not.toContain("secrets.PLATFORM_MACHINE_USER_CLIENT_ID");
   });
 
@@ -125,51 +126,7 @@ describe("renderBranchWorkflow", () => {
 
   test("passes the workspace name as the plan label", () => {
     const { content } = renderBranchWorkflow(branchBase);
-    expect(content).toContain("LABEL: my-app");
-  });
-
-  test("fetches the pull request base into the remote-tracking ref before merge", () => {
-    const { content } = renderBranchWorkflow(branchBase);
-    expect(content).toContain("fetch-depth: 0");
-    expect(content).toContain('git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"');
-    expect(content).toContain('git merge --no-edit "origin/$BASE_REF"');
-    expect(content).not.toContain("git merge --no-commit");
-    expect(content.indexOf("id: tailor-merge-base")).toBeLessThan(
-      content.indexOf("id: tailor-setup-pnpm"),
-    );
-  });
-
-  test("paginates plan comment lookup", () => {
-    const { content } = renderBranchWorkflow(branchBase);
-    expect(content).toContain("github.paginate(github.rest.issues.listComments");
-    expect(content).toContain("per_page: 100");
-  });
-
-  test("updates only bot-owned plan comments", () => {
-    const { content } = renderBranchWorkflow(branchBase);
-    expect(content).toContain("comment.user?.type === 'Bot'");
-    expect(content).toContain("comment.user?.login === 'github-actions[bot]'");
-  });
-
-  test("builds plan comment markdown without YAML indentation", () => {
-    const { content } = renderBranchWorkflow(branchBase);
-    expect(content).toContain("].join('\\n');");
-    expect(content).toContain("`## ${status} Tailor Platform Plan (${key})`");
-    expect(content).toContain("`<summary>Plan output (exit code: ${exitCode})</summary>`");
-    expect(content).not.toContain("            ## ${status} Tailor Platform Plan");
-  });
-
-  test("logs full plan output before truncating comments and outputs", () => {
-    const branch = renderBranchWorkflow(branchBase).content;
-    const tag = renderTagWorkflow(tagBase).content;
-    for (const content of [branch, tag]) {
-      expect(content).toContain("::group::Full Tailor Platform plan output");
-      expect(content).toContain("::stop-commands::$LOG_STOP_TOKEN");
-      expect(content).toContain("printf '%s\\n' \"$OUTPUT\"");
-      expect(content).toContain(
-        "[output truncated to the last $MAX_OUTPUT characters - see the workflow logs for the full plan]",
-      );
-    }
+    expect(content).toContain("label: my-app");
   });
 
   test("references the dry-run dispatch input with bracket notation", () => {
@@ -183,22 +140,8 @@ describe("renderBranchWorkflow", () => {
   test("includes the fork guard on the plan step", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain(
-      "(github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) &&",
+      "if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork",
     );
-    expect(content).toContain("vars.TAILOR_PLATFORM_WORKSPACE_ID != ''");
-  });
-
-  test("skips plan authentication and dry-run until the workspace is provisioned", () => {
-    const branch = renderBranchWorkflow(branchBase).content;
-    const tag = renderTagWorkflow(tagBase).content;
-    for (const content of [branch, tag]) {
-      for (const stepId of ["tailor-mask-credentials", "tailor-login", "tailor-plan"]) {
-        const start = content.indexOf(`- id: ${stepId}`);
-        const end = content.indexOf("\n      - id:", start + 1);
-        const step = content.slice(start, end === -1 ? undefined : end);
-        expect(step).toContain("vars.TAILOR_PLATFORM_WORKSPACE_ID != ''");
-      }
-    }
   });
 
   test("sets cancel-in-progress: false on the deploy concurrency group", () => {
@@ -207,45 +150,31 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("cancel-in-progress: false");
   });
 
-  test("runs generate checks in plan and deploys with the canonical command", () => {
+  test("includes generate + generate-check in plan only (deploy delegates)", () => {
     const { content } = renderBranchWorkflow(branchBase);
     const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
     expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
-    expect(content.match(/^ {6}- id: tailor-generate$/gm)).toHaveLength(2);
     expect(content.match(/id: tailor-generate-check/g)).toHaveLength(1);
-    expect(content).toContain("pnpm exec tailor-sdk deploy --dry-run --yes");
-    expect(content).toContain("pnpm exec tailor-sdk deploy --yes");
-    expect(content).not.toContain("tailor-sdk apply");
   });
 
-  test("validates deploy workspace before using machine-user credentials", () => {
-    for (const content of [
-      renderBranchWorkflow(branchBase).content,
-      renderTagWorkflow(tagBase).content,
-    ]) {
-      const deployJob = content.slice(content.indexOf("tailor-deploy:"));
-      expect(deployJob.indexOf("id: tailor-validate-workspace")).toBeLessThan(
-        deployJob.indexOf("id: tailor-mask-credentials"),
-      );
-      expect(deployJob.indexOf("id: tailor-validate-workspace")).toBeLessThan(
-        deployJob.indexOf("id: tailor-login"),
-      );
-    }
-  });
-
-  test("emits PM exec prefix for generate", () => {
-    expect(renderBranchWorkflow(branchBase).content).toContain(
-      "run: pnpm exec tailor-sdk generate",
-    );
+  test("passes the package manager to the setup action", () => {
+    expect(renderBranchWorkflow(branchBase).content).toContain("package-manager: pnpm");
     expect(renderBranchWorkflow({ ...branchBase, packageManager: "npm" }).content).toContain(
-      "run: npx tailor-sdk generate",
+      "package-manager: npm",
     );
     expect(renderBranchWorkflow({ ...branchBase, packageManager: "bun" }).content).toContain(
-      "run: bunx tailor-sdk generate",
+      "package-manager: bun",
     );
     expect(renderBranchWorkflow({ ...branchBase, packageManager: "yarn" }).content).toContain(
-      "run: yarn tailor-sdk generate",
+      "package-manager: yarn",
     );
+  });
+
+  test("calls the generate-check composite action instead of inlining the diff check", () => {
+    const { content } = renderBranchWorkflow(branchBase);
+    expect(content).toContain("uses: tailor-platform/actions/generate-check@");
+    expect(content).not.toContain("git add -A");
+    expect(content).not.toContain("tailor-sdk generate");
   });
 
   test("--no-plan drops the plan job, pull_request trigger, and dry-run input", () => {
@@ -270,8 +199,9 @@ describe("renderBranchWorkflow", () => {
     const scoped = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/foo" }).content;
     expect(scoped).not.toMatch(NO_MARKER);
     expect(scoped).toContain('paths: ["apps/foo/**"]');
-    // plan generate/login/dry-run and deploy login/generate/deploy
-    expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(6);
+    // Install stays at the repo root (single root lockfile), so setup gets no
+    // working-directory. plan job: generate-check + plan action; deploy job: deploy action.
+    expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(3);
     expect(() => parseYAML(scoped)).not.toThrow();
   });
 
@@ -281,21 +211,22 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("environment: staging");
   });
 
-  test("setup steps differ by package manager", () => {
-    expect(renderBranchWorkflow({ ...branchBase, packageManager: "npm" }).content).toContain(
-      "npm ci",
-    );
-    expect(renderBranchWorkflow({ ...branchBase, packageManager: "bun" }).content).toContain(
-      "oven-sh/setup-bun@",
-    );
+  test("delegates setup to the composite action for every package manager", () => {
+    for (const pm of ["pnpm", "yarn", "npm", "bun"] as const) {
+      const { content } = renderBranchWorkflow({ ...branchBase, packageManager: pm });
+      expect(content).toContain("uses: tailor-platform/actions/setup@");
+      expect(content).toContain(`package-manager: ${pm}`);
+    }
   });
 
   test("generatedIds list the managed jobs and steps", () => {
     const { generatedIds } = renderBranchWorkflow(branchBase);
     expect(generatedIds).toContain("tailor-plan");
-    expect(generatedIds).toContain("tailor-plan/tailor-setup-pnpm");
-    expect(generatedIds).toContain("tailor-plan/tailor-plan");
-    expect(generatedIds).toContain("tailor-deploy/tailor-deploy");
+    expect(generatedIds).toContain("tailor-plan/tailor-setup");
+    expect(generatedIds).toContain("tailor-plan/tailor-generate-check");
+    expect(generatedIds).toContain("tailor-deploy/tailor-setup");
+    expect(generatedIds).toContain("tailor-deploy/tailor-apply");
+    expect(generatedIds).not.toContain("tailor-plan/tailor-generate");
   });
 
   test("preserves $ characters in values", () => {
@@ -320,7 +251,8 @@ describe("renderTagWorkflow", () => {
     const { content, generatedIds } = renderTagWorkflow({ ...tagBase, branch: "main" });
     expect(content).not.toMatch(NO_MARKER);
     expect(content).toContain("tailor-tag-guard:");
-    expect(content).toContain('TARGET_BRANCH: "main"');
+    expect(content).toContain("uses: tailor-platform/actions/tag-guard@");
+    expect(content).toContain('target-branch: "main"');
     expect(content).toContain("needs: tailor-tag-guard");
     expect(content).toContain("needs.tailor-tag-guard.outputs.on-branch == 'true'");
     expect(generatedIds).toContain("tailor-tag-guard");

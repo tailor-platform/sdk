@@ -179,6 +179,7 @@ tailor-sdk executor jobs [options] <executor-name> [job-id]
 | `--attempts`                    | -     | Show job attempts (only with job ID) (detail mode only)                                               | No       | `false`  | -                              |
 | `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only) | No       | `false`  | -                              |
 | `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                        | No       | `"3s"`   | -                              |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait when using --wait (e.g., '30s', '5m')                                            | No       | `"5m"`   | -                              |
 | `--order <ORDER>`               | -     | Sort order (asc or desc)                                                                              | No       | `"desc"` | -                              |
 | `--limit <LIMIT>`               | -     | Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)                           | No       | `50`     | -                              |
 | `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                    | No       | `false`  | -                              |
@@ -283,6 +284,7 @@ tailor-sdk executor trigger [options] <executor-name>
 | `--header <HEADER>`             | `-H`  | Request header (format: 'Key: Value', can be specified multiple times)             | No       | -       | -                              |
 | `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable | No       | `false` | -                              |
 | `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                     | No       | `"3s"`  | -                              |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait when using --wait (e.g., '30s', '5m')                         | No       | `"5m"`  | -                              |
 | `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                 | No       | `false` | -                              |
 
 <!-- politty:command:executor trigger:options:end -->
@@ -322,6 +324,57 @@ $ tailor-sdk executor trigger my-executor -W -l
 ```
 
 <!-- politty:command:executor trigger:examples:end -->
+
+**Shell automation**
+
+Trigger an executor and wait for the executor job plus any downstream workflow or
+function execution:
+
+```bash
+tailor-sdk executor trigger daily-workflow \
+  --wait \
+  --timeout 5m \
+  --interval 5s \
+  --json
+```
+
+Wait for an existing job when another process already captured the job ID:
+
+```bash
+tailor-sdk executor jobs daily-workflow "$job_id" \
+  --wait \
+  --timeout 5m \
+  --logs \
+  --json
+```
+
+**Programmatic API**
+
+Import your executor definition and pass it to the typed API:
+
+```ts
+import { triggerExecutor, watchExecutorJob } from "@tailor-platform/sdk/cli";
+import dailyWorkflow from "../executors/dailyWorkflow";
+
+const { jobId } = await triggerExecutor({
+  executor: dailyWorkflow,
+});
+
+if (!jobId) {
+  throw new Error("Executor trigger did not return a job ID");
+}
+
+const result = await watchExecutorJob({
+  executor: dailyWorkflow,
+  jobId,
+  timeout: 5 * 60 * 1000,
+  interval: 5000,
+});
+
+if (result.timedOut) {
+  throw new Error(`Executor job ${result.job.id} timed out at ${result.job.status}`);
+}
+```
 
 <!-- politty:command:executor trigger:notes:start -->
 

@@ -238,4 +238,3 @@ export declare type ListAIGatewaysResponse = Message<"tailor.v1.ListAIGatewaysRe
  * Use `create(ListAIGatewaysResponseSchema)` to create a new message.
  */
 export declare const ListAIGatewaysResponseSchema: GenMessage<ListAIGatewaysResponse>;
-

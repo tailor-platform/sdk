@@ -18,4 +18,3 @@ export const file_tailor_v1_aigateway_resource = /*@__PURE__*/
  */
 export const AIGatewaySchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_aigateway_resource, 0);
-
