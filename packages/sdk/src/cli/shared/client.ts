@@ -10,12 +10,12 @@ import {
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
-import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
 import { userAgent } from "./user-agent";
+import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -43,7 +43,10 @@ export type OperatorClient = Client<typeof OperatorService>;
  * @returns Configured Operator client
  */
 export async function initOperatorClient(accessToken: string) {
-  const { createTracingInterceptor } = await import("#/cli/telemetry/interceptor");
+  const [{ createTracingInterceptor }, { OperatorService }] = await Promise.all([
+    import("#/cli/telemetry/interceptor"),
+    import("@tailor-platform/tailor-proto/service_pb"),
+  ]);
 
   const interceptors: Interceptor[] = [
     await userAgentInterceptor(),
