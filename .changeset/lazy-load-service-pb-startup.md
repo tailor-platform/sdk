@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-The `@tailor-proto/tailor/v1/service_pb` module is now loaded lazily inside `initOperatorClient()` rather than at module startup. Commands that do not connect to the platform (`profile list`, `profile delete`, `login`, `logout`) no longer pay the ~4.6s protobuf descriptor initialization cost on every invocation.
+Improve CLI startup time for commands that do not connect to the platform. Commands such as `profile list`, `profile delete`, `login`, and `logout` now start approximately 5x faster (~1.6s instead of ~8s).
