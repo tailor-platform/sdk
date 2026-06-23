@@ -218,14 +218,14 @@
     "@types/node": "24.13.2",
     "@types/semver": "7.7.1",
     "@typescript/native-preview": "7.0.0-dev.20260619.1",
-    "@vitest/coverage-v8": "4.1.8",
+    "@vitest/coverage-v8": "4.1.9",
     "oxfmt": "0.54.0",
     "oxlint": "1.69.0",
     "oxlint-tsgolint": "0.23.0",
     "sonda": "0.13.1",
     "tsdown": "0.22.2",
     "typescript": "6.0.3",
-    "vitest": "4.1.8",
+    "vitest": "4.1.9",
     "zinfer": "0.1.8"
   },
   "peerDependencies": {
