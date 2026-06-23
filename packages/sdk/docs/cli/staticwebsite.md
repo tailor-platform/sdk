@@ -43,6 +43,7 @@ tailor-sdk staticwebsite deploy [options]
 | `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Example:**
 
 ```bash
@@ -80,6 +81,7 @@ tailor-sdk staticwebsite list [options]
 | `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Example:**
 
 ```bash
@@ -183,6 +185,7 @@ tailor-sdk staticwebsite get [options] <name>
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Example:**
 
 ```bash

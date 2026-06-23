@@ -50,6 +50,7 @@ tailor-sdk tailordb truncate [options] [types]
 | `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                 | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Usage Examples:**
 
 ```bash
@@ -226,6 +227,7 @@ tailor-sdk tailordb migration sync [options] <number>
 | `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
 
 ### tailordb erd
@@ -309,6 +311,7 @@ tailor-sdk tailordb erd deploy [options]
 | `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Notes:**
 
 - ERD commands build from the local TailorDB schema, including plugin-generated TailorDB types.

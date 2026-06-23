@@ -22,6 +22,7 @@ Commands for managing workflows and workflow executions.
 {{politty:command:workflow list}}
 {{politty:command:workflow get}}
 {{politty:command:workflow start}}
+
 **Usage Examples:**
 
 ```bash
@@ -36,6 +37,7 @@ tailor-sdk workflow start my-workflow -m admin -W
 ```
 
 {{politty:command:workflow wait}}
+
 **Shell automation**
 
 Capture the execution ID from `workflow start` and wait for the same run from a
@@ -90,6 +92,7 @@ if (result.timedOut) {
 ```
 
 {{politty:command:workflow executions}}
+
 **Usage Examples:**
 
 ```bash

@@ -22,6 +22,7 @@ Commands for managing Auth service resources (auth connections, machine users, a
 {{politty:command:oauth2client:subcommands}}
 
 {{politty:command:oauth2client list}}
+
 **Output:**
 
 Returns a list of OAuth2 clients with the following fields:
@@ -34,6 +35,7 @@ Returns a list of OAuth2 clients with the following fields:
 - `createdAt` - Creation timestamp
 
 {{politty:command:oauth2client get}}
+
 **Output:**
 
 Returns the OAuth2 client credentials with the following fields:

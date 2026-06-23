@@ -103,6 +103,7 @@ tailor-sdk workflow start [options] <name>
 | `--logs`                        | `-l`  | Display job execution logs after completion                                 | No       | `false`              | -                                   |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Usage Examples:**
 
 ```bash
@@ -251,6 +252,7 @@ tailor-sdk workflow executions [options] [execution-id]
 | `--logs`                          | -     | Display job execution logs (detail mode only)             | No       | `false`      | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Usage Examples:**
 
 ```bash

@@ -20,6 +20,7 @@ Commands for managing and deploying static websites.
 {{politty:command:staticwebsite:subcommands}}
 
 {{politty:command:staticwebsite deploy}}
+
 **Example:**
 
 ```bash
@@ -38,6 +39,7 @@ tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
 - The deployment URL is returned after successful deployment
 
 {{politty:command:staticwebsite list}}
+
 **Example:**
 
 ```bash
@@ -50,6 +52,7 @@ tailor-sdk staticwebsite list --json
 
 {{politty:command:staticwebsite domain}}
 {{politty:command:staticwebsite get}}
+
 **Example:**
 
 ```bash

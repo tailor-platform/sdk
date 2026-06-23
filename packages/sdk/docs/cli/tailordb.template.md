@@ -20,6 +20,7 @@ Commands for managing TailorDB tables, data, and schema migrations.
 {{politty:command:tailordb:subcommands}}
 
 {{politty:command:tailordb truncate}}
+
 **Usage Examples:**
 
 ```bash
@@ -66,6 +67,7 @@ Note: Migration scripts are automatically executed during `tailor-sdk deploy`. S
 {{politty:command:tailordb migration set}}
 {{politty:command:tailordb migration status}}
 {{politty:command:tailordb migration sync}}
+
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
 
 {{politty:command:tailordb erd:heading}}
@@ -81,6 +83,7 @@ Note: Migration scripts are automatically executed during `tailor-sdk deploy`. S
 {{politty:command:tailordb erd export}}
 {{politty:command:tailordb erd serve}}
 {{politty:command:tailordb erd deploy}}
+
 **Notes:**
 
 - ERD commands build from the local TailorDB schema, including plugin-generated TailorDB types.

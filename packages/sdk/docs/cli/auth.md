@@ -240,6 +240,7 @@ tailor-sdk oauth2client list [options]
 | `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Output:**
 
 Returns a list of OAuth2 clients with the following fields:
@@ -276,6 +277,7 @@ tailor-sdk oauth2client get [options] <name>
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Output:**
 
 Returns the OAuth2 client credentials with the following fields:
