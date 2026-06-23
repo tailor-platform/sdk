@@ -74,8 +74,8 @@ export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
   ? T[]
   : T;
 
-import type { TailorUser } from "@/runtime/types";
-import type { output, InferFieldsOutput } from "@/types/helpers";
+import type { TailorUser } from "#/runtime/types";
+import type { output, InferFieldsOutput } from "#/types/helpers";
 import type { NonEmptyObject } from "type-fest";
 
 /**

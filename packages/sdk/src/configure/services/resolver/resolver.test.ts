@@ -1,10 +1,10 @@
 import { describe, expectTypeOf, test, expect } from "vitest";
-import { db } from "@/configure/services/tailordb";
-import { t } from "@/configure/types";
+import { db } from "#/configure/services/tailordb/index";
+import { t } from "#/configure/types/index";
 import { createResolver } from "./resolver";
-import type { TailorInvoker, TailorUser } from "@/runtime/types";
-import type { output } from "@/types/helpers";
-import type { ResolverInput } from "@/types/resolver.generated";
+import type { TailorInvoker, TailorUser } from "#/runtime/types";
+import type { output } from "#/types/helpers";
+import type { ResolverInput } from "#/types/resolver.generated";
 
 describe("createResolver", () => {
   describe("type inference", () => {

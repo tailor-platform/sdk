@@ -7,7 +7,7 @@
 import type {
   BaseGeneratorConfigInput,
   CodeGeneratorInput,
-} from "@/types/generator-config.generated";
+} from "#/types/generator-config.generated";
 
 export type DependencyKind = "tailordb" | "resolver" | "executor";
 
@@ -21,13 +21,13 @@ import type {
   PluginAttachment,
   TailorAnyDBField,
   TailorAnyDBType,
-} from "@/configure/services/tailordb/types";
+} from "#/configure/services/tailordb/types";
 export type { PluginAttachment };
 
-import type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
-import type { IdProvider as IdProviderConfig, OAuth2Client } from "@/types/auth.generated";
-import type { Executor } from "@/types/executor.generated";
-import type { Resolver } from "@/types/resolver.generated";
+import type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
+import type { IdProvider as IdProviderConfig, OAuth2Client } from "#/types/auth.generated";
+import type { Executor } from "#/types/executor.generated";
+import type { Resolver } from "#/types/resolver.generated";
 
 /**
  * A single generated file to write to disk.

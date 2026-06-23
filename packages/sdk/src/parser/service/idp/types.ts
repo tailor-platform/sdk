@@ -3,7 +3,7 @@
 // This is a pure type module: it must contain type declarations only and may
 // not reference zod or schema modules, so other layers (including configure)
 // can import it type-only without pulling any runtime dependency.
-import type { ValueOperand } from "@/configure/services/auth/types";
+import type { ValueOperand } from "#/configure/services/auth/types";
 
 export type StandardIdPPermissionOperator = "eq" | "ne" | "in" | "nin";
 

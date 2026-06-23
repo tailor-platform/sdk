@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { db } from "@/configure/services/tailordb/schema";
-import { toSchemaOutputs } from "@/utils/test/internal";
+import { db } from "#/configure/services/tailordb/schema";
+import { toSchemaOutputs } from "#/utils/test/internal";
 import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {

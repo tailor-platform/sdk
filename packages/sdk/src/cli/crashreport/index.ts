@@ -1,6 +1,6 @@
-import { logger } from "@/cli/shared/logger";
-import { readPackageJson } from "@/cli/shared/package-json";
-import { userAgentFromVersion } from "@/cli/shared/user-agent";
+import { logger } from "#/cli/shared/logger";
+import { readPackageJson } from "#/cli/shared/package-json";
+import { userAgentFromVersion } from "#/cli/shared/user-agent";
 import { parseCrashReportConfig } from "./config";
 import { buildCrashReport, type ErrorType } from "./report";
 import { sendCrashReport } from "./sender";

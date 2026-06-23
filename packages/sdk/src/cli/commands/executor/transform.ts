@@ -1,12 +1,12 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { ExecutorJobStatus } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import { ExecutorJobStatus } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { executorTargetTypeToString, executorTriggerTypeToString } from "./status";
 import type {
   ExecutorExecutor,
   ExecutorJob,
   ExecutorJobAttempt,
   ExecutorTriggerEventConfig,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
 
 export interface ExecutorJobListInfo {
   id: string;

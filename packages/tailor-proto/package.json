@@ -1,5 +1,6 @@
 {
   "name": "@tailor-platform/tailor-proto",
+  "version": "0.0.0",
   "description": "Tailor Platform Protocol Buffer Definitions",
   "private": true,
   "type": "module",

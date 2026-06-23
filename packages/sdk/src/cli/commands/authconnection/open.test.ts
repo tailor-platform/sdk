@@ -1,9 +1,9 @@
 import open from "open";
 import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { loadWorkspaceId } from "@/cli/shared/context";
-import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { loadWorkspaceId } from "#/cli/shared/context";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { openAuthConnectionCommand } from "./open";
 import type { ChildProcess } from "node:child_process";
 
@@ -11,7 +11,7 @@ vi.mock("open", () => ({
   default: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadWorkspaceId: vi.fn(),
 }));
 

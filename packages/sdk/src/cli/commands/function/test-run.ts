@@ -7,19 +7,19 @@
 
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
-import { AuthInvokerSchema } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
-import { executeScript } from "@/cli/shared/script-executor";
-import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
-import { assertDefined } from "@/utils/assert";
+import { workspaceArgs } from "#/cli/shared/args";
+import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
+import { executeScript } from "#/cli/shared/script-executor";
+import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
+import { assertDefined } from "#/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType, type DetectedFunction } from "./detect";
 

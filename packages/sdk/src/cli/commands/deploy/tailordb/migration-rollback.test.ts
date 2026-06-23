@@ -5,11 +5,11 @@
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applyTailorDB } from "./index";
-import type { PendingMigration } from "@/cli/commands/tailordb/migrate/types";
-import type { Application } from "@/cli/services/application";
-import type { TailorDBService } from "@/cli/services/tailordb/service";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
+import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
+import type { Application } from "#/cli/services/application";
+import type { TailorDBService } from "#/cli/services/tailordb/service";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -46,7 +46,7 @@ vi.mock("./migration", async (importOriginal) => {
   };
 });
 
-vi.mock("@/cli/commands/tailordb/migrate/config", () => ({
+vi.mock("#/cli/commands/tailordb/migrate/config", () => ({
   getNamespacesWithMigrations: vi.fn().mockReturnValue([
     {
       namespace: "test-ns",
@@ -109,10 +109,10 @@ const snapshotFixtures = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
+vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
   const original =
     // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    (await importOriginal()) as typeof import("@/cli/commands/tailordb/migrate/snapshot");
+    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/snapshot");
   return {
     ...original,
     assertValidMigrationFiles: vi.fn(),
@@ -120,7 +120,7 @@ vi.mock("@/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
   };
 });
 
-import { reconstructSnapshotFromMigrations } from "@/cli/commands/tailordb/migrate/snapshot";
+import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import * as migrationModule from "./migration";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;

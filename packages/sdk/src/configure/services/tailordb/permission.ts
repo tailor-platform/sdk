@@ -1,4 +1,4 @@
-import type { InferredAttributeMap } from "@/runtime/types";
+import type { InferredAttributeMap } from "#/runtime/types";
 
 // --- Permission types (UX-focused, for configure layer) ---
 

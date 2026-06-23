@@ -531,6 +531,9 @@ importers:
       '@opentelemetry/sdk-trace-base':
         specifier: 2.8.0
         version: 2.8.0(@opentelemetry/api@1.9.1)
+      '@tailor-platform/tailor-proto':
+        specifier: workspace:^
+        version: link:../tailor-proto
       '@types/madge':
         specifier: 5.0.3
         version: 5.0.3
@@ -571,8 +574,8 @@ importers:
         specifier: 4.1.9
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@24.13.2)(@vitest/coverage-v8@4.1.9)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       zinfer:
-        specifier: 0.1.8
-        version: 0.1.8(typescript@6.0.3)(zod@4.4.3)
+        specifier: 0.2.2
+        version: 0.2.2(typescript@6.0.3)(zod@4.4.3)
 
   packages/sdk-codemod:
     dependencies:
@@ -2251,8 +2254,8 @@ packages:
     resolution: {integrity: sha512-w071DSzP94YfN6XiWhOxnLpYT3uqtxJBDYdh6Jdjzt+Ce6DNspJsPQgpC7rbts/B8tEkq0LHoYuIF/O5Jh5rPg==}
     engines: {node: '>=18'}
 
-  '@ts-morph/common@0.28.1':
-    resolution: {integrity: sha512-W74iWf7ILp1ZKNYXY5qbddNaml7e9Sedv5lvU1V8lftlitkc9Pq1A+jlH23ltDgWYeZFFEqGCD1Ies9hqu3O+g==}
+  '@ts-morph/common@0.29.0':
+    resolution: {integrity: sha512-35oUmphHbJvQ/+UTwFNme/t2p3FoKiGJ5auTjjpNTop2dyREspirjMy82PLSC1pnDJ8ah1GU98hwpVt64YXQsg==}
 
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
@@ -2540,6 +2543,10 @@ packages:
   commander@14.0.3:
     resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
     engines: {node: '>=20'}
+
+  commander@15.0.0:
+    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
+    engines: {node: '>=22.12.0'}
 
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
@@ -3657,8 +3664,8 @@ packages:
     resolution: {integrity: sha512-XyLVuhBVvdJTJr2FJJV2L1pc4MwSjMhcunRVgDE9k4wbb2ee7ORYnPewxMWUav12vxyfUM686MSGsqnVRIInuw==}
     engines: {node: '>=18'}
 
-  ts-morph@27.0.2:
-    resolution: {integrity: sha512-fhUhgeljcrdZ+9DZND1De1029PrE+cMkIP7ooqkLRTrRLTqcki2AstsyJm0vRNbTbVCNJ0idGlbBrfqc7/nA8w==}
+  ts-morph@28.0.0:
+    resolution: {integrity: sha512-Wp3tnZ2bzwxyTZMtgWVzXDfm7lB1Drz+y9DmmYH/L702PQhPyVrp3pkou3yIz4qjS14GY9kcpmLiOOMvl8oG1g==}
 
   tsconfig-paths@4.2.0:
     resolution: {integrity: sha512-NoZ4roiN7LnbKn9QqE1amc9DJfzvZXxF4xDavcOWt1BPkdx+m+0gJuPM+S0vCe7zTJMYUP0R8pO2XMr+Y8oLIg==}
@@ -3870,8 +3877,8 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
-  zinfer@0.1.8:
-    resolution: {integrity: sha512-hITZSgtzceB14+09Nke7chmTjADGprVxbgkb0fbtevIeWrmNJdQsu7TIsQ64A6j5K6ro91DVkNBaxBLb1ppHUA==}
+  zinfer@0.2.2:
+    resolution: {integrity: sha512-6tiTnstjPU9e6q8fIOAAqed8vBsc9Ah/oLuClgGZn5a0Z64TPkJs16VSx3OKfjFJgC4qtNlUXNrY2F3WSI0UUQ==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
@@ -4993,7 +5000,7 @@ snapshots:
       '@ts-graphviz/ast': 2.0.7
       '@ts-graphviz/common': 2.1.5
 
-  '@ts-morph/common@0.28.1':
+  '@ts-morph/common@0.29.0':
     dependencies:
       minimatch: 10.2.5
       path-browserify: 1.0.1
@@ -5293,6 +5300,8 @@ snapshots:
   commander@12.1.0: {}
 
   commander@14.0.3: {}
+
+  commander@15.0.0: {}
 
   commander@2.20.3: {}
 
@@ -6420,9 +6429,9 @@ snapshots:
       '@ts-graphviz/common': 2.1.5
       '@ts-graphviz/core': 2.0.7
 
-  ts-morph@27.0.2:
+  ts-morph@28.0.0:
     dependencies:
-      '@ts-morph/common': 0.28.1
+      '@ts-morph/common': 0.29.0
       code-block-writer: 13.0.3
 
   tsconfig-paths@4.2.0:
@@ -6566,13 +6575,13 @@ snapshots:
 
   yoctocolors@2.1.2: {}
 
-  zinfer@0.1.8(typescript@6.0.3)(zod@4.4.3):
+  zinfer@0.2.2(typescript@6.0.3)(zod@4.4.3):
     dependencies:
-      commander: 14.0.3
+      commander: 15.0.0
       glob: 13.0.6
       jiti: 2.7.0
       pathe: 2.0.3
-      ts-morph: 27.0.2
+      ts-morph: 28.0.0
       typescript: 6.0.3
       zod: 4.4.3
 

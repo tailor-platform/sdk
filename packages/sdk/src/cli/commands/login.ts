@@ -9,12 +9,12 @@ import {
   fetchPlatformMachineUserToken,
   fetchUserInfo,
   initOAuth2Client,
-} from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig, saveUserTokens, writePlatformConfig } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { assertDefined } from "@/utils/assert";
+} from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { readPlatformConfig, saveUserTokens, writePlatformConfig } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { assertDefined } from "#/utils/assert";
 
 const redirectPort = 8085;
 const redirectUri = `http://localhost:${redirectPort}/callback`;
