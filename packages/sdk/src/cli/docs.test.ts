@@ -1,17 +1,11 @@
 import { readFileSync } from "node:fs";
 import { format } from "oxfmt";
-import { assertDocMatch, createCommandRenderer } from "politty/docs";
+import { assertDocMatch } from "politty/docs";
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { commonArgs } from "./shared/args";
 import { mainCommand } from "./index";
-import type { FileConfig } from "politty/docs";
 
-/**
- * Format markdown content using oxfmt JS API
- * @param content - Markdown content to format
- * @returns Formatted markdown content
- */
 async function mdFormatter(content: string): Promise<string> {
   const result = await format("file.md", content);
   return result.code;
@@ -27,138 +21,100 @@ vi.mock("politty", async () => {
   return { ...actual, runMain: vi.fn() };
 });
 
-const defaultRender = createCommandRenderer({ headingLevel: 1 });
-
-// File configurations - subcommands are auto-expanded from parent command names
-// Order matches the manually maintained section order on main
-const files: Record<string, FileConfig> = {
+const templateFiles: Record<string, { commands: string[]; tpl: string }> = {
   "docs/cli/application.md": {
-    title: "Application Commands",
-    description:
-      "Commands for managing Tailor Platform applications (work with `tailor.config.ts`).",
     commands: ["init", "generate", "deploy", "remove", "show", "open", "api"],
-    render: defaultRender,
+    tpl: "docs/cli/application.md.tpl",
   },
   "docs/cli/tailordb.md": {
-    title: "TailorDB Commands",
-    description: "Commands for managing TailorDB tables, data, and schema migrations.",
     commands: ["tailordb"],
-    render: defaultRender,
+    tpl: "docs/cli/tailordb.md.tpl",
   },
   "docs/cli/query.md": {
-    title: "Query Commands",
-    description: "Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.",
     commands: ["query"],
-    render: defaultRender,
+    tpl: "docs/cli/query.md.tpl",
   },
   "docs/cli/user.md": {
-    title: "User & Auth Commands",
-    description: "Commands for authentication and user management.",
     commands: ["login", "logout", "user"],
-    render: defaultRender,
+    tpl: "docs/cli/user.md.tpl",
   },
   "docs/cli/organization.md": {
-    title: "Organization Commands",
-    description: "Commands for managing organizations and folders.",
     commands: ["organization"],
-    render: defaultRender,
+    tpl: "docs/cli/organization.md.tpl",
   },
   "docs/cli/workspace.md": {
-    title: "Workspace Commands",
-    description: "Commands for managing workspaces and profiles.",
     commands: ["workspace", "profile"],
-    render: defaultRender,
+    tpl: "docs/cli/workspace.md.tpl",
   },
   "docs/cli/auth.md": {
-    title: "Auth Resource Commands",
-    description: "Commands for managing Auth service resources.",
     commands: ["authconnection", "machineuser", "oauth2client"],
-    render: defaultRender,
+    tpl: "docs/cli/auth.md.tpl",
   },
   "docs/cli/workflow.md": {
-    title: "Workflow Commands",
-    description: "Commands for managing workflows and executions.",
     commands: ["workflow"],
-    render: defaultRender,
+    tpl: "docs/cli/workflow.md.tpl",
   },
   "docs/cli/function.md": {
-    title: "Function Commands",
-    description: "Commands for managing function registries and viewing function execution logs.",
     commands: ["function"],
-    render: defaultRender,
+    tpl: "docs/cli/function.md.tpl",
   },
   "docs/cli/executor.md": {
-    title: "Executor Commands",
-    description: "Commands for managing executors and executor jobs.",
     commands: ["executor"],
-    render: defaultRender,
+    tpl: "docs/cli/executor.md.tpl",
   },
   "docs/cli/secret.md": {
-    title: "Secret Commands",
-    description: "Commands for managing secrets and vaults.",
     commands: ["secret"],
-    render: defaultRender,
+    tpl: "docs/cli/secret.md.tpl",
   },
   "docs/cli/staticwebsite.md": {
-    title: "Static Website Commands",
-    description: "Commands for managing and deploying static websites.",
     commands: ["staticwebsite"],
-    render: defaultRender,
+    tpl: "docs/cli/staticwebsite.md.tpl",
   },
   "docs/cli/crashreport.md": {
-    title: "Crash Report Commands",
-    description: "Commands for managing crash reports.",
     commands: ["crashreport"],
-    render: defaultRender,
+    tpl: "docs/cli/crashreport.md.tpl",
   },
   "docs/cli/setup.md": {
-    title: "Setup Commands",
-    description: "Commands for setting up project infrastructure.",
     commands: ["setup"],
-    render: defaultRender,
+    tpl: "docs/cli/setup.md.tpl",
   },
   "docs/cli/upgrade.md": {
-    title: "Upgrade Commands",
-    description: "Commands for upgrading SDK versions with automated code migration.",
     commands: ["upgrade"],
-    render: defaultRender,
+    tpl: "docs/cli/upgrade.md.tpl",
   },
   "docs/cli/skills.md": {
-    title: "Skills Commands",
-    description: "Commands for installing Tailor SDK agent skills.",
     commands: ["skills"],
-    render: defaultRender,
+    tpl: "docs/cli/skills.md.tpl",
   },
   "docs/cli/completion.md": {
-    title: "Completion",
-    description: "Generate shell completion scripts for bash, zsh, and fish.",
     commands: ["completion"],
-    render: defaultRender,
+    tpl: "docs/cli/completion.md.tpl",
   },
 };
 
-// Auto-generate targetCommands from files
-const targetCommands = Object.values(files).flatMap((config) => config.commands);
+const targetCommands = Object.values(templateFiles).flatMap((c) => c.commands);
+
+const templates = {
+  ...Object.fromEntries(Object.entries(templateFiles).map(([output, { tpl }]) => [output, tpl])),
+  "docs/cli-reference.md": "docs/cli-reference.md.tpl",
+};
 
 describe("CLI Documentation", () => {
-  test("uses section-level command markers", () => {
+  test("output files contain no politty markers", () => {
     const applicationDoc = readFileSync(
       new URL("../../docs/cli/application.md", import.meta.url),
       "utf-8",
     );
 
-    expect(applicationDoc).toContain("<!-- politty:command:init:heading:start -->");
-    expect(applicationDoc).toContain("<!-- politty:command:init:usage:start -->");
-    expect(applicationDoc).not.toContain("<!-- politty:command:init:start -->");
+    expect(applicationDoc).not.toContain("<!-- politty:");
   });
 
   test("matches golden files", { timeout: 60000 }, async () => {
     await assertDocMatch({
       command: mainCommand,
-      files,
+      templates,
       targetCommands,
       globalArgs: z.object(commonArgs),
-      rootDoc: { path: "docs/cli-reference.md" },
       formatter: mdFormatter,
     });
   });
