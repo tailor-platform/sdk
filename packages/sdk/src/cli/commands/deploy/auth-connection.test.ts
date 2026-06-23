@@ -94,6 +94,7 @@ function createMockClient(opts: { connections: ConnectionFixture[] }): OperatorC
     }),
     setMetadata: vi.fn().mockResolvedValue({}),
     createAuthConnection: vi.fn().mockResolvedValue({}),
+    updateAuthConnection: vi.fn().mockResolvedValue({}),
     deleteAuthConnection: vi.fn().mockResolvedValue({}),
   } as unknown as OperatorClient;
 }
@@ -221,7 +222,7 @@ describe("applyAuthConnections", () => {
     });
   });
 
-  test("replace deletes then recreates the connection", async () => {
+  test("replace updates the connection in-place without deleting it", async () => {
     const client = createMockClient({
       connections: [{ name: "conn", ownerLabel: appName }],
     });
@@ -236,10 +237,13 @@ describe("applyAuthConnections", () => {
 
     await applyAuthConnections(client, result, "create-update");
 
-    expect(client.deleteAuthConnection).toHaveBeenCalledWith({
-      workspaceId,
-      connectionName: "conn",
-    });
-    expect(client.createAuthConnection).toHaveBeenCalled();
+    // updateAuthConnection preserves the OAuth session; delete+create must not be used.
+    // TODO: Remove cast when UpdateAuthConnectionRequestSchema is generated in tailor-proto.
+    expect(
+      (client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> })
+        .updateAuthConnection,
+    ).toHaveBeenCalled();
+    expect(client.deleteAuthConnection).not.toHaveBeenCalled();
+    expect(client.createAuthConnection).not.toHaveBeenCalled();
   });
 });

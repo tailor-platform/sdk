@@ -22,6 +22,16 @@ import type {
 import type { AuthConnection } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
+// TODO: Replace with the generated UpdateAuthConnectionRequestSchema type once tailor-proto is updated.
+type UpdateAuthConnectionRequest = {
+  workspaceId: string;
+  connection: NonNullable<MessageInitShape<typeof CreateAuthConnectionRequestSchema>["connection"]>;
+  updateMask?: { paths: string[] };
+};
+type OperatorClientWithUpdate = OperatorClient & {
+  updateAuthConnection: (req: UpdateAuthConnectionRequest) => Promise<unknown>;
+};
+
 type CreateConnection = {
   name: string;
   request: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
@@ -35,7 +45,6 @@ type UpdateConnection = {
 
 type ReplaceConnection = {
   name: string;
-  deleteRequest: MessageInitShape<typeof DeleteAuthConnectionRequestSchema>;
   createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -198,7 +207,6 @@ export async function planAuthConnections(
       if (nonSecretChanged || secretChanged) {
         changeSet.replaces.push({
           name,
-          deleteRequest: { workspaceId, connectionName: name },
           createRequest: buildConnectionRequest(workspaceId, name, config),
           metaRequest,
         });
@@ -282,8 +290,13 @@ export async function applyAuthConnections(
     );
 
     for (const replace of changeSet.replaces) {
-      await client.deleteAuthConnection(replace.deleteRequest);
-      await client.createAuthConnection(replace.createRequest);
+      // TODO: Remove cast when UpdateAuthConnectionRequestSchema is generated in tailor-proto.
+      // UpdateAuthConnection updates the connection in-place, preserving the OAuth session unless
+      // identity fields (providerUrl, issuerUrl, clientId, type) change.
+      await (client as OperatorClientWithUpdate).updateAuthConnection({
+        workspaceId: replace.createRequest.workspaceId ?? "",
+        connection: replace.createRequest.connection ?? {},
+      });
       await client.setMetadata(replace.metaRequest);
     }
 
