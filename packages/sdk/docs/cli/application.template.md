@@ -59,5 +59,3 @@ Use `--dry-run` to preview the plan without applying anything.
 {{politty:command:show}}
 {{politty:command:open}}
 {{politty:command:api}}
-{{politty:command:api inspect}}
-{{politty:command:api list}}

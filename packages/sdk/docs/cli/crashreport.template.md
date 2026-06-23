@@ -10,5 +10,3 @@ politty:
 Commands for managing crash reports.
 
 {{politty:command:crashreport}}
-{{politty:command:crashreport list}}
-{{politty:command:crashreport send}}

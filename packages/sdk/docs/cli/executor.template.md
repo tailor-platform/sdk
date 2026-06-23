@@ -9,7 +9,16 @@ politty:
 
 Commands for managing executors and executor jobs.
 
-{{politty:command:executor}}
+{{politty:command:executor:heading}}
+
+{{politty:command:executor:description}}
+
+{{politty:command:executor:usage}}
+
+{{politty:command:executor:subcommands}}
+
+{{politty:command:executor:global-options-link}}
+
 {{politty:command:executor list}}
 {{politty:command:executor get}}
 {{politty:command:executor jobs}}
@@ -81,4 +90,3 @@ if (result.timedOut) {
 {{politty:command:executor trigger:global-options-link}}
 
 {{politty:command:executor webhook}}
-{{politty:command:executor webhook list}}

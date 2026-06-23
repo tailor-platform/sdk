@@ -256,9 +256,9 @@ Commands for managing executors and executor jobs.
 | Command                                                          | Description                                   |
 | ---------------------------------------------------------------- | --------------------------------------------- |
 | [executor](./cli/executor.md#executor)                           | Manage executors                              |
+| [executor list](./cli/executor.md#executor-list)                 | List all executors                            |
 | [executor get](./cli/executor.md#executor-get)                   | Get executor details                          |
 | [executor jobs](./cli/executor.md#executor-jobs)                 | List or get executor jobs.                    |
-| [executor list](./cli/executor.md#executor-list)                 | List all executors                            |
 | [executor trigger](./cli/executor.md#executor-trigger)           | Trigger an executor manually.                 |
 | [executor webhook](./cli/executor.md#executor-webhook)           | Manage executor webhooks                      |
 | [executor webhook list](./cli/executor.md#executor-webhook-list) | List executors with incoming webhook triggers |

@@ -101,12 +101,12 @@ const templates = {
 
 describe("CLI Documentation", () => {
   test("output files contain no politty markers", () => {
-    const applicationDoc = readFileSync(
-      new URL("../../docs/cli/application.md", import.meta.url),
-      "utf-8",
-    );
-
-    expect(applicationDoc).not.toContain("<!-- politty:");
+    for (const outputPath of Object.keys(templates)) {
+      const content = readFileSync(new URL(`../../${outputPath}`, import.meta.url), "utf-8");
+      expect(content, `${outputPath} should not contain politty markers`).not.toContain(
+        "<!-- politty:",
+      );
+    }
   });
 
   test("matches golden files", { timeout: 60000 }, async () => {

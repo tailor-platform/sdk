@@ -6,4 +6,3 @@ politty:
 ---
 
 {{politty:command:skills}}
-{{politty:command:skills install}}

@@ -12,14 +12,6 @@ Commands for authentication and user management.
 {{politty:command:login}}
 {{politty:command:logout}}
 {{politty:command:user}}
-{{politty:command:user current}}
-{{politty:command:user list}}
-{{politty:command:user switch}}
-{{politty:command:user pat}}
-{{politty:command:user pat list}}
-{{politty:command:user pat create}}
-{{politty:command:user pat delete}}
-{{politty:command:user pat update}}
 When no subcommand is provided, defaults to `list`.
 
 **Output (default):**
