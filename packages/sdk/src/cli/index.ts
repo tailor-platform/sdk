@@ -37,13 +37,9 @@ import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
-// Register tsx for TypeScript loading on Node.js.
-// Bun and Deno handle TypeScript natively, so registration is skipped.
-// tsx's own register() picks `module.registerHooks` on Node ≥ 24.11.1 / 25.1 / 26
-// (avoiding the DEP0205 deprecation) and falls back to `module.register` on older runtimes.
 if (!isNativeTypeScriptRuntime()) {
-  const { register } = await import("tsx/esm/api");
-  register();
+  const { register } = await import("node:module");
+  register(new URL("./ts-hook.mjs", import.meta.url), import.meta.url);
 }
 
 // Runs before globalArgs effects load --env-file, so env file overrides for

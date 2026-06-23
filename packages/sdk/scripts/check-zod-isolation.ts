@@ -1,4 +1,4 @@
-#!/usr/bin/env -S pnpm exec tsx
+#!/usr/bin/env -S node --experimental-strip-types
 // Verify zod stays isolated to the CLI entry point.
 //
 // zinfer exists so that user-facing entry points never depend on zod:

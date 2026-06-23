@@ -83,5 +83,6 @@ export default defineConfig({
   plugins,
   onSuccess: (config) => {
     copyErdViewerAssets(config.outDir);
+    cpSync("src/cli/ts-hook.mjs", path.join(config.outDir, "cli/ts-hook.mjs"));
   },
 });
