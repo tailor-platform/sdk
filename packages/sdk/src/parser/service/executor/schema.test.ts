@@ -26,28 +26,28 @@ function expectParseFailure<T>(
   return result.error;
 }
 
-function expectLegacyAuthInvokerRejected<T>(
+function expectUnknownKeyRejected<T>(
   result: { success: true; data: T } | { success: false; error: { issues: unknown[] } },
 ) {
   const error = expectParseFailure(result);
   expect(error.issues).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        path: ["authInvoker"],
+        code: "unrecognized_keys",
       }),
     ]),
   );
 }
 
 describe("FunctionOperationSchema", () => {
-  test("rejects legacy authInvoker option", () => {
+  test("rejects unknown options", () => {
     expect.hasAssertions();
 
-    expectLegacyAuthInvokerRejected(
+    expectUnknownKeyRejected(
       FunctionOperationSchema.safeParse({
         kind: "function",
         body: () => {},
-        authInvoker: "admin",
+        unknownOption: true,
       }),
     );
   });
@@ -80,14 +80,14 @@ describe("GqlOperationSchema", () => {
     expect(data.query).toBe("query { users { id } }");
   });
 
-  test("rejects legacy authInvoker option", () => {
+  test("rejects unknown options", () => {
     expect.hasAssertions();
 
-    expectLegacyAuthInvokerRejected(
+    expectUnknownKeyRejected(
       GqlOperationSchema.safeParse({
         kind: "graphql",
         query: "query { users { id } }",
-        authInvoker: "admin",
+        unknownOption: true,
       }),
     );
   });
@@ -117,14 +117,14 @@ describe("WorkflowOperationSchema", () => {
     expect(data.workflowName).toBe("my-workflow");
   });
 
-  test("rejects legacy authInvoker option", () => {
+  test("rejects unknown options", () => {
     expect.hasAssertions();
 
-    expectLegacyAuthInvokerRejected(
+    expectUnknownKeyRejected(
       WorkflowOperationSchema.safeParse({
         kind: "workflow",
         workflowName: "my-workflow",
-        authInvoker: "admin",
+        unknownOption: true,
       }),
     );
   });
@@ -179,7 +179,7 @@ describe("ExecutorSchema", () => {
     expect(data.operation.query).toBe("mutation { createUser { id } }");
   });
 
-  test("rejects legacy authInvoker option on operations", () => {
+  test("rejects unknown options on operations", () => {
     expect.hasAssertions();
 
     expectParseFailure(
@@ -192,7 +192,7 @@ describe("ExecutorSchema", () => {
         operation: {
           kind: "function",
           body: () => {},
-          authInvoker: "admin",
+          unknownOption: true,
         },
       }),
     );
