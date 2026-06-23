@@ -69,7 +69,7 @@ export default {
       fs.writeFileSync(
         filePath,
         `
-export default {
+const executor = {
   name: "my-executor",
   trigger: { kind: "schedule", cron: "0 12 * * *", __args: [{ cron: "0 12 * * *" }] },
   operation: {
@@ -77,6 +77,12 @@ export default {
     body: (args) => {},
   },
 };
+
+Object.defineProperty(executor, Symbol.for("tailor-platform/sdk"), {
+  value: "executor",
+});
+
+export default executor;
 `,
       );
 
