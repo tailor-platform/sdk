@@ -25,7 +25,7 @@ jobs:
       on-branch: ${{ steps.tailor-tag-guard.outputs.on-branch }}
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
       - id: tailor-tag-guard
@@ -43,7 +43,7 @@ jobs:
       contents: read
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - id: tailor-setup
         uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
@@ -76,7 +76,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - id: tailor-setup
         uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
