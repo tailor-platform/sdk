@@ -6,6 +6,7 @@ politty:
 ---
 
 {{politty:command:upgrade}}
+
 ### How It Works
 
 The `upgrade` command runs codemods that automatically transform your project code for breaking changes between SDK versions. The target version (`--to`) is auto-detected from the installed `@tailor-platform/sdk` in `node_modules`.

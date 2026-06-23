@@ -24,71 +24,71 @@ vi.mock("politty", async () => {
 const templateFiles: Record<string, { commands: string[]; tpl: string }> = {
   "docs/cli/application.md": {
     commands: ["init", "generate", "deploy", "remove", "show", "open", "api"],
-    tpl: "docs/cli/application.md.tpl",
+    tpl: "docs/cli/application.template.md",
   },
   "docs/cli/tailordb.md": {
     commands: ["tailordb"],
-    tpl: "docs/cli/tailordb.md.tpl",
+    tpl: "docs/cli/tailordb.template.md",
   },
   "docs/cli/query.md": {
     commands: ["query"],
-    tpl: "docs/cli/query.md.tpl",
+    tpl: "docs/cli/query.template.md",
   },
   "docs/cli/user.md": {
     commands: ["login", "logout", "user"],
-    tpl: "docs/cli/user.md.tpl",
+    tpl: "docs/cli/user.template.md",
   },
   "docs/cli/organization.md": {
     commands: ["organization"],
-    tpl: "docs/cli/organization.md.tpl",
+    tpl: "docs/cli/organization.template.md",
   },
   "docs/cli/workspace.md": {
     commands: ["workspace", "profile"],
-    tpl: "docs/cli/workspace.md.tpl",
+    tpl: "docs/cli/workspace.template.md",
   },
   "docs/cli/auth.md": {
     commands: ["authconnection", "machineuser", "oauth2client"],
-    tpl: "docs/cli/auth.md.tpl",
+    tpl: "docs/cli/auth.template.md",
   },
   "docs/cli/workflow.md": {
     commands: ["workflow"],
-    tpl: "docs/cli/workflow.md.tpl",
+    tpl: "docs/cli/workflow.template.md",
   },
   "docs/cli/function.md": {
     commands: ["function"],
-    tpl: "docs/cli/function.md.tpl",
+    tpl: "docs/cli/function.template.md",
   },
   "docs/cli/executor.md": {
     commands: ["executor"],
-    tpl: "docs/cli/executor.md.tpl",
+    tpl: "docs/cli/executor.template.md",
   },
   "docs/cli/secret.md": {
     commands: ["secret"],
-    tpl: "docs/cli/secret.md.tpl",
+    tpl: "docs/cli/secret.template.md",
   },
   "docs/cli/staticwebsite.md": {
     commands: ["staticwebsite"],
-    tpl: "docs/cli/staticwebsite.md.tpl",
+    tpl: "docs/cli/staticwebsite.template.md",
   },
   "docs/cli/crashreport.md": {
     commands: ["crashreport"],
-    tpl: "docs/cli/crashreport.md.tpl",
+    tpl: "docs/cli/crashreport.template.md",
   },
   "docs/cli/setup.md": {
     commands: ["setup"],
-    tpl: "docs/cli/setup.md.tpl",
+    tpl: "docs/cli/setup.template.md",
   },
   "docs/cli/upgrade.md": {
     commands: ["upgrade"],
-    tpl: "docs/cli/upgrade.md.tpl",
+    tpl: "docs/cli/upgrade.template.md",
   },
   "docs/cli/skills.md": {
     commands: ["skills"],
-    tpl: "docs/cli/skills.md.tpl",
+    tpl: "docs/cli/skills.template.md",
   },
   "docs/cli/completion.md": {
     commands: ["completion"],
-    tpl: "docs/cli/completion.md.tpl",
+    tpl: "docs/cli/completion.template.md",
   },
 };
 
@@ -96,7 +96,7 @@ const targetCommands = Object.values(templateFiles).flatMap((c) => c.commands);
 
 const templates = {
   ...Object.fromEntries(Object.entries(templateFiles).map(([output, { tpl }]) => [output, tpl])),
-  "docs/cli-reference.md": "docs/cli-reference.md.tpl",
+  "docs/cli-reference.md": "docs/cli-reference.template.md",
 };
 
 describe("CLI Documentation", () => {

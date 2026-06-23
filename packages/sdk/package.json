@@ -16,6 +16,7 @@
     "CHANGELOG.md",
     "dist",
     "docs",
+    "!docs/**/*.template.md",
     "postinstall.mjs",
     "README.md",
     "agent-skills"

@@ -11,6 +11,7 @@ Commands for setting up project infrastructure.
 
 {{politty:command:setup}}
 {{politty:command:setup check}}
+
 ## Further reading
 
 - [GitHub Actions Integration](../github-actions.md) — usage guide: targets, generated files, secrets, approval gates, and rollback.
