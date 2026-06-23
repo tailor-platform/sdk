@@ -24,18 +24,18 @@ describe("ResolverSchema", () => {
     },
   };
 
-  test("rejects legacy authInvoker option", () => {
+  test("rejects unknown options", () => {
     const error = expectParseFailure(
       ResolverSchema.safeParse({
         ...validResolver,
-        authInvoker: "admin",
+        unknownOption: true,
       }),
     );
 
     expect(error.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          path: ["authInvoker"],
+          code: "unrecognized_keys",
         }),
       ]),
     );

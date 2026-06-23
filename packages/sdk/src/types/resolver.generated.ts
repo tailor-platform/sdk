@@ -63,6 +63,5 @@ export type Resolver = {
         machineUserName: string;
       }
     | undefined;
-  authInvoker?: undefined;
 };
 export type ResolverInput = Resolver;
