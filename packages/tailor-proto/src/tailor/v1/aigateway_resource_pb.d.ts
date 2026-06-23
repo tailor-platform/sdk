@@ -67,4 +67,3 @@ export declare type AIGateway = Message<"tailor.v1.AIGateway"> & {
  * Use `create(AIGatewaySchema)` to create a new message.
  */
 export declare const AIGatewaySchema: GenMessage<AIGateway>;
-

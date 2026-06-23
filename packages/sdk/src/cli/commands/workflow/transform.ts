@@ -60,6 +60,10 @@ function workflowExecutionStatusToString(status: WorkflowExecution_Status): stri
       return "SUCCESS";
     case WorkflowExecution_Status.FAILED:
       return "FAILED";
+    case WorkflowExecution_Status.PENDING_RETRY:
+      return "PENDING_RETRY";
+    case WorkflowExecution_Status.WAITING:
+      return "WAITING";
     default:
       return "UNSPECIFIED";
   }
@@ -80,6 +84,8 @@ function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status)
       return "SUCCESS";
     case WorkflowJobExecution_Status.FAILED:
       return "FAILED";
+    case WorkflowJobExecution_Status.WAITING:
+      return "WAITING";
     default:
       return "UNSPECIFIED";
   }
