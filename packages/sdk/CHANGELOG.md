@@ -1,5 +1,61 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.2
+### Major Changes
+
+
+
+- [#1476](https://github.com/tailor-platform/sdk/pull/1476) [`fa83075`](https://github.com/tailor-platform/sdk/commit/fa83075f5e0e91085c0ef0cb44b7058a28a79ec3) Thanks [@toiroakr](https://github.com/toiroakr)! - `executeScript` now takes its `arg` as a JSON-serializable value instead of a pre-serialized JSON string. Pass the value directly (e.g. `arg: { a: 1 }`) instead of `arg: JSON.stringify({ a: 1 })`.
+  
+  Add the `v2/execute-script-arg` codemod, which unwraps `JSON.stringify(...)` passed as the `executeScript` `arg` option. Indirect forms (a stringified value held in a variable, etc.) cannot be rewritten automatically and are surfaced as an LLM-assisted review task with a migration prompt.
+
+
+- [#1509](https://github.com/tailor-platform/sdk/pull/1509) [`7cadaa7`](https://github.com/tailor-platform/sdk/commit/7cadaa7c4987b81130ca80ba80bc5d5b26276394) Thanks [@dqn](https://github.com/dqn)! - Rename resolver, executor, workflow trigger, and typed workflow start machine-user options from `authInvoker` to `invoker`.
+  
+  Update create-sdk templates and the v2 auth invoker codemod to generate the new `invoker` option.
+
+
+- [#1492](https://github.com/tailor-platform/sdk/pull/1492) [`41774d1`](https://github.com/tailor-platform/sdk/commit/41774d175d6e42ecce9fd0be458e1fea199fe78a) Thanks [@dqn](https://github.com/dqn)! - Store CLI login tokens in the OS keyring by default when available. If the keyring is unavailable, tokens are stored in the platform config file.
+
+
+
+- [#1484](https://github.com/tailor-platform/sdk/pull/1484) [`a376dc8`](https://github.com/tailor-platform/sdk/commit/a376dc8cd053d20744c90104e8b44ed2729ffe8c) Thanks [@dqn](https://github.com/dqn)! - Remove the deprecated `openDownloadStream` file streaming API. Use `downloadStream` for streamed file downloads.
+  
+  The generated file utilities now emit `downloadFileStream`, which calls `downloadStream` and returns `FileDownloadStreamResponse`, instead of the removed `openFileDownloadStream` helper.
+
+
+- [#1510](https://github.com/tailor-platform/sdk/pull/1510) [`41809c7`](https://github.com/tailor-platform/sdk/commit/41809c75ca0f52d0872e55be095e0b73d026c622) Thanks [@dqn](https://github.com/dqn)! - Remove the deprecated workflow test env fallback. `WORKFLOW_TEST_ENV_KEY` is no longer exported, and `TAILOR_TEST_WORKFLOW_ENV` is no longer read when running workflows locally. Use `mockWorkflow().setEnv(...)` or pass `{ env }` to `runWorkflowLocally(...)` instead.
+
+
+
+- [#1439](https://github.com/tailor-platform/sdk/pull/1439) [`c5b10d2`](https://github.com/tailor-platform/sdk/commit/c5b10d2841ded08927285bce538c05220cde5e4c) Thanks [@dqn](https://github.com/dqn)! - Unify function principal context around `TailorPrincipal`.
+  
+  Resolver contexts now use `caller` and `invoker` as `TailorPrincipal | null`, workflow and executor invokers also use `TailorPrincipal | null`, and event executor `actor` uses `TailorPrincipal | null` with `id`/`type` fields. The legacy `TailorUser`, `TailorInvoker`, `TailorActor`, `TailorActorType`, and `unauthenticatedTailorUser` exports are removed.
+
+
+- [#1498](https://github.com/tailor-platform/sdk/pull/1498) [`83145db`](https://github.com/tailor-platform/sdk/commit/83145db9a0d243aa68c1b641c2b6026771a62188) Thanks [@dqn](https://github.com/dqn)! - Set `db.fields.timestamps()` `updatedAt` when records are created and make the generated field non-null. `createdAt` keeps its existing create-time behavior, while `updatedAt` keeps its update-time behavior and now also gets a create hook that preserves provided values and falls back to the current time.
+  
+  Update create-sdk templates so scaffolded projects use the new non-null `updatedAt` Kysely types and seed schemas.
+  
+  Existing TailorDB schemas that already use this helper will change `updatedAt` from optional to required. Backfill existing records that have `updatedAt: null` before applying the schema change.
+
+### Patch Changes
+
+
+
+- [#1495](https://github.com/tailor-platform/sdk/pull/1495) [`6234022`](https://github.com/tailor-platform/sdk/commit/6234022d7dc03813b8dade831b86f63a5f7a20e6) Thanks [@toiroakr](https://github.com/toiroakr)! - Generate the v2 migration guide (`packages/sdk/docs/migration/v2.md`) from the codemod registry, which is the single source of truth. Each entry renders its name, automation level (Automatic / Partially automatic / Manual), description, optional before/after `examples`, and — for changes the codemods cannot fully migrate on their own — the LLM/manual migration prompt. Run `pnpm codemod:docs:update` to regenerate and `pnpm codemod:docs:check` (wired into `pnpm check`) to verify it is in sync.
+  
+  `scriptPath` is now optional, so the registry can also describe codemod-less ("manual") migrations that ship only guidance (`examples` / `prompt` / `suspiciousPatterns`) with no automatic transform. A manual entry with a `prompt` but no scoping pattern is surfaced as a project-wide `llmReviews` entry at runtime.
+  
+  Add a `sdk-codemod list` command that prints every registered rule (id, name, kind, version range).
+
+
+- [#1516](https://github.com/tailor-platform/sdk/pull/1516) [`ec752bd`](https://github.com/tailor-platform/sdk/commit/ec752bd38f7dec817f7e3b4d2d5468e7320050e0) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.5.0 [security]
+
+
+
+- [#1525](https://github.com/tailor-platform/sdk/pull/1525) [`425a19d`](https://github.com/tailor-platform/sdk/commit/425a19dd58da6e373b739d3b3e838c2ff3d1736a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.5
+
 ## 2.0.0-next.1
 ### Major Changes
 
