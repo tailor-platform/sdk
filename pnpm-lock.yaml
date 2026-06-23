@@ -137,8 +137,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.6.0
-        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        specifier: 0.9.2
+        version: 0.9.2(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -489,8 +489,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.6.0
-        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        specifier: 0.9.2
+        version: 0.9.2(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       rolldown:
         specifier: 1.1.2
         version: 1.1.2
@@ -595,8 +595,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.6.0
-        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        specifier: 0.9.2
+        version: 0.9.2(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       semver:
         specifier: 7.8.5
         version: 7.8.5
@@ -2293,10 +2293,6 @@ packages:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
     engines: {node: '>=8'}
 
-  ansi-regex@6.2.2:
-    resolution: {integrity: sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==}
-    engines: {node: '>=12'}
-
   ansi-styles@4.3.0:
     resolution: {integrity: sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg==}
     engines: {node: '>=8'}
@@ -2667,10 +2663,6 @@ packages:
 
   get-amd-module-type@6.0.2:
     resolution: {integrity: sha512-7zShVYAYtMnj9S65CfN+hvpBCByfuB1OY8xID01nZEzXTZbx4YyysAfi+nMl95JSR6odt4q8TCj2W63KAoyVLQ==}
-    engines: {node: '>=18'}
-
-  get-east-asian-width@1.6.0:
-    resolution: {integrity: sha512-QRbvDIbx6YklUe6RxeTeleMR0yv3cYH6PsPZHcnVn7xv7zO1BHN8r0XETu8n6Ye3Q+ahtSarc3WgtNWmehIBfA==}
     engines: {node: '>=18'}
 
   get-own-enumerable-property-symbols@3.0.2:
@@ -3207,8 +3199,8 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.6.0:
-    resolution: {integrity: sha512-xzEaIJ444nI2S0bRZb/AvcXaHQ0DDRs0y+JsmWUeIFgvgHjGHU8owJwXEY34B8ihCugxAQ0vVgPJX18EOoexfQ==}
+  politty@0.9.2:
+    resolution: {integrity: sha512-qO4yxKtYSf8Rhwn3NqW6VRce8BGRODs9zifmK1LmAf7T+Xd0rHH2GaDwZBcjej4CgnGPO90loQaSbeU0kZOeUA==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -3427,10 +3419,6 @@ packages:
     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
     engines: {node: '>=8'}
 
-  string-width@8.2.1:
-    resolution: {integrity: sha512-IIaP0g3iy9Cyy18w3M9YcaDudujEAVHKt3a3QJg1+sr/oX96TbaGUubG0hJyCjCBThFH+tFpcIyoUHUn1ogaLA==}
-    engines: {node: '>=20'}
-
   string_decoder@1.3.0:
     resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
 
@@ -3441,10 +3429,6 @@ packages:
   strip-ansi@6.0.1:
     resolution: {integrity: sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A==}
     engines: {node: '>=8'}
-
-  strip-ansi@7.2.0:
-    resolution: {integrity: sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==}
-    engines: {node: '>=12'}
 
   strip-bom@3.0.0:
     resolution: {integrity: sha512-vavAMRXOgBVNF6nyEEmL3DBK19iRpDcoIwW+swQ+CbGiu7lju6t+JklA1MHweoWtadgt4ISVUsXLyDq34ddcwA==}
@@ -5003,8 +4987,6 @@ snapshots:
 
   ansi-regex@5.0.1: {}
 
-  ansi-regex@6.2.2: {}
-
   ansi-styles@4.3.0:
     dependencies:
       color-convert: 2.0.1
@@ -5360,8 +5342,6 @@ snapshots:
     dependencies:
       ast-module-types: 6.0.2
       node-source-walk: 7.0.2
-
-  get-east-asian-width@1.6.0: {}
 
   get-own-enumerable-property-symbols@3.0.2: {}
 
@@ -5880,9 +5860,9 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3):
+  politty@0.9.2(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3):
     dependencies:
-      string-width: 8.2.1
+      yaml: 2.9.0
       zod: 4.4.3
     optionalDependencies:
       '@clack/prompts': 1.5.1
@@ -6117,11 +6097,6 @@ snapshots:
       is-fullwidth-code-point: 3.0.0
       strip-ansi: 6.0.1
 
-  string-width@8.2.1:
-    dependencies:
-      get-east-asian-width: 1.6.0
-      strip-ansi: 7.2.0
-
   string_decoder@1.3.0:
     dependencies:
       safe-buffer: 5.2.1
@@ -6135,10 +6110,6 @@ snapshots:
   strip-ansi@6.0.1:
     dependencies:
       ansi-regex: 5.0.1
-
-  strip-ansi@7.2.0:
-    dependencies:
-      ansi-regex: 6.2.2
 
   strip-bom@3.0.0: {}
 

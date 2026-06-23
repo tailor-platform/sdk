@@ -198,7 +198,7 @@
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.1",
-    "politty": "0.6.0",
+    "politty": "0.9.2",
     "rolldown": "1.1.2",
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
