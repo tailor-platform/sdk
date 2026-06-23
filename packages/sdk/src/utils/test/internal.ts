@@ -1,3 +1,4 @@
+import { stripTailorDBTypeBuilderHelpers } from "@/parser/service/tailordb/builder-helpers";
 /**
  * Internal test utilities for SDK development.
  * These are NOT exported to library users.
@@ -15,7 +16,7 @@ export function toSchemaOutput(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Accept any db.type() result for testing
   type: any,
 ): TailorDBTypeSchemaOutput {
-  const parsed = TailorDBTypeSchema.safeParse(type);
+  const parsed = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(type));
   if (!parsed.success) {
     throw new Error(`Failed to parse type ${type.name}: ${parsed.error.message}`);
   }

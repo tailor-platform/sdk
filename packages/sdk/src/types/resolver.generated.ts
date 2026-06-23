@@ -39,6 +39,7 @@ export type Resolver = {
             update?: Function | undefined;
           }
         | undefined;
+      validate?: (Function | [Function, string])[] | undefined;
       typeName?: string | undefined;
     };
     fields: {

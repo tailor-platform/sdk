@@ -4,6 +4,7 @@ import { resolveTSConfig } from "pkg-types";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
+import { stripTailorDBTypeBuilderHelpers } from "@/parser/service/tailordb/builder-helpers";
 import { findOmittedPermitRules } from "@/parser/service/tailordb/permission";
 import { assertDefined } from "@/utils/assert";
 import { isSdkBranded } from "@/utils/brand";
@@ -176,7 +177,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
 
-        const result = TailorDBTypeSchema.safeParse(exportedValue);
+        const result = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(exportedValue));
         if (!result.success) {
           if (isSdkBranded(exportedValue, "tailordb-type")) {
             throw result.error;

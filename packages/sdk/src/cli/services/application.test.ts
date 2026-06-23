@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { defineConfig } from "@/configure/config";
 import { defineAuth } from "@/configure/services/auth";
+import { defineIdp } from "@/configure/services/idp";
+import { defineStaticWebSite } from "@/configure/services/staticwebsite";
 import { db } from "@/configure/services/tailordb/schema";
 import { defineApplication } from "./application";
 
@@ -38,5 +40,43 @@ describe("defineAuth parse wiring", () => {
     await application.authService!.resolveNamespaces();
 
     expect(application.authService!.userProfile?.namespace).toBe("external-ns");
+  });
+
+  test("accepts defineIdp helper objects when parsing IdP services", () => {
+    const idp = defineIdp("my-idp", {
+      clients: ["default-client"],
+    });
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        idp: [idp],
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.idpServices).toHaveLength(1);
+    expect(application.idpServices[0]?.name).toBe("my-idp");
+  });
+
+  test("accepts defineStaticWebSite helper objects when parsing static websites", () => {
+    const website = defineStaticWebSite("my-site", {
+      description: "my website",
+    });
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        staticWebsites: [website],
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.staticWebsiteServices).toHaveLength(1);
+    expect(application.staticWebsiteServices[0]?.name).toBe("my-site");
   });
 });

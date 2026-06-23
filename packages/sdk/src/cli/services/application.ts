@@ -155,6 +155,14 @@ type DefineIdpResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
+function stripIdpProviderHelper(idpConfig: IdPConfig): IdPConfig {
+  if ("external" in idpConfig) return idpConfig;
+  const configWithProvider = idpConfig as IdPConfig & { provider?: unknown };
+  if (typeof configWithProvider.provider !== "function") return idpConfig;
+  const { provider: _provider, ...config } = configWithProvider;
+  return config as IdPConfig;
+}
+
 function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
@@ -171,7 +179,7 @@ function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
     }
     idpNames.add(name);
     if (!("external" in idpConfig)) {
-      const idp = IdPSchema.parse(idpConfig);
+      const idp = IdPSchema.parse(stripIdpProviderHelper(idpConfig));
       idpServices.push(idp);
     }
     subgraphs.push({ Type: "idp", Name: name });
@@ -184,6 +192,14 @@ type DefineAuthResult = {
   authService: AuthService | undefined;
   subgraphs: Array<{ Type: string; Name: string }>;
 };
+
+function stripAuthConnectionTokenHelper(config: AuthConfig): AuthConfig {
+  if ("external" in config) return config;
+  const configWithConnectionToken = config as AuthConfig & { getConnectionToken?: unknown };
+  if (typeof configWithConnectionToken.getConnectionToken !== "function") return config;
+  const { getConnectionToken: _getConnectionToken, ...authConfig } = configWithConnectionToken;
+  return authConfig as AuthConfig;
+}
 
 function defineAuth(
   config: AuthConfig | undefined,
@@ -199,7 +215,7 @@ function defineAuth(
   let authService: AuthService | undefined;
   if (!("external" in config)) {
     authService = createAuthService(
-      AuthConfigSchema.parse(config),
+      AuthConfigSchema.parse(stripAuthConnectionTokenHelper(config)),
       tailorDBServices,
       externalTailorDBNamespaces,
     );
@@ -235,6 +251,13 @@ function defineHttpAdapterService(
   return createHttpAdapterService({ config });
 }
 
+function stripStaticWebsiteUrlHelper(config: StaticWebsiteInput): StaticWebsiteInput {
+  const configWithUrl = config as StaticWebsiteInput & { url?: unknown };
+  if (configWithUrl.url !== `${config.name}:url`) return config;
+  const { url: _url, ...websiteConfig } = configWithUrl;
+  return websiteConfig;
+}
+
 function defineStaticWebsites(
   websites: readonly StaticWebsiteInput[] | undefined,
 ): StaticWebsite[] {
@@ -242,7 +265,7 @@ function defineStaticWebsites(
   const websiteNames = new Set<string>();
 
   (websites ?? []).forEach((config) => {
-    const website = StaticWebsiteSchema.parse(config);
+    const website = StaticWebsiteSchema.parse(stripStaticWebsiteUrlHelper(config));
     if (websiteNames.has(website.name)) {
       throw new Error(`Static website with name "${website.name}" already defined.`);
     }

@@ -4,6 +4,7 @@ import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import { ExecutorSchema } from "@/parser/service/executor";
 import { isSdkBranded } from "@/utils/brand";
+import { stripExecutorTriggerArgs } from "./loader";
 import type { ExecutorServiceConfig } from "@/configure/config/types";
 import type { Executor } from "@/types/executor.generated";
 
@@ -49,7 +50,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
   const loadExecutorForFile = async (executorFile: string): Promise<Executor | undefined> => {
     try {
       const executorModule = await import(pathToFileURL(executorFile).href);
-      const result = ExecutorSchema.safeParse(executorModule.default);
+      const result = ExecutorSchema.safeParse(stripExecutorTriggerArgs(executorModule.default));
       if (result.success) {
         const relativePath = path.relative(process.cwd(), executorFile);
         logger.log(
