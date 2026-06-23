@@ -24,6 +24,12 @@ tailor-sdk workspace [command]
 
 <!-- politty:command:workspace:usage:end -->
 
+<!-- politty:command:workspace:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workspace:global-options-link:end -->
+
 <!-- politty:command:workspace:subcommands:start -->
 
 **Commands**
@@ -39,341 +45,6 @@ tailor-sdk workspace [command]
 | [`workspace user`](#workspace-user)       | Manage workspace users                      |
 
 <!-- politty:command:workspace:subcommands:end -->
-
-<!-- politty:command:workspace:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace:global-options-link:end -->
-<!-- politty:command:workspace create:heading:start -->
-
-### workspace create
-
-<!-- politty:command:workspace create:heading:end -->
-
-<!-- politty:command:workspace create:description:start -->
-
-Create a new Tailor Platform workspace.
-
-<!-- politty:command:workspace create:description:end -->
-
-<!-- politty:command:workspace create:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk workspace create [options]
-```
-
-<!-- politty:command:workspace create:usage:end -->
-
-<!-- politty:command:workspace create:options:start -->
-
-**Options**
-
-| Option                                | Alias | Description                                                                                                 | Required | Default   | Env                               |
-| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
-| `--name <NAME>`                       | `-n`  | Workspace name                                                                                              | Yes      | -         | -                                 |
-| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)                                                                  | Yes      | -         | -                                 |
-| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                    | No       | `false`   | -                                 |
-| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                 | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
-| `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user)                                                       | No       | -         | -                                 |
-| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
-
-<!-- politty:command:workspace create:options:end -->
-
-<!-- politty:command:workspace create:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace create:global-options-link:end -->
-<!-- politty:command:workspace list:heading:start -->
-
-### workspace list
-
-<!-- politty:command:workspace list:heading:end -->
-
-<!-- politty:command:workspace list:description:start -->
-
-List all Tailor Platform workspaces.
-
-<!-- politty:command:workspace list:description:end -->
-
-<!-- politty:command:workspace list:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk workspace list [options]
-```
-
-<!-- politty:command:workspace list:usage:end -->
-
-<!-- politty:command:workspace list:options:start -->
-
-**Options**
-
-| Option            | Alias | Description                                              | Required | Default  |
-| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
-| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
-| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
-
-<!-- politty:command:workspace list:options:end -->
-
-<!-- politty:command:workspace list:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace list:global-options-link:end -->
-<!-- politty:command:workspace delete:heading:start -->
-
-### workspace delete
-
-<!-- politty:command:workspace delete:heading:end -->
-
-<!-- politty:command:workspace delete:description:start -->
-
-Delete a Tailor Platform workspace.
-
-<!-- politty:command:workspace delete:description:end -->
-
-<!-- politty:command:workspace delete:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk workspace delete [options]
-```
-
-<!-- politty:command:workspace delete:usage:end -->
-
-<!-- politty:command:workspace delete:options:start -->
-
-**Options**
-
-| Option                          | Alias | Description               | Required | Default |
-| ------------------------------- | ----- | ------------------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | Yes      | -       |
-| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
-
-<!-- politty:command:workspace delete:options:end -->
-
-<!-- politty:command:workspace delete:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace delete:global-options-link:end -->
-<!-- politty:command:profile:heading:start -->
-
-## profile
-
-<!-- politty:command:profile:heading:end -->
-
-<!-- politty:command:profile:description:start -->
-
-Manage workspace profiles (user + workspace combinations).
-
-<!-- politty:command:profile:description:end -->
-
-<!-- politty:command:profile:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk profile [command]
-```
-
-<!-- politty:command:profile:usage:end -->
-
-<!-- politty:command:profile:subcommands:start -->
-
-**Commands**
-
-| Command                             | Description                |
-| ----------------------------------- | -------------------------- |
-| [`profile create`](#profile-create) | Create a new profile.      |
-| [`profile delete`](#profile-delete) | Delete a profile.          |
-| [`profile list`](#profile-list)     | List all profiles.         |
-| [`profile update`](#profile-update) | Update profile properties. |
-
-<!-- politty:command:profile:subcommands:end -->
-
-<!-- politty:command:profile:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:profile:global-options-link:end -->
-<!-- politty:command:profile create:heading:start -->
-
-### profile create
-
-<!-- politty:command:profile create:heading:end -->
-
-<!-- politty:command:profile create:description:start -->
-
-Create a new profile.
-
-<!-- politty:command:profile create:description:end -->
-
-<!-- politty:command:profile create:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk profile create [options] <name>
-```
-
-<!-- politty:command:profile create:usage:end -->
-
-<!-- politty:command:profile create:arguments:start -->
-
-**Arguments**
-
-| Argument | Description  | Required |
-| -------- | ------------ | -------- |
-| `name`   | Profile name | Yes      |
-
-<!-- politty:command:profile create:arguments:end -->
-
-<!-- politty:command:profile create:options:start -->
-
-**Options**
-
-| Option                                            | Alias | Description                                                                                                                            | Required | Default   |
-| ------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- |
-| `--user <USER>`                                   | `-u`  | User email                                                                                                                             | Yes      | -         |
-| `--workspace-id <WORKSPACE_ID>`                   | `-w`  | Workspace ID                                                                                                                           | Yes      | -         |
-| `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands while the profile is active.                                                      | No       | `"write"` |
-| `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).                 | No       | -         |
-| `--machine-user-override <MACHINE_USER_OVERRIDE>` | -     | Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user. | No       | -         |
-
-<!-- politty:command:profile create:options:end -->
-
-<!-- politty:command:profile create:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:profile create:global-options-link:end -->
-<!-- politty:command:profile list:heading:start -->
-
-### profile list
-
-<!-- politty:command:profile list:heading:end -->
-
-<!-- politty:command:profile list:description:start -->
-
-List all profiles.
-
-<!-- politty:command:profile list:description:end -->
-
-<!-- politty:command:profile list:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk profile list
-```
-
-<!-- politty:command:profile list:usage:end -->
-
-<!-- politty:command:profile list:options:start -->
-<!-- politty:command:profile list:options:end -->
-
-<!-- politty:command:profile list:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:profile list:global-options-link:end -->
-<!-- politty:command:profile update:heading:start -->
-
-### profile update
-
-<!-- politty:command:profile update:heading:end -->
-
-<!-- politty:command:profile update:description:start -->
-
-Update profile properties.
-
-<!-- politty:command:profile update:description:end -->
-
-<!-- politty:command:profile update:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk profile update [options] <name>
-```
-
-<!-- politty:command:profile update:usage:end -->
-
-<!-- politty:command:profile update:arguments:start -->
-
-**Arguments**
-
-| Argument | Description  | Required |
-| -------- | ------------ | -------- |
-| `name`   | Profile name | Yes      |
-
-<!-- politty:command:profile update:arguments:end -->
-
-<!-- politty:command:profile update:options:start -->
-
-**Options**
-
-| Option                                            | Alias | Description                                                                                                                                                           | Required | Default |
-| ------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
-| `--user <USER>`                                   | `-u`  | New user email                                                                                                                                                        | No       | -       |
-| `--workspace-id <WORKSPACE_ID>`                   | `-w`  | New workspace ID                                                                                                                                                      | No       | -       |
-| `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.                                                                                  | No       | -       |
-| `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.                 | No       | -       |
-| `--machine-user-override <MACHINE_USER_OVERRIDE>` | -     | Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction. | No       | -       |
-
-<!-- politty:command:profile update:options:end -->
-
-<!-- politty:command:profile update:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:profile update:global-options-link:end -->
-<!-- politty:command:profile delete:heading:start -->
-
-### profile delete
-
-<!-- politty:command:profile delete:heading:end -->
-
-<!-- politty:command:profile delete:description:start -->
-
-Delete a profile.
-
-<!-- politty:command:profile delete:description:end -->
-
-<!-- politty:command:profile delete:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk profile delete <name>
-```
-
-<!-- politty:command:profile delete:usage:end -->
-
-<!-- politty:command:profile delete:arguments:start -->
-
-**Arguments**
-
-| Argument | Description  | Required |
-| -------- | ------------ | -------- |
-| `name`   | Profile name | Yes      |
-
-<!-- politty:command:profile delete:arguments:end -->
-
-<!-- politty:command:profile delete:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:profile delete:global-options-link:end -->
 
 <!-- politty:command:workspace app:heading:start -->
 
@@ -397,6 +68,12 @@ tailor-sdk workspace app [command]
 
 <!-- politty:command:workspace app:usage:end -->
 
+<!-- politty:command:workspace app:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workspace app:global-options-link:end -->
+
 <!-- politty:command:workspace app:subcommands:start -->
 
 **Commands**
@@ -407,12 +84,6 @@ tailor-sdk workspace app [command]
 | [`workspace app list`](#workspace-app-list)     | List applications in a workspace |
 
 <!-- politty:command:workspace app:subcommands:end -->
-
-<!-- politty:command:workspace app:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace app:global-options-link:end -->
 
 <!-- politty:command:workspace app health:heading:start -->
 
@@ -495,6 +166,90 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:workspace app list:global-options-link:end -->
 
+<!-- politty:command:workspace create:heading:start -->
+
+### workspace create
+
+<!-- politty:command:workspace create:heading:end -->
+
+<!-- politty:command:workspace create:description:start -->
+
+Create a new Tailor Platform workspace.
+
+<!-- politty:command:workspace create:description:end -->
+
+<!-- politty:command:workspace create:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk workspace create [options]
+```
+
+<!-- politty:command:workspace create:usage:end -->
+
+<!-- politty:command:workspace create:options:start -->
+
+**Options**
+
+| Option                                | Alias | Description                                                                                                 | Required | Default   | Env                               |
+| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
+| `--name <NAME>`                       | `-n`  | Workspace name                                                                                              | Yes      | -         | -                                 |
+| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)                                                                  | Yes      | -         | -                                 |
+| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                    | No       | `false`   | -                                 |
+| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                 | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
+| `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user)                                                       | No       | -         | -                                 |
+| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
+
+<!-- politty:command:workspace create:options:end -->
+
+<!-- politty:command:workspace create:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workspace create:global-options-link:end -->
+
+<!-- politty:command:workspace delete:heading:start -->
+
+### workspace delete
+
+<!-- politty:command:workspace delete:heading:end -->
+
+<!-- politty:command:workspace delete:description:start -->
+
+Delete a Tailor Platform workspace.
+
+<!-- politty:command:workspace delete:description:end -->
+
+<!-- politty:command:workspace delete:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk workspace delete [options]
+```
+
+<!-- politty:command:workspace delete:usage:end -->
+
+<!-- politty:command:workspace delete:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description               | Required | Default |
+| ------------------------------- | ----- | ------------------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | Yes      | -       |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
+
+<!-- politty:command:workspace delete:options:end -->
+
+<!-- politty:command:workspace delete:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workspace delete:global-options-link:end -->
+
 <!-- politty:command:workspace get:heading:start -->
 
 ### workspace get
@@ -533,6 +288,45 @@ tailor-sdk workspace get [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:workspace get:global-options-link:end -->
+
+<!-- politty:command:workspace list:heading:start -->
+
+### workspace list
+
+<!-- politty:command:workspace list:heading:end -->
+
+<!-- politty:command:workspace list:description:start -->
+
+List all Tailor Platform workspaces.
+
+<!-- politty:command:workspace list:description:end -->
+
+<!-- politty:command:workspace list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk workspace list [options]
+```
+
+<!-- politty:command:workspace list:usage:end -->
+
+<!-- politty:command:workspace list:options:start -->
+
+**Options**
+
+| Option            | Alias | Description                                              | Required | Default  |
+| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
+| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
+| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
+
+<!-- politty:command:workspace list:options:end -->
+
+<!-- politty:command:workspace list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workspace list:global-options-link:end -->
 
 <!-- politty:command:workspace restore:heading:start -->
 
@@ -595,6 +389,12 @@ tailor-sdk workspace user [command]
 
 <!-- politty:command:workspace user:usage:end -->
 
+<!-- politty:command:workspace user:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workspace user:global-options-link:end -->
+
 <!-- politty:command:workspace user:subcommands:start -->
 
 **Commands**
@@ -607,12 +407,6 @@ tailor-sdk workspace user [command]
 | [`workspace user update`](#workspace-user-update) | Update a user's role in a workspace |
 
 <!-- politty:command:workspace user:subcommands:end -->
-
-<!-- politty:command:workspace user:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace user:global-options-link:end -->
 
 <!-- politty:command:workspace user invite:heading:start -->
 
@@ -777,3 +571,214 @@ tailor-sdk workspace user update [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:workspace user update:global-options-link:end -->
+
+<!-- politty:command:profile:heading:start -->
+
+## profile
+
+<!-- politty:command:profile:heading:end -->
+
+<!-- politty:command:profile:description:start -->
+
+Manage workspace profiles (user + workspace combinations).
+
+<!-- politty:command:profile:description:end -->
+
+<!-- politty:command:profile:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk profile [command]
+```
+
+<!-- politty:command:profile:usage:end -->
+
+<!-- politty:command:profile:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:profile:global-options-link:end -->
+
+<!-- politty:command:profile:subcommands:start -->
+
+**Commands**
+
+| Command                             | Description                |
+| ----------------------------------- | -------------------------- |
+| [`profile create`](#profile-create) | Create a new profile.      |
+| [`profile delete`](#profile-delete) | Delete a profile.          |
+| [`profile list`](#profile-list)     | List all profiles.         |
+| [`profile update`](#profile-update) | Update profile properties. |
+
+<!-- politty:command:profile:subcommands:end -->
+
+<!-- politty:command:profile create:heading:start -->
+
+### profile create
+
+<!-- politty:command:profile create:heading:end -->
+
+<!-- politty:command:profile create:description:start -->
+
+Create a new profile.
+
+<!-- politty:command:profile create:description:end -->
+
+<!-- politty:command:profile create:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk profile create [options] <name>
+```
+
+<!-- politty:command:profile create:usage:end -->
+
+<!-- politty:command:profile create:arguments:start -->
+
+**Arguments**
+
+| Argument | Description  | Required |
+| -------- | ------------ | -------- |
+| `name`   | Profile name | Yes      |
+
+<!-- politty:command:profile create:arguments:end -->
+
+<!-- politty:command:profile create:options:start -->
+
+**Options**
+
+| Option                                            | Alias | Description                                                                                                                            | Required | Default   |
+| ------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- |
+| `--user <USER>`                                   | `-u`  | User email                                                                                                                             | Yes      | -         |
+| `--workspace-id <WORKSPACE_ID>`                   | `-w`  | Workspace ID                                                                                                                           | Yes      | -         |
+| `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands while the profile is active.                                                      | No       | `"write"` |
+| `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).                 | No       | -         |
+| `--machine-user-override <MACHINE_USER_OVERRIDE>` | -     | Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user. | No       | -         |
+
+<!-- politty:command:profile create:options:end -->
+
+<!-- politty:command:profile create:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:profile create:global-options-link:end -->
+
+<!-- politty:command:profile delete:heading:start -->
+
+### profile delete
+
+<!-- politty:command:profile delete:heading:end -->
+
+<!-- politty:command:profile delete:description:start -->
+
+Delete a profile.
+
+<!-- politty:command:profile delete:description:end -->
+
+<!-- politty:command:profile delete:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk profile delete <name>
+```
+
+<!-- politty:command:profile delete:usage:end -->
+
+<!-- politty:command:profile delete:arguments:start -->
+
+**Arguments**
+
+| Argument | Description  | Required |
+| -------- | ------------ | -------- |
+| `name`   | Profile name | Yes      |
+
+<!-- politty:command:profile delete:arguments:end -->
+
+<!-- politty:command:profile delete:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:profile delete:global-options-link:end -->
+
+<!-- politty:command:profile list:heading:start -->
+
+### profile list
+
+<!-- politty:command:profile list:heading:end -->
+
+<!-- politty:command:profile list:description:start -->
+
+List all profiles.
+
+<!-- politty:command:profile list:description:end -->
+
+<!-- politty:command:profile list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk profile list
+```
+
+<!-- politty:command:profile list:usage:end -->
+
+<!-- politty:command:profile list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:profile list:global-options-link:end -->
+
+<!-- politty:command:profile update:heading:start -->
+
+### profile update
+
+<!-- politty:command:profile update:heading:end -->
+
+<!-- politty:command:profile update:description:start -->
+
+Update profile properties.
+
+<!-- politty:command:profile update:description:end -->
+
+<!-- politty:command:profile update:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk profile update [options] <name>
+```
+
+<!-- politty:command:profile update:usage:end -->
+
+<!-- politty:command:profile update:arguments:start -->
+
+**Arguments**
+
+| Argument | Description  | Required |
+| -------- | ------------ | -------- |
+| `name`   | Profile name | Yes      |
+
+<!-- politty:command:profile update:arguments:end -->
+
+<!-- politty:command:profile update:options:start -->
+
+**Options**
+
+| Option                                            | Alias | Description                                                                                                                                                           | Required | Default |
+| ------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
+| `--user <USER>`                                   | `-u`  | New user email                                                                                                                                                        | No       | -       |
+| `--workspace-id <WORKSPACE_ID>`                   | `-w`  | New workspace ID                                                                                                                                                      | No       | -       |
+| `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.                                                                                  | No       | -       |
+| `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.                 | No       | -       |
+| `--machine-user-override <MACHINE_USER_OVERRIDE>` | -     | Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction. | No       | -       |
+
+<!-- politty:command:profile update:options:end -->
+
+<!-- politty:command:profile update:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:profile update:global-options-link:end -->

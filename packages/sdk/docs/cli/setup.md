@@ -42,6 +42,12 @@ tailor-sdk setup [options] [command]
 
 <!-- politty:command:setup:options:end -->
 
+<!-- politty:command:setup:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:setup:global-options-link:end -->
+
 <!-- politty:command:setup:subcommands:start -->
 
 **Commands**
@@ -51,12 +57,6 @@ tailor-sdk setup [options] [command]
 | [`setup check`](#setup-check) | Audit generated workflows for drift against the current config/repo (read-only). |
 
 <!-- politty:command:setup:subcommands:end -->
-
-<!-- politty:command:setup:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:setup:global-options-link:end -->
 
 <!-- politty:command:setup check:heading:start -->
 
@@ -85,7 +85,3 @@ tailor-sdk setup check
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:setup check:global-options-link:end -->
-
-## Further reading
-
-- [GitHub Actions Integration](../github-actions.md) — usage guide: targets, generated files, secrets, approval gates, and rollback.

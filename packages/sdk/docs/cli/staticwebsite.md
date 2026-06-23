@@ -24,6 +24,12 @@ tailor-sdk staticwebsite [command]
 
 <!-- politty:command:staticwebsite:usage:end -->
 
+<!-- politty:command:staticwebsite:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite:global-options-link:end -->
+
 <!-- politty:command:staticwebsite:subcommands:start -->
 
 **Commands**
@@ -37,11 +43,6 @@ tailor-sdk staticwebsite [command]
 
 <!-- politty:command:staticwebsite:subcommands:end -->
 
-<!-- politty:command:staticwebsite:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:staticwebsite:global-options-link:end -->
 <!-- politty:command:staticwebsite deploy:heading:start -->
 
 ### staticwebsite deploy
@@ -82,46 +83,7 @@ tailor-sdk staticwebsite deploy [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:staticwebsite deploy:global-options-link:end -->
-<!-- politty:command:staticwebsite list:heading:start -->
 
-### staticwebsite list
-
-<!-- politty:command:staticwebsite list:heading:end -->
-
-<!-- politty:command:staticwebsite list:description:start -->
-
-List all static websites in a workspace.
-
-<!-- politty:command:staticwebsite list:description:end -->
-
-<!-- politty:command:staticwebsite list:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk staticwebsite list [options]
-```
-
-<!-- politty:command:staticwebsite list:usage:end -->
-
-<!-- politty:command:staticwebsite list:options:start -->
-
-**Options**
-
-| Option                          | Alias | Description                                              | Required | Default  | Env                            |
-| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
-| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
-
-<!-- politty:command:staticwebsite list:options:end -->
-
-<!-- politty:command:staticwebsite list:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:staticwebsite list:global-options-link:end -->
 <!-- politty:command:staticwebsite domain:heading:start -->
 
 ### staticwebsite domain
@@ -139,7 +101,7 @@ Manage custom domains for static websites.
 **Usage**
 
 ```
-tailor-sdk staticwebsite domain [command]
+tailor-sdk staticwebsite domain <command>
 ```
 
 <!-- politty:command:staticwebsite domain:usage:end -->
@@ -160,6 +122,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`staticwebsite domain get`](#staticwebsite-domain-get)   | Get details of a custom domain.           |
 
 <!-- politty:command:staticwebsite domain:subcommands:end -->
+
 <!-- politty:command:staticwebsite domain get:heading:start -->
 
 #### staticwebsite domain get
@@ -307,39 +270,43 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:staticwebsite get:global-options-link:end -->
 
-**Example:**
+<!-- politty:command:staticwebsite list:heading:start -->
 
-```bash
-# Deploy a static website from the dist directory
-tailor-sdk staticwebsite deploy --name my-website --dir ./dist
+### staticwebsite list
 
-# Deploy with workspace ID
-tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
+<!-- politty:command:staticwebsite list:heading:end -->
+
+<!-- politty:command:staticwebsite list:description:start -->
+
+List all static websites in a workspace.
+
+<!-- politty:command:staticwebsite list:description:end -->
+
+<!-- politty:command:staticwebsite list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk staticwebsite list [options]
 ```
 
-**Notes:**
+<!-- politty:command:staticwebsite list:usage:end -->
 
-- The deployment process uploads all files from the specified directory
-- Files are uploaded with appropriate MIME types based on file extensions
-- Unsupported file types or invalid files will be skipped with warnings
-- The deployment URL is returned after successful deployment
+<!-- politty:command:staticwebsite list:options:start -->
 
-**Example:**
+**Options**
 
-```bash
-# List all static websites
-tailor-sdk staticwebsite list
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
 
-# List with JSON output
-tailor-sdk staticwebsite list --json
-```
+<!-- politty:command:staticwebsite list:options:end -->
 
-**Example:**
+<!-- politty:command:staticwebsite list:global-options-link:start -->
 
-```bash
-# Get details of a static website
-tailor-sdk staticwebsite get my-website
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-# Get with JSON output
-tailor-sdk staticwebsite get my-website --json
-```
+<!-- politty:command:staticwebsite list:global-options-link:end -->

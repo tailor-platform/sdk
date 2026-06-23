@@ -1,6 +1,6 @@
 # Auth Resource Commands
 
-Commands for managing Auth service resources (auth connections, machine users, and OAuth2 clients).
+Commands for managing Auth service resources.
 
 <!-- politty:command:authconnection:heading:start -->
 
@@ -24,6 +24,12 @@ tailor-sdk authconnection [command]
 
 <!-- politty:command:authconnection:usage:end -->
 
+<!-- politty:command:authconnection:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection:global-options-link:end -->
+
 <!-- politty:command:authconnection:subcommands:start -->
 
 **Commands**
@@ -38,11 +44,6 @@ tailor-sdk authconnection [command]
 
 <!-- politty:command:authconnection:subcommands:end -->
 
-<!-- politty:command:authconnection:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:authconnection:global-options-link:end -->
 <!-- politty:command:authconnection authorize:heading:start -->
 
 ### authconnection authorize
@@ -85,6 +86,7 @@ tailor-sdk authconnection authorize [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:authconnection authorize:global-options-link:end -->
+
 <!-- politty:command:authconnection delete:heading:start -->
 
 ### authconnection delete
@@ -166,6 +168,7 @@ tailor-sdk authconnection list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:authconnection list:global-options-link:end -->
+
 <!-- politty:command:authconnection open:heading:start -->
 
 ### authconnection open
@@ -276,6 +279,12 @@ tailor-sdk machineuser [command]
 
 <!-- politty:command:machineuser:usage:end -->
 
+<!-- politty:command:machineuser:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:machineuser:global-options-link:end -->
+
 <!-- politty:command:machineuser:subcommands:start -->
 
 **Commands**
@@ -287,11 +296,6 @@ tailor-sdk machineuser [command]
 
 <!-- politty:command:machineuser:subcommands:end -->
 
-<!-- politty:command:machineuser:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:machineuser:global-options-link:end -->
 <!-- politty:command:machineuser list:heading:start -->
 
 ### machineuser list
@@ -333,6 +337,7 @@ tailor-sdk machineuser list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:machineuser list:global-options-link:end -->
+
 <!-- politty:command:machineuser token:heading:start -->
 
 ### machineuser token
@@ -382,6 +387,7 @@ tailor-sdk machineuser token [options] [name]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:machineuser token:global-options-link:end -->
+
 <!-- politty:command:oauth2client:heading:start -->
 
 ## oauth2client
@@ -404,6 +410,12 @@ tailor-sdk oauth2client [command]
 
 <!-- politty:command:oauth2client:usage:end -->
 
+<!-- politty:command:oauth2client:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:oauth2client:global-options-link:end -->
+
 <!-- politty:command:oauth2client:subcommands:start -->
 
 **Commands**
@@ -415,52 +427,6 @@ tailor-sdk oauth2client [command]
 
 <!-- politty:command:oauth2client:subcommands:end -->
 
-<!-- politty:command:oauth2client:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:oauth2client:global-options-link:end -->
-<!-- politty:command:oauth2client list:heading:start -->
-
-### oauth2client list
-
-<!-- politty:command:oauth2client list:heading:end -->
-
-<!-- politty:command:oauth2client list:description:start -->
-
-List all OAuth2 clients in the application.
-
-<!-- politty:command:oauth2client list:description:end -->
-
-<!-- politty:command:oauth2client list:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk oauth2client list [options]
-```
-
-<!-- politty:command:oauth2client list:usage:end -->
-
-<!-- politty:command:oauth2client list:options:start -->
-
-**Options**
-
-| Option                          | Alias | Description                                              | Required | Default              | Env                               |
-| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                  | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"`             | -                                 |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -                    | -                                 |
-
-<!-- politty:command:oauth2client list:options:end -->
-
-<!-- politty:command:oauth2client list:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:oauth2client list:global-options-link:end -->
 <!-- politty:command:oauth2client get:heading:start -->
 
 ### oauth2client get
@@ -511,25 +477,44 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:oauth2client get:global-options-link:end -->
 
-**Output:**
+<!-- politty:command:oauth2client list:heading:start -->
 
-Returns a list of OAuth2 clients with the following fields:
+### oauth2client list
 
-- `name` - Client name
-- `description` - Client description
-- `clientId` - OAuth2 client ID
-- `grantTypes` - Supported grant types (e.g., `authorization_code`, `refresh_token`)
-- `redirectUris` - Registered redirect URIs
-- `createdAt` - Creation timestamp
+<!-- politty:command:oauth2client list:heading:end -->
 
-**Output:**
+<!-- politty:command:oauth2client list:description:start -->
 
-Returns the OAuth2 client credentials with the following fields:
+List all OAuth2 clients in the application.
 
-- `name` - Client name
-- `description` - Client description
-- `clientId` - OAuth2 client ID
-- `clientSecret` - OAuth2 client secret
-- `grantTypes` - Supported grant types
-- `redirectUris` - Registered redirect URIs
-- `createdAt` - Creation timestamp
+<!-- politty:command:oauth2client list:description:end -->
+
+<!-- politty:command:oauth2client list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk oauth2client list [options]
+```
+
+<!-- politty:command:oauth2client list:usage:end -->
+
+<!-- politty:command:oauth2client list:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description                                              | Required | Default              | Env                               |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                  | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"`             | -                                 |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -                    | -                                 |
+
+<!-- politty:command:oauth2client list:options:end -->
+
+<!-- politty:command:oauth2client list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:oauth2client list:global-options-link:end -->

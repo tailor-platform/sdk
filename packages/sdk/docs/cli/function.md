@@ -24,6 +24,12 @@ tailor-sdk function [command]
 
 <!-- politty:command:function:usage:end -->
 
+<!-- politty:command:function:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:function:global-options-link:end -->
+
 <!-- politty:command:function:subcommands:start -->
 
 **Commands**
@@ -37,11 +43,6 @@ tailor-sdk function [command]
 
 <!-- politty:command:function:subcommands:end -->
 
-<!-- politty:command:function:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:function:global-options-link:end -->
 <!-- politty:command:function get:heading:start -->
 
 ### function get
@@ -81,6 +82,7 @@ tailor-sdk function get [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:function get:global-options-link:end -->
+
 <!-- politty:command:function list:heading:start -->
 
 ### function list
@@ -218,11 +220,13 @@ Stack traces stay accurate even after later redeploys, because the trace is reso
 ### function test-run
 
 <!-- politty:command:function test-run:heading:end -->
+
 <!-- politty:command:function test-run:description:start -->
 
 Run a function on the Tailor Platform server without deploying.
 
 <!-- politty:command:function test-run:description:end -->
+
 <!-- politty:command:function test-run:usage:start -->
 
 **Usage**
@@ -232,6 +236,7 @@ tailor-sdk function test-run [options] <file>
 ```
 
 <!-- politty:command:function test-run:usage:end -->
+
 <!-- politty:command:function test-run:arguments:start -->
 
 **Arguments**
@@ -241,6 +246,7 @@ tailor-sdk function test-run [options] <file>
 | `file`   | Path to the function file | Yes      |
 
 <!-- politty:command:function test-run:arguments:end -->
+
 <!-- politty:command:function test-run:options:start -->
 
 **Options**
@@ -255,6 +261,13 @@ tailor-sdk function test-run [options] <file>
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                        | No       | `"tailor.config.ts"` | -                                   |
 
 <!-- politty:command:function test-run:options:end -->
+
+<!-- politty:command:function test-run:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:function test-run:global-options-link:end -->
+
 <!-- politty:command:function test-run:examples:start -->
 
 **Examples**
@@ -278,6 +291,7 @@ $ tailor-sdk function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
 ```
 
 <!-- politty:command:function test-run:examples:end -->
+
 <!-- politty:command:function test-run:notes:start -->
 
 **Notes**
@@ -290,9 +304,3 @@ When a `.js` file is provided, detection and bundling are skipped and the file i
 > Triggered jobs are not executed; only the target job's `body` function runs in isolation.
 
 <!-- politty:command:function test-run:notes:end -->
-
-<!-- politty:command:function test-run:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:function test-run:global-options-link:end -->

@@ -42,6 +42,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`crashreport send`](#crashreport-send) | Submit a crash report to help improve the SDK. |
 
 <!-- politty:command:crashreport:subcommands:end -->
+
 <!-- politty:command:crashreport list:heading:start -->
 
 ### crashreport list
@@ -80,6 +81,7 @@ tailor-sdk crashreport list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:crashreport list:global-options-link:end -->
+
 <!-- politty:command:crashreport send:heading:start -->
 
 ### crashreport send

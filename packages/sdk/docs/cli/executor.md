@@ -24,6 +24,12 @@ tailor-sdk executor [command]
 
 <!-- politty:command:executor:usage:end -->
 
+<!-- politty:command:executor:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor:global-options-link:end -->
+
 <!-- politty:command:executor:subcommands:start -->
 
 **Commands**
@@ -37,53 +43,6 @@ tailor-sdk executor [command]
 | [`executor webhook`](#executor-webhook) | Manage executor webhooks      |
 
 <!-- politty:command:executor:subcommands:end -->
-
-<!-- politty:command:executor:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:executor:global-options-link:end -->
-
-<!-- politty:command:executor list:heading:start -->
-
-### executor list
-
-<!-- politty:command:executor list:heading:end -->
-
-<!-- politty:command:executor list:description:start -->
-
-List all executors
-
-<!-- politty:command:executor list:description:end -->
-
-<!-- politty:command:executor list:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk executor list [options]
-```
-
-<!-- politty:command:executor list:usage:end -->
-
-<!-- politty:command:executor list:options:start -->
-
-**Options**
-
-| Option                          | Alias | Description                                              | Required | Default  | Env                            |
-| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
-| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
-
-<!-- politty:command:executor list:options:end -->
-
-<!-- politty:command:executor list:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:executor list:global-options-link:end -->
 
 <!-- politty:command:executor get:heading:start -->
 
@@ -186,6 +145,12 @@ tailor-sdk executor jobs [options] <executor-name> [job-id]
 
 <!-- politty:command:executor jobs:options:end -->
 
+<!-- politty:command:executor jobs:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor jobs:global-options-link:end -->
+
 <!-- politty:command:executor jobs:examples:start -->
 
 **Examples**
@@ -234,11 +199,46 @@ $ tailor-sdk executor jobs my-executor <job-id> -W -l
 
 <!-- politty:command:executor jobs:examples:end -->
 
-<!-- politty:command:executor jobs:global-options-link:start -->
+<!-- politty:command:executor list:heading:start -->
+
+### executor list
+
+<!-- politty:command:executor list:heading:end -->
+
+<!-- politty:command:executor list:description:start -->
+
+List all executors
+
+<!-- politty:command:executor list:description:end -->
+
+<!-- politty:command:executor list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk executor list [options]
+```
+
+<!-- politty:command:executor list:usage:end -->
+
+<!-- politty:command:executor list:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
+
+<!-- politty:command:executor list:options:end -->
+
+<!-- politty:command:executor list:global-options-link:start -->
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-<!-- politty:command:executor jobs:global-options-link:end -->
+<!-- politty:command:executor list:global-options-link:end -->
 
 <!-- politty:command:executor trigger:heading:start -->
 
@@ -289,6 +289,12 @@ tailor-sdk executor trigger [options] <executor-name>
 
 <!-- politty:command:executor trigger:options:end -->
 
+<!-- politty:command:executor trigger:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor trigger:global-options-link:end -->
+
 <!-- politty:command:executor trigger:examples:start -->
 
 **Examples**
@@ -325,57 +331,6 @@ $ tailor-sdk executor trigger my-executor -W -l
 
 <!-- politty:command:executor trigger:examples:end -->
 
-**Shell automation**
-
-Trigger an executor and wait for the executor job plus any downstream workflow or
-function execution:
-
-```bash
-tailor-sdk executor trigger daily-workflow \
-  --wait \
-  --timeout 5m \
-  --interval 5s \
-  --json
-```
-
-Wait for an existing job when another process already captured the job ID:
-
-```bash
-tailor-sdk executor jobs daily-workflow "$job_id" \
-  --wait \
-  --timeout 5m \
-  --logs \
-  --json
-```
-
-**Programmatic API**
-
-Import your executor definition and pass it to the typed API:
-
-```ts
-import { triggerExecutor, watchExecutorJob } from "@tailor-platform/sdk/cli";
-import dailyWorkflow from "../executors/dailyWorkflow";
-
-const { jobId } = await triggerExecutor({
-  executor: dailyWorkflow,
-});
-
-if (!jobId) {
-  throw new Error("Executor trigger did not return a job ID");
-}
-
-const result = await watchExecutorJob({
-  executor: dailyWorkflow,
-  jobId,
-  timeout: 5 * 60 * 1000,
-  interval: 5000,
-});
-
-if (result.timedOut) {
-  throw new Error(`Executor job ${result.job.id} timed out at ${result.job.status}`);
-}
-```
-
 <!-- politty:command:executor trigger:notes:start -->
 
 **Notes**
@@ -396,12 +351,6 @@ When using `--wait`, the CLI tracks not only the executor job but also any downs
 The `--logs` option displays logs from the downstream execution when available.
 
 <!-- politty:command:executor trigger:notes:end -->
-
-<!-- politty:command:executor trigger:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:executor trigger:global-options-link:end -->
 
 <!-- politty:command:executor webhook:heading:start -->
 
@@ -425,6 +374,12 @@ tailor-sdk executor webhook [command]
 
 <!-- politty:command:executor webhook:usage:end -->
 
+<!-- politty:command:executor webhook:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor webhook:global-options-link:end -->
+
 <!-- politty:command:executor webhook:subcommands:start -->
 
 **Commands**
@@ -434,12 +389,6 @@ tailor-sdk executor webhook [command]
 | [`executor webhook list`](#executor-webhook-list) | List executors with incoming webhook triggers |
 
 <!-- politty:command:executor webhook:subcommands:end -->
-
-<!-- politty:command:executor webhook:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:executor webhook:global-options-link:end -->
 
 <!-- politty:command:executor webhook list:heading:start -->
 

@@ -1,3 +1,7 @@
+# Query Commands
+
+Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.
+
 <!-- politty:command:query:heading:start -->
 
 ## query

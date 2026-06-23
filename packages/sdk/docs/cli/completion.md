@@ -1,5 +1,7 @@
 # Completion
 
+Generate shell completion scripts for bash, zsh, and fish.
+
 <!-- politty:command:completion:heading:start -->
 
 ## completion

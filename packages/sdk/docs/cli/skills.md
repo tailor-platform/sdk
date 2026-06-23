@@ -1,3 +1,7 @@
+# Skills Commands
+
+Commands for installing Tailor SDK agent skills.
+
 <!-- politty:command:skills:heading:start -->
 
 ## skills
@@ -35,6 +39,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`skills install`](#skills-install) | Install the tailor-sdk agent skill from the installed SDK package. |
 
 <!-- politty:command:skills:subcommands:end -->
+
 <!-- politty:command:skills install:heading:start -->
 
 ### skills install

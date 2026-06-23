@@ -100,6 +100,12 @@ tailor-sdk user [command]
 
 <!-- politty:command:user:usage:end -->
 
+<!-- politty:command:user:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user:global-options-link:end -->
+
 <!-- politty:command:user:subcommands:start -->
 
 **Commands**
@@ -113,11 +119,6 @@ tailor-sdk user [command]
 
 <!-- politty:command:user:subcommands:end -->
 
-<!-- politty:command:user:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:user:global-options-link:end -->
 <!-- politty:command:user current:heading:start -->
 
 ### user current
@@ -145,6 +146,7 @@ tailor-sdk user current
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:user current:global-options-link:end -->
+
 <!-- politty:command:user list:heading:start -->
 
 ### user list
@@ -167,51 +169,12 @@ tailor-sdk user list
 
 <!-- politty:command:user list:usage:end -->
 
-<!-- politty:command:user list:options:start -->
-<!-- politty:command:user list:options:end -->
-
 <!-- politty:command:user list:global-options-link:start -->
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:user list:global-options-link:end -->
-<!-- politty:command:user switch:heading:start -->
 
-### user switch
-
-<!-- politty:command:user switch:heading:end -->
-
-<!-- politty:command:user switch:description:start -->
-
-Set current user.
-
-<!-- politty:command:user switch:description:end -->
-
-<!-- politty:command:user switch:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk user switch <user>
-```
-
-<!-- politty:command:user switch:usage:end -->
-
-<!-- politty:command:user switch:arguments:start -->
-
-**Arguments**
-
-| Argument | Description | Required |
-| -------- | ----------- | -------- |
-| `user`   | User email  | Yes      |
-
-<!-- politty:command:user switch:arguments:end -->
-
-<!-- politty:command:user switch:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:user switch:global-options-link:end -->
 <!-- politty:command:user pat:heading:start -->
 
 ### user pat
@@ -234,8 +197,11 @@ tailor-sdk user pat [command]
 
 <!-- politty:command:user pat:usage:end -->
 
-<!-- politty:command:user pat:options:start -->
-<!-- politty:command:user pat:options:end -->
+<!-- politty:command:user pat:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user pat:global-options-link:end -->
 
 <!-- politty:command:user pat:subcommands:start -->
 
@@ -250,49 +216,6 @@ tailor-sdk user pat [command]
 
 <!-- politty:command:user pat:subcommands:end -->
 
-<!-- politty:command:user pat:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:user pat:global-options-link:end -->
-<!-- politty:command:user pat list:heading:start -->
-
-#### user pat list
-
-<!-- politty:command:user pat list:heading:end -->
-
-<!-- politty:command:user pat list:description:start -->
-
-List all personal access tokens.
-
-<!-- politty:command:user pat list:description:end -->
-
-<!-- politty:command:user pat list:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk user pat list [options]
-```
-
-<!-- politty:command:user pat list:usage:end -->
-
-<!-- politty:command:user pat list:options:start -->
-
-**Options**
-
-| Option            | Alias | Description                                              | Required | Default  |
-| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
-| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
-| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
-
-<!-- politty:command:user pat list:options:end -->
-
-<!-- politty:command:user pat list:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:user pat list:global-options-link:end -->
 <!-- politty:command:user pat create:heading:start -->
 
 #### user pat create
@@ -340,6 +263,7 @@ tailor-sdk user pat create [options] <name>
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:user pat create:global-options-link:end -->
+
 <!-- politty:command:user pat delete:heading:start -->
 
 #### user pat delete
@@ -377,6 +301,46 @@ tailor-sdk user pat delete <name>
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:user pat delete:global-options-link:end -->
+
+<!-- politty:command:user pat list:heading:start -->
+
+#### user pat list
+
+<!-- politty:command:user pat list:heading:end -->
+
+<!-- politty:command:user pat list:description:start -->
+
+List all personal access tokens.
+
+<!-- politty:command:user pat list:description:end -->
+
+<!-- politty:command:user pat list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk user pat list [options]
+```
+
+<!-- politty:command:user pat list:usage:end -->
+
+<!-- politty:command:user pat list:options:start -->
+
+**Options**
+
+| Option            | Alias | Description                                              | Required | Default  |
+| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
+| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
+| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
+
+<!-- politty:command:user pat list:options:end -->
+
+<!-- politty:command:user pat list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user pat list:global-options-link:end -->
+
 <!-- politty:command:user pat update:heading:start -->
 
 #### user pat update
@@ -425,60 +389,40 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:user pat update:global-options-link:end -->
 
-When no subcommand is provided, defaults to `list`.
+<!-- politty:command:user switch:heading:start -->
 
-**Output (default):**
+### user switch
 
-```
- token-name-1: read/write
- token-name-2: read
-```
+<!-- politty:command:user switch:heading:end -->
 
-**Output (`-j, --json`):**
+<!-- politty:command:user switch:description:start -->
 
-```json
-[
-  { "name": "token-name-1", "scopes": ["read", "write"] },
-  { "name": "token-name-2", "scopes": ["read"] }
-]
-```
+Set current user.
 
-**Output (default):**
+<!-- politty:command:user switch:description:end -->
+
+<!-- politty:command:user switch:usage:start -->
+
+**Usage**
 
 ```
-Personal access token created successfully.
-
-  name: token-name
-scopes: read/write
- token: tpp_xxxxxxxxxxxxx
-
-Please save this token in a secure location. You won't be able to see it again.
+tailor-sdk user switch <user>
 ```
 
-**Output (`-j, --json`):**
+<!-- politty:command:user switch:usage:end -->
 
-```json
-{ "name": "token-name", "scopes": ["read", "write"], "token": "eyJhbGc..." }
-```
+<!-- politty:command:user switch:arguments:start -->
 
-**Output (default):**
+**Arguments**
 
-```
-Personal access token updated successfully.
+| Argument | Description | Required |
+| -------- | ----------- | -------- |
+| `user`   | User email  | Yes      |
 
-  name: token-name
-scopes: read/write
- token: tpp_xxxxxxxxxxxxx
+<!-- politty:command:user switch:arguments:end -->
 
-Please save this token in a secure location. You won't be able to see it again.
-```
+<!-- politty:command:user switch:global-options-link:start -->
 
-**Output (`-j, --json`):**
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-```json
-{
-  "name": "token-name",
-  "scopes": ["read", "write"],
-  "token": "tpp_xxxxxxxxxxxxx"
-}
-```
+<!-- politty:command:user switch:global-options-link:end -->

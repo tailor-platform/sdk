@@ -1,3 +1,7 @@
+# Organization Commands
+
+Commands for managing organizations and folders.
+
 <!-- politty:command:organization:heading:start -->
 
 ## organization
@@ -39,6 +43,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`organization update`](#organization-update) | Update an organization's name.                   |
 
 <!-- politty:command:organization:subcommands:end -->
+
 <!-- politty:command:organization folder:heading:start -->
 
 ### organization folder
@@ -56,7 +61,7 @@ Manage organization folders.
 **Usage**
 
 ```
-tailor-sdk organization folder [command]
+tailor-sdk organization folder <command>
 ```
 
 <!-- politty:command:organization folder:usage:end -->
@@ -80,6 +85,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`organization folder update`](#organization-folder-update) | Update a folder's name.                   |
 
 <!-- politty:command:organization folder:subcommands:end -->
+
 <!-- politty:command:organization folder create:heading:start -->
 
 #### organization folder create
@@ -119,6 +125,7 @@ tailor-sdk organization folder create [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:organization folder create:global-options-link:end -->
+
 <!-- politty:command:organization folder delete:heading:start -->
 
 #### organization folder delete
@@ -158,6 +165,7 @@ tailor-sdk organization folder delete [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:organization folder delete:global-options-link:end -->
+
 <!-- politty:command:organization folder get:heading:start -->
 
 #### organization folder get
@@ -196,6 +204,7 @@ tailor-sdk organization folder get [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:organization folder get:global-options-link:end -->
+
 <!-- politty:command:organization folder list:heading:start -->
 
 #### organization folder list
@@ -236,6 +245,7 @@ tailor-sdk organization folder list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:organization folder list:global-options-link:end -->
+
 <!-- politty:command:organization folder update:heading:start -->
 
 #### organization folder update
@@ -275,6 +285,7 @@ tailor-sdk organization folder update [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:organization folder update:global-options-link:end -->
+
 <!-- politty:command:organization get:heading:start -->
 
 ### organization get
@@ -312,6 +323,7 @@ tailor-sdk organization get [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:organization get:global-options-link:end -->
+
 <!-- politty:command:organization list:heading:start -->
 
 ### organization list
@@ -349,6 +361,7 @@ tailor-sdk organization list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:organization list:global-options-link:end -->
+
 <!-- politty:command:organization tree:heading:start -->
 
 ### organization tree
@@ -387,6 +400,7 @@ tailor-sdk organization tree [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:organization tree:global-options-link:end -->
+
 <!-- politty:command:organization update:heading:start -->
 
 ### organization update
