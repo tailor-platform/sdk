@@ -20,4 +20,5 @@ export const AIGatewaySchema = z
         "Allowed CORS origins for browser-based clients. Each entry is `*`, `http(s)://*`, `http(s)://*.example.com`, or `http(s)://app.example.com`, optionally with `:port`. Empty list disables cross-origin access.",
       ),
   })
+  .strict()
   .brand("AIGatewayConfig");

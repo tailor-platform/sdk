@@ -64,6 +64,27 @@ export default {
       expect(result.name).toBe("my-executor");
     });
 
+    test("detects a function executor with trigger helper args", async () => {
+      const filePath = path.join(testDir, "executor-with-helper.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+export default {
+  name: "my-executor",
+  trigger: { kind: "schedule", cron: "0 12 * * *", __args: [{ cron: "0 12 * * *" }] },
+  operation: {
+    kind: "function",
+    body: (args) => {},
+  },
+};
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.type).toBe("executor");
+      expect(result.name).toBe("my-executor");
+    });
+
     test("does not detect a non-function executor", async () => {
       const filePath = path.join(testDir, "gql-executor.mjs");
       fs.writeFileSync(
