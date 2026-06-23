@@ -72,7 +72,6 @@ tailor-sdk deploy [options]
 | `--clean-cache`                 | -     | Clean the bundle cache before building                            | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
 **Config File Modification:**
 
 On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
@@ -205,6 +204,13 @@ tailor-sdk api [options] [command] <endpoint>
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+**Commands**
+
+| Command                       | Description                                                  |
+| ----------------------------- | ------------------------------------------------------------ |
+| [`api list`](#api-list)       | List all invocable OperatorService methods.                  |
+| [`api inspect`](#api-inspect) | Print the input message tree of an OperatorService endpoint. |
+
 **Examples**
 
 **Call an endpoint; workspaceId is auto-injected.**
@@ -245,6 +251,58 @@ The request body is inferred from the target endpoint's request schema, and comm
 Values already present in `--body` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.
 
 Use `--field key=value` (repeatable) to set request body fields without writing JSON. Dotted keys (e.g. `application.name=foo`) build nested objects. `--field` overrides matching fields in `--body` and tab-completes from the endpoint's request schema.
+
+### api inspect
+
+Print the input message tree of an OperatorService endpoint.
+
+**Usage**
+
+```
+tailor-sdk api inspect <endpoint>
+```
+
+**Arguments**
+
+| Argument   | Description                                                                                     | Required |
+| ---------- | ----------------------------------------------------------------------------------------------- | -------- |
+| `endpoint` | API endpoint to inspect (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication'). | Yes      |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Examples**
+
+**Show fields of GetApplicationRequest.**
+
+```bash
+$ tailor-sdk api inspect GetApplication
+```
+
+**Inspect a deeply nested input with `(oneof config)` annotations.**
+
+```bash
+$ tailor-sdk api inspect CreateExecutorExecutor
+```
+
+**Notes**
+
+Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor-sdk api list` to discover endpoint names.
+
+### api list
+
+List all invocable OperatorService methods.
+
+**Usage**
+
+```
+tailor-sdk api list
+```
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Only single-request (non-streaming) methods are listed, because the CLI issues a single JSON request and reads one JSON response.
 
 ### api inspect
 

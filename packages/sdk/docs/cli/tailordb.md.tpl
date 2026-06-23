@@ -9,28 +9,8 @@ politty:
 
 Commands for managing TailorDB tables, data, and schema migrations.
 
-{{politty:command:tailordb:heading}}
-
-{{politty:command:tailordb:description}}
-
-{{politty:command:tailordb:usage}}
-
-{{politty:command:tailordb:subcommands}}
-
-{{politty:command:tailordb:global-options-link}}
-
-{{politty:command:tailordb truncate:heading}}
-
-{{politty:command:tailordb truncate:description}}
-
-{{politty:command:tailordb truncate:usage}}
-
-{{politty:command:tailordb truncate:arguments}}
-
-{{politty:command:tailordb truncate:options}}
-
-{{politty:command:tailordb truncate:global-options-link}}
-
+{{politty:command:tailordb}}
+{{politty:command:tailordb truncate}}
 **Usage Examples:**
 
 ```bash
@@ -72,99 +52,17 @@ Note: Migration scripts are automatically executed during `tailor-sdk deploy`. S
 {{politty:command:tailordb migration:subcommands}}
 
 {{politty:command:tailordb migration:global-options-link}}
-{{politty:command:tailordb migration generate:heading}}
-
-{{politty:command:tailordb migration generate:description}}
-
-{{politty:command:tailordb migration generate:usage}}
-
-{{politty:command:tailordb migration generate:options}}
-
-{{politty:command:tailordb migration generate:global-options-link}}
-{{politty:command:tailordb migration script:heading}}
-
-{{politty:command:tailordb migration script:description}}
-
-{{politty:command:tailordb migration script:usage}}
-
-{{politty:command:tailordb migration script:arguments}}
-
-{{politty:command:tailordb migration script:options}}
-
-{{politty:command:tailordb migration script:global-options-link}}
-
-{{politty:command:tailordb migration set:heading}}
-
-{{politty:command:tailordb migration set:description}}
-
-{{politty:command:tailordb migration set:usage}}
-
-{{politty:command:tailordb migration set:arguments}}
-
-{{politty:command:tailordb migration set:options}}
-
-{{politty:command:tailordb migration set:global-options-link}}
-{{politty:command:tailordb migration status:heading}}
-
-{{politty:command:tailordb migration status:description}}
-
-{{politty:command:tailordb migration status:usage}}
-
-{{politty:command:tailordb migration status:options}}
-
-{{politty:command:tailordb migration status:global-options-link}}
-
-{{politty:command:tailordb migration sync:heading}}
-
-{{politty:command:tailordb migration sync:description}}
-
-{{politty:command:tailordb migration sync:usage}}
-
-{{politty:command:tailordb migration sync:arguments}}
-
-{{politty:command:tailordb migration sync:options}}
-
-{{politty:command:tailordb migration sync:global-options-link}}
-
+{{politty:command:tailordb migration generate}}
+{{politty:command:tailordb migration script}}
+{{politty:command:tailordb migration set}}
+{{politty:command:tailordb migration status}}
+{{politty:command:tailordb migration sync}}
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
 
-{{politty:command:tailordb erd:heading}}
-
-{{politty:command:tailordb erd:description}}
-
-{{politty:command:tailordb erd:usage}}
-
-{{politty:command:tailordb erd:subcommands}}
-
-{{politty:command:tailordb erd:global-options-link}}
-{{politty:command:tailordb erd export:heading}}
-
-{{politty:command:tailordb erd export:description}}
-
-{{politty:command:tailordb erd export:usage}}
-
-{{politty:command:tailordb erd export:options}}
-
-{{politty:command:tailordb erd export:global-options-link}}
-{{politty:command:tailordb erd serve:heading}}
-
-{{politty:command:tailordb erd serve:description}}
-
-{{politty:command:tailordb erd serve:usage}}
-
-{{politty:command:tailordb erd serve:options}}
-
-{{politty:command:tailordb erd serve:global-options-link}}
-{{politty:command:tailordb erd deploy:heading}}
-
-{{politty:command:tailordb erd deploy:description}}
-
-{{politty:command:tailordb erd deploy:usage}}
-
-{{politty:command:tailordb erd deploy:options}}
-
-{{politty:command:tailordb erd deploy:global-options-link}}
-
+{{politty:command:tailordb erd}}
+{{politty:command:tailordb erd export}}
+{{politty:command:tailordb erd serve}}
+{{politty:command:tailordb erd deploy}}
 **Notes:**
 
 - ERD commands build from the local TailorDB schema, including plugin-generated TailorDB types.

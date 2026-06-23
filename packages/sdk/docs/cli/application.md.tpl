@@ -9,38 +9,9 @@ politty:
 
 Commands for managing Tailor Platform applications. These commands work with `tailor.config.ts`.
 
-{{politty:command:init:heading}}
-
-{{politty:command:init:description}}
-
-{{politty:command:init:usage}}
-
-{{politty:command:init:arguments}}
-
-{{politty:command:init:options}}
-
-{{politty:command:init:global-options-link}}
-
-{{politty:command:generate:heading}}
-
-{{politty:command:generate:description}}
-
-{{politty:command:generate:usage}}
-
-{{politty:command:generate:options}}
-
-{{politty:command:generate:global-options-link}}
-
-{{politty:command:deploy:heading}}
-
-{{politty:command:deploy:description}}
-
-{{politty:command:deploy:usage}}
-
-{{politty:command:deploy:options}}
-
-{{politty:command:deploy:global-options-link}}
-
+{{politty:command:init}}
+{{politty:command:generate}}
+{{politty:command:deploy}}
 **Config File Modification:**
 
 On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
@@ -84,71 +55,9 @@ Plan: 5 to create, 3 to update, 1 to delete, 25 unchanged
 
 Use `--dry-run` to preview the plan without applying anything.
 
-{{politty:command:remove:heading}}
-
-{{politty:command:remove:description}}
-
-{{politty:command:remove:usage}}
-
-{{politty:command:remove:options}}
-
-{{politty:command:remove:global-options-link}}
-
-{{politty:command:show:heading}}
-
-{{politty:command:show:description}}
-
-{{politty:command:show:usage}}
-
-{{politty:command:show:options}}
-
-{{politty:command:show:global-options-link}}
-
-{{politty:command:open:heading}}
-
-{{politty:command:open:description}}
-
-{{politty:command:open:usage}}
-
-{{politty:command:open:options}}
-
-{{politty:command:open:global-options-link}}
-
-{{politty:command:api:heading}}
-
-{{politty:command:api:description}}
-
-{{politty:command:api:usage}}
-
-{{politty:command:api:arguments}}
-
-{{politty:command:api:options}}
-
-{{politty:command:api:global-options-link}}
-
-{{politty:command:api:examples}}
-
-{{politty:command:api:notes}}
-{{politty:command:api inspect:heading}}
-
-{{politty:command:api inspect:description}}
-
-{{politty:command:api inspect:usage}}
-
-{{politty:command:api inspect:arguments}}
-
-{{politty:command:api inspect:global-options-link}}
-
-{{politty:command:api inspect:examples}}
-
-{{politty:command:api inspect:notes}}
-
-{{politty:command:api list:heading}}
-
-{{politty:command:api list:description}}
-
-{{politty:command:api list:usage}}
-
-{{politty:command:api list:global-options-link}}
-
-{{politty:command:api list:notes}}
+{{politty:command:remove}}
+{{politty:command:show}}
+{{politty:command:open}}
+{{politty:command:api}}
+{{politty:command:api inspect}}
+{{politty:command:api list}}

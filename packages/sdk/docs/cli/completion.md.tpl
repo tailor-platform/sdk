@@ -7,14 +7,4 @@ politty:
 
 # Completion
 
-{{politty:command:completion:heading}}
-
-{{politty:command:completion:description}}
-
-{{politty:command:completion:usage}}
-
-{{politty:command:completion:arguments}}
-
-{{politty:command:completion:options}}
-
-{{politty:command:completion:global-options-link}}
+{{politty:command:completion}}

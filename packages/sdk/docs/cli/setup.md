@@ -26,11 +26,23 @@ tailor-sdk setup [options] [command]
 | `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                                                                                               | No       | `"."`      |
 | `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                                                                                     | No       | `false`    |
 
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Commands**
 
 | Command                       | Description                                                                      |
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | [`setup check`](#setup-check) | Audit generated workflows for drift against the current config/repo (read-only). |
+
+### setup check
+
+Audit generated workflows for drift against the current config/repo (read-only).
+
+**Usage**
+
+```
+tailor-sdk setup check
+```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

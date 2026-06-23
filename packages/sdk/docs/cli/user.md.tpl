@@ -9,110 +9,17 @@ politty:
 
 Commands for authentication and user management.
 
-{{politty:command:login:heading}}
-
-{{politty:command:login:description}}
-
-{{politty:command:login:usage}}
-
-{{politty:command:login:options}}
-
-{{politty:command:login:global-options-link}}
-
-{{politty:command:logout:heading}}
-
-{{politty:command:logout:description}}
-
-{{politty:command:logout:usage}}
-
-{{politty:command:logout:global-options-link}}
-
-{{politty:command:user:heading}}
-
-{{politty:command:user:description}}
-
-{{politty:command:user:usage}}
-
-{{politty:command:user:subcommands}}
-
-{{politty:command:user:global-options-link}}
-{{politty:command:user current:heading}}
-
-{{politty:command:user current:description}}
-
-{{politty:command:user current:usage}}
-
-{{politty:command:user current:global-options-link}}
-{{politty:command:user list:heading}}
-
-{{politty:command:user list:description}}
-
-{{politty:command:user list:usage}}
-
-{{politty:command:user list:options}}
-
-{{politty:command:user list:global-options-link}}
-{{politty:command:user switch:heading}}
-
-{{politty:command:user switch:description}}
-
-{{politty:command:user switch:usage}}
-
-{{politty:command:user switch:arguments}}
-
-{{politty:command:user switch:global-options-link}}
-{{politty:command:user pat:heading}}
-
-{{politty:command:user pat:description}}
-
-{{politty:command:user pat:usage}}
-
-{{politty:command:user pat:options}}
-
-{{politty:command:user pat:subcommands}}
-
-{{politty:command:user pat:global-options-link}}
-{{politty:command:user pat list:heading}}
-
-{{politty:command:user pat list:description}}
-
-{{politty:command:user pat list:usage}}
-
-{{politty:command:user pat list:options}}
-
-{{politty:command:user pat list:global-options-link}}
-{{politty:command:user pat create:heading}}
-
-{{politty:command:user pat create:description}}
-
-{{politty:command:user pat create:usage}}
-
-{{politty:command:user pat create:arguments}}
-
-{{politty:command:user pat create:options}}
-
-{{politty:command:user pat create:global-options-link}}
-{{politty:command:user pat delete:heading}}
-
-{{politty:command:user pat delete:description}}
-
-{{politty:command:user pat delete:usage}}
-
-{{politty:command:user pat delete:arguments}}
-
-{{politty:command:user pat delete:global-options-link}}
-{{politty:command:user pat update:heading}}
-
-{{politty:command:user pat update:description}}
-
-{{politty:command:user pat update:usage}}
-
-{{politty:command:user pat update:arguments}}
-
-{{politty:command:user pat update:options}}
-
-{{politty:command:user pat update:global-options-link}}
-
+{{politty:command:login}}
+{{politty:command:logout}}
+{{politty:command:user}}
+{{politty:command:user current}}
+{{politty:command:user list}}
+{{politty:command:user switch}}
+{{politty:command:user pat}}
+{{politty:command:user pat list}}
+{{politty:command:user pat create}}
+{{politty:command:user pat delete}}
+{{politty:command:user pat update}}
 When no subcommand is provided, defaults to `list`.
 
 **Output (default):**

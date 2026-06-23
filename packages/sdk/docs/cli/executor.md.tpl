@@ -9,52 +9,10 @@ politty:
 
 Commands for managing executors and executor jobs.
 
-{{politty:command:executor:heading}}
-
-{{politty:command:executor:description}}
-
-{{politty:command:executor:usage}}
-
-{{politty:command:executor:subcommands}}
-
-{{politty:command:executor:global-options-link}}
-
-{{politty:command:executor list:heading}}
-
-{{politty:command:executor list:description}}
-
-{{politty:command:executor list:usage}}
-
-{{politty:command:executor list:options}}
-
-{{politty:command:executor list:global-options-link}}
-
-{{politty:command:executor get:heading}}
-
-{{politty:command:executor get:description}}
-
-{{politty:command:executor get:usage}}
-
-{{politty:command:executor get:arguments}}
-
-{{politty:command:executor get:options}}
-
-{{politty:command:executor get:global-options-link}}
-
-{{politty:command:executor jobs:heading}}
-
-{{politty:command:executor jobs:description}}
-
-{{politty:command:executor jobs:usage}}
-
-{{politty:command:executor jobs:arguments}}
-
-{{politty:command:executor jobs:options}}
-
-{{politty:command:executor jobs:examples}}
-
-{{politty:command:executor jobs:global-options-link}}
-
+{{politty:command:executor}}
+{{politty:command:executor list}}
+{{politty:command:executor get}}
+{{politty:command:executor jobs}}
 {{politty:command:executor trigger:heading}}
 
 {{politty:command:executor trigger:description}}
@@ -122,22 +80,5 @@ if (result.timedOut) {
 
 {{politty:command:executor trigger:global-options-link}}
 
-{{politty:command:executor webhook:heading}}
-
-{{politty:command:executor webhook:description}}
-
-{{politty:command:executor webhook:usage}}
-
-{{politty:command:executor webhook:subcommands}}
-
-{{politty:command:executor webhook:global-options-link}}
-
-{{politty:command:executor webhook list:heading}}
-
-{{politty:command:executor webhook list:description}}
-
-{{politty:command:executor webhook list:usage}}
-
-{{politty:command:executor webhook list:options}}
-
-{{politty:command:executor webhook list:global-options-link}}
+{{politty:command:executor webhook}}
+{{politty:command:executor webhook list}}

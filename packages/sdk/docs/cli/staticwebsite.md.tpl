@@ -9,78 +9,13 @@ politty:
 
 Commands for managing and deploying static websites.
 
-{{politty:command:staticwebsite:heading}}
-
-{{politty:command:staticwebsite:description}}
-
-{{politty:command:staticwebsite:usage}}
-
-{{politty:command:staticwebsite:subcommands}}
-
-{{politty:command:staticwebsite:global-options-link}}
-{{politty:command:staticwebsite deploy:heading}}
-
-{{politty:command:staticwebsite deploy:description}}
-
-{{politty:command:staticwebsite deploy:usage}}
-
-{{politty:command:staticwebsite deploy:options}}
-
-{{politty:command:staticwebsite deploy:global-options-link}}
-{{politty:command:staticwebsite list:heading}}
-
-{{politty:command:staticwebsite list:description}}
-
-{{politty:command:staticwebsite list:usage}}
-
-{{politty:command:staticwebsite list:options}}
-
-{{politty:command:staticwebsite list:global-options-link}}
-{{politty:command:staticwebsite domain:heading}}
-
-{{politty:command:staticwebsite domain:description}}
-
-{{politty:command:staticwebsite domain:usage}}
-
-{{politty:command:staticwebsite domain:global-options-link}}
-
-{{politty:command:staticwebsite domain:subcommands}}
-{{politty:command:staticwebsite domain get:heading}}
-
-{{politty:command:staticwebsite domain get:description}}
-
-{{politty:command:staticwebsite domain get:usage}}
-
-{{politty:command:staticwebsite domain get:arguments}}
-
-{{politty:command:staticwebsite domain get:options}}
-
-{{politty:command:staticwebsite domain get:global-options-link}}
-
-{{politty:command:staticwebsite domain list:heading}}
-
-{{politty:command:staticwebsite domain list:description}}
-
-{{politty:command:staticwebsite domain list:usage}}
-
-{{politty:command:staticwebsite domain list:arguments}}
-
-{{politty:command:staticwebsite domain list:options}}
-
-{{politty:command:staticwebsite domain list:global-options-link}}
-
-{{politty:command:staticwebsite get:heading}}
-
-{{politty:command:staticwebsite get:description}}
-
-{{politty:command:staticwebsite get:usage}}
-
-{{politty:command:staticwebsite get:arguments}}
-
-{{politty:command:staticwebsite get:options}}
-
-{{politty:command:staticwebsite get:global-options-link}}
-
+{{politty:command:staticwebsite}}
+{{politty:command:staticwebsite deploy}}
+{{politty:command:staticwebsite list}}
+{{politty:command:staticwebsite domain}}
+{{politty:command:staticwebsite domain get}}
+{{politty:command:staticwebsite domain list}}
+{{politty:command:staticwebsite get}}
 **Example:**
 
 ```bash

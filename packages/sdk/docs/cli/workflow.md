@@ -12,6 +12,8 @@ Manage workflows and workflow executions.
 tailor-sdk workflow [command]
 ```
 
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 **Commands**
 
 | Command                                       | Description                                    |
@@ -23,7 +25,197 @@ tailor-sdk workflow [command]
 | [`workflow executions`](#workflow-executions) | List or get workflow executions.               |
 | [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution. |
 
+### workflow executions
+
+List or get workflow executions.
+
+**Usage**
+
+```
+tailor-sdk workflow executions [options] [execution-id]
+```
+
+**Arguments**
+
+| Argument       | Description                               | Required |
+| -------------- | ----------------------------------------- | -------- |
+| `execution-id` | Execution ID (if provided, shows details) | No       |
+
+**Options**
+
+| Option                            | Alias | Description                                               | Required | Default      | Env                            |
+| --------------------------------- | ----- | --------------------------------------------------------- | -------- | ------------ | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                              | No       | -            | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`             | `-p`  | Workspace profile                                         | No       | -            | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`                 | -     | Sort order (asc or desc)                                  | No       | `"desc"`     | -                              |
+| `--limit <LIMIT>`                 | `-l`  | Maximum number of items to return (0: unlimited)          | No       | `50`         | -                              |
+| `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                  | No       | -            | -                              |
+| `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                         | No       | -            | -                              |
+| `--wait`                          | `-W`  | Wait for execution to complete                            | No       | `false`      | -                              |
+| `--interval <INTERVAL>`           | `-i`  | Polling interval when waiting (e.g., '3s', '500ms', '1m') | No       | `"3s"`       | -                              |
+| `--timeout <TIMEOUT>`             | `-t`  | Maximum time to wait (e.g., '30s', '10m')                 | No       | `"10m"`      | -                              |
+| `--until <UNTIL>`                 | `-u`  | Wait target (success, suspended, terminal)                | No       | `"terminal"` | -                              |
+| `--logs`                          | -     | Display job execution logs (detail mode only)             | No       | `false`      | -                              |
+
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### workflow get
+
+Get workflow details.
+
+**Usage**
+
+```
+tailor-sdk workflow get [options] <name>
+```
+
+**Arguments**
+
+| Argument | Description   | Required |
+| -------- | ------------- | -------- |
+| `name`   | Workflow name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### workflow list
+
+List all workflows in the workspace.
+
+**Usage**
+
+```
+tailor-sdk workflow list [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### workflow resume
+
+Resume a failed or pending workflow execution.
+
+**Usage**
+
+```
+tailor-sdk workflow resume [options] <execution-id>
+```
+
+**Arguments**
+
+| Argument       | Description         | Required |
+| -------------- | ------------------- | -------- |
+| `execution-id` | Failed execution ID | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description                                               | Required | Default      | Env                            |
+| ------------------------------- | ----- | --------------------------------------------------------- | -------- | ------------ | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                              | No       | -            | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                         | No       | -            | `TAILOR_PLATFORM_PROFILE`      |
+| `--wait`                        | `-W`  | Wait for execution to complete                            | No       | `false`      | -                              |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting (e.g., '3s', '500ms', '1m') | No       | `"3s"`       | -                              |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait (e.g., '30s', '10m')                 | No       | `"10m"`      | -                              |
+| `--until <UNTIL>`               | `-u`  | Wait target (success, suspended, terminal)                | No       | `"terminal"` | -                              |
+| `--logs`                        | `-l`  | Display job execution logs after completion               | No       | `false`      | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### workflow start
+
+Start a workflow execution.
+
+**Usage**
+
+```
+tailor-sdk workflow start [options] <name>
+```
+
+**Arguments**
+
+| Argument | Description   | Required |
+| -------- | ------------- | -------- |
+| `name`   | Workflow name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description                                                                 | Required | Default              | Env                                 |
+| ------------------------------- | ----- | --------------------------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                           | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                     | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH`   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                             | No       | -                    | -                                   |
+| `--wait`                        | `-W`  | Wait for execution to complete                                              | No       | `false`              | -                                   |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting (e.g., '3s', '500ms', '1m')                   | No       | `"3s"`               | -                                   |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait (e.g., '30s', '10m')                                   | No       | `"10m"`              | -                                   |
+| `--until <UNTIL>`               | `-u`  | Wait target (success, suspended, terminal)                                  | No       | `"terminal"`         | -                                   |
+| `--logs`                        | `-l`  | Display job execution logs after completion                                 | No       | `false`              | -                                   |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### workflow wait
+
+Wait for a workflow execution.
+
+**Usage**
+
+```
+tailor-sdk workflow wait [options] <execution-id>
+```
+
+**Arguments**
+
+| Argument       | Description  | Required |
+| -------------- | ------------ | -------- |
+| `execution-id` | Execution ID | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description                                               | Required | Default      | Env                            |
+| ------------------------------- | ----- | --------------------------------------------------------- | -------- | ------------ | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                              | No       | -            | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                         | No       | -            | `TAILOR_PLATFORM_PROFILE`      |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting (e.g., '3s', '500ms', '1m') | No       | `"3s"`       | -                              |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait (e.g., '30s', '10m')                 | No       | `"10m"`      | -                              |
+| `--until <UNTIL>`               | `-u`  | Wait target (success, suspended, terminal)                | No       | `"terminal"` | -                              |
+| `--logs`                        | `-l`  | Display job execution logs after completion               | No       | `false`      | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Examples**
+
+**Wait for workflow success**
+
+```bash
+$ tailor-sdk workflow wait execution-id --until success --timeout 10m --json
+```
+
+**Wait for a workflow wait point**
+
+```bash
+$ tailor-sdk workflow wait execution-id --until suspended --timeout 6m --logs --json
+```
+
+**Wait for success, failure, or suspension**
+
+```bash
+$ tailor-sdk workflow wait execution-id --until terminal
+```
 
 ### workflow list
 
@@ -269,7 +461,6 @@ tailor-sdk workflow resume [options] <execution-id>
 | `--logs`                        | `-l`  | Display job execution logs after completion               | No       | `false`      | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
 **Usage Examples:**
 
 ```bash

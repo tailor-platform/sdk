@@ -9,60 +9,11 @@ politty:
 
 Commands for managing workflows and workflow executions.
 
-{{politty:command:workflow:heading}}
-
-{{politty:command:workflow:description}}
-
-{{politty:command:workflow:usage}}
-
-{{politty:command:workflow:subcommands}}
-
-{{politty:command:workflow:global-options-link}}
-{{politty:command:workflow list:heading}}
-
-{{politty:command:workflow list:description}}
-
-{{politty:command:workflow list:usage}}
-
-{{politty:command:workflow list:options}}
-
-{{politty:command:workflow list:global-options-link}}
-{{politty:command:workflow get:heading}}
-
-{{politty:command:workflow get:description}}
-
-{{politty:command:workflow get:usage}}
-
-{{politty:command:workflow get:arguments}}
-
-{{politty:command:workflow get:options}}
-
-{{politty:command:workflow get:global-options-link}}
-{{politty:command:workflow start:heading}}
-
-{{politty:command:workflow start:description}}
-
-{{politty:command:workflow start:usage}}
-
-{{politty:command:workflow start:arguments}}
-
-{{politty:command:workflow start:options}}
-
-{{politty:command:workflow start:global-options-link}}
-{{politty:command:workflow wait:heading}}
-
-{{politty:command:workflow wait:description}}
-
-{{politty:command:workflow wait:usage}}
-
-{{politty:command:workflow wait:arguments}}
-
-{{politty:command:workflow wait:options}}
-
-{{politty:command:workflow wait:global-options-link}}
-
-{{politty:command:workflow wait:examples}}
-
+{{politty:command:workflow}}
+{{politty:command:workflow list}}
+{{politty:command:workflow get}}
+{{politty:command:workflow start}}
+{{politty:command:workflow wait}}
 **Shell automation**
 
 Capture the execution ID from `workflow start` and wait for the same run from a
@@ -116,29 +67,8 @@ if (result.timedOut) {
 }
 ```
 
-{{politty:command:workflow executions:heading}}
-
-{{politty:command:workflow executions:description}}
-
-{{politty:command:workflow executions:usage}}
-
-{{politty:command:workflow executions:arguments}}
-
-{{politty:command:workflow executions:options}}
-
-{{politty:command:workflow executions:global-options-link}}
-{{politty:command:workflow resume:heading}}
-
-{{politty:command:workflow resume:description}}
-
-{{politty:command:workflow resume:usage}}
-
-{{politty:command:workflow resume:arguments}}
-
-{{politty:command:workflow resume:options}}
-
-{{politty:command:workflow resume:global-options-link}}
-
+{{politty:command:workflow executions}}
+{{politty:command:workflow resume}}
 **Usage Examples:**
 
 ```bash
