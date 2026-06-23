@@ -559,8 +559,8 @@ importers:
         specifier: 0.23.0
         version: 0.23.0
       sonda:
-        specifier: 0.13.0
-        version: 0.13.0
+        specifier: 0.13.1
+        version: 0.13.1
       tsdown:
         specifier: 0.22.2
         version: 0.22.2(@typescript/native-preview@7.0.0-dev.20260614.1)(oxc-resolver@11.20.0)(publint@0.3.21)(tsx@4.22.4)(typescript@6.0.3)
@@ -3525,8 +3525,8 @@ packages:
     resolution: {integrity: sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg==}
     engines: {node: '>= 18'}
 
-  sonda@0.13.0:
-    resolution: {integrity: sha512-rV41e4LDL00jcDijXrP7jhkbpCYMiDKynl9TWq2hv1yzC6v2fJiFMaOpUiipmJmhe1Gf360gwwUqSwPQ0ear1A==}
+  sonda@0.13.1:
+    resolution: {integrity: sha512-ocQ4bSr1IaalYphlSga5UlHkywAqOm79ojfmGe8brKgHFMrqPPSjyzz0YDVpPOh9u4VbE5omYY4C9trJSUtzLg==}
     engines: {node: '>=22.12'}
     hasBin: true
 
@@ -6306,7 +6306,7 @@ snapshots:
 
   smol-toml@1.6.1: {}
 
-  sonda@0.13.0:
+  sonda@0.13.1:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       tiny-open: 1.3.0
