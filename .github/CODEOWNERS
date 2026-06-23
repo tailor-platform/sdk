@@ -1,2 +1,6 @@
 # Default code owners for all files
-* @tailor-platform/maintainers-sdk
+* @tailor-platform/contributor-sdk
+
+# Changeset release PRs (Version Packages) always touch CHANGELOG.md,
+# so releases require review from maintainers.
+CHANGELOG.md @tailor-platform/maintainers-sdk
