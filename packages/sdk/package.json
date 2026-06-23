@@ -226,7 +226,7 @@
     "tsdown": "0.22.2",
     "typescript": "6.0.3",
     "vitest": "4.1.8",
-    "zinfer": "0.1.8"
+    "zinfer": "0.2.2"
   },
   "peerDependencies": {
     "vite": "^6.0.0 || ^7.0.0 || ^8.0.0",
