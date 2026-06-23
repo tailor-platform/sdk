@@ -10,17 +10,18 @@ politty:
 Commands for managing Auth service resources (auth connections, machine users, and OAuth2 clients).
 
 {{politty:command:authconnection}}
-{{politty:command:authconnection authorize}}
-{{politty:command:authconnection delete}}
-{{politty:command:authconnection list}}
-{{politty:command:authconnection open}}
-{{politty:command:authconnection revoke}}
 {{politty:command:machineuser}}
-{{politty:command:machineuser list}}
-{{politty:command:machineuser token}}
-{{politty:command:oauth2client}}
+{{politty:command:oauth2client:heading}}
+
+{{politty:command:oauth2client:description}}
+
+{{politty:command:oauth2client:usage}}
+
+{{politty:command:oauth2client:global-options-link}}
+
+{{politty:command:oauth2client:subcommands}}
+
 {{politty:command:oauth2client list}}
-{{politty:command:oauth2client get}}
 **Output:**
 
 Returns a list of OAuth2 clients with the following fields:
@@ -32,6 +33,7 @@ Returns a list of OAuth2 clients with the following fields:
 - `redirectUris` - Registered redirect URIs
 - `createdAt` - Creation timestamp
 
+{{politty:command:oauth2client get}}
 **Output:**
 
 Returns the OAuth2 client credentials with the following fields:

@@ -9,7 +9,16 @@ politty:
 
 Commands for managing TailorDB tables, data, and schema migrations.
 
-{{politty:command:tailordb}}
+{{politty:command:tailordb:heading}}
+
+{{politty:command:tailordb:description}}
+
+{{politty:command:tailordb:usage}}
+
+{{politty:command:tailordb:global-options-link}}
+
+{{politty:command:tailordb:subcommands}}
+
 {{politty:command:tailordb truncate}}
 **Usage Examples:**
 
@@ -59,7 +68,16 @@ Note: Migration scripts are automatically executed during `tailor-sdk deploy`. S
 {{politty:command:tailordb migration sync}}
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
 
-{{politty:command:tailordb erd}}
+{{politty:command:tailordb erd:heading}}
+
+{{politty:command:tailordb erd:description}}
+
+{{politty:command:tailordb erd:usage}}
+
+{{politty:command:tailordb erd:global-options-link}}
+
+{{politty:command:tailordb erd:subcommands}}
+
 {{politty:command:tailordb erd export}}
 {{politty:command:tailordb erd serve}}
 {{politty:command:tailordb erd deploy}}

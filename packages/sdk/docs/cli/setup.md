@@ -46,18 +46,6 @@ tailor-sdk setup check
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-### setup check
-
-Audit generated workflows for drift against the current config/repo (read-only).
-
-**Usage**
-
-```
-tailor-sdk setup check
-```
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
 ## Further reading
 
 - [GitHub Actions Integration](../github-actions.md) — usage guide: targets, generated files, secrets, approval gates, and rollback.

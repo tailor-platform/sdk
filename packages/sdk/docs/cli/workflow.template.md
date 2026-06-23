@@ -9,10 +9,32 @@ politty:
 
 Commands for managing workflows and workflow executions.
 
-{{politty:command:workflow}}
+{{politty:command:workflow:heading}}
+
+{{politty:command:workflow:description}}
+
+{{politty:command:workflow:usage}}
+
+{{politty:command:workflow:global-options-link}}
+
+{{politty:command:workflow:subcommands}}
+
 {{politty:command:workflow list}}
 {{politty:command:workflow get}}
 {{politty:command:workflow start}}
+**Usage Examples:**
+
+```bash
+# Start a workflow
+tailor-sdk workflow start my-workflow -m admin-machine-user
+
+# Start with argument
+tailor-sdk workflow start my-workflow -m admin -a '{"userId": "123"}'
+
+# Start and wait for completion
+tailor-sdk workflow start my-workflow -m admin -W
+```
+
 {{politty:command:workflow wait}}
 **Shell automation**
 
@@ -68,20 +90,6 @@ if (result.timedOut) {
 ```
 
 {{politty:command:workflow executions}}
-{{politty:command:workflow resume}}
-**Usage Examples:**
-
-```bash
-# Start a workflow
-tailor-sdk workflow start my-workflow -m admin-machine-user
-
-# Start with argument
-tailor-sdk workflow start my-workflow -m admin -a '{"userId": "123"}'
-
-# Start and wait for completion
-tailor-sdk workflow start my-workflow -m admin -W
-```
-
 **Usage Examples:**
 
 ```bash
@@ -103,3 +111,5 @@ tailor-sdk workflow executions <execution-id> --logs
 # Wait for execution to complete
 tailor-sdk workflow executions <execution-id> -W
 ```
+
+{{politty:command:workflow resume}}

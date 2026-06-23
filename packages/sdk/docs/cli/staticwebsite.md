@@ -43,307 +43,6 @@ tailor-sdk staticwebsite deploy [options]
 | `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### staticwebsite domain
-
-Manage custom domains for static websites.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite domain <command>
-```
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-**Commands**
-
-| Command                                                   | Description                               |
-| --------------------------------------------------------- | ----------------------------------------- |
-| [`staticwebsite domain list`](#staticwebsite-domain-list) | List custom domains for a static website. |
-| [`staticwebsite domain get`](#staticwebsite-domain-get)   | Get details of a custom domain.           |
-
-#### staticwebsite domain get
-
-Get details of a custom domain.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite domain get [options] <domain>
-```
-
-**Arguments**
-
-| Argument | Description        | Required |
-| -------- | ------------------ | -------- |
-| `domain` | Custom domain name | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-#### staticwebsite domain list
-
-List custom domains for a static website.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite domain list [options] <name>
-```
-
-**Arguments**
-
-| Argument | Description         | Required |
-| -------- | ------------------- | -------- |
-| `name`   | Static website name | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### staticwebsite get
-
-Get details of a specific static website.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite get [options] <name>
-```
-
-**Arguments**
-
-| Argument | Description         | Required |
-| -------- | ------------------- | -------- |
-| `name`   | Static website name | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### staticwebsite list
-
-List all static websites in a workspace.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite list [options]
-```
-
-**Options**
-
-| Option                          | Alias | Description                                              | Required | Default  | Env                            |
-| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
-| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### staticwebsite deploy
-
-Deploy a static website from a local build directory.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite deploy [options]
-```
-
-**Options**
-
-| Option                          | Alias | Description                      | Required | Default | Env                            |
-| ------------------------------- | ----- | -------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--name <NAME>`                 | `-n`  | Static website name              | Yes      | -       | -                              |
-| `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       | -                              |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### staticwebsite list
-
-List all static websites in a workspace.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite list [options]
-```
-
-**Options**
-
-| Option                          | Alias | Description                                              | Required | Default  | Env                            |
-| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
-| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### staticwebsite domain
-
-Manage custom domains for static websites.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite domain <command>
-```
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-**Commands**
-
-| Command                                                   | Description                               |
-| --------------------------------------------------------- | ----------------------------------------- |
-| [`staticwebsite domain list`](#staticwebsite-domain-list) | List custom domains for a static website. |
-| [`staticwebsite domain get`](#staticwebsite-domain-get)   | Get details of a custom domain.           |
-
-#### staticwebsite domain get
-
-Get details of a custom domain.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite domain get [options] <domain>
-```
-
-**Arguments**
-
-| Argument | Description        | Required |
-| -------- | ------------------ | -------- |
-| `domain` | Custom domain name | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-#### staticwebsite domain list
-
-List custom domains for a static website.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite domain list [options] <name>
-```
-
-**Arguments**
-
-| Argument | Description         | Required |
-| -------- | ------------------- | -------- |
-| `name`   | Static website name | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-#### staticwebsite domain get
-
-Get details of a custom domain.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite domain get [options] <domain>
-```
-
-**Arguments**
-
-| Argument | Description        | Required |
-| -------- | ------------------ | -------- |
-| `domain` | Custom domain name | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-#### staticwebsite domain list
-
-List custom domains for a static website.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite domain list [options] <name>
-```
-
-**Arguments**
-
-| Argument | Description         | Required |
-| -------- | ------------------- | -------- |
-| `name`   | Static website name | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### staticwebsite get
-
-Get details of a specific static website.
-
-**Usage**
-
-```
-tailor-sdk staticwebsite get [options] <name>
-```
-
-**Arguments**
-
-| Argument | Description         | Required |
-| -------- | ------------------- | -------- |
-| `name`   | Static website name | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 **Example:**
 
 ```bash
@@ -361,6 +60,26 @@ tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
 - Unsupported file types or invalid files will be skipped with warnings
 - The deployment URL is returned after successful deployment
 
+### staticwebsite list
+
+List all static websites in a workspace.
+
+**Usage**
+
+```
+tailor-sdk staticwebsite list [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 **Example:**
 
 ```bash
@@ -371,6 +90,99 @@ tailor-sdk staticwebsite list
 tailor-sdk staticwebsite list --json
 ```
 
+### staticwebsite domain
+
+Manage custom domains for static websites.
+
+**Usage**
+
+```
+tailor-sdk staticwebsite domain <command>
+```
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Commands**
+
+| Command                                                   | Description                               |
+| --------------------------------------------------------- | ----------------------------------------- |
+| [`staticwebsite domain list`](#staticwebsite-domain-list) | List custom domains for a static website. |
+| [`staticwebsite domain get`](#staticwebsite-domain-get)   | Get details of a custom domain.           |
+
+#### staticwebsite domain get
+
+Get details of a custom domain.
+
+**Usage**
+
+```
+tailor-sdk staticwebsite domain get [options] <domain>
+```
+
+**Arguments**
+
+| Argument | Description        | Required |
+| -------- | ------------------ | -------- |
+| `domain` | Custom domain name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+#### staticwebsite domain list
+
+List custom domains for a static website.
+
+**Usage**
+
+```
+tailor-sdk staticwebsite domain list [options] <name>
+```
+
+**Arguments**
+
+| Argument | Description         | Required |
+| -------- | ------------------- | -------- |
+| `name`   | Static website name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### staticwebsite get
+
+Get details of a specific static website.
+
+**Usage**
+
+```
+tailor-sdk staticwebsite get [options] <name>
+```
+
+**Arguments**
+
+| Argument | Description         | Required |
+| -------- | ------------------- | -------- |
+| `name`   | Static website name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 **Example:**
 
 ```bash

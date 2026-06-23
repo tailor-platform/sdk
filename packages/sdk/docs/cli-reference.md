@@ -122,17 +122,17 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | Command                                                                      | Description                                                                                                               |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [tailordb](./cli/tailordb.md#tailordb)                                       | Manage TailorDB tables and data.                                                                                          |
-| [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                 |
-| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
-| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
-| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
+| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate (delete all records from) TailorDB tables.                                                                       |
 | [tailordb migration](./cli/tailordb.md#tailordb-migration)                   | Manage TailorDB schema migrations.                                                                                        |
 | [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
 | [tailordb migration script](./cli/tailordb.md#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
 | [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
 | [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
-| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate (delete all records from) TailorDB tables.                                                                       |
+| [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                 |
+| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
+| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
+| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
 
 ### [Query Commands](./cli/query.md)
 
@@ -220,8 +220,8 @@ Commands for managing Auth service resources.
 | [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.                                            |
 | [machineuser token](./cli/auth.md#machineuser-token)               | Get an access token for a machine user.                                               |
 | [oauth2client](./cli/auth.md#oauth2client)                         | Manage OAuth2 clients in your Tailor Platform application.                            |
-| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret).                              |
 | [oauth2client list](./cli/auth.md#oauth2client-list)               | List all OAuth2 clients in the application.                                           |
+| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret).                              |
 
 ### [Workflow Commands](./cli/workflow.md)
 
@@ -230,12 +230,12 @@ Commands for managing workflows and executions.
 | Command                                                      | Description                                    |
 | ------------------------------------------------------------ | ---------------------------------------------- |
 | [workflow](./cli/workflow.md#workflow)                       | Manage workflows and workflow executions.      |
-| [workflow executions](./cli/workflow.md#workflow-executions) | List or get workflow executions.               |
-| [workflow get](./cli/workflow.md#workflow-get)               | Get workflow details.                          |
 | [workflow list](./cli/workflow.md#workflow-list)             | List all workflows in the workspace.           |
-| [workflow resume](./cli/workflow.md#workflow-resume)         | Resume a failed or pending workflow execution. |
+| [workflow get](./cli/workflow.md#workflow-get)               | Get workflow details.                          |
 | [workflow start](./cli/workflow.md#workflow-start)           | Start a workflow execution.                    |
 | [workflow wait](./cli/workflow.md#workflow-wait)             | Wait for a workflow execution.                 |
+| [workflow executions](./cli/workflow.md#workflow-executions) | List or get workflow executions.               |
+| [workflow resume](./cli/workflow.md#workflow-resume)         | Resume a failed or pending workflow execution. |
 
 ### [Function Commands](./cli/function.md)
 
@@ -287,11 +287,11 @@ Commands for managing and deploying static websites.
 | ----------------------------------------------------------------------------- | ----------------------------------------------------- |
 | [staticwebsite](./cli/staticwebsite.md#staticwebsite)                         | Manage static websites in your workspace.             |
 | [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy)           | Deploy a static website from a local build directory. |
+| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)               | List all static websites in a workspace.              |
 | [staticwebsite domain](./cli/staticwebsite.md#staticwebsite-domain)           | Manage custom domains for static websites.            |
 | [staticwebsite domain get](./cli/staticwebsite.md#staticwebsite-domain-get)   | Get details of a custom domain.                       |
 | [staticwebsite domain list](./cli/staticwebsite.md#staticwebsite-domain-list) | List custom domains for a static website.             |
 | [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)                 | Get details of a specific static website.             |
-| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)               | List all static websites in a workspace.              |
 
 ### [Crash Report Commands](./cli/crashreport.md)
 

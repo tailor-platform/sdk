@@ -10,7 +10,6 @@ politty:
 Commands for setting up project infrastructure.
 
 {{politty:command:setup}}
-{{politty:command:setup check}}
 
 ## Further reading
 

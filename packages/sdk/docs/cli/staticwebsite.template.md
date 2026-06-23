@@ -9,13 +9,17 @@ politty:
 
 Commands for managing and deploying static websites.
 
-{{politty:command:staticwebsite}}
+{{politty:command:staticwebsite:heading}}
+
+{{politty:command:staticwebsite:description}}
+
+{{politty:command:staticwebsite:usage}}
+
+{{politty:command:staticwebsite:global-options-link}}
+
+{{politty:command:staticwebsite:subcommands}}
+
 {{politty:command:staticwebsite deploy}}
-{{politty:command:staticwebsite list}}
-{{politty:command:staticwebsite domain}}
-{{politty:command:staticwebsite domain get}}
-{{politty:command:staticwebsite domain list}}
-{{politty:command:staticwebsite get}}
 **Example:**
 
 ```bash
@@ -33,6 +37,7 @@ tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
 - Unsupported file types or invalid files will be skipped with warnings
 - The deployment URL is returned after successful deployment
 
+{{politty:command:staticwebsite list}}
 **Example:**
 
 ```bash
@@ -43,6 +48,8 @@ tailor-sdk staticwebsite list
 tailor-sdk staticwebsite list --json
 ```
 
+{{politty:command:staticwebsite domain}}
+{{politty:command:staticwebsite get}}
 **Example:**
 
 ```bash
