@@ -495,8 +495,8 @@ importers:
         specifier: 1.1.1
         version: 1.1.1
       semver:
-        specifier: 7.8.4
-        version: 7.8.4
+        specifier: 7.8.5
+        version: 7.8.5
       sql-highlight:
         specifier: 6.1.0
         version: 6.1.0
@@ -516,8 +516,8 @@ importers:
         specifier: 5.7.0
         version: 5.7.0
       undici:
-        specifier: 8.4.1
-        version: 8.4.1
+        specifier: 8.5.0
+        version: 8.5.0
       vite:
         specifier: ^6.0.0 || ^7.0.0 || ^8.0.0
         version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
@@ -562,8 +562,8 @@ importers:
         specifier: 0.23.0
         version: 0.23.0
       sonda:
-        specifier: 0.13.0
-        version: 0.13.0
+        specifier: 0.13.1
+        version: 0.13.1
       tsdown:
         specifier: 0.22.3
         version: 0.22.3(@typescript/native-preview@7.0.0-dev.20260614.1)(oxc-resolver@11.20.0)(publint@0.3.21)(tsx@4.22.4)(typescript@6.0.3)
@@ -601,8 +601,8 @@ importers:
         specifier: 0.6.0
         version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       semver:
-        specifier: 7.8.4
-        version: 7.8.4
+        specifier: 7.8.5
+        version: 7.8.5
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -3538,8 +3538,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  semver@7.8.4:
-    resolution: {integrity: sha512-rUCObTnP32Q08R2uuIrt7r9PlEonuTmtuXYcW6s5kjdlj3xbnwe+21yXptAUYcMAABLkYYTtnmzb3w3EDZfueA==}
+  semver@7.8.5:
+    resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -3576,8 +3576,8 @@ packages:
     resolution: {integrity: sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg==}
     engines: {node: '>= 18'}
 
-  sonda@0.13.0:
-    resolution: {integrity: sha512-rV41e4LDL00jcDijXrP7jhkbpCYMiDKynl9TWq2hv1yzC6v2fJiFMaOpUiipmJmhe1Gf360gwwUqSwPQ0ear1A==}
+  sonda@0.13.1:
+    resolution: {integrity: sha512-ocQ4bSr1IaalYphlSga5UlHkywAqOm79ojfmGe8brKgHFMrqPPSjyzz0YDVpPOh9u4VbE5omYY4C9trJSUtzLg==}
     engines: {node: '>=22.12'}
     hasBin: true
 
@@ -3812,8 +3812,8 @@ packages:
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
-  undici@8.4.1:
-    resolution: {integrity: sha512-RNHlB4fxZK0IrkhBsxhlbx7s8kFWwr7rzzOqj5nvZugw3ig3RsB7KW3zVlV0eu8POl+rx5d1hmL7rRg0z1owow==}
+  undici@8.5.0:
+    resolution: {integrity: sha512-xamtWoB1EshgjpmlXd7GGm2VfdDtw1+rD8uhry8pSNW3If6S8E0m2T2+orSKeZXEn/aPJMviCpDBA65WJt8zhg==}
     engines: {node: '>=22.19.0'}
 
   unicorn-magic@0.3.0:
@@ -4093,7 +4093,7 @@ snapshots:
       '@changesets/types': 7.0.0-next.5
       detect-indent: 7.0.2
       import-meta-resolve: 4.2.0
-      semver: 7.8.4
+      semver: 7.8.5
 
   '@changesets/assemble-release-plan@7.0.0-next.5':
     dependencies:
@@ -4101,7 +4101,7 @@ snapshots:
       '@changesets/get-dependents-graph': 3.0.0-next.5
       '@changesets/should-skip-package': 1.0.0-next.5
       '@changesets/types': 7.0.0-next.5
-      semver: 7.8.4
+      semver: 7.8.5
 
   '@changesets/changelog-git@1.0.0-next.5':
     dependencies:
@@ -4132,7 +4132,7 @@ snapshots:
       import-meta-resolve: 4.2.0
       launch-editor: 2.14.1
       package-manager-detector: 1.6.0
-      semver: 7.8.4
+      semver: 7.8.5
       tinyexec: 1.2.4
 
   '@changesets/config@4.0.0-next.5':
@@ -4152,7 +4152,7 @@ snapshots:
   '@changesets/get-dependents-graph@3.0.0-next.5':
     dependencies:
       '@changesets/types': 7.0.0-next.5
-      semver: 7.8.4
+      semver: 7.8.5
 
   '@changesets/get-github-info@1.0.0-next.2':
     dependencies:
@@ -5154,7 +5154,7 @@ snapshots:
       '@typescript-eslint/visitor-keys': 8.61.0
       debug: 4.4.3
       minimatch: 10.2.5
-      semver: 7.8.4
+      semver: 7.8.5
       tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
@@ -5954,7 +5954,7 @@ snapshots:
 
   make-dir@4.0.0:
     dependencies:
-      semver: 7.8.4
+      semver: 7.8.5
 
   mime-db@1.54.0: {}
 
@@ -6412,7 +6412,7 @@ snapshots:
       commander: 12.1.0
       enhanced-resolve: 5.24.0
 
-  semver@7.8.4: {}
+  semver@7.8.5: {}
 
   shebang-command@2.0.0:
     dependencies:
@@ -6438,7 +6438,7 @@ snapshots:
 
   smol-toml@1.6.1: {}
 
-  sonda@0.13.0:
+  sonda@0.13.1:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       tiny-open: 1.3.0
@@ -6570,7 +6570,7 @@ snapshots:
       picomatch: 4.0.4
       rolldown: 1.1.1
       rolldown-plugin-dts: 0.25.2(@typescript/native-preview@7.0.0-dev.20260614.1)(oxc-resolver@11.20.0)(rolldown@1.1.1)(typescript@6.0.3)
-      semver: 7.8.4
+      semver: 7.8.5
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tree-kill: 1.2.2
@@ -6597,7 +6597,7 @@ snapshots:
       picomatch: 4.0.4
       rolldown: 1.1.1
       rolldown-plugin-dts: 0.26.0(@typescript/native-preview@7.0.0-dev.20260614.1)(oxc-resolver@11.20.0)(rolldown@1.1.1)(typescript@6.0.3)
-      semver: 7.8.4
+      semver: 7.8.5
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tree-kill: 1.2.2
@@ -6638,7 +6638,7 @@ snapshots:
 
   undici-types@7.18.2: {}
 
-  undici@8.4.1: {}
+  undici@8.5.0: {}
 
   unicorn-magic@0.3.0: {}
 

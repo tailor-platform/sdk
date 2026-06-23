@@ -1,6 +1,6 @@
 # GitHub Actions Integration
 
-`tailor-sdk setup github` generates a GitHub Actions workflow that deploys your
+`tailor-sdk setup` generates a GitHub Actions workflow that deploys your
 Tailor Platform application automatically on push or tag.
 
 > **Beta:** This command is under active development. CLI flags, the generated
@@ -14,12 +14,15 @@ lives):
 
 ```bash
 # Branch target: deploy to stg on every push to main
-tailor-sdk setup github -n my-app-stg
+tailor-sdk setup -n my-app-stg
 
 # Tag target: deploy to production when a tag is pushed, with an approval gate
-tailor-sdk setup github -n my-app-prod \
+tailor-sdk setup -n my-app-prod \
   --tag --branch main --environment production
 ```
+
+`setup` defaults to the GitHub provider; `--provider github` (`-p github`) is
+accepted but optional, and other providers are not yet supported.
 
 After running the command, follow the **Next steps** printed to the terminal to
 set the required secrets, set the `TAILOR_PLATFORM_WORKSPACE_ID` variable, and
@@ -33,7 +36,7 @@ before the first deploy (see [Targeting a workspace](#targeting-a-workspace)).
 ## Targets
 
 A _target_ is one workflow file that handles one deployment destination.
-Run `setup github` once per target.
+Run `setup` once per target.
 
 ### Branch target (recommended for staging)
 
@@ -41,9 +44,9 @@ The branch target fires on pull requests and pushes to the branch you specify
 (defaulting to the repository's default branch when `--branch` is omitted):
 
 ```bash
-tailor-sdk setup github -n my-app-stg
+tailor-sdk setup -n my-app-stg
 # Equivalent to:
-tailor-sdk setup github -n my-app-stg --branch main
+tailor-sdk setup -n my-app-stg --branch main
 ```
 
 What it does:
@@ -66,7 +69,7 @@ The tag target fires when a tag matching `--tag-pattern` (default `v*`) is
 pushed:
 
 ```bash
-tailor-sdk setup github -n my-app-prod \
+tailor-sdk setup -n my-app-prod \
   --tag --tag-pattern "v*" --branch main --environment production
 ```
 
@@ -136,7 +139,7 @@ environment is planned.)
 
 ## Generated files
 
-Running `setup github` creates or updates:
+Running `setup` creates or updates:
 
 ### `.github/workflows/tailor-<workspace-name>.yml`
 
@@ -151,7 +154,7 @@ project-specific setup (such as private registry authentication or a system
 dependency), add a step _before_ the managed `tailor-setup` step. For
 post-install extras (such as `playwright install`), add a step _after_ it.
 
-Note that re-running `setup github` currently regenerates the whole file: if
+Note that re-running `setup` currently regenerates the whole file: if
 the file differs from what the SDK last wrote — whether you edited a managed
 step or added your own — the command stops and reports the conflict. Pass
 `--force` to discard your edits and regenerate from the current template, then
@@ -167,7 +170,7 @@ detect hand edits.
 
 ### `tailor.config.ts` (id injection)
 
-If your config does not already have an `id` field, `setup github` injects one.
+If your config does not already have an `id` field, `setup` injects one.
 This `id` must be committed alongside the workflow file. In CI, `tailor-sdk
 deploy` refuses to inject a new id — if the id were assigned fresh on each CI
 run, every deploy would create a brand-new application and lose ownership of
@@ -238,7 +241,7 @@ you can deploy any commit regardless of branch membership.
 For a monorepo where your SDK app lives in a subdirectory, pass `--dir`:
 
 ```bash
-tailor-sdk setup github -n my-app --dir apps/backend
+tailor-sdk setup -n my-app --dir apps/backend
 ```
 
 The generated workflow adds a `paths` filter on `apps/backend/**` so the
@@ -303,10 +306,10 @@ A typical setup with staging and production:
 
 ```bash
 # Staging: main → stg (deploy on every push to main)
-tailor-sdk setup github -n my-app-stg
+tailor-sdk setup -n my-app-stg
 
 # Production: tagged commits → prod, with approval gate and branch guard
-tailor-sdk setup github -n my-app-prod \
+tailor-sdk setup -n my-app-prod \
   --tag --branch main --environment production
 ```
 
@@ -326,9 +329,19 @@ gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env production
 
 Commit both workflow files and `.github/tailor-sdk.lock`.
 
+## Checking for drift
+
+`tailor-sdk setup check` audits the workflows recorded in
+`.github/tailor-sdk.lock` against your current config and repository, without
+writing anything. It reports when a workflow file is missing or hand-edited, a
+newer template is available, `tailor.config.ts` is no longer under the recorded
+`--dir`, or the repository default branch no longer matches a branch target's
+trigger. It exits non-zero when it finds drift, so you can run it in CI. Each
+finding names a stable rule key for future suppression.
+
 ## Updating the generated workflow
 
-When you upgrade the SDK, re-run `setup github` with the same flags to pick up
+When you upgrade the SDK, re-run `setup` with the same flags to pick up
 template improvements. If the SDK detects that you have hand-edited a managed
 section, it stops and asks you to use `--force` to overwrite your edits, or to
 move your customizations into your own steps before regenerating.

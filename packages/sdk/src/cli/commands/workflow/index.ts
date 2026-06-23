@@ -4,6 +4,7 @@ import { getCommand } from "./get";
 import { listCommand } from "./list";
 import { resumeCommand } from "./resume";
 import { startCommand } from "./start";
+import { waitCommand } from "./wait";
 
 export const workflowCommand = defineCommand({
   name: "workflow",
@@ -12,6 +13,7 @@ export const workflowCommand = defineCommand({
     list: listCommand,
     get: getCommand,
     start: startCommand,
+    wait: waitCommand,
     executions: executionsCommand,
     resume: resumeCommand,
   },

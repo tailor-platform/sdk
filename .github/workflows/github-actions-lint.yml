@@ -72,4 +72,4 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Run actionlint tests
-        run: pnpm --filter @tailor-platform/sdk exec vitest run src/cli/commands/setup/github/workflow-lint.test.ts
+        run: pnpm --filter @tailor-platform/sdk exec vitest run src/cli/commands/setup/workflow-lint.test.ts

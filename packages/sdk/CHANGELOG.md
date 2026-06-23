@@ -1,12 +1,34 @@
 # @tailor-platform/sdk
 
+## 1.68.0
+### Minor Changes
+
+
+
+- [#1503](https://github.com/tailor-platform/sdk/pull/1503) [`023bf0b`](https://github.com/tailor-platform/sdk/commit/023bf0b81cd4e4c384df707b9367f89db886284b) Thanks [@toiroakr](https://github.com/toiroakr)! - `setup` (beta): restructure the command surface
+  
+  **Breaking changes (beta)**
+  
+  - `tailor-sdk setup github` is now `tailor-sdk setup`. The CI provider is selected with the optional `--provider` / `-p` flag, which defaults to `github`; any other value is rejected.
+  - The drift audit moved from the `setup github --check` flag to a dedicated `tailor-sdk setup check` subcommand (no provider flag — it audits every target recorded in `.github/tailor-sdk.lock`).
+
+
+- [#1338](https://github.com/tailor-platform/sdk/pull/1338) [`56f28d6`](https://github.com/tailor-platform/sdk/commit/56f28d6be3d027657a0cc412930f7e221e626017) Thanks [@dqn](https://github.com/dqn)! - Add durable workflow and executor waiters with timeout, retry, and JSON diagnostics.
+
+
+### Patch Changes
+
+
+
+- [#1522](https://github.com/tailor-platform/sdk/pull/1522) [`b95efa7`](https://github.com/tailor-platform/sdk/commit/b95efa765d6a196ca8cd7fc9f3d8707c70b3a23d) Thanks [@toiroakr](https://github.com/toiroakr)! - Refactor CLI waiter utilities: extract shared `formatWaitError` and `isRetryableWaitError` helpers into `cli/shared/wait-error.ts` to eliminate duplication between workflow and executor waiters. Clarify intent of safety-net fallbacks in `classifyWorkflowExecutionStatus` and `classifyExecutorJobStatus`. Simplify the `workflow wait` command run handler by removing the internal `emitWorkflowWaitResult` helper.
+
 ## 1.67.1
 ### Patch Changes
 
 
 
 - [#1491](https://github.com/tailor-platform/sdk/pull/1491) [`be30383`](https://github.com/tailor-platform/sdk/commit/be30383e368b01f81f7e019fc509c9b61a33eb37) Thanks [@toiroakr](https://github.com/toiroakr)! - chore(deps): upgrade typescript to 6.0.3
-  
+
   Upgrade the workspace dev/build toolchain to TypeScript 6.0.3. Dev-dependency
   change only — no public API or runtime behavior change.
 
