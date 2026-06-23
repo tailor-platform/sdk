@@ -32,7 +32,7 @@ type WorkflowLike = {
   };
 };
 
-type AuthInvoker<M extends string = string> = {
+type WorkflowInvoker<M extends string = string> = {
   namespace: string;
   machineUserName: M;
 };
@@ -68,7 +68,7 @@ export interface StartWorkflowOptions {
 
 type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
   workflow: W;
-  authInvoker: MachineUserName;
+  invoker: MachineUserName;
   workspaceId?: string;
   profile?: string;
   configPath?: string;
@@ -227,7 +227,7 @@ interface StartWorkflowCoreOptions {
   client: Awaited<ReturnType<typeof initOperatorClient>>;
   workspaceId: string;
   workflowName: string;
-  authInvoker: AuthInvoker<string>;
+  invoker: WorkflowInvoker<string>;
   arg?: unknown;
   interval?: number;
 }
@@ -239,7 +239,7 @@ async function startWorkflowCore(
 
   try {
     const workflow = await resolveWorkflow(client, workspaceId, workflowName);
-    const authInvoker = create(AuthInvokerSchema, options.authInvoker);
+    const invoker = create(AuthInvokerSchema, options.invoker);
     const arg =
       options.arg === undefined
         ? undefined
@@ -250,7 +250,7 @@ async function startWorkflowCore(
     const { executionId } = await client.testStartWorkflow({
       workspaceId,
       workflowId: workflow.id,
-      authInvoker,
+      authInvoker: invoker,
       arg,
     });
 
@@ -323,7 +323,7 @@ async function startWorkflowByName(
     client,
     workspaceId,
     workflowName: options.name,
-    authInvoker: {
+    invoker: {
       namespace: authNamespace,
       machineUserName: machineUser,
     },
@@ -369,9 +369,9 @@ export async function startWorkflow<W extends WorkflowLike>(
     client,
     workspaceId,
     workflowName: options.workflow.name,
-    authInvoker: {
+    invoker: {
       namespace: authNamespace,
-      machineUserName: options.authInvoker,
+      machineUserName: options.invoker,
     },
     arg: options.arg,
     interval: options.interval,

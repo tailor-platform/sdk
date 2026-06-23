@@ -432,7 +432,7 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
     });
 
-    test("resolver is updated when authInvoker differs", async () => {
+    test("resolver is updated when invoker differs", async () => {
       const resolver = {
         name: "test-resolver",
         operation: 0,
@@ -441,7 +441,7 @@ describe("planPipeline (resolver service level)", () => {
           type: "string",
           metadata: {},
         },
-        authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+        invoker: { namespace: "my-auth", machineUserName: "batch-user" },
       };
       const pipeline = {
         namespace: "my-resolver",
@@ -482,7 +482,7 @@ describe("planPipeline (resolver service level)", () => {
   });
 });
 
-describe("processResolver authInvoker mapping", () => {
+describe("processResolver invoker mapping", () => {
   const workspaceId = "test-workspace";
   const appName = "test-app";
 
@@ -528,7 +528,7 @@ describe("processResolver authInvoker mapping", () => {
     vi.clearAllMocks();
   });
 
-  test("authInvoker is mapped to proto invoker field", async () => {
+  test("invoker is mapped to proto invoker field", async () => {
     const client = createMockClient([{ name: "test-ns", label: appName }]);
 
     const resolverService = {
@@ -540,7 +540,7 @@ describe("processResolver authInvoker mapping", () => {
           operation: "query",
           body: () => "hello",
           output: { type: "string", metadata: {}, fields: {} },
-          authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+          invoker: { namespace: "my-auth", machineUserName: "batch-user" },
         },
       },
       loadResolvers: vi.fn().mockResolvedValue(undefined),
@@ -577,7 +577,7 @@ describe("processResolver authInvoker mapping", () => {
     });
   });
 
-  test("string authInvoker is normalized using the configured auth service name", async () => {
+  test("string invoker is normalized using the configured auth service name", async () => {
     const client = createMockClient([{ name: "test-ns", label: appName }]);
 
     const resolverService = {
@@ -589,7 +589,7 @@ describe("processResolver authInvoker mapping", () => {
           operation: "query",
           body: () => "hello",
           output: { type: "string", metadata: {}, fields: {} },
-          authInvoker: "batch-user",
+          invoker: "batch-user",
         },
       },
       loadResolvers: vi.fn().mockResolvedValue(undefined),
@@ -627,7 +627,7 @@ describe("processResolver authInvoker mapping", () => {
     });
   });
 
-  test("string authInvoker without auth service configured throws", async () => {
+  test("string invoker without auth service configured throws", async () => {
     const client = createMockClient([{ name: "test-ns", label: appName }]);
 
     const resolverService = {
@@ -639,7 +639,7 @@ describe("processResolver authInvoker mapping", () => {
           operation: "query",
           body: () => "hello",
           output: { type: "string", metadata: {}, fields: {} },
-          authInvoker: "batch-user",
+          invoker: "batch-user",
         },
       },
       loadResolvers: vi.fn().mockResolvedValue(undefined),
@@ -667,7 +667,7 @@ describe("processResolver authInvoker mapping", () => {
     await expect(planPipeline(ctx)).rejects.toThrow(/no Auth service is configured/);
   });
 
-  test("string authInvoker uses external auth config name", async () => {
+  test("string invoker uses external auth config name", async () => {
     const client = createMockClient([{ name: "test-ns", label: appName }]);
 
     const resolverService = {
@@ -679,7 +679,7 @@ describe("processResolver authInvoker mapping", () => {
           operation: "query",
           body: () => "hello",
           output: { type: "string", metadata: {}, fields: {} },
-          authInvoker: "batch-user",
+          invoker: "batch-user",
         },
       },
       loadResolvers: vi.fn().mockResolvedValue(undefined),
@@ -719,7 +719,7 @@ describe("processResolver authInvoker mapping", () => {
     });
   });
 
-  test("invoker is undefined when authInvoker is not set", async () => {
+  test("invoker is undefined when invoker is not set", async () => {
     const client = createMockClient([{ name: "test-ns", label: appName }]);
 
     const resolverService = {

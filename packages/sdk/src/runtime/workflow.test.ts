@@ -31,7 +31,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
       "my-workflow",
       { a: 1 },
       {
-        authInvoker: { namespace: "ns", machineUserName: "mu" },
+        invoker: { namespace: "ns", machineUserName: "mu" },
       },
     );
 

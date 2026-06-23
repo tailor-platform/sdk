@@ -1,10 +1,10 @@
 import { parse, Lang } from "@ast-grep/napi";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
-const QUICK_FILTER_NEEDLE = "auth.invoker";
+const QUICK_FILTER_NEEDLES = ["auth.invoker", "authInvoker"];
 
 function quickFilter(source: string): boolean {
-  return source.includes(QUICK_FILTER_NEEDLE);
+  return QUICK_FILTER_NEEDLES.some((needle) => source.includes(needle));
 }
 
 function isInsideImportStatement(node: SgNode): boolean {
@@ -139,14 +139,133 @@ function findAuthImports(root: SgNode): SgNode[] {
   });
 }
 
+function sameRange(a: SgNode, b: SgNode): boolean {
+  const ar = a.range();
+  const br = b.range();
+  return ar.start.index === br.start.index && ar.end.index === br.end.index;
+}
+
+function keyText(node: SgNode | null): string | null {
+  if (!node) return null;
+  return node.text().replace(/^['"]|['"]$/g, "");
+}
+
+function expressionArguments(args: SgNode): SgNode[] {
+  return args.children().filter((child) => !["(", ")", ","].includes(child.kind()));
+}
+
+function argumentCallForObject(objectNode: SgNode): { call: SgNode; index: number } | null {
+  const args = objectNode.parent();
+  const call = args?.parent();
+  if (args?.kind() !== "arguments" || call?.kind() !== "call_expression") return null;
+  const index = expressionArguments(args).findIndex((arg) => sameRange(arg, objectNode));
+  return index === -1 ? null : { call, index };
+}
+
+function calleeText(call: SgNode): string {
+  return call.field("function")?.text() ?? "";
+}
+
+function isCreateCallOptionObject(objectNode: SgNode, functionName: string): boolean {
+  const callInfo = argumentCallForObject(objectNode);
+  return (
+    callInfo?.index === 0 &&
+    callInfo.call.field("function")?.kind() === "identifier" &&
+    calleeText(callInfo.call) === functionName
+  );
+}
+
+function isExecutorOperationObject(objectNode: SgNode): boolean {
+  const operationPair = objectNode.parent();
+  if (operationPair?.kind() !== "pair" || keyText(operationPair.field("key")) !== "operation") {
+    return false;
+  }
+  const configObject = operationPair.parent();
+  return (
+    configObject?.kind() === "object" && isCreateCallOptionObject(configObject, "createExecutor")
+  );
+}
+
+function isSupportedInvokerOptionObject(objectNode: SgNode): boolean {
+  return (
+    isCreateCallOptionObject(objectNode, "createResolver") ||
+    isCreateCallOptionObject(objectNode, "startWorkflow") ||
+    isExecutorOperationObject(objectNode)
+  );
+}
+
+function optionObjectForPairKey(node: SgNode): SgNode | null {
+  const parent = node.parent();
+  if (!parent || parent.kind() !== "pair") return null;
+  const key = parent.field("key");
+  if (!key || !sameRange(key, node)) return null;
+  const objectNode = parent.parent();
+  return objectNode?.kind() === "object" ? objectNode : null;
+}
+
+function isSupportedInvokerOptionKey(node: SgNode): boolean {
+  const objectNode = optionObjectForPairKey(node) ?? node.parent();
+  return objectNode?.kind() === "object" && isSupportedInvokerOptionObject(objectNode);
+}
+
+function isSupportedInvokerValueCall(node: SgNode): boolean {
+  const pair = node.parent();
+  if (pair?.kind() !== "pair") return false;
+  const value = pair.field("value");
+  if (!value || !sameRange(value, node)) return false;
+  const key = keyText(pair.field("key"));
+  if (key !== "authInvoker" && key !== "invoker") return false;
+  const objectNode = pair.parent();
+  return objectNode?.kind() === "object" && isSupportedInvokerOptionObject(objectNode);
+}
+
+function findAuthInvokerShorthands(root: SgNode): SgNode[] {
+  return root
+    .findAll({
+      rule: {
+        kind: "shorthand_property_identifier",
+        regex: "^authInvoker$",
+      },
+    })
+    .filter(isSupportedInvokerOptionKey);
+}
+
+function findAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
+  return root
+    .findAll({
+      rule: {
+        kind: "property_identifier",
+        regex: "^authInvoker$",
+      },
+    })
+    .filter(isSupportedInvokerOptionKey);
+}
+
+function findQuotedAuthInvokerPropertyKeys(root: SgNode): SgNode[] {
+  return root
+    .findAll({
+      rule: {
+        kind: "string",
+        regex: "^['\"]authInvoker['\"]$",
+      },
+    })
+    .filter(isSupportedInvokerOptionKey);
+}
+
+function renameQuotedKey(node: SgNode): string {
+  const quote = node.text().startsWith("'") ? "'" : '"';
+  return `${quote}invoker${quote}`;
+}
+
 /**
- * Replace `auth.invoker("name")` calls with the bare `"name"` string literal.
+ * Replace `auth.invoker("name")` calls with the bare `"name"` string literal
+ * and rename `authInvoker:` option keys to `invoker:`.
  * If no other `auth` references remain after the rewrite, drop the `auth`
  * specifier (or the entire import line when `auth` was its sole specifier).
  *
- * `auth.invoker()` was deprecated in favor of passing the machine user name
- * directly; carrying the `auth` import only for `.invoker()` would otherwise
- * pull config-layer (Node-only) modules into runtime bundles.
+ * `auth.invoker()` was removed in favor of passing the machine user name
+ * directly to `invoker`; carrying the `auth` import only for `.invoker()`
+ * would otherwise pull config-layer modules into runtime bundles.
  * @param source - File contents
  * @param filePath - Absolute path to the file (kept for the runner signature)
  * @returns Transformed source or null when nothing matched.
@@ -157,25 +276,30 @@ export default function transform(source: string, _filePath: string): string | n
   const lang = source.includes("</") || source.includes("/>") ? Lang.Tsx : Lang.TypeScript;
   const root = parse(lang, source).root();
 
-  const calls = findInvokerCalls(root);
-  if (calls.length === 0) return null;
-
+  const calls = findInvokerCalls(root).filter((c) => isSupportedInvokerValueCall(c.callNode));
   const edits: Edit[] = calls.map((c) => c.callNode.replace(c.argText));
-
-  const remaining = countRemainingAuthRefs(
-    root,
-    calls.map((c) => c.range),
+  edits.push(...findAuthInvokerPropertyKeys(root).map((node) => node.replace("invoker")));
+  edits.push(
+    ...findQuotedAuthInvokerPropertyKeys(root).map((node) => node.replace(renameQuotedKey(node))),
   );
-  if (remaining === 0) {
+  edits.push(
+    ...findAuthInvokerShorthands(root).map((node) => node.replace("invoker: authInvoker")),
+  );
+
+  if (
+    calls.length > 0 &&
+    countRemainingAuthRefs(
+      root,
+      calls.map((c) => c.range),
+    ) === 0
+  ) {
     for (const importStmt of findAuthImports(root)) {
       const edit = buildAuthImportRemovalEdit(source, importStmt);
       if (edit) edits.push(edit);
     }
   }
 
-  if (edits.length === 0) return null;
-
-  let result = root.commitEdits(edits);
+  let result = edits.length === 0 ? source : root.commitEdits(edits);
 
   // Normalize: drop the leading blank line that an import removal at the top
   // of the file leaves behind, and collapse runs of 3+ newlines.

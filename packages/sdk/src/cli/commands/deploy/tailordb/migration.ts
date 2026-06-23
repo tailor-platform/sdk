@@ -34,7 +34,7 @@ import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 export interface MigrationExecutionOptions {
   client: OperatorClient;
   workspaceId: string;
-  authInvoker: AuthInvoker;
+  invoker: AuthInvoker;
   env: Record<string, string | number | boolean>;
 }
 
@@ -174,7 +174,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, authInvoker, env } = options;
+  const { client, workspaceId, invoker, env } = options;
 
   const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
 
@@ -192,7 +192,7 @@ async function executeSingleMigration(
     workspaceId,
     name: migrationName,
     code: bundleResult.bundledCode,
-    invoker: authInvoker,
+    invoker,
   });
 
   return {
@@ -271,8 +271,7 @@ export async function executeMigrations(
       );
     }
 
-    // Create authInvoker for this namespace
-    const authInvoker = create(AuthInvokerSchema, {
+    const invoker = create(AuthInvokerSchema, {
       namespace: context.authNamespace,
       machineUserName,
     });
@@ -280,7 +279,7 @@ export async function executeMigrations(
     const options: MigrationExecutionOptions = {
       client: context.client,
       workspaceId: context.workspaceId,
-      authInvoker,
+      invoker,
       env: context.env,
     };
 

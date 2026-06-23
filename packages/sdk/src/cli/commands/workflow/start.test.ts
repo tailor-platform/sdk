@@ -73,7 +73,7 @@ describe("startWorkflow runtime overload", () => {
           body: () => undefined,
         },
       },
-      authInvoker: "typed-user",
+      invoker: "typed-user",
     } as never);
 
     expect(loadConfig).toHaveBeenCalledTimes(1);
@@ -95,7 +95,7 @@ describe("startWorkflow runtime overload", () => {
     );
   });
 
-  test("typed shape resolves auth namespace from config and sends proto authInvoker", async () => {
+  test("typed shape resolves auth namespace from config and sends proto credentials", async () => {
     await startWorkflow({
       workflow: {
         name: "typed-workflow",
@@ -103,7 +103,7 @@ describe("startWorkflow runtime overload", () => {
           body: () => undefined,
         },
       },
-      authInvoker: "typed-user",
+      invoker: "typed-user",
     });
 
     expect(loadConfig).toHaveBeenCalledTimes(1);
@@ -140,7 +140,7 @@ describe("startWorkflow runtime overload", () => {
           body: () => undefined,
         },
       },
-      authInvoker: "typed-user",
+      invoker: "typed-user",
     });
 
     expect(testStartWorkflowMock).toHaveBeenCalledWith(
@@ -167,7 +167,7 @@ describe("startWorkflow runtime overload", () => {
             body: () => undefined,
           },
         },
-        authInvoker: "typed-user",
+        invoker: "typed-user",
       }),
     ).rejects.toThrow("my-app does not have an auth configuration");
     expect(testStartWorkflowMock).not.toHaveBeenCalled();

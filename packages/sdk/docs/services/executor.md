@@ -219,7 +219,7 @@ createExecutor({
 });
 ```
 
-Executor callbacks receive the trigger args, including `env` from `defineConfig({ env })`. `function` and `jobFunction` `body` args also include an `invoker` field: the principal running this function, overridden by `authInvoker` when set; `null` for anonymous calls. Other operation kinds (`graphql`, `webhook`, `workflow`) receive `env` through their callback args but do not pass `invoker` into those callbacks.
+Executor callbacks receive the trigger args, including `env` from `defineConfig({ env })`. `function` and `jobFunction` `body` args also include an `invoker` field: the principal running this function, or the machine user configured through the operation `invoker` option; `null` for anonymous calls. Other operation kinds (`graphql`, `webhook`, `workflow`) receive `env` through their callback args but do not pass `invoker` into those callbacks.
 
 ### Job Function Operation
 
@@ -331,7 +331,7 @@ createExecutor({
 
 ### Authentication for Operations
 
-GraphQL and Workflow operations can specify an `authInvoker` to execute with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names defined in your auth config:
+GraphQL and Workflow operations can specify an `invoker` to execute with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names defined in your auth config:
 
 ```typescript
 import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
@@ -342,7 +342,7 @@ export default createExecutor({
   operation: {
     kind: "graphql",
     query: `mutation { cleanupOldRecords { count } }`,
-    authInvoker: "batch-processor",
+    invoker: "batch-processor",
   },
 });
 ```

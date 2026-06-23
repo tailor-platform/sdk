@@ -849,7 +849,7 @@ describe("user-profile-sync workflow", () => {
   test("executes end to end", { timeout: 180_000 }, async () => {
     const { executionId, wait } = await startWorkflow({
       workflow: userProfileSync,
-      authInvoker: "admin",
+      invoker: "admin",
       arg: {
         name: "workflow-test",
         email: `wf-${randomUUID()}@example.com`,

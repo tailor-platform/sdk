@@ -47,8 +47,8 @@ import type {
   UserQuery as IdpUserQuery,
 } from "./idp";
 import type {
-  AuthInvoker as WorkflowAuthInvoker,
-  TriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
+  Invoker as WorkflowInvoker,
+  PlatformTriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
 } from "./workflow";
 
 declare global {
@@ -79,7 +79,7 @@ declare global {
     }
 
     namespace workflow {
-      type AuthInvoker = WorkflowAuthInvoker;
+      type Invoker = WorkflowInvoker;
       type TriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
     }
 
