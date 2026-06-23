@@ -125,8 +125,8 @@ importers:
   packages/create-sdk:
     dependencies:
       '@clack/prompts':
-        specifier: 1.5.1
-        version: 1.5.1
+        specifier: 1.6.0
+        version: 1.6.0
       execa:
         specifier: 9.6.1
         version: 9.6.1
@@ -138,7 +138,7 @@ importers:
         version: 2.3.1
       politty:
         specifier: 0.6.0
-        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        version: 0.6.0(@clack/prompts@1.6.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -490,7 +490,7 @@ importers:
         version: 2.3.1
       politty:
         specifier: 0.6.0
-        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        version: 0.6.0(@clack/prompts@1.6.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       rolldown:
         specifier: 1.1.1
         version: 1.1.1
@@ -596,7 +596,7 @@ importers:
         version: 2.3.1
       politty:
         specifier: 0.6.0
-        version: 0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        version: 0.6.0(@clack/prompts@1.6.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       semver:
         specifier: 7.8.5
         version: 7.8.5
@@ -840,12 +840,12 @@ packages:
     resolution: {integrity: sha512-EKZIKPqHnK1GKljvOUgyNoEsNJ06uDd1d+MGzgjMeMbeIk3Y4a9oeFw7pqEFe80HfxHTVn3tyYYVVD0ImaR1yw==}
     engines: {node: ^22.11 || ^24 || >=26}
 
-  '@clack/core@1.4.1':
-    resolution: {integrity: sha512-FILJa1gGKEFTGZAJE9RpVhrjKz3c3h4ar60dSv6cGuDqufQ84YEIS3GAGvZiN+H6yaLbbvTFNejjCC4tXpZEuw==}
+  '@clack/core@1.4.2':
+    resolution: {integrity: sha512-0Ty/1Gfm+Kb07sXcuESjyKfwEhSy4Ns1AgeEisHb/bDY5fWme0tTeTkU14T1Gmcs17YIjB/teiDe4uaCghbYqQ==}
     engines: {node: '>= 20.12.0'}
 
-  '@clack/prompts@1.5.1':
-    resolution: {integrity: sha512-zccHj2z2oCCO4yrDiRSlFOxWerGqRiysP7a5jPK6uoI9URKAquwY42Dd/iUP8JWHxEzdRe4TlbvZCo8z1/mhrw==}
+  '@clack/prompts@1.6.0':
+    resolution: {integrity: sha512-EYlRokl8szrP9Z25qT5aepMdBjzBvHF9ZEhzIiUBc9guz/T31EqRgvD0QSgZcpE93xiwrr+OkB4nz0BZyF6fSA==}
     engines: {node: '>= 20.12.0'}
 
   '@connectrpc/connect-node@2.1.2':
@@ -3888,7 +3888,7 @@ snapshots:
       '@changesets/should-skip-package': 1.0.0-next.5
       '@changesets/types': 7.0.0-next.5
       '@changesets/write': 1.0.0-next.5
-      '@clack/prompts': 1.5.1
+      '@clack/prompts': 1.6.0
       '@manypkg/get-packages': 3.1.0
       cac: 7.0.0
       import-meta-resolve: 4.2.0
@@ -3957,14 +3957,14 @@ snapshots:
       '@changesets/types': 7.0.0-next.5
       human-id: 4.2.0
 
-  '@clack/core@1.4.1':
+  '@clack/core@1.4.2':
     dependencies:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@clack/prompts@1.5.1':
+  '@clack/prompts@1.6.0':
     dependencies:
-      '@clack/core': 1.4.1
+      '@clack/core': 1.4.2
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
@@ -5875,12 +5875,12 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.6.0(@clack/prompts@1.5.1)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3):
+  politty@0.6.0(@clack/prompts@1.6.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3):
     dependencies:
       string-width: 8.2.1
       zod: 4.4.3
     optionalDependencies:
-      '@clack/prompts': 1.5.1
+      '@clack/prompts': 1.6.0
       '@inquirer/prompts': 8.5.2(@types/node@24.13.2)
 
   postcss-values-parser@6.0.2(postcss@8.5.15):
