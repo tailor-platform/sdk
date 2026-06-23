@@ -84,19 +84,23 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
   AuthAccessTokenTriggerSchema,
 ]);
 
-export const FunctionOperationSchema = z.object({
-  kind: z.enum(["function", "jobFunction"]),
-  body: functionSchema.describe("Function implementation"),
-  authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the function execution"),
-});
+export const FunctionOperationSchema = z
+  .object({
+    kind: z.enum(["function", "jobFunction"]),
+    body: functionSchema.describe("Function implementation"),
+    invoker: AuthInvokerSchema.optional().describe("Invoker for the function execution"),
+  })
+  .strict();
 
-export const GqlOperationSchema = z.object({
-  kind: z.literal("graphql"),
-  appName: z.string().optional().describe("Target application name for the GraphQL query"),
-  query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
-  variables: functionSchema.optional().describe("Function to compute GraphQL variables"),
-  authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the GraphQL execution"),
-});
+export const GqlOperationSchema = z
+  .object({
+    kind: z.literal("graphql"),
+    appName: z.string().optional().describe("Target application name for the GraphQL query"),
+    query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
+    variables: functionSchema.optional().describe("Function to compute GraphQL variables"),
+    invoker: AuthInvokerSchema.optional().describe("Invoker for the GraphQL execution"),
+  })
+  .strict();
 
 export const WebhookOperationSchema = z.object({
   kind: z.literal("webhook"),
@@ -123,15 +127,17 @@ export const WorkflowOperationSchema = z.preprocess(
     const { workflow, ...rest } = val as { workflow: { name: string } };
     return { ...rest, workflowName: workflow.name };
   },
-  z.object({
-    kind: z.literal("workflow"),
-    workflowName: z.string().describe("Name of the workflow to execute"),
-    args: z
-      .union([z.record(z.string(), z.unknown()), functionSchema])
-      .optional()
-      .describe("Arguments to pass to the workflow"),
-    authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the workflow execution"),
-  }),
+  z
+    .object({
+      kind: z.literal("workflow"),
+      workflowName: z.string().describe("Name of the workflow to execute"),
+      args: z
+        .union([z.record(z.string(), z.unknown()), functionSchema])
+        .optional()
+        .describe("Arguments to pass to the workflow"),
+      invoker: AuthInvokerSchema.optional().describe("Invoker for the workflow execution"),
+    })
+    .strict(),
 );
 
 const OperationSchema = z.union([

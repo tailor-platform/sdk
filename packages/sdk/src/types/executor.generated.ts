@@ -103,8 +103,8 @@ export type FunctionOperation = {
   kind: "function" | "jobFunction";
   /** Function implementation */
   body: Function;
-  /** Auth invoker for the function execution */
-  authInvoker?:
+  /** Invoker for the function execution */
+  invoker?:
     | string
     | {
         namespace: string;
@@ -121,8 +121,8 @@ export type GqlOperationInput = {
   appName?: string | undefined;
   /** Function to compute GraphQL variables */
   variables?: Function | undefined;
-  /** Auth invoker for the GraphQL execution */
-  authInvoker?:
+  /** Invoker for the GraphQL execution */
+  invoker?:
     | string
     | {
         namespace: string;
@@ -138,8 +138,8 @@ export type GqlOperation = {
   appName?: string | undefined;
   /** Function to compute GraphQL variables */
   variables?: Function | undefined;
-  /** Auth invoker for the GraphQL execution */
-  authInvoker?:
+  /** Invoker for the GraphQL execution */
+  invoker?:
     | string
     | {
         namespace: string;
@@ -179,7 +179,7 @@ export type WorkflowOperation = {
         [x: string]: unknown;
       }
     | undefined;
-  authInvoker?:
+  invoker?:
     | string
     | {
         namespace: string;
@@ -303,7 +303,7 @@ export type Executor = {
               [x: string]: unknown;
             }
           | undefined;
-        authInvoker?:
+        invoker?:
           | string
           | {
               namespace: string;
@@ -314,7 +314,7 @@ export type Executor = {
     | {
         kind: "function" | "jobFunction";
         body: Function;
-        authInvoker?:
+        invoker?:
           | string
           | {
               namespace: string;
@@ -327,7 +327,7 @@ export type Executor = {
         query: string;
         appName?: string | undefined;
         variables?: Function | undefined;
-        authInvoker?:
+        invoker?:
           | string
           | {
               namespace: string;

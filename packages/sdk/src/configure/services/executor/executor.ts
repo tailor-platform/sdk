@@ -30,7 +30,7 @@ type Executor<T extends Trigger<unknown>, O> = O extends {
         kind: "workflow";
         workflow: W;
         args?: WorkflowInput<W> | ((args: TriggerArgs<T>) => WorkflowInput<W>);
-        authInvoker?: MachineUserName;
+        invoker?: MachineUserName;
       };
     }
   : ExecutorBase<T> & {

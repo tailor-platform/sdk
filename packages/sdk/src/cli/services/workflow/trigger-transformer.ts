@@ -18,7 +18,7 @@ import type {
   ImportDefaultSpecifier,
 } from "@oxc-project/types";
 
-interface AuthInvokerInfo {
+interface InvokerInfo {
   isShorthand: boolean;
   valueText: string;
 }
@@ -28,15 +28,14 @@ interface ExtendedTriggerCall {
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
-  // For workflow triggers, extracted authInvoker info from config
-  authInvoker?: AuthInvokerInfo;
+  invoker?: InvokerInfo;
 }
 
 /**
  * Name of the injected runtime normalizer helper. Chosen to be unique enough
  * to avoid collisions with user code.
  */
-const NORMALIZER_IDENTIFIER = "__tailor_normalizeAuthInvoker";
+const NORMALIZER_IDENTIFIER = "__tailor_normalizeInvoker";
 
 /**
  * Build the source text of the injected normalizer helper.
@@ -52,16 +51,13 @@ function buildNormalizerHelperSource(authNamespace: string): string {
 }
 
 /**
- * Extract authInvoker info from a config object expression
- * Returns the authInvoker value text and whether it's a shorthand property
+ * Extract invoker info from a config object expression.
+ * Returns the invoker value text and whether it's a shorthand property.
  * @param configArg - Config argument node
  * @param sourceText - Source code text
- * @returns Extracted authInvoker info, if any
+ * @returns Extracted invoker info, if any
  */
-function extractAuthInvokerInfo(
-  configArg: unknown,
-  sourceText: string,
-): AuthInvokerInfo | undefined {
+function extractInvokerInfo(configArg: unknown, sourceText: string): InvokerInfo | undefined {
   if (!configArg || typeof configArg !== "object") return undefined;
 
   const arg = configArg as { type?: string };
@@ -69,7 +65,6 @@ function extractAuthInvokerInfo(
 
   const objExpr = configArg as ObjectExpression;
 
-  // Find authInvoker property
   for (const prop of objExpr.properties) {
     if (prop.type !== "Property") continue;
 
@@ -81,9 +76,9 @@ function extractAuthInvokerInfo(
           ? (objProp.key as { value?: string }).value
           : null;
 
-    if (keyName === "authInvoker") {
+    if (keyName === "invoker") {
       if (objProp.shorthand) {
-        return { isShorthand: true, valueText: "authInvoker" };
+        return { isShorthand: true, valueText: "invoker" };
       }
       // Extract value text directly from source
       const valueText = sourceText.slice(objProp.value.start, objProp.value.end);
@@ -320,14 +315,14 @@ function detectExtendedTriggerCalls(
 
             if (isWorkflow && argCount >= 2) {
               const secondArg = callExpr.arguments[1];
-              const authInvoker = extractAuthInvokerInfo(secondArg, sourceText);
-              if (authInvoker) {
+              const invoker = extractInvokerInfo(secondArg, sourceText);
+              if (invoker) {
                 calls.push({
                   kind: "workflow",
                   identifierName,
                   callRange: { start: callExpr.start, end: callExpr.end },
                   argsText,
-                  authInvoker,
+                  invoker,
                 });
               }
             } else if (isJob) {
@@ -365,7 +360,7 @@ function detectExtendedTriggerCalls(
  * @param jobNameMap - Map from variable name to job name
  * @param workflowFileMap - Map from file path (without extension) to workflow name for default exports
  * @param currentFilePath - Path of the current file being transformed (for resolving relative imports)
- * @param authNamespace - Auth service namespace used to expand string-literal `authInvoker` to object form
+ * @param authNamespace - Auth service namespace used to expand string-literal `invoker` to object form
  * @returns Transformed source code with trigger calls rewritten
  */
 export function transformFunctionTriggers(
@@ -417,7 +412,7 @@ export function transformFunctionTriggers(
   const triggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
 
   const replacements: Replacement[] = [];
-  // Whether any workflow trigger authInvoker was wrapped with the runtime
+  // Whether any workflow trigger invoker was wrapped with the runtime
   // normalizer. Used to decide whether to inject the helper at the top.
   let needsNormalizerHelper = false;
 
@@ -425,27 +420,26 @@ export function transformFunctionTriggers(
   const transformedCallsPerIdentifier = new Map<string, number>();
 
   for (const call of triggerCalls) {
-    if (call.kind === "workflow" && call.authInvoker) {
+    if (call.kind === "workflow" && call.invoker) {
       // Workflow trigger - get workflow name from map
       const workflowName = localWorkflowNameMap.get(call.identifierName);
       if (workflowName) {
-        // Resolve the source expression for authInvoker.
-        const rawExpr = call.authInvoker.isShorthand ? "authInvoker" : call.authInvoker.valueText;
+        const rawExpr = call.invoker.isShorthand ? "invoker" : call.invoker.valueText;
         // Wrap with the runtime normalizer so string expressions become the
         // object form the platform RPC expects. The normalizer is injected
         // once at the top of the file.
         // When no auth service is configured we can't expand a string, so
         // we pass through unchanged (platform will reject a string with a
         // clear error).
-        let authInvokerExpr: string;
+        let invokerExpr: string;
         if (authNamespace) {
-          authInvokerExpr = `${NORMALIZER_IDENTIFIER}(${rawExpr})`;
+          invokerExpr = `${NORMALIZER_IDENTIFIER}(${rawExpr})`;
           needsNormalizerHelper = true;
         } else {
-          authInvokerExpr = rawExpr;
+          invokerExpr = rawExpr;
         }
         // Transform to tailor.workflow.triggerWorkflow
-        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
+        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${invokerExpr} })`;
         replacements.push({
           start: call.callRange.start,
           end: call.callRange.end,

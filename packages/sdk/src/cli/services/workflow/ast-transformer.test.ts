@@ -760,7 +760,7 @@ describe("AST Transformer - transformFunctionTriggers", () => {
       const source = `
 const workflowRunId = await orderWorkflow.trigger(
   { orderId: "123", customerId: "456" },
-  { authInvoker: "admin" }
+  { invoker: "admin" }
 );
 `;
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
@@ -773,10 +773,10 @@ const workflowRunId = await orderWorkflow.trigger(
       expect(result).toContain('{ authInvoker: "admin" }');
     });
 
-    test("transforms workflow.trigger() with shorthand authInvoker", () => {
+    test("transforms workflow.trigger() with shorthand invoker", () => {
       const source = `
-const authInvoker = "admin";
-const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
+const invoker = "admin";
+const result = await myWorkflow.trigger({ id: 1 }, { invoker });
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
@@ -784,12 +784,12 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow"');
-      expect(result).toContain("{ authInvoker: authInvoker }");
+      expect(result).toContain("{ authInvoker: invoker }");
     });
 
-    test("wraps a string-literal authInvoker with the runtime normalizer when authNamespace is provided", () => {
+    test("wraps a string-literal invoker with the runtime normalizer when authNamespace is provided", () => {
       const source = `
-const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
+const result = await myWorkflow.trigger({ id: 1 }, { invoker: "kiosk" });
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
@@ -804,17 +804,17 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
       );
 
       expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow"');
-      expect(result).toContain('{ authInvoker: __tailor_normalizeAuthInvoker("kiosk") }');
+      expect(result).toContain('{ authInvoker: __tailor_normalizeInvoker("kiosk") }');
       // Helper injected at the top of the file with the namespace baked in
       expect(result).toContain(
-        'const __tailor_normalizeAuthInvoker = (machineUserName) => ({ namespace: "my-auth", machineUserName });',
+        'const __tailor_normalizeInvoker = (machineUserName) => ({ namespace: "my-auth", machineUserName });',
       );
     });
 
-    test("wraps a variable-reference authInvoker with the runtime normalizer", () => {
+    test("wraps a variable-reference invoker with the runtime normalizer", () => {
       const source = `
 const invoker = "kiosk";
-const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: invoker });
+const result = await myWorkflow.trigger({ id: 1 }, { invoker });
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
@@ -828,13 +828,13 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: invoker });
         "my-auth",
       );
 
-      expect(result).toContain("{ authInvoker: __tailor_normalizeAuthInvoker(invoker) }");
+      expect(result).toContain("{ authInvoker: __tailor_normalizeInvoker(invoker) }");
     });
 
-    test("wraps a shorthand authInvoker with the runtime normalizer", () => {
+    test("wraps a shorthand invoker with the runtime normalizer", () => {
       const source = `
-const authInvoker = "kiosk";
-const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
+const invoker = "kiosk";
+const result = await myWorkflow.trigger({ id: 1 }, { invoker });
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
@@ -848,13 +848,13 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
         "my-auth",
       );
 
-      expect(result).toContain("{ authInvoker: __tailor_normalizeAuthInvoker(authInvoker) }");
+      expect(result).toContain("{ authInvoker: __tailor_normalizeInvoker(invoker) }");
     });
 
     test("injects the normalizer helper only once per file even for multiple trigger calls", () => {
       const source = `
-await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
-await myWorkflow.trigger({ id: 2 }, { authInvoker: "batch" });
+await myWorkflow.trigger({ id: 1 }, { invoker: "kiosk" });
+await myWorkflow.trigger({ id: 2 }, { invoker: "batch" });
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
@@ -868,13 +868,13 @@ await myWorkflow.trigger({ id: 2 }, { authInvoker: "batch" });
         "my-auth",
       );
 
-      const matches = result.match(/const __tailor_normalizeAuthInvoker =/g);
+      const matches = result.match(/const __tailor_normalizeInvoker =/g);
       expect(matches).toHaveLength(1);
     });
 
-    test("keeps authInvoker unchanged and omits the helper when authNamespace is not provided", () => {
+    test("keeps invoker unchanged and omits the helper when authNamespace is not provided", () => {
       const source = `
-const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
+const result = await myWorkflow.trigger({ id: 1 }, { invoker: "kiosk" });
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
@@ -882,7 +882,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('{ authInvoker: "kiosk" }');
-      expect(result).not.toContain("__tailor_normalizeAuthInvoker");
+      expect(result).not.toContain("__tailor_normalizeInvoker");
     });
   });
 
@@ -936,7 +936,7 @@ const event = button.trigger("click");
     test("only transforms trigger calls for known workflows and jobs", () => {
       const source = `
 // Known workflow - should be transformed
-const wfResult = await orderWorkflow.trigger({ id: 1 }, { authInvoker: "admin" });
+const wfResult = await orderWorkflow.trigger({ id: 1 }, { invoker: "admin" });
 
 // Known job - should be transformed
 const jobResult = await fetchData.trigger({ id: 2 });
@@ -983,7 +983,7 @@ async function processOrder(orderId: string) {
   // Then trigger a workflow for processing
   const workflowRunId = await orderWorkflow.trigger(
     { orderId, data },
-    { authInvoker: "system" }
+    { invoker: "system" }
   );
 
   return { data, workflowRunId };
@@ -1034,7 +1034,7 @@ const notification = await sendNotification.trigger({ message: "Hello" });
 
     test("does not wrap workflow.trigger() calls (already async)", () => {
       const source = `
-const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoker });
+const executionId = await orderWorkflow.trigger({ orderId: "123" }, { invoker });
 `;
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map<string, string>();
@@ -1126,7 +1126,7 @@ export const job = createWorkflowJob({
   body: async () => {
     const result = await simpleWorkflow.trigger(
       { input: 0 },
-      { authInvoker: "admin" }
+      { invoker: "admin" }
     );
     return result;
   },
@@ -1155,8 +1155,8 @@ import simpleWorkflow from "./simple";
 export const job = createWorkflowJob({
   name: "my-job",
   body: async () => {
-    await simpleWorkflow.trigger({ input: 1 }, { authInvoker: "admin" });
-    await simpleWorkflow.trigger({ input: 2 }, { authInvoker: "admin" });
+    await simpleWorkflow.trigger({ input: 1 }, { invoker: "admin" });
+    await simpleWorkflow.trigger({ input: 2 }, { invoker: "admin" });
   },
 });
 `;
@@ -1184,7 +1184,7 @@ console.log(simpleWorkflow);
 export const job = createWorkflowJob({
   name: "my-job",
   body: async () => {
-    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    await simpleWorkflow.trigger({ input: 0 }, { invoker: "admin" });
   },
 });
 `;
@@ -1237,8 +1237,8 @@ import workflowB from "./workflow-b";
 export const job = createWorkflowJob({
   name: "my-job",
   body: async () => {
-    await workflowA.trigger({ input: 1 }, { authInvoker: "admin" });
-    await workflowB.trigger({ input: 2 }, { authInvoker: "admin" });
+    await workflowA.trigger({ input: 1 }, { invoker: "admin" });
+    await workflowB.trigger({ input: 2 }, { invoker: "admin" });
   },
 });
 `;
@@ -1271,7 +1271,7 @@ export const job = createWorkflowJob({
   name: "my-job",
   body: async () => {
     someHelper();
-    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    await simpleWorkflow.trigger({ input: 0 }, { invoker: "admin" });
   },
 });
 `;
@@ -1300,7 +1300,7 @@ import simpleWorkflow from "./simple";
 export const job = createWorkflowJob({
   name: "my-job",
   body: async () => {
-    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    await simpleWorkflow.trigger({ input: 0 }, { invoker: "admin" });
     function helper(simpleWorkflow) {
       console.log(simpleWorkflow);
     }
@@ -1330,7 +1330,7 @@ import simpleWorkflow from "./simple";
 export const job = createWorkflowJob({
   name: "my-job",
   body: async () => {
-    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    await simpleWorkflow.trigger({ input: 0 }, { invoker: "admin" });
     const config = { simpleWorkflow: "some-value" };
     return config;
   },
@@ -1398,7 +1398,7 @@ export const job = createWorkflowJob({
   body: async () => {
     const result = await simpleWorkflow.trigger(
       { input: 0 },
-      { authInvoker: "admin" }
+      { invoker: "admin" }
     );
     return result;
   },

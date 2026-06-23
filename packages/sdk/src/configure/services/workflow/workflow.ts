@@ -23,7 +23,7 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
   concurrencyPolicy?: ConcurrencyPolicy;
   trigger: (
     args: Parameters<Job["trigger"]>[0],
-    options?: { authInvoker: MachineUserName },
+    options?: { invoker: MachineUserName },
   ) => Promise<string>;
 }
 

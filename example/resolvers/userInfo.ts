@@ -40,5 +40,5 @@ export default createResolver({
         .description("Function invoker"),
     })
     .description("User and invoker information"),
-  authInvoker: "manager-machine-user",
+  invoker: "manager-machine-user",
 });

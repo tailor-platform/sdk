@@ -1365,7 +1365,7 @@ describe("workflowTarget", () => {
     });
   });
 
-  test("can specify authInvoker", () => {
+  test("can specify invoker", () => {
     createExecutor({
       name: "test",
       trigger: scheduleTrigger({ cron: "0 12 * * *" }),
@@ -1373,7 +1373,7 @@ describe("workflowTarget", () => {
         kind: "workflow",
         workflow: testWorkflow,
         args: { orderId: "test-id" },
-        authInvoker: "admin",
+        invoker: "admin",
       },
     });
   });

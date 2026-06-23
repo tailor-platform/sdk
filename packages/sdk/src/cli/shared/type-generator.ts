@@ -41,7 +41,7 @@ export function extractAttributesFromConfig(config: AppConfig): ExtractedAttribu
  * @param attributeMap - Attribute map configuration
  * @param attributeList - Attribute list configuration
  * @param env - Environment configuration
- * @param machineUserNames - Registered machine user names (used to narrow `authInvoker` strings)
+ * @param machineUserNames - Registered machine user names (used to narrow `invoker` strings)
  * @param idpNames - Registered IdP names (used to narrow `idpUser*Trigger({ idp })` strings)
  * @returns Generated type definition source
  */
