@@ -32,9 +32,9 @@ async function install() {
   }
 
   try {
+    register(new URL("./dist/cli/ts-hook.mjs", import.meta.url), import.meta.url);
     const configDir = dirname(configPath);
     process.chdir(configDir);
-    register("tsx", import.meta.url, { data: {} });
 
     const { generateUserTypes, loadConfig } = await import(
       pathToFileURL(resolve(__dirname, "dist", "cli", "lib.mjs")).href
