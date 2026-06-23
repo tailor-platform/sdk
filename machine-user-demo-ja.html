@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Show &amp; Tell — Profiles &amp; Machine Users</title>
+    <title>Show &amp; Tell — プロファイルとマシンユーザー</title>
     <style>
       :root {
         --ground: #0c1118;
@@ -105,7 +105,7 @@
         margin: 0;
       }
 
-      /* ── Section heads ── */
+      /* ── Section heads (terminal separator style) ── */
       .sec {
         font-family: ui-monospace, "SF Mono", Menlo, monospace;
         font-size: 0.72rem;
@@ -389,12 +389,12 @@
     <div class="hero">
       <div class="hero-inner">
         <div class="hero-eyebrow">Tailor Platform SDK — Show &amp; Tell</div>
-        <h1>Profiles &amp;<br />Machine Users</h1>
+        <h1>プロファイルと<br />マシンユーザー</h1>
         <p class="hero-lead">
-          We start with "what is a profile?" and work through the
-          <code>.envrc</code> combo, then cover the main act: a read-only profile combined with a
-          pinned read-only machine user, so a local AI agent or CI pipeline can't accidentally mutate
-          staging. Every command has a <code>copy</code> button.
+          「プロファイルとは何か」から始め、read-only プロファイル +
+          read-only マシンユーザーの組み合わせで — ローカルの AI エージェントや CI が
+          ステージング環境を誤って書き換えない仕組みをライブデモで確認します。コマンドには
+          <code>copy</code> ボタン付き。
         </p>
       </div>
     </div>
@@ -402,120 +402,110 @@
     <!-- ═══════════════════════════════════════════════════ PART 1 -->
     <div class="part-header">
       <div class="part-label">Part 1</div>
-      <h2>Feature Overview</h2>
+      <h2>機能説明</h2>
       <p>
-        Profiles, default machine users, override deny, and the .envrc combo — concepts before
-        commands.
+        プロファイル・デフォルトマシンユーザー・override deny・.envrc コンボの概念を整理します。
       </p>
     </div>
 
     <div class="wrap">
-      <!-- Profiles -->
-      <div class="sec">Profiles</div>
+      <!-- プロファイルとは -->
+      <div class="sec">プロファイルとは</div>
 
       <div class="concept">
-        <div class="concept-head">A profile is a named "user × workspace" pair</div>
+        <div class="concept-head">ユーザー × ワークスペースの「名前付きペア」</div>
         <div class="concept-body">
-          After authenticating with <code class="il">tailor-sdk login</code>, a profile holds which
-          workspace your commands talk to. No more repeating
-          <code class="il">-w &lt;workspace-id&gt;</code> on every command — switching is a single
-          <code class="il">--profile</code> flag away.
+          <code class="il">tailor-sdk login</code> で認証したあと、プロファイルが「どのワークスペースに対してコマンドを実行するか」を保持します。
+          <code class="il">-w &lt;workspace-id&gt;</code> を毎回指定する必要がなくなり、切り替えも
+          <code class="il">--profile</code> ひとつで完結します。
           <br /><br />
           <div class="cmd" style="margin-top: 0.3rem">
             <pre><code>tailor-sdk profile list</code></pre>
           </div>
           <div style="margin-top: 0.45rem">
-            → Shows a table of
-            <code class="il">name / user / workspaceId / permission / machineUser</code>.
+            → <code class="il">name / user / workspaceId / permission / machineUser</code> の表が表示されます。
           </div>
         </div>
       </div>
 
       <div class="concept">
-        <div class="concept-head">Activation precedence</div>
+        <div class="concept-head">活性化の優先順位</div>
         <div class="concept-body">
-          The active profile for a command resolves in this order:
+          コマンド実行時のプロファイルは以下の優先順位で解決されます：
           <table class="ptable">
             <tr>
-              <td>1st (wins)</td>
-              <td>--profile &lt;name&gt; flag</td>
+              <td>1 位（最優先）</td>
+              <td>--profile &lt;name&gt; フラグ</td>
             </tr>
             <tr>
-              <td>2nd</td>
-              <td>TAILOR_PLATFORM_PROFILE env var</td>
+              <td>2 位</td>
+              <td>TAILOR_PLATFORM_PROFILE 環境変数</td>
             </tr>
             <tr>
-              <td>3rd</td>
-              <td>Current login (state from tailor-sdk login)</td>
+              <td>3 位</td>
+              <td>カレントログイン（login 時の状態）</td>
             </tr>
           </table>
         </div>
       </div>
 
-      <!-- Machine users -->
-      <div class="sec">Machine users</div>
+      <!-- マシンユーザー -->
+      <div class="sec">マシンユーザー</div>
 
       <div class="concept">
-        <div class="concept-head">Default machine user — the fallback when none is specified</div>
+        <div class="concept-head">デフォルトマシンユーザー — 未指定時のフォールバック</div>
         <div class="concept-body">
-          Pass <code class="il">-m &lt;machine-user&gt;</code> when creating a profile to bake in a
-          default. When no machine user is given on the command, the profile's default is used
-          automatically.<br /><br />
-          Machine user resolution follows the same layered structure:
+          プロファイル作成時に <code class="il">-m &lt;machine-user&gt;</code> を渡すと、コマンドにマシンユーザーが指定されていない場合にそのプロファイルのデフォルトが自動で使われます。<br /><br />
+          マシンユーザーの解決優先順位も同じ構造です：
           <table class="ptable">
             <tr>
-              <td>1st (wins)</td>
-              <td>--machine-user &lt;name&gt; flag</td>
+              <td>1 位（最優先）</td>
+              <td>--machine-user &lt;name&gt; フラグ</td>
             </tr>
             <tr>
-              <td>2nd</td>
-              <td>TAILOR_PLATFORM_MACHINE_USER_NAME env var</td>
+              <td>2 位</td>
+              <td>TAILOR_PLATFORM_MACHINE_USER_NAME 環境変数</td>
             </tr>
             <tr>
-              <td>3rd</td>
-              <td>Profile default (set with -m at create time)</td>
+              <td>3 位</td>
+              <td>プロファイルのデフォルト（-m で指定したもの）</td>
             </tr>
           </table>
         </div>
       </div>
 
       <div class="concept">
-        <div class="concept-head">--machine-user-override deny — pin the identity</div>
+        <div class="concept-head">--machine-user-override deny — identity の固定</div>
         <div class="concept-body">
-          Set <code class="il">profile update --machine-user-override deny</code> and the profile
-          rejects any attempt to use a
-          <strong style="color: var(--text)">different machine user</strong> — whether it comes from
-          a CLI flag or an env var. The error is immediate:
-          <code class="il">PROFILE_MACHINE_USER_OVERRIDE_DENIED</code>.<br /><br />
-          <strong style="color: var(--text)">Passing the same value is fine</strong> — deny only
-          blocks switching to a different identity.<br /><br />
-          Applies to: <code class="il">query</code> / <code class="il">workflow start</code> /
-          <code class="il">function test-run</code> / <code class="il">machineuser token</code> and
-          all other application-data commands.
+          <code class="il">profile update --machine-user-override deny</code> を設定すると、CLI フラグ・環境変数のどちらからも
+          <strong style="color: var(--text)">別のマシンユーザーを指定できなくなります</strong>。
+          指定した瞬間に <code class="il">PROFILE_MACHINE_USER_OVERRIDE_DENIED</code> エラー。<br /><br />
+          <strong style="color: var(--text)">「同じ値を渡す」のは OK</strong> —
+          deny はあくまで「別の identity への切り替え」を禁止します。<br /><br />
+          適用範囲: <code class="il">query</code> / <code class="il">workflow start</code> /
+          <code class="il">function test-run</code> / <code class="il">machineuser token</code> などアプリケーションデータ操作コマンド全般。
         </div>
       </div>
 
       <!-- .envrc -->
-      <div class="sec">.envrc combo (direnv)</div>
+      <div class="sec">.envrc コンボ（direnv）</div>
 
       <div class="concept">
-        <div class="concept-head">Switch environments just by cd-ing</div>
+        <div class="concept-head">cd するだけで環境が切り替わる</div>
         <div class="concept-body">
-          Drop an <code class="il">.envrc</code> in each directory and direnv loads it the moment you
-          enter. Split dev / stg / prod into separate directories (worktrees) and
-          <strong style="color: var(--text)">directory = environment</strong> — accidental deploys to
-          the wrong workspace stop happening.
+          各ディレクトリに <code class="il">.envrc</code> を置き direnv でオートロード。dev /
+          stg / prod を別ディレクトリ（worktree）に分ければ、
+          <strong style="color: var(--text)">「間違ったワークスペースに deploy した」がなくなります</strong>。
           <div class="cmd" style="margin-top: 0.6rem">
-            <pre><code># .envrc (place it in the directory)
+            <pre><code># .envrc の例（ディレクトリに配置）
 export TAILOR_PLATFORM_PROFILE="show-and-tell"
 
-# default machine user can also be set via env var
+# デフォルトマシンユーザーも環境変数で指定できます
 export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
           </div>
           <div style="margin-top: 0.45rem; font-size: 0.82rem; color: var(--muted)">
-            Requires <code class="il">direnv allow</code> once. This show-and-tell worktree itself
-            uses <code class="il">TAILOR_PLATFORM_PROFILE="show-and-tell"</code> in its
-            <code class="il">.envrc</code> (live example).
+            初回のみ <code class="il">direnv allow</code> が必要です。この show-and-tell worktree 自体が
+            <code class="il">TAILOR_PLATFORM_PROFILE="show-and-tell"</code> を .envrc で設定しています（ライブ例）。
           </div>
         </div>
       </div>
@@ -531,8 +521,8 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
       <div class="part-label">Part 2 — Live Demo</div>
       <h2>Read-only profile + read-only machine user</h2>
       <p>
-        Two complementary guards for a workspace you want to inspect but never mutate — handy when
-        you point a local AI agent or MCP server at staging.
+        ステージング環境を「見るだけ」にする 2 層ガード。CLI ガード（プロファイルの permission）と
+        サーバーサイドガード（マシンユーザーの権限 + override deny）を重ねます。
       </p>
     </div>
 
@@ -545,17 +535,17 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
       </div>
 
       <div class="note">
-        ⚠ Run everything from <code class="il">example/</code>. Token/query commands pass
-        <code class="il">-c tailor.config.ts</code> to point at the config explicitly.
+        ⚠ <code class="il">example/</code> ディレクトリから実行してください。トークン/クエリコマンドは
+        <code class="il">-c tailor.config.ts</code> で設定を明示します。
       </div>
 
       <!-- 0. cd -->
-      <div class="sec">0. Working directory</div>
+      <div class="sec">0. 作業ディレクトリへ移動</div>
 
       <div class="step">
         <div class="step-head">
           <span class="badge">[00]</span>
-          <span class="step-title">Into the show-and-tell worktree's example/</span>
+          <span class="step-title">show-and-tell worktree の example/ へ移動</span>
         </div>
         <div class="cmd">
           <pre><code>cd /Users/toiroakr/workspace/sdk-bare/show-and-tell/example</code></pre>
@@ -563,35 +553,33 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
       </div>
 
       <!-- Layer 1 -->
-      <div class="sec ok">Layer 1 — CLI guard (read-only profile)</div>
+      <div class="sec ok">Layer 1 — CLI ガード（read-only プロファイル）</div>
 
       <div class="step ok">
         <div class="step-head">
           <span class="badge">[01]</span>
-          <span class="step-title">Create a profile with --permission read</span>
+          <span class="step-title">--permission read でプロファイルを作成</span>
         </div>
         <div class="step-desc">
-          With <code class="il">--permission read</code>, write commands (deploy, truncate, workflow
-          start, secret set, …) fail fast. Reads like
-          <code class="il">query</code> / <code class="il">*list</code> /
-          <code class="il">describe</code> still work.
+          <code class="il">--permission read</code> を付けると、deploy・truncate・workflow start・secret
+          set などの書き込み系コマンドが即座に失敗します。query / list / describe などの読み取りは通ります。
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile create stg-readonly -u akira_higuchi@tailor.tech -w 5d80e666-2f32-499f-b878-213229a558b8 --permission read</code></pre>
         </div>
-        <div class="expect ok">✓ Expect: created with permission = read</div>
+        <div class="expect ok">✓ 期待値: permission = read でプロファイルが作成される</div>
       </div>
 
       <div class="step err">
         <div class="step-head">
           <span class="badge">[02]</span>
-          <span class="step-title">A write command is blocked</span>
+          <span class="step-title">書き込みコマンドはブロックされる</span>
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk deploy -c tailor.config.ts --dry-run --profile stg-readonly</code></pre>
         </div>
         <div class="expect err">
-          ✗ Expect: Error [PROFILE_READONLY] — "blocks platform-state mutations (apply,
+          ✗ 期待値: Error [PROFILE_READONLY] — "blocks platform-state mutations (apply,
           create/update/delete, deploy, ...). Application-data operations remain available because
           their permissions are governed by the machine user."
         </div>
@@ -600,60 +588,58 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
       <div class="step ok">
         <div class="step-head">
           <span class="badge">[03]</span>
-          <span class="step-title">A read command still works</span>
+          <span class="step-title">読み取りコマンドは通る</span>
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk query --engine gql -q '{ users(first: 1) { edges { node { name } } } }' -m manager-machine-user -p stg-readonly -c tailor.config.ts</code></pre>
         </div>
-        <div class="expect ok">✓ Expect: users returned as JSON</div>
+        <div class="expect ok">✓ 期待値: users が JSON で返る</div>
       </div>
 
       <!-- Layer 2 -->
-      <div class="sec warn">Layer 2 — server-side guard (pin the machine user)</div>
+      <div class="sec warn">Layer 2 — サーバーサイドガード（machine user ピン留め）</div>
 
       <div class="step warn">
         <div class="step-head">
           <span class="badge">[04]</span>
-          <span class="step-title">Pin the machine user with override deny</span>
+          <span class="step-title">マシンユーザーを固定する（override deny）</span>
         </div>
         <div class="step-desc">
-          The profile stops the CLI; the machine user's own permissions stop the server. In real
-          staging, point this at a machine user whose TailorDB / IdP permissions only grant read.
-          <code class="il">deny</code> means a prompt injection or a buggy tool call can't swap to a
-          more privileged identity.
+          プロファイルが CLI の書き込みを止め、マシンユーザー自身のロール権限がサーバーを守ります。実際のステージング運用では、TailorDB /
+          IdP の権限が read-only なマシンユーザーをここに指定します。
+          <code class="il">deny</code> により、プロンプトインジェクションや誤ったツール呼び出しでより特権のあるマシンユーザーに切り替えようとしても即座にエラーになります。
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile update stg-readonly -m manager-machine-user --machine-user-override deny</code></pre>
         </div>
-        <div class="expect ok">✓ Expect: machineUserOverride = deny</div>
+        <div class="expect ok">✓ 期待値: machineUserOverride = deny に更新される</div>
       </div>
 
       <!-- Cleanup -->
-      <div class="sec">5. Cleanup</div>
+      <div class="sec">5. クリーンアップ</div>
 
       <div class="step">
         <div class="step-head">
           <span class="badge">[05]</span>
-          <span class="step-title">Delete the demo profile</span>
+          <span class="step-title">デモ用プロファイルを削除</span>
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile delete stg-readonly</code></pre>
         </div>
-        <div class="expect ok">✓ Expect: Profile "stg-readonly" deleted successfully.</div>
+        <div class="expect ok">✓ 期待値: Profile "stg-readonly" deleted successfully.</div>
       </div>
 
       <!-- AI / MCP -->
-      <div class="sec info">AI agents / MCP</div>
+      <div class="sec info">AI エージェント / MCP との組み合わせ</div>
 
       <div class="step info">
         <div class="step-head">
           <span class="badge">[info]</span>
-          <span class="step-title">Why this matters for AI agents and MCP servers</span>
+          <span class="step-title">なぜ AI 環境に重要か</span>
         </div>
         <div class="step-desc">
-          AI agents and MCP servers increasingly run queries against real environments (RAG,
-          analytics, debugging). Point your local agent at this read-only profile + read-only machine
-          user and:
+          AI エージェントや MCP サーバーはリアルな環境に対してクエリを発行するケースが増えています（RAG・分析・デバッグ）。この
+          read-only プロファイル + read-only マシンユーザーをローカルのエージェントに向けることで：
         </div>
         <ul
           style="
@@ -663,48 +649,44 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
             font-size: 0.87rem;
           "
         >
-          <li>it can read / inspect staging data, but cannot deploy, mutate, or delete;</li>
-          <li>a prompt injection or a buggy tool call can't escalate to writes;</li>
+          <li>ステージングデータの閲覧・検索はできるが、deploy・mutation・削除は不可</li>
+          <li>プロンプトインジェクションやバグったツール呼び出しが書き込みにエスカレートしない</li>
           <li>
-            <code class="il">--machine-user-override deny</code> means it can't swap to a more
-            privileged machine user.
+            <code class="il">--machine-user-override deny</code> により、より特権のあるユーザーへの切り替えも不可
           </li>
         </ul>
         <div class="step-desc" style="margin-top: 0.65rem">
-          One read-only identity, enforced on both the CLI and the platform — scoped to your own
-          local setup.
+          CLI とプラットフォームの両方で一つの read-only identity が強制される — 自分のローカル環境にスコープされた安全ガード。
         </div>
       </div>
 
       <!-- Wrap-up -->
       <div class="wrap-up">
-        <div class="wu-label">Talking points (wrap-up)</div>
+        <div class="wu-label">まとめ / Talking points</div>
         <ul>
           <li>
-            Precedence: <code class="il">--machine-user</code> &gt;
-            <code class="il">TAILOR_PLATFORM_MACHINE_USER_NAME</code> &gt; the profile's default.
+            マシンユーザー優先順位:
+            <code class="il">--machine-user</code> &gt;
+            <code class="il">TAILOR_PLATFORM_MACHINE_USER_NAME</code> &gt; プロファイルのデフォルト
           </li>
           <li>
-            <code class="il">--machine-user-override deny</code> forbids switching to a different
-            identity from both the CLI flag and the env var — enforced at config level.
+            <code class="il">--machine-user-override deny</code> は CLI・env var
+            の両方からの identity 切り替えを設定レベルで禁止する
           </li>
           <li>
-            Applies to application-data commands:
-            <code class="il">query</code> / <code class="il">workflow start</code> /
-            <code class="il">function test-run</code> /
-            <code class="il">machineuser token</code>.
+            対象コマンド: <code class="il">query</code> / <code class="il">workflow start</code> /
+            <code class="il">function test-run</code> / <code class="il">machineuser token</code>
           </li>
           <li>
-            Profiles are local per-developer config — a personal safety guard that covers
-            <em>your own</em> commands and any AI agent / MCP you run locally. Not an org-wide
-            policy others can't bypass.
+            プロファイルは開発者ローカルの設定。<em>自分の</em>操作と、ローカルで動かす AI
+            エージェント / MCP を guard するものであり、org 全体への強制ではない
           </li>
         </ul>
       </div>
     </div>
     <!-- /wrap -->
 
-    <footer>Show &amp; Tell demo runbook — generated for the show-and-tell worktree</footer>
+    <footer>Show &amp; Tell demo runbook — show-and-tell worktree 用（日本語版）</footer>
 
     <script>
       function copyToClipboard(text) {
