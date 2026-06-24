@@ -24,7 +24,7 @@ export type ChangeSet<
   readonly replaces: R[];
   readonly unchanged: Un[];
   isEmpty: () => boolean;
-  print: () => void;
+  print: (write?: (line: string) => void) => void;
 };
 
 export interface PlanSummary {
@@ -64,15 +64,15 @@ export function createChangeSet<
     replaces,
     unchanged,
     isEmpty,
-    print: () => {
+    print: (write: (line: string) => void = logger.log.bind(logger)) => {
       if (isEmpty()) {
         return;
       }
-      logger.log(styles.bold(`${title}:`));
+      write(styles.bold(`${title}:`));
       const printItem = (symbol: string, item: HasName) => {
-        logger.log(`  ${symbol} ${item.name}`);
+        write(`  ${symbol} ${item.name}`);
         for (const detail of item.details ?? []) {
-          logger.log(`    ${detail}`);
+          write(`    ${detail}`);
         }
       };
       creates.forEach((item) => printItem(symbols.create, item));

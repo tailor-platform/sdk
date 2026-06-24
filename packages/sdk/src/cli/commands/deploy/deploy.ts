@@ -69,6 +69,7 @@ export interface DeployOptions {
   profile?: string;
   configPath?: string;
   dryRun?: boolean;
+  json?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
   noValidate?: boolean;
@@ -208,7 +209,10 @@ type PlanResults = {
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-function printPlanResults(results: PlanResults) {
+function printPlanResults(
+  results: PlanResults,
+  opts?: { dryRun?: boolean; json?: boolean },
+): PlanSummary {
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
@@ -272,37 +276,14 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf),
   ];
 
-  // Print grouped sections
   const { otherChanges: otherFunctionRegistryChanges } = splitFunctionRegistryChanges(
     results.functionRegistry.changeSet,
-  );
-  printGroupedDisplaySection(
-    results.functionRegistry.changeSet.title,
-    formatChangeSetEntries(otherFunctionRegistryChanges),
   );
   const tailorDBServiceActions = extractServiceActions(results.tailorDB.changeSet.service);
   const pipelineServiceActions = extractServiceActions(results.pipeline.changeSet.service);
   const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
   const authServiceActions = extractServiceActions(results.auth.changeSet.service);
-  results.staticWebsite.changeSet.print();
-  results.staticWebsite.customDomainChangeSet.print();
-  results.app.print();
-  printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
-  printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
-  printGroupedDisplaySection("Executor", executorEntries);
-  printGroupedDisplaySection("Workflow", workflowEntries);
-  printGroupedDisplaySection("IdP", idpEntries, idpServiceActions);
-  printGroupedDisplaySection("Auth", authEntries, authServiceActions);
-  results.secretManager.vaultChangeSet.print();
-  results.secretManager.secretChangeSet.print();
-  if (results.secretManager.skippedSecrets.length > 0) {
-    logger.log(styles.bold("Secret Manager secrets (skipped - no value provided):"));
-    for (const name of results.secretManager.skippedSecrets) {
-      logger.log(`  ${styles.dim("○")} ${name}`);
-    }
-  }
 
-  // Compute summary: count display entries + service actions + non-grouped changesets
   const allDisplayEntries = [
     ...tailorDBEntries,
     ...pipelineEntries,
@@ -318,7 +299,51 @@ function printPlanResults(results: PlanResults) {
     ...authServiceActions,
   ];
   const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
-  logger.log(formatPlanSummary(summary));
+
+  if (opts?.json) {
+    if (opts.dryRun) {
+      const changes = allDisplayEntries.map(({ action, name, labels, namespace }) => ({
+        action,
+        name,
+        labels,
+        namespace,
+      }));
+      logger.out({ summary, changes });
+    }
+    return summary;
+  }
+
+  const write: (line: string) => void = opts?.dryRun
+    ? (line) => logger.out(line)
+    : logger.log.bind(logger);
+
+  printGroupedDisplaySection(
+    results.functionRegistry.changeSet.title,
+    formatChangeSetEntries(otherFunctionRegistryChanges),
+    undefined,
+    write,
+  );
+  results.staticWebsite.changeSet.print(write);
+  results.staticWebsite.customDomainChangeSet.print(write);
+  results.app.print(write);
+  printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions, write);
+  printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions, write);
+  printGroupedDisplaySection("Executor", executorEntries, undefined, write);
+  printGroupedDisplaySection("Workflow", workflowEntries, undefined, write);
+  printGroupedDisplaySection("IdP", idpEntries, idpServiceActions, write);
+  printGroupedDisplaySection("Auth", authEntries, authServiceActions, write);
+  results.secretManager.vaultChangeSet.print(write);
+  results.secretManager.secretChangeSet.print(write);
+  if (results.secretManager.skippedSecrets.length > 0) {
+    write(styles.bold("Secret Manager secrets (skipped - no value provided):"));
+    for (const name of results.secretManager.skippedSecrets) {
+      write(`  ${styles.dim("○")} ${name}`);
+    }
+  }
+
+  write(formatPlanSummary(summary));
+
+  return summary;
 }
 
 /**
@@ -697,18 +722,21 @@ export async function deploy(options?: DeployOptions) {
       }
     });
 
-    printPlanResults({
-      functionRegistry,
-      tailorDB,
-      staticWebsite,
-      idp,
-      auth,
-      pipeline,
-      app,
-      executor,
-      workflow,
-      secretManager,
-    });
+    const planSummary = printPlanResults(
+      {
+        functionRegistry,
+        tailorDB,
+        staticWebsite,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+        secretManager,
+      },
+      { dryRun: options?.dryRun, json: options?.json ?? logger.jsonMode },
+    );
 
     if (options?.noValidate) {
       logger.warn("Client-side validation skipped (--no-validate).");
@@ -785,6 +813,10 @@ export async function deploy(options?: DeployOptions) {
       applyFunctionRegistry(client, workspaceId, functionRegistry, "delete"),
     );
 
-    logger.success("Successfully applied changes.");
+    if (options?.json ?? logger.jsonMode) {
+      logger.out({ summary: planSummary, status: "applied" });
+    } else {
+      logger.out("Successfully applied changes.");
+    }
   });
 }

@@ -267,11 +267,13 @@ export function extractServiceActions(
  * @param title - Section title
  * @param entries - Entries to print (should NOT include service entries)
  * @param serviceActions - Optional service-level actions to merge into namespace headers
+ * @param write - Output function; defaults to stderr via logger.log
  */
 export function printGroupedDisplaySection(
   title: string,
   entries: ReadonlyArray<GroupedDisplayEntry>,
   serviceActions?: ReadonlyArray<NamespaceAction>,
+  write: (line: string) => void = logger.log.bind(logger),
 ) {
   const serviceMap = new Map<string, DisplayAction>();
   if (serviceActions) {
@@ -284,7 +286,7 @@ export function printGroupedDisplaySection(
     return;
   }
 
-  logger.log(styles.bold(`${title}:`));
+  write(styles.bold(`${title}:`));
 
   // Group entries by namespace while preserving order
   const namespaceOrder: (string | undefined)[] = [];
@@ -306,14 +308,14 @@ export function printGroupedDisplaySection(
     if (ns) {
       const svcAction = serviceMap.get(ns);
       const prefix = svcAction ? `${ACTION_SYMBOLS[svcAction]} ` : "";
-      logger.log(`  ${prefix}${styles.bold(`${ns}:`)}`);
+      write(`  ${prefix}${styles.bold(`${ns}:`)}`);
       printedServices.add(ns);
       for (const entry of group) {
-        logger.log(`    ${formatGroupedDisplayLine(entry)}`);
+        write(`    ${formatGroupedDisplayLine(entry)}`);
       }
     } else {
       for (const entry of group) {
-        logger.log(`  ${formatGroupedDisplayLine(entry)}`);
+        write(`  ${formatGroupedDisplayLine(entry)}`);
       }
     }
   }
@@ -321,7 +323,7 @@ export function printGroupedDisplaySection(
   // Print services without child entries as flat entries
   for (const [name, action] of serviceMap) {
     if (!printedServices.has(name)) {
-      logger.log(`  ${ACTION_SYMBOLS[action]} ${name}`);
+      write(`  ${ACTION_SYMBOLS[action]} ${name}`);
     }
   }
 }
