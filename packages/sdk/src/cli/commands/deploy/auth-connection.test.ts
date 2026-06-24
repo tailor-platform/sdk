@@ -1,8 +1,15 @@
+import { AuthConnection_Status } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import type { AuthService } from "@/cli/services/auth/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
+
+const mockLoggerWarn = vi.fn();
+
+vi.mock("@/cli/shared/logger", () => ({
+  logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+}));
 
 const mockLoadSecretsState = vi.fn();
 
@@ -94,7 +101,9 @@ function createMockClient(opts: { connections: ConnectionFixture[] }): OperatorC
     }),
     setMetadata: vi.fn().mockResolvedValue({}),
     createAuthConnection: vi.fn().mockResolvedValue({}),
-    updateAuthConnection: vi.fn().mockResolvedValue({}),
+    updateAuthConnection: vi
+      .fn()
+      .mockResolvedValue({ connection: { status: AuthConnection_Status.AUTHORIZED } }),
     deleteAuthConnection: vi.fn().mockResolvedValue({}),
   } as unknown as OperatorClient;
 }
@@ -205,6 +214,7 @@ describe("applyAuthConnections", () => {
   beforeEach(() => {
     mockLoadSecretsState.mockReset();
     mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
+    mockLoggerWarn.mockReset();
   });
 
   test("delete phase removes connections via deleteAuthConnection", async () => {
@@ -237,13 +247,40 @@ describe("applyAuthConnections", () => {
 
     await applyAuthConnections(client, result, "create-update");
 
-    // updateAuthConnection preserves the OAuth session; delete+create must not be used.
     // TODO: Remove cast when UpdateAuthConnectionRequestSchema is generated in tailor-proto.
-    expect(
-      (client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> })
-        .updateAuthConnection,
-    ).toHaveBeenCalled();
+    const updateFn = (client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> })
+      .updateAuthConnection;
+    expect(updateFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        updateMask: { paths: ["oauth2.client_secret"] },
+      }),
+    );
     expect(client.deleteAuthConnection).not.toHaveBeenCalled();
     expect(client.createAuthConnection).not.toHaveBeenCalled();
+  });
+
+  test("warns user to re-authorize when the server responds UNAUTHORIZED", async () => {
+    const client = createMockClient({
+      connections: [{ name: "conn", ownerLabel: appName }],
+    });
+    // Override to return UNAUTHORIZED
+    (
+      client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> }
+    ).updateAuthConnection.mockResolvedValueOnce({
+      connection: { status: AuthConnection_Status.UNAUTHORIZED },
+    });
+
+    const result = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      undefined,
+      authsWith(["conn"]),
+    );
+    await applyAuthConnections(client, result, "create-update");
+
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining("tailor-sdk authconnection authorize --name conn"),
+    );
   });
 });

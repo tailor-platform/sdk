@@ -1,8 +1,12 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { AuthConnection_Type } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import {
+  AuthConnection_Status,
+  AuthConnection_Type,
+} from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -22,14 +26,17 @@ import type {
 import type { AuthConnection } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
-// TODO: Replace with the generated UpdateAuthConnectionRequestSchema type once tailor-proto is updated.
+// TODO: Replace with generated types once tailor-proto is updated.
 type UpdateAuthConnectionRequest = {
   workspaceId: string;
   connection: NonNullable<MessageInitShape<typeof CreateAuthConnectionRequestSchema>["connection"]>;
-  updateMask?: { paths: string[] };
+  updateMask: { paths: string[] };
+};
+type UpdateAuthConnectionResponse = {
+  connection?: { status?: AuthConnection_Status };
 };
 type OperatorClientWithUpdate = OperatorClient & {
-  updateAuthConnection: (req: UpdateAuthConnectionRequest) => Promise<unknown>;
+  updateAuthConnection: (req: UpdateAuthConnectionRequest) => Promise<UpdateAuthConnectionResponse>;
 };
 
 type CreateConnection = {
@@ -46,6 +53,7 @@ type UpdateConnection = {
 type ReplaceConnection = {
   name: string;
   createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
+  updateMask: { paths: string[] };
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
@@ -92,21 +100,33 @@ function hashConnectionConfig(config: AuthConnectionConfig): string {
   return hashValue(serialized);
 }
 
-function hasNonSecretFieldChanged(
+function buildUpdateMask(
   existing: AuthConnection,
   desired: AuthConnectionConfig,
-): boolean {
+  secretChanged: boolean,
+): { paths: string[] } {
   if (existing.config.case !== "oauth2") {
-    return true;
+    return {
+      paths: [
+        "type",
+        "oauth2.provider_url",
+        "oauth2.issuer_url",
+        "oauth2.client_id",
+        "oauth2.client_secret",
+        "oauth2.auth_url",
+        "oauth2.token_url",
+      ],
+    };
   }
-  const oauth2 = existing.config.value;
-  return (
-    oauth2.providerUrl !== desired.providerUrl ||
-    oauth2.issuerUrl !== desired.issuerUrl ||
-    oauth2.clientId !== desired.clientId ||
-    oauth2.authUrl !== (desired.authUrl ?? "") ||
-    oauth2.tokenUrl !== (desired.tokenUrl ?? "")
-  );
+  const paths: string[] = [];
+  const v = existing.config.value;
+  if (v.providerUrl !== desired.providerUrl) paths.push("oauth2.provider_url");
+  if (v.issuerUrl !== desired.issuerUrl) paths.push("oauth2.issuer_url");
+  if (v.clientId !== desired.clientId) paths.push("oauth2.client_id");
+  if (v.authUrl !== (desired.authUrl ?? "")) paths.push("oauth2.auth_url");
+  if (v.tokenUrl !== (desired.tokenUrl ?? "")) paths.push("oauth2.token_url");
+  if (secretChanged) paths.push("oauth2.client_secret");
+  return { paths };
 }
 
 /**
@@ -201,13 +221,14 @@ export async function planAuthConnections(
 
       const currentHash = hashConnectionConfig(config);
       const storedHash = state.connections?.[name];
-      const nonSecretChanged = hasNonSecretFieldChanged(existing.resource, config);
       const secretChanged = currentHash !== storedHash;
+      const updateMask = buildUpdateMask(existing.resource, config, secretChanged);
 
-      if (nonSecretChanged || secretChanged) {
+      if (updateMask.paths.length > 0) {
         changeSet.replaces.push({
           name,
           createRequest: buildConnectionRequest(workspaceId, name, config),
+          updateMask,
           metaRequest,
         });
       } else if (!existing.label) {
@@ -291,12 +312,16 @@ export async function applyAuthConnections(
 
     for (const replace of changeSet.replaces) {
       // TODO: Remove cast when UpdateAuthConnectionRequestSchema is generated in tailor-proto.
-      // UpdateAuthConnection updates the connection in-place, preserving the OAuth session unless
-      // identity fields (providerUrl, issuerUrl, clientId, type) change.
-      await (client as OperatorClientWithUpdate).updateAuthConnection({
+      const resp = await (client as OperatorClientWithUpdate).updateAuthConnection({
         workspaceId: replace.createRequest.workspaceId ?? "",
         connection: replace.createRequest.connection ?? {},
+        updateMask: replace.updateMask,
       });
+      if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
+        logger.warn(
+          `Connection "${replace.name}" requires re-authorization. Run: tailor-sdk authconnection authorize --name ${replace.name}`,
+        );
+      }
       await client.setMetadata(replace.metaRequest);
     }
 
