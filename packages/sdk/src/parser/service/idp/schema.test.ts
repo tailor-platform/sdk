@@ -542,6 +542,25 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
   });
 
+  test("accepts allowedReturnOrigins with static-website :url placeholder", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["my-frontend:url"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedReturnOrigins).toEqual(["my-frontend:url"]);
+  });
+
+  test("rejects allowedReturnOrigins with :url placeholder followed by a path", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["my-frontend:url/return"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
+  });
+
   test("accepts mfaIssuer", () => {
     const policy = {
       enableMfa: true,
