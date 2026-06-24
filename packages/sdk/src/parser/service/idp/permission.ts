@@ -126,7 +126,7 @@ export function normalizeIdPPermission(permission: RawIdPPermission): StandardId
     read: permission.read.map((p) => normalizeIdPActionPermission(p)),
     update: permission.update.map((p) => normalizeIdPActionPermission(p)),
     delete: permission.delete.map((p) => normalizeIdPActionPermission(p)),
-    sendPasswordResetEmail: (permission.sendPasswordResetEmail ?? []).map((p) =>
+    sendPasswordResetEmail: permission.sendPasswordResetEmail.map((p) =>
       normalizeIdPActionPermission(p),
     ),
     unenrollMfa: (permission.unenrollMfa ?? []).map((p) => normalizeIdPActionPermission(p)),

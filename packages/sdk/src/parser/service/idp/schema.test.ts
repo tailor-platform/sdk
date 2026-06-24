@@ -1024,45 +1024,6 @@ describe("IdPSchema permission tests", () => {
     expect(() => IdPSchema.parse(config)).not.toThrow();
   });
 
-  test("accepts permission omitting sendPasswordResetEmail when disablePasswordAuth is true", () => {
-    const config = {
-      name: "test-idp",
-      authorization: "loggedIn" as const,
-      clients: ["client-1"],
-      userAuthPolicy: {
-        disablePasswordAuth: true,
-        allowGoogleOauth: true,
-        allowedEmailDomains: ["example.com"],
-      },
-      permission: {
-        create: [],
-        read: [],
-        update: [],
-        delete: [],
-      },
-    };
-
-    expect(() => IdPSchema.parse(config)).not.toThrow();
-  });
-
-  test("rejects permission omitting sendPasswordResetEmail when password auth is enabled", () => {
-    const config = {
-      name: "test-idp",
-      authorization: "loggedIn" as const,
-      clients: ["client-1"],
-      permission: {
-        create: [],
-        read: [],
-        update: [],
-        delete: [],
-      },
-    };
-
-    expect(() => IdPSchema.parse(config)).toThrow(
-      "permission.sendPasswordResetEmail must be set explicitly when password authentication is enabled",
-    );
-  });
-
   test("accepts permission with in/not in operators", () => {
     const config = {
       name: "test-idp",

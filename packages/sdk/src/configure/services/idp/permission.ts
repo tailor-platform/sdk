@@ -129,7 +129,7 @@ export type IdPPermission<User extends object = InferredAttributeMap> = {
   read: readonly IdPActionPermission<User, false>[];
   update: readonly IdPActionPermission<User, true>[];
   delete: readonly IdPActionPermission<User, false>[];
-  sendPasswordResetEmail?: readonly IdPActionPermission<User, false>[];
+  sendPasswordResetEmail: readonly IdPActionPermission<User, false>[];
   unenrollMfa?: readonly IdPActionPermission<User, false>[];
 };
 
