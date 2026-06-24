@@ -5,12 +5,11 @@ import { fileURLToPath } from "node:url";
 // requiring --experimental-strip-types at process startup.
 import { transformSync } from "amaro";
 
-const TS_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+const TS_EXTENSIONS = [".ts", ".tsx", ".mts"];
 const JS_TO_TS = new Map([
   [".js", ".ts"],
   [".jsx", ".tsx"],
   [".mjs", ".mts"],
-  [".cjs", ".cts"],
 ]);
 
 export async function resolve(specifier, context, nextResolve) {
@@ -23,8 +22,8 @@ export async function resolve(specifier, context, nextResolve) {
     for (const ext of TS_EXTENSIONS) {
       try {
         return await nextResolve(specifier + ext, context);
-      } catch {
-        /* try next */
+      } catch (e) {
+        if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
       }
     }
 
@@ -32,8 +31,8 @@ export async function resolve(specifier, context, nextResolve) {
       if (specifier.endsWith(jsExt)) {
         try {
           return await nextResolve(specifier.slice(0, -jsExt.length) + tsExt, context);
-        } catch {
-          /* try next */
+        } catch (e) {
+          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
         }
       }
     }
