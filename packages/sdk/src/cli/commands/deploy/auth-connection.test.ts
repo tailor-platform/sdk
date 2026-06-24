@@ -212,6 +212,27 @@ describe("planAuthConnections", () => {
     expect(changeSet.updates.map((u) => u.name)).toEqual([]);
     expect(unmanaged.map((u) => u.resourceName)).toEqual([]);
   });
+
+  test("omits client_secret from update mask when clientSecret is empty (CI scenario)", async () => {
+    const client = createMockClient({
+      connections: [{ name: "conn", ownerLabel: appName }],
+    });
+    const ciConfig: AuthConnectionConfig = {
+      ...oauth2DesiredConfig,
+      clientSecret: "",
+      providerUrl: "https://changed.example.com",
+    } as AuthConnectionConfig;
+
+    const { changeSet } = await planAuthConnections(client, workspaceId, appName, undefined, [
+      { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
+    ]);
+
+    expect(changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
+    const [replace] = changeSet.replaces;
+    expect(replace).toBeDefined();
+    expect(replace!.updateMask.paths).toContain("oauth2.provider_url");
+    expect(replace!.updateMask.paths).not.toContain("oauth2.client_secret");
+  });
 });
 
 describe("applyAuthConnections", () => {

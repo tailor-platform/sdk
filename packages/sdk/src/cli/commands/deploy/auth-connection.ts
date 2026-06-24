@@ -30,7 +30,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 type UpdateAuthConnectionRequest = {
   workspaceId: string;
   connection: NonNullable<MessageInitShape<typeof CreateAuthConnectionRequestSchema>["connection"]>;
-  updateMask: { paths: string[] };
+  updateMask?: { paths: string[] };
 };
 type UpdateAuthConnectionResponse = {
   connection?: { status?: AuthConnection_Status };
@@ -125,7 +125,7 @@ function buildUpdateMask(
   if (v.clientId !== desired.clientId) paths.push("oauth2.client_id");
   if (v.authUrl !== (desired.authUrl ?? "")) paths.push("oauth2.auth_url");
   if (v.tokenUrl !== (desired.tokenUrl ?? "")) paths.push("oauth2.token_url");
-  if (secretChanged) paths.push("oauth2.client_secret");
+  if (secretChanged && !!desired.clientSecret) paths.push("oauth2.client_secret");
   return { paths };
 }
 
