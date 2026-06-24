@@ -45,7 +45,12 @@ export async function load(url, context, nextLoad) {
   if (TS_EXTENSIONS.some((ext) => url.endsWith(ext))) {
     const filePath = fileURLToPath(url);
     const source = await readFile(filePath, "utf-8");
-    const { code } = transformSync(source, { mode: "transform", filename: filePath });
+    const { code } = transformSync(source, {
+      mode: "transform",
+      filename: filePath,
+      minify: true,
+      jsc: { minify: { compress: true, mangle: false } },
+    });
     return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
   }
   return nextLoad(url, context);
