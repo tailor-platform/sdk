@@ -1,6 +1,6 @@
-import type { output } from "@/configure";
-import type { TailorDBType } from "@/configure/services/tailordb/schema";
-import type { TailorField } from "@/configure/types/type";
+import type { output } from "#/configure/index";
+import type { TailorDBType } from "#/configure/services/tailordb/schema";
+import type { TailorField } from "#/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 export {

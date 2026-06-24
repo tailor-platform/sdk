@@ -1,6 +1,6 @@
-import { formatTimestamp } from "@/cli/shared/format";
-import type { ListUserOrganizationsResponse_UserOrganization } from "@tailor-proto/tailor/v1/workspace_pb";
-import type { Organization, Folder } from "@tailor-proto/tailor/v1/workspace_resource_pb";
+import { formatTimestamp } from "#/cli/shared/format";
+import type { ListUserOrganizationsResponse_UserOrganization } from "@tailor-platform/tailor-proto/workspace_pb";
+import type { Organization, Folder } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 export interface UserOrganizationInfo {
   organizationId: string;

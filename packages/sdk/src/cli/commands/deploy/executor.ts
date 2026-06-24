@@ -3,7 +3,7 @@ import {
   type CreateExecutorExecutorRequestSchema,
   type DeleteExecutorExecutorRequestSchema,
   type UpdateExecutorExecutorRequestSchema,
-} from "@tailor-proto/tailor/v1/executor_pb";
+} from "@tailor-platform/tailor-proto/executor_pb";
 import {
   type ExecutorExecutorSchema,
   type ExecutorTargetConfigSchema,
@@ -12,12 +12,12 @@ import {
   type ExecutorTriggerConfigSchema,
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { getApplicationAuthNamespace } from "@/cli/shared/auth-namespace";
-import { type OperatorClient } from "@/cli/shared/client";
-import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
-import { stringifyFunction } from "@/parser/service/tailordb";
-import { assertDefined } from "@/utils/assert";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
+import { type OperatorClient } from "#/cli/shared/client";
+import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
+import { stringifyFunction } from "#/parser/service/tailordb/index";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
@@ -33,11 +33,11 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
+import type { Application } from "#/cli/services/application";
+import type { Executor } from "#/types/executor.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { Application } from "@/cli/services/application";
-import type { Executor } from "@/types/executor.generated";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply executor-related changes for the given phase.

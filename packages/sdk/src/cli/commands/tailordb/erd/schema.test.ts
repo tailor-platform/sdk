@@ -7,8 +7,8 @@ import type {
   OperatorFieldConfig,
   ParsedField,
   TailorDBType,
-} from "@/parser/service/tailordb/types";
-import type { TailorDBNamespaceData } from "@/plugin/types";
+} from "#/parser/service/tailordb/types";
+import type { TailorDBNamespaceData } from "#/plugin/types";
 
 function createField(
   name: string,

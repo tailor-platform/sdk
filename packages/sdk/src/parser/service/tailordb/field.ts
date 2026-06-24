@@ -3,9 +3,9 @@ import type {
   TailorAnyDBField,
   DBFieldMetadata,
   RawRelationConfig,
-} from "@/configure/services/tailordb/types";
-import type { OperatorFieldConfig } from "@/parser/service/tailordb/types";
-import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
+} from "#/configure/services/tailordb/types";
+import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 

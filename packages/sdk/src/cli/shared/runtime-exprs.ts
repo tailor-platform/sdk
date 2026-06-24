@@ -13,8 +13,8 @@
  * `ACTOR_TRANSFORM_EXPR` below come from the same factory so the three stay in
  * sync.
  */
-import { makePrincipalExpr, tailorPrincipalMap } from "@/parser/service/tailordb";
-import type { Trigger } from "@/types/executor.generated";
+import { makePrincipalExpr, tailorPrincipalMap } from "#/parser/service/tailordb/index";
+import type { Trigger } from "#/types/executor.generated";
 
 // ---------------------------------------------------------------------------
 // Bundle inline

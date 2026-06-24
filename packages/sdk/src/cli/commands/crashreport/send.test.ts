@@ -2,9 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { formatCrashReport } from "@/cli/crashreport/writer";
+import { formatCrashReport } from "#/cli/crashreport/writer";
 import { parseCrashLogFile } from "./send";
-import type { CrashReport } from "@/cli/crashreport/report";
+import type { CrashReport } from "#/cli/crashreport/report";
 
 function makeCrashReport(): CrashReport {
   return {

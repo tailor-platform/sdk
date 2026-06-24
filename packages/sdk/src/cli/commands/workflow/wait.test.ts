@@ -1,19 +1,19 @@
-import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { waitCommand } from "./wait";
-import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 

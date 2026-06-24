@@ -10,12 +10,12 @@ import {
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
 import { userAgent } from "./user-agent";
+import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -43,7 +43,10 @@ export type OperatorClient = Client<typeof OperatorService>;
  * @returns Configured Operator client
  */
 export async function initOperatorClient(accessToken: string) {
-  const { createTracingInterceptor } = await import("@/cli/telemetry/interceptor");
+  const [{ createTracingInterceptor }, { OperatorService }] = await Promise.all([
+    import("#/cli/telemetry/interceptor"),
+    import("@tailor-platform/tailor-proto/service_pb"),
+  ]);
 
   const interceptors: Interceptor[] = [
     await userAgentInterceptor(),
@@ -154,7 +157,7 @@ export function retryInterceptor(): Interceptor {
           // or non-idempotent compound create under load — #1350). The top-level
           // handler skips ConnectError, so route it to error tracking here before
           // letting it surface as the deploy error.
-          const { reportCrash } = await import("@/cli/crashreport");
+          const { reportCrash } = await import("#/cli/crashreport/index");
           await reportCrash(error, "handledError");
         }
         if (isRetirable(error, req.method.idempotency)) {

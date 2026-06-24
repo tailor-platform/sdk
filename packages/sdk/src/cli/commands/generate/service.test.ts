@@ -2,14 +2,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vitest";
-import { defineApplication } from "@/cli/services/application";
-import { PluginManager } from "@/plugin/manager";
+import { defineApplication } from "#/cli/services/application";
+import { PluginManager } from "#/plugin/manager";
 import { createGenerationManager } from "./service";
-import type { Application } from "@/cli/services/application";
-import type { TailorDBService } from "@/cli/services/tailordb/service";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
-import type { Plugin } from "@/plugin/types";
+import type { Application } from "#/cli/services/application";
+import type { TailorDBService } from "#/cli/services/tailordb/service";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { TailorDBType } from "#/parser/service/tailordb/types";
+import type { Plugin } from "#/plugin/types";
 
 vi.mock("node:fs", () => {
   return {
@@ -24,7 +24,7 @@ vi.mock("node:fs", () => {
   };
 });
 
-vi.mock("@/cli/shared/logger", async (importOriginal) => {
+vi.mock("#/cli/shared/logger", async (importOriginal) => {
   const actual = (await importOriginal()) as {
     logger?: Record<string, unknown>;
     styles?: Record<string, unknown>;

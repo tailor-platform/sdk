@@ -1,6 +1,6 @@
 import { processKyselyType, generateUnifiedKyselyTypes } from "./type-processor";
+import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
 import type { KyselyTypeMetadata, KyselyNamespaceMetadata } from "./types";
-import type { Plugin, GeneratorResult, TailorDBReadyContext } from "@/plugin/types";
 
 /** Unique identifier for the Kysely type generator plugin. */
 export const KyselyGeneratorID = "@tailor-platform/kysely-type";

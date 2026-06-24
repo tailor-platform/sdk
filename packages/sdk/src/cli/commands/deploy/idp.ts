@@ -7,7 +7,7 @@ import {
   type DeleteIdPClientRequestSchema,
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
-} from "@tailor-proto/tailor/v1/idp_pb";
+} from "@tailor-platform/tailor-proto/idp_pb";
 import {
   IdPLang,
   IdPPermissionOperator,
@@ -17,11 +17,11 @@ import {
   type IdPPermissionPolicySchema as ProtoIdPPermissionPolicySchema,
   type IdPPermissionSchema as ProtoIdPPermissionSchema,
   type IdPService as ProtoIdPService,
-} from "@tailor-proto/tailor/v1/idp_resource_pb";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
-import { findOmittedPermitRules, parseIdPPermission } from "@/parser/service/idp/permission";
-import { assertDefined } from "@/utils/assert";
+} from "@tailor-platform/tailor-proto/idp_resource_pb";
+import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
+import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
@@ -32,16 +32,16 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
   StandardIdPActionPermission,
   StandardIdPPermission,
   StandardIdPPermissionCondition,
-} from "@/parser/service/idp/types";
-import type { IdP, IdPLang as IdPLangInput } from "@/types/idp.generated";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "#/parser/service/idp/types";
+import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Build the vault name for an IdP client.

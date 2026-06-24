@@ -1,4 +1,4 @@
-import { AuthConnection_Type } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { AuthConnection_Type } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test } from "vitest";
 import { createChangeSet } from "./change-set";
 import { validatePlan, type ValidatePlanInput } from "./validate-plan";
