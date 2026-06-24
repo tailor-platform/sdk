@@ -307,6 +307,11 @@ export async function applyAuthConnections(
       changeSet.creates.map(async (create) => {
         await client.createAuthConnection(create.request);
         await client.setMetadata(create.metaRequest);
+        logger.info(
+          `Connection "${create.name}" was created. Authorize it with:\n` +
+            `  tailor-sdk authconnection authorize --name ${create.name}\n` +
+            `Or via the Console: tailor-sdk authconnection open`,
+        );
       }),
     );
 
@@ -319,7 +324,9 @@ export async function applyAuthConnections(
       });
       if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
         logger.warn(
-          `Connection "${replace.name}" requires re-authorization. Run: tailor-sdk authconnection authorize --name ${replace.name}`,
+          `Connection "${replace.name}" requires re-authorization. Authorize with:\n` +
+            `  tailor-sdk authconnection authorize --name ${replace.name}\n` +
+            `Or via the Console: tailor-sdk authconnection open`,
         );
       }
       await client.setMetadata(replace.metaRequest);

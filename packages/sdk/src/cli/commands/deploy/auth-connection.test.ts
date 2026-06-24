@@ -6,9 +6,13 @@ import type { OperatorClient } from "@/cli/shared/client";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 
 const mockLoggerWarn = vi.fn();
+const mockLoggerInfo = vi.fn();
 
 vi.mock("@/cli/shared/logger", () => ({
-  logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+  logger: {
+    warn: (...args: unknown[]) => mockLoggerWarn(...args),
+    info: (...args: unknown[]) => mockLoggerInfo(...args),
+  },
 }));
 
 const mockLoadSecretsState = vi.fn();
@@ -215,6 +219,25 @@ describe("applyAuthConnections", () => {
     mockLoadSecretsState.mockReset();
     mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
     mockLoggerWarn.mockReset();
+    mockLoggerInfo.mockReset();
+  });
+
+  test("notifies user to authorize a newly created connection", async () => {
+    const client = createMockClient({ connections: [] });
+    const result = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      undefined,
+      authsWith(["new-conn"]),
+    );
+    expect(result.changeSet.creates.map((c) => c.name)).toEqual(["new-conn"]);
+
+    await applyAuthConnections(client, result, "create-update");
+
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining("tailor-sdk authconnection authorize --name new-conn"),
+    );
   });
 
   test("delete phase removes connections via deleteAuthConnection", async () => {
