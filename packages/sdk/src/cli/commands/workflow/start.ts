@@ -1,24 +1,23 @@
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { AuthInvokerSchema } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import {
-  WorkflowExecution_Status,
-  WorkflowJobExecution_Status,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, parseDuration } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
-import { spinner } from "@/cli/shared/spinner";
+import { deploymentArgs, parseDuration } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
-import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
-import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import { type WorkflowWaitUntil } from "./status";
+import {
+  getWorkflowWaitFailureMessage,
+  waitForWorkflowExecution,
+  type WorkflowWaitResult,
+} from "./waiter";
 import type { Jsonifiable } from "type-fest";
 
 type WorkflowLike = {
@@ -54,7 +53,7 @@ type StartWorkflowArgOption<W extends WorkflowLike> = W extends WorkflowLike
  */
 export interface StartWorkflowOptions {
   name: string;
-  machineUser: string;
+  machineUser?: string;
   arg?: Jsonifiable;
   workspaceId?: string;
   profile?: string;
@@ -73,149 +72,17 @@ type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
 export type StartWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> =
   W extends WorkflowLike ? StartWorkflowTypedBaseOptions<W> & StartWorkflowArgOption<W> : never;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString("en-US", { hour12: false });
-}
-
-function colorizeStatus(status: WorkflowExecution_Status): string {
-  const statusText = WorkflowExecution_Status[status];
-  switch (status) {
-    case WorkflowExecution_Status.PENDING:
-      return styles.dim(statusText);
-    case WorkflowExecution_Status.PENDING_RESUME:
-      return styles.warning(statusText);
-    case WorkflowExecution_Status.RUNNING:
-      return styles.info(statusText);
-    case WorkflowExecution_Status.SUCCESS:
-      return styles.success(statusText);
-    case WorkflowExecution_Status.FAILED:
-      return styles.error(statusText);
-    default:
-      return statusText;
-  }
-}
-
-export interface WaitForExecutionOptions {
-  client: Awaited<ReturnType<typeof initOperatorClient>>;
-  workspaceId: string;
-  executionId: string;
-  interval: number;
-  showProgress?: boolean;
-  trackJobs?: boolean;
-}
-
-/**
- * Wait for a workflow execution to reach a terminal state, optionally showing progress.
- * @param options - Wait options
- * @returns Final workflow execution info
- */
-export async function waitForExecution(
-  options: WaitForExecutionOptions,
-): Promise<WorkflowExecutionInfo> {
-  const { client, workspaceId, executionId, interval, showProgress, trackJobs } = options;
-
-  let lastStatus: WorkflowExecution_Status | undefined;
-  let lastRunningJobs: string | undefined;
-  const sp = showProgress
-    ? spinner({ indent: 2 }).start("Waiting for workflow to complete...")
-    : null;
-
-  try {
-    // loop exits when the workflow execution reaches a terminal status
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    while (true) {
-      const { execution } = await client.getWorkflowExecution({
-        workspaceId,
-        executionId,
-      });
-
-      if (!execution) {
-        sp?.fail(`Execution '${executionId}' not found.`);
-        throw new Error(`Execution '${executionId}' not found.`);
-      }
-
-      const now = formatTime(new Date());
-      const coloredStatus = colorizeStatus(execution.status);
-
-      // Show workflow status change (persist previous line)
-      if (execution.status !== lastStatus) {
-        if (showProgress) {
-          sp?.stop();
-          logger.info(`Status: ${coloredStatus}`, {
-            mode: "stream",
-            indent: 2,
-          });
-          sp?.start(`Waiting for workflow to complete...`);
-        }
-        lastStatus = execution.status;
-      }
-
-      // Show job execution details when running (optional)
-      if (trackJobs && execution.status === WorkflowExecution_Status.RUNNING) {
-        const runningJobs = getRunningJobs(execution);
-        if (runningJobs && runningJobs !== lastRunningJobs) {
-          if (showProgress) {
-            sp?.stop();
-            logger.info(`Job | ${runningJobs}: ${coloredStatus}`, {
-              mode: "stream",
-              indent: 2,
-            });
-            sp?.start(`Waiting for workflow to complete...`);
-          }
-          lastRunningJobs = runningJobs;
-        }
-      }
-
-      if (sp) {
-        sp.text = `Waiting for workflow to complete... (${now})`;
-      }
-
-      // Terminal states: SUCCESS, FAILED, or PENDING_RESUME
-      if (isTerminalStatus(execution.status)) {
-        if (execution.status === WorkflowExecution_Status.SUCCESS) {
-          sp?.succeed(`Completed: ${coloredStatus}`);
-        } else if (execution.status === WorkflowExecution_Status.FAILED) {
-          sp?.fail(`Completed: ${coloredStatus}`);
-        } else {
-          sp?.warn(`Completed: ${coloredStatus}`);
-        }
-        return toWorkflowExecutionInfo(execution);
-      }
-
-      await sleep(interval);
-    }
-  } catch (error) {
-    sp?.stop();
-    throw error;
-  }
-}
-
-function getRunningJobs(execution: WorkflowExecution): string {
-  return execution.jobExecutions
-    .filter((job) => job.status === WorkflowJobExecution_Status.RUNNING)
-    .map((job) => job.stackedJobName)
-    .join(", ");
-}
-
-function isTerminalStatus(status: WorkflowExecution_Status): boolean {
-  return (
-    status === WorkflowExecution_Status.SUCCESS ||
-    status === WorkflowExecution_Status.FAILED ||
-    status === WorkflowExecution_Status.PENDING_RESUME
-  );
-}
+export { waitForWorkflowExecution as waitForExecution };
 
 export interface WaitOptions {
   showProgress?: boolean;
+  timeout?: number;
+  until?: WorkflowWaitUntil;
 }
 
 export interface StartWorkflowResultWithWait {
   executionId: string;
-  wait: (options?: WaitOptions) => Promise<WorkflowExecutionInfo>;
+  wait: (options?: WaitOptions) => Promise<WorkflowWaitResult>;
 }
 
 interface StartWorkflowCoreOptions {
@@ -252,11 +119,13 @@ async function startWorkflowCore(
     return {
       executionId,
       wait: (waitOptions?: WaitOptions) =>
-        waitForExecution({
+        waitForWorkflowExecution({
           client,
           workspaceId,
           executionId,
           interval: options.interval ?? 3000,
+          timeout: waitOptions?.timeout,
+          until: waitOptions?.until,
           showProgress: waitOptions?.showProgress,
           trackJobs: true,
         }),
@@ -272,8 +141,17 @@ async function startWorkflowCore(
 async function startWorkflowByName(
   options: StartWorkflowOptions,
 ): Promise<StartWorkflowResultWithWait> {
+  const machineUser = await loadMachineUserName({
+    machineUser: options.machineUser,
+    profile: options.profile,
+  });
+  if (!machineUser) {
+    throw new Error(
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+    );
+  }
+
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -297,7 +175,7 @@ async function startWorkflowByName(
     workflowName: options.name,
     authInvoker: {
       namespace: application.authNamespace,
-      machineUserName: options.machineUser,
+      machineUserName: machineUser,
     },
     arg: options.arg,
     interval: options.interval,
@@ -324,7 +202,6 @@ export async function startWorkflow<W extends WorkflowLike>(
   }
 
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -350,10 +227,10 @@ export const startCommand = defineAppCommand({
     .object({
       ...deploymentArgs,
       ...nameArgs,
-      "machine-user": arg(z.string(), {
+      "machine-user": arg(z.string().optional(), {
         alias: "m",
         hiddenAlias: "machineuser",
-        description: "Machine user name",
+        description: "Machine user name. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
       arg: arg(z.string().optional(), {
@@ -378,7 +255,11 @@ export const startCommand = defineAppCommand({
     logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
 
     if (args.wait) {
-      const result = await wait({ showProgress: !jsonOutput });
+      const result = await wait({
+        showProgress: !jsonOutput,
+        timeout: parseDuration(args.timeout),
+        until: args.until,
+      });
       if (args.logs && !jsonOutput) {
         const { execution } = await getWorkflowExecution({
           executionId,
@@ -387,8 +268,20 @@ export const startCommand = defineAppCommand({
           logs: true,
         });
         printExecutionWithLogs(execution);
+      } else if (args.logs) {
+        const { execution } = await getWorkflowExecution({
+          executionId,
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+          logs: true,
+        });
+        logger.out({ ...result, jobDetails: execution.jobDetails });
       } else {
         logger.out(result);
+      }
+      const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
+      if (failureMessage) {
+        throw new Error(failureMessage);
       }
     } else {
       logger.out({ executionId });

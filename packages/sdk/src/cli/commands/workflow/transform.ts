@@ -2,12 +2,12 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type {
   Workflow,
   WorkflowExecution,
   WorkflowJobExecution,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 export interface WorkflowListInfo {
   name: string;
@@ -60,6 +60,10 @@ function workflowExecutionStatusToString(status: WorkflowExecution_Status): stri
       return "SUCCESS";
     case WorkflowExecution_Status.FAILED:
       return "FAILED";
+    case WorkflowExecution_Status.PENDING_RETRY:
+      return "PENDING_RETRY";
+    case WorkflowExecution_Status.WAITING:
+      return "WAITING";
     default:
       return "UNSPECIFIED";
   }
@@ -80,6 +84,8 @@ function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status)
       return "SUCCESS";
     case WorkflowJobExecution_Status.FAILED:
       return "FAILED";
+    case WorkflowJobExecution_Status.WAITING:
+      return "WAITING";
     default:
       return "UNSPECIFIED";
   }

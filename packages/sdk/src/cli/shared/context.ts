@@ -6,9 +6,10 @@ import * as path from "pathe";
 import { lt as semverLt } from "semver";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 import { initOAuth2Client } from "./client";
+import { CLIError } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
@@ -23,6 +24,8 @@ const pfProfileSchema = z.object({
   user: z.string(),
   workspace_id: z.string(),
   readonly: z.boolean().optional(),
+  machine_user: z.string().optional(),
+  machine_user_override: z.enum(["allow", "deny"]).optional(),
 });
 
 const pfUserSchemaV1 = z.object({
@@ -82,7 +85,10 @@ type LoadWorkspaceIdOptions = {
   profile?: string;
 };
 type LoadAccessTokenOptions = {
-  useProfile?: boolean;
+  profile?: string;
+};
+type LoadMachineUserNameOptions = {
+  machineUser?: string;
   profile?: string;
 };
 
@@ -357,6 +363,54 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
 }
 
 /**
+ * Load machine user name from command options, environment variables, or platform config.
+ * In CLI context, env fallback is also handled by politty's arg env option.
+ * Priority: opts/machineUser > env/TAILOR_PLATFORM_MACHINE_USER_NAME > opts/profile (profile default) > undefined.
+ * An explicitly empty `opts.machineUser` is rejected with a CLIError (`MACHINE_USER_NAME_EMPTY`) rather than falling back to the env var or profile default.
+ * When the active profile has `machine_user_override: "deny"`, an explicit value that differs from the profile's machine user throws a CLIError with code `PROFILE_MACHINE_USER_OVERRIDE_DENIED`.
+ * @param opts - Machine user and profile options
+ * @returns Resolved machine user name, or undefined if not set
+ */
+export async function loadMachineUserName(
+  opts?: LoadMachineUserNameOptions,
+): Promise<string | undefined> {
+  if (opts?.machineUser === "") {
+    throw CLIError({
+      code: "MACHINE_USER_NAME_EMPTY",
+      message: "Machine user name cannot be empty.",
+      suggestion:
+        "Pass a non-empty machine user name, or omit the option to use the environment variable or profile default.",
+    });
+  }
+
+  const explicit = opts?.machineUser || process.env.TAILOR_PLATFORM_MACHINE_USER_NAME || undefined;
+
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  if (!profile) return explicit;
+
+  const pfConfig = await readPlatformConfig();
+  const entry = pfConfig.profiles[profile];
+  if (!entry) {
+    if (explicit) return explicit;
+    throw new Error(`Profile "${profile}" not found`);
+  }
+
+  if (entry.machine_user && entry.machine_user_override === "deny") {
+    if (explicit && explicit !== entry.machine_user) {
+      throw CLIError({
+        code: "PROFILE_MACHINE_USER_OVERRIDE_DENIED",
+        message: `Profile "${profile}" denies overriding the machine user.`,
+        details: `This profile fixes the machine user to "${entry.machine_user}" for application-data commands.`,
+        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run 'tailor-sdk profile update ${profile} --machine-user-override allow'.`,
+      });
+    }
+    return entry.machine_user;
+  }
+
+  return explicit || entry.machine_user;
+}
+
+/**
  * Load access token from environment variables, command options, or platform config.
  * In CLI context, profile env fallback is also handled by politty's arg env option.
  * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
@@ -376,9 +430,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
 
   const pfConfig = await readPlatformConfig();
   let user;
-  const profile = opts?.useProfile
-    ? opts.profile || process.env.TAILOR_PLATFORM_PROFILE
-    : undefined;
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (profile) {
     const u = pfConfig.profiles[profile]?.user;
     if (!u) {

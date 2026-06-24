@@ -1,14 +1,14 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { deploymentArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { deploymentArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { createWorkspaceNameTransformer, resolveWorkspaceFolderName } from "./workspace/transform";
-import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
+import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export interface ShowOptions {
   workspaceId?: string;
@@ -59,7 +59,6 @@ function applicationInfo(app: Application): ApplicationInfo {
 export async function show(options?: ShowOptions): Promise<ShowInfo> {
   // Load and validate options
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

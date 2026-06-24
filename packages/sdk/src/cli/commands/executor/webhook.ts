@@ -1,10 +1,10 @@
 import { defineCommand, runCommand } from "politty";
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
 
 export interface WebhookExecutorInfo {
   name: string;
@@ -28,7 +28,6 @@ export async function listWebhookExecutors(
   options?: ListWebhookExecutorsOptions,
 ): Promise<WebhookExecutorInfo[]> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

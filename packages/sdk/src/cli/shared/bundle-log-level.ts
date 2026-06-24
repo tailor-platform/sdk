@@ -1,5 +1,5 @@
-import { isLogLevel, LOG_LEVELS } from "@/parser/app-config/log-level";
-import type { LogLevel, LogLevelInput } from "@/types/app-config";
+import { isLogLevel, LOG_LEVELS } from "#/parser/app-config/log-level";
+import type { LogLevel, LogLevelInput } from "#/configure/config/types";
 import type { TreeshakingOptions } from "rolldown";
 
 const INFO_LEVEL_CONSOLE_METHODS = [

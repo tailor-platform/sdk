@@ -1,13 +1,13 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 import { vaultArgs } from "./args";
-import type { SecretManagerSecret } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
+import type { SecretManagerSecret } from "@tailor-platform/tailor-proto/secret_manager_resource_pb";
 
 export interface SecretListOptions {
   workspaceId?: string;
@@ -38,7 +38,6 @@ function secretInfo(secret: SecretManagerSecret): SecretInfo {
  */
 async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

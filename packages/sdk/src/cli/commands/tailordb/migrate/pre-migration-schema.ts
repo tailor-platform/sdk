@@ -22,7 +22,7 @@ import { convertFieldConfigToProto } from "./snapshot-manifest";
 import type { DiffChange, FieldDiffChange } from "./diff-calculator";
 import type { PendingMigration } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 /**
  * Diff change kinds that require pre-migration schema adjustments.
@@ -93,11 +93,7 @@ export function applyPreMigrationFieldAdjustments(
 ): void {
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
-      // snapshot JSON is parsed without validation
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      if (change.before) {
-        fields[fieldName] = convertFieldConfigToProto(change.before);
-      }
+      fields[fieldName] = convertFieldConfigToProto(change.before);
       continue;
     }
 
@@ -105,9 +101,7 @@ export function applyPreMigrationFieldAdjustments(
     if (!field) continue;
 
     if (change.kind === "field_added") {
-      // snapshot JSON is parsed without validation
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      if (change.after?.required) {
+      if (change.after.required) {
         field.required = false;
       }
       continue;
@@ -115,21 +109,15 @@ export function applyPreMigrationFieldAdjustments(
 
     const { before, after } = change;
 
-    // snapshot JSON is parsed without validation
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (!before?.required && after?.required) {
+    if (!before.required && after.required) {
       field.required = false;
     }
 
-    // snapshot JSON is parsed without validation
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (!(before?.unique ?? false) && (after?.unique ?? false)) {
+    if (!(before.unique ?? false) && (after.unique ?? false)) {
       field.unique = false;
     }
 
-    // snapshot JSON is parsed without validation
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    if (before?.allowedValues && after?.allowedValues) {
+    if (before.allowedValues && after.allowedValues) {
       const afterValues = new Set(after.allowedValues.map((v) => v.value));
       const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));
       if (removedValues.length > 0) {

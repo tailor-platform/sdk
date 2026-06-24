@@ -1,5 +1,5 @@
 import { ScalarType } from "@bufbuild/protobuf";
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import type { DescField, DescMessage, DescMethodUnary } from "@bufbuild/protobuf";
 
 // `tailor-sdk api` issues a single JSON POST and reads one JSON response, so

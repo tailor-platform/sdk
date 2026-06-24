@@ -9,16 +9,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   ci:
+    name: ci # required status check context (ruleset status_check_main) — keep equal to the job id
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: read # checkout the repository
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -68,3 +71,11 @@ jobs:
 
       - name: Check package exports (publint)
         run: pnpm -r run publint
+
+      # zod must not leak into user-facing entry points (operates on dist/,
+      # already built by install-deps).
+      - name: Check zod isolation
+        run: pnpm -r run check:zod-isolation
+
+      - name: Check import cycles
+        run: pnpm -r run check:import-cycles

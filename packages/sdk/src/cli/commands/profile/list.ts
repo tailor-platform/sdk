@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+import { defineAppCommand } from "#/cli/shared/command";
+import { readPlatformConfig } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 import type { ProfileInfo } from "./types";
 
 export const listCommand = defineAppCommand({
@@ -33,6 +33,12 @@ export const listCommand = defineAppCommand({
         user: p.user,
         workspaceId: p.workspace_id,
         permission: p.readonly === true ? "read" : "write",
+        ...(p.machine_user
+          ? {
+              machineUser: p.machine_user,
+              machineUserOverride: p.machine_user_override ?? "allow",
+            }
+          : {}),
       };
     });
     logger.out(profileInfos);

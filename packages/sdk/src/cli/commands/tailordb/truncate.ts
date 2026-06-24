@@ -1,16 +1,16 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { extractOwnedNamespaces } from "@/cli/shared/config";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { assertWritable } from "@/cli/shared/readonly-guard";
-import { resolveTypeNamespaces } from "@/cli/shared/tailordb-namespace";
-import { assertDefined } from "@/utils/assert";
+import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { extractOwnedNamespaces } from "#/cli/shared/config";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { resolveTypeNamespaces } from "#/cli/shared/tailordb-namespace";
+import { assertDefined } from "#/utils/assert";
 
 export interface TruncateOptions {
   workspaceId?: string;
@@ -69,7 +69,6 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
 async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
   // Load and validate options
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

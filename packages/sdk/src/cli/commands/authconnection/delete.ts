@@ -1,12 +1,12 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { confirmationArgs, workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { assertWritable } from "@/cli/shared/readonly-guard";
+import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import { connectionNameArgs } from "./args";
 
 export const deleteAuthConnectionCommand = defineAppCommand({
@@ -22,7 +22,6 @@ export const deleteAuthConnectionCommand = defineAppCommand({
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);

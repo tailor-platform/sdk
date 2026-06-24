@@ -1,5 +1,6 @@
 import * as inflection from "inflection";
-import type { RawRelationConfig, OperatorFieldConfig } from "@/types/tailordb";
+import type { RawRelationConfig } from "#/configure/services/tailordb/types";
+import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
 import type { UnionToTuple } from "type-fest";
 
 const relationTypes = {
@@ -50,7 +51,7 @@ export function validateRelationConfig(
   rawRelation: RawRelationConfig,
   context: RelationProcessingContext,
 ): void {
-  // platform response may omit the field
+  // raw user config may omit the field
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (!rawRelation.type) {
     throw new Error(

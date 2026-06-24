@@ -1,5 +1,6 @@
 {
   "name": "@tailor-platform/tailor-proto",
+  "version": "0.0.0",
   "description": "Tailor Platform Protocol Buffer Definitions",
   "private": true,
   "type": "module",
@@ -16,6 +17,6 @@
   "license": "MIT",
   "dependencies": {
     "@bufbuild/protobuf": "2.12.0",
-    "@connectrpc/connect": "2.1.1"
+    "@connectrpc/connect": "2.1.2"
   }
 }

@@ -11,14 +11,14 @@ import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { configArg, confirmationArgs } from "@/cli/shared/args";
-import { logBetaWarning } from "@/cli/shared/beta";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
-import { logger, styles } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { PluginManager } from "@/plugin/manager";
+import { configArg, confirmationArgs } from "#/cli/shared/args";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
+import { logger, styles } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
   formatMigrationDiff,
@@ -139,7 +139,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   }
 
   // Load application and all types
-  const { defineApplication } = await import("@/cli/services/application");
+  const { defineApplication } = await import("#/cli/services/application");
   const application = defineApplication({ config, pluginManager });
 
   // Process each namespace
@@ -165,13 +165,10 @@ export async function generate(options: GenerateOptions): Promise<void> {
     // Create snapshot from current local types
     const currentSnapshot = createSnapshotFromLocalTypes(localTypesObj, namespace);
 
-    // Check if migrations directory exists and has snapshots
-    let previousSnapshot: SchemaSnapshot | null = null;
-    try {
-      previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir);
-    } catch {
-      // No previous migrations - this is fine
-    }
+    // Returns null when the migrations directory is missing or empty;
+    // throws when existing migration files are invalid.
+    const previousSnapshot: SchemaSnapshot | null =
+      reconstructSnapshotFromMigrations(migrationsDir);
 
     if (!previousSnapshot) {
       // First migration - generate initial schema snapshot

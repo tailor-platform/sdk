@@ -15,11 +15,11 @@
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.13.1",
-    "oxfmt": "0.53.0",
-    "oxlint": "1.68.0",
+    "@types/node": "24.13.2",
+    "oxfmt": "0.55.0",
+    "oxlint": "1.70.0",
     "oxlint-tsgolint": "0.23.0",
-    "typescript": "5.9.3",
-    "vitest": "4.1.8"
+    "typescript": "6.0.3",
+    "vitest": "4.1.9"
   }
 }

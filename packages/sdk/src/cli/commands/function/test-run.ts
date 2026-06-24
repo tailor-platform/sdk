@@ -7,19 +7,19 @@
 
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
-import { AuthInvokerSchema } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
-import { executeScript } from "@/cli/shared/script-executor";
-import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
-import { assertDefined } from "@/utils/assert";
+import { workspaceArgs } from "#/cli/shared/args";
+import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
+import { executeScript } from "#/cli/shared/script-executor";
+import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
+import { assertDefined } from "#/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType, type DetectedFunction } from "./detect";
 
@@ -42,7 +42,8 @@ export const testRunCommand = defineAppCommand({
     }),
     "machine-user": arg(z.string().optional(), {
       alias: "m",
-      description: "Machine user name for authentication",
+      description:
+        "Machine user name for authentication. Falls back to the active profile's default machine user.",
       env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
     }),
     config: arg(z.string().default("tailor.config.ts"), {
@@ -84,10 +85,13 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
     // 3. Resolve auth, workspace, and machine user info (needed before bundling)
     const authNamespace = resolveAuthNamespace(config.auth);
-    const machineUserName = resolveMachineUserName(args["machine-user"], config.auth);
+    const machineUserName = await resolveMachineUserName({
+      cliMachineUser: args["machine-user"],
+      profile: args.profile,
+      authConfig: config.auth,
+    });
 
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
@@ -237,21 +241,28 @@ function resolveAuthNamespace(
   throw new Error("Auth namespace is required. Ensure tailor.config.ts has an auth config.");
 }
 
-/**
- * Resolve machine user name from CLI args or config. Priority: --machine-user > first key of config.auth.machineUsers
- * @param cliMachineUser - CLI --machine-user value
- * @param authConfig - Auth configuration from tailor.config.ts
- * @returns Resolved machine user name
- */
-function resolveMachineUserName(
-  cliMachineUser: string | undefined,
+type ResolveMachineUserNameOptions = {
+  cliMachineUser: string | undefined;
+  profile: string | undefined;
   authConfig:
     | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
-    | undefined,
-): string {
-  if (cliMachineUser) {
-    return cliMachineUser;
+    | undefined;
+};
+
+/**
+ * Resolve machine user name from CLI args, profile default, or config.
+ * Priority: --machine-user / env > profile default > first key of config.auth.machineUsers > error
+ * @param options - Resolution options
+ * @returns Resolved machine user name
+ */
+async function resolveMachineUserName(options: ResolveMachineUserNameOptions): Promise<string> {
+  const { cliMachineUser, profile, authConfig } = options;
+
+  const resolved = await loadMachineUserName({ machineUser: cliMachineUser, profile });
+  if (resolved) {
+    return resolved;
   }
+
   if (authConfig && !("external" in authConfig && authConfig.external)) {
     const machineUsers = authConfig.machineUsers;
     if (machineUsers) {
@@ -262,7 +273,7 @@ function resolveMachineUserName(
     }
   }
   throw new Error(
-    "Machine user is required. Provide --machine-user or ensure tailor.config.ts has machine users configured.",
+    "Machine user is required. Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
   );
 }
 

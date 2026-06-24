@@ -93,7 +93,6 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "secret/vault/list.ts",
   // Setup (local file generation)
   "setup/index.ts",
-  "setup/github/index.ts",
   // Skills (local file install)
   "skills/index.ts",
   "skills/install.ts",
@@ -131,6 +130,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "workflow/list.ts",
   "workflow/resume.ts",
   "workflow/start.ts",
+  "workflow/wait.ts",
   // Workspace (read-only branches)
   "workspace/index.ts",
   "workspace/get.ts",

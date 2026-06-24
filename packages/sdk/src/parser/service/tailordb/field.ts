@@ -2,10 +2,10 @@ import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,
-  OperatorFieldConfig,
   RawRelationConfig,
-} from "@/types/tailordb";
-import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
+} from "#/configure/services/tailordb/types";
+import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.

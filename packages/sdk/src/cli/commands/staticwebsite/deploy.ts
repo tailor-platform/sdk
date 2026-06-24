@@ -5,15 +5,15 @@ import pLimit from "p-limit";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { createProgress, withTimeout } from "@/cli/shared/progress";
-import { assertWritable } from "@/cli/shared/readonly-guard";
+import { workspaceArgs } from "#/cli/shared/args";
+import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { createProgress, withTimeout } from "#/cli/shared/progress";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
+import type { UploadFileRequestSchema } from "@tailor-platform/tailor-proto/staticwebsite_pb";
 
 const CHUNK_SIZE = 64 * 1024; // 64KB
 const IGNORED_FILES = new Set([".DS_Store", "thumbs.db", "desktop.ini"]);
@@ -247,7 +247,6 @@ export const deployCommand = defineAppCommand({
     await assertWritable({ profile: args.profile });
     logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);
     const accessToken = await loadAccessToken({
-      useProfile: true,
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);

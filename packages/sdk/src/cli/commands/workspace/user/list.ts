@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { orderArg, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { orderArg, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { userInfo, type UserInfo } from "./transform";
 
 const listUsersOptionsSchema = z.object({
@@ -22,7 +22,7 @@ async function loadOptions(options: ListUsersOptions) {
     throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ useProfile: true, profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.data.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
     workspaceId: result.data.workspaceId,

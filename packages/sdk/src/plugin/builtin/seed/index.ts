@@ -1,6 +1,6 @@
 import * as path from "pathe";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 import {
   processIdpUser,
   generateIdpUserSchemaFile,
@@ -14,8 +14,7 @@ import {
   type PluginSchemaParams,
 } from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
-import type { Plugin } from "@/types/plugin";
-import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-generation";
+import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
 
 /** Unique identifier for the seed generator plugin. */
 export const SeedGeneratorID = "@tailor-platform/seed";
@@ -523,7 +522,7 @@ ${namespaceSelfRefEntries}
     const authNamespace = appInfo.auth;
 
     // Initialize operator client (once for all namespaces)
-    const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
+    const accessToken = await loadAccessToken({ profile: values.profile });
     const workspaceId = await loadWorkspaceId({ profile: values.profile });
     const operatorClient = await initOperatorClient(accessToken);
 

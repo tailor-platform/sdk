@@ -1,8 +1,8 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { parseDuration } from "@/cli/shared/args";
-import { type OperatorClient, fetchAll } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { parseDuration } from "#/cli/shared/args";
+import { type OperatorClient, fetchAll } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
@@ -17,16 +17,16 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "#/types/workflow.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
-import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
-import type { CreateWorkflowRequestSchema } from "@tailor-proto/tailor/v1/workflow_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+import type { CreateWorkflowRequestSchema } from "@tailor-platform/tailor-proto/workflow_pb";
 import type {
   ConcurrencyPolicySchema,
   RetryPolicySchema,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 /**
  * Apply workflow changes for the given phase.
@@ -101,9 +101,7 @@ export async function applyWorkflow(
     );
 
     await deleteAllSettled(
-      // platform response may omit the field
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      (result.jobFunctionDeletes ?? collectDeletableJobFunctions(changeSet.deletes)).map((del) => ({
+      result.jobFunctionDeletes.map((del) => ({
         resourceType: "workflow job function",
         resourceName: del.jobFunctionName,
         run: () =>
@@ -146,22 +144,6 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
   if (firstError) {
     throw firstError;
   }
-}
-
-function collectDeletableJobFunctions(deletes: readonly DeleteWorkflow[]) {
-  const seen = new Set<string>();
-  const jobFunctions: Array<{ workspaceId: string; jobFunctionName: string }> = [];
-  for (const del of deletes) {
-    for (const jobFunctionName of del.deletableJobNames) {
-      const key = `${del.workspaceId}\0${jobFunctionName}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      jobFunctions.push({ workspaceId: del.workspaceId, jobFunctionName });
-    }
-  }
-  return jobFunctions;
 }
 
 /**

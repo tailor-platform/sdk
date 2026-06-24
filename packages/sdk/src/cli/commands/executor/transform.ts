@@ -1,12 +1,12 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { ExecutorJobStatus } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import { ExecutorJobStatus } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { executorTargetTypeToString, executorTriggerTypeToString } from "./status";
 import type {
   ExecutorExecutor,
   ExecutorJob,
   ExecutorJobAttempt,
   ExecutorTriggerEventConfig,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
 
 export interface ExecutorJobListInfo {
   id: string;
@@ -128,9 +128,7 @@ function formatSubjectEvent(subject: string, eventTypes: readonly string[]): str
 
 function formatTypedEventTrigger(config: ExecutorTriggerEventConfig): string | null {
   const typedConfig = config.typedConfig;
-  // platform response may omit the field
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  if (!typedConfig || typedConfig.case === undefined) {
+  if (typedConfig.case === undefined) {
     return null;
   }
 
@@ -247,9 +245,7 @@ function formatTriggerConfig(executor: ExecutorExecutor): Record<string, unknown
 
 function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<string, unknown> {
   const typedConfig = config.typedConfig;
-  // platform response may omit the field
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  if (!typedConfig || typedConfig.case === undefined) {
+  if (typedConfig.case === undefined) {
     return {
       eventType: config.eventType,
       condition: config.condition?.expr || "",

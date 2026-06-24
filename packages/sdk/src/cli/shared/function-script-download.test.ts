@@ -1,8 +1,8 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
+import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { describe, test, expect, vi } from "vitest";
 import { downloadFunctionScript, scriptNameToRegistryName } from "./function-script-download";
-import type { OperatorClient } from "@/cli/shared/client";
+import type { OperatorClient } from "#/cli/shared/client";
 
 interface DownloadResponse {
   payload:

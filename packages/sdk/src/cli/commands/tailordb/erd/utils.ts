@@ -1,7 +1,7 @@
-import { logBetaWarning } from "@/cli/shared/beta";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import type { OperatorClient } from "@/cli/shared/client";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import type { OperatorClient } from "#/cli/shared/client";
 
 export interface ErdDeployContext {
   client: OperatorClient;
@@ -30,7 +30,6 @@ export async function initErdDeployContext(
 ): Promise<ErdDeployContext> {
   initErdCommand();
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: args.profile,
   });
   const client = await initOperatorClient(accessToken);

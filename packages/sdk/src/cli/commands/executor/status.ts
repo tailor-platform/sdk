@@ -2,13 +2,15 @@ import {
   ExecutorJobStatus,
   ExecutorTargetType,
   ExecutorTriggerType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
-import { styles } from "@/cli/shared/logger";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import { styles } from "#/cli/shared/logger";
 
 // ============================================================================
 // Executor Job Status
 // ============================================================================
+
+export type ExecutorJobStatusClass = "success" | "failure" | "transient";
 
 /**
  * Colorize executor job status string.
@@ -38,11 +40,57 @@ export function colorizeExecutorJobStatus(status: string): string {
  * @returns True if status is terminal
  */
 export function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean {
+  return isExecutorJobSuccessStatus(status) || isExecutorJobFailureStatus(status);
+}
+
+/**
+ * Check if executor job status is successful.
+ * @param status - Executor job status enum value
+ * @returns True if status is success
+ */
+export function isExecutorJobSuccessStatus(status: ExecutorJobStatus): boolean {
+  return status === ExecutorJobStatus.SUCCESS;
+}
+
+/**
+ * Check if executor job status is a terminal failure.
+ * @param status - Executor job status enum value
+ * @returns True if status is failure
+ */
+export function isExecutorJobFailureStatus(status: ExecutorJobStatus): boolean {
+  return status === ExecutorJobStatus.FAILED || status === ExecutorJobStatus.CANCELED;
+}
+
+/**
+ * Check if executor job status can still progress.
+ * @param status - Executor job status enum value
+ * @returns True if status is transient
+ */
+export function isExecutorJobTransientStatus(status: ExecutorJobStatus): boolean {
   return (
-    status === ExecutorJobStatus.SUCCESS ||
-    status === ExecutorJobStatus.FAILED ||
-    status === ExecutorJobStatus.CANCELED
+    status === ExecutorJobStatus.UNSPECIFIED ||
+    status === ExecutorJobStatus.PENDING ||
+    status === ExecutorJobStatus.RUNNING
   );
+}
+
+/**
+ * Classify executor job status for waiter decisions.
+ * @param status - Executor job status enum value
+ * @returns Classified executor job status
+ */
+export function classifyExecutorJobStatus(status: ExecutorJobStatus): ExecutorJobStatusClass {
+  if (isExecutorJobSuccessStatus(status)) {
+    return "success";
+  }
+  if (isExecutorJobTerminalStatus(status)) {
+    return "failure";
+  }
+  if (isExecutorJobTransientStatus(status)) {
+    return "transient";
+  }
+  // Safety net: unknown future statuses are treated as transient
+  return "transient";
 }
 
 /**

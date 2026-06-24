@@ -3,7 +3,14 @@ import * as os from "node:os";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId, writePlatformConfig } from "./context";
+import {
+  loadAccessToken,
+  loadConfigPath,
+  loadMachineUserName,
+  loadWorkspaceId,
+  writePlatformConfig,
+} from "./context";
+import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { resetKeyringState } from "./token-store";
 
@@ -257,6 +264,200 @@ describe("loadWorkspaceId", () => {
   });
 });
 
+describe("loadMachineUserName", () => {
+  const validUUID = "12345678-1234-4abc-8def-123456789012";
+
+  beforeEach(() => {
+    vi.resetModules();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("returns machineUser from opts when provided", async () => {
+    const result = await loadMachineUserName({ machineUser: "bot" });
+    expect(result).toBe("bot");
+  });
+
+  test("opts.machineUser takes precedence over env variable", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
+    const result = await loadMachineUserName({ machineUser: "opts-bot" });
+    expect(result).toBe("opts-bot");
+  });
+
+  test("returns machineUser from env when opts not provided", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
+    const result = await loadMachineUserName();
+    expect(result).toBe("env-bot");
+  });
+
+  test("env takes precedence over profile default", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
+      current_user: null,
+    });
+    const result = await loadMachineUserName({ profile: "myprofile" });
+    expect(result).toBe("env-bot");
+  });
+
+  test("returns machine_user from profile when profile provided", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
+      current_user: null,
+    });
+    const result = await loadMachineUserName({ profile: "myprofile" });
+    expect(result).toBe("profile-bot");
+  });
+
+  test("returns undefined when profile has no machine_user", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: { myprofile: { user: "u", workspace_id: validUUID } },
+      current_user: null,
+    });
+    const result = await loadMachineUserName({ profile: "myprofile" });
+    expect(result).toBeUndefined();
+  });
+
+  test("throws when profile does not exist", async () => {
+    await expect(loadMachineUserName({ profile: "nonexistent" })).rejects.toThrow(
+      'Profile "nonexistent" not found',
+    );
+  });
+
+  test("returns undefined when nothing is set", async () => {
+    const result = await loadMachineUserName();
+    expect(result).toBeUndefined();
+  });
+
+  test("returns machine_user from env profile when TAILOR_PLATFORM_PROFILE is set", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        envprofile: { user: "u", workspace_id: validUUID, machine_user: "env-profile-bot" },
+      },
+      current_user: null,
+    });
+    const result = await loadMachineUserName();
+    expect(result).toBe("env-profile-bot");
+  });
+
+  describe("machine_user_override: deny", () => {
+    beforeEach(() => {
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {},
+        profiles: {
+          locked: {
+            user: "u",
+            workspace_id: validUUID,
+            machine_user: "profile-bot",
+            machine_user_override: "deny",
+          },
+        },
+        current_user: null,
+      });
+    });
+
+    test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when opts.machineUser differs", async () => {
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        profile: "locked",
+      }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+    });
+
+    test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when env var differs", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "other-bot");
+      const err = await loadMachineUserName({ profile: "locked" }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+    });
+
+    test("resolves when opts.machineUser matches profile's machine_user", async () => {
+      const result = await loadMachineUserName({ machineUser: "profile-bot", profile: "locked" });
+      expect(result).toBe("profile-bot");
+    });
+
+    test("resolves when env var matches profile's machine_user", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "profile-bot");
+      const result = await loadMachineUserName({ profile: "locked" });
+      expect(result).toBe("profile-bot");
+    });
+
+    test("resolves to profile's machine_user when nothing explicit is provided", async () => {
+      const result = await loadMachineUserName({ profile: "locked" });
+      expect(result).toBe("profile-bot");
+    });
+  });
+
+  test("explicit value wins over profile when profile has machine_user but no override (regression guard)", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" },
+      },
+      current_user: null,
+    });
+    const result = await loadMachineUserName({ machineUser: "explicit-bot", profile: "myprofile" });
+    expect(result).toBe("explicit-bot");
+  });
+
+  test("explicit value returned when profile in scope does not exist", async () => {
+    const result = await loadMachineUserName({ machineUser: "explicit-bot", profile: "missing" });
+    expect(result).toBe("explicit-bot");
+  });
+
+  test("rejects with MACHINE_USER_NAME_EMPTY when opts.machineUser is an empty string", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
+    const err = await loadMachineUserName({ machineUser: "" }).catch((e: unknown) => e);
+    expect(isCLIError(err)).toBe(true);
+    expect((err as { code?: string }).code).toBe("MACHINE_USER_NAME_EMPTY");
+  });
+
+  test("rejects empty opts.machineUser instead of falling back to profile default", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
+      current_user: null,
+    });
+    const err = await loadMachineUserName({ machineUser: "", profile: "myprofile" }).catch(
+      (e: unknown) => e,
+    );
+    expect(isCLIError(err)).toBe(true);
+    expect((err as { code?: string }).code).toBe("MACHINE_USER_NAME_EMPTY");
+  });
+});
+
 describe("loadAccessToken", () => {
   const validToken = "valid-access-token";
   const otherToken = "other-access-token";
@@ -312,7 +513,7 @@ describe("loadAccessToken", () => {
         },
         current_user: null,
       });
-      const result = await loadAccessToken({ useProfile: true, profile: "myprofile" });
+      const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(validToken);
     });
   });
@@ -330,7 +531,7 @@ describe("loadAccessToken", () => {
   });
 
   describe("opts.profile", () => {
-    test("returns token from profile when useProfile is true and profile provided", async () => {
+    test("returns token from profile when profile provided", async () => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -347,7 +548,7 @@ describe("loadAccessToken", () => {
         },
         current_user: null,
       });
-      const result = await loadAccessToken({ useProfile: true, profile: "myprofile" });
+      const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(validToken);
     });
 
@@ -359,12 +560,12 @@ describe("loadAccessToken", () => {
         profiles: {},
         current_user: null,
       });
-      await expect(loadAccessToken({ useProfile: true, profile: "nonexistent" })).rejects.toThrow(
+      await expect(loadAccessToken({ profile: "nonexistent" })).rejects.toThrow(
         'Profile "nonexistent" not found',
       );
     });
 
-    test("does not use profile when useProfile is false", async () => {
+    test("prefers the profile user over current_user", async () => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -375,19 +576,25 @@ describe("loadAccessToken", () => {
             token_expires_at: futureDate,
             storage: "file",
           },
+          profileuser: {
+            access_token: otherToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+            storage: "file",
+          },
         },
         profiles: {
           myprofile: { user: "profileuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
         },
         current_user: "currentuser",
       });
-      const result = await loadAccessToken({ useProfile: false, profile: "myprofile" });
-      expect(result).toBe(validToken);
+      const result = await loadAccessToken({ profile: "myprofile" });
+      expect(result).toBe(otherToken);
     });
   });
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
-    test("returns token from env profile when useProfile is true", async () => {
+    test("returns token from env profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
       writePlatformConfig({
         version: 2,
@@ -405,7 +612,7 @@ describe("loadAccessToken", () => {
         },
         current_user: null,
       });
-      const result = await loadAccessToken({ useProfile: true });
+      const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
 
@@ -434,7 +641,7 @@ describe("loadAccessToken", () => {
         },
         current_user: null,
       });
-      const result = await loadAccessToken({ useProfile: true, profile: "optsprofile" });
+      const result = await loadAccessToken({ profile: "optsprofile" });
       expect(result).toBe(validToken);
     });
   });

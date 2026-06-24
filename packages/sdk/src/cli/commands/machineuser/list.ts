@@ -1,13 +1,13 @@
 import { toJson } from "@bufbuild/protobuf";
 import { timestampDate, ValueSchema } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import type { MachineUser } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import type { MachineUser } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ListMachineUsersOptions {
   workspaceId?: string;
@@ -54,7 +54,6 @@ export async function listMachineUsers(
 ): Promise<MachineUserInfo[]> {
   // Load and validate options
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);

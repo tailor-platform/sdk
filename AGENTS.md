@@ -24,8 +24,8 @@ When editing files matching these globs, read and follow the linked rule documen
 - `**`: [Code Comments](.agents/rules/code-comments.md)
 - `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
 - `packages/sdk/src/**/*.ts`: [JSDoc Parameter Rules (SDK)](.agents/rules/jsdoc.md)
-- `packages/sdk/src/types/**/*.ts`, `packages/sdk/src/parser/**/schema.ts`, `packages/sdk/zinfer.config.ts`: [Schema Types](.agents/rules/schema-types.md)
-- `packages/sdk/src/configure/**/*.ts`, `packages/sdk/src/parser/**/*.ts`, `packages/sdk/src/cli/**/*.ts`, `packages/sdk/src/types/**/*.ts`: [SDK Internals](.agents/rules/sdk-internals.md)
+- `packages/sdk/src/types/**/*.ts`, `packages/sdk/src/parser/**/types.ts`, `packages/sdk/src/configure/**/types.ts`, `packages/sdk/src/configure/**/*.types.ts`, `packages/sdk/src/plugin/types.ts`, `packages/sdk/src/runtime/types.ts`, `packages/sdk/src/parser/**/schema.ts`, `packages/sdk/zinfer.config.ts`: [Schema Types](.agents/rules/schema-types.md)
+- `packages/sdk/src/configure/**/*.ts`, `packages/sdk/src/parser/**/*.ts`, `packages/sdk/src/cli/**/*.ts`, `packages/sdk/src/plugin/**/*.ts`, `packages/sdk/src/types/**/*.ts`: [SDK Internals](.agents/rules/sdk-internals.md)
 
 <!-- agent-rules:end -->
 
@@ -70,7 +70,7 @@ Refer to `example/` for working implementations of all patterns (config, models,
 
 Key files:
 
-- `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, definePlugins
+- `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, defineAIGateway, definePlugins
 - `example/tailordb/*.ts` - Model definitions with `db.type()`
 - `example/resolvers/*.ts` - Resolver implementations with `createResolver`
 - `example/executors/*.ts` - Executor implementations with `createExecutor`

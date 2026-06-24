@@ -1,1 +1,1 @@
-export type { WorkflowServiceConfig, WorkflowServiceInput } from "@/types/app-config";
+export type { WorkflowServiceConfig, WorkflowServiceInput } from "#/configure/config/types";

@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   changes:
+    name: Detect changes
     # No bot-skip guard here (unlike test.yml): generate must re-run on
     # tailor-pr-trigger[bot] commits so the cross-platform consistency check
     # validates the generated files the bot just committed.
@@ -22,7 +23,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.changes }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: "false"
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -40,6 +41,7 @@ jobs:
               - pnpm-lock.yaml
 
   generate:
+    name: generate # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
@@ -49,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -105,7 +107,7 @@ jobs:
         run: git config --global core.autocrlf false
 
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -117,9 +119,11 @@ jobs:
 
       - name: Check for uncommitted changes
         shell: bash
+        env:
+          PLATFORM_NAME: ${{ matrix.name }}
         run: |
           if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Generated files differ between ${{ matrix.name }} and committed files"
+            echo "::error::Generated files differ between $PLATFORM_NAME and committed files"
             echo ""
             echo "Changed files:"
             git status --porcelain
@@ -131,6 +135,7 @@ jobs:
           echo "No differences found - generate output is consistent across platforms"
 
   generate-summary:
+    name: generate-summary # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: [changes, generate, generate-cross-platform]
     if: always()
     runs-on: ubuntu-latest

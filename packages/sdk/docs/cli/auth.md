@@ -350,7 +350,7 @@ Get an access token for a machine user.
 **Usage**
 
 ```
-tailor-sdk machineuser token [options] <name>
+tailor-sdk machineuser token [options] [name]
 ```
 
 <!-- politty:command:machineuser token:usage:end -->
@@ -359,9 +359,9 @@ tailor-sdk machineuser token [options] <name>
 
 **Arguments**
 
-| Argument | Description       | Required |
-| -------- | ----------------- | -------- |
-| `name`   | Machine user name | Yes      |
+| Argument | Description                                                                 | Required |
+| -------- | --------------------------------------------------------------------------- | -------- |
+| `name`   | Machine user name. Falls back to the active profile's default machine user. | No       |
 
 <!-- politty:command:machineuser token:arguments:end -->
 

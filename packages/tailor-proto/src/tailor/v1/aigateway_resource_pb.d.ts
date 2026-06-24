@@ -53,6 +53,13 @@ export declare type AIGateway = Message<"tailor.v1.AIGateway"> & {
    * @generated from field: repeated string cors = 6;
    */
   cors: string[];
+
+  /**
+   * The base URL of the AI gateway.
+   *
+   * @generated from field: string url = 7;
+   */
+  url: string;
 };
 
 /**
@@ -60,4 +67,3 @@ export declare type AIGateway = Message<"tailor.v1.AIGateway"> & {
  * Use `create(AIGatewaySchema)` to create a new message.
  */
 export declare const AIGatewaySchema: GenMessage<AIGateway>;
-

@@ -5,21 +5,21 @@ import {
   AuthInvokerSchema,
   type AuthInvoker,
   type MachineUser,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { createPrompt } from "@toiroakr/read-multiline";
 import * as path from "pathe";
 import { parse as parseSql } from "pgsql-ast-parser";
 import { arg } from "politty";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { deploymentArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { defineAppCommand } from "../shared/command";
 import { extractAllNamespaces } from "../shared/config";
 import { loadConfig, type LoadedConfig } from "../shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "../shared/context";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "../shared/context";
 import { getEditorCommand, openInEditor } from "../shared/editor";
 import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
@@ -36,7 +36,7 @@ import {
 } from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
 import { queryEngines, type QueryEngine } from "./types";
-import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
+import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export type { QueryEngine } from "./types";
 
@@ -46,7 +46,7 @@ const queryBaseOptionsSchema = z.object({
   profile: z.string().optional(),
   configPath: z.string().optional(),
   engine: queryEngineSchema,
-  machineUser: z.string(),
+  machineUser: z.string().optional(),
 });
 const queryOptionsSchema = queryBaseOptionsSchema.extend({
   query: z.string(),
@@ -144,8 +144,17 @@ async function loadOptions(options: QueryBaseOptions) {
     );
   }
 
+  const machineUser = await loadMachineUserName({
+    machineUser: result.data.machineUser,
+    profile: result.data.profile,
+  });
+  if (!machineUser) {
+    throw new Error(
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+    );
+  }
+
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: result.data.profile,
   });
   const client = await initOperatorClient(accessToken);
@@ -167,11 +176,11 @@ async function loadOptions(options: QueryBaseOptions) {
   const { machineUser: machineUserResource } = await client.getAuthMachineUser({
     workspaceId: workspaceId,
     authNamespace: application.authNamespace,
-    name: result.data.machineUser,
+    name: machineUser,
   });
 
   if (!machineUserResource) {
-    throw new Error(`Machine user ${result.data.machineUser} not found.`);
+    throw new Error(`Machine user ${machineUser} not found.`);
   }
 
   return {
@@ -409,7 +418,7 @@ async function prepareQueryExecutor(
         error,
         engine,
         namespace,
-        machineUser: options.machineUser,
+        machineUser: machineUserResource.name,
       });
     }
   };
@@ -753,10 +762,11 @@ export const queryCommand = defineAppCommand({
       edit: arg(z.boolean().default(false), {
         description: "Open a temporary file in your editor; omit to start REPL mode",
       }),
-      "machine-user": arg(z.string(), {
+      "machine-user": arg(z.string().optional(), {
         alias: "m",
         hiddenAlias: "machineuser",
-        description: "Machine user name for query execution",
+        description:
+          "Machine user name for query execution. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
       "newline-on-enter": arg(z.boolean().optional(), {

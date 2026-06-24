@@ -7,16 +7,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   changes:
+    name: Detect changes
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read # checkout to run the paths filter
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.filter.outputs.changes }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: "false"
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -58,7 +61,7 @@ jobs:
         shell: ${{ matrix.shell }}
     steps:
       - name: checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: "false"
 
@@ -78,8 +81,10 @@ jobs:
       - name: Create workspace
         if: runner.os != 'Windows'
         working-directory: example
-        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${{ github.run_id }}-${{ matrix.slug }}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --json > workspace.json
         env:
+          RUN_ID: ${{ github.run_id }}
+          SLUG: ${{ matrix.slug }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
@@ -141,6 +146,7 @@ jobs:
         run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   deploy-result:
+    name: deploy-result # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: [changes, deploy]
     if: always()
     runs-on: ubuntu-latest

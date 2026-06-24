@@ -6,10 +6,14 @@ import type {
   DefinedAuth,
   UserAttributeListKey,
   UserAttributeMap,
-} from "@/types/auth";
-import type { AuthInvoker as ParserAuthInvoker } from "@/types/auth.generated";
-import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/types/field-types";
-import type { TailorField } from "@/types/tailor-field";
+} from "#/configure/services/auth/types";
+import type {
+  DefinedFieldMetadata,
+  FieldMetadata,
+  TailorFieldType,
+  TailorField,
+} from "#/configure/types/field.types";
+import type { AuthInvoker as ParserAuthInvoker } from "#/types/auth.generated";
 
 type MachineUserAttributeFields = Record<
   string,
@@ -68,12 +72,20 @@ export type {
   SCIMResource,
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
-} from "@/types/auth.generated";
-export type { OAuth2ClientGrantType, SCIMAttributeType, BeforeLoginHookArgs } from "@/types/auth";
+} from "#/types/auth.generated";
+export type {
+  OAuth2ClientGrantType,
+  SCIMAttributeType,
+  BeforeLoginHookArgs,
+  BeforeLoginClaims,
+  FederatedIdentity,
+  FederatedIdentityClaims,
+  FederatedIdentityProvider,
+} from "#/configure/services/auth/types";
 export type {
   AuthConnectionOAuth2Config,
   AuthConnectionConfig,
-} from "@/types/auth-connection.generated";
+} from "#/types/auth-connection.generated";
 export type {
   ValueOperand,
   UsernameFieldKey,
@@ -86,7 +98,7 @@ export type {
   AuthExternalConfig,
   AuthOwnConfig,
   DefinedAuth,
-} from "@/types/auth";
+} from "#/configure/services/auth/types";
 
 /**
  * Invoker type compatible with tailor.v1.AuthInvoker

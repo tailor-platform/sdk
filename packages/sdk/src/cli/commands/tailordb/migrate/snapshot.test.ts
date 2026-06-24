@@ -24,9 +24,9 @@ import {
   formatMigrationNumber,
   type SchemaSnapshot,
 } from "./snapshot";
+import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
 import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
-import type { ParsedField, TailorDBType } from "@/types/tailordb";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {
   const migDir = path.join(baseDir, formatMigrationNumber(num));
@@ -1052,9 +1052,9 @@ describe("snapshot", () => {
         hasWarnings: false,
         warnings: [
           {
-            kind: "field_removed",
             typeName: "Product",
             fieldName: "legacyCode",
+            reason: "Field was removed",
           },
         ],
         requiresMigrationScript: false,
@@ -1067,6 +1067,323 @@ describe("snapshot", () => {
 
       expect(loaded.warnings.length).toBe(1);
       expect(loaded.hasWarnings).toBe(true);
+    });
+  });
+
+  describe("loadSnapshot validation", () => {
+    test("loads a snapshot with a different format version", () => {
+      // example/migrations contain snapshots with version 2; the loader must
+      // not pin the version field to the current constant.
+      const filePath = path.join(testDir, "v2_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 2,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: { User: { name: "User", pluralForm: "Users", fields: {} } },
+        }),
+      );
+
+      expect(loadSnapshot(filePath).version).toBe(2);
+    });
+
+    test("rejects an ambiguous permission field-ref operand", () => {
+      const filePath = path.join(testDir, "ambiguous_operand_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                record: {
+                  create: [],
+                  read: [
+                    {
+                      permit: "allow",
+                      conditions: [[{ user: "id", record: "ownerId" }, "eq", "x"]],
+                    },
+                  ],
+                  update: [],
+                  delete: [],
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
+    test("rejects a record field-ref in GQL permission conditions", () => {
+      const filePath = path.join(testDir, "gql_record_ref_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                gql: [
+                  {
+                    permit: "allow",
+                    actions: ["read"],
+                    conditions: [[{ record: "ownerId" }, "eq", "x"]],
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
+    test("loads a snapshot with an unknown operator string", () => {
+      const filePath = path.join(testDir, "unknown_operator_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                record: {
+                  create: [],
+                  read: [
+                    {
+                      permit: "allow",
+                      conditions: [["x", "startsWith", "admin"]],
+                    },
+                  ],
+                  update: [],
+                  delete: [],
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).not.toThrow();
+    });
+
+    test("loads a snapshot with an unknown GQL action", () => {
+      const filePath = path.join(testDir, "unknown_gql_action_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                gql: [
+                  {
+                    permit: "allow",
+                    actions: ["futureAction"],
+                    conditions: [["x", "eq", "y"]],
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).not.toThrow();
+    });
+
+    test("loads a field config without required and defaults it to true", () => {
+      const filePath = path.join(testDir, "no_required_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {
+                name: { type: "string" },
+              },
+            },
+          },
+        }),
+      );
+
+      const loaded = loadSnapshot(filePath);
+      expect(loaded.types.User?.fields.name?.required).toBe(true);
+    });
+
+    test("loads a partial record permission object (only create and read)", () => {
+      const filePath = path.join(testDir, "partial_permission_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {},
+              permissions: {
+                record: {
+                  create: [{ permit: "allow", conditions: [] }],
+                  read: [{ permit: "allow", conditions: [] }],
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      const loaded = loadSnapshot(filePath);
+      expect(loaded.types.User?.permissions?.record?.create).toHaveLength(1);
+      expect(loaded.types.User?.permissions?.record?.update).toEqual([]);
+      expect(loaded.types.User?.permissions?.record?.delete).toEqual([]);
+    });
+
+    test("throws with file path when the file is not valid JSON", () => {
+      const filePath = path.join(testDir, "truncated_schema.json");
+      fs.writeFileSync(filePath, '{"version": 1, "namespace": "x"');
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
+    test("throws with file path when JSON is not an object", () => {
+      const filePath = path.join(testDir, "corrupt_schema.json");
+      fs.writeFileSync(filePath, JSON.stringify("not an object"));
+
+      expect(() => loadSnapshot(filePath)).toThrow(filePath);
+    });
+
+    test("throws with file path and offending field path when a required field has wrong type", () => {
+      const filePath = path.join(testDir, "bad_type_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({ version: 1, namespace: 42, createdAt: "t", types: {} }),
+      );
+
+      let thrownError: unknown;
+      try {
+        loadSnapshot(filePath);
+      } catch (e) {
+        thrownError = e;
+      }
+      expect(thrownError).toBeInstanceOf(Error);
+      const message = (thrownError as Error).message;
+      expect(message).toContain(filePath);
+      // z.prettifyError includes the field path ("namespace") in the output
+      expect(message).toContain("namespace");
+    });
+
+    test("loads a legacy snapshot missing newer optional fields", () => {
+      // Older snapshots may omit pluralForm and settings on a type.
+      const legacySnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Product: {
+            name: "Product",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const filePath = path.join(testDir, "legacy_schema.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacySnapshot, null, 2));
+
+      const loaded = loadSnapshot(filePath);
+      expect(loaded.types.Product?.name).toBe("Product");
+      // pluralForm is backfilled from inflection
+      expect(loaded.types.Product?.pluralForm).toBe("Products");
+    });
+
+    test("unknown extra keys survive loadSnapshot → writeSnapshot round-trip", () => {
+      // A snapshot written by a newer CLI may include unknown fields; they
+      // must not be silently dropped on load/save.
+      const snapshotWithExtra = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        futureTopLevelField: "keep-me",
+        types: {
+          Widget: {
+            name: "Widget",
+            pluralForm: "Widgets",
+            futurTypeField: "also-keep",
+            fields: {
+              id: { type: "uuid", required: true, futureFieldProp: true },
+            },
+          },
+        },
+      };
+      const loadPath = path.join(testDir, "future_schema.json");
+      fs.writeFileSync(loadPath, JSON.stringify(snapshotWithExtra, null, 2));
+
+      const loaded = loadSnapshot(loadPath);
+      const savedPath = writeSnapshot(loaded, testDir, 99);
+      const saved = JSON.parse(fs.readFileSync(savedPath, "utf-8")) as Record<string, unknown>;
+
+      expect(saved.futureTopLevelField).toBe("keep-me");
+      const widget = (saved.types as Record<string, unknown>).Widget as Record<string, unknown>;
+      expect(widget.futurTypeField).toBe("also-keep");
+      const idField = (widget.fields as Record<string, unknown>).id as Record<string, unknown>;
+      expect(idField.futureFieldProp).toBe(true);
+    });
+  });
+
+  describe("loadDiff validation", () => {
+    test("throws with file path when JSON is not an object", () => {
+      const filePath = path.join(testDir, "corrupt_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify([1, 2, 3]));
+
+      expect(() => loadDiff(filePath)).toThrow(filePath);
+    });
+
+    test("throws with file path when a required field has wrong type", () => {
+      const filePath = path.join(testDir, "bad_type_diff.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: "t",
+          changes: "not-an-array",
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          requiresMigrationScript: false,
+        }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow(filePath);
     });
   });
 
@@ -1653,6 +1970,7 @@ describe("snapshot", () => {
           foreignKey: config.foreignKey ?? false,
           foreignKeyType: config.foreignKeyType,
           allowedValues: config.allowedValues ?? [],
+          validate: [],
           ...(config.scale !== undefined && { scale: config.scale }),
         };
       }

@@ -1,12 +1,12 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { organizationArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertWritable } from "@/cli/shared/readonly-guard";
-import { assertDefined } from "@/utils/assert";
+import { organizationArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 const updateOrganizationOptionsSchema = z.object({

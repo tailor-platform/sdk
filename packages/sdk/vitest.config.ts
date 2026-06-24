@@ -3,9 +3,6 @@ import * as path from "node:path";
 import { defineConfig } from "vitest/config";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
-const srcDir = path.resolve(__dirname, "./src");
-const protoDir = path.resolve(__dirname, "../tailor-proto/src");
-
 type PackageExport = {
   import?: string;
   default?: string;
@@ -89,8 +86,6 @@ export default defineConfig({
   plugins: [{ name: "yaml-text", load: loadYamlText }],
   resolve: {
     alias: [
-      { find: /^@(?=\/|$)/, replacement: srcDir },
-      { find: /^@tailor-proto(?=\/|$)/, replacement: protoDir },
       // Keep package self-imports on the source tree so V8 coverage does not
       // remap built package exports and direct source imports as separate files.
       ...sdkSourceAliases,

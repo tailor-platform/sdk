@@ -20,10 +20,10 @@ import {
   type AuthSCIMResourceSchema,
   type TenantProviderConfigSchema,
   type UserProfileProviderConfigSchema,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { type AuthService } from "@/cli/services/auth/service";
-import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { assertDefined } from "@/utils/assert";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { type AuthService } from "#/cli/services/auth/service";
+import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/client";
+import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
@@ -41,9 +41,8 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { AuthAttributeValue } from "@/types/auth";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
+import type { AuthAttributeValue } from "#/configure/services/auth/types";
 import type {
   BuiltinIdP,
   IdProvider as IdProviderConfig,
@@ -52,7 +51,8 @@ import type {
   SCIMConfig,
   SCIMResource,
   TenantProvider as TenantProviderConfig,
-} from "@/types/auth.generated";
+} from "#/types/auth.generated";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type {
   CreateAuthHookRequestSchema,
   CreateAuthIDPConfigRequestSchema,
@@ -81,8 +81,8 @@ import type {
   UpdateAuthServiceRequestSchema,
   UpdateTenantConfigRequestSchema,
   UpdateUserProfileConfigRequestSchema,
-} from "@tailor-proto/tailor/v1/auth_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "@tailor-platform/tailor-proto/auth_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply auth-related changes for the given phase.

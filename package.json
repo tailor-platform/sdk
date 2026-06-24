@@ -21,6 +21,8 @@
     "check:knip": "pnpm -r run knip",
     "check:publint": "pnpm -r run publint",
     "check:jsdoc": "pnpm -r run check:public-api-jsdoc",
+    "check:zod-isolation": "pnpm -r run check:zod-isolation",
+    "check:import-cycles": "pnpm -r run check:import-cycles",
     "lint": "pnpm run build && pnpm -r run lint && pnpm run lint:vitest",
     "lint:fix": "pnpm run build && pnpm -r run lint:fix && pnpm run lint:vitest:fix",
     "lint:vitest": "oxlint --config oxlint.vitest.json .",
@@ -35,21 +37,21 @@
     "perf:typecheck": "pnpm --filter example perf:typecheck"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "0.7.0",
-    "@changesets/cli": "2.31.0",
+    "@changesets/changelog-github": "1.0.0-next.5",
+    "@changesets/cli": "3.0.0-next.5",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.13.1",
-    "knip": "6.16.1",
+    "@types/node": "24.13.2",
+    "knip": "6.17.1",
     "lefthook": "2.1.9",
-    "oxfmt": "0.53.0",
-    "oxlint": "1.68.0",
+    "oxfmt": "0.55.0",
+    "oxlint": "1.70.0",
     "pkg-pr-new": "0.0.75",
     "publint": "0.3.21",
     "tsx": "4.22.4",
-    "typescript": "5.9.3"
+    "typescript": "6.0.3"
   },
   "engines": {
     "node": ">= 22.14.0"
   },
-  "packageManager": "pnpm@11.5.2"
+  "packageManager": "pnpm@11.8.0"
 }

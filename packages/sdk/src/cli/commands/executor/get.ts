@@ -1,11 +1,11 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
+import { workspaceArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 import { type ExecutorInfo, toExecutorInfo } from "./transform";
 
 type ExecutorLike = {
@@ -71,7 +71,6 @@ export async function getExecutor<E extends ExecutorLike>(
   // Discriminant: legacy options have top-level 'name', typed options use 'executor'.
   const name = "name" in options ? options.name : options.executor.name;
   const accessToken = await loadAccessToken({
-    useProfile: true,
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);

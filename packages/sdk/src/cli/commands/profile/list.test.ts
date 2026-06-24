@@ -2,10 +2,10 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { writePlatformConfig } from "@/cli/shared/context";
-import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
-import { resetKeyringState } from "@/cli/shared/token-store";
+import { writePlatformConfig } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { resetKeyringState } from "#/cli/shared/token-store";
 import { listCommand } from "./list";
 import { profileCommand } from ".";
 
@@ -71,5 +71,109 @@ describe("profile list", () => {
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);
+  });
+
+  test("includes machineUser in JSON output when profile has machine_user set", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          machine_user: "bot",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ name: "myprofile", machineUser: "bot" });
+  });
+
+  test("omits machineUser from JSON output when profile has no machine_user", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).not.toHaveProperty("machineUser");
+  });
+
+  test("includes machineUserOverride: deny when machine_user_override is set", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          machine_user: "bot",
+          machine_user_override: "deny",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ machineUser: "bot", machineUserOverride: "deny" });
+  });
+
+  test("includes machineUserOverride: allow when machine_user is set but override is absent", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          machine_user: "bot",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ machineUser: "bot", machineUserOverride: "allow" });
   });
 });

@@ -9,8 +9,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   changes:
+    name: Detect changes
     # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
     if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     runs-on: ubuntu-latest
@@ -20,7 +23,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.changes }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: "false"
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -53,7 +56,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -75,6 +78,7 @@ jobs:
         run: pnpm -r run test --project 'unit*'
 
   test-summary:
+    name: test-summary # required status check context (ruleset status_check_main) — keep equal to the job id
     needs: [changes, test]
     if: >-
       always() &&

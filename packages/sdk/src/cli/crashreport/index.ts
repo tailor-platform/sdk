@@ -1,5 +1,6 @@
-import { logger } from "@/cli/shared/logger";
-import { readPackageJson } from "@/cli/shared/package-json";
+import { logger } from "#/cli/shared/logger";
+import { readPackageJson } from "#/cli/shared/package-json";
+import { userAgentFromVersion } from "#/cli/shared/user-agent";
 import { parseCrashReportConfig } from "./config";
 import { buildCrashReport, type ErrorType } from "./report";
 import { sendCrashReport } from "./sender";
@@ -41,10 +42,7 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
     }
 
     if (config.remoteEnabled) {
-      // Lazy import: client.ts pulls in heavy dependencies (OAuth2, Connect, Protobuf)
-      // that should not be loaded on the startup critical path via initCrashReporting().
-      const { userAgent } = await import("@/cli/shared/client");
-      const ua = await userAgent();
+      const ua = userAgentFromVersion(sdkVersion);
       await sendCrashReport(report, ua);
     }
   } catch {
