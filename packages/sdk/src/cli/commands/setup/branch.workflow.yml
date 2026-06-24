@@ -39,7 +39,7 @@ jobs:
       cancel-in-progress: true
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
         uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
@@ -74,7 +74,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
         uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
         with:
