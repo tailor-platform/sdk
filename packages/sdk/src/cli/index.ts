@@ -35,21 +35,9 @@ import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
-import { isNativeTypeScriptRuntime } from "./shared/runtime";
+import { registerTsHook } from "./shared/register-ts-hook";
 
-if (!isNativeTypeScriptRuntime()) {
-  const mod = await import("node:module");
-  // registerHooks is available since Node 22.15.0; fall back to register() on older versions.
-  const registerHooks = (mod as unknown as Record<string, unknown>).registerHooks as
-    | ((opts: { resolve?: unknown; load?: unknown }) => void)
-    | undefined;
-  if (registerHooks) {
-    const { resolveSync, loadSync } = await import("./ts-hook.mjs");
-    registerHooks({ resolve: resolveSync, load: loadSync });
-  } else {
-    mod.register(new URL("./ts-hook.mjs", import.meta.url), import.meta.url);
-  }
-}
+await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 
 // Runs before globalArgs effects load --env-file, so env file overrides for
 // TAILOR_CRASH_REPORTS_* are not available for early startup failures.

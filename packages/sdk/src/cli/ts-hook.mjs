@@ -20,11 +20,14 @@ export async function resolve(specifier, context, nextResolve) {
     if (err.code !== "ERR_MODULE_NOT_FOUND") throw err;
     if (!specifier.startsWith(".") && !specifier.startsWith("/")) throw err;
 
-    for (const ext of TS_EXTENSIONS) {
-      try {
-        return await nextResolve(specifier + ext, context);
-      } catch (e) {
-        if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+    const lastSegment = specifier.split("/").pop() ?? "";
+    if (!lastSegment.includes(".")) {
+      for (const ext of TS_EXTENSIONS) {
+        try {
+          return await nextResolve(specifier + ext, context);
+        } catch (e) {
+          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+        }
       }
     }
 
@@ -43,7 +46,7 @@ export async function resolve(specifier, context, nextResolve) {
 }
 
 export async function load(url, context, nextLoad) {
-  if (TS_EXTENSIONS.some((ext) => url.endsWith(ext))) {
+  if (url.startsWith("file:") && TS_EXTENSIONS.some((ext) => new URL(url).pathname.endsWith(ext))) {
     const filePath = fileURLToPath(url);
     const source = await readFile(filePath, "utf-8");
     const { code } = transformSync(source, { mode: "transform", filename: filePath });
@@ -60,11 +63,14 @@ export function resolveSync(specifier, context, nextResolve) {
     if (err.code !== "ERR_MODULE_NOT_FOUND") throw err;
     if (!specifier.startsWith(".") && !specifier.startsWith("/")) throw err;
 
-    for (const ext of TS_EXTENSIONS) {
-      try {
-        return nextResolve(specifier + ext, context);
-      } catch (e) {
-        if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+    const lastSegment = specifier.split("/").pop() ?? "";
+    if (!lastSegment.includes(".")) {
+      for (const ext of TS_EXTENSIONS) {
+        try {
+          return nextResolve(specifier + ext, context);
+        } catch (e) {
+          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+        }
       }
     }
 
@@ -83,7 +89,7 @@ export function resolveSync(specifier, context, nextResolve) {
 }
 
 export function loadSync(url, context, nextLoad) {
-  if (TS_EXTENSIONS.some((ext) => url.endsWith(ext))) {
+  if (url.startsWith("file:") && TS_EXTENSIONS.some((ext) => new URL(url).pathname.endsWith(ext))) {
     const filePath = fileURLToPath(url);
     const source = readFileSync(filePath, "utf-8");
     const { code } = transformSync(source, { mode: "transform", filename: filePath });

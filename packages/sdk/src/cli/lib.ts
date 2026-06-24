@@ -1,19 +1,7 @@
 // CLI API exports for programmatic usage
-import { isNativeTypeScriptRuntime } from "./shared/runtime";
+import { registerTsHook } from "./shared/register-ts-hook";
 
-if (!isNativeTypeScriptRuntime()) {
-  const mod = await import("node:module");
-  // registerHooks is available since Node 22.15.0; fall back to register() on older versions.
-  const registerHooks = (mod as unknown as Record<string, unknown>).registerHooks as
-    | ((opts: { resolve?: unknown; load?: unknown }) => void)
-    | undefined;
-  if (registerHooks) {
-    const { resolveSync, loadSync } = await import("./ts-hook.mjs");
-    registerHooks({ resolve: resolveSync, load: loadSync });
-  } else {
-    mod.register(new URL("./ts-hook.mjs", import.meta.url), import.meta.url);
-  }
-}
+await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
 export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
