@@ -74,11 +74,11 @@ importers:
         specifier: 7.0.0-dev.20260619.1
         version: 7.0.0-dev.20260619.1
       graphql:
-        specifier: 16.14.2
-        version: 16.14.2
+        specifier: 17.0.1
+        version: 17.0.1
       graphql-request:
         specifier: 7.4.0
-        version: 7.4.0(graphql@16.14.2)
+        version: 7.4.0(graphql@17.0.1)
       multiline-ts:
         specifier: 4.0.1
         version: 4.0.1
@@ -348,11 +348,11 @@ importers:
         specifier: 24.13.2
         version: 24.13.2
       graphql:
-        specifier: 16.14.2
-        version: 16.14.2
+        specifier: 17.0.1
+        version: 17.0.1
       graphql-request:
         specifier: 7.4.0
-        version: 7.4.0(graphql@16.14.2)
+        version: 7.4.0(graphql@17.0.1)
       oxfmt:
         specifier: 0.55.0
         version: 0.55.0
@@ -373,7 +373,7 @@ importers:
     dependencies:
       '@0no-co/graphql.web':
         specifier: 1.3.2
-        version: 1.3.2(graphql@16.14.2)
+        version: 1.3.2(graphql@17.0.1)
       '@badgateway/oauth2-client':
         specifier: 3.3.1
         version: 3.3.1
@@ -433,7 +433,7 @@ importers:
         version: 0.4.1
       '@urql/core':
         specifier: 6.0.2
-        version: 6.0.2(graphql@16.14.2)
+        version: 6.0.2(graphql@17.0.1)
       chalk:
         specifier: 5.6.2
         version: 5.6.2
@@ -456,8 +456,8 @@ importers:
         specifier: 17.6.0
         version: 17.6.0
       graphql:
-        specifier: 16.14.2
-        version: 16.14.2
+        specifier: 17.0.1
+        version: 17.0.1
       inflection:
         specifier: 3.0.2
         version: 3.0.2
@@ -2842,9 +2842,9 @@ packages:
     peerDependencies:
       graphql: 14 - 16
 
-  graphql@16.14.2:
-    resolution: {integrity: sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA==}
-    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+  graphql@17.0.1:
+    resolution: {integrity: sha512-8eWbg5Zcv/8o20nzEjHUGPTj20MLFJjc5kagbIPxbaeGxvFwpitJhemEC/k17n5+UD4M/9ea5rTuce78mELujQ==}
+    engines: {node: ^22.0.0 || ^24.0.0 || ^25.0.0 || >=26.0.0}
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -3889,9 +3889,9 @@ packages:
 
 snapshots:
 
-  '@0no-co/graphql.web@1.3.2(graphql@16.14.2)':
+  '@0no-co/graphql.web@1.3.2(graphql@17.0.1)':
     optionalDependencies:
-      graphql: 16.14.2
+      graphql: 17.0.1
 
   '@ast-grep/napi-darwin-arm64@0.43.0':
     optional: true
@@ -4236,9 +4236,9 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@graphql-typed-document-node/core@3.2.0(graphql@16.14.2)':
+  '@graphql-typed-document-node/core@3.2.0(graphql@17.0.1)':
     dependencies:
-      graphql: 16.14.2
+      graphql: 17.0.1
 
   '@inquirer/ansi@2.0.7': {}
 
@@ -5102,9 +5102,9 @@ snapshots:
       '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260619.1
       '@typescript/native-preview-win32-x64': 7.0.0-dev.20260619.1
 
-  '@urql/core@6.0.2(graphql@16.14.2)':
+  '@urql/core@6.0.2(graphql@17.0.1)':
     dependencies:
-      '@0no-co/graphql.web': 1.3.2(graphql@16.14.2)
+      '@0no-co/graphql.web': 1.3.2(graphql@17.0.1)
       wonka: 6.3.6
     transitivePeerDependencies:
       - graphql
@@ -5596,12 +5596,12 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  graphql-request@7.4.0(graphql@16.14.2):
+  graphql-request@7.4.0(graphql@17.0.1):
     dependencies:
-      '@graphql-typed-document-node/core': 3.2.0(graphql@16.14.2)
-      graphql: 16.14.2
+      '@graphql-typed-document-node/core': 3.2.0(graphql@17.0.1)
+      graphql: 17.0.1
 
-  graphql@16.14.2: {}
+  graphql@17.0.1: {}
 
   has-flag@4.0.0: {}
 
