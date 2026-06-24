@@ -46,12 +46,7 @@ export async function load(url, context, nextLoad) {
   if (TS_EXTENSIONS.some((ext) => url.endsWith(ext))) {
     const filePath = fileURLToPath(url);
     const source = await readFile(filePath, "utf-8");
-    const { code } = transformSync(source, {
-      mode: "transform",
-      filename: filePath,
-      minify: true,
-      jsc: { minify: { compress: true, mangle: false } },
-    });
+    const { code } = transformSync(source, { mode: "transform", filename: filePath });
     return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
   }
   return nextLoad(url, context);
@@ -91,12 +86,7 @@ export function loadSync(url, context, nextLoad) {
   if (TS_EXTENSIONS.some((ext) => url.endsWith(ext))) {
     const filePath = fileURLToPath(url);
     const source = readFileSync(filePath, "utf-8");
-    const { code } = transformSync(source, {
-      mode: "transform",
-      filename: filePath,
-      minify: true,
-      jsc: { minify: { compress: true, mangle: false } },
-    });
+    const { code } = transformSync(source, { mode: "transform", filename: filePath });
     return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
   }
   return nextLoad(url, context);
