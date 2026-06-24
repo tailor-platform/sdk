@@ -561,6 +561,27 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
   });
 
+  test("rejects allowedReturnOrigins where a typo'd literal origin ends in :url", () => {
+    const policy = {
+      enableMfa: true,
+      // `:url` here was meant as a placeholder but the leading scheme/host
+      // makes it an invalid hybrid; treating it as a placeholder would silently
+      // try to resolve `https://app.example.com` as a static-website name.
+      allowedReturnOrigins: ["https://app.example.com:url"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
+  });
+
+  test("rejects allowedReturnOrigins with :url placeholder using invalid slug", () => {
+    const policy = {
+      enableMfa: true,
+      allowedReturnOrigins: ["My_Frontend:url"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
+  });
+
   test("accepts mfaIssuer", () => {
     const policy = {
       enableMfa: true,

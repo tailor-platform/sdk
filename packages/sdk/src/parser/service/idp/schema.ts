@@ -55,9 +55,13 @@ export const IdPGqlOperationsSchema = z
 export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
 
 // Origins are either a literal http(s) origin (scheme + host + optional port,
-// no path/query/fragment) or a static-website `:url` placeholder that the CLI
-// resolves to a real origin at apply time.
-const allowedReturnOriginPattern = /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[^\s]+:url)$/;
+// no path/query/fragment) or a static-website `<name>:url` placeholder that
+// the CLI resolves to a real origin at apply time. The placeholder branch
+// uses the same slug rule as the platform's static-website name validator so
+// typos like `https://app.example.com:url` are rejected instead of being
+// silently interpreted as a website name at apply time.
+const allowedReturnOriginPattern =
+  /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url)$/;
 
 export const IdPUserAuthPolicySchema = z
   .object({

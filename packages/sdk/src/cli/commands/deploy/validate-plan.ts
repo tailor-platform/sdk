@@ -255,11 +255,12 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     if (!Array.isArray(origins) || origins.length === 0) {
       return item;
     }
-    // Match the parser schema's placeholder shape exactly (`<name>:url`, no
-    // path/query/fragment). A broader regex would mask schema-rejected inputs
-    // that should still surface here as validation errors.
+    // Match the parser schema's placeholder shape exactly (a static-website
+    // slug followed by `:url`, no path/query/fragment). A broader regex would
+    // mask schema-rejected inputs that should still surface here as
+    // validation errors.
     const substituted = origins.map((origin) =>
-      typeof origin === "string" && /^[^\s]+:url$/.test(origin)
+      typeof origin === "string" && /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url$/.test(origin)
         ? placeholderOriginReplacement
         : origin,
     );

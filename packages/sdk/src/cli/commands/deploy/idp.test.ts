@@ -108,3 +108,113 @@ describe("applyIdP phase separation", () => {
     expect(client.deleteIdPService).not.toHaveBeenCalled();
   });
 });
+
+describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
+  function createPlanResult(opts: {
+    op: "create" | "update";
+    origins: string[];
+  }): Awaited<ReturnType<typeof planIdP>> {
+    const entry = {
+      name: "test-idp",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-idp",
+        userAuthPolicy: {
+          enableMfa: true,
+          allowedReturnOrigins: [...opts.origins],
+        },
+      },
+      metaRequest: { trn: "", labels: {} },
+    };
+    return {
+      changeSet: {
+        service: {
+          creates: opts.op === "create" ? [entry] : [],
+          updates: opts.op === "update" ? [entry] : [],
+          deletes: [],
+          title: "IdP Services",
+          isEmpty: () => false,
+          print: () => {},
+        },
+        client: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          title: "IdP Clients",
+          isEmpty: () => true,
+          print: () => {},
+        },
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    } as unknown as Awaited<ReturnType<typeof planIdP>>;
+  }
+
+  function createClient() {
+    return {
+      createIdPService: vi.fn().mockResolvedValue({}),
+      updateIdPService: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+      getStaticWebsite: vi
+        .fn()
+        .mockResolvedValue({ staticwebsite: { url: "https://my-site.example.com" } }),
+    } as unknown as OperatorClient;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("resolves :url placeholder before createIdPService", async () => {
+    const client = createClient();
+    await applyIdP(
+      client,
+      createPlanResult({ op: "create", origins: ["my-site:url", "https://other.example.com"] }),
+      "create-update",
+    );
+
+    expect(client.getStaticWebsite).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      name: "my-site",
+    });
+    expect(client.createIdPService).toHaveBeenCalledTimes(1);
+    const req = (client.createIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      userAuthPolicy: { allowedReturnOrigins: string[] };
+    };
+    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual([
+      "https://my-site.example.com",
+      "https://other.example.com",
+    ]);
+  });
+
+  test("resolves :url placeholder before updateIdPService", async () => {
+    const client = createClient();
+    await applyIdP(
+      client,
+      createPlanResult({ op: "update", origins: ["my-site:url"] }),
+      "create-update",
+    );
+
+    expect(client.updateIdPService).toHaveBeenCalledTimes(1);
+    const req = (client.updateIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      userAuthPolicy: { allowedReturnOrigins: string[] };
+    };
+    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual(["https://my-site.example.com"]);
+  });
+
+  test("skips static-website lookup when allowedReturnOrigins has no placeholder", async () => {
+    const client = createClient();
+    await applyIdP(
+      client,
+      createPlanResult({ op: "create", origins: ["https://app.example.com"] }),
+      "create-update",
+    );
+
+    expect(client.getStaticWebsite).not.toHaveBeenCalled();
+    const req = (client.createIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      userAuthPolicy: { allowedReturnOrigins: string[] };
+    };
+    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual(["https://app.example.com"]);
+  });
+});
