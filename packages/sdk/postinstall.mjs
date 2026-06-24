@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
-import { register, registerHooks } from "node:module";
+import * as nodeModule from "node:module";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { findUpSync } from "find-up-simple";
@@ -32,11 +32,12 @@ async function install() {
   }
 
   try {
+    const registerHooks = nodeModule.registerHooks;
     if (registerHooks) {
       const { resolveSync, loadSync } = await import("./dist/cli/ts-hook.mjs");
       registerHooks({ resolve: resolveSync, load: loadSync });
     } else {
-      register(new URL("./dist/cli/ts-hook.mjs", import.meta.url), import.meta.url);
+      nodeModule.register(new URL("./dist/cli/ts-hook.mjs", import.meta.url), import.meta.url);
     }
     const configDir = dirname(configPath);
     process.chdir(configDir);
