@@ -46,11 +46,16 @@ export async function resolve(specifier, context, nextResolve) {
 }
 
 export async function load(url, context, nextLoad) {
-  if (url.startsWith("file:") && TS_EXTENSIONS.some((ext) => new URL(url).pathname.endsWith(ext))) {
-    const filePath = fileURLToPath(url);
-    const source = await readFile(filePath, "utf-8");
-    const { code } = transformSync(source, { mode: "transform", filename: filePath });
-    return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
+  if (url.startsWith("file:")) {
+    const parsedUrl = new URL(url);
+    if (TS_EXTENSIONS.some((ext) => parsedUrl.pathname.endsWith(ext))) {
+      parsedUrl.search = "";
+      parsedUrl.hash = "";
+      const filePath = fileURLToPath(parsedUrl);
+      const source = await readFile(filePath, "utf-8");
+      const { code } = transformSync(source, { mode: "transform", filename: filePath });
+      return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
+    }
   }
   return nextLoad(url, context);
 }
@@ -89,11 +94,16 @@ export function resolveSync(specifier, context, nextResolve) {
 }
 
 export function loadSync(url, context, nextLoad) {
-  if (url.startsWith("file:") && TS_EXTENSIONS.some((ext) => new URL(url).pathname.endsWith(ext))) {
-    const filePath = fileURLToPath(url);
-    const source = readFileSync(filePath, "utf-8");
-    const { code } = transformSync(source, { mode: "transform", filename: filePath });
-    return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
+  if (url.startsWith("file:")) {
+    const parsedUrl = new URL(url);
+    if (TS_EXTENSIONS.some((ext) => parsedUrl.pathname.endsWith(ext))) {
+      parsedUrl.search = "";
+      parsedUrl.hash = "";
+      const filePath = fileURLToPath(parsedUrl);
+      const source = readFileSync(filePath, "utf-8");
+      const { code } = transformSync(source, { mode: "transform", filename: filePath });
+      return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
+    }
   }
   return nextLoad(url, context);
 }
