@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -216,5 +217,44 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
       userAuthPolicy: { allowedReturnOrigins: string[] };
     };
     expect(req.userAuthPolicy.allowedReturnOrigins).toEqual(["https://app.example.com"]);
+  });
+
+  test("fails fast when a placeholder cannot be resolved (NotFound)", async () => {
+    const client = {
+      createIdPService: vi.fn().mockResolvedValue({}),
+      updateIdPService: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+      getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+    } as unknown as OperatorClient;
+
+    await expect(
+      applyIdP(
+        client,
+        createPlanResult({ op: "create", origins: ["missing-site:url"] }),
+        "create-update",
+      ),
+    ).rejects.toThrow(/1 of 1 entries could not be resolved/);
+    expect(client.createIdPService).not.toHaveBeenCalled();
+  });
+
+  test("fails fast when a placeholder resolves to a website without URL", async () => {
+    const client = {
+      createIdPService: vi.fn().mockResolvedValue({}),
+      updateIdPService: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+      getStaticWebsite: vi.fn().mockResolvedValue({ staticwebsite: { url: "" } }),
+    } as unknown as OperatorClient;
+
+    await expect(
+      applyIdP(
+        client,
+        createPlanResult({
+          op: "update",
+          origins: ["unassigned-site:url", "https://other.example.com"],
+        }),
+        "create-update",
+      ),
+    ).rejects.toThrow(/1 of 2 entries could not be resolved/);
+    expect(client.updateIdPService).not.toHaveBeenCalled();
   });
 });

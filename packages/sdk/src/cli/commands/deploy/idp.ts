@@ -53,15 +53,28 @@ async function resolveServiceReturnOrigins(
   client: OperatorClient,
   request: IdPServiceMutationRequest,
 ): Promise<void> {
-  if (!request.userAuthPolicy?.allowedReturnOrigins?.length) {
+  const policy = request.userAuthPolicy;
+  const originals = policy?.allowedReturnOrigins;
+  if (!policy || !originals?.length) {
     return;
   }
-  request.userAuthPolicy.allowedReturnOrigins = await resolveStaticWebsiteUrls(
+  const resolved = await resolveStaticWebsiteUrls(
     client,
     assertDefined(request.workspaceId, "request missing workspaceId"),
-    request.userAuthPolicy.allowedReturnOrigins,
+    originals,
     `IdP service "${request.namespaceName ?? ""}" allowedReturnOrigins`,
   );
+  // resolveStaticWebsiteUrls warn-and-drops unresolvable entries, which is fine
+  // for CORS but would silently clear an authoritative field here (UpdateIdP is
+  // a full replacement, and `enable_mfa: true` requires ≥1 origin). Fail fast.
+  if (resolved.length !== originals.length) {
+    throw new Error(
+      `IdP service "${request.namespaceName ?? ""}" allowedReturnOrigins: ` +
+        `${originals.length - resolved.length} of ${originals.length} entries could not be resolved. ` +
+        `Check that each "<name>:url" entry refers to a deployed static website.`,
+    );
+  }
+  policy.allowedReturnOrigins = resolved;
 }
 
 /**
