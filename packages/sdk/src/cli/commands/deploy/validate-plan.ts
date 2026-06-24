@@ -139,8 +139,9 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  *
  * Collections not validated: idp client, tailorDB gqlPermission, functionRegistry — no
  * buf.validate annotations.
- * Application cors is excluded: static-website URL placeholders are resolved at apply time
- * and a bare cors array carries no constraint that would false-positive when omitted.
+ * Application cors and IdP userAuthPolicy.allowedReturnOrigins are excluded:
+ * static-website URL placeholders are resolved at apply time, so the relevant
+ * origin/URL constraints would false-positive on `<name>:url` entries here.
  * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
  * and the map field carries no min_items constraint. Job names are validated separately via
  * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
@@ -238,15 +239,26 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     staticWebsite.customDomainChangeSet.creates as HasRequest[],
   );
 
+  // userAuthPolicy.allowedReturnOrigins is excluded: static-website URL
+  // placeholders are resolved at apply time, so the origin-format regex would
+  // false-positive on `<name>:url` entries here.
+  const stripIdpReturnOrigins = (item: HasRequest): HasRequest => {
+    const request = item.request as { userAuthPolicy?: Record<string, unknown> };
+    if (!request.userAuthPolicy) {
+      return item;
+    }
+    const { allowedReturnOrigins: _omit, ...rest } = request.userAuthPolicy;
+    return { ...item, request: { ...request, userAuthPolicy: rest } };
+  };
   creates(
     CreateIdPServiceRequestSchema,
     "IdP service",
-    idp.changeSet.service.creates as HasRequest[],
+    (idp.changeSet.service.creates as HasRequest[]).map(stripIdpReturnOrigins),
   );
   updates(
     UpdateIdPServiceRequestSchema,
     "IdP service",
-    idp.changeSet.service.updates as HasRequest[],
+    (idp.changeSet.service.updates as HasRequest[]).map(stripIdpReturnOrigins),
   );
 
   // Validate Secret Manager vault/secret names derived from IdP client creates and updates.
