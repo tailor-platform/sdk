@@ -1002,6 +1002,22 @@ describe("IdPSchema permission tests", () => {
     );
   });
 
+  test("rejects enableMfa: true when permission is omitted entirely", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      userAuthPolicy: {
+        enableMfa: true,
+        allowedReturnOrigins: ["https://app.example.com"],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).toThrow(
+      "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true",
+    );
+  });
+
   test("accepts permission with explicit empty unenrollMfa when enableMfa is true", () => {
     const config = {
       name: "test-idp",

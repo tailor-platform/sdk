@@ -331,12 +331,11 @@ export const IdPSchema = z
   })
   .refine(
     (data) =>
-      !data.permission ||
       !data.userAuthPolicy?.enableMfa ||
-      data.permission.unenrollMfa !== undefined,
+      (data.permission !== undefined && data.permission.unenrollMfa !== undefined),
     {
       message:
-        "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true (set [{ conditions: [...], permit: true }] to allow, or [] to deny all)",
+        "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true (set [{ conditions: [...], permit: true }] to allow, or [] to deny all). permission itself must also be defined.",
       path: ["permission", "unenrollMfa"],
     },
   )
