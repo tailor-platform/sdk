@@ -182,6 +182,14 @@ defineIdp("my-idp", {
     allowedReturnOrigins: [website.url, "https://admin.example.com"],
     mfaIssuer: "My App",
   },
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+  },
 });
 ```
 
@@ -199,6 +207,7 @@ defineIdp("my-idp", {
 - `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
 - `requireMfa: true` requires `enableMfa: true`.
 - `enableMfa: true` requires at least one entry in `allowedReturnOrigins`.
+- `enableMfa: true` requires `permission` to be defined and to include an explicit `unenrollMfa` policy (an empty array `[]` to deny is fine).
 
 ### gqlOperations
 
