@@ -1,4 +1,4 @@
-import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 
 /**
  * Convert function execution status enum to string.

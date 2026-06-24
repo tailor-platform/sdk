@@ -2,9 +2,9 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
-import { captureStderr } from "@/cli/shared/test-helpers/capture-output";
-import { resetKeyringState } from "@/cli/shared/token-store";
+import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
+import { resetKeyringState } from "#/cli/shared/token-store";
 import { switchCommand } from "./switch";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-user-switch-${Date.now()}-${Math.random()}`);

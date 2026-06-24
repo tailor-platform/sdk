@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { ensureSecretDir, writeSecretFile } from "@/cli/shared/secret-file";
+import { ensureSecretDir, writeSecretFile } from "#/cli/shared/secret-file";
 import type { CrashReport } from "./report";
 
 const MAX_CRASH_FILES = 10;

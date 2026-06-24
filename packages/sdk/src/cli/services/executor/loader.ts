@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { ExecutorSchema } from "@/parser/service/executor";
-import type { Executor } from "@/types/executor.generated";
+import { ExecutorSchema } from "#/parser/service/executor/index";
+import type { Executor } from "#/types/executor.generated";
 
 /**
  * Load and validate an executor definition from a file.

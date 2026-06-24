@@ -6,13 +6,13 @@ import type {
   DefinedAuth,
   UserAttributeListKey,
   UserAttributeMap,
-} from "@/configure/services/auth/types";
+} from "#/configure/services/auth/types";
 import type {
   DefinedFieldMetadata,
   FieldMetadata,
   TailorFieldType,
   TailorField,
-} from "@/configure/types/field.types";
+} from "#/configure/types/field.types";
 
 type MachineUserAttributeFields = Record<
   string,
@@ -71,7 +71,7 @@ export type {
   SCIMResource,
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
-} from "@/types/auth.generated";
+} from "#/types/auth.generated";
 export type {
   OAuth2ClientGrantType,
   SCIMAttributeType,
@@ -80,11 +80,11 @@ export type {
   FederatedIdentity,
   FederatedIdentityClaims,
   FederatedIdentityProvider,
-} from "@/configure/services/auth/types";
+} from "#/configure/services/auth/types";
 export type {
   AuthConnectionOAuth2Config,
   AuthConnectionConfig,
-} from "@/types/auth-connection.generated";
+} from "#/types/auth-connection.generated";
 export type {
   ValueOperand,
   UsernameFieldKey,
@@ -97,7 +97,7 @@ export type {
   AuthExternalConfig,
   AuthOwnConfig,
   DefinedAuth,
-} from "@/configure/services/auth/types";
+} from "#/configure/services/auth/types";
 
 /**
  * Define an auth service for the Tailor SDK.

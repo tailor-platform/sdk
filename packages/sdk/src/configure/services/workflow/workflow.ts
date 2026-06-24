@@ -1,9 +1,9 @@
 /* oxlint-disable typescript/no-explicit-any */
-import { brandValue } from "@/utils/brand";
+import { brandValue } from "#/utils/brand";
 import { dispatchTriggerWorkflow } from "./registry";
+import type { MachineUserName } from "#/configure/types/machine-user";
+import type { ConcurrencyPolicy, RetryPolicy } from "#/types/workflow.generated";
 import type { WorkflowJob } from "./job";
-import type { MachineUserName } from "@/configure/types/machine-user";
-import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
 
 export type { ConcurrencyPolicy, RetryPolicy };
 

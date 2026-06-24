@@ -23,15 +23,15 @@
  */
 
 import { type Mock, vi } from "vitest";
-import { TRIGGER_DEFAULT } from "@/configure/services/workflow/registry";
-import { assertDefined } from "@/utils/assert";
-import { platformSerialize } from "@/utils/test/platform-serialize";
+import { TRIGGER_DEFAULT } from "#/configure/services/workflow/registry";
+import { assertDefined } from "#/utils/assert";
+import { platformSerialize } from "#/utils/test/platform-serialize";
 import {
   clearWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../configure/services/workflow/test-env-key";
+import type { TailorEnv } from "#/runtime/types";
 import type { User as IdpUser } from "../runtime/idp";
-import type { TailorEnv } from "@/runtime/types";
 
 export { RUNTIME_FLAG_KEY } from "./globals";
 

@@ -1,9 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import pLimit from "p-limit";
-import { formatTimestamp } from "@/cli/shared/format";
-import { logger, type FieldTransformer } from "@/cli/shared/logger";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
+import { formatTimestamp } from "#/cli/shared/format";
+import { logger, type FieldTransformer } from "#/cli/shared/logger";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 export interface WorkspaceInfo {
   id: string;

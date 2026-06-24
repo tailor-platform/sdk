@@ -17,19 +17,19 @@ export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { generateUserTypes } from "./shared/type-generator";
-export type { GeneratorResult, PluginAttachment } from "@/plugin/types";
-export type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
-export type { Resolver } from "@/types/resolver.generated";
-export type { Executor } from "@/types/executor.generated";
+export type { GeneratorResult, PluginAttachment } from "#/plugin/types";
+export type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
+export type { Resolver } from "#/types/resolver.generated";
+export type { Executor } from "#/types/executor.generated";
 
 /** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
-export { kyselyTypePlugin } from "@/plugin/builtin/kysely-type";
+export { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/enum-constants' instead */
-export { enumConstantsPlugin } from "@/plugin/builtin/enum-constants";
+export { enumConstantsPlugin } from "#/plugin/builtin/enum-constants/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/file-utils' instead */
-export { fileUtilsPlugin } from "@/plugin/builtin/file-utils";
+export { fileUtilsPlugin } from "#/plugin/builtin/file-utils/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
-export { seedPlugin } from "@/plugin/builtin/seed";
+export { seedPlugin } from "#/plugin/builtin/seed/index";
 
 export { show, type ShowOptions, type ApplicationInfo } from "./commands/show";
 export { remove, type RemoveOptions } from "./commands/remove";
@@ -218,4 +218,4 @@ export {
   type ExecutionWaitResult,
 } from "./shared/script-executor";
 export { initOperatorClient, type OperatorClient } from "./shared/client";
-export type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+export type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";

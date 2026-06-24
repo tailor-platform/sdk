@@ -2,8 +2,8 @@
  * Tests for `@tailor-platform/sdk/runtime/file` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import * as file from "@/runtime/file";
-import { cleanupMocks, mockFile, injectMocks } from "@/vitest/mock";
+import * as file from "#/runtime/file";
+import { cleanupMocks, mockFile, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/file", () => {
   beforeEach(() => {

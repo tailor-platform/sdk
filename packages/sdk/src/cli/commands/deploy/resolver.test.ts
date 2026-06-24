@@ -1,12 +1,12 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
+import type { Application } from "#/cli/services/application";
+import type { ExecutorService } from "#/cli/services/executor/service";
+import type { ResolverService } from "#/cli/services/resolver/service";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { PlanContext } from "./types";
-import type { Application } from "@/cli/services/application";
-import type { ExecutorService } from "@/cli/services/executor/service";
-import type { ResolverService } from "@/cli/services/resolver/service";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
 
 // Mock config values for tests
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;

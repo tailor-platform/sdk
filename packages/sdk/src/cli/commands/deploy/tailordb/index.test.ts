@@ -2,20 +2,20 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { applyPreMigrationFieldAdjustments } from "@/cli/commands/tailordb/migrate/pre-migration-schema";
+import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
+import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import type { SnapshotFieldConfig } from "#/cli/commands/tailordb/migrate/snapshot";
+import type { Application } from "#/cli/services/application";
+import type { ExecutorService } from "#/cli/services/executor/service";
+import type { TailorDBService } from "#/cli/services/tailordb/service";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { PlanContext } from "../types";
-import type { FieldDiffChange } from "@/cli/commands/tailordb/migrate/diff-calculator";
-import type { SnapshotFieldConfig } from "@/cli/commands/tailordb/migrate/snapshot";
-import type { Application } from "@/cli/services/application";
-import type { ExecutorService } from "@/cli/services/executor/service";
-import type { TailorDBService } from "@/cli/services/tailordb/service";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {

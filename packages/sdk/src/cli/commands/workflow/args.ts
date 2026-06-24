@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { durationArg } from "@/cli/shared/args";
+import { durationArg } from "#/cli/shared/args";
 import type { WorkflowWaitUntil } from "./status";
 
 type ArgsShape = Record<string, z.ZodType>;

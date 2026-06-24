@@ -5,19 +5,18 @@ import {
   defineApplication,
   generatePluginFilesIfNeeded,
   type Application,
-} from "@/cli/services/application";
-import { createExecutorService } from "@/cli/services/executor/service";
-import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
-import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { logger, styles } from "@/cli/shared/logger";
-import { generateUserTypes } from "@/cli/shared/type-generator";
-import { withSpan } from "@/cli/telemetry";
-import { PluginManager } from "@/plugin/manager";
-import { assertDefined } from "@/utils/assert";
+} from "#/cli/services/application";
+import { createExecutorService } from "#/cli/services/executor/service";
+import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
+import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { logger, styles } from "#/cli/shared/logger";
+import { generateUserTypes } from "#/cli/shared/type-generator";
+import { withSpan } from "#/cli/telemetry/index";
+import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
-import type { GenerateOptions } from "./options";
-import type { TypeSourceInfo, TailorDBType } from "@/parser/service/tailordb/types";
+import type { TypeSourceInfo, TailorDBType } from "#/parser/service/tailordb/types";
 import type {
   GeneratorAuthInput,
   GeneratorResult,
@@ -25,9 +24,10 @@ import type {
   ResolverNamespaceData,
   Plugin,
   PluginAttachment,
-} from "@/plugin/types";
-import type { Executor } from "@/types/executor.generated";
-import type { Resolver } from "@/types/resolver.generated";
+} from "#/plugin/types";
+import type { Executor } from "#/types/executor.generated";
+import type { Resolver } from "#/types/resolver.generated";
+import type { GenerateOptions } from "./options";
 
 type TypeInfo = {
   types: Record<string, TailorDBType>;

@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { organizationArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken } from "@/cli/shared/context";
-import { humanizeRelativeTime } from "@/cli/shared/format";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { organizationArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken } from "#/cli/shared/context";
+import { humanizeRelativeTime } from "#/cli/shared/format";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 const getOrganizationOptionsSchema = z.object({
