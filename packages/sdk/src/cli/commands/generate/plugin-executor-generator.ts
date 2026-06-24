@@ -8,12 +8,12 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "pathe";
-import { logger, styles } from "@/cli/shared/logger";
+import { logger, styles } from "#/cli/shared/logger";
 import {
   getPluginImportBaseDirs,
   resolveRelativePluginImportPath,
-} from "@/cli/shared/plugin-import";
-import { isPluginExecutorWithFile } from "@/plugin/guards";
+} from "#/cli/shared/plugin-import";
+import { isPluginExecutorWithFile } from "#/plugin/guards";
 import {
   type PluginGeneratedExecutorLegacy,
   type PluginGeneratedExecutorWithFile,
@@ -21,14 +21,14 @@ import {
   type PluginOperationConfig,
   type PluginInjectMap,
   type PluginExecutorContext,
-} from "@/plugin/types";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+} from "#/plugin/types";
+import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 import type {
   PluginExecutorInfoExtended,
   PluginTypeGenerationResult,
   SourceTypeInfo,
-} from "@/plugin/manager";
+} from "#/plugin/manager";
 
 /**
  * Information needed for type import resolution.

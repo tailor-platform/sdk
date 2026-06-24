@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { describe, expect, beforeEach, afterEach, test, vi } from "vitest";
 import { loadEnvFiles, durationArg, parseDuration, positiveIntArg, toPageDirection } from "./args";

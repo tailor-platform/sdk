@@ -3,9 +3,9 @@ import {
   type CreateAIGatewayRequestSchema,
   type DeleteAIGatewayRequestSchema,
   type UpdateAIGatewayRequestSchema,
-} from "@tailor-proto/tailor/v1/aigateway_pb";
-import { resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { assertDefined } from "@/utils/assert";
+} from "@tailor-platform/tailor-proto/aigateway_pb";
+import { resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/client";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
@@ -14,10 +14,10 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { AIGateway as ProtoAIGateway } from "@tailor-proto/tailor/v1/aigateway_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { AIGateway as ProtoAIGateway } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply AI Gateway changes for the given phase.

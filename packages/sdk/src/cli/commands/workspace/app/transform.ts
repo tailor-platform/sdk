@@ -1,10 +1,10 @@
 import {
   type GetApplicationSchemaHealthResponse,
   GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus,
-} from "@tailor-proto/tailor/v1/application_pb";
-import { ApplicationSchemaUpdateAttemptStatus } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { formatTimestamp } from "@/cli/shared/format";
-import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
+} from "@tailor-platform/tailor-proto/application_pb";
+import { ApplicationSchemaUpdateAttemptStatus } from "@tailor-platform/tailor-proto/application_resource_pb";
+import { formatTimestamp } from "#/cli/shared/format";
+import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export interface AppInfo {
   name: string;

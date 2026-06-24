@@ -1,29 +1,29 @@
 import { z } from "zod";
-import { applyAIGateway, planAIGateway } from "@/cli/commands/deploy/aigateway";
-import { applyApplication, planApplication } from "@/cli/commands/deploy/application";
-import { applyAuth, planAuth } from "@/cli/commands/deploy/auth";
-import { applyExecutor, planExecutor } from "@/cli/commands/deploy/executor";
+import { applyAIGateway, planAIGateway } from "#/cli/commands/deploy/aigateway";
+import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
+import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
+import { applyExecutor, planExecutor } from "#/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
   planFunctionRegistry,
-} from "@/cli/commands/deploy/function-registry";
-import { applyIdP, planIdP } from "@/cli/commands/deploy/idp";
-import { applyPipeline, planPipeline } from "@/cli/commands/deploy/resolver";
-import { applySecretManager, planSecretManager } from "@/cli/commands/deploy/secret-manager";
-import { applyStaticWebsite, planStaticWebsite } from "@/cli/commands/deploy/staticwebsite";
-import { applyTailorDB, planTailorDB } from "@/cli/commands/deploy/tailordb";
-import { applyWorkflow, planWorkflow } from "@/cli/commands/deploy/workflow";
-import { type Application, defineApplication } from "@/cli/services/application";
-import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
-import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { assertWritable } from "@/cli/shared/readonly-guard";
-import ml from "@/utils/multiline";
-import type { PlanContext } from "@/cli/commands/deploy/types";
+} from "#/cli/commands/deploy/function-registry";
+import { applyIdP, planIdP } from "#/cli/commands/deploy/idp";
+import { applyPipeline, planPipeline } from "#/cli/commands/deploy/resolver";
+import { applySecretManager, planSecretManager } from "#/cli/commands/deploy/secret-manager";
+import { applyStaticWebsite, planStaticWebsite } from "#/cli/commands/deploy/staticwebsite";
+import { applyTailorDB, planTailorDB } from "#/cli/commands/deploy/tailordb/index";
+import { applyWorkflow, planWorkflow } from "#/cli/commands/deploy/workflow";
+import { type Application, defineApplication } from "#/cli/services/application";
+import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
+import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import ml from "#/utils/multiline";
+import type { PlanContext } from "#/cli/commands/deploy/types";
 
 export interface RemoveOptions {
   workspaceId?: string;

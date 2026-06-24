@@ -6,15 +6,15 @@ import type {
   DefinedFieldMetadata,
   FieldMetadata,
   TailorField,
-} from "@/configure/types/field.types";
-import type { InferredAttributeMap, TailorUser } from "@/runtime/types";
-import type { InferFieldsOutput, output, Prettify } from "@/types/helpers";
+} from "#/configure/types/field.types";
+import type { InferredAttributeMap, TailorUser } from "#/runtime/types";
+import type { InferFieldsOutput, output, Prettify } from "#/types/helpers";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
   GqlOperationsInput,
   RawPermissions,
   TailorDBServiceConfigInput,
-} from "@/types/tailordb.generated";
+} from "#/types/tailordb.generated";
 import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<

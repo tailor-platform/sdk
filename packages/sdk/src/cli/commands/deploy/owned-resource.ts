@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { fetchAll, type OperatorClient } from "#/cli/shared/client";
 import { isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 

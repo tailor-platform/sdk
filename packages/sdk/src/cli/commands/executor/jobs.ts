@@ -4,14 +4,14 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import {
   ExecutorJobStatus,
   ExecutorTargetType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import {
   Condition_Operator,
   ConditionSchema,
   FilterSchema,
   PageDirection,
-} from "@tailor-proto/tailor/v1/resource_pb";
+} from "@tailor-platform/tailor-proto/resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -22,15 +22,15 @@ import {
   parseDuration,
   toPageDirection,
   workspaceArgs,
-} from "@/cli/shared/args";
-import { fetchAll, fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { formatKeyValueTable } from "@/cli/shared/format";
-import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
-import { logger, styles } from "@/cli/shared/logger";
-import { spinner } from "@/cli/shared/spinner";
-import { formatWaitError, isRetryableWaitError } from "@/cli/shared/wait-error";
+} from "#/cli/shared/args";
+import { fetchAll, fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { formatKeyValueTable } from "#/cli/shared/format";
+import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
+import { logger, styles } from "#/cli/shared/logger";
+import { spinner } from "#/cli/shared/spinner";
+import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {

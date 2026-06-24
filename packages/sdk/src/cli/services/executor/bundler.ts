@@ -2,24 +2,24 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
-import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
-import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
-import { withBundleConcurrency } from "@/cli/shared/bundle-concurrency";
-import { createLogLevelTreeshakeOptions } from "@/cli/shared/bundle-log-level";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
-import { logger, styles } from "@/cli/shared/logger";
-import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
-import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
+import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
+import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
+import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
+import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
+import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import { logger, styles } from "#/cli/shared/logger";
+import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import {
   createTriggerTransformPlugin,
   serializeTriggerContext,
   type TriggerContext,
-} from "@/cli/shared/trigger-context";
-import ml from "@/utils/multiline";
+} from "#/cli/shared/trigger-context";
+import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
-import type { LogLevel } from "@/configure/config/types";
+import type { LogLevel } from "#/configure/config/types";
 
 interface ExecutorInfo {
   name: string;

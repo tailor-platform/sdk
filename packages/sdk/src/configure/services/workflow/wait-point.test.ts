@@ -1,8 +1,8 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { afterEach, describe, expect, test, expectTypeOf } from "vitest";
-import { setupWaitPointMock, setupWorkflowMock } from "@/utils/test/mock";
+import { setupWaitPointMock, setupWorkflowMock } from "#/utils/test/mock";
 import { defineWaitPoint, defineWaitPoints } from "./wait-point";
-import type { TailorRuntime } from "@/runtime";
+import type { TailorRuntime } from "#/runtime/index";
 
 const TailorGlobal = globalThis as { tailor?: TailorRuntime };
 

@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 // eslint-disable-next-line no-restricted-imports -- test fixture script, node:path is fine here
 import * as path from "node:path";
-import { deploy } from "@/cli/commands/deploy/deploy";
-import { generate } from "@/cli/commands/generate/service";
-import type { BundledScripts } from "@/cli/commands/deploy/function-registry";
+import { deploy } from "#/cli/commands/deploy/deploy";
+import { generate } from "#/cli/commands/generate/service";
+import type { BundledScripts } from "#/cli/commands/deploy/function-registry";
 
 const fixtureDir = path.dirname(new URL(import.meta.url).pathname);
 const outputDir = path.join(fixtureDir, "dist");

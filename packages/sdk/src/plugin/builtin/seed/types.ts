@@ -1,4 +1,4 @@
-import type { PluginGeneratedTypeSource } from "@/parser/service/tailordb/types";
+import type { PluginGeneratedTypeSource } from "#/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 /**
