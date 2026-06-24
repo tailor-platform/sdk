@@ -126,10 +126,10 @@ export function normalizeIdPPermission(permission: RawIdPPermission): StandardId
     read: permission.read.map((p) => normalizeIdPActionPermission(p)),
     update: permission.update.map((p) => normalizeIdPActionPermission(p)),
     delete: permission.delete.map((p) => normalizeIdPActionPermission(p)),
-    sendPasswordResetEmail: permission.sendPasswordResetEmail.map((p) =>
+    sendPasswordResetEmail: (permission.sendPasswordResetEmail ?? []).map((p) =>
       normalizeIdPActionPermission(p),
     ),
-    unenrollMfa: permission.unenrollMfa.map((p) => normalizeIdPActionPermission(p)),
+    unenrollMfa: (permission.unenrollMfa ?? []).map((p) => normalizeIdPActionPermission(p)),
   } as StandardIdPPermission;
 }
 
@@ -164,7 +164,7 @@ export function findOmittedPermitRules(permission: RawIdPPermission | undefined)
   }
   const locations: string[] = [];
   for (const action of Object.keys(permission) as Array<keyof typeof permission>) {
-    permission[action].forEach((rule: unknown, index: number) => {
+    permission[action]?.forEach((rule: unknown, index: number) => {
       if (isObjectFormat(rule) && rule.permit === undefined) {
         locations.push(`${String(action)}[${index}]`);
       }

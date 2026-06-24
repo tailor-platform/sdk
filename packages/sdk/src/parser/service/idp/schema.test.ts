@@ -962,6 +962,107 @@ describe("IdPSchema permission tests", () => {
     expect(result.permission).toBeDefined();
   });
 
+  test("accepts permission omitting unenrollMfa when enableMfa is not set", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
+  test("rejects permission omitting unenrollMfa when enableMfa is true", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      userAuthPolicy: {
+        enableMfa: true,
+        allowedReturnOrigins: ["https://app.example.com"],
+      },
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).toThrow(
+      "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true",
+    );
+  });
+
+  test("accepts permission with explicit empty unenrollMfa when enableMfa is true", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      userAuthPolicy: {
+        enableMfa: true,
+        allowedReturnOrigins: ["https://app.example.com"],
+      },
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+        unenrollMfa: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
+  test("accepts permission omitting sendPasswordResetEmail when disablePasswordAuth is true", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      userAuthPolicy: {
+        disablePasswordAuth: true,
+        allowGoogleOauth: true,
+        allowedEmailDomains: ["example.com"],
+      },
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
+  test("rejects permission omitting sendPasswordResetEmail when password auth is enabled", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).toThrow(
+      "permission.sendPasswordResetEmail must be set explicitly when password authentication is enabled",
+    );
+  });
+
   test("accepts permission with in/not in operators", () => {
     const config = {
       name: "test-idp",
