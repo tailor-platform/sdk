@@ -10,8 +10,6 @@ tailor-sdk <command> [options]
 
 ## Global Options
 
-<!-- politty:global-options:start -->
-
 <a id="global-options"></a>
 | Option | Alias | Description | Required | Default |
 |--------|-------|-------------|----------|---------|
@@ -19,8 +17,6 @@ tailor-sdk <command> [options]
 | `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | No | - |
 | `--verbose` | - | Enable verbose logging | No | `false` |
 | `--json` | `-j` | Output as JSON | No | `false` |
-
-<!-- politty:global-options:end -->
 
 ### JSON Output
 
@@ -103,8 +99,6 @@ Workspace ID resolution follows this priority order:
 
 ## Commands
 
-<!-- politty:index:docs/cli-reference.md:start -->
-
 ### [Application Commands](./cli/application.md)
 
 Commands for managing Tailor Platform applications (work with `tailor.config.ts`).
@@ -117,8 +111,9 @@ Commands for managing Tailor Platform applications (work with `tailor.config.ts`
 | [remove](./cli/application.md#remove)           | Remove all resources managed by the application from the workspace. |
 | [show](./cli/application.md#show)               | Show information about the deployed application.                    |
 | [open](./cli/application.md#open)               | Open Tailor Platform Console.                                       |
-| [api list](./cli/application.md#api-list)       | List all invocable OperatorService methods.                         |
+| [api](./cli/application.md#api)                 | Call Tailor Platform API endpoints directly.                        |
 | [api inspect](./cli/application.md#api-inspect) | Print the input message tree of an OperatorService endpoint.        |
+| [api list](./cli/application.md#api-list)       | List all invocable OperatorService methods.                         |
 
 ### [TailorDB Commands](./cli/tailordb.md)
 
@@ -126,12 +121,15 @@ Commands for managing TailorDB tables, data, and schema migrations.
 
 | Command                                                                      | Description                                                                                                               |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| [tailordb](./cli/tailordb.md#tailordb)                                       | Manage TailorDB tables and data.                                                                                          |
 | [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate (delete all records from) TailorDB tables.                                                                       |
+| [tailordb migration](./cli/tailordb.md#tailordb-migration)                   | Manage TailorDB schema migrations.                                                                                        |
 | [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
 | [tailordb migration script](./cli/tailordb.md#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
 | [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
 | [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
+| [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                 |
 | [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
 | [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
 | [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
@@ -152,13 +150,15 @@ Commands for authentication and user management.
 | ------------------------------------------------ | ----------------------------------------------------- |
 | [login](./cli/user.md#login)                     | Login to Tailor Platform.                             |
 | [logout](./cli/user.md#logout)                   | Logout from Tailor Platform.                          |
+| [user](./cli/user.md#user)                       | Manage Tailor Platform users.                         |
 | [user current](./cli/user.md#user-current)       | Show current user.                                    |
 | [user list](./cli/user.md#user-list)             | List all users.                                       |
-| [user switch](./cli/user.md#user-switch)         | Set current user.                                     |
-| [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                      |
+| [user pat](./cli/user.md#user-pat)               | Manage personal access tokens.                        |
 | [user pat create](./cli/user.md#user-pat-create) | Create a new personal access token.                   |
 | [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token.                       |
+| [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                      |
 | [user pat update](./cli/user.md#user-pat-update) | Update a personal access token (delete and recreate). |
+| [user switch](./cli/user.md#user-switch)         | Set current user.                                     |
 
 ### [Organization Commands](./cli/organization.md)
 
@@ -166,6 +166,8 @@ Commands for managing organizations and folders.
 
 | Command                                                                        | Description                                      |
 | ------------------------------------------------------------------------------ | ------------------------------------------------ |
+| [organization](./cli/organization.md#organization)                             | Manage Tailor Platform organizations.            |
+| [organization folder](./cli/organization.md#organization-folder)               | Manage organization folders.                     |
 | [organization folder create](./cli/organization.md#organization-folder-create) | Create a new folder in an organization.          |
 | [organization folder delete](./cli/organization.md#organization-folder-delete) | Delete a folder from an organization.            |
 | [organization folder get](./cli/organization.md#organization-folder-get)       | Show detailed information about a folder.        |
@@ -180,23 +182,27 @@ Commands for managing organizations and folders.
 
 Commands for managing workspaces and profiles.
 
-| Command                                                           | Description                                 |
-| ----------------------------------------------------------------- | ------------------------------------------- |
-| [workspace app health](./cli/workspace.md#workspace-app-health)   | Check application schema health             |
-| [workspace app list](./cli/workspace.md#workspace-app-list)       | List applications in a workspace            |
-| [workspace create](./cli/workspace.md#workspace-create)           | Create a new Tailor Platform workspace.     |
-| [workspace delete](./cli/workspace.md#workspace-delete)           | Delete a Tailor Platform workspace.         |
-| [workspace get](./cli/workspace.md#workspace-get)                 | Show detailed information about a workspace |
-| [workspace list](./cli/workspace.md#workspace-list)               | List all Tailor Platform workspaces.        |
-| [workspace restore](./cli/workspace.md#workspace-restore)         | Restore a deleted workspace                 |
-| [workspace user invite](./cli/workspace.md#workspace-user-invite) | Invite a user to a workspace                |
-| [workspace user list](./cli/workspace.md#workspace-user-list)     | List users in a workspace                   |
-| [workspace user remove](./cli/workspace.md#workspace-user-remove) | Remove a user from a workspace              |
-| [workspace user update](./cli/workspace.md#workspace-user-update) | Update a user's role in a workspace         |
-| [profile create](./cli/workspace.md#profile-create)               | Create a new profile.                       |
-| [profile delete](./cli/workspace.md#profile-delete)               | Delete a profile.                           |
-| [profile list](./cli/workspace.md#profile-list)                   | List all profiles.                          |
-| [profile update](./cli/workspace.md#profile-update)               | Update profile properties.                  |
+| Command                                                           | Description                                                |
+| ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| [workspace](./cli/workspace.md#workspace)                         | Manage Tailor Platform workspaces.                         |
+| [workspace app](./cli/workspace.md#workspace-app)                 | Manage workspace applications                              |
+| [workspace app health](./cli/workspace.md#workspace-app-health)   | Check application schema health                            |
+| [workspace app list](./cli/workspace.md#workspace-app-list)       | List applications in a workspace                           |
+| [workspace create](./cli/workspace.md#workspace-create)           | Create a new Tailor Platform workspace.                    |
+| [workspace delete](./cli/workspace.md#workspace-delete)           | Delete a Tailor Platform workspace.                        |
+| [workspace get](./cli/workspace.md#workspace-get)                 | Show detailed information about a workspace                |
+| [workspace list](./cli/workspace.md#workspace-list)               | List all Tailor Platform workspaces.                       |
+| [workspace restore](./cli/workspace.md#workspace-restore)         | Restore a deleted workspace                                |
+| [workspace user](./cli/workspace.md#workspace-user)               | Manage workspace users                                     |
+| [workspace user invite](./cli/workspace.md#workspace-user-invite) | Invite a user to a workspace                               |
+| [workspace user list](./cli/workspace.md#workspace-user-list)     | List users in a workspace                                  |
+| [workspace user remove](./cli/workspace.md#workspace-user-remove) | Remove a user from a workspace                             |
+| [workspace user update](./cli/workspace.md#workspace-user-update) | Update a user's role in a workspace                        |
+| [profile](./cli/workspace.md#profile)                             | Manage workspace profiles (user + workspace combinations). |
+| [profile create](./cli/workspace.md#profile-create)               | Create a new profile.                                      |
+| [profile delete](./cli/workspace.md#profile-delete)               | Delete a profile.                                          |
+| [profile list](./cli/workspace.md#profile-list)                   | List all profiles.                                         |
+| [profile update](./cli/workspace.md#profile-update)               | Update profile properties.                                 |
 
 ### [Auth Resource Commands](./cli/auth.md)
 
@@ -204,13 +210,16 @@ Commands for managing Auth service resources.
 
 | Command                                                            | Description                                                                           |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| [authconnection](./cli/auth.md#authconnection)                     | Manage auth connections.                                                              |
 | [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection via OAuth2 flow.                                         |
+| [authconnection delete](./cli/auth.md#authconnection-delete)       | Delete an auth connection entirely.                                                   |
 | [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections.                                                            |
 | [authconnection open](./cli/auth.md#authconnection-open)           | Open the auth connections page in the Tailor Platform Console.                        |
 | [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it). |
-| [authconnection delete](./cli/auth.md#authconnection-delete)       | Delete an auth connection entirely.                                                   |
+| [machineuser](./cli/auth.md#machineuser)                           | Manage machine users in your Tailor Platform application.                             |
 | [machineuser list](./cli/auth.md#machineuser-list)                 | List all machine users in the application.                                            |
 | [machineuser token](./cli/auth.md#machineuser-token)               | Get an access token for a machine user.                                               |
+| [oauth2client](./cli/auth.md#oauth2client)                         | Manage OAuth2 clients in your Tailor Platform application.                            |
 | [oauth2client list](./cli/auth.md#oauth2client-list)               | List all OAuth2 clients in the application.                                           |
 | [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials (including client secret).                              |
 
@@ -220,6 +229,7 @@ Commands for managing workflows and executions.
 
 | Command                                                      | Description                                    |
 | ------------------------------------------------------------ | ---------------------------------------------- |
+| [workflow](./cli/workflow.md#workflow)                       | Manage workflows and workflow executions.      |
 | [workflow list](./cli/workflow.md#workflow-list)             | List all workflows in the workspace.           |
 | [workflow get](./cli/workflow.md#workflow-get)               | Get workflow details.                          |
 | [workflow start](./cli/workflow.md#workflow-start)           | Start a workflow execution.                    |
@@ -233,6 +243,7 @@ Commands for managing function registries and viewing function execution logs.
 
 | Command                                                  | Description                                                     |
 | -------------------------------------------------------- | --------------------------------------------------------------- |
+| [function](./cli/function.md#function)                   | Manage functions                                                |
 | [function get](./cli/function.md#function-get)           | Get a function registry by name                                 |
 | [function list](./cli/function.md#function-list)         | List function registries in a workspace                         |
 | [function logs](./cli/function.md#function-logs)         | List or get function execution logs.                            |
@@ -244,10 +255,12 @@ Commands for managing executors and executor jobs.
 
 | Command                                                          | Description                                   |
 | ---------------------------------------------------------------- | --------------------------------------------- |
-| [executor trigger](./cli/executor.md#executor-trigger)           | Trigger an executor manually.                 |
-| [executor jobs](./cli/executor.md#executor-jobs)                 | List or get executor jobs.                    |
+| [executor](./cli/executor.md#executor)                           | Manage executors                              |
 | [executor list](./cli/executor.md#executor-list)                 | List all executors                            |
 | [executor get](./cli/executor.md#executor-get)                   | Get executor details                          |
+| [executor jobs](./cli/executor.md#executor-jobs)                 | List or get executor jobs.                    |
+| [executor trigger](./cli/executor.md#executor-trigger)           | Trigger an executor manually.                 |
+| [executor webhook](./cli/executor.md#executor-webhook)           | Manage executor webhooks                      |
 | [executor webhook list](./cli/executor.md#executor-webhook-list) | List executors with incoming webhook triggers |
 
 ### [Secret Commands](./cli/secret.md)
@@ -256,13 +269,15 @@ Commands for managing secrets and vaults.
 
 | Command                                                    | Description                                      |
 | ---------------------------------------------------------- | ------------------------------------------------ |
+| [secret](./cli/secret.md#secret)                           | Manage Secret Manager vaults and secrets.        |
+| [secret create](./cli/secret.md#secret-create)             | Create a secret in a vault.                      |
+| [secret delete](./cli/secret.md#secret-delete)             | Delete a secret in a vault.                      |
+| [secret list](./cli/secret.md#secret-list)                 | List all secrets in a vault.                     |
+| [secret update](./cli/secret.md#secret-update)             | Update a secret in a vault.                      |
+| [secret vault](./cli/secret.md#secret-vault)               | Manage Secret Manager vaults.                    |
 | [secret vault create](./cli/secret.md#secret-vault-create) | Create a new Secret Manager vault.               |
 | [secret vault delete](./cli/secret.md#secret-vault-delete) | Delete a Secret Manager vault.                   |
 | [secret vault list](./cli/secret.md#secret-vault-list)     | List all Secret Manager vaults in the workspace. |
-| [secret create](./cli/secret.md#secret-create)             | Create a secret in a vault.                      |
-| [secret update](./cli/secret.md#secret-update)             | Update a secret in a vault.                      |
-| [secret list](./cli/secret.md#secret-list)                 | List all secrets in a vault.                     |
-| [secret delete](./cli/secret.md#secret-delete)             | Delete a secret in a vault.                      |
 
 ### [Static Website Commands](./cli/staticwebsite.md)
 
@@ -270,10 +285,12 @@ Commands for managing and deploying static websites.
 
 | Command                                                                       | Description                                           |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [staticwebsite](./cli/staticwebsite.md#staticwebsite)                         | Manage static websites in your workspace.             |
 | [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy)           | Deploy a static website from a local build directory. |
-| [staticwebsite domain list](./cli/staticwebsite.md#staticwebsite-domain-list) | List custom domains for a static website.             |
-| [staticwebsite domain get](./cli/staticwebsite.md#staticwebsite-domain-get)   | Get details of a custom domain.                       |
 | [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)               | List all static websites in a workspace.              |
+| [staticwebsite domain](./cli/staticwebsite.md#staticwebsite-domain)           | Manage custom domains for static websites.            |
+| [staticwebsite domain get](./cli/staticwebsite.md#staticwebsite-domain-get)   | Get details of a custom domain.                       |
+| [staticwebsite domain list](./cli/staticwebsite.md#staticwebsite-domain-list) | List custom domains for a static website.             |
 | [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)                 | Get details of a specific static website.             |
 
 ### [Crash Report Commands](./cli/crashreport.md)
@@ -282,6 +299,7 @@ Commands for managing crash reports.
 
 | Command                                                   | Description                                    |
 | --------------------------------------------------------- | ---------------------------------------------- |
+| [crashreport](./cli/crashreport.md#crashreport)           | Manage crash reports.                          |
 | [crashreport list](./cli/crashreport.md#crashreport-list) | List local crash report files.                 |
 | [crashreport send](./cli/crashreport.md#crashreport-send) | Submit a crash report to help improve the SDK. |
 
@@ -291,6 +309,7 @@ Commands for setting up project infrastructure.
 
 | Command                                   | Description                                                                      |
 | ----------------------------------------- | -------------------------------------------------------------------------------- |
+| [setup](./cli/setup.md#setup)             | Generate a CI deploy workflow for your project. (beta)                           |
 | [setup check](./cli/setup.md#setup-check) | Audit generated workflows for drift against the current config/repo (read-only). |
 
 ### [Upgrade Commands](./cli/upgrade.md)
@@ -307,6 +326,7 @@ Commands for installing Tailor SDK agent skills.
 
 | Command                                          | Description                                                        |
 | ------------------------------------------------ | ------------------------------------------------------------------ |
+| [skills](./cli/skills.md#skills)                 | Manage Tailor SDK agent skills.                                    |
 | [skills install](./cli/skills.md#skills-install) | Install the tailor-sdk agent skill from the installed SDK package. |
 
 ### [Completion](./cli/completion.md)
@@ -316,5 +336,3 @@ Generate shell completion scripts for bash, zsh, and fish.
 | Command                                      | Description                      |
 | -------------------------------------------- | -------------------------------- |
 | [completion](./cli/completion.md#completion) | Generate shell completion script |
-
-<!-- politty:index:docs/cli-reference.md:end -->
