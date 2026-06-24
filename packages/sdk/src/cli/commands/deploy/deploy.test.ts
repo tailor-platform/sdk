@@ -1,6 +1,8 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { createChangeSet } from "./change-set";
-import { computeRenamedAppDeletions, summarizePlanResults } from "./deploy";
+import { computeRenamedAppDeletions, printPlanResults, summarizePlanResults } from "./deploy";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
@@ -252,5 +254,60 @@ describe("computeRenamedAppDeletions", () => {
     });
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("printPlanResults", () => {
+  test("routes dry-run output to stdout via logger.out", () => {
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    printPlanResults(emptyResults(), { dryRun: true });
+
+    expect(outSpy).toHaveBeenCalled();
+    expect(logSpy).not.toHaveBeenCalled();
+
+    outSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test("routes apply output to stderr via logger.log", () => {
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    printPlanResults(emptyResults(), { dryRun: false });
+
+    expect(logSpy).toHaveBeenCalled();
+    expect(outSpy).not.toHaveBeenCalled();
+
+    outSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test("emits JSON with summary and changes for dry-run --json", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    const summary = printPlanResults(emptyResults(), { dryRun: true, json: true });
+
+    expect(outSpy).toHaveBeenCalledOnce();
+    const payload = outSpy.mock.calls[0]?.[0] as { summary: unknown; changes: unknown[] };
+    expect(payload).toHaveProperty("summary");
+    expect(payload).toHaveProperty("changes");
+    expect(Array.isArray(payload.changes)).toBe(true);
+    expect(summary.create).toBe(0);
+
+    outSpy.mockRestore();
+  });
+
+  test("does not emit JSON for apply --json (caller emits after apply)", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    printPlanResults(emptyResults(), { dryRun: false, json: true });
+
+    expect(outSpy).not.toHaveBeenCalled();
+
+    outSpy.mockRestore();
   });
 });

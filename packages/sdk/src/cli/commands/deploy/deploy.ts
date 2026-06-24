@@ -212,7 +212,7 @@ type PlanResults = {
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-function printPlanResults(
+export function printPlanResults(
   results: PlanResults,
   opts?: { dryRun?: boolean; json?: boolean },
 ): PlanSummary {
@@ -305,7 +305,23 @@ function printPlanResults(
 
   if (opts?.json) {
     if (opts.dryRun) {
-      const changes = allDisplayEntries.map(({ action, name, labels, namespace }) => ({
+      const allEntries = [
+        ...allDisplayEntries,
+        ...allServiceActions.map(({ action, name }) => ({
+          action,
+          name,
+          labels: [] as string[],
+          namespace: undefined as string | undefined,
+        })),
+        ...formatChangeSetEntries(otherFunctionRegistryChanges),
+        ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
+        ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
+        ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
+        ...formatChangeSetEntries(results.app, ["application"]),
+        ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
+        ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
+      ];
+      const changes = allEntries.map(({ action, name, labels, namespace }) => ({
         action,
         name,
         labels,
