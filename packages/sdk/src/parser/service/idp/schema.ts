@@ -124,7 +124,7 @@ export const IdPUserAuthPolicySchema = z
           .string()
           .regex(
             allowedReturnOriginPattern,
-            "must be an http(s) origin like https://app.example.com (scheme + host + optional port, no path/query/fragment)",
+            'must be an http(s) origin like "https://app.example.com" (scheme + host + optional port, no path/query/fragment) or a static-website placeholder like "<name>:url"',
           ),
       )
       .optional()
