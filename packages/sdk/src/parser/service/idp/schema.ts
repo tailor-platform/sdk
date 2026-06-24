@@ -294,7 +294,7 @@ export const IdPPermissionSchema = z
     update: z.array(IdPActionPermissionSchema).readonly(),
     delete: z.array(IdPActionPermissionSchema).readonly(),
     sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly(),
-    unenrollMfa: z.array(IdPActionPermissionSchema).readonly(),
+    unenrollMfa: z.array(IdPActionPermissionSchema).readonly().default([]),
   })
   .describe("Per-operation permission policies for IdP users");
 
