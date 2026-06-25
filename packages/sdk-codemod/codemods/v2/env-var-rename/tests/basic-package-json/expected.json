@@ -5,6 +5,6 @@
   },
   "config": {
     "TAILOR_TEMPLATE_SDK_VERSION": "workspace:*",
-    "TAILOR_PLATFORM_URL": "https://api.tailor.test"
+    "PLATFORM_URL": "https://api.tailor.test"
   }
 }

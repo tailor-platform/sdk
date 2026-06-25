@@ -196,7 +196,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/env-var-rename",
     name: "SDK environment variable rename",
     description:
-      "Rewrite removed SDK environment variable names to their v2 `TAILOR_*` names across scripts, CI configs, docs, env files, and source files",
+      "Rewrite unambiguous removed SDK environment variable names to their v2 `TAILOR_*` names and flag generic names for manual review",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/env-var-rename/scripts/transform.js",
@@ -225,20 +225,22 @@ export const allCodemods: CodemodPackage[] = [
     examples: [
       {
         lang: "sh",
-        before: "TAILOR_PLATFORM_SDK_BUILD_ONLY=true LOG_LEVEL=DEBUG tailor-sdk deploy",
-        after: "TAILOR_DEPLOY_BUILD_ONLY=true TAILOR_APP_LOG_LEVEL=DEBUG tailor-sdk deploy",
+        before: "TAILOR_PLATFORM_SDK_BUILD_ONLY=true tailor-sdk deploy",
+        after: "TAILOR_DEPLOY_BUILD_ONLY=true tailor-sdk deploy",
       },
       {
-        before: "const apiUrl = process.env.PLATFORM_URL;",
-        after: "const apiUrl = process.env.TAILOR_PLATFORM_URL;",
+        before: "const token = process.env.TAILOR_TOKEN;",
+        after: "const token = process.env.TAILOR_PLATFORM_TOKEN;",
       },
     ],
     prompt: [
       "Review any remaining removed SDK environment variable names after the codemod",
-      "runs. Replace actual environment variable usages with their v2 names, including",
-      "`TAILOR_TOKEN` -> `TAILOR_PLATFORM_TOKEN`. If a remaining match is an unrelated",
-      "local identifier, fixture label, or historical documentation that intentionally",
-      "does not configure the SDK, leave it unchanged.",
+      "runs. The codemod intentionally leaves generic names such as `LOG_LEVEL`,",
+      "`PLATFORM_URL`, and `PLATFORM_OAUTH2_CLIENT_ID` for manual review because",
+      "they can configure non-SDK tools. Replace only actual SDK usages with their",
+      "v2 names. If a remaining match is an unrelated local identifier, fixture",
+      "label, or historical documentation that intentionally does not configure the",
+      "SDK, leave it unchanged.",
     ].join("\n"),
   },
   {
