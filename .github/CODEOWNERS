@@ -9,4 +9,5 @@ CHANGELOG.md @tailor-platform/maintainers-sdk
 .github/CODEOWNERS @tailor-platform/maintainers-sdk
 .github/workflows/ @tailor-platform/maintainers-sdk
 **/package.json @tailor-platform/maintainers-sdk
-pnpm-lock.yaml @tailor-platform/maintainers-sdk
+**/pnpm-lock.yaml @tailor-platform/maintainers-sdk
+pnpm-workspace.yaml @tailor-platform/maintainers-sdk
