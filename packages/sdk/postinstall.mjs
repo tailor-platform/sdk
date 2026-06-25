@@ -32,14 +32,8 @@ async function install() {
   }
 
   try {
-    const mod = /** @type {{ register: Function, registerHooks?: Function }} */ (nodeModule);
-    const registerHooks = mod.registerHooks;
-    if (registerHooks) {
-      const { resolveSync, loadSync } = await import("./dist/cli/ts-hook.mjs");
-      registerHooks({ resolve: resolveSync, load: loadSync });
-    } else {
-      mod.register(new URL("./dist/cli/ts-hook.mjs", import.meta.url), import.meta.url);
-    }
+    const { resolveSync, loadSync } = await import("./dist/cli/ts-hook.mjs");
+    nodeModule.registerHooks({ resolve: resolveSync, load: loadSync });
     const configDir = dirname(configPath);
     process.chdir(configDir);
 
