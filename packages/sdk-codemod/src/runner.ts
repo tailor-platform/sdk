@@ -136,6 +136,7 @@ interface LoadedTransform {
   transform?: TransformFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: CodemodPatternGroup[];
+  sourceStringLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
 }
@@ -143,6 +144,31 @@ interface LoadedTransform {
 function contentForResidualMatching(relative: string, content: string): string {
   const ext = path.extname(relative).toLowerCase();
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
+}
+
+function sourceStringContentForResidualMatching(relative: string, content: string): string | null {
+  const ext = path.extname(relative).toLowerCase();
+  if (!SOURCE_EXTENSIONS.has(ext)) return null;
+
+  let root: SgNode;
+  try {
+    root = parse(sourceLang(relative), content).root();
+  } catch {
+    return null;
+  }
+
+  const fragments: string[] = [];
+  const visit = (node: SgNode): void => {
+    if (node.kind() === "string_fragment") {
+      fragments.push(node.text());
+      return;
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return fragments.join("\n");
 }
 
 function sourceLang(relative: string): Lang {
@@ -235,15 +261,24 @@ function matchResidualPattern(content: string, pattern: CodemodPatternGroup): st
 function legacyPatternWarnings(
   relative: string,
   content: string,
+  sourceStringContent: string | null,
   transforms: LoadedTransform[],
 ): string[] {
   return transforms.flatMap((lt) => {
-    const found = lt.legacyPatterns
-      .map((p) => matchResidualPattern(content, p))
-      .filter((label): label is string => label !== null);
-    if (found.length === 0) return [];
+    const found = new Set(
+      lt.legacyPatterns
+        .map((p) => matchResidualPattern(content, p))
+        .filter((label): label is string => label !== null),
+    );
+    if (sourceStringContent != null) {
+      for (const pattern of lt.sourceStringLegacyPatterns) {
+        const label = matchResidualPattern(sourceStringContent, pattern);
+        if (label != null) found.add(label);
+      }
+    }
+    if (found.size === 0) return [];
     return [
-      `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
+      `${relative}: contains ${Array.from(found).join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
     ];
   });
 }
@@ -273,6 +308,7 @@ export async function runCodemods(
       transform: scriptPath ? await loadTransform(scriptPath) : undefined,
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
+      sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
       prompt: codemod.prompt,
     });
@@ -320,7 +356,10 @@ export async function runCodemods(
     }
 
     const residualContent = contentForResidualMatching(relative, current);
-    warnings.push(...legacyPatternWarnings(relative, residualContent, matchedTransforms));
+    const sourceStringContent = sourceStringContentForResidualMatching(relative, current);
+    warnings.push(
+      ...legacyPatternWarnings(relative, residualContent, sourceStringContent, matchedTransforms),
+    );
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;

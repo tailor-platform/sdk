@@ -222,6 +222,7 @@ export const allCodemods: CodemodPackage[] = [
       "LOG_LEVEL",
       "TAILOR_TOKEN",
     ],
+    sourceStringLegacyPatterns: ["PLATFORM_URL", "PLATFORM_OAUTH2_CLIENT_ID", "LOG_LEVEL"],
     examples: [
       {
         lang: "sh",

@@ -6,7 +6,8 @@ export type AutomationLevel = "Automatic" | "Partially automatic" | "Manual";
  * Classify how much of a migration the codemod automates.
  * - `Automatic`: a transform fully covers it, with no residual to flag.
  * - `Partially automatic`: a transform covers the common cases but flags
- *   residuals (via `legacyPatterns`/`suspiciousPatterns`/`prompt`) to finish.
+ *   residuals (via `legacyPatterns`/`sourceStringLegacyPatterns`/
+ *   `suspiciousPatterns`/`prompt`) to finish.
  * - `Manual`: no transform; the change is migrated by hand (optionally guided
  *   by a `prompt`). Whether a person or an LLM does it does not matter here.
  * @param codemod - The codemod registry entry
@@ -16,6 +17,7 @@ export function automationLevel(codemod: CodemodPackage): AutomationLevel {
   if (!codemod.scriptPath) return "Manual";
   const flagsResidual =
     (codemod.legacyPatterns?.length ?? 0) > 0 ||
+    (codemod.sourceStringLegacyPatterns?.length ?? 0) > 0 ||
     (codemod.suspiciousPatterns?.length ?? 0) > 0 ||
     codemod.prompt != null;
   return flagsResidual ? "Partially automatic" : "Automatic";
