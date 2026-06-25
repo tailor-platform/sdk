@@ -1,9 +1,10 @@
 import * as path from "pathe";
 
 // Match the `tailor-sdk` binary, optionally with a version pin (`@latest`,
-// `@2.0.0`, etc.). Lookbehind excludes `.tailor-sdk` (directory path preceded
-// by `.`) and `create-tailor-sdk` (package name preceded by `-`).
-const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(@[^\s'"`;|&)]+)?/g;
+// `@2.0.0`, etc.). Lookbehind excludes `.tailor-sdk` (preceded by `.`) and
+// `create-tailor-sdk` (preceded by `-`). Lookahead excludes trailing `-word`
+// (e.g. `tailor-sdk-skills`) to avoid partial-match rewrites.
+const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 
 function renameBinary(value: string): string {
   return value.replace(TAILOR_SDK_RE, (_match, version?: string) =>
