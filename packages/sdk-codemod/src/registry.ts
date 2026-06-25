@@ -193,6 +193,48 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/env-var-rename",
+    name: "SDK environment variable rename",
+    description:
+      "Rewrite removed SDK environment variable names to their v2 `TAILOR_*` names across scripts, CI configs, docs, env files, and source files",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/env-var-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/.env",
+      "**/.env.*",
+      "**/*.{env,sh,bash,zsh,yml,yaml,json,md}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [
+      "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+      "TAILOR_PLATFORM_SDK_DTS_PATH",
+      "TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION",
+      "TAILOR_PLATFORM_SDK_BUILD_ONLY",
+      "TAILOR_SDK_OUTPUT_DIR",
+      "TAILOR_SDK_SKILLS_SOURCE",
+      "TAILOR_SDK_VERSION",
+      "PLATFORM_URL",
+      "PLATFORM_OAUTH2_CLIENT_ID",
+      "TAILOR_ENABLE_INLINE_SOURCEMAP",
+      "TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER",
+      "LOG_LEVEL",
+      "TAILOR_TOKEN",
+    ],
+    examples: [
+      {
+        lang: "sh",
+        before: "TAILOR_PLATFORM_SDK_BUILD_ONLY=true LOG_LEVEL=DEBUG tailor-sdk deploy",
+        after: "TAILOR_DEPLOY_BUILD_ONLY=true TAILOR_APP_LOG_LEVEL=DEBUG tailor-sdk deploy",
+      },
+      {
+        before: "const apiUrl = process.env.PLATFORM_URL;",
+        after: "const apiUrl = process.env.TAILOR_PLATFORM_URL;",
+      },
+    ],
+  },
+  {
     id: "v2/auth-invoker-unwrap",
     name: 'auth.invoker("name") → invoker: "name"',
     description:

@@ -1,0 +1,8 @@
+name: deploy
+jobs:
+  deploy:
+    env:
+      TAILOR_DEPLOY_BUILD_ONLY: "true"
+      TAILOR_CI_ALLOW_ID_INJECTION: "true"
+    steps:
+      - run: TAILOR_PLATFORM_OAUTH2_CLIENT_ID=client TAILOR_PLATFORM_URL=https://api.tailor.test tailor-sdk login

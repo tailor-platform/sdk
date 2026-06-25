@@ -40,14 +40,14 @@ tailor-sdk tailordb truncate [options] [types]
 
 **Options**
 
-| Option                          | Alias | Description                                                                | Required | Default              | Env                               |
-| ------------------------------- | ----- | -------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                    | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                                  | No       | `false`              | -                                 |
-| `--all`                         | `-a`  | Truncate all tables in all owned namespaces (excludes external namespaces) | No       | `false`              | -                                 |
-| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                 | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                  | No       | `false`              | -                              |
+| `--all`                         | `-a`  | Truncate all tables in all owned namespaces (excludes external namespaces) | No       | `false`              | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                 | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -117,12 +117,12 @@ tailor-sdk tailordb migration generate [options]
 
 **Options**
 
-| Option              | Alias | Description                                | Required | Default              | Env                               |
-| ------------------- | ----- | ------------------------------------------ | -------- | -------------------- | --------------------------------- |
-| `--yes`             | `-y`  | Skip confirmation prompts                  | No       | `false`              | -                                 |
-| `--config <CONFIG>` | `-c`  | Path to SDK config file                    | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--name <NAME>`     | `-n`  | Optional description for the migration     | No       | -                    | -                                 |
-| `--init`            | -     | Delete existing migrations and start fresh | No       | `false`              | -                                 |
+| Option              | Alias | Description                                | Required | Default              | Env                  |
+| ------------------- | ----- | ------------------------------------------ | -------- | -------------------- | -------------------- |
+| `--yes`             | `-y`  | Skip confirmation prompts                  | No       | `false`              | -                    |
+| `--config <CONFIG>` | `-c`  | Path to Tailor config file                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
+| `--name <NAME>`     | `-n`  | Optional description for the migration     | No       | -                    | -                    |
+| `--init`            | -     | Delete existing migrations and start fresh | No       | `false`              | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -144,10 +144,10 @@ tailor-sdk tailordb migration script [options] <number>
 
 **Options**
 
-| Option                    | Alias | Description                                                       | Required | Default              | Env                               |
-| ------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
+| Option                    | Alias | Description                                                       | Required | Default              | Env                  |
+| ------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | -------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -169,13 +169,13 @@ tailor-sdk tailordb migration set [options] <number>
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                                 |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -191,12 +191,12 @@ tailor-sdk tailordb migration status [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified) | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified) | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -218,13 +218,13 @@ tailor-sdk tailordb migration sync [options] <number>
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                                 |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -262,11 +262,11 @@ tailor-sdk tailordb erd export [options]
 
 **Options**
 
-| Option                    | Alias | Description                                                                                    | Required | Default              | Env                               |
-| ------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                                                        | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                  | No       | -                    | -                                 |
-| `--output <OUTPUT>`       | `-o`  | Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`) | No       | `".tailor-sdk/erd"`  | -                                 |
+| Option                    | Alias | Description                                                                                    | Required | Default              | Env                  |
+| ------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                                     | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                  | No       | -                    | -                    |
+| `--output <OUTPUT>`       | `-o`  | Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`) | No       | `".tailor-sdk/erd"`  | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -282,12 +282,12 @@ tailor-sdk tailordb erd serve [options]
 
 **Options**
 
-| Option                    | Alias | Description                                                               | Required | Default              | Env                               |
-| ------------------------- | ----- | ------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                                   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | No       | -                    | -                                 |
-| `--port <PORT>`           | -     | Local server port (0 selects a free port)                                 | No       | `0`                  | -                                 |
-| `--open`                  | -     | Open the ERD viewer in the default browser                                | No       | `false`              | -                                 |
+| Option                    | Alias | Description                                                               | Required | Default              | Env                  |
+| ------------------------- | ----- | ------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | No       | -                    | -                    |
+| `--port <PORT>`           | -     | Local server port (0 selects a free port)                                 | No       | `0`                  | -                    |
+| `--open`                  | -     | Open the ERD viewer in the default browser                                | No       | `false`              | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -303,12 +303,12 @@ tailor-sdk tailordb erd deploy [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                         | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                        | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                   | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                             | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                                         | Required | Default              | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                        | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                   | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                          | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

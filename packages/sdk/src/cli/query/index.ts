@@ -822,9 +822,7 @@ export const queryCommand = defineAppCommand({
 
     if (mode.mode === "repl") {
       const newlineOnEnter =
-        args["newline-on-enter"] ??
-        parseBoolean(process.env.TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER) ??
-        true;
+        args["newline-on-enter"] ?? parseBoolean(process.env.TAILOR_QUERY_NEWLINE_ON_ENTER) ?? true;
       await runRepl({
         ...sharedOptions,
         json: args.json,

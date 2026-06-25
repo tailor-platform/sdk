@@ -22,8 +22,8 @@ async function install() {
 
   // Try to find and load the user's tailor.config.ts
   // Priority: env/config > search parent directories
-  const configPath = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH
-    ? resolve(cwd, process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH)
+  const configPath = process.env.TAILOR_CONFIG_PATH
+    ? resolve(cwd, process.env.TAILOR_CONFIG_PATH)
     : findUpSync(DEFAULT_CONFIG_FILENAME, { cwd });
 
   if (!configPath || !existsSync(configPath)) {

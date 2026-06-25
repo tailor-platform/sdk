@@ -22,11 +22,11 @@ describe("bundleForTestRun", () => {
   beforeEach(() => {
     testDir = path.join(TEST_BASE, `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     fs.mkdirSync(testDir, { recursive: true });
-    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
   });
 
   afterAll(() => {
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BASE, { recursive: true, force: true });
     } catch {
