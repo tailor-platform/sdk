@@ -14,6 +14,6 @@ export async function registerTsHook(tsHookUrl: URL): Promise<void> {
     };
     registerHooks({ resolve: resolveSync, load: loadSync });
   } else {
-    mod.register(tsHookUrl, tsHookUrl.href);
+    mod.register(tsHookUrl, import.meta.url);
   }
 }
