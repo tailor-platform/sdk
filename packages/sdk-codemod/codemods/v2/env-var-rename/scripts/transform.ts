@@ -17,7 +17,7 @@ const ENV_RENAMES: ReadonlyArray<readonly [string, string]> = [
 ];
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
-const ENV_BOUNDARY = "[A-Z0-9_]";
+const ENV_BOUNDARY = "[A-Za-z0-9_]";
 const RENAME_PATTERNS = ENV_RENAMES.map(([from, to]) => ({
   pattern: new RegExp(`(?<!${ENV_BOUNDARY})${from}(?!${ENV_BOUNDARY})`, "g"),
   to,
