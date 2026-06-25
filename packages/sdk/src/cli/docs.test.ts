@@ -35,7 +35,7 @@ const templateFiles: Record<string, { commands: string[]; tpl: string }> = {
     tpl: "docs/cli/query.template.md",
   },
   "docs/cli/user.md": {
-    commands: ["login", "logout", "user"],
+    commands: ["login", "logout", "auth", "user"],
     tpl: "docs/cli/user.template.md",
   },
   "docs/cli/organization.md": {
@@ -85,6 +85,10 @@ const templateFiles: Record<string, { commands: string[]; tpl: string }> = {
   "docs/cli/skills.md": {
     commands: ["skills"],
     tpl: "docs/cli/skills.template.md",
+  },
+  "docs/cli/plugin.md": {
+    commands: ["plugin"],
+    tpl: "docs/cli/plugin.template.md",
   },
   "docs/cli/completion.md": {
     commands: ["completion"],

@@ -19,7 +19,7 @@ import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 
 export const platformBaseUrl = process.env.TAILOR_PLATFORM_URL ?? "https://api.tailor.tech";
 
-const oauth2ClientId =
+export const oauth2ClientId =
   process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID ?? "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
 const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
 

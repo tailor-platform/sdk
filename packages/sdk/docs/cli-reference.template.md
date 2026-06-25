@@ -91,6 +91,64 @@ Workspace ID resolution follows this priority order:
 2. `TAILOR_PLATFORM_WORKSPACE_ID` environment variable
 3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 
+## CLI Plugins
+
+You can extend the CLI with external plugins, similar to `gh` extensions. When you run a command that
+is not a built-in, the CLI looks for an executable named `tailor-<name>` and runs it, forwarding the
+remaining arguments:
+
+```bash
+# Runs the `tailor-hello` executable with: world --loud
+tailor hello world --loud
+```
+
+This also works under a built-in command group. The command path is joined with hyphens, so a plugin
+nested under `tailordb` is named `tailor-tailordb-erd`:
+
+```bash
+# Runs `tailor-tailordb-erd` with: export
+tailor tailordb erd export
+```
+
+Resolution rules:
+
+- **Built-ins always win.** A plugin is only used when no built-in command matches.
+- **A command that takes its own arguments is never replaced.** Plugin dispatch applies only to command
+  _groups_ (commands that just route to subcommands). A command that performs its own action — including
+  one that accepts a positional argument — always runs itself, so a plugin can never shadow an argument value.
+- **Lookup order:** the project's `node_modules/.bin` (nearest first, walking up from the current
+  directory), then your `PATH`. So a plugin installed as a project dev-dependency takes precedence over a
+  globally installed one.
+
+Because resolution is based on `node_modules/.bin` and `PATH`, any package manager that populates
+`node_modules/.bin` works for project-local plugins — npm, pnpm (its content-addressable store is
+transparent here), Bun, and Yarn Classic. The exception is **Yarn Plug'n'Play**, which does not create a
+`node_modules` directory: install such plugins globally so they resolve via `PATH`, or use Yarn's
+`nodeLinker: node-modules` setting.
+
+Run `tailor plugin list` to see which plugins are discovered and where they resolve from.
+
+### Context passed to plugins
+
+Before running a plugin, the CLI injects the current Tailor Platform context as environment variables so
+the plugin does not need to re-implement authentication or re-resolve the active workspace:
+
+| Variable                           | Description                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| `TAILOR_PLATFORM_TOKEN`            | A valid access token (refreshed if needed). Omitted when not logged in.  |
+| `TAILOR_PLATFORM_URL`              | The Tailor Platform endpoint in effect                                   |
+| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID` | The OAuth2 client ID in effect, for plugins that run their own auth flow |
+| `TAILOR_PLATFORM_WORKSPACE_ID`     | The resolved workspace ID, when one can be determined                    |
+| `TAILOR_PLATFORM_USER`             | The active user (email when known), when logged in                       |
+| `TAILOR_CONFIG_PATH`               | Path to the resolved Tailor config file, when found                      |
+| `TAILOR_VERSION`                   | The `tailor` version that invoked the plugin                             |
+| `TAILOR_BIN`                       | Path to the `tailor` executable, for calling back into the CLI           |
+
+The token, workspace ID, and user are best-effort: whatever the current context can resolve is injected,
+and auth-free plugins still run when you are not logged in. A long-running plugin (or one started on its
+own) can obtain a fresh token at any time with `tailor auth token`, which prints a valid access token to
+stdout, refreshing it first if it has expired.
+
 ## Commands
 
 {{politty:index}}
