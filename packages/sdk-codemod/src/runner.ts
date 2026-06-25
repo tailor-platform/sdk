@@ -150,10 +150,20 @@ function sourceLang(relative: string): Lang {
   return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
 }
 
+function isProcessEnvSubscriptKey(node: SgNode): boolean {
+  const stringNode = node.kind() === "string_fragment" ? node.parent() : node;
+  if (stringNode == null || !["string", "template_string"].includes(stringNode.kind())) {
+    return false;
+  }
+  const parent = stringNode.parent();
+  return parent?.kind() === "subscript_expression" && /^process\.env\s*\[/.test(parent.text());
+}
+
 function collectMaskedRanges(root: SgNode): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
   const visit = (node: SgNode): void => {
     if (MASKED_SOURCE_NODE_KINDS.has(node.kind())) {
+      if (isProcessEnvSubscriptKey(node)) return;
       const range = node.range();
       ranges.push([range.start.index, range.end.index]);
       return;
