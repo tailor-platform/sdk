@@ -2,7 +2,8 @@ import { z } from "zod";
 
 /**
  * Normalize IdPGqlOperationsConfig (alias or object) to IdPGqlOperations object.
- * "query" alias expands to read-only mode: { create: false, update: false, delete: false, read: true, sendPasswordResetEmail: false }
+ * "query" alias expands to read-only mode: every mutation is disabled while
+ * queries (`read`, `requestMfaSettingsUrl`) stay enabled.
  * @param config - The config to normalize
  * @returns The normalized IdPGqlOperations object
  */
@@ -15,6 +16,8 @@ function normalizeIdPGqlOperations(
         delete?: boolean;
         read?: boolean;
         sendPasswordResetEmail?: boolean;
+        requestMfaSettingsUrl?: boolean;
+        unenrollMfa?: boolean;
       },
 ) {
   if (config === "query") {
@@ -24,6 +27,8 @@ function normalizeIdPGqlOperations(
       delete: false,
       read: true,
       sendPasswordResetEmail: false,
+      requestMfaSettingsUrl: true,
+      unenrollMfa: false,
     };
   }
   return config;
@@ -45,6 +50,11 @@ export const IdPGqlOperationsSchema = z
         .boolean()
         .optional()
         .describe("Enable _sendPasswordResetEmail mutation (default: true)"),
+      requestMfaSettingsUrl: z
+        .boolean()
+        .optional()
+        .describe("Enable _requestMfaSettingsUrl query (default: true)"),
+      unenrollMfa: z.boolean().optional().describe("Enable _unenrollMfa mutation (default: true)"),
     }),
   ])
   .describe(
@@ -332,10 +342,11 @@ export const IdPSchema = z
   .refine(
     (data) =>
       !data.userAuthPolicy?.enableMfa ||
+      data.gqlOperations?.unenrollMfa === false ||
       (data.permission !== undefined && data.permission.unenrollMfa !== undefined),
     {
       message:
-        "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true (set [{ conditions: [...], permit: true }] to allow, or [] to deny all). permission itself must also be defined.",
+        "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true (set [{ conditions: [...], permit: true }] to allow, or [] to deny all). permission itself must also be defined. The requirement is only relaxed when gqlOperations.unenrollMfa is false.",
       path: ["permission", "unenrollMfa"],
     },
   )

@@ -86,8 +86,8 @@ defineIdp("my-idp", {
 - `read` - Controls who can read IdP users
 - `update` - Controls who can update IdP users
 - `delete` - Controls who can delete IdP users
-- `sendPasswordResetEmail` - Controls who can send password reset emails. Required unless `userAuthPolicy.disablePasswordAuth` is `true` (the password-reset flow has no meaning when password authentication is off). Set `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]` to allow, or `[]` to deny.
-- `unenrollMfa` - Controls who can remove an enrolled MFA factor from a user. Required when `userAuthPolicy.enableMfa` is `true`; omit otherwise. Typically restricted to administrators.
+- `sendPasswordResetEmail` - Controls who can send password reset emails. Required unless `userAuthPolicy.disablePasswordAuth` is `true` or `gqlOperations.sendPasswordResetEmail` is `false` (the password-reset flow has no meaning when password authentication is off or the operation is disabled). Set `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]` to allow, or `[]` to deny.
+- `unenrollMfa` - Controls who can remove an enrolled MFA factor from a user. Required when `userAuthPolicy.enableMfa` is `true` unless `gqlOperations.unenrollMfa` is `false`; omit otherwise. Typically restricted to administrators.
 
 **Policy fields:** each entry in an operation's policy array supports:
 
@@ -222,6 +222,8 @@ defineIdp("my-idp", {
     update: true,
     delete: false,
     sendPasswordResetEmail: false,
+    requestMfaSettingsUrl: false,
+    unenrollMfa: false,
   },
 });
 ```
@@ -233,8 +235,10 @@ defineIdp("my-idp", {
 - `update` - The `_updateUser` mutation.
 - `delete` - The `_deleteUser` mutation.
 - `sendPasswordResetEmail` - The `_sendPasswordResetEmail` mutation.
+- `requestMfaSettingsUrl` - The `_requestMfaSettingsUrl` query that issues a self-service URL for MFA settings.
+- `unenrollMfa` - The `_unenrollMfa` mutation that removes a user's enrolled MFA factor. When set to `false`, `permission.unenrollMfa` may be omitted even with `userAuthPolicy.enableMfa: true`.
 
-**Shortcut:** pass the string `"query"` to expose a read-only IdP. It enables `read` and disables every mutation.
+**Shortcut:** pass the string `"query"` to expose a read-only IdP. It enables the queries (`read`, `requestMfaSettingsUrl`) and disables every mutation.
 
 ```typescript
 defineIdp("my-idp", {
