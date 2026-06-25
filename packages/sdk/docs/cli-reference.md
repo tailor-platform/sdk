@@ -38,7 +38,7 @@ The following options are available for most commands:
 | ---------------- | ----- | -------------------------------------- |
 | `--workspace-id` | `-w`  | Workspace ID (for deployment commands) |
 | `--profile`      | `-p`  | Workspace profile                      |
-| `--config`       | `-c`  | Path to SDK config file                |
+| `--config`       | `-c`  | Path to Tailor config file             |
 | `--yes`          | `-y`  | Skip confirmation prompts              |
 
 ### Environment File Loading
@@ -67,15 +67,16 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                                    |
 | `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                                |
 | `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                                |
-| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                                                          |
 | `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                                       |
-| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                                                      |
-| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                                                 |
+| `TAILOR_CONFIG_PATH`                         | Path to Tailor config file                                                                                   |
+| `TAILOR_DTS_PATH`                            | Output path for generated `tailor.d.ts` type definition file                                                 |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                         |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                                     |
 | `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`, `machineuser token`            |
 | `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count            |
 | `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent unary platform RPCs during `apply`/`deploy` (streaming uploads are not gated). Defaults to 16 |
+| `TAILOR_PLATFORM_URL`                        | Tailor Platform API endpoint override                                                                        |
+| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID override for Tailor Platform login                                                          |
 | `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                                  |
 | `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                             |
 | `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                                   |
@@ -85,9 +86,8 @@ You can use environment variables to configure workspace and authentication:
 Token resolution follows this priority order:
 
 1. `TAILOR_PLATFORM_TOKEN` environment variable
-2. `TAILOR_TOKEN` environment variable (deprecated)
-3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
-4. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
+2. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
+3. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
 
 ### Workspace ID Priority
 

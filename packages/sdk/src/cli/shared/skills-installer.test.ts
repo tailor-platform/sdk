@@ -49,8 +49,8 @@ describe("skills-installer", () => {
     ]);
   });
 
-  test("prefers TAILOR_SDK_SKILLS_SOURCE env var over the passed source", () => {
-    vi.stubEnv("TAILOR_SDK_SKILLS_SOURCE", "/override/skills");
+  test("prefers TAILOR_SKILLS_SOURCE env var over the passed source", () => {
+    vi.stubEnv("TAILOR_SKILLS_SOURCE", "/override/skills");
     try {
       expect(buildSkillsAddArgs({ source: TEST_SOURCE })[2]).toBe("/override/skills");
     } finally {

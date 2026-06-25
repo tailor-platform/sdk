@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+MY_LOG_LEVEL=debug
+TAILOR_TOKEN_BACKUP=token
+echo "$MY_LOG_LEVEL:$TAILOR_TOKEN_BACKUP"

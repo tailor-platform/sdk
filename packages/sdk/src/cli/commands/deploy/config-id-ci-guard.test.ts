@@ -100,8 +100,8 @@ export default defineConfig({
     ).rejects.toThrow(/must be a UUID/);
   });
 
-  test("CI + missing id + TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION: injects an id", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION", "true");
+  test("CI + missing id + TAILOR_CI_ALLOW_ID_INJECTION: injects an id", async () => {
+    vi.stubEnv("TAILOR_CI_ALLOW_ID_INJECTION", "true");
     const filePath = await writeConfig(configWithoutId);
     const { ensureConfigIdForDeploy } = await load(true);
     await ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false });

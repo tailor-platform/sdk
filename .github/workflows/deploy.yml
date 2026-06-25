@@ -104,7 +104,7 @@ jobs:
         working-directory: example
         run: pnpm run deploy
         env:
-          TAILOR_PLATFORM_SDK_BUILD_ONLY: ${{ runner.os == 'Windows' && 'true' || '' }}
+          TAILOR_DEPLOY_BUILD_ONLY: ${{ runner.os == 'Windows' && 'true' || '' }}
 
       - name: Verify all migrations applied
         if: runner.os != 'Windows'
