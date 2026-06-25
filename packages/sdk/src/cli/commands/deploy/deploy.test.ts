@@ -300,14 +300,17 @@ describe("printPlanResults", () => {
     outSpy.mockRestore();
   });
 
-  test("does not emit JSON for apply --json (caller emits after apply)", () => {
+  test("does not emit JSON for apply --json; still prints plan to stderr", () => {
     using _json = jsonMode();
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
 
     printPlanResults(emptyResults(), { dryRun: false });
 
     expect(outSpy).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalled();
 
     outSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });

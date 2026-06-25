@@ -299,32 +299,30 @@ export function printPlanResults(results: PlanResults, opts?: { dryRun?: boolean
   ];
   const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
 
-  if (logger.jsonMode) {
-    if (opts?.dryRun) {
-      const allEntries = [
-        ...allDisplayEntries,
-        ...allServiceActions.map(({ action, name }) => ({
-          action,
-          name,
-          labels: [] as string[],
-          namespace: undefined as string | undefined,
-        })),
-        ...formatChangeSetEntries(otherFunctionRegistryChanges),
-        ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
-        ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
-        ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
-        ...formatChangeSetEntries(results.app, ["application"]),
-        ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
-        ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
-      ];
-      const changes = allEntries.map(({ action, name, labels, namespace }) => ({
+  if (logger.jsonMode && opts?.dryRun) {
+    const allEntries = [
+      ...allDisplayEntries,
+      ...allServiceActions.map(({ action, name }) => ({
         action,
         name,
-        labels,
-        namespace,
-      }));
-      logger.out({ summary, changes });
-    }
+        labels: [],
+        namespace: undefined,
+      })),
+      ...formatChangeSetEntries(otherFunctionRegistryChanges),
+      ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
+      ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
+      ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
+      ...formatChangeSetEntries(results.app, ["application"]),
+      ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
+      ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
+    ];
+    const changes = allEntries.map(({ action, name, labels, namespace }) => ({
+      action,
+      name,
+      labels,
+      namespace,
+    }));
+    logger.out({ summary, changes });
     return summary;
   }
 
@@ -861,7 +859,7 @@ export async function deploy(options?: DeployOptions) {
     if (logger.jsonMode) {
       logger.out({ summary: planSummary, status: "applied" });
     } else {
-      logger.out("Successfully applied changes.");
+      logger.success("Successfully applied changes.");
     }
   });
 }
