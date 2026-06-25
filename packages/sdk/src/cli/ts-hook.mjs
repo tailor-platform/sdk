@@ -145,7 +145,10 @@ export async function resolve(specifier, context, nextResolve) {
     if (!specifier.startsWith(".") && !specifier.startsWith("/")) {
       // Non-relative: try tsconfig path aliases
       if (context.parentURL?.startsWith("file://")) {
-        const parentDir = dirname(fileURLToPath(context.parentURL));
+        const parentParsed = new URL(context.parentURL);
+        parentParsed.search = "";
+        parentParsed.hash = "";
+        const parentDir = dirname(fileURLToPath(parentParsed));
         const tsconfigPaths = loadTsconfigPaths(parentDir);
         const mapped = matchTsconfigPath(specifier, tsconfigPaths);
         if (mapped) {
@@ -224,7 +227,10 @@ export function resolveSync(specifier, context, nextResolve) {
     if (!specifier.startsWith(".") && !specifier.startsWith("/")) {
       // Non-relative: try tsconfig path aliases
       if (context.parentURL?.startsWith("file://")) {
-        const parentDir = dirname(fileURLToPath(context.parentURL));
+        const parentParsed = new URL(context.parentURL);
+        parentParsed.search = "";
+        parentParsed.hash = "";
+        const parentDir = dirname(fileURLToPath(parentParsed));
         const tsconfigPaths = loadTsconfigPaths(parentDir);
         const mapped = matchTsconfigPath(specifier, tsconfigPaths);
         if (mapped) {

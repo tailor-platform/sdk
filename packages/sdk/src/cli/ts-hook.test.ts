@@ -142,6 +142,28 @@ describe("resolve", () => {
     expect(result).toEqual(resolved);
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
+
+  test("resolves tsconfig path alias when parentURL has tailorImportNonce query string", async () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///alias-project/tailordb/user.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(notFound("@/tailordb/user"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-project/tailor.config.ts?tailorImportNonce=1" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
 });
 
 describe("resolveSync", () => {
@@ -210,6 +232,30 @@ describe("resolveSync", () => {
     const result = resolveSync(
       "@/tailordb/user",
       { parentURL: "file:///alias-sync-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
+
+  test("resolves tsconfig path alias when parentURL has tailorImportNonce query string", () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///alias-sync-project/tailordb/user.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw notFound("@/tailordb/user");
+      })
+      .mockReturnValueOnce(resolved);
+    const result = resolveSync(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-sync-project/tailor.config.ts?tailorImportNonce=1" },
       nextResolve,
     );
     expect(result).toEqual(resolved);
