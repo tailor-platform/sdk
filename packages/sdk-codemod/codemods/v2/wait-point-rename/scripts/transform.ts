@@ -80,7 +80,13 @@ export default function transform(source: string, _filePath?: string): string | 
       let scopeNode: SgNode = root;
       let p: SgNode | null = decl.parent();
       while (p) {
-        if (p.kind() === "statement_block" || p.kind() === "program") {
+        const k = p.kind();
+        if (
+          k === "statement_block" ||
+          k === "program" ||
+          k === "for_statement" ||
+          k === "for_in_statement"
+        ) {
           scopeNode = p;
           break;
         }
