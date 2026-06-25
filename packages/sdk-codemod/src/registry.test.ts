@@ -50,6 +50,9 @@ describe("getApplicableCodemods", () => {
     );
     expect(envVarRename?.legacyPatterns).toContain("TAILOR_PLATFORM_SDK_CONFIG_PATH");
     expect(envVarRename?.legacyPatterns).toContain("TAILOR_TOKEN");
+    expect(envVarRename?.sourceStringLegacyPatterns).toEqual(
+      expect.arrayContaining(["PLATFORM_URL", "PLATFORM_OAUTH2_CLIENT_ID", "LOG_LEVEL"]),
+    );
   });
 
   test("flags CommonJS TypeScript files for runtime globals review", () => {
