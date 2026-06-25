@@ -98,4 +98,8 @@ describe("codemod transforms", () => {
   test("v2/execute-script-arg transforms correctly", async () => {
     await expect(runFixtureCases("v2/execute-script-arg")).resolves.toBeUndefined();
   });
+
+  test("v2/wait-point-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/wait-point-rename")).resolves.toBeUndefined();
+  });
 });

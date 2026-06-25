@@ -1,6 +1,7 @@
 ---
 "@tailor-platform/sdk": major
 "@tailor-platform/create-sdk": major
+"@tailor-platform/sdk-codemod": patch
 ---
 
 Rename `defineWaitPoint` and `defineWaitPoints` to `createWaitPoint` and `createWaitPoints`.
