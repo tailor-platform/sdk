@@ -4,3 +4,9 @@
 # Changeset release PRs (Version Packages) always touch CHANGELOG.md,
 # so releases require review from maintainers.
 CHANGELOG.md @tailor-platform/maintainers-sdk
+
+# Security-sensitive files — supply-chain and CI/CD risk
+.github/CODEOWNERS @tailor-platform/maintainers-sdk
+.github/workflows/ @tailor-platform/maintainers-sdk
+**/package.json @tailor-platform/maintainers-sdk
+pnpm-lock.yaml @tailor-platform/maintainers-sdk
