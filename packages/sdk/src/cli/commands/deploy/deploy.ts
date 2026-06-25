@@ -211,7 +211,11 @@ type PlanResults = {
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-export function printPlanResults(results: PlanResults, opts?: { dryRun?: boolean }): PlanSummary {
+type PrintPlanOptions = {
+  dryRun?: boolean;
+};
+
+export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions): PlanSummary {
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
