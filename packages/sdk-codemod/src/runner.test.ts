@@ -428,6 +428,40 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("keeps legacy warnings for process.env bracket keys in source files", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "env.ts"),
+        [
+          'const platformUrl = process.env["PLATFORM_URL"];',
+          "const logLevel = process.env[`LOG_LEVEL`];",
+          'const unrelated = "LOG_LEVEL";',
+        ].join("\n"),
+        "utf-8",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod(
+              "test/env",
+              partialTransformPath,
+              ["**/*.ts"],
+              ["PLATFORM_URL", "LOG_LEVEL"],
+            ),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual([
+        "env.ts: contains PLATFORM_URL, LOG_LEVEL but was not migrated automatically (rule: test/env). Manual migration may be needed.",
+      ]);
+    });
+
     test("flags files matching a suspicious pattern for LLM review", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-test-"));
       tmpDir = dir;
