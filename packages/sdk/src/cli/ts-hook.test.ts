@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test, vi } from "vitest";
 import { load, loadSync, resolve, resolveSync } from "./ts-hook.mjs";
 
@@ -65,7 +66,23 @@ describe("loadSync", () => {
 const notFound = (specifier: string) =>
   Object.assign(new Error(`Cannot find '${specifier}'`), { code: "ERR_MODULE_NOT_FOUND" });
 
+const dirImport = (specifier: string) =>
+  Object.assign(new Error(`Directory import not allowed for '${specifier}'`), {
+    code: "ERR_UNSUPPORTED_DIR_IMPORT",
+  });
+
 describe("resolve", () => {
+  test("retries with /index.ts for ERR_UNSUPPORTED_DIR_IMPORT on relative directory specifier", async () => {
+    const resolved = { url: "file:///path/to/models/index.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(dirImport("./models"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve("./models", {}, nextResolve);
+    expect(result).toEqual(resolved);
+    expect(nextResolve).toHaveBeenCalledWith("./models/index.ts", {});
+  });
+
   test("retries with .ts extension for extensionless relative specifier on ERR_MODULE_NOT_FOUND", async () => {
     const resolved = { url: "file:///path/to/foo.ts" };
     const nextResolve = vi
@@ -103,9 +120,44 @@ describe("resolve", () => {
     });
     expect(nextResolve).toHaveBeenCalledTimes(1);
   });
+
+  test("resolves non-relative specifier via tsconfig path alias", async () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///alias-project/tailordb/user.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(notFound("@/tailordb/user"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
 });
 
 describe("resolveSync", () => {
+  test("retries with /index.ts for ERR_UNSUPPORTED_DIR_IMPORT on relative directory specifier", () => {
+    const resolved = { url: "file:///path/to/models/index.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw dirImport("./models");
+      })
+      .mockReturnValueOnce(resolved);
+    const result = resolveSync("./models", {}, nextResolve);
+    expect(result).toEqual(resolved);
+    expect(nextResolve).toHaveBeenCalledWith("./models/index.ts", {});
+  });
+
   test("retries with .ts extension for extensionless relative specifier on ERR_MODULE_NOT_FOUND", () => {
     const resolved = { url: "file:///path/to/foo.ts" };
     const nextResolve = vi
@@ -138,5 +190,29 @@ describe("resolveSync", () => {
     });
     expect(() => resolveSync("./foo.ts", {}, nextResolve)).toThrow("Cannot find './foo.ts'");
     expect(nextResolve).toHaveBeenCalledTimes(1);
+  });
+
+  test("resolves non-relative specifier via tsconfig path alias", () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///alias-sync-project/tailordb/user.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw notFound("@/tailordb/user");
+      })
+      .mockReturnValueOnce(resolved);
+    const result = resolveSync(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-sync-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
 });
