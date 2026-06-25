@@ -563,7 +563,7 @@ export interface PluginTypeGenerationResult {
  * Parameters for generating plugin files
  */
 export interface GeneratePluginFilesParams {
-  /** Base output directory (e.g., .tailor-sdk/plugin) */
+  /** Base output directory (e.g., .tailor/plugin) */
   outputDir: string;
   /** Map of source type names to their source info */
   sourceTypeInfoMap: Map<string, SourceTypeInfo>;

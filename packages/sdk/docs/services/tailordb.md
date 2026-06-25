@@ -463,7 +463,7 @@ db.type("User", {
 
 - When `publishEvents: true`, record creation/update/deletion events are published
 - When not specified, it is **automatically set to `true`** if an executor uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`
-- When explicitly set to `false` while an executor uses this type, an error is thrown during `tailor-sdk deploy`
+- When explicitly set to `false` while an executor uses this type, an error is thrown during `tailor deploy`
 
 **Use cases:**
 
@@ -622,6 +622,6 @@ db.type("User", {
 
 ## Migrations
 
-When you change a TailorDB type definition, the SDK can generate a migration that captures the diff and, for breaking changes, runs a data transformation script during `tailor-sdk deploy`. See the [TailorDB Migrations guide](./tailordb-migration.md) for the full workflow, configuration, supported change types, team coordination, and troubleshooting.
+When you change a TailorDB type definition, the SDK can generate a migration that captures the diff and, for breaking changes, runs a data transformation script during `tailor deploy`. See the [TailorDB Migrations guide](./tailordb-migration.md) for the full workflow, configuration, supported change types, team coordination, and troubleshooting.
 
 For the CLI command reference, see [`tailordb migration`](../cli/tailordb.md#tailordb-migration).

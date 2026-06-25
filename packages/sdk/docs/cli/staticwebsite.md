@@ -9,7 +9,7 @@ Manage static websites in your workspace.
 **Usage**
 
 ```
-tailor-sdk staticwebsite [command]
+tailor staticwebsite [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -30,7 +30,7 @@ Deploy a static website from a local build directory.
 **Usage**
 
 ```
-tailor-sdk staticwebsite deploy [options]
+tailor staticwebsite deploy [options]
 ```
 
 **Options**
@@ -48,10 +48,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 # Deploy a static website from the dist directory
-tailor-sdk staticwebsite deploy --name my-website --dir ./dist
+tailor staticwebsite deploy --name my-website --dir ./dist
 
 # Deploy with workspace ID
-tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
+tailor staticwebsite deploy -n my-website -d ./dist -w ws_abc123
 ```
 
 **Notes:**
@@ -68,7 +68,7 @@ List all static websites in a workspace.
 **Usage**
 
 ```
-tailor-sdk staticwebsite list [options]
+tailor staticwebsite list [options]
 ```
 
 **Options**
@@ -86,10 +86,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 # List all static websites
-tailor-sdk staticwebsite list
+tailor staticwebsite list
 
 # List with JSON output
-tailor-sdk staticwebsite list --json
+tailor staticwebsite list --json
 ```
 
 ### staticwebsite domain
@@ -99,7 +99,7 @@ Manage custom domains for static websites.
 **Usage**
 
 ```
-tailor-sdk staticwebsite domain <command>
+tailor staticwebsite domain <command>
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -118,7 +118,7 @@ Get details of a custom domain.
 **Usage**
 
 ```
-tailor-sdk staticwebsite domain get [options] <domain>
+tailor staticwebsite domain get [options] <domain>
 ```
 
 **Arguments**
@@ -143,7 +143,7 @@ List custom domains for a static website.
 **Usage**
 
 ```
-tailor-sdk staticwebsite domain list [options] <name>
+tailor staticwebsite domain list [options] <name>
 ```
 
 **Arguments**
@@ -168,7 +168,7 @@ Get details of a specific static website.
 **Usage**
 
 ```
-tailor-sdk staticwebsite get [options] <name>
+tailor staticwebsite get [options] <name>
 ```
 
 **Arguments**
@@ -190,8 +190,8 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 # Get details of a static website
-tailor-sdk staticwebsite get my-website
+tailor staticwebsite get my-website
 
 # Get with JSON output
-tailor-sdk staticwebsite get my-website --json
+tailor staticwebsite get my-website --json
 ```

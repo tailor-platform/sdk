@@ -27,13 +27,13 @@ Commands for managing workflows and workflow executions.
 
 ```bash
 # Start a workflow
-tailor-sdk workflow start my-workflow -m admin-machine-user
+tailor workflow start my-workflow -m admin-machine-user
 
 # Start with argument
-tailor-sdk workflow start my-workflow -m admin -a '{"userId": "123"}'
+tailor workflow start my-workflow -m admin -a '{"userId": "123"}'
 
 # Start and wait for completion
-tailor-sdk workflow start my-workflow -m admin -W
+tailor workflow start my-workflow -m admin -W
 ```
 
 {{politty:command:workflow wait}}
@@ -45,10 +45,10 @@ separate command:
 
 ```bash
 execution_id="$(
-  tailor-sdk workflow start order-workflow --json | jq -r '.executionId'
+  tailor workflow start order-workflow --json | jq -r '.executionId'
 )"
 
-tailor-sdk workflow wait "$execution_id" \
+tailor workflow wait "$execution_id" \
   --until success \
   --timeout 10m \
   --interval 5s \
@@ -58,7 +58,7 @@ tailor-sdk workflow wait "$execution_id" \
 Wait until a workflow reaches a wait point, such as an approval step:
 
 ```bash
-tailor-sdk workflow wait "$execution_id" \
+tailor workflow wait "$execution_id" \
   --until suspended \
   --timeout 6m \
   --logs \
@@ -97,22 +97,22 @@ if (result.timedOut) {
 
 ```bash
 # List all executions
-tailor-sdk workflow executions
+tailor workflow executions
 
 # Filter by workflow name
-tailor-sdk workflow executions -n my-workflow
+tailor workflow executions -n my-workflow
 
 # Filter by status
-tailor-sdk workflow executions -s RUNNING
+tailor workflow executions -s RUNNING
 
 # Get execution details
-tailor-sdk workflow executions <execution-id>
+tailor workflow executions <execution-id>
 
 # Get execution details with logs
-tailor-sdk workflow executions <execution-id> --logs
+tailor workflow executions <execution-id> --logs
 
 # Wait for execution to complete
-tailor-sdk workflow executions <execution-id> -W
+tailor workflow executions <execution-id> -W
 ```
 
 {{politty:command:workflow resume}}

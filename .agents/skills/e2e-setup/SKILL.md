@@ -2,7 +2,7 @@
 name: e2e-setup
 description: >
   Set up the environment and run e2e tests in this repo (`example/e2e` and `packages/sdk/e2e`).
-  Covers tailor-sdk authentication, workspace selection, and re-deploying `example/` when
+  Covers tailor authentication, workspace selection, and re-deploying `example/` when
   the deployed app drifts from the current code. Use when running e2e tests locally, fixing
   e2e failures, or when a run errors with "Failed to refresh token", "Workspace ID not found",
   or mismatched counts/fields in resolver/workflow assertions.
@@ -50,7 +50,7 @@ set -a; source .agents/skills/e2e-setup/ids.local.env; set +a
 **Sanity check on `TAILOR_PLATFORM_WORKSPACE_ID`.** Before running `example/e2e`, confirm the workspace still has `my-app` deployed:
 
 ```
-pnpm exec tailor-sdk workspace app list --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID"
+pnpm exec tailor workspace app list --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID"
 ```
 
 If it is gone, re-deploy per [Pre-deploy](#one-time-setup) step 4.
@@ -63,18 +63,18 @@ The tests assert against the **deployed** state of `example/` (resolver count, w
 
 Only needed when `ids.local.env` has no `TAILOR_PLATFORM_WORKSPACE_ID` yet, or the saved workspace was deleted / no longer hosts `my-app`. Write the resolved workspace ID back to `ids.local.env` when finished.
 
-1. Make sure you are logged in. `tailor-sdk login` opens a browser — **only the user can run it**; the agent must ask. Verify with `pnpm exec tailor-sdk workspace list` (errors with `Tailor Platform token not found.` if unauthenticated).
+1. Make sure you are logged in. `tailor login` opens a browser — **only the user can run it**; the agent must ask. Verify with `pnpm exec tailor workspace list` (errors with `Tailor Platform token not found.` if unauthenticated).
 2. Look up the organization and folder you want the workspace to live under. The `workspace create` flags below need both IDs:
    ```
-   pnpm exec tailor-sdk organization list
-   pnpm exec tailor-sdk organization folder list --organization-id <org>
+   pnpm exec tailor organization list
+   pnpm exec tailor organization folder list --organization-id <org>
    # Optional: drill into a sub-folder
-   pnpm exec tailor-sdk organization folder list --organization-id <org> --parent-folder-id <folder>
+   pnpm exec tailor organization folder list --organization-id <org> --parent-folder-id <folder>
    ```
 3. Pick or create a personal workspace. Suggested name: `example-e2e` (descriptive of purpose; fall back to a personal prefix only if it collides under the same folder). The agent must not invent a name — use the suggestion or ask the user:
    ```
-   pnpm exec tailor-sdk workspace list
-   pnpm exec tailor-sdk workspace create --name example-e2e --region asia-northeast --organization-id <org> --folder-id <folder>
+   pnpm exec tailor workspace list
+   pnpm exec tailor workspace create --name example-e2e --region asia-northeast --organization-id <org> --folder-id <folder>
    ```
 4. Deploy `example/` into it once:
    ```
@@ -83,7 +83,7 @@ Only needed when `ids.local.env` has no `TAILOR_PLATFORM_WORKSPACE_ID` yet, or t
    Use `run deploy`, not bare `deploy` — pnpm has a builtin `deploy` command that shadows the package script when invoked via `--filter`.
 5. Confirm `my-app` is present:
    ```
-   pnpm exec tailor-sdk workspace app list --workspace-id <id>
+   pnpm exec tailor workspace app list --workspace-id <id>
    ```
 
 Optionally save the workspace as a profile (`~/.config/tailor-platform/config.yaml`) so `TAILOR_PLATFORM_PROFILE=<name>` alone is enough.
@@ -134,9 +134,9 @@ The script uses `loadAccessToken()` so it works with keyring/config credentials 
 
 | Error                                                                                                      | Cause                                                                    | Fix                                                                                                                               |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `Failed to refresh token. Your session may have expired.`                                                  | The refresh token in `~/.config/tailor-platform/config.yaml` is expired. | `pnpm exec tailor-sdk login` (interactive; only the user can run this — the agent should ask).                                    |
+| `Failed to refresh token. Your session may have expired.`                                                  | The refresh token in `~/.config/tailor-platform/config.yaml` is expired. | `pnpm exec tailor login` (interactive; only the user can run this — the agent should ask).                                        |
 | `Workspace ID not found.`                                                                                  | No `--workspace-id`, no `TAILOR_PLATFORM_WORKSPACE_ID`, no profile set.  | Set `TAILOR_PLATFORM_WORKSPACE_ID` or `TAILOR_PLATFORM_PROFILE`.                                                                  |
-| `Application my-app does not have an auth configuration.` / `Machine user manager-machine-user not found.` | Wrong workspace selected, or `example/` was never deployed there.        | Confirm with `tailor-sdk workspace app list`; deploy if missing.                                                                  |
+| `Application my-app does not have an auth configuration.` / `Machine user manager-machine-user not found.` | Wrong workspace selected, or `example/` was never deployed there.        | Confirm with `tailor workspace app list`; deploy if missing.                                                                      |
 | `TAILOR_PLATFORM_ORGANIZATION_ID` / `..._FOLDER_ID` unset (in `packages/sdk/e2e`)                          | The suite needs these to create workspaces.                              | `source .agents/skills/e2e-setup/ids.local.env` (or follow the fallback in [Stored IDs](#stored-ids-idslocalenv) to populate it). |
 
 ## When the user reports an e2e failure

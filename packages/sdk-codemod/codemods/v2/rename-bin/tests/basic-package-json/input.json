@@ -1,0 +1,10 @@
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "scripts": {
+    "deploy": "tailor-sdk deploy",
+    "login": "pnpm exec tailor-sdk login",
+    "generate": "tailor-sdk@latest generate",
+    "build": "tsc"
+  }
+}

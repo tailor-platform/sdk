@@ -50,13 +50,13 @@ For more details, see the [Quickstart Guide](./docs/quickstart.md).
 
 ## Agent Skill
 
-Install the `tailor-sdk` skill from the locally installed SDK package:
+Install the `tailor` skill from the locally installed SDK package:
 
 ```bash
-npx tailor-sdk skills install
+npx tailor skills install
 
 # Example: install to Codex in non-interactive mode
-npx tailor-sdk skills install -a codex -y
+npx tailor skills install -a codex -y
 ```
 
 This uses the `skills` CLI under the hood, sourcing the skill from

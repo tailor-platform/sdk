@@ -9,7 +9,7 @@ Manage executors
 **Usage**
 
 ```
-tailor-sdk executor [command]
+tailor executor [command]
 ```
 
 **Commands**
@@ -31,7 +31,7 @@ List all executors
 **Usage**
 
 ```
-tailor-sdk executor list [options]
+tailor executor list [options]
 ```
 
 **Options**
@@ -52,7 +52,7 @@ Get executor details
 **Usage**
 
 ```
-tailor-sdk executor get [options] <name>
+tailor executor get [options] <name>
 ```
 
 **Arguments**
@@ -77,7 +77,7 @@ List or get executor jobs.
 **Usage**
 
 ```
-tailor-sdk executor jobs [options] <executor-name> [job-id]
+tailor executor jobs [options] <executor-name> [job-id]
 ```
 
 **Arguments**
@@ -109,43 +109,43 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **List jobs for an executor (default: 50 jobs)**
 
 ```bash
-$ tailor-sdk executor jobs my-executor
+$ tailor executor jobs my-executor
 ```
 
 **Limit the number of jobs**
 
 ```bash
-$ tailor-sdk executor jobs my-executor --limit 10
+$ tailor executor jobs my-executor --limit 10
 ```
 
 **Filter by status**
 
 ```bash
-$ tailor-sdk executor jobs my-executor -s RUNNING
+$ tailor executor jobs my-executor -s RUNNING
 ```
 
 **Get job details**
 
 ```bash
-$ tailor-sdk executor jobs my-executor <job-id>
+$ tailor executor jobs my-executor <job-id>
 ```
 
 **Get job details with attempts**
 
 ```bash
-$ tailor-sdk executor jobs my-executor <job-id> --attempts
+$ tailor executor jobs my-executor <job-id> --attempts
 ```
 
 **Wait for job to complete**
 
 ```bash
-$ tailor-sdk executor jobs my-executor <job-id> -W
+$ tailor executor jobs my-executor <job-id> -W
 ```
 
 **Wait for job with logs**
 
 ```bash
-$ tailor-sdk executor jobs my-executor <job-id> -W -l
+$ tailor executor jobs my-executor <job-id> -W -l
 ```
 
 ### executor trigger
@@ -155,7 +155,7 @@ Trigger an executor manually.
 **Usage**
 
 ```
-tailor-sdk executor trigger [options] <executor-name>
+tailor executor trigger [options] <executor-name>
 ```
 
 **Arguments**
@@ -182,31 +182,31 @@ tailor-sdk executor trigger [options] <executor-name>
 **Trigger an executor**
 
 ```bash
-$ tailor-sdk executor trigger my-executor
+$ tailor executor trigger my-executor
 ```
 
 **Trigger with data**
 
 ```bash
-$ tailor-sdk executor trigger my-executor -d '{"message": "hello"}'
+$ tailor executor trigger my-executor -d '{"message": "hello"}'
 ```
 
 **Trigger with data and headers**
 
 ```bash
-$ tailor-sdk executor trigger my-executor -d '{"message": "hello"}' -H "X-Custom: value" -H "X-Another: value2"
+$ tailor executor trigger my-executor -d '{"message": "hello"}' -H "X-Custom: value" -H "X-Another: value2"
 ```
 
 **Trigger and wait for completion**
 
 ```bash
-$ tailor-sdk executor trigger my-executor -W
+$ tailor executor trigger my-executor -W
 ```
 
 **Trigger, wait, and show logs**
 
 ```bash
-$ tailor-sdk executor trigger my-executor -W -l
+$ tailor executor trigger my-executor -W -l
 ```
 
 **Shell automation**
@@ -215,7 +215,7 @@ Trigger an executor and wait for the executor job plus any downstream workflow o
 function execution:
 
 ```bash
-tailor-sdk executor trigger daily-workflow \
+tailor executor trigger daily-workflow \
   --wait \
   --timeout 5m \
   --interval 5s \
@@ -225,7 +225,7 @@ tailor-sdk executor trigger daily-workflow \
 Wait for an existing job when another process already captured the job ID:
 
 ```bash
-tailor-sdk executor jobs daily-workflow "$job_id" \
+tailor executor jobs daily-workflow "$job_id" \
   --wait \
   --timeout 5m \
   --logs \
@@ -286,7 +286,7 @@ Manage executor webhooks
 **Usage**
 
 ```
-tailor-sdk executor webhook [command]
+tailor executor webhook [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -304,7 +304,7 @@ List executors with incoming webhook triggers
 **Usage**
 
 ```
-tailor-sdk executor webhook list [options]
+tailor executor webhook list [options]
 ```
 
 **Options**

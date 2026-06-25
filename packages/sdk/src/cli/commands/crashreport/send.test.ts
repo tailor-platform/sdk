@@ -16,7 +16,7 @@ function makeCrashReport(): CrashReport {
     osRelease: "25.3.0",
     arch: "arm64",
     command: "apply",
-    argv: ["node", "tailor-sdk", "apply"],
+    argv: ["node", "tailor", "apply"],
     errorName: "TypeError",
     errorMessage: "Cannot read properties of undefined",
     stackTrace:

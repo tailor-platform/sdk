@@ -143,7 +143,7 @@ describe("shell completion", () => {
         candidates: readonly { value: string; description?: string }[];
       }[];
     } {
-      const data = extractCompletionData(mainCommand, "tailor-sdk");
+      const data = extractCompletionData(mainCommand, "tailor");
       const apiCmd = data.command.subcommands.find((s) => s.name === "api");
       if (!apiCmd) throw new Error("api subcommand missing");
       const fieldOpt = apiCmd.options.find((o) => o.name === "field");
@@ -209,7 +209,7 @@ describe("shell completion", () => {
       // repeated. Confirm both are wired up in the zsh script.
       const { script } = generateCompletion(mainCommand, {
         shell: "zsh",
-        programName: "tailor-sdk",
+        programName: "tailor",
       });
       expect(script).toMatch(/__tailor_sdk_expand_[a-z_]+__field=/);
       expect(script).toContain("GetFunctionExecution");

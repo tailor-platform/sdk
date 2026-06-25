@@ -31,13 +31,13 @@ npm create @tailor-platform/sdk -- --template hello-world example-app
 Before deploying your app, you need to create a workspace:
 
 ```bash
-npx tailor-sdk login
-npx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
-npx tailor-sdk workspace list
+npx tailor login
+npx tailor workspace create --name <workspace-name> --region <workspace-region>
+npx tailor workspace list
 
 # Or with Bun:
-# bunx tailor-sdk login
-# bunx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
+# bunx tailor login
+# bunx tailor workspace create --name <workspace-name> --region <workspace-region>
 
 # OR
 # Create a new workspace using Tailor Platform Console

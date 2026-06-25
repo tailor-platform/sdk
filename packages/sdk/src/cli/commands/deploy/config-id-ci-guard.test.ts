@@ -46,7 +46,7 @@ describe("ensureConfigIdForDeploy", () => {
     const { ensureConfigIdForDeploy } = await load(true);
     await expect(
       ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
-    ).rejects.toThrow(/missing an 'id'|tailor-sdk setup|deploy/);
+    ).rejects.toThrow(/missing an 'id'|tailor setup|deploy/);
     // Must not have injected anything in CI.
     expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
   });

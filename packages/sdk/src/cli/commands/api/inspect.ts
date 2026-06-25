@@ -10,7 +10,7 @@ export const inspectCommand = defineAppCommand({
   name: "inspect",
   description: "Print the input message tree of an OperatorService endpoint.",
   notes:
-    "Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor-sdk api list` to discover endpoint names.",
+    "Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor api list` to discover endpoint names.",
   examples: [
     { cmd: "GetApplication", desc: "Show fields of GetApplicationRequest." },
     {
@@ -34,7 +34,7 @@ export const inspectCommand = defineAppCommand({
     if (!method) {
       throw CLIError({
         message: `unknown method: ${methodName}`,
-        suggestion: "Run `tailor-sdk api list` to see available methods.",
+        suggestion: "Run `tailor api list` to see available methods.",
         command: "api inspect",
       });
     }

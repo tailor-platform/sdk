@@ -18,7 +18,7 @@ export const listCommand = defineAppCommand({
     if (profiles.length === 0) {
       logger.info(ml`
         No profiles found.
-        Please create a profile first using 'tailor-sdk profile create' command.
+        Please create a profile first using 'tailor profile create' command.
       `);
       if (jsonOutput) {
         logger.out([]);

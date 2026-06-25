@@ -150,7 +150,7 @@ async function loadOptions(options: QueryBaseOptions) {
   });
   if (!machineUser) {
     throw new Error(
-      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
     );
   }
 

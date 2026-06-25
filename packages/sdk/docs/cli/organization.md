@@ -5,7 +5,7 @@ Manage Tailor Platform organizations.
 **Usage**
 
 ```
-tailor-sdk organization [command]
+tailor organization [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -27,7 +27,7 @@ Manage organization folders.
 **Usage**
 
 ```
-tailor-sdk organization folder <command>
+tailor organization folder <command>
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -49,7 +49,7 @@ Create a new folder in an organization.
 **Usage**
 
 ```
-tailor-sdk organization folder create [options]
+tailor organization folder create [options]
 ```
 
 **Options**
@@ -69,7 +69,7 @@ Delete a folder from an organization.
 **Usage**
 
 ```
-tailor-sdk organization folder delete [options]
+tailor organization folder delete [options]
 ```
 
 **Options**
@@ -89,7 +89,7 @@ Show detailed information about a folder.
 **Usage**
 
 ```
-tailor-sdk organization folder get [options]
+tailor organization folder get [options]
 ```
 
 **Options**
@@ -108,7 +108,7 @@ List folders in an organization.
 **Usage**
 
 ```
-tailor-sdk organization folder list [options]
+tailor organization folder list [options]
 ```
 
 **Options**
@@ -129,7 +129,7 @@ Update a folder's name.
 **Usage**
 
 ```
-tailor-sdk organization folder update [options]
+tailor organization folder update [options]
 ```
 
 **Options**
@@ -149,7 +149,7 @@ Show detailed information about an organization.
 **Usage**
 
 ```
-tailor-sdk organization get [options]
+tailor organization get [options]
 ```
 
 **Options**
@@ -167,7 +167,7 @@ List organizations you belong to.
 **Usage**
 
 ```
-tailor-sdk organization list [options]
+tailor organization list [options]
 ```
 
 **Options**
@@ -185,7 +185,7 @@ Display organization folder hierarchy as a tree.
 **Usage**
 
 ```
-tailor-sdk organization tree [options]
+tailor organization tree [options]
 ```
 
 **Options**
@@ -204,7 +204,7 @@ Update an organization's name.
 **Usage**
 
 ```
-tailor-sdk organization update [options]
+tailor organization update [options]
 ```
 
 **Options**

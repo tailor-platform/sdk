@@ -370,13 +370,13 @@ function printNextSteps(obj: { environment: string; idInjected: boolean }): void
     `2. Provision the workspace and set its id as the TAILOR_PLATFORM_WORKSPACE_ID variable ` +
       `on the "${environment}" environment:`,
   );
-  logger.log("   tailor-sdk workspace create   # if it does not exist yet; copy the id");
+  logger.log("   tailor workspace create   # if it does not exist yet; copy the id");
   logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
 
   logger.newline();
   logger.log("3. Commit the generated files:");
   logger.log("   - .github/workflows/tailor-*.yml");
-  logger.log("   - .github/tailor-sdk.lock");
+  logger.log("   - .github/tailor.lock");
   if (idInjected) {
     logger.log("   - tailor.config.ts (app id was added)");
   }
