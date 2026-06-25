@@ -75,25 +75,26 @@ export const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/sdk-skills-shim",
-    name: "tailor-skills → tailor skills install",
-    description: "Replace deprecated `tailor-skills` invocations with `tailor skills install`",
+    name: "tailor-sdk-skills → tailor-sdk skills install",
+    description:
+      "Replace deprecated `tailor-sdk-skills` invocations with `tailor-sdk skills install`",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/sdk-skills-shim/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
-    legacyPatterns: ["tailor-skills"],
+    legacyPatterns: ["tailor-sdk-skills"],
     examples: [
       {
         lang: "sh",
-        before: "npx tailor-skills",
-        after: "tailor skills install",
+        before: "npx tailor-sdk-skills",
+        after: "tailor-sdk skills install",
       },
     ],
     prompt: [
-      "The standalone tailor-skills binary is removed in v2; call the skills install",
-      "subcommand on the main tailor CLI instead. Replace any remaining",
-      "tailor-skills invocations the codemod did not rewrite with",
-      "`tailor skills install`.",
+      "The standalone tailor-sdk-skills binary is removed in v2; call the skills install",
+      "subcommand on the main tailor-sdk CLI instead. Replace any remaining",
+      "tailor-sdk-skills invocations the codemod did not rewrite with",
+      "`tailor-sdk skills install`.",
     ].join("\n"),
   },
   {
@@ -147,9 +148,9 @@ export const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/apply-to-deploy",
-    name: "tailor apply → tailor deploy",
+    name: "tailor-sdk apply → tailor-sdk deploy",
     description:
-      "Rewrite `tailor apply` invocations in package.json scripts, shell scripts, CI configs, and docs to the canonical v2 `tailor deploy` command",
+      "Rewrite `tailor-sdk apply` invocations in package.json scripts, shell scripts, CI configs, and docs to the canonical v2 `tailor-sdk deploy` command",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/apply-to-deploy/scripts/transform.js",
@@ -162,8 +163,8 @@ export const allCodemods: CodemodPackage[] = [
     examples: [
       {
         lang: "sh",
-        before: "tailor apply --profile prod",
-        after: "tailor deploy --profile prod",
+        before: "tailor-sdk apply --profile prod",
+        after: "tailor-sdk deploy --profile prod",
       },
     ],
   },
@@ -171,22 +172,22 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/cli-rename",
     name: "v2 CLI rename",
     description:
-      "Rewrite `tailor crash-report` to `tailor crashreport` and `--machineuser` to `--machine-user` across package.json scripts, shell scripts, CI configs, and docs",
+      "Rewrite `tailor-sdk crash-report` to `tailor-sdk crashreport` and `--machineuser` to `--machine-user` across package.json scripts, shell scripts, CI configs, and docs",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/cli-rename/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
-    legacyPatterns: ["tailor crash-report", "--machineuser"],
+    legacyPatterns: ["tailor-sdk crash-report", "--machineuser"],
     examples: [
       {
         lang: "sh",
-        before: "tailor crash-report list\ntailor-sdk login --machineuser",
-        after: "tailor crashreport list\ntailor-sdk login --machine-user",
+        before: "tailor-sdk crash-report list\ntailor-sdk login --machineuser",
+        after: "tailor-sdk crashreport list\ntailor-sdk login --machine-user",
       },
     ],
     prompt: [
-      "Apply the v2 CLI renames the codemod did not reach (only `tailor`-prefixed",
-      "invocations are rewritten): `tailor crash-report` -> `tailor crashreport`",
+      "Apply the v2 CLI renames the codemod did not reach (only `tailor-sdk`-prefixed",
+      "invocations are rewritten): `tailor-sdk crash-report` -> `tailor-sdk crashreport`",
       "and the `--machineuser` option -> `--machine-user`. Leave unrelated commands that",
       "happen to use `--machineuser` alone.",
     ].join("\n"),
@@ -440,7 +441,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/rename-bin",
     name: "tailor-sdk binary → tailor",
     description:
-      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package.",
+      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock` — update `.gitignore` entries and any lock-file references manually.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/rename-bin/scripts/transform.js",
