@@ -303,6 +303,31 @@ export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions):
   ];
   const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
 
+  const allUnmanaged = [
+    ...results.functionRegistry.unmanaged,
+    ...results.tailorDB.unmanaged,
+    ...results.staticWebsite.unmanaged,
+    ...results.aiGateway.unmanaged,
+    ...results.idp.unmanaged,
+    ...results.auth.unmanaged,
+    ...results.pipeline.unmanaged,
+    ...results.executor.unmanaged,
+    ...results.workflow.unmanaged,
+    ...results.secretManager.unmanaged,
+  ];
+  const allConflicts = [
+    ...results.functionRegistry.conflicts,
+    ...results.tailorDB.conflicts,
+    ...results.staticWebsite.conflicts,
+    ...results.aiGateway.conflicts,
+    ...results.idp.conflicts,
+    ...results.auth.conflicts,
+    ...results.pipeline.conflicts,
+    ...results.executor.conflicts,
+    ...results.workflow.conflicts,
+    ...results.secretManager.conflicts,
+  ];
+
   if (logger.jsonMode && opts?.dryRun) {
     const allEntries = [
       ...allDisplayEntries,
@@ -345,18 +370,7 @@ export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions):
       namespace,
     }));
     const warnings = [
-      ...[
-        ...results.functionRegistry.unmanaged,
-        ...results.tailorDB.unmanaged,
-        ...results.staticWebsite.unmanaged,
-        ...results.aiGateway.unmanaged,
-        ...results.idp.unmanaged,
-        ...results.auth.unmanaged,
-        ...results.pipeline.unmanaged,
-        ...results.executor.unmanaged,
-        ...results.workflow.unmanaged,
-        ...results.secretManager.unmanaged,
-      ].map(({ resourceType, resourceName }) => ({
+      ...allUnmanaged.map(({ resourceType, resourceName }) => ({
         type: "unmanaged" as const,
         resourceType,
         name: resourceName,
@@ -367,18 +381,7 @@ export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions):
         name,
       })),
     ];
-    const conflicts = [
-      ...results.functionRegistry.conflicts,
-      ...results.tailorDB.conflicts,
-      ...results.staticWebsite.conflicts,
-      ...results.aiGateway.conflicts,
-      ...results.idp.conflicts,
-      ...results.auth.conflicts,
-      ...results.pipeline.conflicts,
-      ...results.executor.conflicts,
-      ...results.workflow.conflicts,
-      ...results.secretManager.conflicts,
-    ].map(({ resourceType, resourceName, currentOwner }) => ({
+    const conflicts = allConflicts.map(({ resourceType, resourceName, currentOwner }) => ({
       resourceType,
       name: resourceName,
       currentOwner,
@@ -406,10 +409,26 @@ export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions):
     ...results.secretManager.secretChangeSet.lines(),
   ];
 
+  if (allUnmanaged.length > 0) {
+    allLines.push(styles.bold("Unmanaged resources (not in config):"));
+    for (const { resourceType, resourceName } of allUnmanaged) {
+      allLines.push(`  ${styles.warning("⚠")} ${styles.bold(resourceType)} "${resourceName}"`);
+    }
+  }
+
   if (results.secretManager.skippedSecrets.length > 0) {
     allLines.push(styles.bold("Secret Manager secrets (skipped - no value provided):"));
     for (const name of results.secretManager.skippedSecrets) {
       allLines.push(`  ${styles.dim("○")} ${name}`);
+    }
+  }
+
+  if (allConflicts.length > 0) {
+    allLines.push(styles.bold("Owner conflicts (will require confirmation on apply):"));
+    for (const { resourceType, resourceName, currentOwner } of allConflicts) {
+      allLines.push(
+        `  ${styles.warning("!")} ${styles.bold(resourceType)} "${resourceName}" — owned by "${currentOwner}"`,
+      );
     }
   }
 
