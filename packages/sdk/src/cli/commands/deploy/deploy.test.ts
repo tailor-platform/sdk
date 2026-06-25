@@ -288,7 +288,7 @@ describe("printPlanResults", () => {
     using _json = jsonMode();
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
-    const summary = printPlanResults(emptyResults(), { dryRun: true, json: true });
+    const summary = printPlanResults(emptyResults(), { dryRun: true });
 
     expect(outSpy).toHaveBeenCalledOnce();
     const payload = outSpy.mock.calls[0]?.[0] as { summary: unknown; changes: unknown[] };
@@ -304,7 +304,7 @@ describe("printPlanResults", () => {
     using _json = jsonMode();
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
-    printPlanResults(emptyResults(), { dryRun: false, json: true });
+    printPlanResults(emptyResults(), { dryRun: false });
 
     expect(outSpy).not.toHaveBeenCalled();
 

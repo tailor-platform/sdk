@@ -70,7 +70,6 @@ export interface DeployOptions {
   profile?: string;
   configPath?: string;
   dryRun?: boolean;
-  json?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
   noValidate?: boolean;
@@ -212,10 +211,7 @@ type PlanResults = {
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-export function printPlanResults(
-  results: PlanResults,
-  opts?: { dryRun?: boolean; json?: boolean },
-): PlanSummary {
+export function printPlanResults(results: PlanResults, opts?: { dryRun?: boolean }): PlanSummary {
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
@@ -303,8 +299,8 @@ export function printPlanResults(
   ];
   const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
 
-  if (opts?.json) {
-    if (opts.dryRun) {
+  if (logger.jsonMode) {
+    if (opts?.dryRun) {
       const allEntries = [
         ...allDisplayEntries,
         ...allServiceActions.map(({ action, name }) => ({
@@ -780,7 +776,7 @@ export async function deploy(options?: DeployOptions) {
         workflow,
         secretManager,
       },
-      { dryRun: options?.dryRun, json: options?.json ?? logger.jsonMode },
+      { dryRun: options?.dryRun },
     );
 
     if (options?.noValidate) {
@@ -860,7 +856,7 @@ export async function deploy(options?: DeployOptions) {
       applyFunctionRegistry(client, workspaceId, functionRegistry, "delete"),
     );
 
-    if (options?.json ?? logger.jsonMode) {
+    if (logger.jsonMode) {
       logger.out({ summary: planSummary, status: "applied" });
     } else {
       logger.out("Successfully applied changes.");
