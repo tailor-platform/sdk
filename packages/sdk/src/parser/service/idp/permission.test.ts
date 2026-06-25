@@ -185,7 +185,7 @@ describe("normalizeIdPActionPermission", () => {
 });
 
 describe("normalizeIdPPermission", () => {
-  test("normalizes all 5 action types", () => {
+  test("normalizes all 6 action types", () => {
     const raw: Parameters<typeof normalizeIdPPermission>[0] = {
       create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
@@ -194,6 +194,7 @@ describe("normalizeIdPPermission", () => {
       ],
       delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       sendPasswordResetEmail: [{ conditions: [], permit: true }],
+      unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     };
 
     const result = normalizeIdPPermission(raw);
@@ -203,9 +204,11 @@ describe("normalizeIdPPermission", () => {
     expect(result.update).toHaveLength(1);
     expect(result.delete).toHaveLength(1);
     expect(result.sendPasswordResetEmail).toHaveLength(1);
+    expect(result.unenrollMfa).toHaveLength(1);
 
     expect(result.create[0]!.permit).toBe("allow");
     expect(result.update[0]!.conditions[0]![1]).toBe("ne");
+    expect(result.unenrollMfa[0]!.permit).toBe("allow");
   });
 
   test("handles empty permission arrays", () => {
@@ -215,6 +218,7 @@ describe("normalizeIdPPermission", () => {
       update: [],
       delete: [],
       sendPasswordResetEmail: [],
+      unenrollMfa: [],
     };
 
     const result = normalizeIdPPermission(raw);
@@ -224,6 +228,7 @@ describe("normalizeIdPPermission", () => {
     expect(result.update).toHaveLength(0);
     expect(result.delete).toHaveLength(0);
     expect(result.sendPasswordResetEmail).toHaveLength(0);
+    expect(result.unenrollMfa).toHaveLength(0);
   });
 });
 
@@ -237,6 +242,7 @@ describe("findOmittedPermitRules", () => {
       update: [],
       delete: [],
       sendPasswordResetEmail: [],
+      unenrollMfa: [],
     } as RawIdPPermission);
     expect(result).toEqual(["create[0]"]);
   });
@@ -248,6 +254,7 @@ describe("findOmittedPermitRules", () => {
       update: [],
       delete: [],
       sendPasswordResetEmail: [],
+      unenrollMfa: [],
     } as RawIdPPermission);
     expect(result).toEqual([]);
   });
@@ -259,8 +266,21 @@ describe("findOmittedPermitRules", () => {
       update: [],
       delete: [],
       sendPasswordResetEmail: [],
+      unenrollMfa: [],
     } as RawIdPPermission);
     expect(result).toEqual(["create[0]"]);
+  });
+
+  test("flags object-form rules in unenrollMfa that omit permit", () => {
+    const result = findOmittedPermitRules({
+      create: [],
+      read: [],
+      update: [],
+      delete: [],
+      sendPasswordResetEmail: [],
+      unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]] }],
+    } as RawIdPPermission);
+    expect(result).toEqual(["unenrollMfa[0]"]);
   });
 
   test("returns empty for undefined permission", () => {

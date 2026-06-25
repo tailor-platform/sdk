@@ -37,4 +37,5 @@ export type StandardIdPPermission = {
   update: readonly StandardIdPActionPermission<true>[];
   delete: readonly StandardIdPActionPermission<false>[];
   sendPasswordResetEmail: readonly StandardIdPActionPermission<false>[];
+  unenrollMfa: readonly StandardIdPActionPermission<false>[];
 };
