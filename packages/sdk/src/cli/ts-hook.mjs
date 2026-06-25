@@ -88,12 +88,14 @@ function matchTsconfigPaths(specifier, paths) {
 }
 
 async function tryResolveWithExtensions(base, context, nextResolve) {
-  for (const ext of TS_EXTENSIONS) {
-    for (const suffix of ["", "/index"]) {
-      try {
-        return await nextResolve(base + suffix + ext, context);
-      } catch (e) {
-        if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+  if (!TS_EXTENSIONS.some((ext) => base.endsWith(ext))) {
+    for (const ext of TS_EXTENSIONS) {
+      for (const suffix of ["", "/index"]) {
+        try {
+          return await nextResolve(base + suffix + ext, context);
+        } catch (e) {
+          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+        }
       }
     }
   }
@@ -107,12 +109,14 @@ async function tryResolveWithExtensions(base, context, nextResolve) {
 }
 
 function tryResolveWithExtensionsSync(base, context, nextResolve) {
-  for (const ext of TS_EXTENSIONS) {
-    for (const suffix of ["", "/index"]) {
-      try {
-        return nextResolve(base + suffix + ext, context);
-      } catch (e) {
-        if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+  if (!TS_EXTENSIONS.some((ext) => base.endsWith(ext))) {
+    for (const ext of TS_EXTENSIONS) {
+      for (const suffix of ["", "/index"]) {
+        try {
+          return nextResolve(base + suffix + ext, context);
+        } catch (e) {
+          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+        }
       }
     }
   }
