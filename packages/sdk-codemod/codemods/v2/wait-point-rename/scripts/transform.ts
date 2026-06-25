@@ -63,6 +63,19 @@ export default function transform(source: string, _filePath?: string): string | 
   if (edits.length === 0) return null;
 
   if (needsBodyRename.size > 0) {
+    // Skip body rename for any name that is also declared locally (function or variable),
+    // to avoid incorrectly renaming shadowed identifiers unrelated to the SDK import.
+    const localDecls = root.findAll({
+      rule: { any: [{ kind: "function_declaration" }, { kind: "variable_declarator" }] },
+    });
+    for (const decl of localDecls) {
+      if (isInsideImportStatement(decl)) continue;
+      const nameChild = decl.children().find((c: SgNode) => c.kind() === "identifier");
+      if (nameChild && needsBodyRename.has(nameChild.text())) {
+        needsBodyRename.delete(nameChild.text());
+      }
+    }
+
     const identifiers = root.findAll({ rule: { kind: "identifier" } });
     for (const ident of identifiers) {
       const name = ident.text();
