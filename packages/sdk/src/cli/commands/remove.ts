@@ -91,7 +91,7 @@ async function execRemove(
   const secretManager = await planSecretManager(ctx);
 
   // Print planned deletions (same order as apply dry-run)
-  [
+  const removeLines = [
     ...functionRegistry.changeSet.lines(),
     ...staticWebsite.changeSet.lines(),
     ...aiGateway.changeSet.lines(),
@@ -117,7 +117,8 @@ async function execRemove(
     ...auth.changeSet.connection.lines(),
     ...secretManager.vaultChangeSet.lines(),
     ...secretManager.secretChangeSet.lines(),
-  ].forEach((line) => logger.log(line));
+  ];
+  if (removeLines.length > 0) logger.log(removeLines.join("\n"));
 
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&

@@ -65,21 +65,18 @@ export function createChangeSet<
     unchanged,
     isEmpty,
     lines: () => {
-      if (isEmpty()) {
-        return [];
-      }
-      const out: string[] = [styles.bold(`${title}:`)];
-      const addItem = (symbol: string, item: HasName) => {
-        out.push(`  ${symbol} ${item.name}`);
-        for (const detail of item.details ?? []) {
-          out.push(`    ${detail}`);
-        }
-      };
-      creates.forEach((item) => addItem(symbols.create, item));
-      deletes.forEach((item) => addItem(symbols.delete, item));
-      updates.forEach((item) => addItem(symbols.update, item));
-      replaces.forEach((item) => addItem(symbols.replace, item));
-      return out;
+      if (isEmpty()) return [];
+      const itemLines = (symbol: string) => (item: HasName) => [
+        `  ${symbol} ${item.name}`,
+        ...(item.details ?? []).map((d) => `    ${d}`),
+      ];
+      return [
+        styles.bold(`${title}:`),
+        ...creates.flatMap(itemLines(symbols.create)),
+        ...deletes.flatMap(itemLines(symbols.delete)),
+        ...updates.flatMap(itemLines(symbols.update)),
+        ...replaces.flatMap(itemLines(symbols.replace)),
+      ];
     },
   };
 }

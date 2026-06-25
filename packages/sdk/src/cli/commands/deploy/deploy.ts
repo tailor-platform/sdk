@@ -356,10 +356,12 @@ export function printPlanResults(results: PlanResults, opts?: { dryRun?: boolean
 
   allLines.push(formatPlanSummary(summary));
 
-  const write: (line: string) => void = opts?.dryRun
-    ? (line) => logger.out(line)
-    : logger.log.bind(logger);
-  allLines.forEach(write);
+  const output = allLines.join("\n");
+  if (opts?.dryRun) {
+    logger.out(output);
+  } else {
+    logger.log(output);
+  }
 
   return summary;
 }
