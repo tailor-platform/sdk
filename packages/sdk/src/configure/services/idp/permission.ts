@@ -110,7 +110,8 @@ type IdPActionPermission<
 
 /**
  * Per-operation permission policies for an IdP service.
- * Defines create, read, update, delete, and sendPasswordResetEmail permissions.
+ * Defines create, read, update, delete, sendPasswordResetEmail, and
+ * unenrollMfa permissions.
  *
  * For update operations, use `newIdpUser`/`oldIdpUser` operands instead of `idpUser`.
  * @example
@@ -120,6 +121,7 @@ type IdPActionPermission<
  *   update: [{ conditions: [[{ newIdpUser: "name" }, "=", { user: "id" }]], permit: true }],
  *   delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  *   sendPasswordResetEmail: [{ conditions: [], permit: true }],
+ *   unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  * };
  */
 export type IdPPermission<User extends object = InferredAttributeMap> = {
@@ -128,6 +130,7 @@ export type IdPPermission<User extends object = InferredAttributeMap> = {
   update: readonly IdPActionPermission<User, true>[];
   delete: readonly IdPActionPermission<User, false>[];
   sendPasswordResetEmail: readonly IdPActionPermission<User, false>[];
+  unenrollMfa?: readonly IdPActionPermission<User, false>[];
 };
 
 /**
@@ -143,4 +146,5 @@ export const unsafeAllowAllIdPPermission: IdPPermission = {
   update: [{ conditions: [], permit: true }],
   delete: [{ conditions: [], permit: true }],
   sendPasswordResetEmail: [{ conditions: [], permit: true }],
+  unenrollMfa: [{ conditions: [], permit: true }],
 };

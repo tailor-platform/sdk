@@ -49,6 +49,7 @@ function createMockApplication(opts?: {
   const serviceOpts = opts?.idpServices ?? [{}];
   return {
     name: appName,
+    staticWebsiteServices: [],
     idpServices: serviceOpts.map((service) => {
       const result: Record<string, unknown> = {
         name: service.name ?? "idp-a",
@@ -392,6 +393,7 @@ describe("planIdP", () => {
       update: [{ conditions: [], permit: true }],
       delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       sendPasswordResetEmail: [{ conditions: [], permit: true }],
+      unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     };
 
     const result = await planIdP(context);
@@ -436,6 +438,7 @@ describe("planIdP", () => {
             update: [],
             delete: [],
             sendPasswordResetEmail: [],
+            unenrollMfa: [],
           },
           label: appName,
         },
@@ -453,6 +456,7 @@ describe("planIdP", () => {
       update: [],
       delete: [],
       sendPasswordResetEmail: [],
+      unenrollMfa: [],
     };
 
     const result = await planIdP(context);
@@ -548,6 +552,7 @@ describe("planIdP", () => {
             update: [],
             delete: [],
             sendPasswordResetEmail: [],
+            unenrollMfa: [],
           },
           label: appName,
         },

@@ -409,6 +409,24 @@ describe("validatePlan", () => {
     await expect(validatePlan(input)).resolves.toBeUndefined();
   });
 
+  test("(l3) IdP service with allowedReturnOrigins :url placeholder passes", async () => {
+    const input = emptyInput();
+    input.idp.changeSet.service.creates.push({
+      name: "my-idp",
+      request: {
+        workspaceId: WS_ID,
+        namespaceName: "my-idp",
+        userAuthPolicy: {
+          enableMfa: true,
+          allowedReturnOrigins: ["my-frontend:url"],
+        },
+      },
+      metaRequest: { trn: "", labels: {} },
+    } as never);
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+  });
+
   test("(m) invalid name in unchangedWorkflowJobNames is rejected when a workflow create exists", async () => {
     const input = emptyInput();
     input.workflow.changeSet.creates.push({

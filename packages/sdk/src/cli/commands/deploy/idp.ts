@@ -18,7 +18,7 @@ import {
   type IdPPermissionSchema as ProtoIdPPermissionSchema,
   type IdPService as ProtoIdPService,
 } from "@tailor-platform/tailor-proto/idp_resource_pb";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
@@ -42,6 +42,40 @@ import type {
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+
+type IdPServiceMutationRequest = {
+  workspaceId?: string;
+  namespaceName?: string;
+  userAuthPolicy?: { allowedReturnOrigins?: string[] } | undefined;
+};
+
+async function resolveServiceReturnOrigins(
+  client: OperatorClient,
+  request: IdPServiceMutationRequest,
+): Promise<void> {
+  const policy = request.userAuthPolicy;
+  const originals = policy?.allowedReturnOrigins;
+  if (!policy || !originals?.length) {
+    return;
+  }
+  const resolved = await resolveStaticWebsiteUrls(
+    client,
+    assertDefined(request.workspaceId, "request missing workspaceId"),
+    originals,
+    `IdP service "${request.namespaceName ?? ""}" allowedReturnOrigins`,
+  );
+  // resolveStaticWebsiteUrls warn-and-drops unresolvable entries, which is fine
+  // for CORS but would silently clear an authoritative field here (UpdateIdP is
+  // a full replacement, and `enable_mfa: true` requires ≥1 origin). Fail fast.
+  if (resolved.length !== originals.length) {
+    throw new Error(
+      `IdP service "${request.namespaceName ?? ""}" allowedReturnOrigins: ` +
+        `${originals.length - resolved.length} of ${originals.length} entries could not be resolved. ` +
+        `Check that each "<name>:url" entry refers to a deployed static website.`,
+    );
+  }
+  policy.allowedReturnOrigins = resolved;
+}
 
 /**
  * Build the vault name for an IdP client.
@@ -80,10 +114,12 @@ export async function applyIdP(
     // Services
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
+        await resolveServiceReturnOrigins(client, create.request);
         await client.createIdPService(create.request);
         await client.setMetadata(create.metaRequest);
       }),
       ...changeSet.service.updates.map(async (update) => {
+        await resolveServiceReturnOrigins(client, update.request);
         await client.updateIdPService(update.request);
         await client.setMetadata(update.metaRequest);
       }),
@@ -177,6 +213,9 @@ export async function planIdP(context: PlanContext) {
     idpUserTriggerTargets,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
+  const expectedLocalWebsites = new Set(
+    application.staticWebsiteServices.map((website) => website.name),
+  );
   const {
     changeSet: serviceChangeSet,
     conflicts,
@@ -189,6 +228,7 @@ export async function planIdP(context: PlanContext) {
     application.id,
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
+    expectedLocalWebsites,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
@@ -253,6 +293,10 @@ function normalizeComparableUserAuthPolicy(
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,
     allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
+    enableMfa: policy?.enableMfa ?? false,
+    requireMfa: policy?.requireMfa ?? false,
+    allowedReturnOrigins: (policy?.allowedReturnOrigins ?? []).toSorted(),
+    mfaIssuer: policy?.mfaIssuer ?? "",
   };
 }
 
@@ -311,7 +355,8 @@ function normalizeComparablePermission(
     permission.read.length === 0 &&
     permission.update.length === 0 &&
     permission.delete.length === 0 &&
-    permission.sendPasswordResetEmail.length === 0
+    permission.sendPasswordResetEmail.length === 0 &&
+    permission.unenrollMfa.length === 0
   ) {
     return undefined;
   }
@@ -331,6 +376,7 @@ function normalizeComparablePermission(
     update: permission.update.map(normalizePolicy),
     delete: permission.delete.map(normalizePolicy),
     sendPasswordResetEmail: permission.sendPasswordResetEmail.map(normalizePolicy),
+    unenrollMfa: permission.unenrollMfa.map(normalizePolicy),
   };
 }
 
@@ -356,6 +402,7 @@ async function planServices(
   appId: string | undefined,
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
+  expectedLocalWebsites: ReadonlySet<string>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
   const conflicts: OwnerConflict[] = [];
@@ -440,10 +487,20 @@ async function planServices(
     }
     const parsedPermission = parseIdPPermission(idp.permission);
     const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;
+    const resolvedReturnOrigins = await resolveStaticWebsiteUrls(
+      client,
+      workspaceId,
+      userAuthPolicy?.allowedReturnOrigins ? [...userAuthPolicy.allowedReturnOrigins] : [],
+      `IdP service "${namespaceName}" allowedReturnOrigins`,
+      { expectedLocalNames: expectedLocalWebsites },
+    );
+    const userAuthPolicyForCompare = userAuthPolicy
+      ? { ...userAuthPolicy, allowedReturnOrigins: resolvedReturnOrigins }
+      : userAuthPolicy;
     const desired = normalizeComparableIdPService({
       authorization,
       lang,
-      userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicy),
+      userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicyForCompare),
       publishUserEvents,
       disableGqlOperations: normalizeComparableDisableGqlOperations(
         convertGqlOperationsToDisable(idp.gqlOperations),
@@ -677,6 +734,7 @@ function protoIdPPermission(
     update: permission.update.map((p) => protoIdPPolicy(p)),
     delete: permission.delete.map((p) => protoIdPPolicy(p)),
     sendPasswordResetEmail: permission.sendPasswordResetEmail.map((p) => protoIdPPolicy(p)),
+    unenrollMfa: permission.unenrollMfa.map((p) => protoIdPPolicy(p)),
   };
 }
 

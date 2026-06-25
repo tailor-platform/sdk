@@ -87,6 +87,7 @@ defineIdp("my-idp", {
 - `update` - Controls who can update IdP users
 - `delete` - Controls who can delete IdP users
 - `sendPasswordResetEmail` - Controls who can send password reset emails. The examples above disable this operation; to enable it, use a permission such as `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]`.
+- `unenrollMfa` - Controls who can remove an enrolled MFA factor from a user. Required when `userAuthPolicy.enableMfa` is `true`; omit otherwise. Typically restricted to administrators.
 
 **Policy fields:** each entry in an operation's policy array supports:
 
@@ -166,6 +167,37 @@ defineIdp("my-idp", {
 - `allowGoogleOauth` - Enable the "Sign in with Google" button. Default `false`.
 - `allowMicrosoftOauth` - Enable the "Sign in with Microsoft" button. Default `false`.
 
+**MFA (TOTP):**
+
+```typescript
+import { defineIdp, defineStaticWebSite } from "@tailor-platform/sdk";
+
+const website = defineStaticWebSite("my-frontend", { description: "App frontend" });
+
+defineIdp("my-idp", {
+  clients: ["my-client"],
+  userAuthPolicy: {
+    enableMfa: true,
+    requireMfa: false,
+    allowedReturnOrigins: [website.url, "https://admin.example.com"],
+    mfaIssuer: "My App",
+  },
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+  },
+});
+```
+
+- `enableMfa` - Make TOTP MFA available for users in this namespace. Default `false`. When enabled, users can register an authenticator app (Google Authenticator, 1Password, etc.) from the IdP self-service page.
+- `requireMfa` - Force password-authenticated users to enroll and pass an MFA challenge on each sign-in. Default `false`. Social sign-in (`allowGoogleOauth` / `allowMicrosoftOauth`) is not affected; the upstream provider's MFA covers those sessions.
+- `allowedReturnOrigins` - Origins the IdP self-service pages (such as `/mfa/settings`) are allowed to redirect back to. Each entry is either a literal origin (`https://app.example.com`, scheme + host + optional port, no path/query/fragment) or a static-website placeholder `<name>:url` (e.g. `website.url`) that the CLI resolves to the deployed website's URL at apply time. Required when `enableMfa` is `true`.
+- `mfaIssuer` - Label shown next to the user account in authenticator apps when TOTP is enrolled. Up to 64 characters. Falls back to `"Tailor Platform IdP"` when empty.
+
 **Constraints:** the following combinations are rejected at parse time.
 
 - `passwordMinLength` must be less than or equal to `passwordMaxLength`.
@@ -173,6 +205,9 @@ defineIdp("my-idp", {
 - `allowGoogleOauth` requires a non-empty `allowedEmailDomains`.
 - `allowMicrosoftOauth` requires both a non-empty `allowedEmailDomains` and `disablePasswordAuth: true`.
 - `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
+- `requireMfa: true` requires `enableMfa: true`.
+- `enableMfa: true` requires at least one entry in `allowedReturnOrigins`.
+- `enableMfa: true` requires `permission` to be defined and to include an explicit `unenrollMfa` policy (an empty array `[]` to deny is fine).
 
 ### gqlOperations
 

@@ -60,6 +60,14 @@ export declare type AIGateway = Message<"tailor.v1.AIGateway"> & {
    * @generated from field: string url = 7;
    */
   url: string;
+
+  /**
+   * When true, the AI gateway stops serving traffic. Flip back to false to
+   * resume traffic. Defaults to false on create.
+   *
+   * @generated from field: bool disabled = 8;
+   */
+  disabled: boolean;
 };
 
 /**
@@ -67,3 +75,4 @@ export declare type AIGateway = Message<"tailor.v1.AIGateway"> & {
  * Use `create(AIGatewaySchema)` to create a new message.
  */
 export declare const AIGatewaySchema: GenMessage<AIGateway>;
+
