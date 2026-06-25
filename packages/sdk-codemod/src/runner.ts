@@ -178,7 +178,9 @@ function sourceLang(relative: string): Lang {
 
 function isProcessEnvSubscriptKey(node: SgNode): boolean {
   const stringNode = node.kind() === "string_fragment" ? node.parent() : node;
-  if (stringNode == null || !["string", "template_string"].includes(stringNode.kind())) {
+  if (stringNode == null) return false;
+  const stringNodeKind = stringNode.kind();
+  if (stringNodeKind !== "string" && stringNodeKind !== "template_string") {
     return false;
   }
   const parent = stringNode.parent();
