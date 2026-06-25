@@ -17,10 +17,11 @@ const JS_TO_TS = new Map([
 
 const tsconfigPathsCache = new Map();
 
-function collectPathsInto(out, baseDir, content, visited) {
-  const id = join(baseDir, "tsconfig.json");
-  if (visited.has(id)) return;
-  visited.add(id);
+function collectPathsInto(out, configFilePath, content, visited) {
+  if (visited.has(configFilePath)) return;
+  visited.add(configFilePath);
+
+  const baseDir = dirname(configFilePath);
 
   const extendsField = content.extends;
   if (typeof extendsField === "string") {
@@ -28,7 +29,7 @@ function collectPathsInto(out, baseDir, content, visited) {
     const extendsPath = base.endsWith(".json") ? base : base + ".json";
     try {
       const sub = JSON.parse(readFileSync(extendsPath, "utf-8"));
-      collectPathsInto(out, dirname(extendsPath), sub, visited);
+      collectPathsInto(out, extendsPath, sub, visited);
     } catch {
       // extends file not readable; skip
     }
@@ -53,8 +54,9 @@ function loadTsconfigPaths(startDir) {
   let prev = "";
   while (dir !== prev) {
     try {
-      const content = JSON.parse(readFileSync(join(dir, "tsconfig.json"), "utf-8"));
-      collectPathsInto(paths, dir, content, new Set());
+      const configFilePath = join(dir, "tsconfig.json");
+      const content = JSON.parse(readFileSync(configFilePath, "utf-8"));
+      collectPathsInto(paths, configFilePath, content, new Set());
       break;
     } catch {
       // tsconfig.json not found in this directory; walk up
@@ -68,15 +70,17 @@ function loadTsconfigPaths(startDir) {
 }
 
 function matchTsconfigPaths(specifier, paths) {
-  for (const [alias, targets] of Object.entries(paths)) {
-    if (alias.endsWith("/*")) {
-      const prefix = alias.slice(0, -2);
-      if (specifier.startsWith(prefix + "/")) {
-        const rest = specifier.slice(prefix.length + 1);
-        return targets.map((t) => (t.endsWith("/*") ? t.slice(0, -2) + "/" + rest : t));
-      }
-    } else if (alias === specifier && targets.length > 0) {
-      return targets;
+  if (paths[specifier]?.length > 0) {
+    return paths[specifier];
+  }
+  const wildcardEntries = Object.entries(paths)
+    .filter(([alias]) => alias.endsWith("/*"))
+    .toSorted((a, b) => b[0].length - a[0].length);
+  for (const [alias, targets] of wildcardEntries) {
+    const prefix = alias.slice(0, -2);
+    if (specifier.startsWith(prefix + "/")) {
+      const rest = specifier.slice(prefix.length + 1);
+      return targets.map((t) => (t.endsWith("/*") ? t.slice(0, -2) + "/" + rest : t));
     }
   }
   return null;
