@@ -11,3 +11,7 @@ A small `ts-hook.mjs` provides the Node.js module hook with both a resolver
 (`.ts` extension fallback) and a load hook (`amaro` for full TypeScript
 support including enums). Dev-only scripts now use
 `node --experimental-strip-types` instead.
+
+Raises the minimum Node.js version to 22.15.0 (from 22.6.0) to use
+`module.registerHooks()`, which allows synchronous hook registration directly
+in the main thread without a worker thread.
