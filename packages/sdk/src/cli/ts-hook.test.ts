@@ -218,6 +218,37 @@ describe("resolve", () => {
     );
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
+
+  test("does not append extensions when tsconfig path target already has a .ts extension", async () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/utils": ["./utils/index.ts"] } },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///ext-project/utils/index.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(notFound("@/utils"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve(
+      "@/utils",
+      { parentURL: "file:///ext-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    expect(nextResolve).toHaveBeenCalledTimes(2);
+    expect(nextResolve).toHaveBeenLastCalledWith(
+      expect.stringContaining("utils/index.ts"),
+      expect.anything(),
+    );
+    expect(nextResolve).not.toHaveBeenCalledWith(
+      expect.stringContaining("index.ts.ts"),
+      expect.anything(),
+    );
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
 });
 
 describe("resolveSync", () => {
