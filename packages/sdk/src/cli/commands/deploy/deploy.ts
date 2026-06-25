@@ -306,10 +306,28 @@ export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions):
   if (logger.jsonMode && opts?.dryRun) {
     const allEntries = [
       ...allDisplayEntries,
-      ...allServiceActions.map(({ action, name }) => ({
+      ...tailorDBServiceActions.map(({ action, name }) => ({
         action,
         name,
-        labels: [],
+        labels: ["tailorDB"],
+        namespace: undefined,
+      })),
+      ...pipelineServiceActions.map(({ action, name }) => ({
+        action,
+        name,
+        labels: ["pipeline"],
+        namespace: undefined,
+      })),
+      ...idpServiceActions.map(({ action, name }) => ({
+        action,
+        name,
+        labels: ["idp"],
+        namespace: undefined,
+      })),
+      ...authServiceActions.map(({ action, name }) => ({
+        action,
+        name,
+        labels: ["auth"],
         namespace: undefined,
       })),
       ...formatChangeSetEntries(otherFunctionRegistryChanges),
