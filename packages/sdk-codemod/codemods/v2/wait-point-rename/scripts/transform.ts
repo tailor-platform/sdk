@@ -67,6 +67,13 @@ export default function transform(source: string, _filePath?: string): string | 
     // Only identifiers outside these ranges should be renamed.
     const shadowedRanges = new Map<string, Array<{ start: number; end: number }>>();
 
+    const addShadowedRange = (name: string, scopeNode: SgNode) => {
+      const r = scopeNode.range();
+      if (!shadowedRanges.has(name)) shadowedRanges.set(name, []);
+      shadowedRanges.get(name)!.push({ start: r.start.index, end: r.end.index });
+    };
+
+    // Variable declarations and local function declarations.
     const localDecls = root.findAll({
       rule: { any: [{ kind: "function_declaration" }, { kind: "variable_declarator" }] },
     });
@@ -93,10 +100,64 @@ export default function transform(source: string, _filePath?: string): string | 
         p = p.parent();
       }
 
-      const r = scopeNode.range();
-      const name = nameChild.text();
-      if (!shadowedRanges.has(name)) shadowedRanges.set(name, []);
-      shadowedRanges.get(name)!.push({ start: r.start.index, end: r.end.index });
+      addShadowedRange(nameChild.text(), scopeNode);
+    }
+
+    // Function/arrow parameters (required_parameter covers both regular and rest patterns).
+    const paramNodes = root.findAll({ rule: { kind: "required_parameter" } });
+    for (const param of paramNodes) {
+      if (isInsideImportStatement(param)) continue;
+      // The name identifier may be a direct child or wrapped in rest_pattern.
+      const nameChild = param
+        .children()
+        .flatMap((c: SgNode) =>
+          c.kind() === "rest_pattern"
+            ? c.children().filter((cc: SgNode) => cc.kind() === "identifier")
+            : c.kind() === "identifier"
+              ? [c]
+              : [],
+        )
+        .find((c: SgNode) => needsBodyRename.has(c.text()));
+      if (!nameChild) continue;
+
+      // Walk up past formal_parameters to the enclosing function/arrow, then use its body.
+      let scopeNode: SgNode = root;
+      let p: SgNode | null = param.parent();
+      while (p) {
+        const k = p.kind();
+        if (k === "formal_parameters") {
+          p = p.parent();
+          continue;
+        }
+        if (
+          k === "function_declaration" ||
+          k === "function_expression" ||
+          k === "arrow_function" ||
+          k === "method_definition"
+        ) {
+          // Use the whole function node so the parameter list itself is also covered.
+          scopeNode = p;
+          break;
+        }
+        break;
+      }
+
+      addShadowedRange(nameChild.text(), scopeNode);
+    }
+
+    // for...of / for...in binding identifiers (direct children of for_in_statement,
+    // appearing before the 'of' or 'in' keyword).
+    const forInStmts = root.findAll({ rule: { kind: "for_in_statement" } });
+    for (const stmt of forInStmts) {
+      const children = stmt.children();
+      const keywordIdx = children.findIndex((c: SgNode) => c.kind() === "of" || c.kind() === "in");
+      if (keywordIdx < 0) continue;
+      for (let i = 0; i < keywordIdx; i++) {
+        const child = children[i]!;
+        if (child.kind() === "identifier" && needsBodyRename.has(child.text())) {
+          addShadowedRange(child.text(), stmt);
+        }
+      }
     }
 
     const identifiers = root.findAll({ rule: { kind: "identifier" } });
