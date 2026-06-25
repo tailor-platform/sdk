@@ -121,7 +121,7 @@ export type UserAttributeListKey<User extends TailorDBInstance> = {
       : never;
 }[UserFieldKeys<User>];
 
-export type UserAttributeMap<User extends TailorDBInstance> = {
+export type UserAttributes<User extends TailorDBInstance> = {
   [K in UserAttributeKey<User>]?: true;
 };
 
@@ -144,19 +144,19 @@ type AttributeListToTuple<
     : never;
 };
 
-type AttributeMapSelectedKeys<
+type SelectedAttributeKeys<
   User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User>,
+  Attributes extends UserAttributes<User>,
 > = Extract<
   {
-    [K in keyof AttributeMap]-?: undefined extends AttributeMap[K] ? never : K;
-  }[keyof AttributeMap],
+    [K in keyof Attributes]-?: undefined extends Attributes[K] ? never : K;
+  }[keyof Attributes],
   UserAttributeKey<User>
 >;
 
 type UserProfile<
   User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User>,
+  Attributes extends UserAttributes<User>,
   AttributeList extends UserAttributeListKey<User>[],
 > = {
   /**
@@ -168,7 +168,7 @@ type UserProfile<
   namespace?: string;
   type: User;
   usernameField: UsernameFieldKey<User>;
-  attributes?: DisallowExtraKeys<AttributeMap, UserAttributeKey<User>>;
+  attributes?: DisallowExtraKeys<Attributes, UserAttributeKey<User>>;
   attributeList?: AttributeList;
 };
 
@@ -197,7 +197,7 @@ type MachineUserFromAttributes<Fields extends MachineUserAttributeFields> =
 
 type MachineUser<
   User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User> = UserAttributeMap<User>,
+  Attributes extends UserAttributes<User> = UserAttributes<User>,
   AttributeList extends UserAttributeListKey<User>[] = [],
   MachineUserAttributes extends MachineUserAttributeFields | undefined = undefined,
 > =
@@ -207,18 +207,15 @@ type MachineUser<
           attributes: Record<string, AuthAttributeValue>;
           attributeList?: string[];
         }
-      : (AttributeMapSelectedKeys<User, AttributeMap> extends never
+      : (SelectedAttributeKeys<User, Attributes> extends never
           ? { attributes?: never }
           : {
               attributes: {
-                [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
+                [K in SelectedAttributeKeys<User, Attributes>]: K extends keyof output<User>
                   ? output<User>[K]
                   : never;
               } & {
-                [K in Exclude<
-                  keyof output<User>,
-                  AttributeMapSelectedKeys<User, AttributeMap>
-                >]?: never;
+                [K in Exclude<keyof output<User>, SelectedAttributeKeys<User, Attributes>>]?: never;
               };
             }) &
           ([] extends AttributeList
@@ -231,17 +228,17 @@ type MachineUser<
             attributes: Record<string, AuthAttributeValue>;
             attributeList?: string[];
           }
-        : (AttributeMapSelectedKeys<User, AttributeMap> extends never
+        : (SelectedAttributeKeys<User, Attributes> extends never
             ? { attributes?: never }
             : {
                 attributes: {
-                  [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
+                  [K in SelectedAttributeKeys<User, Attributes>]: K extends keyof output<User>
                     ? output<User>[K]
                     : never;
                 } & {
                   [K in Exclude<
                     keyof output<User>,
-                    AttributeMapSelectedKeys<User, AttributeMap>
+                    SelectedAttributeKeys<User, Attributes>
                   >]?: never;
                 };
               }) &
@@ -309,7 +306,7 @@ export type AuthHooks<MachineUserNames extends string> = {
 // Input type (before parsing) - used by configure layer
 export type AuthServiceInput<
   User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User>,
+  Attributes extends UserAttributes<User>,
   AttributeList extends UserAttributeListKey<User>[],
   MachineUserNames extends string,
   MachineUserAttributes extends MachineUserAttributeFields | undefined =
@@ -318,11 +315,11 @@ export type AuthServiceInput<
   ConnectionNames extends string = string,
 > = {
   hooks?: AuthHooks<MachineUserNames>;
-  userProfile?: UserProfile<User, AttributeMap, AttributeList>;
+  userProfile?: UserProfile<User, Attributes, AttributeList>;
   machineUserAttributes?: MachineUserAttributes;
   machineUsers?: Record<
     MachineUserNames,
-    MachineUser<User, AttributeMap, AttributeList, MachineUserAttributes>
+    MachineUser<User, Attributes, AttributeList, MachineUserAttributes>
   >;
   oauth2Clients?: Record<string, OAuth2ClientInput>;
   idProvider?: IdProviderConfig;

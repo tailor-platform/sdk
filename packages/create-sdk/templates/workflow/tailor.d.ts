@@ -3,7 +3,7 @@
 // Regenerated automatically when running 'tailor-sdk deploy' or 'tailor-sdk generate'
 
 declare module "@tailor-platform/sdk" {
-  interface AttributeMap {
+  interface Attributes {
     role: string;
   }
   interface AttributeList {

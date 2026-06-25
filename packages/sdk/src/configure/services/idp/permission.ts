@@ -1,5 +1,5 @@
 import type { IdPUserField } from "#/parser/service/idp/types";
-import type { InferredAttributeMap } from "#/runtime/types";
+import type { InferredAttributes } from "#/runtime/types";
 
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";
@@ -20,19 +20,19 @@ type BooleanArrayFieldKeys<User extends object> = {
   [K in keyof User]: User[K] extends boolean[] ? K : never;
 }[keyof User];
 
-type UserStringOperand<User extends object = InferredAttributeMap> = {
+type UserStringOperand<User extends object = InferredAttributes> = {
   user: StringFieldKeys<User> | "id";
 };
 
-type UserStringArrayOperand<User extends object = InferredAttributeMap> = {
+type UserStringArrayOperand<User extends object = InferredAttributes> = {
   user: StringArrayFieldKeys<User>;
 };
 
-type UserBooleanOperand<User extends object = InferredAttributeMap> = {
+type UserBooleanOperand<User extends object = InferredAttributes> = {
   user: BooleanFieldKeys<User> | "_loggedIn";
 };
 
-type UserBooleanArrayOperand<User extends object = InferredAttributeMap> = {
+type UserBooleanArrayOperand<User extends object = InferredAttributes> = {
   user: BooleanArrayFieldKeys<User>;
 };
 
@@ -63,7 +63,7 @@ type BooleanEqualityCondition<User extends object, Update extends boolean> =
   | readonly [boolean | UserBooleanOperand<User>, EqualityOperator, IdPUserOperand<Update>];
 
 type EqualityCondition<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
 > = StringEqualityCondition<User, Update> | BooleanEqualityCondition<User, Update>;
 
@@ -80,17 +80,17 @@ type BooleanContainsCondition<User extends object, Update extends boolean> =
   | readonly [IdPUserOperand<Update>, ContainsOperator, boolean[] | UserBooleanArrayOperand<User>];
 
 type ContainsCondition<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
 > = StringContainsCondition<User, Update> | BooleanContainsCondition<User, Update>;
 
 export type IdPPermissionCondition<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
 > = EqualityCondition<User, Update> | ContainsCondition<User, Update>;
 
 type IdPActionPermission<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
 > =
   | {
@@ -124,7 +124,7 @@ type IdPActionPermission<
  *   unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  * };
  */
-export type IdPPermission<User extends object = InferredAttributeMap> = {
+export type IdPPermission<User extends object = InferredAttributes> = {
   create: readonly IdPActionPermission<User, false>[];
   read: readonly IdPActionPermission<User, false>[];
   update: readonly IdPActionPermission<User, true>[];
