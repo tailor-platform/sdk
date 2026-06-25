@@ -639,7 +639,6 @@ describe("IdPSchema validation", () => {
   test("accepts publishUserEvents as true", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       publishUserEvents: true,
     };
@@ -651,7 +650,6 @@ describe("IdPSchema validation", () => {
   test("accepts publishUserEvents as false", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       publishUserEvents: false,
     };
@@ -663,7 +661,6 @@ describe("IdPSchema validation", () => {
   test("accepts missing publishUserEvents", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
     };
 
@@ -674,7 +671,6 @@ describe("IdPSchema validation", () => {
   test("accepts gqlOperations with all fields", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       gqlOperations: {
         create: true,
@@ -696,7 +692,6 @@ describe("IdPSchema validation", () => {
   test("accepts gqlOperations with partial fields", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       gqlOperations: {
         create: true,
@@ -715,7 +710,6 @@ describe("IdPSchema validation", () => {
   test("accepts missing gqlOperations", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
     };
 
@@ -851,7 +845,6 @@ describe("IdPSchema emailConfig tests", () => {
   test("accepts emailConfig in IdPSchema", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       emailConfig: {
         fromName: "My App",
@@ -867,7 +860,6 @@ describe("IdPSchema emailConfig tests", () => {
   test("accepts missing emailConfig", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
     };
 
@@ -878,7 +870,6 @@ describe("IdPSchema emailConfig tests", () => {
   test("rejects invalid emailConfig in IdPSchema", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       emailConfig: {
         fromName: "a".repeat(201),
@@ -893,7 +884,6 @@ describe("IdPSchema permission tests", () => {
   test("accepts permission with all 5 actions", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       permission: {
         create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
@@ -916,7 +906,6 @@ describe("IdPSchema permission tests", () => {
   test("accepts missing permission", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
     };
 
@@ -927,7 +916,6 @@ describe("IdPSchema permission tests", () => {
   test("accepts permission with empty arrays (deny-all)", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       permission: {
         create: [],
@@ -946,7 +934,6 @@ describe("IdPSchema permission tests", () => {
   test("accepts permission with array shorthand format", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       permission: {
         create: [[{ user: "role" }, "=", "ADMIN"]],
@@ -965,7 +952,6 @@ describe("IdPSchema permission tests", () => {
   test("accepts permission omitting unenrollMfa when enableMfa is not set", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       permission: {
         create: [],
@@ -982,7 +968,6 @@ describe("IdPSchema permission tests", () => {
   test("rejects permission omitting unenrollMfa when enableMfa is true", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       userAuthPolicy: {
         enableMfa: true,
@@ -1005,7 +990,6 @@ describe("IdPSchema permission tests", () => {
   test("rejects enableMfa: true when permission is omitted entirely", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       userAuthPolicy: {
         enableMfa: true,
@@ -1021,7 +1005,6 @@ describe("IdPSchema permission tests", () => {
   test("accepts permission with explicit empty unenrollMfa when enableMfa is true", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       userAuthPolicy: {
         enableMfa: true,
@@ -1043,7 +1026,6 @@ describe("IdPSchema permission tests", () => {
   test("accepts permission with in/not in operators", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       permission: {
         create: [{ conditions: [[{ user: "role" }, "in", ["ADMIN", "MANAGER"]]], permit: true }],
@@ -1064,7 +1046,6 @@ describe("IdPSchema gqlOperations alias tests", () => {
   test("accepts 'query' alias in IdPSchema", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       gqlOperations: "query" as const,
     };
@@ -1080,7 +1061,6 @@ describe("IdPSchema gqlOperations alias tests", () => {
   test("'query' alias works with other IdP config options", () => {
     const config = {
       name: "test-idp",
-      authorization: "loggedIn" as const,
       clients: ["client-1"],
       lang: "en" as const,
       publishUserEvents: true,
