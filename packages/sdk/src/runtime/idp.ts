@@ -22,6 +22,16 @@ export interface User {
   name: string;
   disabled: boolean;
   createdAt?: string;
+  /**
+   * True when the user has at least one enrolled MFA second factor. False when
+   * the namespace has MFA disabled or the user has not enrolled a factor.
+   */
+  mfaEnrolled?: boolean;
+  /**
+   * Enrolled MFA second factor IDs. Pass an entry into
+   * {@link Client.unenrollMfa} to remove that factor.
+   */
+  mfaFactorIds?: string[];
 }
 
 /** Filter options for {@link Client.users}. */
@@ -85,6 +95,17 @@ export interface SendPasswordResetEmailInput {
   subject?: string;
 }
 
+/** Input for {@link Client.unenrollMfa}. */
+export interface UnenrollMfaInput {
+  /** The ID of the user whose factor will be unenrolled. */
+  userId: string;
+  /**
+   * The ID of the factor to unenroll. Factor IDs are exposed on the user
+   * record (see {@link User.mfaFactorIds}).
+   */
+  mfaFactorId: string;
+}
+
 /** Instance methods exposed by `tailor.idp.Client`. */
 export interface IdpClientInstance {
   users(options?: ListUsersOptions): Promise<ListUsersResponse>;
@@ -94,6 +115,7 @@ export interface IdpClientInstance {
   updateUser(input: UpdateUserInput): Promise<User>;
   deleteUser(userId: string): Promise<boolean>;
   sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<boolean>;
+  unenrollMfa(input: UnenrollMfaInput): Promise<boolean>;
 }
 
 /**
@@ -186,5 +208,14 @@ export class Client {
    */
   sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<boolean> {
     return this.#impl.sendPasswordResetEmail(input);
+  }
+
+  /**
+   * Unenroll an MFA factor from a user.
+   * @param input - Target user ID and factor ID (see {@link User.mfaFactorIds})
+   * @returns `true` when the factor was removed
+   */
+  unenrollMfa(input: UnenrollMfaInput): Promise<boolean> {
+    return this.#impl.unenrollMfa(input);
   }
 }
