@@ -86,7 +86,7 @@ defineIdp("my-idp", {
 - `read` - Controls who can read IdP users
 - `update` - Controls who can update IdP users
 - `delete` - Controls who can delete IdP users
-- `sendPasswordResetEmail` - Controls who can send password reset emails. The examples above disable this operation; to enable it, use a permission such as `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]`.
+- `sendPasswordResetEmail` - Controls who can send password reset emails. Required unless `userAuthPolicy.disablePasswordAuth` is `true` (the password-reset flow has no meaning when password authentication is off). Set `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]` to allow, or `[]` to deny.
 - `unenrollMfa` - Controls who can remove an enrolled MFA factor from a user. Required when `userAuthPolicy.enableMfa` is `true`; omit otherwise. Typically restricted to administrators.
 
 **Policy fields:** each entry in an operation's policy array supports:

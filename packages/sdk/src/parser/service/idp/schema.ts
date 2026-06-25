@@ -297,7 +297,7 @@ export const IdPPermissionSchema = z
     read: z.array(IdPActionPermissionSchema).readonly(),
     update: z.array(IdPActionPermissionSchema).readonly(),
     delete: z.array(IdPActionPermissionSchema).readonly(),
-    sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly(),
+    sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly().optional(),
     unenrollMfa: z.array(IdPActionPermissionSchema).readonly().optional(),
   })
   .describe("Per-operation permission policies for IdP users");
@@ -337,6 +337,17 @@ export const IdPSchema = z
       message:
         "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true (set [{ conditions: [...], permit: true }] to allow, or [] to deny all). permission itself must also be defined.",
       path: ["permission", "unenrollMfa"],
+    },
+  )
+  .refine(
+    (data) =>
+      !data.permission ||
+      data.userAuthPolicy?.disablePasswordAuth === true ||
+      data.permission.sendPasswordResetEmail !== undefined,
+    {
+      message:
+        "permission.sendPasswordResetEmail must be set explicitly when password authentication is enabled (set [{ conditions: [...], permit: true }] to allow, or [] to deny; only optional when userAuthPolicy.disablePasswordAuth is true)",
+      path: ["permission", "sendPasswordResetEmail"],
     },
   )
   .brand("IdPConfig");
