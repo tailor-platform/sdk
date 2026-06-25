@@ -23,6 +23,8 @@ export default defineConfig([
         "codemods/v2/test-run-arg-input/scripts/transform.ts",
       "v2/sdk-skills-shim/scripts/transform": "codemods/v2/sdk-skills-shim/scripts/transform.ts",
       "v2/principal-unify/scripts/transform": "codemods/v2/principal-unify/scripts/transform.ts",
+      "v2/auth-attributes-rename/scripts/transform":
+        "codemods/v2/auth-attributes-rename/scripts/transform.ts",
       "v2/apply-to-deploy/scripts/transform": "codemods/v2/apply-to-deploy/scripts/transform.ts",
       "v2/cli-rename/scripts/transform": "codemods/v2/cli-rename/scripts/transform.ts",
       "v2/auth-invoker-unwrap/scripts/transform":
