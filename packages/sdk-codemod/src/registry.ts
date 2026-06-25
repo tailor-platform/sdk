@@ -153,7 +153,12 @@ export const allCodemods: CodemodPackage[] = [
       "Rename auth attribute module augmentation and related SDK type names from `AttributeMap` to `Attributes`",
     since: "1.0.0",
     until: "2.0.0",
-    legacyPatterns: ["AttributeMap", "interface AttributeMap"],
+    legacyPatterns: [
+      "AttributeMap",
+      "interface AttributeMap",
+      "UserAttributeMap",
+      "InferredAttributeMap",
+    ],
     examples: [
       {
         caption: "Module augmentation uses `Attributes`:",
