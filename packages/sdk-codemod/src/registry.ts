@@ -233,6 +233,13 @@ export const allCodemods: CodemodPackage[] = [
         after: "const apiUrl = process.env.TAILOR_PLATFORM_URL;",
       },
     ],
+    prompt: [
+      "Review any remaining removed SDK environment variable names after the codemod",
+      "runs. Replace actual environment variable usages with their v2 names, including",
+      "`TAILOR_TOKEN` -> `TAILOR_PLATFORM_TOKEN`. If a remaining match is an unrelated",
+      "local identifier, fixture label, or historical documentation that intentionally",
+      "does not configure the SDK, leave it unchanged.",
+    ].join("\n"),
   },
   {
     id: "v2/auth-invoker-unwrap",
