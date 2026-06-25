@@ -147,6 +147,29 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/auth-attributes-rename",
+    name: "AttributeMap → Attributes",
+    description:
+      "Rename auth attribute module augmentation and related SDK type names from `AttributeMap` to `Attributes`",
+    since: "1.0.0",
+    until: "2.0.0",
+    legacyPatterns: ["AttributeMap", "interface AttributeMap"],
+    examples: [
+      {
+        caption: "Module augmentation uses `Attributes`:",
+        before:
+          'declare module "@tailor-platform/sdk" {\n  interface AttributeMap {\n    role: string;\n  }\n}',
+        after:
+          'declare module "@tailor-platform/sdk" {\n  interface Attributes {\n    role: string;\n  }\n}',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, the generated module augmentation interface `AttributeMap`",
+      "is renamed to `Attributes`. Rename any hand-written declaration merging from",
+      "`interface AttributeMap` to `interface Attributes`.",
+    ].join("\n"),
+  },
+  {
     id: "v2/apply-to-deploy",
     name: "tailor-sdk apply → tailor-sdk deploy",
     description:
