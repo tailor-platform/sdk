@@ -31,7 +31,7 @@ function collectPathsInto(out, configFilePath, content, visited) {
       const sub = JSON.parse(readFileSync(extendsPath, "utf-8"));
       collectPathsInto(out, extendsPath, sub, visited);
     } catch (e) {
-      if (e?.code !== "ENOENT") throw e;
+      if (e?.code !== "ENOENT" && !(e instanceof SyntaxError)) throw e;
     }
   }
 
@@ -59,7 +59,8 @@ function loadTsconfigPaths(startDir) {
       collectPathsInto(paths, configFilePath, content, new Set());
       break;
     } catch (e) {
-      if (e?.code !== "ENOENT") throw e;
+      if (e?.code !== "ENOENT" && !(e instanceof SyntaxError)) throw e;
+      if (e instanceof SyntaxError) break;
     }
     prev = dir;
     dir = dirname(dir);
