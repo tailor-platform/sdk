@@ -1100,6 +1100,40 @@ describe("IdPSchema permission tests", () => {
 
     expect(() => IdPSchema.parse(config)).not.toThrow();
   });
+
+  test("accepts permission omitting sendPasswordResetEmail when gqlOperations.sendPasswordResetEmail is false", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      gqlOperations: {
+        sendPasswordResetEmail: false,
+      },
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
+  test("accepts permission omitting sendPasswordResetEmail when gqlOperations is the 'query' alias", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      gqlOperations: "query" as const,
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
 });
 
 describe("IdPSchema gqlOperations alias tests", () => {

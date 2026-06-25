@@ -343,10 +343,11 @@ export const IdPSchema = z
     (data) =>
       !data.permission ||
       data.userAuthPolicy?.disablePasswordAuth === true ||
+      data.gqlOperations?.sendPasswordResetEmail === false ||
       data.permission.sendPasswordResetEmail !== undefined,
     {
       message:
-        "permission.sendPasswordResetEmail must be set explicitly when password authentication is enabled (set [{ conditions: [...], permit: true }] to allow, or [] to deny; only optional when userAuthPolicy.disablePasswordAuth is true)",
+        "permission.sendPasswordResetEmail must be set explicitly when password authentication is enabled (set [{ conditions: [...], permit: true }] to allow, or [] to deny; only optional when userAuthPolicy.disablePasswordAuth is true or gqlOperations.sendPasswordResetEmail is false)",
       path: ["permission", "sendPasswordResetEmail"],
     },
   )
