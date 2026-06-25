@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": patch
+"@tailor-platform/sdk": major
 ---
 
 chore: replace tsx with amaro for TypeScript loading
