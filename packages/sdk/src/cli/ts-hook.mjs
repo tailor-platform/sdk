@@ -41,7 +41,11 @@ function collectPathsInto(out, configFilePath, content, visited) {
   if (rawPaths && baseUrl) {
     const absBase = resolvePath(baseDir, baseUrl);
     for (const [alias, targets] of Object.entries(rawPaths)) {
-      out[alias] = targets.map((t) => resolvePath(absBase, t));
+      out[alias] = targets.map((t) => {
+        const isWildcard = t.endsWith("/*");
+        const resolved = resolvePath(absBase, isWildcard ? t.slice(0, -2) : t);
+        return pathToFileURL(resolved).href + (isWildcard ? "/*" : "");
+      });
     }
   }
 }
@@ -162,11 +166,7 @@ export async function resolve(specifier, context, nextResolve) {
         const candidates = matchTsconfigPaths(specifier, tsconfigPaths);
         if (candidates) {
           for (const candidate of candidates) {
-            const result = await tryResolveWithExtensions(
-              pathToFileURL(candidate).href,
-              context,
-              nextResolve,
-            );
+            const result = await tryResolveWithExtensions(candidate, context, nextResolve);
             if (result) return result;
           }
         }
@@ -246,11 +246,7 @@ export function resolveSync(specifier, context, nextResolve) {
         const candidates = matchTsconfigPaths(specifier, tsconfigPaths);
         if (candidates) {
           for (const candidate of candidates) {
-            const result = tryResolveWithExtensionsSync(
-              pathToFileURL(candidate).href,
-              context,
-              nextResolve,
-            );
+            const result = tryResolveWithExtensionsSync(candidate, context, nextResolve);
             if (result) return result;
           }
         }
