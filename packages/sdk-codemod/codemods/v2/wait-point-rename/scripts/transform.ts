@@ -63,17 +63,34 @@ export default function transform(source: string, _filePath?: string): string | 
   if (edits.length === 0) return null;
 
   if (needsBodyRename.size > 0) {
-    // Skip body rename for any name that is also declared locally (function or variable),
-    // to avoid incorrectly renaming shadowed identifiers unrelated to the SDK import.
+    // Build byte-range maps for scopes where each name is shadowed by a local declaration.
+    // Only identifiers outside these ranges should be renamed.
+    const shadowedRanges = new Map<string, Array<{ start: number; end: number }>>();
+
     const localDecls = root.findAll({
       rule: { any: [{ kind: "function_declaration" }, { kind: "variable_declarator" }] },
     });
     for (const decl of localDecls) {
       if (isInsideImportStatement(decl)) continue;
       const nameChild = decl.children().find((c: SgNode) => c.kind() === "identifier");
-      if (nameChild && needsBodyRename.has(nameChild.text())) {
-        needsBodyRename.delete(nameChild.text());
+      if (!nameChild || !needsBodyRename.has(nameChild.text())) continue;
+
+      // Walk up to the nearest statement_block or program — that is the scope
+      // where this declaration shadows the imported name.
+      let scopeNode: SgNode = root;
+      let p: SgNode | null = decl.parent();
+      while (p) {
+        if (p.kind() === "statement_block" || p.kind() === "program") {
+          scopeNode = p;
+          break;
+        }
+        p = p.parent();
       }
+
+      const r = scopeNode.range();
+      const name = nameChild.text();
+      if (!shadowedRanges.has(name)) shadowedRanges.set(name, []);
+      shadowedRanges.get(name)!.push({ start: r.start.index, end: r.end.index });
     }
 
     const identifiers = root.findAll({ rule: { kind: "identifier" } });
@@ -81,6 +98,14 @@ export default function transform(source: string, _filePath?: string): string | 
       const name = ident.text();
       if (!needsBodyRename.has(name)) continue;
       if (isInsideImportStatement(ident)) continue;
+
+      // Skip identifiers that fall inside a scope where this name is locally declared.
+      const ranges = shadowedRanges.get(name);
+      if (ranges) {
+        const pos = ident.range().start.index;
+        if (ranges.some((r) => pos >= r.start && pos <= r.end)) continue;
+      }
+
       edits.push(ident.replace(RENAMES[name]!));
     }
   }
