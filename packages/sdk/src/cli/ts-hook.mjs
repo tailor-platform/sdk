@@ -67,18 +67,16 @@ function loadTsconfigPaths(startDir) {
   return paths;
 }
 
-function matchTsconfigPath(specifier, paths) {
+function matchTsconfigPaths(specifier, paths) {
   for (const [alias, targets] of Object.entries(paths)) {
     if (alias.endsWith("/*")) {
       const prefix = alias.slice(0, -2);
       if (specifier.startsWith(prefix + "/")) {
         const rest = specifier.slice(prefix.length + 1);
-        for (const target of targets) {
-          return target.endsWith("/*") ? target.slice(0, -2) + "/" + rest : target;
-        }
+        return targets.map((t) => (t.endsWith("/*") ? t.slice(0, -2) + "/" + rest : t));
       }
     } else if (alias === specifier && targets.length > 0) {
-      return targets[0];
+      return targets;
     }
   }
   return null;
@@ -97,7 +95,8 @@ async function tryResolveWithExtensions(base, context, nextResolve) {
   try {
     return await nextResolve(base, context);
   } catch (e) {
-    if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+    const code = e?.code;
+    if (code !== "ERR_MODULE_NOT_FOUND" && code !== "ERR_UNSUPPORTED_DIR_IMPORT") throw e;
   }
   return null;
 }
@@ -115,7 +114,8 @@ function tryResolveWithExtensionsSync(base, context, nextResolve) {
   try {
     return nextResolve(base, context);
   } catch (e) {
-    if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+    const code = e?.code;
+    if (code !== "ERR_MODULE_NOT_FOUND" && code !== "ERR_UNSUPPORTED_DIR_IMPORT") throw e;
   }
   return null;
 }
@@ -150,14 +150,16 @@ export async function resolve(specifier, context, nextResolve) {
         parentParsed.hash = "";
         const parentDir = dirname(fileURLToPath(parentParsed));
         const tsconfigPaths = loadTsconfigPaths(parentDir);
-        const mapped = matchTsconfigPath(specifier, tsconfigPaths);
-        if (mapped) {
-          const result = await tryResolveWithExtensions(
-            pathToFileURL(mapped).href,
-            context,
-            nextResolve,
-          );
-          if (result) return result;
+        const candidates = matchTsconfigPaths(specifier, tsconfigPaths);
+        if (candidates) {
+          for (const candidate of candidates) {
+            const result = await tryResolveWithExtensions(
+              pathToFileURL(candidate).href,
+              context,
+              nextResolve,
+            );
+            if (result) return result;
+          }
         }
       }
       throw err;
@@ -232,14 +234,16 @@ export function resolveSync(specifier, context, nextResolve) {
         parentParsed.hash = "";
         const parentDir = dirname(fileURLToPath(parentParsed));
         const tsconfigPaths = loadTsconfigPaths(parentDir);
-        const mapped = matchTsconfigPath(specifier, tsconfigPaths);
-        if (mapped) {
-          const result = tryResolveWithExtensionsSync(
-            pathToFileURL(mapped).href,
-            context,
-            nextResolve,
-          );
-          if (result) return result;
+        const candidates = matchTsconfigPaths(specifier, tsconfigPaths);
+        if (candidates) {
+          for (const candidate of candidates) {
+            const result = tryResolveWithExtensionsSync(
+              pathToFileURL(candidate).href,
+              context,
+              nextResolve,
+            );
+            if (result) return result;
+          }
         }
       }
       throw err;
