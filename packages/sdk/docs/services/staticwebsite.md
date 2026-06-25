@@ -124,8 +124,14 @@ const website = defineStaticWebSite("my-frontend", {
 });
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["default-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
 });
 
 const auth = defineAuth("my-auth", {
