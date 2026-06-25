@@ -91,31 +91,33 @@ async function execRemove(
   const secretManager = await planSecretManager(ctx);
 
   // Print planned deletions (same order as apply dry-run)
-  functionRegistry.changeSet.print();
-  staticWebsite.changeSet.print();
-  aiGateway.changeSet.print();
-  app.print();
-  tailorDB.changeSet.service.print();
-  tailorDB.changeSet.type.print();
-  tailorDB.changeSet.gqlPermission.print();
-  pipeline.changeSet.service.print();
-  pipeline.changeSet.resolver.print();
-  executor.changeSet.print();
-  workflow.changeSet.print();
-  idp.changeSet.service.print();
-  idp.changeSet.client.print();
-  auth.changeSet.service.print();
-  auth.changeSet.idpConfig.print();
-  auth.changeSet.userProfileConfig.print();
-  auth.changeSet.tenantConfig.print();
-  auth.changeSet.machineUser.print();
-  auth.changeSet.oauth2Client.print();
-  auth.changeSet.authHook.print();
-  auth.changeSet.scim.print();
-  auth.changeSet.scimResource.print();
-  auth.changeSet.connection.print();
-  secretManager.vaultChangeSet.print();
-  secretManager.secretChangeSet.print();
+  [
+    ...functionRegistry.changeSet.lines(),
+    ...staticWebsite.changeSet.lines(),
+    ...aiGateway.changeSet.lines(),
+    ...app.lines(),
+    ...tailorDB.changeSet.service.lines(),
+    ...tailorDB.changeSet.type.lines(),
+    ...tailorDB.changeSet.gqlPermission.lines(),
+    ...pipeline.changeSet.service.lines(),
+    ...pipeline.changeSet.resolver.lines(),
+    ...executor.changeSet.lines(),
+    ...workflow.changeSet.lines(),
+    ...idp.changeSet.service.lines(),
+    ...idp.changeSet.client.lines(),
+    ...auth.changeSet.service.lines(),
+    ...auth.changeSet.idpConfig.lines(),
+    ...auth.changeSet.userProfileConfig.lines(),
+    ...auth.changeSet.tenantConfig.lines(),
+    ...auth.changeSet.machineUser.lines(),
+    ...auth.changeSet.oauth2Client.lines(),
+    ...auth.changeSet.authHook.lines(),
+    ...auth.changeSet.scim.lines(),
+    ...auth.changeSet.scimResource.lines(),
+    ...auth.changeSet.connection.lines(),
+    ...secretManager.vaultChangeSet.lines(),
+    ...secretManager.secretChangeSet.lines(),
+  ].forEach((line) => logger.log(line));
 
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&

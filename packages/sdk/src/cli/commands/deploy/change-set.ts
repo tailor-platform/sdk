@@ -1,10 +1,10 @@
-import { logger, styles, symbols } from "#/cli/shared/logger";
+import { styles, symbols } from "#/cli/shared/logger";
 
 export interface HasName {
   name: string;
   /**
    * Optional pre-formatted lines rendered indented beneath the item by
-   * `ChangeSet.print()` (e.g. per-sub-resource diffs embedded in a single
+   * `ChangeSet.lines()` (e.g. per-sub-resource diffs embedded in a single
    * resource).
    */
   details?: readonly string[];
@@ -24,7 +24,7 @@ export type ChangeSet<
   readonly replaces: R[];
   readonly unchanged: Un[];
   isEmpty: () => boolean;
-  print: (write?: (line: string) => void) => void;
+  lines: () => string[];
 };
 
 export interface PlanSummary {
@@ -38,7 +38,7 @@ export interface PlanSummary {
 /**
  * Create a new ChangeSet for tracking resource changes.
  * @param title - Title for the change set
- * @returns Empty ChangeSet instance with isEmpty() and print() methods
+ * @returns Empty ChangeSet instance with isEmpty() and lines() methods
  */
 export function createChangeSet<
   C extends HasName,
@@ -64,21 +64,22 @@ export function createChangeSet<
     replaces,
     unchanged,
     isEmpty,
-    print: (write: (line: string) => void = logger.log.bind(logger)) => {
+    lines: () => {
       if (isEmpty()) {
-        return;
+        return [];
       }
-      write(styles.bold(`${title}:`));
-      const printItem = (symbol: string, item: HasName) => {
-        write(`  ${symbol} ${item.name}`);
+      const out: string[] = [styles.bold(`${title}:`)];
+      const addItem = (symbol: string, item: HasName) => {
+        out.push(`  ${symbol} ${item.name}`);
         for (const detail of item.details ?? []) {
-          write(`    ${detail}`);
+          out.push(`    ${detail}`);
         }
       };
-      creates.forEach((item) => printItem(symbols.create, item));
-      deletes.forEach((item) => printItem(symbols.delete, item));
-      updates.forEach((item) => printItem(symbols.update, item));
-      replaces.forEach((item) => printItem(symbols.replace, item));
+      creates.forEach((item) => addItem(symbols.create, item));
+      deletes.forEach((item) => addItem(symbols.delete, item));
+      updates.forEach((item) => addItem(symbols.update, item));
+      replaces.forEach((item) => addItem(symbols.replace, item));
+      return out;
     },
   };
 }

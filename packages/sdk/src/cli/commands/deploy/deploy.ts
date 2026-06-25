@@ -49,9 +49,9 @@ import {
   WORKFLOW_PREFIX,
 } from "./function-registry";
 import {
+  buildGroupedDisplayLines,
   extractServiceActions,
   formatChangeSetEntries,
-  printGroupedDisplaySection,
   type GroupedDisplayEntry,
   type NamespaceAction,
 } from "./grouped-display";
@@ -332,36 +332,38 @@ export function printPlanResults(
     return summary;
   }
 
-  const write: (line: string) => void = opts?.dryRun
-    ? (line) => logger.out(line)
-    : logger.log.bind(logger);
+  const allLines: string[] = [
+    ...buildGroupedDisplayLines(
+      results.functionRegistry.changeSet.title,
+      formatChangeSetEntries(otherFunctionRegistryChanges),
+    ),
+    ...results.staticWebsite.changeSet.lines(),
+    ...results.staticWebsite.customDomainChangeSet.lines(),
+    ...results.aiGateway.changeSet.lines(),
+    ...results.app.lines(),
+    ...buildGroupedDisplayLines("TailorDB", tailorDBEntries, tailorDBServiceActions),
+    ...buildGroupedDisplayLines("Resolver", pipelineEntries, pipelineServiceActions),
+    ...buildGroupedDisplayLines("Executor", executorEntries),
+    ...buildGroupedDisplayLines("Workflow", workflowEntries),
+    ...buildGroupedDisplayLines("IdP", idpEntries, idpServiceActions),
+    ...buildGroupedDisplayLines("Auth", authEntries, authServiceActions),
+    ...results.secretManager.vaultChangeSet.lines(),
+    ...results.secretManager.secretChangeSet.lines(),
+  ];
 
-  printGroupedDisplaySection(
-    results.functionRegistry.changeSet.title,
-    formatChangeSetEntries(otherFunctionRegistryChanges),
-    undefined,
-    write,
-  );
-  results.staticWebsite.changeSet.print(write);
-  results.staticWebsite.customDomainChangeSet.print(write);
-  results.aiGateway.changeSet.print(write);
-  results.app.print(write);
-  printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions, write);
-  printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions, write);
-  printGroupedDisplaySection("Executor", executorEntries, undefined, write);
-  printGroupedDisplaySection("Workflow", workflowEntries, undefined, write);
-  printGroupedDisplaySection("IdP", idpEntries, idpServiceActions, write);
-  printGroupedDisplaySection("Auth", authEntries, authServiceActions, write);
-  results.secretManager.vaultChangeSet.print(write);
-  results.secretManager.secretChangeSet.print(write);
   if (results.secretManager.skippedSecrets.length > 0) {
-    write(styles.bold("Secret Manager secrets (skipped - no value provided):"));
+    allLines.push(styles.bold("Secret Manager secrets (skipped - no value provided):"));
     for (const name of results.secretManager.skippedSecrets) {
-      write(`  ${styles.dim("○")} ${name}`);
+      allLines.push(`  ${styles.dim("○")} ${name}`);
     }
   }
 
-  write(formatPlanSummary(summary));
+  allLines.push(formatPlanSummary(summary));
+
+  const write: (line: string) => void = opts?.dryRun
+    ? (line) => logger.out(line)
+    : logger.log.bind(logger);
+  allLines.forEach(write);
 
   return summary;
 }

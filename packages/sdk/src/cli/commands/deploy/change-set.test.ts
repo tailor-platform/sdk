@@ -1,5 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
-import { logger } from "#/cli/shared/logger";
+import { describe, expect, test } from "vitest";
 import { createChangeSet, formatPlanSummary, summarizeChangeSets } from "./change-set";
 import type { HasName } from "./change-set";
 
@@ -7,7 +6,7 @@ function createNamedChangeSet(title: string) {
   return createChangeSet<HasName, HasName, HasName, HasName>(title);
 }
 
-describe("ChangeSet.print", () => {
+describe("ChangeSet.lines", () => {
   test("renders an item's optional details indented beneath it", () => {
     const changeSet = createNamedChangeSet("Applications");
     changeSet.updates.push({
@@ -15,15 +14,14 @@ describe("ChangeSet.print", () => {
       details: ["~ get-user (httpAdapter)", "+ echo (httpAdapter)"],
     });
 
-    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-    changeSet.print();
-
-    const lines = logSpy.mock.calls.map((call) => String(call[0]));
-    // The application line is present (symbol is color-wrapped, so match loosely),
-    // followed by its detail lines indented by four spaces.
+    const lines = changeSet.lines();
     expect(lines.some((line) => line.includes("my-app"))).toBe(true);
     expect(lines).toContain("    ~ get-user (httpAdapter)");
     expect(lines).toContain("    + echo (httpAdapter)");
+  });
+
+  test("returns empty array when change set is empty", () => {
+    expect(createNamedChangeSet("Applications").lines()).toEqual([]);
   });
 });
 

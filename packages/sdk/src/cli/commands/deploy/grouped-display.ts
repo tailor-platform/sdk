@@ -1,4 +1,4 @@
-import { logger, styles, symbols } from "#/cli/shared/logger";
+import { styles, symbols } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import {
   AUTH_HOOK_PREFIX,
@@ -261,20 +261,19 @@ export function extractServiceActions(
 }
 
 /**
- * Print a titled section of grouped display entries, nesting by namespace.
+ * Build display lines for a titled section of grouped entries, nesting by namespace.
  * Service-level changes are shown as the namespace header symbol.
  * Services without child entries are shown as flat entries.
  * @param title - Section title
- * @param entries - Entries to print (should NOT include service entries)
+ * @param entries - Entries to render (should NOT include service entries)
  * @param serviceActions - Optional service-level actions to merge into namespace headers
- * @param write - Output function; defaults to stderr via logger.log
+ * @returns Lines ready for output; empty array when there is nothing to show
  */
-export function printGroupedDisplaySection(
+export function buildGroupedDisplayLines(
   title: string,
   entries: ReadonlyArray<GroupedDisplayEntry>,
   serviceActions?: ReadonlyArray<NamespaceAction>,
-  write: (line: string) => void = logger.log.bind(logger),
-) {
+): string[] {
   const serviceMap = new Map<string, DisplayAction>();
   if (serviceActions) {
     for (const sa of serviceActions) {
@@ -283,10 +282,10 @@ export function printGroupedDisplaySection(
   }
 
   if (entries.length === 0 && serviceMap.size === 0) {
-    return;
+    return [];
   }
 
-  write(styles.bold(`${title}:`));
+  const out: string[] = [styles.bold(`${title}:`)];
 
   // Group entries by namespace while preserving order
   const namespaceOrder: (string | undefined)[] = [];
@@ -308,22 +307,24 @@ export function printGroupedDisplaySection(
     if (ns) {
       const svcAction = serviceMap.get(ns);
       const prefix = svcAction ? `${ACTION_SYMBOLS[svcAction]} ` : "";
-      write(`  ${prefix}${styles.bold(`${ns}:`)}`);
+      out.push(`  ${prefix}${styles.bold(`${ns}:`)}`);
       printedServices.add(ns);
       for (const entry of group) {
-        write(`    ${formatGroupedDisplayLine(entry)}`);
+        out.push(`    ${formatGroupedDisplayLine(entry)}`);
       }
     } else {
       for (const entry of group) {
-        write(`  ${formatGroupedDisplayLine(entry)}`);
+        out.push(`  ${formatGroupedDisplayLine(entry)}`);
       }
     }
   }
 
-  // Print services without child entries as flat entries
+  // Append services without child entries as flat entries
   for (const [name, action] of serviceMap) {
     if (!printedServices.has(name)) {
-      write(`  ${ACTION_SYMBOLS[action]} ${name}`);
+      out.push(`  ${ACTION_SYMBOLS[action]} ${name}`);
     }
   }
+
+  return out;
 }
