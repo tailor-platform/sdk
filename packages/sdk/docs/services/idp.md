@@ -217,7 +217,7 @@ import { idp } from "@tailor-platform/sdk/runtime";
 const client = new idp.Client({ namespace: "my-idp" });
 const user = await client.user("user-id");
 if (user.mfaEnrolled) {
-  for (const factorId of user.mfaFactorIds ?? []) {
+  for (const factorId of user.mfaFactorIds) {
     await client.unenrollMfa({ userId: user.id, mfaFactorId: factorId });
   }
 }
