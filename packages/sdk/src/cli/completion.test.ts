@@ -211,7 +211,7 @@ describe("shell completion", () => {
         shell: "zsh",
         programName: "tailor",
       });
-      expect(script).toMatch(/__tailor_sdk_expand_[a-z_]+__field=/);
+      expect(script).toMatch(/__tailor_expand_[a-z_]+__field=/);
       expect(script).toContain("GetFunctionExecution");
       expect(script).toContain("_used_field_keys");
     });
