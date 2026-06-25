@@ -153,6 +153,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename auth attribute module augmentation and related SDK type names from `AttributeMap` to `Attributes`",
     since: "1.0.0",
     until: "2.0.0",
+    scriptPath: "v2/auth-attributes-rename/scripts/transform.js",
     legacyPatterns: [
       "AttributeMap",
       "interface AttributeMap",
@@ -169,9 +170,12 @@ export const allCodemods: CodemodPackage[] = [
       },
     ],
     prompt: [
-      "In Tailor SDK v2, the generated module augmentation interface `AttributeMap`",
-      "is renamed to `Attributes`. Rename any hand-written declaration merging from",
-      "`interface AttributeMap` to `interface Attributes`.",
+      "In Tailor SDK v2, the auth attribute type API is renamed from `AttributeMap`",
+      "to `Attributes`; related SDK types are renamed to `UserAttributes` and",
+      "`InferredAttributes`. The codemod rewrites SDK imports, re-exports,",
+      "namespace-qualified references, import() type references, and module",
+      "augmentations. Review any remaining matches manually and leave unrelated",
+      "local names or deploy/proto wire field names unchanged.",
     ].join("\n"),
   },
   {

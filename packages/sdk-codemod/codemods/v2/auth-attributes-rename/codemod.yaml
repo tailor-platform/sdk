@@ -1,0 +1,7 @@
+name: "@tailor-platform/auth-attributes-rename"
+version: "1.0.0"
+description: "Rename auth attribute type names from AttributeMap to Attributes"
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"
