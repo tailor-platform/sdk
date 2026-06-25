@@ -40,6 +40,18 @@ describe("load", () => {
     await load("file:///path/to/foo.js", {}, nextLoad);
     expect(nextLoad).toHaveBeenCalledWith("file:///path/to/foo.js", {});
   });
+
+  test("delegates .d.ts declaration files to nextLoad without transforming", async () => {
+    const nextLoad = vi.fn();
+    await load("file:///path/to/foo.d.ts", {}, nextLoad);
+    expect(nextLoad).toHaveBeenCalledWith("file:///path/to/foo.d.ts", {});
+  });
+
+  test("delegates .d.mts declaration files to nextLoad without transforming", async () => {
+    const nextLoad = vi.fn();
+    await load("file:///path/to/foo.d.mts", {}, nextLoad);
+    expect(nextLoad).toHaveBeenCalledWith("file:///path/to/foo.d.mts", {});
+  });
 });
 
 describe("loadSync", () => {
@@ -60,6 +72,12 @@ describe("loadSync", () => {
     const nextLoad = vi.fn();
     loadSync("file:///path/to/foo.js", {}, nextLoad);
     expect(nextLoad).toHaveBeenCalledWith("file:///path/to/foo.js", {});
+  });
+
+  test("delegates .d.ts declaration files to nextLoad without transforming", () => {
+    const nextLoad = vi.fn();
+    loadSync("file:///path/to/foo.d.ts", {}, nextLoad);
+    expect(nextLoad).toHaveBeenCalledWith("file:///path/to/foo.d.ts", {});
   });
 });
 

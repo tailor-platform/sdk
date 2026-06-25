@@ -202,7 +202,11 @@ export async function resolve(specifier, context, nextResolve) {
 export async function load(url, context, nextLoad) {
   if (url.startsWith("file:")) {
     const parsedUrl = new URL(url);
-    if (TS_EXTENSIONS.some((ext) => parsedUrl.pathname.endsWith(ext))) {
+    if (
+      TS_EXTENSIONS.some((ext) => parsedUrl.pathname.endsWith(ext)) &&
+      !parsedUrl.pathname.endsWith(".d.ts") &&
+      !parsedUrl.pathname.endsWith(".d.mts")
+    ) {
       parsedUrl.search = "";
       parsedUrl.hash = "";
       const filePath = fileURLToPath(parsedUrl);
@@ -282,7 +286,11 @@ export function resolveSync(specifier, context, nextResolve) {
 export function loadSync(url, context, nextLoad) {
   if (url.startsWith("file:")) {
     const parsedUrl = new URL(url);
-    if (TS_EXTENSIONS.some((ext) => parsedUrl.pathname.endsWith(ext))) {
+    if (
+      TS_EXTENSIONS.some((ext) => parsedUrl.pathname.endsWith(ext)) &&
+      !parsedUrl.pathname.endsWith(".d.ts") &&
+      !parsedUrl.pathname.endsWith(".d.mts")
+    ) {
       parsedUrl.search = "";
       parsedUrl.hash = "";
       const filePath = fileURLToPath(parsedUrl);
