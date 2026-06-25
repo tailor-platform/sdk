@@ -685,10 +685,28 @@ export function mockAuthconnection() {
 
 const IDP_DEFAULTS: Record<string, unknown> = {
   users: { users: [], nextPageToken: null, totalCount: 0 },
-  user: { id: "mock-id", name: "mock-user", disabled: false },
-  userByName: { id: "mock-id", name: "mock-user", disabled: false },
-  createUser: { id: "mock-id", name: "mock-user", disabled: false },
-  updateUser: { id: "mock-id", name: "mock-user", disabled: false },
+  user: { id: "mock-id", name: "mock-user", disabled: false, mfaEnrolled: false, mfaFactorIds: [] },
+  userByName: {
+    id: "mock-id",
+    name: "mock-user",
+    disabled: false,
+    mfaEnrolled: false,
+    mfaFactorIds: [],
+  },
+  createUser: {
+    id: "mock-id",
+    name: "mock-user",
+    disabled: false,
+    mfaEnrolled: false,
+    mfaFactorIds: [],
+  },
+  updateUser: {
+    id: "mock-id",
+    name: "mock-user",
+    disabled: false,
+    mfaEnrolled: false,
+    mfaFactorIds: [],
+  },
   deleteUser: true,
   sendPasswordResetEmail: true,
   unenrollMfa: true,

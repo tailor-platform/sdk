@@ -26,12 +26,12 @@ export interface User {
    * True when the user has at least one enrolled MFA second factor. False when
    * the namespace has MFA disabled or the user has not enrolled a factor.
    */
-  mfaEnrolled?: boolean;
+  mfaEnrolled: boolean;
   /**
    * Enrolled MFA second factor IDs. Pass an entry into
    * {@link Client.unenrollMfa} to remove that factor.
    */
-  mfaFactorIds?: string[];
+  mfaFactorIds: string[];
 }
 
 /** Filter options for {@link Client.users}. */
