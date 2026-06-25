@@ -19,6 +19,7 @@ const RENAME_PATTERNS = ENV_RENAMES.map(([from, to]) => ({
   pattern: new RegExp(`(?<!${ENV_BOUNDARY})${from}(?!${ENV_BOUNDARY})`, "g"),
   to,
 }));
+const STRING_LITERAL_PATTERN = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -48,7 +49,10 @@ function replaceSourceTokens(source: string): string {
       .replace(new RegExp(`(["'\`])${escaped}\\1`, "g"), `$1${to}$1`)
       .replace(new RegExp(`([,{]\\s*)${escaped}(?=\\s*:)`, "g"), `$1${to}`);
   }
-  return updated;
+  return updated.replace(STRING_LITERAL_PATTERN, (match, quote: string, body: string) => {
+    const replaced = replaceTextTokens(body);
+    return replaced === body ? match : `${quote}${replaced}${quote}`;
+  });
 }
 
 export default function transform(source: string, filePath: string): string | null {
