@@ -30,7 +30,7 @@ vi.mock("../change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -169,7 +169,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
           deletes: [],
           title: "TailorDB Services",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
         type: {
           creates: [
@@ -182,7 +182,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
           deletes: [],
           title: "TailorDB Types",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         gqlPermission: {
           creates: [],
@@ -190,7 +190,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
           deletes: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],
@@ -244,7 +244,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
           deletes: [],
           title: "TailorDB Services",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
         type: {
           creates: [],
@@ -257,7 +257,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
           deletes: [],
           title: "TailorDB Types",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         gqlPermission: {
           creates: [],
@@ -265,7 +265,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
           deletes: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],

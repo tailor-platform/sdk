@@ -30,7 +30,7 @@ vi.mock("./change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -703,7 +703,7 @@ describe("planWorkflow", () => {
             replaces: [],
             unchanged: [],
             isEmpty: () => false,
-            print: () => {},
+            lines: () => [],
           },
           jobFunctionDeletes: [{ workspaceId, jobFunctionName: "removed-job" }],
           conflicts: [],
@@ -772,7 +772,7 @@ describe("planWorkflow", () => {
             replaces: [],
             unchanged: [],
             isEmpty: () => false,
-            print: () => {},
+            lines: () => [],
           },
           jobFunctionDeletes: [
             { workspaceId, jobFunctionName: "job-a" },

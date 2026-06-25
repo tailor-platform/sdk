@@ -36,7 +36,7 @@ vi.mock("../change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -169,7 +169,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           deletes: [],
           title: "TailorDB Services",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
         type: {
           creates: [],
@@ -182,7 +182,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           deletes: [],
           title: "TailorDB Types",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         gqlPermission: {
           creates: [],
@@ -190,7 +190,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           deletes: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],

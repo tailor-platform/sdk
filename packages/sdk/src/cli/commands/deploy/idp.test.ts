@@ -38,7 +38,7 @@ describe("applyIdP phase separation", () => {
           ],
           title: "IdP Services",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         client: {
           creates: [],
@@ -55,7 +55,7 @@ describe("applyIdP phase separation", () => {
           ],
           title: "IdP Clients",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],
