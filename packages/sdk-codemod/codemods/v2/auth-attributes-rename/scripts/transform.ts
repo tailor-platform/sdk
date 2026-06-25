@@ -24,6 +24,18 @@ function hasSdkModuleLiteral(node: SgNode): boolean {
   return node.findAll({ rule: { kind: "string" } }).some(isSdkModuleLiteral);
 }
 
+function moduleSpecifierLiteral(node: SgNode): SgNode | undefined {
+  const directLiteral = node.children().find((child: SgNode) => child.kind() === "string");
+  if (directLiteral) return directLiteral;
+  const moduleNode = node.children().find((child: SgNode) => child.kind() === "module");
+  return moduleNode?.children().find((child: SgNode) => child.kind() === "string");
+}
+
+function hasSdkModuleSpecifier(node: SgNode): boolean {
+  const literal = moduleSpecifierLiteral(node);
+  return literal ? isSdkModuleLiteral(literal) : false;
+}
+
 function identifierChildren(node: SgNode): SgNode[] {
   return node.children().filter((child: SgNode) => child.kind() === "identifier");
 }
@@ -78,6 +90,66 @@ function isNestedTypeName(node: SgNode): boolean {
   return node.parent()?.kind() === "nested_type_identifier";
 }
 
+function declarationName(node: SgNode): SgNode | undefined {
+  if (
+    [
+      "class_declaration",
+      "enum_declaration",
+      "interface_declaration",
+      "type_alias_declaration",
+    ].includes(node.kind())
+  ) {
+    return node.field("name") ?? undefined;
+  }
+  if (node.kind() !== "export_statement") return undefined;
+  const declaration = node
+    .children()
+    .find((child: SgNode) =>
+      [
+        "class_declaration",
+        "enum_declaration",
+        "interface_declaration",
+        "type_alias_declaration",
+      ].includes(child.kind()),
+    );
+  return declaration?.field("name") ?? undefined;
+}
+
+function scopeDeclaresType(scope: SgNode, name: string, reference: SgNode): boolean {
+  return scope.children().some((child: SgNode) => {
+    const declaredName = declarationName(child);
+    return !!declaredName && declaredName.text() === name && !sameRange(declaredName, reference);
+  });
+}
+
+function hasTypeParameterShadow(node: SgNode, name: string): boolean {
+  const parameters = node.findAll({ rule: { kind: "type_parameter" } });
+  return parameters.some((parameter) => typeIdentifierChildren(parameter)[0]?.text() === name);
+}
+
+function isShadowedTypeReference(node: SgNode, name: string): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === "statement_block" && scopeDeclaresType(current, name, node)) {
+      return true;
+    }
+    if (
+      [
+        "class_declaration",
+        "function_declaration",
+        "interface_declaration",
+        "method_definition",
+        "type_alias_declaration",
+      ].includes(current.kind()) &&
+      hasTypeParameterShadow(current, name)
+    ) {
+      return true;
+    }
+    current = current.parent();
+  }
+  return false;
+}
+
 function collectSdkImports(
   root: SgNode,
   edits: Edit[],
@@ -91,7 +163,7 @@ function collectSdkImports(
   const importStmts = root.findAll({ rule: { kind: "import_statement" } });
 
   for (const importStmt of importStmts) {
-    if (!hasSdkModuleLiteral(importStmt)) continue;
+    if (!hasSdkModuleSpecifier(importStmt)) continue;
 
     const namespaceImports = importStmt.findAll({ rule: { kind: "namespace_import" } });
     for (const namespaceImport of namespaceImports) {
@@ -120,7 +192,7 @@ function collectSdkImports(
 function rewriteSdkExports(root: SgNode, edits: Edit[], editedRanges: Set<string>): void {
   const exportStmts = root.findAll({ rule: { kind: "export_statement" } });
   for (const exportStmt of exportStmts) {
-    if (!hasSdkModuleLiteral(exportStmt)) continue;
+    if (!hasSdkModuleSpecifier(exportStmt)) continue;
 
     const specs = exportStmt.findAll({ rule: { kind: "export_specifier" } });
     for (const spec of specs) {
@@ -135,7 +207,7 @@ function rewriteSdkExports(root: SgNode, edits: Edit[], editedRanges: Set<string
 function rewriteModuleAugmentations(root: SgNode, edits: Edit[], editedRanges: Set<string>): void {
   const declarations = root.findAll({ rule: { kind: "ambient_declaration" } });
   for (const declaration of declarations) {
-    if (!hasSdkModuleLiteral(declaration)) continue;
+    if (!hasSdkModuleSpecifier(declaration)) continue;
 
     const interfaces = declaration.findAll({ rule: { kind: "interface_declaration" } });
     for (const iface of interfaces) {
@@ -159,6 +231,7 @@ function rewriteLocalTypeReferences(
   for (const typeIdentifier of typeIdentifiers) {
     if (isDeclarationName(typeIdentifier) || isNestedTypeName(typeIdentifier)) continue;
     const replacement = localTypeRenames.get(typeIdentifier.text());
+    if (replacement && isShadowedTypeReference(typeIdentifier, typeIdentifier.text())) continue;
     if (replacement) addReplacement(edits, editedRanges, typeIdentifier, replacement);
   }
 }
@@ -208,7 +281,15 @@ function rewriteImportTypeReferences(root: SgNode, edits: Edit[], editedRanges: 
 export default function transform(source: string, _filePath?: string): string | null {
   if (!quickFilter(source)) return null;
 
-  const lang = source.includes("</") || source.includes("/>") ? Lang.Tsx : Lang.TypeScript;
+  const filePath = _filePath?.toLowerCase();
+  const lang =
+    filePath?.endsWith(".tsx") || filePath?.endsWith(".jsx")
+      ? Lang.Tsx
+      : filePath
+        ? Lang.TypeScript
+        : source.includes("</") || source.includes("/>")
+          ? Lang.Tsx
+          : Lang.TypeScript;
   const root = parse(lang, source).root();
 
   const edits: Edit[] = [];
