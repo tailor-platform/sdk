@@ -207,23 +207,23 @@ Wait points allow a workflow job to suspend execution and wait for an external s
 
 ### Defining Wait Points
 
-Use `defineWaitPoint` to declare a single typed wait point:
+Use `createWaitPoint` to create a single typed wait point:
 
 ```typescript
-import { defineWaitPoint } from "@tailor-platform/sdk";
+import { createWaitPoint } from "@tailor-platform/sdk";
 
-export const approval = defineWaitPoint<
+export const approval = createWaitPoint<
   { message: string; requestId: string },
   { approved: boolean }
 >("approval");
 ```
 
-For multiple wait points, use `defineWaitPoints` with a builder callback. Property names become wait point keys, and JSDoc on each property is preserved in IDE autocompletion:
+For multiple wait points, use `createWaitPoints` with a builder callback. Property names become wait point keys, and JSDoc on each property is preserved in IDE autocompletion:
 
 ```typescript
-import { defineWaitPoints } from "@tailor-platform/sdk";
+import { createWaitPoints } from "@tailor-platform/sdk";
 
-export const waitPoints = defineWaitPoints((define) => ({
+export const waitPoints = createWaitPoints((define) => ({
   /** Manager approval step */
   managerApproval: define<{ amount: number }, { approved: boolean }>(),
   /** Finance review step */
@@ -245,9 +245,9 @@ Both must be JsonValue-compatible (plain objects/arrays; no class instances or f
 Call `.wait()` inside a workflow job body to suspend execution:
 
 ```typescript
-import { createWorkflow, createWorkflowJob, defineWaitPoint } from "@tailor-platform/sdk";
+import { createWaitPoint, createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
-export const approval = defineWaitPoint<
+export const approval = createWaitPoint<
   { message: string; requestId: string },
   { approved: boolean }
 >("approval");
