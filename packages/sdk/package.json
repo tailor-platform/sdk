@@ -222,7 +222,7 @@
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.2",
     "@types/semver": "7.7.1",
-    "@typescript/native-preview": "7.0.0-dev.20260620.1",
+    "@typescript/native-preview": "7.0.0-dev.20260621.1",
     "@vitest/coverage-v8": "4.1.9",
     "oxfmt": "0.55.0",
     "oxlint": "1.70.0",
