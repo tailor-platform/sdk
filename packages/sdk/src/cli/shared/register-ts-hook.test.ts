@@ -5,7 +5,6 @@ const nodeModuleMock = vi.hoisted(() => ({
 }));
 
 vi.mock("node:module", () => nodeModuleMock);
-vi.mock("../ts-hook.mjs", () => ({ resolveSync: vi.fn(), loadSync: vi.fn() }));
 
 import { registerTsHook } from "./register-ts-hook";
 
