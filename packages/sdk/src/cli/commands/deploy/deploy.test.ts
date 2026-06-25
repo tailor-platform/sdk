@@ -284,18 +284,77 @@ describe("printPlanResults", () => {
     logSpy.mockRestore();
   });
 
-  test("emits JSON with summary and changes for dry-run --json", () => {
+  test("emits JSON with summary, changes, warnings, and conflicts for dry-run --json", () => {
     using _json = jsonMode();
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
     const summary = printPlanResults(emptyResults(), { dryRun: true });
 
     expect(outSpy).toHaveBeenCalledOnce();
-    const payload = outSpy.mock.calls[0]?.[0] as { summary: unknown; changes: unknown[] };
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: unknown;
+      changes: unknown[];
+      warnings: unknown[];
+      conflicts: unknown[];
+    };
     expect(payload).toHaveProperty("summary");
     expect(payload).toHaveProperty("changes");
+    expect(payload).toHaveProperty("warnings");
+    expect(payload).toHaveProperty("conflicts");
     expect(Array.isArray(payload.changes)).toBe(true);
+    expect(Array.isArray(payload.warnings)).toBe(true);
+    expect(Array.isArray(payload.conflicts)).toBe(true);
     expect(summary.create).toBe(0);
+
+    outSpy.mockRestore();
+  });
+
+  test("includes unmanaged resources and skipped secrets in warnings", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    const results = emptyResults();
+    results.tailorDB.unmanaged = [{ resourceType: "tailorDB", resourceName: "OldType" }];
+    results.secretManager.skippedSecrets = ["DB_PASSWORD"];
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      warnings: Array<{ type: string; resourceType: string; name: string }>;
+    };
+    expect(payload.warnings).toContainEqual({
+      type: "unmanaged",
+      resourceType: "tailorDB",
+      name: "OldType",
+    });
+    expect(payload.warnings).toContainEqual({
+      type: "skippedSecret",
+      resourceType: "secret",
+      name: "DB_PASSWORD",
+    });
+
+    outSpy.mockRestore();
+  });
+
+  test("includes owner conflicts in conflicts", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    const results = emptyResults();
+    results.tailorDB.conflicts = [
+      { resourceType: "tailorDB", resourceName: "User", currentOwner: "other-app" },
+    ];
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      conflicts: Array<{ resourceType: string; name: string; currentOwner: string }>;
+    };
+    expect(payload.conflicts).toContainEqual({
+      resourceType: "tailorDB",
+      name: "User",
+      currentOwner: "other-app",
+    });
 
     outSpy.mockRestore();
   });

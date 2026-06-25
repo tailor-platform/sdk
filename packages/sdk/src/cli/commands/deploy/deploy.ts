@@ -344,7 +344,46 @@ export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions):
       labels,
       namespace,
     }));
-    logger.out({ summary, changes });
+    const warnings = [
+      ...[
+        ...results.functionRegistry.unmanaged,
+        ...results.tailorDB.unmanaged,
+        ...results.staticWebsite.unmanaged,
+        ...results.aiGateway.unmanaged,
+        ...results.idp.unmanaged,
+        ...results.auth.unmanaged,
+        ...results.pipeline.unmanaged,
+        ...results.executor.unmanaged,
+        ...results.workflow.unmanaged,
+        ...results.secretManager.unmanaged,
+      ].map(({ resourceType, resourceName }) => ({
+        type: "unmanaged" as const,
+        resourceType,
+        name: resourceName,
+      })),
+      ...results.secretManager.skippedSecrets.map((name) => ({
+        type: "skippedSecret" as const,
+        resourceType: "secret",
+        name,
+      })),
+    ];
+    const conflicts = [
+      ...results.functionRegistry.conflicts,
+      ...results.tailorDB.conflicts,
+      ...results.staticWebsite.conflicts,
+      ...results.aiGateway.conflicts,
+      ...results.idp.conflicts,
+      ...results.auth.conflicts,
+      ...results.pipeline.conflicts,
+      ...results.executor.conflicts,
+      ...results.workflow.conflicts,
+      ...results.secretManager.conflicts,
+    ].map(({ resourceType, resourceName, currentOwner }) => ({
+      resourceType,
+      name: resourceName,
+      currentOwner,
+    }));
+    logger.out({ summary, changes, warnings, conflicts });
     return summary;
   }
 
