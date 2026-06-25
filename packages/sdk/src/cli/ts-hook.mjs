@@ -30,8 +30,8 @@ function collectPathsInto(out, configFilePath, content, visited) {
     try {
       const sub = JSON.parse(readFileSync(extendsPath, "utf-8"));
       collectPathsInto(out, extendsPath, sub, visited);
-    } catch {
-      // extends file not readable; skip
+    } catch (e) {
+      if (e?.code !== "ENOENT") throw e;
     }
   }
 
@@ -49,7 +49,7 @@ function collectPathsInto(out, configFilePath, content, visited) {
 function loadTsconfigPaths(startDir) {
   if (tsconfigPathsCache.has(startDir)) return tsconfigPathsCache.get(startDir);
 
-  const paths = {};
+  const paths = Object.create(null);
   let dir = startDir;
   let prev = "";
   while (dir !== prev) {
@@ -58,8 +58,8 @@ function loadTsconfigPaths(startDir) {
       const content = JSON.parse(readFileSync(configFilePath, "utf-8"));
       collectPathsInto(paths, configFilePath, content, new Set());
       break;
-    } catch {
-      // tsconfig.json not found in this directory; walk up
+    } catch (e) {
+      if (e?.code !== "ENOENT") throw e;
     }
     prev = dir;
     dir = dirname(dir);
