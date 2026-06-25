@@ -35,7 +35,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Login as machine user
-        run: pnpm tailor-sdk login --machine-user
+        run: pnpm tailor login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
@@ -43,7 +43,7 @@ jobs:
       - name: List e2e workspaces
         working-directory: packages/sdk
         run: |
-          pnpm --silent tailor-sdk workspace list --json > /tmp/workspaces.json
+          pnpm --silent tailor workspace list --json > /tmp/workspaces.json
           jq -r '.[] | select(.name | test("^(e2e-ws-|template-e2e-|sdk-ci-)")) | "\(.id)\t\(.name)"' \
             /tmp/workspaces.json > /tmp/e2e-workspaces.tsv
           echo "e2e workspace candidates:"
@@ -91,7 +91,7 @@ jobs:
                   echo "dry     $name  (run $run_id status=$status)"
                 else
                   echo "delete  $name  (run $run_id status=$status)"
-                  if pnpm --silent tailor-sdk workspace delete --workspace-id "$id" --yes; then
+                  if pnpm --silent tailor workspace delete --workspace-id "$id" --yes; then
                     deleted=$((deleted + 1))
                   else
                     failed=$((failed + 1))

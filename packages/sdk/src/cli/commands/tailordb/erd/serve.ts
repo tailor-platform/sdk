@@ -16,7 +16,7 @@ import { prepareErdBuildsFromContext, type ErdBuildResult } from "./export";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
 import { initErdCommand } from "./utils";
 
-const DEFAULT_ERD_BASE_DIR = ".tailor-sdk/erd";
+const DEFAULT_ERD_BASE_DIR = ".tailor/erd";
 const LOCAL_HOST = "127.0.0.1";
 
 interface StaticServerResult {
@@ -56,7 +56,7 @@ interface OpenStaticFileResult {
 const GLOB_CHARS = /[*?[\]{}()!+@]/;
 
 function formatServeCommand(namespace: string): string {
-  return `tailor-sdk tailordb erd serve --namespace ${namespace}`;
+  return `tailor tailordb erd serve --namespace ${namespace}`;
 }
 
 function getCacheControl(filePath: string): string {

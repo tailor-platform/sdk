@@ -34,7 +34,7 @@ function isFieldDefinition(value: unknown): value is FieldDefinition {
  * Generate TypeScript files for plugin-generated types.
  * These files export the type definition and can be imported by executor files.
  * @param types - Array of plugin type information
- * @param outputDir - Base output directory (e.g., .tailor-sdk)
+ * @param outputDir - Base output directory (e.g., .tailor)
  * @returns Generation result with file paths
  */
 export function generatePluginTypeFiles(

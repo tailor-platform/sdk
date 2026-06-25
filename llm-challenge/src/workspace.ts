@@ -43,7 +43,7 @@ const GITIGNORE_PATTERNS = [
   ".pnpm-store/",
   ".pnpm-home/",
   ".cache/",
-  ".tailor-sdk/cache/",
+  ".tailor/cache/",
 ];
 
 export async function prepareWorkspace(options: {
@@ -82,8 +82,8 @@ export function profileForProblem(
 
 export async function pruneWorkspaceDeps(worktreePath: string): Promise<void> {
   await Promise.all(
-    ["node_modules", ".pnpm-store", ".pnpm-home", ".cache", ".turbo", ".tailor-sdk/cache"].map(
-      (name) => fs.rm(path.join(worktreePath, name), { recursive: true, force: true }),
+    ["node_modules", ".pnpm-store", ".pnpm-home", ".cache", ".turbo", ".tailor/cache"].map((name) =>
+      fs.rm(path.join(worktreePath, name), { recursive: true, force: true }),
     ),
   );
 }

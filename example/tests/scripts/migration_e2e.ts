@@ -33,7 +33,7 @@ const tailorSdkBin = path.resolve(
   exampleDir,
   "node_modules",
   ".bin",
-  process.platform === "win32" ? "tailor-sdk.cmd" : "tailor-sdk",
+  process.platform === "win32" ? "tailor.cmd" : "tailor",
 );
 
 const runTailorSdk = (args: string[]) => {

@@ -170,8 +170,8 @@ export function checkGitHub(options: CheckGitHubOptions): void {
   const lock = readLock(outputDir);
   if (!lock || lock.targets.length === 0) {
     throw new Error(
-      "No managed workflows found (.github/tailor-sdk.lock is missing or empty). " +
-        "Run `tailor-sdk setup` first.",
+      "No managed workflows found (.github/tailor.lock is missing or empty). " +
+        "Run `tailor setup` first.",
     );
   }
 
@@ -208,6 +208,6 @@ export function checkGitHub(options: CheckGitHubOptions): void {
   }
   throw new Error(
     `Detected ${String(findings.length)} drift finding(s) across ${String(count)} target(s). ` +
-      "Re-run `tailor-sdk setup` to regenerate, or address each finding above.",
+      "Re-run `tailor setup` to regenerate, or address each finding above.",
   );
 }

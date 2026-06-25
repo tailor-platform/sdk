@@ -53,7 +53,7 @@ if (!isNativeTypeScriptRuntime()) {
 initCrashReporting();
 
 const packageJson = await readPackageJson();
-const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk";
+const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor";
 
 export const mainCommand = withCompletionCommand(
   defineCommand({

@@ -484,7 +484,7 @@ export async function loadMachineUserName(
         code: "PROFILE_MACHINE_USER_OVERRIDE_DENIED",
         message: `Profile "${profile}" denies overriding the machine user.`,
         details: `This profile fixes the machine user to "${entry.machine_user}" for application-data commands.`,
-        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run 'tailor-sdk profile update ${profile} --machine-user-override allow'.`,
+        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run 'tailor profile update ${profile} --machine-user-override allow'.`,
       });
     }
     return entry.machine_user;
@@ -527,7 +527,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
       // error
       throw new Error(ml`
         Tailor Platform token not found.
-        Please specify token via TAILOR_PLATFORM_TOKEN environment variable or login using 'tailor-sdk login' command.
+        Please specify token via TAILOR_PLATFORM_TOKEN environment variable or login using 'tailor login' command.
       `);
     }
     user = u;
@@ -551,7 +551,7 @@ export async function resolveTokens(
     if (!tokens) {
       throw new Error(ml`
         Credentials not found in OS keyring for "${user}".
-        Please run 'tailor-sdk login' and try again.
+        Please run 'tailor login' and try again.
       `);
     }
     return tokens;
@@ -662,7 +662,7 @@ export async function fetchLatestToken(
   if (!storedUser) {
     throw new Error(ml`
       User "${user}" not found.
-      Please verify your user name and login using 'tailor-sdk login' command.
+      Please verify your user name and login using 'tailor login' command.
     `);
   }
 
@@ -670,7 +670,7 @@ export async function fetchLatestToken(
   if (!userEntry) {
     throw new Error(ml`
       User "${user}" not found.
-      Please verify your user name and login using 'tailor-sdk login' command.
+      Please verify your user name and login using 'tailor login' command.
     `);
   }
 
@@ -683,7 +683,7 @@ export async function fetchLatestToken(
   if (!tokens.refreshToken) {
     throw new Error(ml`
       Token expired.
-      Please run 'tailor-sdk login' and try again.
+      Please run 'tailor login' and try again.
     `);
   }
 
@@ -698,7 +698,7 @@ export async function fetchLatestToken(
   } catch {
     throw new Error(ml`
       Failed to refresh token. Your session may have expired.
-      Please run 'tailor-sdk login' and try again.
+      Please run 'tailor login' and try again.
     `);
   }
 

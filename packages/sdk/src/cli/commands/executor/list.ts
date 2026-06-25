@@ -81,7 +81,7 @@ export const listCommand = defineAppCommand({
     if (!jsonOutput) {
       const hasWebhook = executors.some((e) => e.triggerType === "webhook");
       if (hasWebhook) {
-        logger.info("To see webhook URLs, run: tailor-sdk executor webhook list");
+        logger.info("To see webhook URLs, run: tailor executor webhook list");
       }
     }
   },

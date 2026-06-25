@@ -25,10 +25,10 @@ Commands for managing and deploying static websites.
 
 ```bash
 # Deploy a static website from the dist directory
-tailor-sdk staticwebsite deploy --name my-website --dir ./dist
+tailor staticwebsite deploy --name my-website --dir ./dist
 
 # Deploy with workspace ID
-tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
+tailor staticwebsite deploy -n my-website -d ./dist -w ws_abc123
 ```
 
 **Notes:**
@@ -44,10 +44,10 @@ tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
 
 ```bash
 # List all static websites
-tailor-sdk staticwebsite list
+tailor staticwebsite list
 
 # List with JSON output
-tailor-sdk staticwebsite list --json
+tailor staticwebsite list --json
 ```
 
 {{politty:command:staticwebsite domain}}
@@ -57,8 +57,8 @@ tailor-sdk staticwebsite list --json
 
 ```bash
 # Get details of a static website
-tailor-sdk staticwebsite get my-website
+tailor staticwebsite get my-website
 
 # Get with JSON output
-tailor-sdk staticwebsite get my-website --json
+tailor staticwebsite get my-website --json
 ```

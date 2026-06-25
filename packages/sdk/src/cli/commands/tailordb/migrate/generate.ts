@@ -303,7 +303,7 @@ async function generateDiffFromSnapshot(
     }
     logger.newline();
     logger.log("A migration script was generated for breaking changes.");
-    logger.log("Please review and edit the script before running 'tailor-sdk deploy'.");
+    logger.log("Please review and edit the script before running 'tailor deploy'.");
 
     const editor = getConfiguredEditorCommand();
     if (!editor) {
@@ -330,7 +330,7 @@ async function generateDiffFromSnapshot(
       `Data loss is possible for this migration but no script was generated. To add a custom migrate.ts, run:`,
     );
     logger.log(
-      `  ${styles.bold(`tailor-sdk tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
+      `  ${styles.bold(`tailor tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
     );
   }
 }

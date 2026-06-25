@@ -108,7 +108,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
         const executor = await loadExecutorForFile(filePath);
         if (executor) {
           // Track as plugin executor (plugin ID is extracted from file path)
-          // File path format: .tailor-sdk/plugin/{executor-name}.ts
+          // File path format: .tailor/plugin/{executor-name}.ts
           pluginExecutors.push({
             executor,
             pluginId: "plugin-generated",

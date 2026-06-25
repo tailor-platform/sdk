@@ -9,7 +9,7 @@ Initialize a new project using create-sdk.
 **Usage**
 
 ```
-tailor-sdk init [options] [name]
+tailor init [options] [name]
 ```
 
 **Arguments**
@@ -33,7 +33,7 @@ Generate files using Tailor configuration.
 **Usage**
 
 ```
-tailor-sdk generate [options]
+tailor generate [options]
 ```
 
 **Options**
@@ -52,7 +52,7 @@ Deploy your application by applying the Tailor configuration.
 **Usage**
 
 ```
-tailor-sdk deploy [options]
+tailor deploy [options]
 ```
 
 **Options**
@@ -120,7 +120,7 @@ Remove all resources managed by the application from the workspace.
 **Usage**
 
 ```
-tailor-sdk remove [options]
+tailor remove [options]
 ```
 
 **Options**
@@ -141,7 +141,7 @@ Show information about the deployed application.
 **Usage**
 
 ```
-tailor-sdk show [options]
+tailor show [options]
 ```
 
 **Options**
@@ -161,7 +161,7 @@ Open Tailor Platform Console.
 **Usage**
 
 ```
-tailor-sdk open [options]
+tailor open [options]
 ```
 
 **Options**
@@ -181,7 +181,7 @@ Call Tailor Platform API endpoints directly.
 **Usage**
 
 ```
-tailor-sdk api [options] [command] <endpoint>
+tailor api [options] [command] <endpoint>
 ```
 
 **Arguments**
@@ -214,30 +214,30 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Call an endpoint; workspaceId is auto-injected.**
 
 ```bash
-$ tailor-sdk api GetApplication -b '{"applicationName":"app-1"}'
+$ tailor api GetApplication -b '{"applicationName":"app-1"}'
 ```
 
 **Same as above, using --field instead of --body.**
 
 ```bash
-$ tailor-sdk api GetApplication -f applicationName=app-1
+$ tailor api GetApplication -f applicationName=app-1
 ```
 
 **List all invocable OperatorService methods.**
 
 ```bash
-$ tailor-sdk api list
+$ tailor api list
 ```
 
 **Show the input message tree for an endpoint.**
 
 ```bash
-$ tailor-sdk api inspect GetApplication
+$ tailor api inspect GetApplication
 ```
 
 **Notes**
 
-Use `tailor-sdk api list` to enumerate invocable methods and `tailor-sdk api inspect <endpoint>` to print an endpoint's input message tree (combine with `--json` for machine-readable output).
+Use `tailor api list` to enumerate invocable methods and `tailor api inspect <endpoint>` to print an endpoint's input message tree (combine with `--json` for machine-readable output).
 
 The request body is inferred from the target endpoint's request schema, and commonly required fields are auto-injected so they can be omitted from `--body`:
 
@@ -257,7 +257,7 @@ Print the input message tree of an OperatorService endpoint.
 **Usage**
 
 ```
-tailor-sdk api inspect <endpoint>
+tailor api inspect <endpoint>
 ```
 
 **Arguments**
@@ -273,18 +273,18 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Show fields of GetApplicationRequest.**
 
 ```bash
-$ tailor-sdk api inspect GetApplication
+$ tailor api inspect GetApplication
 ```
 
 **Inspect a deeply nested input with `(oneof config)` annotations.**
 
 ```bash
-$ tailor-sdk api inspect CreateExecutorExecutor
+$ tailor api inspect CreateExecutorExecutor
 ```
 
 **Notes**
 
-Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor-sdk api list` to discover endpoint names.
+Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor api list` to discover endpoint names.
 
 ### api list
 
@@ -293,7 +293,7 @@ List all invocable OperatorService methods.
 **Usage**
 
 ```
-tailor-sdk api list
+tailor api list
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.

@@ -164,7 +164,7 @@ export function generateMigrationScript(diff: MigrationDiff): string {
  * Migration script for ${diff.namespace}
  *
  * This script runs between the Pre-migration and Post-migration phases of
- * 'tailor-sdk deploy'. Use it to transform existing data so that the schema
+ * 'tailor deploy'. Use it to transform existing data so that the schema
  * change can complete safely (for breaking changes, this is hard-required;
  * for warning-tier changes it is optional). Edit this file to implement
  * your data migration logic.

@@ -9,7 +9,7 @@ describe("resolveBundledSkillsDir", () => {
     expect(dir.endsWith("/agent-skills")).toBe(true);
     expect(existsSync(dir)).toBe(true);
     expect(statSync(dir).isDirectory()).toBe(true);
-    expect(existsSync(resolve(dir, "tailor-sdk", "SKILL.md"))).toBe(true);
+    expect(existsSync(resolve(dir, "tailor", "SKILL.md"))).toBe(true);
   });
 });
 

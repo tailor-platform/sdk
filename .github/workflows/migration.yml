@@ -56,14 +56,14 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Login as machine user
-        run: pnpm tailor-sdk login --machine-user
+        run: pnpm tailor login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Create workspace
         working-directory: example
-        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-migration-${RUN_ID}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor workspace create --name "sdk-ci-migration-${RUN_ID}" --region asia-northeast --json > workspace.json
         env:
           RUN_ID: ${{ github.run_id }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
@@ -83,7 +83,7 @@ jobs:
       - name: Destroy workspace
         if: always()
         working-directory: example
-        run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
+        run: pnpm tailor workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   migration-result:
     name: Migration result

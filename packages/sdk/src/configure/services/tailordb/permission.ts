@@ -251,7 +251,7 @@ type HasAnyCondition<
 /**
  * Type representing a permission condition that combines user attributes, record fields, and literal values using comparison operators.
  *
- * The User type is extended by `tailor.d.ts`, which is automatically generated when running `tailor-sdk generate`.
+ * The User type is extended by `tailor.d.ts`, which is automatically generated when running `tailor generate`.
  * Attributes enabled in the config file's `auth.userProfile.attributes` (or
  * `auth.machineUserAttributes` when userProfile is omitted) become available as types.
  * @example
