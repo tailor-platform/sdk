@@ -1,4 +1,3 @@
-#!/usr/bin/env -S node --experimental-strip-types
 // Verify every public API export has JSDoc.
 //
 // "Public API" is derived from package.json#exports — each `types` entry
