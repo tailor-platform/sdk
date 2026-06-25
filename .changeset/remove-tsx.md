@@ -2,7 +2,7 @@
 "@tailor-platform/sdk": major
 ---
 
-chore: replace tsx with amaro for TypeScript loading
+Minimum Node.js version raised to 22.15.0; TypeScript loading switched from tsx to amaro
 
 Removes `tsx` (which pulled in esbuild's native binaries, ~10.5 MB) from
 `dependencies` and replaces it with `amaro` (~3.8 MB, zero transitive deps).
