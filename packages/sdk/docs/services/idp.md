@@ -207,7 +207,7 @@ defineIdp("my-idp", {
 - `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
 - `requireMfa: true` requires `enableMfa: true`.
 - `enableMfa: true` requires at least one entry in `allowedReturnOrigins`.
-- `enableMfa: true` requires `permission` to be defined and to include an explicit `unenrollMfa` policy (an empty array `[]` to deny is fine).
+- `enableMfa: true` requires `permission` to be defined and to include an explicit `unenrollMfa` policy (an empty array `[]` to deny is fine), unless `gqlOperations.unenrollMfa` is `false` (or `gqlOperations: "query"`, which normalizes to the same), in which case the operation is turned off and the policy may be omitted.
 
 ### gqlOperations
 
