@@ -1052,6 +1052,27 @@ describe("IdPSchema permission tests", () => {
     expect(() => IdPSchema.parse(config)).not.toThrow();
   });
 
+  test("accepts permission omitting unenrollMfa when gqlOperations is the 'query' alias and enableMfa is true", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      userAuthPolicy: {
+        enableMfa: true,
+        allowedReturnOrigins: ["https://app.example.com"],
+      },
+      gqlOperations: "query" as const,
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
   test("accepts permission with explicit empty unenrollMfa when enableMfa is true", () => {
     const config = {
       name: "test-idp",
