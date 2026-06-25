@@ -139,8 +139,13 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  *
  * Collections not validated: idp client, tailorDB gqlPermission, functionRegistry — no
  * buf.validate annotations.
- * Application cors is excluded: static-website URL placeholders are resolved at apply time
- * and a bare cors array carries no constraint that would false-positive when omitted.
+ * Application cors and IdP userAuthPolicy.allowedReturnOrigins receive special
+ * handling: static-website URL placeholders are resolved at apply time, so the
+ * relevant origin/URL constraints would false-positive on `<name>:url` entries
+ * here. Application cors is dropped entirely (no other constraint to lose); IdP
+ * `allowedReturnOrigins` substitutes placeholder entries with a dummy origin so
+ * the per-item regex and the cross-field `enable_mfa requires ≥1 origin` rule
+ * still get exercised on the rest of the payload.
  * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
  * and the map field carries no min_items constraint. Job names are validated separately via
  * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
@@ -238,15 +243,44 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     staticWebsite.customDomainChangeSet.creates as HasRequest[],
   );
 
+  // userAuthPolicy.allowedReturnOrigins: static-website URL placeholders
+  // (`<name>:url`) are resolved at apply time. Substitute them with a dummy
+  // origin so the per-item origin regex passes and the cross-field
+  // `enable_mfa requires ≥1 origin` rule still sees a non-empty list; real
+  // (non-placeholder) entries pass through unchanged.
+  const placeholderOriginReplacement = "https://placeholder.invalid";
+  const substituteIdpReturnOrigins = (item: HasRequest): HasRequest => {
+    const request = item.request as { userAuthPolicy?: Record<string, unknown> };
+    const origins = request.userAuthPolicy?.allowedReturnOrigins;
+    if (!Array.isArray(origins) || origins.length === 0) {
+      return item;
+    }
+    // Match the parser schema's placeholder shape exactly (a static-website
+    // slug followed by `:url`, no path/query/fragment). A broader regex would
+    // mask schema-rejected inputs that should still surface here as
+    // validation errors.
+    const substituted = origins.map((origin) =>
+      typeof origin === "string" && /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url$/.test(origin)
+        ? placeholderOriginReplacement
+        : origin,
+    );
+    return {
+      ...item,
+      request: {
+        ...request,
+        userAuthPolicy: { ...request.userAuthPolicy, allowedReturnOrigins: substituted },
+      },
+    };
+  };
   creates(
     CreateIdPServiceRequestSchema,
     "IdP service",
-    idp.changeSet.service.creates as HasRequest[],
+    (idp.changeSet.service.creates as HasRequest[]).map(substituteIdpReturnOrigins),
   );
   updates(
     UpdateIdPServiceRequestSchema,
     "IdP service",
-    idp.changeSet.service.updates as HasRequest[],
+    (idp.changeSet.service.updates as HasRequest[]).map(substituteIdpReturnOrigins),
   );
 
   // Validate Secret Manager vault/secret names derived from IdP client creates and updates.
