@@ -164,6 +164,60 @@ describe("resolve", () => {
     expect(result).toEqual(resolved);
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
+
+  test("collects paths from same-directory extends (visited key tracks file path, not dir)", async () => {
+    const baseConfig = JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+    });
+    const rootConfig = JSON.stringify({ extends: "./tsconfig.base.json" });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      const p = String(path);
+      if (p.endsWith("tsconfig.base.json")) return baseConfig as unknown as string;
+      if (p.endsWith("tsconfig.json")) return rootConfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///extends-project/tailordb/user.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(notFound("@/tailordb/user"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve(
+      "@/tailordb/user",
+      { parentURL: "file:///extends-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
+
+  test("prefers more specific wildcard alias over less specific", async () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: {
+        baseUrl: ".",
+        paths: { "@/*": ["./*"], "@foo/*": ["./foo-pkg/*"] },
+      },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///specificity-project/foo-pkg/bar.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(notFound("@foo/bar"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve(
+      "@foo/bar",
+      { parentURL: "file:///specificity-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    expect(nextResolve).toHaveBeenLastCalledWith(
+      expect.stringContaining("foo-pkg/bar"),
+      expect.anything(),
+    );
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
 });
 
 describe("resolveSync", () => {
