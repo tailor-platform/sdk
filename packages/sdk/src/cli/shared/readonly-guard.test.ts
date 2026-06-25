@@ -37,6 +37,8 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   // (including Create*/Update*/Delete*) and must guard.
   "api/inspect.ts",
   "api/list.ts",
+  // Auth token retrieval (reads/refreshes local credentials only)
+  "auth/token.ts",
   // Auth connections (read-only)
   "authconnection/index.ts",
   "authconnection/list.ts",
@@ -80,6 +82,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "organization/folder/index.ts",
   "organization/folder/get.ts",
   "organization/folder/list.ts",
+  // Plugin discovery (local filesystem listing only)
+  "plugin/index.ts",
+  "plugin/list.ts",
   // Profile management (local config only, never platform state)
   "profile/index.ts",
   "profile/create.ts",

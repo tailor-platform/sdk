@@ -1,5 +1,6 @@
 import { extractFields, isLazyCommand } from "politty";
 import { describe, expect, test, vi } from "vitest";
+import { BUILTIN_COMMAND_NAMES } from "./shared/builtin-commands";
 import { mainCommand } from "./index";
 import type { AnyCommand, ExtractedFields, SubCommandValue } from "politty";
 
@@ -72,5 +73,15 @@ describe("CLI options", () => {
     for (const [name, cmd] of Object.entries(mainCommand.subCommands ?? {})) {
       await walkCommand(cmd, [name]);
     }
+  });
+
+  test("keeps BUILTIN_COMMAND_NAMES in sync with the registered subcommands", () => {
+    // `plugin list` uses BUILTIN_COMMAND_NAMES (a leaf module, to avoid an
+    // import cycle) to flag shadowed plugins. Exclude the wrapper-added
+    // `completion` command and any internal `__`-prefixed commands.
+    const registered = Object.keys(mainCommand.subCommands ?? {}).filter(
+      (name) => !name.startsWith("__") && name !== "completion",
+    );
+    expect(new Set(registered)).toEqual(new Set(BUILTIN_COMMAND_NAMES));
   });
 });

@@ -4,6 +4,7 @@ import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
+import { authCommand } from "./commands/auth";
 import { authconnectionCommand } from "./commands/authconnection";
 import { crashReportCommand } from "./commands/crashreport";
 import { deployCommand } from "./commands/deploy";
@@ -17,6 +18,7 @@ import { machineuserCommand } from "./commands/machineuser";
 import { oauth2clientCommand } from "./commands/oauth2client";
 import { openCommand } from "./commands/open";
 import { organizationCommand } from "./commands/organization";
+import { pluginCommand } from "./commands/plugin";
 import { profileCommand } from "./commands/profile";
 import { removeCommand } from "./commands/remove";
 import { secretCommand } from "./commands/secret";
@@ -35,6 +37,7 @@ import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
+import { dispatchPlugin } from "./shared/plugin";
 import { registerTsHook } from "./shared/register-ts-hook";
 
 await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
@@ -53,8 +56,11 @@ export const mainCommand = withCompletionCommand(
     name: cliName,
     description:
       packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
+    notes: `An unknown subcommand is dispatched to an external plugin executable named \`${cliName}-<name>\` (found on your PATH or in node_modules/.bin), similar to \`gh\` extensions.
+Run \`${cliName} plugin list\` to see which plugins are installed and where they resolve from.`,
     subCommands: {
       api: apiCommand,
+      auth: authCommand,
       authconnection: authconnectionCommand,
       crashreport: crashReportCommand,
       deploy: deployCommand,
@@ -68,6 +74,7 @@ export const mainCommand = withCompletionCommand(
       oauth2client: oauth2clientCommand,
       open: openCommand,
       organization: organizationCommand,
+      plugin: pluginCommand,
       profile: profileCommand,
       query: queryCommand,
       remove: removeCommand,
@@ -90,6 +97,16 @@ runMain(mainCommand, {
   // strip unknown keys
   globalArgs: z.object(commonArgs),
   displayErrors: false,
+  // CLI plugin dispatch: an unknown subcommand at any level execs the external
+  // `tailor-<path...>-<name>` binary, forwarding args and injecting context.
+  onUnknownSubcommand: ({ commandPath, name, args }) =>
+    dispatchPlugin({
+      commandPath,
+      name,
+      args,
+      cliName,
+      profile: process.env.TAILOR_PLATFORM_PROFILE,
+    }),
   cleanup: async ({ error }) => {
     if (error) {
       if (isCLIError(error)) {
