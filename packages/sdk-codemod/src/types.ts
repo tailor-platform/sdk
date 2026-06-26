@@ -28,6 +28,8 @@ export interface CodemodPackage {
   since: string;
   /** Target version this codemod upgrades to (semver, exclusive upper bound) */
   until: string;
+  /** Earliest prerelease target that should apply this codemod before `until` is stable. */
+  prereleaseUntil?: string;
   /**
    * Path to the jssg transform script relative to the codemods root. Omit for a
    * codemod-less ("manual") migration that ships only guidance — `prompt`,

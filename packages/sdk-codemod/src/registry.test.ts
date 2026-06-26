@@ -21,6 +21,14 @@ describe("getApplicableCodemods", () => {
     expect(getApplicableCodemods("1.0.0", "1.5.0")).toEqual([]);
   });
 
+  test("uses each codemod's prerelease boundary", () => {
+    const ids = getApplicableCodemods("1.67.1", "2.0.0-next.1").map((codemod) => codemod.id);
+
+    expect(ids).toContain("v2/test-run-arg-input");
+    expect(ids).not.toContain("v2/execute-script-arg");
+    expect(ids).not.toContain("v2/principal-unify");
+  });
+
   test("returns empty when the target prerelease is before the codemod boundary", () => {
     expect(getApplicableCodemods("1.67.1", "1.99.0-next.1")).toEqual([]);
   });
