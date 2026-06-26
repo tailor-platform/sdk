@@ -191,6 +191,7 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("id: tailor-setup-base-node");
     expect(content).toContain("id: tailor-setup-base-bun");
     expect(content).toContain("id: tailor-install-base");
+    expect(content).toContain("id: tailor-restore-head-setup");
     expect(content).toContain("node-version-file: .tailor-erd-base/package.json");
     expect(content).toContain("working-directory: .tailor-erd-base");
     expect(content).toContain('base_package_manager="$(');
@@ -231,6 +232,7 @@ describe("renderBranchWorkflow", () => {
         "tailor-erd-preview/tailor-setup-base-node",
         "tailor-erd-preview/tailor-setup-base-bun",
         "tailor-erd-preview/tailor-install-base",
+        "tailor-erd-preview/tailor-restore-head-setup",
         "tailor-erd-preview/tailor-build-erd-preview",
         "tailor-erd-preview/tailor-upload-erd-viewer",
         "tailor-erd-preview/tailor-upload-erd-diff",
@@ -246,7 +248,7 @@ describe("renderBranchWorkflow", () => {
       erdPreview: { namespaces: ["tailordb"] },
     });
     const start = content.indexOf("id: tailor-detect-base-package-manager");
-    const end = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-restore-head-setup");
     const baseSetup = content.slice(start, end);
 
     expect(start).toBeGreaterThanOrEqual(0);
@@ -266,6 +268,23 @@ describe("renderBranchWorkflow", () => {
     expect(baseSetup).toContain("npm ci");
     expect(baseSetup).toContain("yarn install --frozen-lockfile");
     expect(baseSetup).toContain("bun install --frozen-lockfile");
+  });
+
+  test("restores the head setup after installing ERD base dependencies", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const installBase = content.indexOf("id: tailor-install-base");
+    const restoreHead = content.indexOf("id: tailor-restore-head-setup");
+    const buildPreview = content.indexOf("id: tailor-build-erd-preview");
+    const restoreStep = content.slice(restoreHead, buildPreview);
+
+    expect(installBase).toBeGreaterThanOrEqual(0);
+    expect(restoreHead).toBeGreaterThan(installBase);
+    expect(buildPreview).toBeGreaterThan(restoreHead);
+    expect(restoreStep).toContain("uses: tailor-platform/actions/setup@");
+    expect(restoreStep).toContain("package-manager: pnpm");
   });
 
   test("runs ERD base export through the head SDK toolchain", () => {

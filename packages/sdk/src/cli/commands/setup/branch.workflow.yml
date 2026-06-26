@@ -243,6 +243,10 @@ jobs:
               exit 1
               ;;
           esac
+      - id: tailor-restore-head-setup
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
       - id: tailor-build-erd-preview
         shell: bash
         env:
