@@ -27,7 +27,7 @@ export const switchCommand = defineAppCommand({
 
     if (args.user.includes("|")) {
       throw new Error(
-        `User "${args.user}" looks like a platform-scoped token key. Pass the user name without the platform URL and select the platform with PLATFORM_URL or a profile.`,
+        `User "${args.user}" looks like a platform-scoped token key. Pass the user name without the platform URL and select the platform with TAILOR_PLATFORM_URL or a profile.`,
       );
     }
 

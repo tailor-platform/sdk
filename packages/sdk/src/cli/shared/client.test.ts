@@ -75,7 +75,7 @@ describe("getConsoleBaseUrl", () => {
   });
 
   test("infers the Console URL from profile platform URL before using env console URL", () => {
-    vi.stubEnv("PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
 
     expect(getConsoleBaseUrl({ platformUrl: "https://api.dev.tailor.tech" })).toBe(
       "https://console.dev.tailor.tech",

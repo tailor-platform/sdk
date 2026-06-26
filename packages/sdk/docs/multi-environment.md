@@ -28,19 +28,19 @@ Profiles are created with `write` permission by default. The production profile 
 If a profile targets a non-default Tailor Platform API, save that connection on the profile as well. User login tokens are stored per Platform URL, so you can log in once for each Platform and then switch with only the profile:
 
 ```bash
-export PLATFORM_URL=<platform-api-url>
-export PLATFORM_OAUTH2_CLIENT_ID=<oauth2-client-id>
-export PLATFORM_CONSOLE_URL=<console-url>
+export TAILOR_PLATFORM_URL=<platform-api-url>
+export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=<oauth2-client-id>
+export TAILOR_PLATFORM_CONSOLE_URL=<console-url>
 
 tailor-sdk login
 tailor-sdk profile create development \
   -u you@example.com \
   -w <development-workspace-id> \
-  --platform-url "$PLATFORM_URL" \
-  --oauth2-client-id "$PLATFORM_OAUTH2_CLIENT_ID" \
-  --console-url "$PLATFORM_CONSOLE_URL"
+  --platform-url "$TAILOR_PLATFORM_URL" \
+  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
+  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"
 
-unset PLATFORM_URL PLATFORM_OAUTH2_CLIENT_ID PLATFORM_CONSOLE_URL
+unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL
 tailor-sdk deploy -p development
 tailor-sdk open -p development
 ```

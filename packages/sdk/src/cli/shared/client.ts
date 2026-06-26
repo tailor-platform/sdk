@@ -40,14 +40,14 @@ export function normalizeBaseUrl(value: string): string {
 
 export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
   const effective = {
-    ...((config.platformUrl ?? process.env.PLATFORM_URL)
-      ? { platformUrl: config.platformUrl ?? process.env.PLATFORM_URL }
+    ...((config.platformUrl ?? process.env.TAILOR_PLATFORM_URL)
+      ? { platformUrl: config.platformUrl ?? process.env.TAILOR_PLATFORM_URL }
       : {}),
-    ...((config.oauth2ClientId ?? process.env.PLATFORM_OAUTH2_CLIENT_ID)
-      ? { oauth2ClientId: config.oauth2ClientId ?? process.env.PLATFORM_OAUTH2_CLIENT_ID }
+    ...((config.oauth2ClientId ?? process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID)
+      ? { oauth2ClientId: config.oauth2ClientId ?? process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID }
       : {}),
-    ...((config.consoleUrl ?? process.env.PLATFORM_CONSOLE_URL)
-      ? { consoleUrl: config.consoleUrl ?? process.env.PLATFORM_CONSOLE_URL }
+    ...((config.consoleUrl ?? process.env.TAILOR_PLATFORM_CONSOLE_URL)
+      ? { consoleUrl: config.consoleUrl ?? process.env.TAILOR_PLATFORM_CONSOLE_URL }
       : {}),
   };
   return Object.keys(effective).length > 0 ? effective : undefined;
@@ -67,11 +67,15 @@ function getPlatformConfigForToken(accessToken: string): PlatformClientConfig | 
 }
 
 export function getPlatformBaseUrl(config: PlatformClientConfig = {}) {
-  return normalizeBaseUrl(config.platformUrl ?? process.env.PLATFORM_URL ?? defaultPlatformBaseUrl);
+  return normalizeBaseUrl(
+    config.platformUrl ?? process.env.TAILOR_PLATFORM_URL ?? defaultPlatformBaseUrl,
+  );
 }
 
 export function getOAuth2ClientId(config: PlatformClientConfig = {}) {
-  return config.oauth2ClientId ?? process.env.PLATFORM_OAUTH2_CLIENT_ID ?? defaultOAuth2ClientId;
+  return (
+    config.oauth2ClientId ?? process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID ?? defaultOAuth2ClientId
+  );
 }
 
 function inferConsoleBaseUrl(platformBaseUrl: string) {
@@ -86,7 +90,8 @@ function inferConsoleBaseUrl(platformBaseUrl: string) {
 export function getConsoleBaseUrl(config: PlatformClientConfig = {}) {
   if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
   if (config.platformUrl) return inferConsoleBaseUrl(config.platformUrl);
-  if (process.env.PLATFORM_CONSOLE_URL) return normalizeBaseUrl(process.env.PLATFORM_CONSOLE_URL);
+  if (process.env.TAILOR_PLATFORM_CONSOLE_URL)
+    return normalizeBaseUrl(process.env.TAILOR_PLATFORM_CONSOLE_URL);
   return inferConsoleBaseUrl(getPlatformBaseUrl(config));
 }
 

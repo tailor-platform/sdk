@@ -163,9 +163,9 @@ function platformUserKey(user: string, config?: PlatformClientConfig): string {
 }
 
 function canUseLegacyUserKey(platformUrl: string): boolean {
-  if (process.env.PLATFORM_URL === undefined) return false;
+  if (process.env.TAILOR_PLATFORM_URL === undefined) return false;
   try {
-    return normalizeBaseUrl(process.env.PLATFORM_URL) === platformUrl;
+    return normalizeBaseUrl(process.env.TAILOR_PLATFORM_URL) === platformUrl;
   } catch {
     return false;
   }

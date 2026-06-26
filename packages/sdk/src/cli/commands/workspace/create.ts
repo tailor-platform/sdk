@@ -61,8 +61,9 @@ const validateRegion = async (region: string, client: OperatorClient) => {
 
 function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
   const platformUrl = getPlatformBaseUrl(platformConfig);
-  const hasOAuth2ClientId = platformConfig?.oauth2ClientId || process.env.PLATFORM_OAUTH2_CLIENT_ID;
-  const hasConsoleUrl = platformConfig?.consoleUrl || process.env.PLATFORM_CONSOLE_URL;
+  const hasOAuth2ClientId =
+    platformConfig?.oauth2ClientId || process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID;
+  const hasConsoleUrl = platformConfig?.consoleUrl || process.env.TAILOR_PLATFORM_CONSOLE_URL;
 
   return {
     ...(platformUrl !== normalizeBaseUrl(defaultPlatformBaseUrl)

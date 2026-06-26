@@ -163,11 +163,11 @@ describe("workspace create --permission", () => {
     });
   });
 
-  test("creates a profile for a user whose token is scoped to PLATFORM_URL", async () => {
+  test("creates a profile for a user whose token is scoped to TAILOR_PLATFORM_URL", async () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
-    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
-    vi.stubEnv("PLATFORM_CONSOLE_URL", "https://console.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",

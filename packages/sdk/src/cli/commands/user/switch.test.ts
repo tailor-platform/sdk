@@ -55,8 +55,8 @@ describe("user switch", () => {
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
-  test("stores the bare user when switching to a PLATFORM_URL-scoped token", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+  test("stores the bare user when switching to a TAILOR_PLATFORM_URL-scoped token", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
 
     const result = await runCommand(switchCommand, ["u@example.com"]);
 

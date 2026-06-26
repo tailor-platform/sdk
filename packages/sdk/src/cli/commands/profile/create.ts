@@ -38,15 +38,15 @@ export const createCommand = defineAppCommand({
       }),
       "platform-url": arg(z.url().optional(), {
         description: "Platform API base URL for this profile.",
-        env: "PLATFORM_URL",
+        env: "TAILOR_PLATFORM_URL",
       }),
       "oauth2-client-id": arg(z.string().optional(), {
         description: "OAuth2 client ID for logging in to this profile's platform.",
-        env: "PLATFORM_OAUTH2_CLIENT_ID",
+        env: "TAILOR_PLATFORM_OAUTH2_CLIENT_ID",
       }),
       "console-url": arg(z.url().optional(), {
         description: "Console base URL for this profile.",
-        env: "PLATFORM_CONSOLE_URL",
+        env: "TAILOR_PLATFORM_CONSOLE_URL",
       }),
     })
     .strict(),

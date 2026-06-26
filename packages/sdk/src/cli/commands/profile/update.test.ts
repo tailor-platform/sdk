@@ -88,8 +88,8 @@ describe("profile update --permission", () => {
     expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
   });
 
-  test("does not treat PLATFORM_URL as an implicit update value", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+  test("does not treat TAILOR_PLATFORM_URL as an implicit update value", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     using _logger = silenceLogger("out", "success");
 
     await runCommand(updateCommand, ["rw", "--permission", "read"]);
@@ -201,9 +201,9 @@ describe("profile update --platform", () => {
     vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    vi.stubEnv("PLATFORM_URL", undefined);
-    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", undefined);
-    vi.stubEnv("PLATFORM_CONSOLE_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", undefined);
     vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
     vi.mocked(initOperatorClient).mockResolvedValue({

@@ -170,7 +170,7 @@ describe("user list", () => {
   });
 
   test("marks the env-selected platform token current when users share an email", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -270,7 +270,7 @@ describe("user list", () => {
 
   test("marks a legacy default token current for an explicit profile platform URL when env matches", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -301,7 +301,7 @@ describe("user list", () => {
 
   test("ignores an invalid env platform URL when an explicit profile token exists", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    vi.stubEnv("PLATFORM_URL", "not a url");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "not a url");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -332,7 +332,7 @@ describe("user list", () => {
 
   test("marks the env-selected token current when the active profile has no platform URL", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",

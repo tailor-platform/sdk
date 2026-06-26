@@ -131,7 +131,7 @@ describe("logout --profile", () => {
   });
 
   test("clears current user when profile logout removes the default token while env selects another platform", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -205,7 +205,7 @@ describe("logout --profile", () => {
     expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
     expect(config.users["https://api.stage.tailor.tech|u@example.com"]).toBeDefined();
 
-    vi.stubEnv("PLATFORM_URL", "https://api.stage.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.stage.tailor.tech");
     await expect(loadAccessToken()).resolves.toBe("stage-access-token");
   });
 
@@ -301,7 +301,7 @@ describe("logout --profile", () => {
   });
 
   test("clears current user when logging out a non-default platform without a profile", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -326,7 +326,7 @@ describe("logout --profile", () => {
   });
 
   test("preserves default login when logging out an env-selected platform", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -356,12 +356,12 @@ describe("logout --profile", () => {
     expect(config.users["u@example.com"]).toBeDefined();
     expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
 
-    vi.stubEnv("PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
     await expect(loadAccessToken()).resolves.toBe("default-access-token");
   });
 
   test("preserves default login when env-selected platform has no stored token", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -384,7 +384,7 @@ describe("logout --profile", () => {
     expect(config.current_user).toBe("u@example.com");
     expect(config.users["u@example.com"]).toBeDefined();
 
-    vi.stubEnv("PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
     await expect(loadAccessToken()).resolves.toBe("default-access-token");
   });
 });

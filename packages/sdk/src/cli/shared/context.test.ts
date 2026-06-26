@@ -516,8 +516,8 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("TAILOR_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    vi.stubEnv("PLATFORM_URL", undefined);
-    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", undefined);
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -681,7 +681,7 @@ describe("loadAccessToken", () => {
     });
 
     test("falls back to a legacy user token for a profile platform URL without persisting it", async () => {
-      vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+      vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -738,7 +738,7 @@ describe("loadAccessToken", () => {
     });
 
     test("does not fall back to an unscoped token for a profile platform URL with invalid env", async () => {
-      vi.stubEnv("PLATFORM_URL", "not a url");
+      vi.stubEnv("TAILOR_PLATFORM_URL", "not a url");
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -766,7 +766,7 @@ describe("loadAccessToken", () => {
     });
 
     test("removes a legacy unscoped token after refreshing it into a scoped platform key", async () => {
-      vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+      vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
       const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
       const refreshedExpiresAt = Date.now() + 3600 * 1000;
       refreshTokenMock.mockResolvedValueOnce({
@@ -890,7 +890,7 @@ describe("saveUserTokens", () => {
 
   beforeEach(() => {
     resetKeyringState();
-    vi.stubEnv("PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -919,7 +919,7 @@ describe("saveUserTokens", () => {
     config.current_user = "testuser";
     writePlatformConfig(config);
 
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     const reloaded = await readPlatformConfig();
 
     expect(reloaded.current_user).toBe("testuser");
@@ -930,8 +930,8 @@ describe("saveUserTokens", () => {
 describe("loadConsoleBaseUrl", () => {
   beforeEach(() => {
     resetKeyringState();
-    vi.stubEnv("PLATFORM_URL", undefined);
-    vi.stubEnv("PLATFORM_CONSOLE_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     writePlatformConfig({
       version: 2,

@@ -72,8 +72,8 @@ describe("user current", () => {
     expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
   });
 
-  test("accepts a current user whose tokens are scoped to PLATFORM_URL", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+  test("accepts a current user whose tokens are scoped to TAILOR_PLATFORM_URL", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
