@@ -9,7 +9,7 @@ Manage functions
 **Usage**
 
 ```
-tailor-sdk function [command]
+tailor function [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -30,7 +30,7 @@ Get a function registry by name
 **Usage**
 
 ```
-tailor-sdk function get [options]
+tailor function get [options]
 ```
 
 **Options**
@@ -50,7 +50,7 @@ List function registries in a workspace
 **Usage**
 
 ```
-tailor-sdk function list [options]
+tailor function list [options]
 ```
 
 **Options**
@@ -71,7 +71,7 @@ List or get function execution logs.
 **Usage**
 
 ```
-tailor-sdk function logs [options] [execution-id]
+tailor function logs [options] [execution-id]
 ```
 
 **Arguments**
@@ -96,25 +96,25 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **List all function execution logs**
 
 ```bash
-$ tailor-sdk function logs
+$ tailor function logs
 ```
 
 **Get execution details with logs**
 
 ```bash
-$ tailor-sdk function logs <execution-id>
+$ tailor function logs <execution-id>
 ```
 
 **Output as JSON**
 
 ```bash
-$ tailor-sdk function logs --json
+$ tailor function logs --json
 ```
 
 **Get execution details as JSON**
 
 ```bash
-$ tailor-sdk function logs <execution-id> --json
+$ tailor function logs <execution-id> --json
 ```
 
 **Notes**
@@ -130,7 +130,7 @@ Run a function on the Tailor Platform server without deploying.
 **Usage**
 
 ```
-tailor-sdk function test-run [options] <file>
+tailor function test-run [options] <file>
 ```
 
 **Arguments**
@@ -157,19 +157,19 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Run a resolver with input arguments**
 
 ```bash
-$ tailor-sdk function test-run resolvers/add.ts --arg '{"a":1,"b":2}'
+$ tailor function test-run resolvers/add.ts --arg '{"a":1,"b":2}'
 ```
 
 **Run a specific workflow job by name**
 
 ```bash
-$ tailor-sdk function test-run workflows/sample.ts --name validate-order
+$ tailor function test-run workflows/sample.ts --name validate-order
 ```
 
 **Run a pre-bundled .js file directly**
 
 ```bash
-$ tailor-sdk function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
+$ tailor function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
 ```
 
 **Notes**

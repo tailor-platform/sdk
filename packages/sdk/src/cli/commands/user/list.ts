@@ -16,7 +16,7 @@ export const listCommand = defineAppCommand({
     if (users.length === 0) {
       logger.info(ml`
         No users found.
-        Please login first using 'tailor-sdk login' command to register a user.
+        Please login first using 'tailor login' command to register a user.
       `);
       if (jsonOutput) {
         logger.out([]);

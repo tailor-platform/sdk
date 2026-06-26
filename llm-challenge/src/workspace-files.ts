@@ -11,7 +11,7 @@ const EXCLUDED_DIRS = new Set([
   ".turbo",
   "node_modules",
 ]);
-const EXCLUDED_PATHS = new Set([".tailor-sdk/cache"]);
+const EXCLUDED_PATHS = new Set([".tailor/cache"]);
 
 /**
  * Recursively list workspace files as posix-style paths relative to

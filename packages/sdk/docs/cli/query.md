@@ -5,7 +5,7 @@ Run SQL/GraphQL query.
 **Usage**
 
 ```
-tailor-sdk query [options]
+tailor query [options]
 ```
 
 **Options**

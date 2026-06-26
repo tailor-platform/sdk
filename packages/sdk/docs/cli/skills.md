@@ -5,25 +5,25 @@ Manage Tailor SDK agent skills.
 **Usage**
 
 ```
-tailor-sdk skills [command]
+tailor skills [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 **Commands**
 
-| Command                             | Description                                                        |
-| ----------------------------------- | ------------------------------------------------------------------ |
-| [`skills install`](#skills-install) | Install the tailor-sdk agent skill from the installed SDK package. |
+| Command                             | Description                                                    |
+| ----------------------------------- | -------------------------------------------------------------- |
+| [`skills install`](#skills-install) | Install the tailor agent skill from the installed SDK package. |
 
 ### skills install
 
-Install the tailor-sdk agent skill from the installed SDK package.
+Install the tailor agent skill from the installed SDK package.
 
 **Usage**
 
 ```
-tailor-sdk skills install [options]
+tailor skills install [options]
 ```
 
 **Options**

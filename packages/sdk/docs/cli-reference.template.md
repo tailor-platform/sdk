@@ -1,11 +1,11 @@
-# tailor-sdk
+# tailor
 
 Tailor Platform SDK - The SDK to work with Tailor Platform
 
 ## Usage
 
 ```bash
-tailor-sdk <command> [options]
+tailor <command> [options]
 ```
 
 ## Global Options
@@ -45,10 +45,10 @@ Both `--env-file` and `--env-file-if-exists` can be specified multiple times and
 
 ```bash
 # Load .env (required) and .env.local (optional, if exists)
-tailor-sdk deploy --env-file .env --env-file-if-exists .env.local
+tailor deploy --env-file .env --env-file-if-exists .env.local
 
 # Load multiple files
-tailor-sdk deploy --env-file .env --env-file .env.production
+tailor deploy --env-file .env --env-file .env.production
 ```
 
 ## Environment Variables

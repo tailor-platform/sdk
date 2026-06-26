@@ -9,7 +9,7 @@ Login to Tailor Platform.
 **Usage**
 
 ```
-tailor-sdk login [options]
+tailor login [options]
 ```
 
 **Options**
@@ -37,7 +37,7 @@ Logout from Tailor Platform.
 **Usage**
 
 ```
-tailor-sdk logout
+tailor logout
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -49,7 +49,7 @@ Manage Tailor Platform users.
 **Usage**
 
 ```
-tailor-sdk user [command]
+tailor user [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -70,7 +70,7 @@ Show current user.
 **Usage**
 
 ```
-tailor-sdk user current
+tailor user current
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -82,7 +82,7 @@ List all users.
 **Usage**
 
 ```
-tailor-sdk user list
+tailor user list
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -94,7 +94,7 @@ Manage personal access tokens.
 **Usage**
 
 ```
-tailor-sdk user pat [command]
+tailor user pat [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -115,7 +115,7 @@ Create a new personal access token.
 **Usage**
 
 ```
-tailor-sdk user pat create [options] <name>
+tailor user pat create [options] <name>
 ```
 
 **Arguments**
@@ -139,7 +139,7 @@ Delete a personal access token.
 **Usage**
 
 ```
-tailor-sdk user pat delete <name>
+tailor user pat delete <name>
 ```
 
 **Arguments**
@@ -157,7 +157,7 @@ List all personal access tokens.
 **Usage**
 
 ```
-tailor-sdk user pat list [options]
+tailor user pat list [options]
 ```
 
 **Options**
@@ -176,7 +176,7 @@ Update a personal access token (delete and recreate).
 **Usage**
 
 ```
-tailor-sdk user pat update [options] <name>
+tailor user pat update [options] <name>
 ```
 
 **Arguments**
@@ -200,7 +200,7 @@ Set current user.
 **Usage**
 
 ```
-tailor-sdk user switch <user>
+tailor user switch <user>
 ```
 
 **Arguments**

@@ -482,7 +482,7 @@ export async function deploy(options?: DeployOptions) {
     }
 
     // Note: the normal apply path intentionally skips writing bundle files to
-    // .tailor-sdk/. Bundles are kept in memory and uploaded directly to the
+    // .tailor/. Bundles are kept in memory and uploaded directly to the
     // function registry. To test a function locally, use `function test-run`
     // with a .ts source file instead of a pre-bundled .js file.
 

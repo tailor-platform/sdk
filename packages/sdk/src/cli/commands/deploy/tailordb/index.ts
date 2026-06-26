@@ -272,7 +272,7 @@ async function validateAndDetectMigrations(
         logger.error("Schema changes detected that are not in migration files:");
         logger.log(formatMigrationCheckResults(migrationResults));
         logger.newline();
-        logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
+        logger.info("Run 'tailor tailordb migration generate' to create migration files.");
         logger.info("Or use '--no-schema-check' to skip this check.");
         throw new Error("Schema migration check failed");
       }
@@ -549,7 +549,7 @@ export async function applyTailorDB(
         ]);
       } catch (error) {
         handleOptionalToRequiredError(error, [
-          "Run 'tailor-sdk tailordb migration generate' to create migration files.",
+          "Run 'tailor tailordb migration generate' to create migration files.",
           "Migration scripts allow you to handle existing data before applying the schema change.",
         ]);
       }
@@ -1933,9 +1933,7 @@ function formatMigrationCheckResults(results: MigrationCheckResult[]): string {
     lines.push(`Namespace: ${result.namespace}`);
 
     if (!result.diff) {
-      lines.push(
-        "  No migration snapshot found. Run 'tailor-sdk tailordb migration generate' first.",
-      );
+      lines.push("  No migration snapshot found. Run 'tailor tailordb migration generate' first.");
     } else {
       lines.push(`  ${formatDiffSummary(result.diff)}`);
       lines.push("");

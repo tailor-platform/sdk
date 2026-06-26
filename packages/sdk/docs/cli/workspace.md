@@ -9,7 +9,7 @@ Manage Tailor Platform workspaces.
 **Usage**
 
 ```
-tailor-sdk workspace [command]
+tailor workspace [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -33,7 +33,7 @@ Manage workspace applications
 **Usage**
 
 ```
-tailor-sdk workspace app [command]
+tailor workspace app [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -52,7 +52,7 @@ Check application schema health
 **Usage**
 
 ```
-tailor-sdk workspace app health [options]
+tailor workspace app health [options]
 ```
 
 **Options**
@@ -72,7 +72,7 @@ List applications in a workspace
 **Usage**
 
 ```
-tailor-sdk workspace app list [options]
+tailor workspace app list [options]
 ```
 
 **Options**
@@ -93,7 +93,7 @@ Create a new Tailor Platform workspace.
 **Usage**
 
 ```
-tailor-sdk workspace create [options]
+tailor workspace create [options]
 ```
 
 **Options**
@@ -118,7 +118,7 @@ Delete a Tailor Platform workspace.
 **Usage**
 
 ```
-tailor-sdk workspace delete [options]
+tailor workspace delete [options]
 ```
 
 **Options**
@@ -137,7 +137,7 @@ Show detailed information about a workspace
 **Usage**
 
 ```
-tailor-sdk workspace get [options]
+tailor workspace get [options]
 ```
 
 **Options**
@@ -156,7 +156,7 @@ List all Tailor Platform workspaces.
 **Usage**
 
 ```
-tailor-sdk workspace list [options]
+tailor workspace list [options]
 ```
 
 **Options**
@@ -175,7 +175,7 @@ Restore a deleted workspace
 **Usage**
 
 ```
-tailor-sdk workspace restore [options]
+tailor workspace restore [options]
 ```
 
 **Options**
@@ -194,7 +194,7 @@ Manage workspace users
 **Usage**
 
 ```
-tailor-sdk workspace user [command]
+tailor workspace user [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -215,7 +215,7 @@ Invite a user to a workspace
 **Usage**
 
 ```
-tailor-sdk workspace user invite [options]
+tailor workspace user invite [options]
 ```
 
 **Options**
@@ -236,7 +236,7 @@ List users in a workspace
 **Usage**
 
 ```
-tailor-sdk workspace user list [options]
+tailor workspace user list [options]
 ```
 
 **Options**
@@ -257,7 +257,7 @@ Remove a user from a workspace
 **Usage**
 
 ```
-tailor-sdk workspace user remove [options]
+tailor workspace user remove [options]
 ```
 
 **Options**
@@ -278,7 +278,7 @@ Update a user's role in a workspace
 **Usage**
 
 ```
-tailor-sdk workspace user update [options]
+tailor workspace user update [options]
 ```
 
 **Options**
@@ -299,7 +299,7 @@ Manage workspace profiles (user + workspace combinations).
 **Usage**
 
 ```
-tailor-sdk profile [command]
+tailor profile [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -320,7 +320,7 @@ Create a new profile.
 **Usage**
 
 ```
-tailor-sdk profile create [options] <name>
+tailor profile create [options] <name>
 ```
 
 **Arguments**
@@ -348,7 +348,7 @@ Delete a profile.
 **Usage**
 
 ```
-tailor-sdk profile delete <name>
+tailor profile delete <name>
 ```
 
 **Arguments**
@@ -366,7 +366,7 @@ List all profiles.
 **Usage**
 
 ```
-tailor-sdk profile list
+tailor profile list
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -378,7 +378,7 @@ Update profile properties.
 **Usage**
 
 ```
-tailor-sdk profile update [options] <name>
+tailor profile update [options] <name>
 ```
 
 **Arguments**

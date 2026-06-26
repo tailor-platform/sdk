@@ -23,7 +23,7 @@ export const switchCommand = defineAppCommand({
     if (!user) {
       throw new Error(ml`
         User "${args.user}" not found.
-        Please login first using 'tailor-sdk login' command to register this user.
+        Please login first using 'tailor login' command to register this user.
       `);
     }
 

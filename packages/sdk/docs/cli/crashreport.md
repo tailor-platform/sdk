@@ -9,7 +9,7 @@ Manage crash reports.
 **Usage**
 
 ```
-tailor-sdk crashreport [command]
+tailor crashreport [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -28,7 +28,7 @@ List local crash report files.
 **Usage**
 
 ```
-tailor-sdk crashreport list [options]
+tailor crashreport list [options]
 ```
 
 **Options**
@@ -47,7 +47,7 @@ Submit a crash report to help improve the SDK.
 **Usage**
 
 ```
-tailor-sdk crashreport send [options]
+tailor crashreport send [options]
 ```
 
 **Options**

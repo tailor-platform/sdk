@@ -90,9 +90,7 @@ const listWebhookCommand = defineAppCommand({
     });
 
     if (!jsonOutput) {
-      logger.info(
-        'To test a webhook, run: tailor-sdk executor trigger <name> -d \'{"key":"value"}\'',
-      );
+      logger.info('To test a webhook, run: tailor executor trigger <name> -d \'{"key":"value"}\'');
     }
   },
 });

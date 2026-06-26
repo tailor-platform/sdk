@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "tailor-sdk deploy",
-    "generate": "tailor-sdk generate",
+    "deploy": "tailor deploy",
+    "generate": "tailor generate",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware .",
