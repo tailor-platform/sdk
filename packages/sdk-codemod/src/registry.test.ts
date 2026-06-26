@@ -71,6 +71,13 @@ describe("getApplicableCodemods", () => {
       expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
       expect(matches("tailor.d.ts")).toBe(true);
     }
+    expect(cliRename?.sourceStringLegacyPatterns).toEqual(
+      expect.arrayContaining([
+        ["tailor-sdk", "crash-report"],
+        ["tailor", "crash-report"],
+        "--machineuser",
+      ]),
+    );
   });
 
   test("flags CommonJS TypeScript files for runtime globals review", () => {

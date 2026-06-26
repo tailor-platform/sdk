@@ -7,6 +7,7 @@ pnpm exec tailor-sdk workflow start approval --machineuser ci
 tailor-sdk query --query 'select 1' --machineuser ci
 tailor-sdk query 2>&1 --machineuser ci
 tailor-sdk query $(build-query --machineuser=ci) --machineuser ci
+tailor-sdk login ${CI:+--machineuser ci}
 tailor-sdk query --query 'select 1;' --machineuser ci
 tailor-sdk query --query "select 1 | 2" --machineuser ci
 tailor-sdk workflow start approval --arg '{"ok":true}' \
