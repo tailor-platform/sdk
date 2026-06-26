@@ -10,8 +10,10 @@ import {
   fetchAll,
   fetchPaged,
   formatRequestParams,
+  initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
+  rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
@@ -41,6 +43,28 @@ describe("createTransport", () => {
       interceptors: [],
     });
     expect(transport).toEqual({ type: "node-transport" });
+  });
+});
+
+describe("initOperatorClient", () => {
+  afterEach(() => {
+    rememberPlatformConfigForToken("token-a");
+    vi.clearAllMocks();
+  });
+
+  test("uses the platform config remembered for the access token", async () => {
+    rememberPlatformConfigForToken("token-a", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+
+    await initOperatorClient("token-a");
+    const connectNode = await import("@connectrpc/connect-node");
+
+    expect(connectNode.createConnectTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "https://api.dev.tailor.tech",
+      }),
+    );
   });
 });
 

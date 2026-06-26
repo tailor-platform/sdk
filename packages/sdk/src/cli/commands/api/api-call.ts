@@ -1,5 +1,5 @@
 import { getPlatformBaseUrl, userAgent } from "#/cli/shared/client";
-import { loadAccessToken } from "#/cli/shared/context";
+import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
 
 export interface ApiCallOptions {
   profile?: string;
@@ -19,6 +19,9 @@ export interface ApiCallResult {
  * @returns Response status and data
  */
 export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
+  const platformConfig = await loadPlatformClientConfig({
+    profile: options.profile,
+  });
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -30,7 +33,7 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
     endpointPath = `tailor.v1.OperatorService/${options.endpoint}`;
   }
 
-  const url = new URL(endpointPath, getPlatformBaseUrl());
+  const url = new URL(endpointPath, getPlatformBaseUrl(platformConfig));
 
   const response = await fetch(url.toString(), {
     method: "POST",

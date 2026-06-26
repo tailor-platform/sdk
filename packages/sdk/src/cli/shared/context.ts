@@ -14,7 +14,7 @@ import {
   getPlatformBaseUrl,
   initOAuth2Client,
   normalizeBaseUrl,
-  setActivePlatformConfig,
+  rememberPlatformConfigForToken,
   type PlatformClientConfig,
 } from "./client";
 import { CLIError } from "./errors";
@@ -123,10 +123,6 @@ function platformConfigFromProfile(profile: PfProfile | undefined): PlatformClie
     ...(profile?.oauth2_client_id ? { oauth2ClientId: profile.oauth2_client_id } : {}),
     ...(profile?.console_url ? { consoleUrl: profile.console_url } : {}),
   };
-}
-
-function activatePlatformConfig(config: PlatformClientConfig | undefined) {
-  setActivePlatformConfig(config && Object.keys(config).length > 0 ? config : undefined);
 }
 
 function platformUserKey(user: string, config?: PlatformClientConfig): string {
@@ -421,9 +417,6 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
   if (profile) {
     const pfConfig = await readPlatformConfig();
     profileEntry = pfConfig.profiles[profile];
-    activatePlatformConfig(platformConfigFromProfile(profileEntry));
-  } else {
-    activatePlatformConfig(undefined);
   }
 
   if (opts?.workspaceId) {
@@ -479,7 +472,6 @@ export async function loadMachineUserName(
 
   const pfConfig = await readPlatformConfig();
   const entry = pfConfig.profiles[profile];
-  activatePlatformConfig(platformConfigFromProfile(entry));
   if (!entry) {
     if (explicit) return explicit;
     throw new Error(`Profile "${profile}" not found`);
@@ -516,18 +508,17 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
     pfConfig = await readPlatformConfig();
     profileEntry = pfConfig.profiles[profile];
     platformConfig = platformConfigFromProfile(profileEntry);
-    activatePlatformConfig(platformConfig);
-  } else {
-    activatePlatformConfig(undefined);
   }
 
   // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
   if (process.env.TAILOR_PLATFORM_TOKEN) {
+    rememberPlatformConfigForToken(process.env.TAILOR_PLATFORM_TOKEN, platformConfig);
     return process.env.TAILOR_PLATFORM_TOKEN;
   }
   // TAILOR_TOKEN is deprecated
   if (process.env.TAILOR_TOKEN) {
     logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
+    rememberPlatformConfigForToken(process.env.TAILOR_TOKEN, platformConfig);
     return process.env.TAILOR_TOKEN;
   }
 
@@ -565,7 +556,6 @@ export async function loadPlatformClientConfig(
 ): Promise<PlatformClientConfig | undefined> {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (!profile) {
-    activatePlatformConfig(undefined);
     return undefined;
   }
 
@@ -575,7 +565,6 @@ export async function loadPlatformClientConfig(
     throw new Error(`Profile "${profile}" not found`);
   }
   const platformConfig = platformConfigFromProfile(profileEntry);
-  activatePlatformConfig(platformConfig);
   return Object.keys(platformConfig).length > 0 ? platformConfig : undefined;
 }
 
@@ -707,7 +696,6 @@ export async function fetchLatestToken(
   user: string,
   platformConfig?: PlatformClientConfig,
 ): Promise<string> {
-  activatePlatformConfig(platformConfig);
   const { userKey, userEntry } = findUserEntry(config, user, platformConfig);
   if (!userEntry) {
     throw new Error(ml`
@@ -719,6 +707,7 @@ export async function fetchLatestToken(
   const tokens = await resolveTokens(userEntry, userKey, user);
 
   if (new Date(userEntry.token_expires_at) > new Date()) {
+    rememberPlatformConfigForToken(tokens.accessToken, platformConfig);
     return tokens.accessToken;
   }
 
@@ -758,6 +747,7 @@ export async function fetchLatestToken(
     platformConfig,
   );
   writePlatformConfig(config);
+  rememberPlatformConfigForToken(resp.accessToken, platformConfig);
   return resp.accessToken;
 }
 

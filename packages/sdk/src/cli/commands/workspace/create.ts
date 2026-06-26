@@ -1,10 +1,20 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import {
+  defaultPlatformBaseUrl,
+  getConsoleBaseUrl,
+  getOAuth2ClientId,
+  getPlatformBaseUrl,
+  initOperatorClient,
+  normalizeBaseUrl,
+  type OperatorClient,
+  type PlatformClientConfig,
+} from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
   loadAccessToken,
+  loadPlatformClientConfig,
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
@@ -48,6 +58,20 @@ const validateRegion = async (region: string, client: OperatorClient) => {
     throw new Error(`Region must be one of: ${availableRegions.regions.join(", ")}.`);
   }
 };
+
+function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
+  const platformUrl = getPlatformBaseUrl(platformConfig);
+  const hasOAuth2ClientId = platformConfig?.oauth2ClientId || process.env.PLATFORM_OAUTH2_CLIENT_ID;
+  const hasConsoleUrl = platformConfig?.consoleUrl || process.env.PLATFORM_CONSOLE_URL;
+
+  return {
+    ...(platformUrl !== normalizeBaseUrl(defaultPlatformBaseUrl)
+      ? { platform_url: platformUrl }
+      : {}),
+    ...(hasOAuth2ClientId ? { oauth2_client_id: getOAuth2ClientId(platformConfig) } : {}),
+    ...(hasConsoleUrl ? { console_url: getConsoleBaseUrl(platformConfig) } : {}),
+  };
+}
 
 /**
  * Create a new workspace with the given options.
@@ -126,6 +150,7 @@ export const createCommand = defineAppCommand({
     // This command does not expose `--profile`, so the guard resolves the
     // active profile from `TAILOR_PLATFORM_PROFILE` only.
     await assertWritable();
+    const platformConfig = await loadPlatformClientConfig();
     // Execute workspace create logic
     const workspace = await createWorkspace({
       name: args.name,
@@ -155,10 +180,12 @@ export const createCommand = defineAppCommand({
           `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
         );
       }
+      const platformSettings = profilePlatformSettings(platformConfig);
       config.profiles[profileName] = {
         user: profileUser,
         workspace_id: workspace.id,
         ...(args.permission === "read" ? { readonly: true } : {}),
+        ...platformSettings,
       };
       writePlatformConfig(config);
       profileInfo = {
@@ -166,6 +193,11 @@ export const createCommand = defineAppCommand({
         user: profileUser,
         workspaceId: workspace.id,
         permission: args.permission,
+        ...(platformSettings.platform_url ? { platformUrl: platformSettings.platform_url } : {}),
+        ...(platformSettings.oauth2_client_id
+          ? { oauth2ClientId: platformSettings.oauth2_client_id }
+          : {}),
+        ...(platformSettings.console_url ? { consoleUrl: platformSettings.console_url } : {}),
       };
 
       if (!args.json) {

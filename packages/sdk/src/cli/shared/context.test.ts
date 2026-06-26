@@ -3,7 +3,6 @@ import * as os from "node:os";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
-import { getPlatformBaseUrl } from "./client";
 import {
   loadConsoleBaseUrl,
   loadAccessToken,
@@ -628,7 +627,6 @@ describe("loadAccessToken", () => {
       const result = await loadAccessToken({ profile: "dev" });
 
       expect(result).toBe(validToken);
-      expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
     });
 
     test("falls back to a legacy user token for a profile platform URL", async () => {

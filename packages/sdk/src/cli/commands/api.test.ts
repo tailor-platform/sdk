@@ -1,12 +1,13 @@
 import { runCommand } from "politty";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { apiCommand } from "./api";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
+  loadPlatformClientConfig: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
@@ -31,6 +32,7 @@ describe("api command body auto-injection", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(loadPlatformClientConfig).mockResolvedValue(undefined);
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     fetchMock.mockResolvedValue({
       ok: true,

@@ -132,6 +132,8 @@ describe("workspace create --permission", () => {
   test("creates a profile for a user whose token is scoped to PLATFORM_URL", async () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
+    vi.stubEnv("PLATFORM_CONSOLE_URL", "https://console.dev.tailor.tech");
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -161,6 +163,9 @@ describe("workspace create --permission", () => {
     expect(config.profiles.bootstrap).toMatchObject({
       user: "u@example.com",
       workspace_id: validUUID,
+      platform_url: "https://api.dev.tailor.tech",
+      oauth2_client_id: "dev-client",
+      console_url: "https://console.dev.tailor.tech",
     });
   });
 

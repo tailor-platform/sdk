@@ -29,7 +29,7 @@ export type PlatformClientConfig = {
   consoleUrl?: string;
 };
 
-let activePlatformConfig: PlatformClientConfig | undefined;
+const tokenPlatformConfigs = new Map<string, PlatformClientConfig>();
 
 export function normalizeBaseUrl(value: string): string {
   const url = new URL(value);
@@ -38,19 +38,43 @@ export function normalizeBaseUrl(value: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
-export function setActivePlatformConfig(config?: PlatformClientConfig) {
-  activePlatformConfig = config;
+export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
+  const effective = {
+    ...((config.platformUrl ?? process.env.PLATFORM_URL)
+      ? { platformUrl: config.platformUrl ?? process.env.PLATFORM_URL }
+      : {}),
+    ...((config.oauth2ClientId ?? process.env.PLATFORM_OAUTH2_CLIENT_ID)
+      ? { oauth2ClientId: config.oauth2ClientId ?? process.env.PLATFORM_OAUTH2_CLIENT_ID }
+      : {}),
+    ...((config.consoleUrl ?? process.env.PLATFORM_CONSOLE_URL)
+      ? { consoleUrl: config.consoleUrl ?? process.env.PLATFORM_CONSOLE_URL }
+      : {}),
+  };
+  return Object.keys(effective).length > 0 ? effective : undefined;
 }
 
-export function getPlatformBaseUrl(config: PlatformClientConfig = activePlatformConfig ?? {}) {
+export function rememberPlatformConfigForToken(accessToken: string, config?: PlatformClientConfig) {
+  const effectiveConfig = getEffectivePlatformConfig(config);
+  if (effectiveConfig) {
+    tokenPlatformConfigs.set(accessToken, effectiveConfig);
+  } else {
+    tokenPlatformConfigs.delete(accessToken);
+  }
+}
+
+function getPlatformConfigForToken(accessToken: string): PlatformClientConfig | undefined {
+  return tokenPlatformConfigs.get(accessToken);
+}
+
+export function getPlatformBaseUrl(config: PlatformClientConfig = {}) {
   return normalizeBaseUrl(config.platformUrl ?? process.env.PLATFORM_URL ?? defaultPlatformBaseUrl);
 }
 
-export function getOAuth2ClientId(config: PlatformClientConfig = activePlatformConfig ?? {}) {
+export function getOAuth2ClientId(config: PlatformClientConfig = {}) {
   return config.oauth2ClientId ?? process.env.PLATFORM_OAUTH2_CLIENT_ID ?? defaultOAuth2ClientId;
 }
 
-export function getConsoleBaseUrl(config: PlatformClientConfig = activePlatformConfig ?? {}) {
+export function getConsoleBaseUrl(config: PlatformClientConfig = {}) {
   if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
   if (process.env.PLATFORM_CONSOLE_URL) return normalizeBaseUrl(process.env.PLATFORM_CONSOLE_URL);
 
@@ -85,6 +109,7 @@ export type OperatorClient = Client<typeof OperatorService>;
  * @returns Configured Operator client
  */
 export async function initOperatorClient(accessToken: string, config?: PlatformClientConfig) {
+  const platformConfig = config ?? getPlatformConfigForToken(accessToken);
   const [{ createTracingInterceptor }, { OperatorService }] = await Promise.all([
     import("#/cli/telemetry/interceptor"),
     import("@tailor-platform/tailor-proto/service_pb"),
@@ -101,7 +126,7 @@ export async function initOperatorClient(accessToken: string, config?: PlatformC
     concurrencyLimitInterceptor(),
   ];
 
-  const transport = await createTransport(getPlatformBaseUrl(config), interceptors);
+  const transport = await createTransport(getPlatformBaseUrl(platformConfig), interceptors);
   return createClient(OperatorService, transport);
 }
 
@@ -535,10 +560,11 @@ export async function fetchPaged<T>(
 /**
  * Fetch user info from the Tailor Platform userinfo endpoint.
  * @param accessToken - Access token for the current user
+ * @param config - Optional platform connection settings
  * @returns Parsed user info
  */
-export async function fetchUserInfo(accessToken: string) {
-  const userInfoUrl = new URL("/auth/platform/userinfo", getPlatformBaseUrl()).href;
+export async function fetchUserInfo(accessToken: string, config?: PlatformClientConfig) {
+  const userInfoUrl = new URL("/auth/platform/userinfo", getPlatformBaseUrl(config)).href;
   const resp = await fetch(userInfoUrl, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -679,13 +705,18 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
  * Fetch an OAuth2 token for a platform machine user via client_credentials grant.
  * @param clientId - Client ID for the platform machine user
  * @param clientSecret - Client secret for the platform machine user
+ * @param config - Optional platform connection settings
  * @returns OAuth2 token
  */
-export async function fetchPlatformMachineUserToken(clientId: string, clientSecret: string) {
+export async function fetchPlatformMachineUserToken(
+  clientId: string,
+  clientSecret: string,
+  config?: PlatformClientConfig,
+) {
   const client = new OAuth2Client({
     clientId,
     clientSecret,
-    server: getPlatformBaseUrl(),
+    server: getPlatformBaseUrl(config),
     discoveryEndpoint: oauth2DiscoveryEndpoint,
   });
   return await client.clientCredentials();

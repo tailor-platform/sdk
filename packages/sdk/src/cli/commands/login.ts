@@ -73,7 +73,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
             codeVerifier,
           },
         );
-        const userInfo = await fetchUserInfo(tokens.accessToken);
+        const userInfo = await fetchUserInfo(tokens.accessToken, args.platformConfig);
         assertProfileLoginUser(args, userInfo.email);
 
         const pfConfig = await readPlatformConfig();
@@ -150,7 +150,11 @@ async function loginAsMachineUser(
 ) {
   assertProfileLoginUser(args, args.clientId);
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
-  const tokens = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
+  const tokens = await fetchPlatformMachineUserToken(
+    args.clientId,
+    clientSecret,
+    args.platformConfig,
+  );
 
   const pfConfig = await readPlatformConfig();
   await saveUserTokens(
