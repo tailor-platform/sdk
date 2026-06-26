@@ -110,4 +110,8 @@ describe("codemod transforms", () => {
   test("v2/rename-bin transforms correctly", async () => {
     await expect(runFixtureCases("v2/rename-bin")).resolves.toBeUndefined();
   });
+
+  test("v2/wait-point-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/wait-point-rename")).resolves.toBeUndefined();
+  });
 });
