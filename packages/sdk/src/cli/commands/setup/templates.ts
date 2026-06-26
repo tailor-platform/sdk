@@ -169,6 +169,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-erd-preview/tailor-checkout",
       "tailor-erd-preview/tailor-setup",
       "tailor-erd-preview/tailor-checkout-base",
+      "tailor-erd-preview/tailor-install-base",
       "tailor-erd-preview/tailor-build-erd-preview",
       "tailor-erd-preview/tailor-upload-erd-viewer",
       "tailor-erd-preview/tailor-upload-erd-diff",

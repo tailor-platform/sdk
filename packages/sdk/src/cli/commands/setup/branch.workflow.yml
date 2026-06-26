@@ -132,7 +132,7 @@ jobs:
     needs: tailor-erd-preview-matrix
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     strategy:
@@ -155,6 +155,21 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .tailor-erd-base
           persist-credentials: false
+      - id: tailor-install-base
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .tailor-erd-base
+          case "__PACKAGE_MANAGER__" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            npm) npm ci ;;
+            yarn) yarn install --immutable || yarn install --frozen-lockfile ;;
+            bun) bun install --frozen-lockfile ;;
+            *)
+              echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
+              exit 1
+              ;;
+          esac
       - id: tailor-build-erd-preview
         shell: bash
         env:
