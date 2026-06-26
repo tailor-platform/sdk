@@ -295,6 +295,7 @@ export const allCodemods: CodemodPackage[] = [
     prereleaseUntil: V2_NEXT_1,
     scriptPath: "v2/auth-invoker-call-unwrap/scripts/transform.js",
     suspiciousPatterns: ["auth.invoker"],
+    reviewSupersededBy: ["v2/auth-invoker-unwrap"],
     prompt: [
       "In Tailor SDK v2 the auth.invoker() helper is removed; an invoker is now the",
       "machine user name passed directly as a string. The codemod already rewrote the",

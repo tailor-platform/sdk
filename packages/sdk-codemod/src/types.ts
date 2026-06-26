@@ -74,6 +74,8 @@ export interface CodemodPackage {
    * by `suspiciousPatterns`.
    */
   prompt?: string;
+  /** Codemod ids whose LLM review prompt supersedes this prompt when both are selected. */
+  reviewSupersededBy?: string[];
   /** Before/after examples shown in the generated migration doc. */
   examples?: CodemodExample[];
   /**

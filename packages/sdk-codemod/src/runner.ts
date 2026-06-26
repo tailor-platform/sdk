@@ -139,6 +139,7 @@ interface LoadedTransform {
   sourceStringLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
+  reviewSupersededBy: string[];
 }
 
 function contentForResidualMatching(relative: string, content: string): string {
@@ -313,6 +314,7 @@ export async function runCodemods(
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
       prompt: codemod.prompt,
+      reviewSupersededBy: codemod.reviewSupersededBy ?? [],
     });
   }
 
@@ -374,8 +376,10 @@ export async function runCodemods(
   }
 
   const llmReviews: LlmReview[] = [];
+  const loadedIds = new Set(loaded.map((lt) => lt.id));
   for (const lt of loaded) {
     if (!lt.prompt) continue;
+    if (lt.reviewSupersededBy.some((id) => loadedIds.has(id))) continue;
     if (lt.suspiciousPatterns.length > 0) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);
