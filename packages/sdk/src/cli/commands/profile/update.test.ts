@@ -288,6 +288,17 @@ describe("profile update --platform", () => {
     expect(config.profiles.myprofile?.oauth2_client_id).toBeUndefined();
     expect(config.profiles.myprofile?.console_url).toBeUndefined();
   });
+
+  test("rejects invalid platform URLs before writing config", async () => {
+    const result = await runCommand(updateCommand, ["myprofile", "--platform-url", "not-a-url"]);
+
+    expect(result.success).toBe(false);
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.platform_url).toBeUndefined();
+  });
 });
 
 describe("profile update --machine-user-override", () => {

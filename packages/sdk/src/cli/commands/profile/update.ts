@@ -36,7 +36,7 @@ export const updateCommand = defineAppCommand({
         description:
           "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction.",
       }),
-      "platform-url": arg(z.string().optional(), {
+      "platform-url": arg(z.union([z.url(), z.literal("")]).optional(), {
         description: "Platform API base URL for this profile. Pass an empty string to clear.",
         env: "PLATFORM_URL",
       }),
@@ -45,7 +45,7 @@ export const updateCommand = defineAppCommand({
           "OAuth2 client ID for logging in to this profile's platform. Pass an empty string to clear.",
         env: "PLATFORM_OAUTH2_CLIENT_ID",
       }),
-      "console-url": arg(z.string().optional(), {
+      "console-url": arg(z.union([z.url(), z.literal("")]).optional(), {
         description: "Console base URL for this profile. Pass an empty string to clear.",
         env: "PLATFORM_CONSOLE_URL",
       }),
