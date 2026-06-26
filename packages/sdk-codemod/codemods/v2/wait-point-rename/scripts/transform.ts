@@ -117,8 +117,10 @@ export default function transform(source: string, _filePath?: string): string | 
       addShadowedRange(nameChild.text(), scopeNode);
     }
 
-    // Function/arrow parameters (required_parameter covers both regular and rest patterns).
-    const paramNodes = root.findAll({ rule: { kind: "required_parameter" } });
+    // Function/arrow parameters — covers required (param: T) and optional (param?: T).
+    const paramNodes = root.findAll({
+      rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
+    });
     for (const param of paramNodes) {
       if (isInsideImportStatement(param)) continue;
       // The name identifier may be a direct child or wrapped in rest_pattern.
@@ -181,7 +183,7 @@ export default function transform(source: string, _filePath?: string): string | 
       const ranges = shadowedRanges.get(name);
       if (ranges) {
         const pos = node.range().start.index;
-        if (ranges.some((r) => pos >= r.start && pos <= r.end)) return;
+        if (ranges.some((r) => pos >= r.start && pos < r.end)) return;
       }
       edits.push(node.replace(RENAMES[name]!));
     };
