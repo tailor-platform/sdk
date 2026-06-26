@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterAll } from "vitest";
+import { describe, expect, expectTypeOf, test, beforeEach, afterAll } from "vitest";
 import {
   createSnapshotFromLocalTypes,
   loadSnapshot,
@@ -24,6 +24,7 @@ import {
   DIFF_FILE_NAME,
   INITIAL_SCHEMA_NUMBER,
   formatMigrationNumber,
+  type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
 import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
@@ -230,6 +231,9 @@ describe("snapshot", () => {
       const normalized = normalizeSchemaSnapshot(snapshot);
 
       expect(normalized).toBe(snapshot);
+      expectTypeOf(normalized).toEqualTypeOf<NormalizedSchemaSnapshot>();
+      expectTypeOf<NormalizedSchemaSnapshot>().toExtend<SchemaSnapshot>();
+      expectTypeOf<SchemaSnapshot>().not.toExtend<NormalizedSchemaSnapshot>();
       expect(snapshot.types.Product?.pluralForm).toBe("Products");
       expect(snapshot.types.Product?.fields.price?.scale).toBe(6);
       expect(snapshot.types.Product?.fields.metadata?.fields?.discount?.scale).toBe(6);

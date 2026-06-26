@@ -24,6 +24,7 @@ import type {
   StandardActionPermission,
 } from "#/parser/service/tailordb/types";
 import type {
+  NormalizedSchemaSnapshot,
   SchemaSnapshot,
   SnapshotActionPermission,
   SnapshotFieldConfig,
@@ -120,13 +121,13 @@ function normalizeSnapshotType(type: TailorDBSnapshotType): TailorDBSnapshotType
 /**
  * Normalize a schema snapshot in place to the canonical comparison shape.
  * @param {SchemaSnapshot} snapshot - Schema snapshot to normalize
- * @returns The same schema snapshot object after normalization
+ * @returns The same schema snapshot object branded as normalized
  */
-export function normalizeSchemaSnapshot(snapshot: SchemaSnapshot): SchemaSnapshot {
+export function normalizeSchemaSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
   for (const type of Object.values(snapshot.types)) {
     normalizeSnapshotType(type);
   }
-  return snapshot;
+  return snapshot as NormalizedSchemaSnapshot;
 }
 
 // Re-export SCHEMA_SNAPSHOT_VERSION for convenience
@@ -160,6 +161,7 @@ export type {
   SnapshotGqlPermission,
   TailorDBSnapshotType,
   SchemaSnapshot,
+  NormalizedSchemaSnapshot,
 } from "./snapshot-types";
 
 /**
@@ -532,12 +534,12 @@ function convertActionPermission(
  * Create a schema snapshot from local type definitions
  * @param {Record<string, TailorDBType>} types - Local type definitions
  * @param {string} namespace - Namespace for the snapshot
- * @returns {SchemaSnapshot} Schema snapshot
+ * @returns {NormalizedSchemaSnapshot} Normalized schema snapshot
  */
 export function createSnapshotFromLocalTypes(
   types: Record<string, TailorDBType>,
   namespace: string,
-): SchemaSnapshot {
+): NormalizedSchemaSnapshot {
   const snapshotTypes = createSnapshotRecord<TailorDBSnapshotType>();
 
   for (const [typeName, type] of Object.entries(types)) {
@@ -559,9 +561,9 @@ export function createSnapshotFromLocalTypes(
 /**
  * Load a schema snapshot from a file
  * @param {string} filePath - Path to the snapshot file
- * @returns {SchemaSnapshot} Loaded schema snapshot
+ * @returns {NormalizedSchemaSnapshot} Loaded normalized schema snapshot
  */
-export function loadSnapshot(filePath: string): SchemaSnapshot {
+export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
   const content = fs.readFileSync(filePath, "utf-8");
   let raw: unknown;
   try {
@@ -681,9 +683,12 @@ export function getNextMigrationNumber(migrationsDir: string): number {
  * Apply a diff to a snapshot to get the resulting snapshot
  * @param {SchemaSnapshot} snapshot - Base snapshot to apply diff to
  * @param {MigrationDiff} diff - Diff to apply
- * @returns {SchemaSnapshot} Resulting snapshot after applying diff
+ * @returns {NormalizedSchemaSnapshot} Normalized snapshot after applying diff
  */
-function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): SchemaSnapshot {
+function applyDiffToSnapshot(
+  snapshot: SchemaSnapshot,
+  diff: MigrationDiff,
+): NormalizedSchemaSnapshot {
   const types = { ...snapshot.types };
 
   for (const change of diff.changes) {
@@ -863,11 +868,11 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
     }
   }
 
-  return {
+  return normalizeSchemaSnapshot({
     ...snapshot,
     types,
     createdAt: diff.createdAt,
-  };
+  });
 }
 
 /**
@@ -875,12 +880,12 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
  * Returns null if no migrations exist
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} [maxVersion] - Optional maximum migration version to apply
- * @returns {SchemaSnapshot | null} Reconstructed snapshot or null if no migrations exist
+ * @returns {NormalizedSchemaSnapshot | null} Reconstructed normalized snapshot or null if no migrations exist
  */
 export function reconstructSnapshotFromMigrations(
   migrationsDir: string,
   maxVersion?: number,
-): SchemaSnapshot | null {
+): NormalizedSchemaSnapshot | null {
   const files = getMigrationFiles(migrationsDir);
   if (files.length === 0) return null;
 
@@ -1479,9 +1484,16 @@ function comparePermissions(
  * @returns {MigrationDiff} Migration diff between snapshots
  */
 export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapshot): MigrationDiff {
-  normalizeSchemaSnapshot(previous);
-  normalizeSchemaSnapshot(current);
+  return compareNormalizedSnapshots(
+    normalizeSchemaSnapshot(previous),
+    normalizeSchemaSnapshot(current),
+  );
+}
 
+function compareNormalizedSnapshots(
+  previous: NormalizedSchemaSnapshot,
+  current: NormalizedSchemaSnapshot,
+): MigrationDiff {
   const ctx: DiffContext = { changes: [], breakingChanges: [], warnings: [] };
 
   const previousTypeNames = new Set(Object.keys(previous.types));
@@ -1867,12 +1879,12 @@ function convertRemoteTypeToSnapshot(remoteType: ProtoTailorDBType): TailorDBSna
  * Convert remote TailorDB types into the normalized snapshot shape used by drift checks.
  * @param {ProtoTailorDBType[]} remoteTypes - Remote TailorDB types from the API
  * @param {string} namespace - Namespace for the reconstructed snapshot
- * @returns {SchemaSnapshot} Normalized snapshot-shaped remote state
+ * @returns {NormalizedSchemaSnapshot} Normalized snapshot-shaped remote state
  */
 export function createSnapshotFromRemoteTypes(
   remoteTypes: ProtoTailorDBType[],
   namespace: string,
-): SchemaSnapshot {
+): NormalizedSchemaSnapshot {
   const types = createSnapshotRecord<TailorDBSnapshotType>();
   for (const remoteType of remoteTypes) {
     types[remoteType.name] = convertRemoteTypeToSnapshot(remoteType);
@@ -2002,9 +2014,16 @@ export function compareRemoteWithSnapshot(
   remoteTypes: ProtoTailorDBType[],
   snapshot: SchemaSnapshot,
 ): SchemaDrift[] {
-  normalizeSchemaSnapshot(snapshot);
-  const remoteSnapshot = createSnapshotFromRemoteTypes(remoteTypes, snapshot.namespace);
+  return compareNormalizedRemoteWithSnapshot(
+    createSnapshotFromRemoteTypes(remoteTypes, snapshot.namespace),
+    normalizeSchemaSnapshot(snapshot),
+  );
+}
 
+function compareNormalizedRemoteWithSnapshot(
+  remoteSnapshot: NormalizedSchemaSnapshot,
+  snapshot: NormalizedSchemaSnapshot,
+): SchemaDrift[] {
   const drifts: SchemaDrift[] = [];
 
   // Build maps for easy lookup

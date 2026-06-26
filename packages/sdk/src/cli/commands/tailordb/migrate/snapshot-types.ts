@@ -232,3 +232,15 @@ export interface SchemaSnapshot {
   createdAt: string;
   types: Record<string, TailorDBSnapshotType>;
 }
+
+declare const normalizedSchemaSnapshotBrand: unique symbol;
+
+/**
+ * Schema snapshot after canonical normalization has been applied.
+ *
+ * Use this at internal comparison boundaries that require defaults and legacy
+ * compatibility fixes to be materialized before reading snapshot contents.
+ */
+export type NormalizedSchemaSnapshot = SchemaSnapshot & {
+  readonly [normalizedSchemaSnapshotBrand]: true;
+};
