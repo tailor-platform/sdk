@@ -6,7 +6,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 3;
+export const TEMPLATE_VERSION = 4;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -170,7 +170,10 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-erd-preview/tailor-setup",
       "tailor-erd-preview/tailor-checkout-base",
       "tailor-erd-preview/tailor-detect-base-package-manager",
-      "tailor-erd-preview/tailor-setup-base",
+      "tailor-erd-preview/tailor-setup-base-pnpm",
+      "tailor-erd-preview/tailor-setup-base-node",
+      "tailor-erd-preview/tailor-setup-base-bun",
+      "tailor-erd-preview/tailor-install-base",
       "tailor-erd-preview/tailor-build-erd-preview",
       "tailor-erd-preview/tailor-upload-erd-viewer",
       "tailor-erd-preview/tailor-upload-erd-diff",

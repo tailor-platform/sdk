@@ -187,10 +187,10 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("run_tailor_sdk tailordb erd export");
     expect(content).toContain("run_tailor_sdk tailordb erd diff");
     expect(content).toContain("id: tailor-detect-base-package-manager");
-    expect(content).toContain("id: tailor-setup-base");
-    expect(content).toContain(
-      "package-manager: ${{ steps.tailor-detect-base-package-manager.outputs.package-manager }}",
-    );
+    expect(content).toContain("id: tailor-setup-base-pnpm");
+    expect(content).toContain("id: tailor-setup-base-node");
+    expect(content).toContain("id: tailor-setup-base-bun");
+    expect(content).toContain("id: tailor-install-base");
     expect(content).toContain("node-version-file: .tailor-erd-base/package.json");
     expect(content).toContain("working-directory: .tailor-erd-base");
     expect(content).toContain('base_package_manager="$(');
@@ -228,7 +228,10 @@ describe("renderBranchWorkflow", () => {
         "tailor-erd-preview/tailor-checkout",
         "tailor-erd-preview/tailor-checkout-base",
         "tailor-erd-preview/tailor-detect-base-package-manager",
-        "tailor-erd-preview/tailor-setup-base",
+        "tailor-erd-preview/tailor-setup-base-pnpm",
+        "tailor-erd-preview/tailor-setup-base-node",
+        "tailor-erd-preview/tailor-setup-base-bun",
+        "tailor-erd-preview/tailor-install-base",
         "tailor-erd-preview/tailor-build-erd-preview",
         "tailor-erd-preview/tailor-upload-erd-viewer",
         "tailor-erd-preview/tailor-upload-erd-diff",
@@ -236,6 +239,28 @@ describe("renderBranchWorkflow", () => {
         "tailor-erd-preview-comment/tailor-comment-erd-preview",
       ]),
     );
+  });
+
+  test("installs ERD base dependencies without the head checkout cache path", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-detect-base-package-manager");
+    const end = content.indexOf("id: tailor-build-erd-preview");
+    const baseSetup = content.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(baseSetup).not.toContain("tailor-platform/actions/setup@");
+    expect(baseSetup).not.toContain("cache:");
+    expect(baseSetup).toContain("pnpm/action-setup@");
+    expect(baseSetup).toContain("actions/setup-node@");
+    expect(baseSetup).toContain("oven-sh/setup-bun@");
+    expect(baseSetup).toContain("pnpm install --frozen-lockfile");
+    expect(baseSetup).toContain("npm ci");
+    expect(baseSetup).toContain("yarn install --frozen-lockfile");
+    expect(baseSetup).toContain("bun install --frozen-lockfile");
   });
 
   test("passes the package manager to the setup action", () => {
