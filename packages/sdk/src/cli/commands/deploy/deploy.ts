@@ -216,8 +216,9 @@ type PrintPlanOptions = {
 };
 
 /**
- * Format and output the plan diff, then return a summary of change counts.
- * In dry-run mode the diff is written to stdout; in apply mode it goes to stderr.
+ * Format and output the plan results, then return a summary of change counts.
+ * In JSON mode a JSON payload is written to stdout. In non-JSON mode the
+ * human-readable diff goes to stdout (dry-run) or stderr (apply).
  * @param results - Planned results across all services
  * @param opts - Output options (dry-run mode flag)
  * @returns Aggregated plan summary counts
