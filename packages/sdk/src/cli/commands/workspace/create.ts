@@ -168,14 +168,17 @@ export const createCommand = defineAppCommand({
         throw new Error(`Profile "${profileName}" already exists.`);
       }
 
-      const profileUser = args["profile-user"] || config.current_user;
+      const activeProfileUser = process.env.TAILOR_PLATFORM_PROFILE
+        ? config.profiles[process.env.TAILOR_PLATFORM_PROFILE]?.user
+        : undefined;
+      const profileUser = args["profile-user"] || activeProfileUser || config.current_user;
       if (!profileUser) {
         throw new Error(
           "Current user not found. Please login or specify --profile-user to create a profile.",
         );
       }
 
-      if (!hasUserTokenEntry(config, profileUser)) {
+      if (!hasUserTokenEntry(config, profileUser, platformConfig)) {
         throw new Error(
           `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
         );

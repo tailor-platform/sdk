@@ -169,6 +169,48 @@ describe("workspace create --permission", () => {
     });
   });
 
+  test("creates a profile when the active profile selects a custom platform", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          token_expires_at: "2099-12-31T00:00:00Z",
+          access_token: "custom-token",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success", "warn");
+
+    await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--profile-name",
+      "bootstrap",
+    ]);
+
+    expect(initOperatorClient).toHaveBeenCalledWith("custom-token");
+    const config = await readPlatformConfig();
+    expect(config.profiles.bootstrap).toMatchObject({
+      user: "u@example.com",
+      workspace_id: validUUID,
+      platform_url: "https://api.dev.tailor.tech",
+    });
+  });
+
   test("creates no profile when --permission read is passed without --profile-name", async () => {
     using _logger = silenceLogger("out", "success", "warn");
     // Matches the existing --profile-user behavior: profile-only flags are
