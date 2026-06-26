@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
@@ -15,6 +16,8 @@ import type { LogLevel } from "#/configure/config/types";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
 const ADAPTER_BUNDLE_ERROR_BYTES = 256 * 1024;
+const nodeRequire = createRequire(import.meta.url);
+const GRAPHQL_WEB_MODULE = nodeRequire.resolve("@0no-co/graphql.web");
 
 export interface HttpAdapterBundleInput {
   name: string;
@@ -101,7 +104,7 @@ async function bundleAdapterScript(
     tsconfig,
     inlineSourcemap: false,
     bundleLogLevel,
-    prefix: kind,
+    prefix: `${kind}:document-query-normalize-v1`,
   });
 
   const code = await withCache({
@@ -113,12 +116,6 @@ async function bundleAdapterScript(
     async build(cachePlugins) {
       const entryPath = path.join(outputDir, `${adapter.name}.${kind}.entry.js`);
       const absoluteSourcePath = path.resolve(adapter.sourceFile);
-
-      const entryContent =
-        kind === "input"
-          ? buildInputEntry(absoluteSourcePath, adapter.methods)
-          : buildOutputEntry(absoluteSourcePath);
-      fs.writeFileSync(entryPath, entryContent);
 
       const rejectNodeImports: rolldown.Plugin = {
         name: "http-adapter-reject-node-imports",
@@ -154,6 +151,11 @@ async function bundleAdapterScript(
 
       let bundled: string;
       try {
+        const entryContent =
+          kind === "input"
+            ? buildInputEntry(absoluteSourcePath, adapter.methods, GRAPHQL_WEB_MODULE)
+            : buildOutputEntry(absoluteSourcePath);
+        fs.writeFileSync(entryPath, entryContent);
         const result = await rolldown.build({
           input: entryPath,
           write: false,
@@ -206,12 +208,28 @@ async function bundleAdapterScript(
   return [adapter.name, kind, code];
 }
 
-function buildInputEntry(absoluteSourcePath: string, methods: HttpMethodKey[]): string {
+function buildInputEntry(
+  absoluteSourcePath: string,
+  methods: HttpMethodKey[],
+  graphqlPrinterModule: string,
+): string {
   const cases = methods
-    .map((method) => `    case "${HTTP_METHODS[method]}": return __adapter.input.${method}(req);`)
+    .map((method) => {
+      const result = `__adapter.input.${method}(req)`;
+      const expression = `__normalizeHttpAdapterGraphQLRequest(${result})`;
+      return `    case "${HTTP_METHODS[method]}": return ${expression};`;
+    })
     .join("\n");
   const supported = methods.map((m) => HTTP_METHODS[m]).join(", ");
-  return `import __adapter from ${JSON.stringify(absoluteSourcePath)};
+  const documentNormalizer = `import { print as __printHttpAdapterDocument } from ${JSON.stringify(graphqlPrinterModule)};
+function __normalizeHttpAdapterGraphQLRequest(result) {
+  if (typeof result.query === "string") {
+    return result;
+  }
+  return { ...result, query: __printHttpAdapterDocument(result.query) };
+}
+`;
+  return `${documentNormalizer}import __adapter from ${JSON.stringify(absoluteSourcePath)};
 globalThis.transform = function(req) {
   switch (req.method) {
 ${cases}
