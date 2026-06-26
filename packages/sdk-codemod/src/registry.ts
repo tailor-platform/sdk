@@ -160,6 +160,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename auth attribute module augmentation and related SDK type names from `AttributeMap` to `Attributes`",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     scriptPath: "v2/auth-attributes-rename/scripts/transform.js",
     legacyPatterns: [
       "AttributeMap",
@@ -240,6 +241,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rewrite unambiguous removed SDK environment variable names to their v2 `TAILOR_*` names and flag generic names for manual review",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     scriptPath: "v2/env-var-rename/scripts/transform.js",
     filePatterns: [
       "**/package.json",
@@ -582,6 +584,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Update `.gitignore` entries manually (the codemod skips paths preceded by a dot).",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     scriptPath: "v2/rename-bin/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
     legacyPatterns: ["tailor-sdk"],
@@ -605,6 +608,7 @@ export const allCodemods: CodemodPackage[] = [
       "v2 requires Node.js **22.15.0** or later. This is the first version that includes `module.registerHooks()`, which the SDK uses to register its TypeScript loader hook synchronously in the main thread. No source change is required; ensure your environment runs Node.js 22.15.0+.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     notice: true,
   },
 ];

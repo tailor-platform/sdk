@@ -26,6 +26,14 @@ describe("getApplicableCodemods", () => {
         )
         .map((codemod) => codemod.id),
     );
+    expect(prereleaseCodemods.map((codemod) => codemod.id)).toEqual(
+      expect.arrayContaining([
+        "v2/auth-attributes-rename",
+        "v2/env-var-rename",
+        "v2/rename-bin",
+        "v2/node-minimum-22-15-0",
+      ]),
+    );
   });
 
   test("returns empty when both versions are before the codemod boundary", () => {
