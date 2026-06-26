@@ -30,7 +30,10 @@ export const listCommand = defineAppCommand({
     }
 
     users.forEach((user) => {
-      if (user === config.current_user) {
+      if (
+        user === config.current_user ||
+        (config.current_user && user.endsWith(`|${config.current_user}`))
+      ) {
         logger.success(`${user} (current)`, { mode: "plain" });
       } else {
         logger.log(user);

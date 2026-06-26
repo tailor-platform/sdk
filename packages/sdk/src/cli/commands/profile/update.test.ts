@@ -289,6 +289,18 @@ describe("profile update --platform", () => {
     expect(config.profiles.myprofile?.console_url).toBeUndefined();
   });
 
+  test("updates only OAuth2 client ID without remote validation", async () => {
+    using _logger = silenceLogger("out", "success");
+
+    await runCommand(updateCommand, ["myprofile", "--oauth2-client-id", "new-client"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.oauth2_client_id).toBe("new-client");
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
+  });
+
   test("rejects invalid platform URLs before writing config", async () => {
     const result = await runCommand(updateCommand, ["myprofile", "--platform-url", "not-a-url"]);
 

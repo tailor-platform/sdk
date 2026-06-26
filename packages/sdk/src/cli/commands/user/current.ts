@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
-import { readPlatformConfig } from "#/cli/shared/context";
+import { hasUserTokenEntry, readPlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 
@@ -21,7 +21,7 @@ export const currentCommand = defineAppCommand({
     }
 
     // Check if user exists
-    if (!config.users[config.current_user]) {
+    if (!hasUserTokenEntry(config, config.current_user)) {
       throw new Error(ml`
         Current user '${config.current_user}' not found in registered users.
         Please login again using 'tailor-sdk login' command to register the user.

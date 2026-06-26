@@ -57,6 +57,7 @@ describe("user current", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
@@ -68,6 +69,30 @@ describe("user current", () => {
     await runCommand(currentCommand, []);
 
     expect(stdout.output).not.toBe("");
+    expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
+  });
+
+  test("accepts a current user whose tokens are scoped to PLATFORM_URL", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "token",
+          refresh_token: "refresh",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+    using stdout = captureStdout();
+    using _json = jsonMode();
+
+    await runCommand(currentCommand, []);
+
     expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
   });
 });

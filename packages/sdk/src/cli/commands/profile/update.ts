@@ -121,8 +121,7 @@ export const updateCommand = defineAppCommand({
     if (
       args.user !== undefined ||
       args["workspace-id"] !== undefined ||
-      args["platform-url"] !== undefined ||
-      args["oauth2-client-id"] !== undefined
+      args["platform-url"] !== undefined
     ) {
       // Check if user exists
       const token = finalPlatformConfig

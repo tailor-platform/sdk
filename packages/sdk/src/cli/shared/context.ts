@@ -158,6 +158,21 @@ function findUserEntry(config: PfConfig, user: string, platformConfig?: Platform
   return legacyEntry ? { userKey: user, userEntry: legacyEntry } : { userKey, userEntry };
 }
 
+/**
+ * Check whether tokens are registered for a user on the selected platform.
+ * @param config - Platform config
+ * @param user - User name
+ * @param platformConfig - Optional platform connection settings
+ * @returns True when the user has a registered token entry
+ */
+export function hasUserTokenEntry(
+  config: PfConfig,
+  user: string,
+  platformConfig?: PlatformClientConfig,
+): boolean {
+  return findUserEntry(config, user, platformConfig).userEntry !== undefined;
+}
+
 function hasCurrentUserEntry(users: PfConfigV1["users"], currentUser: string): boolean {
   return (
     users[currentUser] !== undefined ||
