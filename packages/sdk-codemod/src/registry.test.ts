@@ -1,3 +1,4 @@
+import picomatch from "picomatch";
 import { describe, expect, test } from "vitest";
 import { allCodemods, getApplicableCodemods } from "./registry";
 
@@ -63,6 +64,9 @@ describe("getApplicableCodemods", () => {
     expect(renameBin?.filePatterns).toEqual(
       expect.arrayContaining(["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]),
     );
+    const matches = picomatch(renameBin?.filePatterns ?? [], { dot: true });
+    expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
+    expect(matches("tailor.d.ts")).toBe(true);
   });
 
   test("flags CommonJS TypeScript files for runtime globals review", () => {
