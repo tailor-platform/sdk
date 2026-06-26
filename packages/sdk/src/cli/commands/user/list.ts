@@ -24,21 +24,23 @@ function platformUserKeyFor(user: string, platformUrl?: string): string {
 
 function canUseLegacyUserKey(platformUrl?: string): boolean {
   if (!platformUrl) return true;
-  return (
-    process.env.PLATFORM_URL !== undefined &&
-    normalizeBaseUrl(process.env.PLATFORM_URL) === normalizeBaseUrl(platformUrl)
-  );
+  if (process.env.PLATFORM_URL === undefined) return false;
+  try {
+    return normalizeBaseUrl(process.env.PLATFORM_URL) === normalizeBaseUrl(platformUrl);
+  } catch {
+    return false;
+  }
 }
 
 function currentUserKeyFor(
   config: PlatformConfig,
   user: string,
   platformUrl: string | undefined,
-  opts: { allowDefaultFallback: boolean },
+  opts: { canUseDefaultFallback: () => boolean },
 ): string {
   const selectedUserKey = platformUserKeyFor(user, platformUrl);
   if (config.users[selectedUserKey]) return selectedUserKey;
-  return opts.allowDefaultFallback ? user : selectedUserKey;
+  return opts.canUseDefaultFallback() ? user : selectedUserKey;
 }
 
 function activeCurrentUserKey(config: PlatformConfig): string | null {
@@ -46,13 +48,13 @@ function activeCurrentUserKey(config: PlatformConfig): string | null {
   if (!activeProfile) {
     if (!config.current_user) return null;
     return currentUserKeyFor(config, config.current_user, process.env.PLATFORM_URL, {
-      allowDefaultFallback: true,
+      canUseDefaultFallback: () => true,
     });
   }
   const profile = config.profiles[activeProfile];
   if (!profile) return null;
   return currentUserKeyFor(config, profile.user, profile.platform_url ?? process.env.PLATFORM_URL, {
-    allowDefaultFallback: canUseLegacyUserKey(profile.platform_url),
+    canUseDefaultFallback: () => canUseLegacyUserKey(profile.platform_url),
   });
 }
 

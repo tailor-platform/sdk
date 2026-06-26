@@ -299,6 +299,37 @@ describe("user list", () => {
     expect(stderr.output).toContain("u@example.com (current)");
   });
 
+  test("ignores an invalid env platform URL when an explicit profile token exists", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    vi.stubEnv("PLATFORM_URL", "not a url");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "profile-token",
+          refresh_token: "profile-refresh",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: "u@example.com",
+    });
+
+    using stderr = captureStderr();
+
+    await runCommand(userCommand, []);
+
+    expect(stderr.output).toContain("u@example.com [https://api.dev.tailor.tech] (current)");
+  });
+
   test("marks the env-selected token current when the active profile has no platform URL", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
