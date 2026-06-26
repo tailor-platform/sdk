@@ -128,7 +128,9 @@ function addedNames<T extends { name: string }>(
 
 function tableMetadata(table: TailorDbErdTable): object {
   return {
+    backwardRelationships: table.backwardRelationships,
     description: table.description,
+    forwardRelationships: table.forwardRelationships,
     pluralForm: table.pluralForm,
     source: table.source,
   };

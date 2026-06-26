@@ -83,10 +83,12 @@ build artifacts, but the comment step is skipped because fork tokens cannot
 write PR comments.
 
 `--erd-preview` is only available for branch targets with the plan job enabled;
-it cannot be combined with `--tag` or `--no-plan`. The namespace matrix is
-generated from the config when you run `setup`, so re-run `setup` after adding
-or removing TailorDB namespaces. `setup check` reports drift when the recorded
-ERD preview namespaces no longer match the current config.
+it cannot be combined with `--tag` or `--no-plan`. The namespace list is
+recorded in `.github/tailor-sdk.lock`; the pull request workflow compares the
+head and base lock files so newly added or removed namespaces can still produce
+all-added or all-removed diff artifacts. Re-run `setup` after adding or
+removing TailorDB namespaces. `setup check` reports drift when the recorded ERD
+preview namespaces no longer match the current config.
 
 ### Tag target (recommended for production)
 

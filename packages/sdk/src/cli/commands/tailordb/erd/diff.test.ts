@@ -207,6 +207,51 @@ describe("buildErdSchemaDiff", () => {
     expect(diff.summary).toEqual({ added: 2, changed: 0, removed: 0 });
     expect(diff.changes.map((change) => change.path)).toEqual(["Account", "User"]);
   });
+
+  test("detects relationship metadata changes on tables", () => {
+    const base = schema({
+      tables: [
+        table("User", {
+          forwardRelationships: [
+            {
+              name: "orders",
+              targetType: "Order",
+              targetField: "userId",
+              sourceField: "id",
+              isArray: true,
+              description: "Old label",
+            },
+          ],
+        }),
+      ],
+    });
+    const head = schema({
+      tables: [
+        table("User", {
+          forwardRelationships: [
+            {
+              name: "orders",
+              targetType: "Order",
+              targetField: "userId",
+              sourceField: "id",
+              isArray: true,
+              description: "New label",
+            },
+          ],
+        }),
+      ],
+    });
+
+    const diff = buildErdSchemaDiff({ base, head });
+
+    expect(diff.changed).toBe(true);
+    expect(diff.changes).toContainEqual({
+      action: "changed",
+      entity: "table",
+      path: "User",
+      detail: "Changed fields: forwardRelationships",
+    });
+  });
 });
 
 describe("ERD diff rendering", () => {

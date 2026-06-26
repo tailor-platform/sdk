@@ -63,7 +63,73 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
   # __PLAN_JOB_END__
   # __ERD_PREVIEW_JOB_START__
+  tailor-erd-preview-matrix:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      namespaces: ${{ steps.tailor-erd-preview-matrix.outputs.namespaces }}
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - id: tailor-checkout-base
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .tailor-erd-base
+          persist-credentials: false
+      - id: tailor-erd-preview-matrix
+        shell: bash
+        env:
+          WORKSPACE_NAME: "__WORKSPACE_NAME__"
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const workspaceName = process.env.WORKSPACE_NAME;
+          const output = process.env.GITHUB_OUTPUT;
+
+          function namespacesFromLock(file) {
+            try {
+              const lock = JSON.parse(fs.readFileSync(file, "utf8"));
+              const target = lock.targets?.find(
+                (candidate) =>
+                  candidate.kind === "branch" &&
+                  candidate.workspaceName === workspaceName &&
+                  candidate.inputs?.erdPreview === true,
+              );
+              return Array.isArray(target?.inputs?.erdNamespaces)
+                ? target.inputs.erdNamespaces
+                : [];
+            } catch (error) {
+              if (error && error.code === "ENOENT") return [];
+              throw error;
+            }
+          }
+
+          const namespaces = [
+            ...new Set([
+              ...namespacesFromLock(".github/tailor-sdk.lock"),
+              ...namespacesFromLock(".tailor-erd-base/.github/tailor-sdk.lock"),
+            ]),
+          ].sort((a, b) => a.localeCompare(b));
+
+          if (namespaces.length === 0) {
+            console.error("No ERD preview namespaces found in the head or base setup lock.");
+            process.exit(1);
+          }
+
+          fs.appendFileSync(output, `namespaces=${JSON.stringify(namespaces)}\n`);
+          NODE
+
   tailor-erd-preview:
+    needs: tailor-erd-preview-matrix
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -72,7 +138,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        namespace: [__ERD_NAMESPACES__]
+        namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}
     steps:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -115,6 +181,7 @@ jobs:
           preview_output="$RUNNER_TEMP/tailor-erd/preview"
           diff_output="$RUNNER_TEMP/tailor-erd/diff"
           dts_output="$RUNNER_TEMP/tailor-erd/dts"
+          head_log="$RUNNER_TEMP/tailor-erd/head-$NAMESPACE.log"
           base_log="$RUNNER_TEMP/tailor-erd/base-$NAMESPACE.log"
           rm -rf "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
           mkdir -p "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
@@ -125,11 +192,23 @@ jobs:
           base_html="$base_output/$NAMESPACE/dist/index.html"
           diff_html="$diff_output/$NAMESPACE-diff.html"
 
-          (
+          head_missing="false"
+          if ! (
             cd "$GITHUB_WORKSPACE/$APP_DIR"
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts" \
               run_tailor_sdk tailordb erd export --config "$head_config" --namespace "$NAMESPACE" --output "$head_output"
-          )
+          ) >"$head_log" 2>&1; then
+            if grep -q 'not found in local config.db' "$head_log"; then
+              cat "$head_log"
+              echo "Head ERD namespace '$NAMESPACE' not found; rendering base objects as removed."
+              head_missing="true"
+            else
+              cat "$head_log"
+              exit 1
+            fi
+          elif [ -s "$head_log" ]; then
+            cat "$head_log"
+          fi
 
           base_missing="false"
           if ! (
@@ -149,16 +228,29 @@ jobs:
             cat "$base_log"
           fi
 
+          if [ "$head_missing" = "true" ] && [ "$base_missing" = "true" ]; then
+            echo "::error::ERD namespace '$NAMESPACE' was not found in head or base."
+            exit 1
+          fi
+          if [ "$head_missing" = "false" ] && [ ! -f "$head_html" ]; then
+            echo "::error::Head ERD viewer was not generated at $head_html"
+            exit 1
+          fi
           if [ "$base_missing" = "false" ] && [ ! -f "$base_html" ]; then
             echo "::error::Base ERD viewer was not generated at $base_html"
             exit 1
           fi
 
-          cp "$head_html" "$preview_output/$NAMESPACE.html"
-          diff_args=(--head-html "$head_html" --output "$diff_html")
-          if [ "$base_missing" = "true" ]; then
-            diff_args+=(--namespace "$NAMESPACE")
-          else
+          if [ "$head_missing" = "false" ]; then
+            cp "$head_html" "$preview_output/$NAMESPACE-viewer.html"
+          fi
+          echo "head-missing=$head_missing" >> "$GITHUB_OUTPUT"
+
+          diff_args=(--namespace "$NAMESPACE" --output "$diff_html")
+          if [ "$head_missing" = "false" ]; then
+            diff_args+=(--head-html "$head_html")
+          fi
+          if [ "$base_missing" = "false" ]; then
             diff_args+=(--base-html "$base_html")
           fi
           (
@@ -166,10 +258,11 @@ jobs:
             run_tailor_sdk tailordb erd diff "${diff_args[@]}"
           )
       - id: tailor-upload-erd-viewer
+        if: steps.tailor-build-erd-preview.outputs.head-missing != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tailor-erd-viewer-${{ matrix.namespace }}
-          path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}.html
+          path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html
           if-no-files-found: error
           archive: false
           retention-days: 7
@@ -201,25 +294,34 @@ jobs:
           SERVER: ${{ github.server_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MARKER: "<!-- tailor-erd-preview: __WORKSPACE_NAME__ -->"
         run: |
           set -euo pipefail
+
+          current_head=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.head.sha')
+          if [ "$current_head" != "$HEAD_SHA" ]; then
+            echo "Skipping stale ERD preview comment for $HEAD_SHA; current head is $current_head."
+            exit 0
+          fi
 
           body="$MARKER"$'\n'"### TailorDB ERD preview (__WORKSPACE_NAME__)"$'\n\n'
           body+="Self-contained HTML artifacts for this pull request. Diff previews compare this pull request with base branch \`$BASE_REF\`."$'\n'
 
           while IFS=$'\t' read -r name id; do
             [ -z "$name" ] && continue
-            if [[ "$name" == *-diff.html ]]; then
+            if [[ "$name" == *-viewer.html ]]; then
+              ns=${name%-viewer.html}
+              label="$ns viewer"
+            elif [[ "$name" == *-diff.html ]]; then
               ns=${name%-diff.html}
               label="$ns diff"
             else
-              ns=${name%.html}
-              label="$ns viewer"
+              continue
             fi
             body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
           done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv' | sort)
+            --jq '.artifacts[] | select((.name | endswith("-viewer.html")) or (.name | endswith("-diff.html"))) | [.name, (.id|tostring)] | @tsv' | sort)
 
           existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
             --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')

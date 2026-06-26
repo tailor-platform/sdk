@@ -147,10 +147,6 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     params.workingDirectory ? `paths: ["${params.workingDirectory}/**"]` : undefined,
   );
 
-  if (erdPreview) {
-    out = out.replaceAll("__ERD_NAMESPACES__", () => erdPreview.namespaces.join(", "));
-  }
-
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
 
   const generatedIds: string[] = [];
@@ -165,6 +161,10 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   }
   if (erdPreview) {
     generatedIds.push(
+      "tailor-erd-preview-matrix",
+      "tailor-erd-preview-matrix/tailor-checkout",
+      "tailor-erd-preview-matrix/tailor-checkout-base",
+      "tailor-erd-preview-matrix/tailor-erd-preview-matrix",
       "tailor-erd-preview",
       "tailor-erd-preview/tailor-checkout",
       "tailor-erd-preview/tailor-setup",

@@ -175,23 +175,37 @@ describe("renderBranchWorkflow", () => {
 
     expect(Object.keys(parsed.jobs)).toEqual([
       "tailor-plan",
+      "tailor-erd-preview-matrix",
       "tailor-erd-preview",
       "tailor-erd-preview-comment",
       "tailor-deploy",
     ]);
-    expect(content).toContain("namespace: [tailordb, analyticsdb]");
+    expect(content).toContain(
+      "namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}",
+    );
+    expect(content).toContain(".tailor-erd-base/.github/tailor-sdk.lock");
     expect(content).toContain("run_tailor_sdk tailordb erd export");
     expect(content).toContain("run_tailor_sdk tailordb erd diff");
     expect(content).toContain(
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"',
     );
     expect(content).toContain('run_tailor_sdk tailordb erd export --config "$base_config"');
+    expect(content).toContain('head_missing="false"');
+    expect(content).toContain('echo "head-missing=$head_missing" >> "$GITHUB_OUTPUT"');
     expect(content).toContain("grep -q 'not found in local config.db'");
-    expect(content).toContain('diff_args+=(--namespace "$NAMESPACE")');
+    expect(content).toContain('diff_args=(--namespace "$NAMESPACE" --output "$diff_html")');
+    expect(content).toContain("if: steps.tailor-build-erd-preview.outputs.head-missing != 'true'");
+    expect(content).toContain("-viewer.html");
+    expect(content).toContain("HEAD_SHA: ${{ github.event.pull_request.head.sha }}");
+    expect(content).toContain('current_head=$(gh api "repos/$REPO/pulls/$PR_NUMBER"');
     expect(content).toContain("archive: false");
     expect(content).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(generatedIds).toEqual(
       expect.arrayContaining([
+        "tailor-erd-preview-matrix",
+        "tailor-erd-preview-matrix/tailor-checkout",
+        "tailor-erd-preview-matrix/tailor-checkout-base",
+        "tailor-erd-preview-matrix/tailor-erd-preview-matrix",
         "tailor-erd-preview",
         "tailor-erd-preview/tailor-checkout",
         "tailor-erd-preview/tailor-checkout-base",
@@ -463,7 +477,9 @@ describe("setupGitHub (integration)", () => {
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
     const lock = readLock(testDir);
     expect(wf).toContain("tailor-erd-preview:");
-    expect(wf).toContain("namespace: [tailordb, analyticsdb]");
+    expect(wf).toContain(
+      "namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}",
+    );
     expect(lock?.targets[0]?.inputs.erdPreview).toBe(true);
     expect(lock?.targets[0]?.inputs.erdNamespaces).toEqual(["tailordb", "analyticsdb"]);
   });
