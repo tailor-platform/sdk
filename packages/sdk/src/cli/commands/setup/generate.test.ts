@@ -213,7 +213,8 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("grep -q 'not found in local config.db'");
     expect(content).toContain('diff_args=(--namespace "$NAMESPACE" --output "$diff_html")');
     expect(content).toContain("if: steps.tailor-build-erd-preview.outputs.head-missing != 'true'");
-    expect(content).toContain("-viewer.html");
+    expect(content).toContain("name: ${{ matrix.namespace }}-viewer.html");
+    expect(content).toContain("name: ${{ matrix.namespace }}-diff.html");
     expect(content).toContain("HEAD_SHA: ${{ github.event.pull_request.head.sha }}");
     expect(content).toContain('current_head=$(gh api "repos/$REPO/pulls/$PR_NUMBER"');
     expect(content).toContain("archive: false");

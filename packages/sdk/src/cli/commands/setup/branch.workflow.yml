@@ -447,7 +447,7 @@ jobs:
         if: steps.tailor-build-erd-preview.outputs.head-missing != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: tailor-erd-viewer-${{ matrix.namespace }}
+          name: ${{ matrix.namespace }}-viewer.html
           path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html
           if-no-files-found: error
           archive: false
@@ -455,7 +455,7 @@ jobs:
       - id: tailor-upload-erd-diff
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: tailor-erd-diff-${{ matrix.namespace }}
+          name: ${{ matrix.namespace }}-diff.html
           path: ${{ runner.temp }}/tailor-erd/diff/${{ matrix.namespace }}-diff.html
           if-no-files-found: error
           archive: false
