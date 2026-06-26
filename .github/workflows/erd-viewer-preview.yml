@@ -46,6 +46,10 @@ jobs:
           path: .erd-base
           persist-credentials: false
 
+      - name: Install base deps
+        working-directory: .erd-base
+        run: pnpm install --frozen-lockfile
+
       # `erd export` is fully local (no platform login/network needed) and emits
       # a single self-contained index.html per namespace. The base checkout is
       # built with this PR's SDK so the diff reflects schema changes, not viewer
@@ -56,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-diff"
+          mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-diff" "$RUNNER_TEMP/erd-dts"
 
           (
             cd example

@@ -60,6 +60,11 @@ const COMMON = {
 };
 
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
+const REPO_ROOT = path.resolve(process.cwd(), "../..");
+const ERD_PREVIEW_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-viewer-preview.yml");
+
+// Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
+const actionlintAvailable = isActionlintAvailable();
 
 // ---------------------------------------------------------------------------
 // Utility: write + lint a workflow
@@ -71,12 +76,29 @@ function writeAndLint(name: string, content: string): LintResult {
   return runActionlint(filePath);
 }
 
+describe("repository ERD preview workflow", () => {
+  test("installs base dependencies before exporting the base schema", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+    const checkoutBase = content.indexOf("name: Checkout base branch");
+    const installBase = content.indexOf("name: Install base deps");
+    const baseExport = content.indexOf("cd .erd-base/example");
+
+    expect(checkoutBase).toBeGreaterThanOrEqual(0);
+    expect(installBase).toBeGreaterThan(checkoutBase);
+    expect(installBase).toBeLessThan(baseExport);
+    expect(content).toContain("working-directory: .erd-base");
+    expect(content).toContain("pnpm install --frozen-lockfile");
+  });
+
+  test.skipIf(!actionlintAvailable)("passes actionlint", () => {
+    const { ok, output } = runActionlint(ERD_PREVIEW_WORKFLOW);
+    expect(ok, `actionlint errors for ${ERD_PREVIEW_WORKFLOW}:\n${output}`).toBe(true);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Tests (skipped when actionlint is not on PATH)
 // ---------------------------------------------------------------------------
-
-// Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
-const actionlintAvailable = isActionlintAvailable();
 
 describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWorkflow", () => {
   // All four package managers, plan=true, no optional fields
