@@ -8,8 +8,21 @@ describe("getApplicableCodemods", () => {
     expect(codemods[0]!.id).toBe("v2/define-generators-to-plugins");
   });
 
+  test("returns codemods when upgrading to a prerelease at their version boundary", () => {
+    const stableCodemods = getApplicableCodemods("1.67.1", "2.0.0");
+    const prereleaseCodemods = getApplicableCodemods("1.67.1", "2.0.0-next.2");
+
+    expect(prereleaseCodemods.map((codemod) => codemod.id)).toEqual(
+      stableCodemods.map((codemod) => codemod.id),
+    );
+  });
+
   test("returns empty when both versions are before the codemod boundary", () => {
     expect(getApplicableCodemods("1.0.0", "1.5.0")).toEqual([]);
+  });
+
+  test("returns empty when the target prerelease is before the codemod boundary", () => {
+    expect(getApplicableCodemods("1.67.1", "1.99.0-next.1")).toEqual([]);
   });
 
   test("returns empty when both versions are after the codemod boundary", () => {
