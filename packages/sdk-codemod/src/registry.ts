@@ -437,6 +437,15 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     notice: true,
   },
+  {
+    id: "v2/node-minimum-22-15-0",
+    name: "Node.js minimum version raised to 22.15.0",
+    description:
+      "v2 requires Node.js **22.15.0** or later. This is the first version that includes `module.registerHooks()`, which the SDK uses to register its TypeScript loader hook synchronously in the main thread. No source change is required; ensure your environment runs Node.js 22.15.0+.",
+    since: "1.0.0",
+    until: "2.0.0",
+    notice: true,
+  },
 ];
 
 /**
