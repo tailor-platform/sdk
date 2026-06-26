@@ -10,7 +10,7 @@ import type { Hook } from "./types";
 
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type Expect<T extends true> = T;
-type ThisEquals<T, Message extends string> = Equal<ThisParameterType<T>, TypeLevelError<Message>>;
+type TypeEquals<T, Message extends string> = Equal<T, TypeLevelError<Message>>;
 
 describe("TailorDBField basic field type tests", () => {
   test("string field outputs string type correctly", () => {
@@ -386,7 +386,7 @@ describe("TailorDBField type error message tests", () => {
   test("invalid field modifiers expose type-level error messages", () => {
     const dbField = db.string();
     type _TypeName = Expect<
-      ThisEquals<typeof dbField.typeName, "typeName cannot be used on TailorDB fields">
+      TypeEquals<typeof dbField.typeName, "typeName cannot be used on TailorDB fields">
     >;
 
     const erasedDBField: TailorAnyDBField = db.string();
@@ -395,7 +395,7 @@ describe("TailorDBField type error message tests", () => {
 
     const described = db.string().description("Name");
     type _Description = Expect<
-      ThisEquals<typeof described.description, ".description() has already been set">
+      TypeEquals<typeof described.description, ".description() has already been set">
     >;
 
     const _userType = db.type("User", {
@@ -406,71 +406,71 @@ describe("TailorDBField type error message tests", () => {
       toward: { type: _userType },
     });
     type _RelationDuplicate = Expect<
-      ThisEquals<typeof related.relation, ".relation() has already been set">
+      TypeEquals<typeof related.relation, ".relation() has already been set">
     >;
 
     const indexed = db.string().index();
     type _IndexDuplicate = Expect<
-      ThisEquals<typeof indexed.index, ".index() has already been set">
+      TypeEquals<typeof indexed.index, ".index() has already been set">
     >;
 
     const arrayString = db.string({ array: true });
     type _IndexArray = Expect<
-      ThisEquals<typeof arrayString.index, "index cannot be set on array fields">
+      TypeEquals<typeof arrayString.index, "index cannot be set on array fields">
     >;
 
     const unique = db.string().unique();
     type _UniqueDuplicate = Expect<
-      ThisEquals<typeof unique.unique, ".unique() has already been set">
+      TypeEquals<typeof unique.unique, ".unique() has already been set">
     >;
 
     const uniqueArray = db.string({ array: true });
     type _UniqueArray = Expect<
-      ThisEquals<typeof uniqueArray.unique, "unique cannot be set on array fields">
+      TypeEquals<typeof uniqueArray.unique, "unique cannot be set on array fields">
     >;
 
     const vector = db.string().vector();
     type _VectorDuplicate = Expect<
-      ThisEquals<typeof vector.vector, ".vector() has already been set">
+      TypeEquals<typeof vector.vector, ".vector() has already been set">
     >;
 
     const nonString = db.int();
     type _Vector = Expect<
-      ThisEquals<typeof nonString.vector, "vector can only be set on non-array string fields">
+      TypeEquals<typeof nonString.vector, "vector can only be set on non-array string fields">
     >;
 
     const hooked = db.string().hooks({ create: () => "created" });
-    type _HooksDuplicate = Expect<ThisEquals<typeof hooked.hooks, ".hooks() has already been set">>;
+    type _HooksDuplicate = Expect<TypeEquals<typeof hooked.hooks, ".hooks() has already been set">>;
     type _SerialAfterHooks = Expect<
-      ThisEquals<typeof hooked.serial, "serial cannot be set after hooks">
+      TypeEquals<typeof hooked.serial, "serial cannot be set after hooks">
     >;
 
     const emptyHooked = db.string().hooks({});
     type _EmptyHooksDuplicate = Expect<
-      ThisEquals<typeof emptyHooked.hooks, ".hooks() has already been set">
+      TypeEquals<typeof emptyHooked.hooks, ".hooks() has already been set">
     >;
 
     const nested = db.object({ name: db.string() });
     type _Hooks = Expect<
-      ThisEquals<typeof nested.hooks, "hooks cannot be set on nested type fields">
+      TypeEquals<typeof nested.hooks, "hooks cannot be set on nested type fields">
     >;
 
     const validated = db.string().validate(() => true);
     type _ValidateDuplicate = Expect<
-      ThisEquals<typeof validated.validate, ".validate() has already been set">
+      TypeEquals<typeof validated.validate, ".validate() has already been set">
     >;
 
     const serial = db.string().serial({ start: 0 });
     type _SerialDuplicate = Expect<
-      ThisEquals<typeof serial.serial, ".serial() has already been set">
+      TypeEquals<typeof serial.serial, ".serial() has already been set">
     >;
     type _HooksAfterSerial = Expect<
-      ThisEquals<typeof serial.hooks, "hooks cannot be set after serial">
+      TypeEquals<typeof serial.hooks, "hooks cannot be set after serial">
     >;
 
     const nonSerial = db.bool();
     type _SerialUnsupported = Expect<
-      ThisEquals<
+      TypeEquals<
         typeof nonSerial.serial,
         "serial can only be set on non-array integer or string fields"
       >
@@ -503,16 +503,15 @@ describe("TailorDBField relation modifier tests", () => {
       name: db.string(),
     });
 
+    const related = db.uuid().relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
     // @ts-expect-error relation() cannot be called after relation() has already been called
-    db.uuid()
-      .relation({
-        type: "oneToOne",
-        toward: { type: _userType },
-      })
-      .relation({
-        type: "oneToOne",
-        toward: { type: _userType },
-      });
+    related.relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
   });
 });
 
@@ -531,11 +530,12 @@ describe("TailorDBField hooks modifier tests", () => {
   });
 
   test("setting hooks on nested field causes type error", () => {
-    // @ts-expect-error hooks() cannot be called on nested fields
-    db.object({
+    const nested = db.object({
       first: db.string(),
       last: db.string(),
-    }).hooks({ create: () => ({ first: "A", last: "B" }) });
+    });
+    // @ts-expect-error hooks() cannot be called on nested fields
+    nested.hooks({ create: () => ({ first: "A", last: "B" }) });
   });
 
   test("hooks modifier on string field receives string", () => {
@@ -596,10 +596,9 @@ describe("TailorDBField validate modifier tests", () => {
   });
 
   test("calling validate modifier more than once causes type error", () => {
+    const validated = db.string().validate(() => true);
     // @ts-expect-error validate() cannot be called after validate() has already been called
-    db.string()
-      .validate(() => true)
-      .validate(() => true);
+    validated.validate(() => true);
   });
 
   test("validate modifier on string field receives string", () => {

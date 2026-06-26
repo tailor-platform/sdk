@@ -5,28 +5,28 @@ import type { TypeLevelError } from "#/types/helpers";
 
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type Expect<T extends true> = T;
-type ThisEquals<T, Message extends string> = Equal<ThisParameterType<T>, TypeLevelError<Message>>;
+type TypeEquals<T, Message extends string> = Equal<T, TypeLevelError<Message>>;
 
 describe("typeName method type safety", () => {
   test("invalid field modifiers expose type-level error messages", () => {
     const described = t.string().description("Name");
     type _Description = Expect<
-      ThisEquals<typeof described.description, ".description() has already been set">
+      TypeEquals<typeof described.description, ".description() has already been set">
     >;
 
     const scalar = t.string();
     type _TypeNameScalar = Expect<
-      ThisEquals<typeof scalar.typeName, "typeName can only be set on enum or object fields">
+      TypeEquals<typeof scalar.typeName, "typeName can only be set on enum or object fields">
     >;
 
     const named = t.enum(["active", "inactive"]).typeName("Status");
     type _TypeNameDuplicate = Expect<
-      ThisEquals<typeof named.typeName, ".typeName() has already been set">
+      TypeEquals<typeof named.typeName, ".typeName() has already been set">
     >;
 
     const validated = t.string().validate(() => true);
     type _ValidateDuplicate = Expect<
-      ThisEquals<typeof validated.validate, ".validate() has already been set">
+      TypeEquals<typeof validated.validate, ".validate() has already been set">
     >;
   });
 
