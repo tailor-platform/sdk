@@ -174,10 +174,48 @@ jobs:
             fi
           )"
           echo "package-manager=$base_package_manager" >> "$GITHUB_OUTPUT"
+          if [ "$base_package_manager" = "pnpm" ]; then
+            base_pnpm_version="$(node <<'NODE'
+          const fs = require("node:fs");
+
+          const fallback = "10";
+
+          function readManifest(file) {
+            try {
+              return JSON.parse(fs.readFileSync(file, "utf8"));
+            } catch {
+              return {};
+            }
+          }
+
+          function pnpmVersion(manifest) {
+            const packageManager = manifest.packageManager;
+            if (typeof packageManager === "string" && packageManager.startsWith("pnpm@")) {
+              return packageManager.slice("pnpm@".length).split("+")[0];
+            }
+
+            const devPackageManager = manifest.devEngines?.packageManager;
+            if (devPackageManager?.name === "pnpm" && devPackageManager.version) {
+              return devPackageManager.version;
+            }
+
+            return undefined;
+          }
+
+          process.stdout.write(
+            pnpmVersion(readManifest("package.json")) ??
+              pnpmVersion(readManifest("../package.json")) ??
+              fallback,
+          );
+          NODE
+          )"
+            echo "pnpm-version=$base_pnpm_version" >> "$GITHUB_OUTPUT"
+          fi
       - id: tailor-setup-base-pnpm
         if: steps.tailor-detect-base-package-manager.outputs['package-manager'] == 'pnpm'
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
+          version: ${{ steps.tailor-detect-base-package-manager.outputs['pnpm-version'] }}
           package_json_file: .tailor-erd-base/package.json
           run_install: false
       - id: tailor-setup-base-node

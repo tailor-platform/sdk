@@ -255,6 +255,11 @@ describe("renderBranchWorkflow", () => {
     expect(baseSetup).not.toContain("cache:");
     expect(baseSetup).toContain("pnpm/action-setup@");
     expect(baseSetup).toContain("package_json_file: .tailor-erd-base/package.json");
+    expect(baseSetup).toContain(
+      "version: ${{ steps.tailor-detect-base-package-manager.outputs['pnpm-version'] }}",
+    );
+    expect(baseSetup).toContain('fallback = "10";');
+    expect(baseSetup).toContain('echo "pnpm-version=$base_pnpm_version" >> "$GITHUB_OUTPUT"');
     expect(baseSetup).toContain("actions/setup-node@");
     expect(baseSetup).toContain("oven-sh/setup-bun@");
     expect(baseSetup).toContain("pnpm install --frozen-lockfile");
