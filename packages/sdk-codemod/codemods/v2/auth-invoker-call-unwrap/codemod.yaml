@@ -1,4 +1,7 @@
 name: "@tailor-platform/auth-invoker-call-unwrap"
-version: 0.1.0
+version: "1.0.0"
 description: 'Replace auth.invoker("name") with the bare string "name" while preserving the authInvoker option key'
+engine: jssg
 language: typescript
+since: "1.0.0"
+until: "2.0.0"
