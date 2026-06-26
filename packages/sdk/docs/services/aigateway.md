@@ -1,12 +1,12 @@
 # AI Gateway
 
-AI Gateway provides a unified endpoint for accessing multiple LLM providers (Azure OpenAI, Google Vertex AI Gemini, Anthropic via Vertex AI) through a single OpenAI-compatible API, with platform-managed credentials and workspace-scoped authentication.
+AI Gateway provides a unified endpoint for accessing a range of large language models through a single OpenAI-compatible API, with platform-managed credentials and workspace-scoped authentication.
 
 ## Overview
 
 AI Gateway provides:
 
-- A unified, OpenAI-compatible endpoint for multiple LLM providers
+- A unified, OpenAI-compatible endpoint for multiple LLM models
 - Mandatory authentication via your workspace's auth (request tokens are resolved against the configured auth namespace)
 - Per-workspace isolation: each gateway is provisioned with its own platform-assigned URL
 - Optional CORS allow-list for browser-based clients
@@ -31,6 +31,7 @@ const aiGateway = defineAIGateway("my-aigateway", {
 });
 
 export default defineConfig({
+  name: "my-app",
   aiGateways: [aiGateway],
 });
 ```
@@ -80,6 +81,7 @@ const website = defineStaticWebSite("my-frontend", {
 });
 
 const aiGateway = defineAIGateway("my-aigateway", {
+  // Name of an auth namespace in your workspace; request tokens are resolved against it.
   authNamespace: "default",
   cors: [website.url],
 });
