@@ -29,6 +29,7 @@ type MockIdpServiceOpts = {
   name?: string;
   clients?: string[];
   publishUserEvents?: boolean | undefined;
+  gqlOperations?: Record<string, boolean | undefined>;
 };
 
 function createMockApplication(opts?: {
@@ -37,10 +38,10 @@ function createMockApplication(opts?: {
   const serviceOpts = opts?.idpServices ?? [{}];
   return {
     name: appName,
+    staticWebsiteServices: [],
     idpServices: serviceOpts.map((service) => {
       const result: Record<string, unknown> = {
         name: service.name ?? "idp-a",
-        authorization: "loggedIn",
         lang: "ja",
         userAuthPolicy: {
           useNonEmailIdentifier: false,
@@ -62,6 +63,7 @@ function createMockApplication(opts?: {
           delete: true,
           read: true,
           sendPasswordResetEmail: true,
+          ...service.gqlOperations,
         },
         clients: service.clients ?? ["default-idp-client"],
       };
@@ -80,7 +82,6 @@ function createMockApplication(opts?: {
 function createMockClient(opts?: {
   services?: Array<{
     name: string;
-    authorization: string;
     lang: IdPLang;
     publishUserEvents: boolean;
     userAuthPolicy?: Record<string, unknown>;
@@ -97,7 +98,7 @@ function createMockClient(opts?: {
     listIdPServices: vi.fn().mockResolvedValue({
       idpServices: services.map((service) => ({
         namespace: { name: service.name },
-        authorization: service.authorization,
+        authorization: "",
         lang: service.lang,
         publishUserEvents: service.publishUserEvents,
         userAuthPolicy: service.userAuthPolicy,
@@ -138,7 +139,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -183,7 +183,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -231,7 +230,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "true==true",
           lang: IdPLang.EN,
           publishUserEvents: false,
           label: appName,
@@ -253,7 +251,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -296,7 +293,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -340,7 +336,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -380,6 +375,7 @@ describe("planIdP", () => {
       update: [{ conditions: [], permit: true }],
       delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       sendPasswordResetEmail: [{ conditions: [], permit: true }],
+      unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     };
 
     const result = await planIdP(context);
@@ -393,7 +389,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -424,6 +419,7 @@ describe("planIdP", () => {
             update: [],
             delete: [],
             sendPasswordResetEmail: [],
+            unenrollMfa: [],
           },
           label: appName,
         },
@@ -441,58 +437,7 @@ describe("planIdP", () => {
       update: [],
       delete: [],
       sendPasswordResetEmail: [],
-    };
-
-    const result = await planIdP(context);
-
-    expect(result.changeSet.service.unchanged).toHaveLength(1);
-    expect(result.changeSet.service.updates).toHaveLength(0);
-  });
-
-  test("marks idp service unchanged when authorization is omitted and remote is empty string", async () => {
-    const app = createMockApplication();
-    // oxlint-disable-next-line no-explicit-any
-    delete (app.idpServices[0] as any).authorization;
-
-    const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          authorization: "",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
-          label: appName,
-        },
-      ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
-    });
-
-    const context = {
-      ...createContext(client),
-      application: app,
+      unenrollMfa: [],
     };
 
     const result = await planIdP(context);
@@ -506,7 +451,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -536,6 +480,7 @@ describe("planIdP", () => {
             update: [],
             delete: [],
             sendPasswordResetEmail: [],
+            unenrollMfa: [],
           },
           label: appName,
         },
@@ -556,7 +501,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           label: appName,
@@ -571,6 +515,46 @@ describe("planIdP", () => {
 
     expect(result.changeSet.client.creates).toHaveLength(1);
     expect(result.changeSet.client.unchanged).toHaveLength(0);
+  });
+});
+
+describe("planIdP / gqlOperations MFA mapping", () => {
+  test("defaults disableGqlOperations.requestMfaSettingsUrl and unenrollMfa to false when local gqlOperations does not disable them", async () => {
+    const app = createMockApplication();
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.creates).toHaveLength(1);
+    const request = result.changeSet.service.creates[0]!.request;
+    expect(request.disableGqlOperations?.requestMfaSettingsUrl).toBe(false);
+    expect(request.disableGqlOperations?.unenrollMfa).toBe(false);
+  });
+
+  test("flips disableGqlOperations.requestMfaSettingsUrl and unenrollMfa to true when local gqlOperations explicitly disables them", async () => {
+    const app = createMockApplication({
+      idpServices: [
+        {
+          gqlOperations: { requestMfaSettingsUrl: false, unenrollMfa: false },
+        },
+      ],
+    });
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.creates).toHaveLength(1);
+    const request = result.changeSet.service.creates[0]!.request;
+    expect(request.disableGqlOperations?.requestMfaSettingsUrl).toBe(true);
+    expect(request.disableGqlOperations?.unenrollMfa).toBe(true);
   });
 });
 

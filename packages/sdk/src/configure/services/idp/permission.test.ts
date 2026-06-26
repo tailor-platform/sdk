@@ -55,6 +55,7 @@ describe("IdPPermission type checks", () => {
       update: [{ conditions: [[{ newIdpUser: "name" }, "=", "test"]], permit: true }],
       delete: [{ conditions: [[{ user: "id" }, "=", "admin"]], permit: true }],
       sendPasswordResetEmail: [{ conditions: [], permit: true }],
+      unenrollMfa: [{ conditions: [[{ user: "id" }, "=", "admin"]], permit: true }],
     };
     expectTypeOf(_perm).toExtend<IdPPermission>();
   });
@@ -66,6 +67,7 @@ describe("IdPPermission type checks", () => {
       update: [],
       delete: [],
       sendPasswordResetEmail: [],
+      unenrollMfa: [],
     };
     expectTypeOf(_perm).toExtend<IdPPermission>();
   });

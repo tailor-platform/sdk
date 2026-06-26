@@ -103,6 +103,14 @@ export declare type IdPPermission = Message<"tailor.v1.IdPPermission"> & {
    * @generated from field: repeated tailor.v1.IdPPermissionPolicy send_password_reset_email = 5;
    */
   sendPasswordResetEmail: IdPPermissionPolicy[];
+
+  /**
+   * unenroll_mfa policies guard the dataplane MFA-unenroll mutation, which
+   * removes a single enrolled MFA factor from a user.
+   *
+   * @generated from field: repeated tailor.v1.IdPPermissionPolicy unenroll_mfa = 6;
+   */
+  unenrollMfa: IdPPermissionPolicy[];
 };
 
 /**
@@ -249,6 +257,20 @@ export declare type IdPDisableGqlOperations = Message<"tailor.v1.IdPDisableGqlOp
    * @generated from field: bool send_password_reset_email = 5;
    */
   sendPasswordResetEmail: boolean;
+
+  /**
+   * request_mfa_settings_url disables the _requestMfaSettingsUrl GraphQL query.
+   *
+   * @generated from field: bool request_mfa_settings_url = 6;
+   */
+  requestMfaSettingsUrl: boolean;
+
+  /**
+   * unenroll_mfa disables the _unenrollMfa GraphQL mutation.
+   *
+   * @generated from field: bool unenroll_mfa = 7;
+   */
+  unenrollMfa: boolean;
 };
 
 /**
@@ -397,6 +419,53 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * @generated from field: bool allow_microsoft_oauth = 12;
    */
   allowMicrosoftOauth: boolean;
+
+  /**
+   * enable_mfa makes TOTP MFA available for users in this namespace. When true the
+   * Identity Platform tenant has mfaConfig.State=ENABLED. When false, MFA cannot
+   * be enrolled or challenged regardless of require_mfa.
+   *
+   * @generated from field: bool enable_mfa = 13;
+   */
+  enableMfa: boolean;
+
+  /**
+   * require_mfa enforces TOTP MFA enrollment and challenge for password-authenticated
+   * users in this namespace. OAuth (Google/Microsoft) sign-in is not affected.
+   * Requires enable_mfa to be true.
+   *
+   * @generated from field: bool require_mfa = 14;
+   */
+  requireMfa: boolean;
+
+  /**
+   * allowed_return_origins lists application origins (e.g. "https://app.example.com")
+   * that the IdP is allowed to redirect users back to from self-service pages such
+   * as /mfa/settings. This is intentionally separate from OIDC redirect_uri, and
+   * covers the general case of "send the user back to the app after an action in
+   * the IdP UI". Each entry must be an origin (RFC 6454, scheme + host + optional
+   * port, no path, query, or fragment). The caller's returnTo URL may freely
+   * include a path and query; the matcher extracts its origin and compares against
+   * this list.
+   *
+   * The per-item pattern is stricter than RFC 6454 by design:
+   *   - host must match [a-zA-Z0-9.-]+ (DNS-friendly), so IPv6 literals
+   *     (http://[::1]) and underscores in hostnames are not accepted
+   *   - only http and https schemes are allowed
+   *   - path / query / fragment are rejected, since matching is origin-only
+   *
+   * @generated from field: repeated string allowed_return_origins = 15;
+   */
+  allowedReturnOrigins: string[];
+
+  /**
+   * mfa_issuer is the label shown next to the user account in authenticator apps
+   * (Google Authenticator, 1Password, etc.) when TOTP is enrolled. When empty the
+   * server falls back to "Tailor Platform IdP".
+   *
+   * @generated from field: string mfa_issuer = 16;
+   */
+  mfaIssuer: string;
 };
 
 /**
