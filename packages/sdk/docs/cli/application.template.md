@@ -81,8 +81,8 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 
 - `summary` — counts of each change type.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`.
-- `warnings` — resources not in config (`type: "unmanaged"`) or secrets with missing values (`type: "skippedSecret"`). These are informational and do not block apply.
-- `conflicts` — resources owned by another application that conflict with the current config. These do not block apply either, but the conflict entries are skipped.
+- `warnings` — resources not in config (`type: "unmanaged"`) or secrets with missing values (`type: "skippedSecret"`). Unmanaged resources require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
+- `conflicts` — resources owned by another application that conflict with the current config. Require confirmation in apply mode; apply is cancelled if declined.
 
 **Apply** (`--json`): writes a JSON object to stdout:
 
