@@ -149,10 +149,12 @@ function platformUserKey(user: string, config?: PlatformClientConfig): string {
 }
 
 function canUseLegacyUserKey(platformUrl: string): boolean {
-  return (
-    process.env.PLATFORM_URL !== undefined &&
-    normalizeBaseUrl(process.env.PLATFORM_URL) === platformUrl
-  );
+  if (process.env.PLATFORM_URL === undefined) return false;
+  try {
+    return normalizeBaseUrl(process.env.PLATFORM_URL) === platformUrl;
+  } catch {
+    return false;
+  }
 }
 
 type UserEntryLookupOptions = {

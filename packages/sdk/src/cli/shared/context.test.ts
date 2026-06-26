@@ -723,6 +723,34 @@ describe("loadAccessToken", () => {
         'User "testuser" not found',
       );
     });
+
+    test("does not fall back to an unscoped token for a profile platform URL with invalid env", async () => {
+      vi.stubEnv("PLATFORM_URL", "not a url");
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          testuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+            storage: "file",
+          },
+        },
+        profiles: {
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+
+      await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
+        'User "testuser" not found',
+      );
+    });
   });
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
