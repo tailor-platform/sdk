@@ -81,18 +81,8 @@ const semverSchema = z.templateLiteral([
   z.number().int(),
 ]);
 
-const pfConfigSchemaV2 = z.object({
-  version: z.literal(V2_CONFIG_VERSION),
-  min_sdk_version: semverSchema,
-  latest_version: z.number().int().optional(),
-  latest_min_sdk_version: semverSchema.optional(),
-  users: z.partialRecord(z.string(), pfUserSchemaV2),
-  profiles: z.partialRecord(z.string(), pfProfileSchema),
-  current_user: z.string().nullable(),
-});
-
-const pfConfigSchemaV3 = z.object({
-  version: z.literal(LATEST_CONFIG_VERSION),
+const pfConfigSchema = z.object({
+  version: z.union([z.literal(V2_CONFIG_VERSION), z.literal(LATEST_CONFIG_VERSION)]),
   min_sdk_version: semverSchema,
   latest_version: z.number().int().optional(),
   latest_min_sdk_version: semverSchema.optional(),
@@ -102,9 +92,9 @@ const pfConfigSchemaV3 = z.object({
 });
 
 type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
-type PfConfigV2 = z.output<typeof pfConfigSchemaV2>;
-type PfConfigV3 = z.output<typeof pfConfigSchemaV3>;
-type PfConfig = PfConfigV2 | PfConfigV3;
+type PfConfig = z.output<typeof pfConfigSchema>;
+type PfConfigV2 = PfConfig & { version: typeof V2_CONFIG_VERSION };
+type PfConfigV3 = PfConfig & { version: typeof LATEST_CONFIG_VERSION };
 type PfProfile = z.output<typeof pfProfileSchema>;
 type LoadWorkspaceIdOptions = {
   workspaceId?: string;
@@ -335,18 +325,10 @@ export async function readPlatformConfig(): Promise<PfConfig> {
     `);
   }
 
-  // Try latest first
-  const v3Result = pfConfigSchemaV3.safeParse(rawConfig);
-  if (v3Result.success) {
-    await warnIfNewerConfigAvailable(v3Result.data);
-    return v3Result.data;
-  }
-
-  // Try v2
-  const v2Result = pfConfigSchemaV2.safeParse(rawConfig);
-  if (v2Result.success) {
-    await warnIfNewerConfigAvailable(v2Result.data);
-    return v2Result.data;
+  const configResult = pfConfigSchema.safeParse(rawConfig);
+  if (configResult.success) {
+    await warnIfNewerConfigAvailable(configResult.data);
+    return configResult.data;
   }
 
   // Fall back to v1 (convert to v2 in memory, but don't rewrite disk)

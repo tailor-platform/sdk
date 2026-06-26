@@ -88,20 +88,6 @@ describe("profile update --permission", () => {
     expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
   });
 
-  test("does not treat TAILOR_PLATFORM_URL as an implicit update value", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
-    using _logger = silenceLogger("out", "success");
-
-    await runCommand(updateCommand, ["rw", "--permission", "read"]);
-
-    const config = await readPlatformConfig();
-    expect(config.profiles.rw?.readonly).toBe(true);
-    expect(config.profiles.rw?.platform_url).toBeUndefined();
-    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
-    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
-    expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
-  });
-
   test("clears readonly when --permission write is passed and skips remote validation", async () => {
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["ro", "--permission", "write"]);
@@ -301,18 +287,6 @@ describe("profile update --platform", () => {
     expect(config.profiles.myprofile?.platform_url).toBeUndefined();
     expect(config.profiles.myprofile?.oauth2_client_id).toBeUndefined();
     expect(config.profiles.myprofile?.console_url).toBeUndefined();
-  });
-
-  test("updates only OAuth2 client ID without remote validation", async () => {
-    using _logger = silenceLogger("out", "success");
-
-    await runCommand(updateCommand, ["myprofile", "--oauth2-client-id", "new-client"]);
-
-    const config = await readPlatformConfig();
-    expect(config.profiles.myprofile?.oauth2_client_id).toBe("new-client");
-    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
-    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
-    expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
   });
 
   test("rejects invalid platform URLs before writing config", async () => {

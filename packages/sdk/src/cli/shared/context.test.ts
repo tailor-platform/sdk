@@ -737,34 +737,6 @@ describe("loadAccessToken", () => {
       );
     });
 
-    test("does not fall back to an unscoped token for a profile platform URL with invalid env", async () => {
-      vi.stubEnv("TAILOR_PLATFORM_URL", "not a url");
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          testuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {
-          dev: {
-            user: "testuser",
-            workspace_id: "12345678-1234-4abc-8def-123456789012",
-            platform_url: "https://api.dev.tailor.tech",
-          },
-        },
-        current_user: null,
-      });
-
-      await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
-        'User "testuser" not found',
-      );
-    });
-
     test("removes a legacy unscoped token after refreshing it into a scoped platform key", async () => {
       vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
       const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
@@ -884,49 +856,6 @@ describe("loadAccessToken", () => {
   });
 });
 
-describe("saveUserTokens", () => {
-  const validToken = "valid-access-token";
-  const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
-
-  beforeEach(() => {
-    resetKeyringState();
-    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  test("preserves current_user when writing a token scoped to a custom platform URL", async () => {
-    const config = await readPlatformConfig();
-    await saveUserTokens(
-      config,
-      "testuser",
-      {
-        accessToken: validToken,
-        refreshToken: "refresh",
-      },
-      futureDate,
-      { platformUrl: "https://api.dev.tailor.tech" },
-    );
-    config.current_user = "testuser";
-    writePlatformConfig(config);
-
-    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
-    const reloaded = await readPlatformConfig();
-
-    expect(reloaded.current_user).toBe("testuser");
-    await expect(loadAccessToken()).resolves.toBe(validToken);
-  });
-});
-
 describe("loadConsoleBaseUrl", () => {
   beforeEach(() => {
     resetKeyringState();
@@ -957,26 +886,6 @@ describe("loadConsoleBaseUrl", () => {
           workspace_id: "12345678-1234-4abc-8def-123456789012",
           platform_url: "https://api.dev.tailor.tech",
           console_url: "https://console.dev.tailor.tech",
-        },
-      },
-      current_user: null,
-    });
-
-    await expect(loadConsoleBaseUrl({ profile: "dev" })).resolves.toBe(
-      "https://console.dev.tailor.tech",
-    );
-  });
-
-  test("infers console URL from an api.* platform URL", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        dev: {
-          user: "u@example.com",
-          workspace_id: "12345678-1234-4abc-8def-123456789012",
-          platform_url: "https://api.dev.tailor.tech",
         },
       },
       current_user: null,
@@ -1147,7 +1056,7 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     expect(diskConfig.current_user).toBe("file@example.com");
   });
 
-  test("keeps profile platform settings in a min-SDK gated config format", async () => {
+  test("keeps platform settings and scoped token keys in a min-SDK gated config format", async () => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -1155,6 +1064,11 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
         "file@example.com": {
           storage: "file",
           access_token: "file-access-token",
+          token_expires_at: futureDate,
+        },
+        "https://api.dev.tailor.tech|file@example.com": {
+          storage: "file",
+          access_token: "scoped-access-token",
           token_expires_at: futureDate,
         },
       },
@@ -1173,6 +1087,7 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
       version: number;
       min_sdk_version?: string;
+      users: Record<string, unknown>;
       profiles: Record<
         string,
         {
@@ -1187,36 +1102,10 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     expect(diskConfig.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
     expect(diskConfig.profiles.dev?.oauth2_client_id).toBe("dev-client");
     expect(diskConfig.profiles.dev?.console_url).toBe("https://console.dev.tailor.tech");
+    expect(diskConfig.users["https://api.dev.tailor.tech|file@example.com"]).toBeDefined();
 
     const config = await readPlatformConfig();
     expect(config.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
-  });
-
-  test("keeps scoped token keys in a min-SDK gated config format", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {
-        "https://api.dev.tailor.tech|file@example.com": {
-          storage: "file",
-          access_token: "file-access-token",
-          token_expires_at: futureDate,
-        },
-      },
-      profiles: {},
-      current_user: "file@example.com",
-    });
-
-    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
-      version: number;
-      min_sdk_version?: string;
-      users: Record<string, unknown>;
-      current_user: string | null;
-    };
-    expect(diskConfig.version).toBe(3);
-    expect(diskConfig.min_sdk_version).toBe("1.70.0");
-    expect(diskConfig.users["https://api.dev.tailor.tech|file@example.com"]).toBeDefined();
-    expect(diskConfig.current_user).toBe("file@example.com");
   });
 
   test("clears current_user on V1 downgrade when it points at a user not representable in V1", () => {

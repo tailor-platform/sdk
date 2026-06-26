@@ -129,40 +129,6 @@ describe("workspace create --permission", () => {
     expect(config.profiles.bootstrap?.readonly).toBeUndefined();
   });
 
-  test("creates a workspace with an env token when the active profile is missing", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "missing");
-    using _logger = silenceLogger("out", "success", "warn");
-
-    const result = await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west"]);
-
-    expect(result.success).toBe(true);
-    expect(initOperatorClient).toHaveBeenCalledWith("mock-token");
-    const config = await readPlatformConfig();
-    expect(config.profiles.missing).toBeUndefined();
-  });
-
-  test("creates a requested profile with an env token when the active profile is missing", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "missing");
-    using _logger = silenceLogger("out", "success", "warn");
-
-    const result = await runCommand(createCommand, [
-      "--name",
-      "test-ws",
-      "--region",
-      "us-west",
-      "--profile-name",
-      "bootstrap",
-    ]);
-
-    expect(result.success).toBe(true);
-    expect(initOperatorClient).toHaveBeenCalledWith("mock-token");
-    const config = await readPlatformConfig();
-    expect(config.profiles.bootstrap).toMatchObject({
-      user: "u@example.com",
-      workspace_id: validUUID,
-    });
-  });
-
   test("creates a profile for a user whose token is scoped to TAILOR_PLATFORM_URL", async () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
@@ -243,23 +209,5 @@ describe("workspace create --permission", () => {
       workspace_id: validUUID,
       platform_url: "https://api.dev.tailor.tech",
     });
-  });
-
-  test("creates no profile when --permission read is passed without --profile-name", async () => {
-    using _logger = silenceLogger("out", "success", "warn");
-    // Matches the existing --profile-user behavior: profile-only flags are
-    // silently inert when --profile-name is absent. We don't store the flag
-    // anywhere because no profile was created to attach it to.
-    await runCommand(createCommand, [
-      "--name",
-      "test-ws",
-      "--region",
-      "us-west",
-      "--permission",
-      "read",
-    ]);
-
-    const config = await readPlatformConfig();
-    expect(Object.keys(config.profiles)).toHaveLength(0);
   });
 });

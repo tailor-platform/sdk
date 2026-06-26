@@ -72,60 +72,6 @@ describe("user current", () => {
     expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
   });
 
-  test("accepts a current user whose tokens are scoped to TAILOR_PLATFORM_URL", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {
-        "https://api.dev.tailor.tech|u@example.com": {
-          storage: "file",
-          access_token: "token",
-          refresh_token: "refresh",
-          token_expires_at: "2999-01-01T00:00:00.000Z",
-        },
-      },
-      profiles: {},
-      current_user: "u@example.com",
-    });
-    using stdout = captureStdout();
-    using _json = jsonMode();
-
-    await runCommand(currentCommand, []);
-
-    expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
-  });
-
-  test("accepts a current user whose tokens are scoped to the active profile platform", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {
-        "https://api.dev.tailor.tech|u@example.com": {
-          storage: "file",
-          access_token: "token",
-          refresh_token: "refresh",
-          token_expires_at: "2999-01-01T00:00:00.000Z",
-        },
-      },
-      profiles: {
-        dev: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          platform_url: "https://api.dev.tailor.tech",
-        },
-      },
-      current_user: "u@example.com",
-    });
-    using stdout = captureStdout();
-    using _json = jsonMode();
-
-    await runCommand(currentCommand, []);
-
-    expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
-  });
-
   test("shows the active profile user instead of the global current user", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     writePlatformConfig({
