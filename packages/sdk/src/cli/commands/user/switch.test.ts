@@ -65,9 +65,14 @@ describe("user switch", () => {
     expect(config.current_user).toBe("u@example.com");
   });
 
-  test("uses the active profile platform when switching users", async () => {
+  test("updates the active profile user when switching users", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     const config = await readPlatformConfig();
+    config.users["https://api.dev.tailor.tech|other@example.com"] = {
+      storage: "file",
+      access_token: "other-token",
+      token_expires_at: "2999-01-01T00:00:00.000Z",
+    };
     config.profiles.dev = {
       user: "u@example.com",
       workspace_id: "12345678-1234-4abc-8def-123456789012",
@@ -75,11 +80,12 @@ describe("user switch", () => {
     };
     writePlatformConfig(config);
 
-    const result = await runCommand(switchCommand, ["u@example.com"]);
+    const result = await runCommand(switchCommand, ["other@example.com"]);
 
     expect(result.success).toBe(true);
     const updatedConfig = await readPlatformConfig();
-    expect(updatedConfig.current_user).toBe("u@example.com");
+    expect(updatedConfig.profiles.dev?.user).toBe("other@example.com");
+    expect(updatedConfig.current_user).toBeNull();
   });
 
   test("rejects scoped token keys as current user values", async () => {

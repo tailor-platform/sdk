@@ -1,4 +1,4 @@
-import { getPlatformBaseUrl, userAgent } from "#/cli/shared/client";
+import { getPlatformBaseUrl, userAgent, type PlatformClientConfig } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
 
 export interface ApiCallOptions {
@@ -12,6 +12,10 @@ export interface ApiCallResult {
   data: unknown;
 }
 
+function hasEnvAccessToken(): boolean {
+  return process.env.TAILOR_PLATFORM_TOKEN !== undefined || process.env.TAILOR_TOKEN !== undefined;
+}
+
 /**
  * Call Tailor Platform API endpoints directly.
  * If the endpoint doesn't contain "/", it defaults to `tailor.v1.OperatorService/{endpoint}`.
@@ -19,12 +23,17 @@ export interface ApiCallResult {
  * @returns Response status and data
  */
 export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
-  const platformConfig = await loadPlatformClientConfig({
-    profile: options.profile,
-  });
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
+  let platformConfig: PlatformClientConfig | undefined;
+  try {
+    platformConfig = await loadPlatformClientConfig({
+      profile: options.profile,
+    });
+  } catch (error) {
+    if (!hasEnvAccessToken()) throw error;
+  }
 
   let endpointPath: string;
   if (options.endpoint.includes("/")) {

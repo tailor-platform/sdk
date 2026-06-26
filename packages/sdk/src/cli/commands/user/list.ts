@@ -47,7 +47,11 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    const userInfos = users.map((user) => toUserListInfo(user, config.current_user));
+    const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
+    const currentUser = activeProfile
+      ? (config.profiles[activeProfile]?.user ?? null)
+      : config.current_user;
+    const userInfos = users.map((user) => toUserListInfo(user, currentUser));
     if (jsonOutput) {
       logger.out([...new Set(userInfos.map((userInfo) => userInfo.user))]);
       return;

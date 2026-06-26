@@ -39,8 +39,16 @@ export const switchCommand = defineAppCommand({
       `);
     }
 
-    // Set current user
-    config.current_user = args.user;
+    const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
+    if (activeProfile) {
+      const profile = config.profiles[activeProfile];
+      if (!profile) {
+        throw new Error(`Profile "${activeProfile}" not found`);
+      }
+      profile.user = args.user;
+    } else {
+      config.current_user = args.user;
+    }
     writePlatformConfig(config);
 
     logger.success(`Current user set to "${args.user}" successfully.`);
