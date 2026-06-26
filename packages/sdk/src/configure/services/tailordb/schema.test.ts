@@ -5,8 +5,12 @@ import { unauthenticatedTailorUser } from "#/configure/user";
 import { db } from "./schema";
 import type { FieldValidateInput, ValidateConfig } from "#/configure/types/field.types";
 import type { TailorUser } from "#/runtime/types";
-import type { output } from "#/types/helpers";
+import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
+
+type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Expect<T extends true> = T;
+type ThisEquals<T, Message extends string> = Equal<ThisParameterType<T>, TypeLevelError<Message>>;
 
 describe("TailorDBField basic field type tests", () => {
   test("string field outputs string type correctly", () => {
@@ -375,6 +379,87 @@ describe("TailorDBField modifier chain tests", () => {
       id: string;
       username: string;
     }>();
+  });
+});
+
+describe("TailorDBField type error message tests", () => {
+  test("invalid field modifiers expose type-level error messages", () => {
+    const dbField = db.string();
+    type _TypeName = Expect<
+      ThisEquals<typeof dbField.typeName, "typeName cannot be used on TailorDB fields">
+    >;
+
+    const described = db.string().description("Name");
+    type _Description = Expect<
+      ThisEquals<typeof described.description, ".description() has already been set">
+    >;
+
+    const _userType = db.type("User", {
+      name: db.string(),
+    });
+    const related = db.uuid().relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
+    type _RelationDuplicate = Expect<
+      ThisEquals<typeof related.relation, ".relation() has already been set">
+    >;
+
+    const indexed = db.string().index();
+    type _IndexDuplicate = Expect<
+      ThisEquals<typeof indexed.index, ".index() has already been set">
+    >;
+
+    const arrayString = db.string({ array: true });
+    type _IndexArray = Expect<
+      ThisEquals<typeof arrayString.index, "index cannot be set on array fields">
+    >;
+
+    const unique = db.string().unique();
+    type _UniqueDuplicate = Expect<
+      ThisEquals<typeof unique.unique, ".unique() has already been set">
+    >;
+
+    const uniqueArray = db.string({ array: true });
+    type _UniqueArray = Expect<
+      ThisEquals<typeof uniqueArray.unique, "unique cannot be set on array fields">
+    >;
+
+    const vector = db.string().vector();
+    type _VectorDuplicate = Expect<
+      ThisEquals<typeof vector.vector, ".vector() has already been set">
+    >;
+
+    const nonString = db.int();
+    type _Vector = Expect<
+      ThisEquals<typeof nonString.vector, "vector can only be set on non-array string fields">
+    >;
+
+    const hooked = db.string().hooks({ create: () => "created" });
+    type _HooksDuplicate = Expect<ThisEquals<typeof hooked.hooks, ".hooks() has already been set">>;
+
+    const nested = db.object({ name: db.string() });
+    type _Hooks = Expect<
+      ThisEquals<typeof nested.hooks, "hooks cannot be set on nested type fields">
+    >;
+
+    const validated = db.string().validate(() => true);
+    type _ValidateDuplicate = Expect<
+      ThisEquals<typeof validated.validate, ".validate() has already been set">
+    >;
+
+    const serial = db.string().serial({ start: 0 });
+    type _SerialDuplicate = Expect<
+      ThisEquals<typeof serial.serial, ".serial() has already been set">
+    >;
+
+    const nonSerial = db.bool();
+    type _SerialUnsupported = Expect<
+      ThisEquals<
+        typeof nonSerial.serial,
+        "serial can only be set on non-array integer or string fields"
+      >
+    >;
   });
 });
 
@@ -1355,11 +1440,16 @@ describe("TailorDBType files method tests", () => {
       avatar: db.string(), // existing field
     });
 
-    // This should be a type error - files field name conflicts with existing field
     type FilesParam = Parameters<typeof _userType.files>[0];
-    // "avatar" key should be `never` due to Partial<Record<keyof output<this>, never>>
-    expectTypeOf<FilesParam>().toExtend<{ avatar?: never }>();
-    expectTypeOf<FilesParam>().not.toExtend<{ nonExists?: never }>();
+    expectTypeOf<FilesParam>().toExtend<{
+      avatar?: TypeLevelError<"file keys cannot use existing field names">;
+    }>();
+    expectTypeOf<FilesParam>().not.toExtend<{
+      nonExists?: TypeLevelError<"file keys cannot use existing field names">;
+    }>();
+
+    // @ts-expect-error file keys cannot use existing field names
+    _userType.files({ avatar: "profile image" });
   });
 
   test("files field names that do not conflict are allowed", () => {

@@ -28,7 +28,7 @@ import type {
 } from "#/configure/types/field.types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
 import type { InferredAttributeMap, TailorUser } from "#/runtime/types";
-import type { output, InferFieldsOutput, Prettify } from "#/types/helpers";
+import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
 import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures } from "./types";
@@ -41,6 +41,105 @@ export type TailorAnyDBField = TailorDBField<any, any>;
 // Helper alias
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyDBType = TailorDBType<any, any>;
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type DuplicateFieldMethodError<Method extends string> =
+  TypeLevelError<`.${Method}() has already been set`>;
+type DBFieldTypeNameThis<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? TailorFieldMinimal<Defined, Output> | TypeLevelError<string>
+    : TypeLevelError<"typeName cannot be used on TailorDB fields">;
+type DBFieldDescriptionThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  description: unknown;
+}
+  ? DuplicateFieldMethodError<"description">
+  : TailorFieldMinimal<Defined, Output> | TypeLevelError<string>;
+type DBFieldRelationThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  relation: unknown;
+}
+  ? DuplicateFieldMethodError<"relation">
+  : TailorDBField<Defined, Output>;
+type DBFieldIndexThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  index: unknown;
+}
+  ? DuplicateFieldMethodError<"index">
+  : Defined extends { array: true }
+    ? TypeLevelError<"index cannot be set on array fields">
+    : TailorDBField<Defined, Output>;
+type DBFieldUniqueThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  unique: unknown;
+}
+  ? DuplicateFieldMethodError<"unique">
+  : Defined extends { array: true }
+    ? TypeLevelError<"unique cannot be set on array fields">
+    : TailorDBField<Defined, Output>;
+type DBFieldVectorThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  vector: unknown;
+}
+  ? DuplicateFieldMethodError<"vector">
+  : Defined extends { type: "string"; array: false }
+    ? TailorDBField<Defined, Output>
+    : TypeLevelError<"vector can only be set on non-array string fields">;
+type DBFieldHooksThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  hooks: unknown;
+}
+  ? DuplicateFieldMethodError<"hooks">
+  : Defined extends { type: "nested" }
+    ? TypeLevelError<"hooks cannot be set on nested type fields">
+    : TailorDBField<Defined, Output>;
+type DBFieldValidateThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  validate: unknown;
+}
+  ? DuplicateFieldMethodError<"validate">
+  : TailorFieldMinimal<Defined, Output> | TypeLevelError<string>;
+type DBFieldSerialThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  serial: unknown;
+}
+  ? DuplicateFieldMethodError<"serial">
+  : Output extends null
+    ? TypeLevelError<"serial can only be set on non-array integer or string fields">
+    : Defined extends { type: "integer" | "string"; array: false }
+      ? TailorDBField<Defined, Output>
+      : TypeLevelError<"serial can only be set on non-array integer or string fields">;
+
+type WithDBFieldDescription<Defined> = Defined & { description: true };
+type WithDBFieldRelation<Defined, S extends RelationType | RelationSelfConfig> = S extends
+  | "oneToOne"
+  | "1-1"
+  ? Defined & { unique: true; index: true; relation: true }
+  : S extends { type: "oneToOne" | "1-1" }
+    ? Defined & { unique: true; index: true; relation: true }
+    : Defined & { index: true; relation: true };
+type WithDBFieldIndex<Defined> = Defined & { index: true };
+type WithDBFieldUnique<Defined> = Defined & { unique: true; index: true };
+type WithDBFieldVector<Defined> = Defined & { vector: true };
+type WithDBFieldHooks<Defined, H> = Defined & {
+  hooks: {
+    create: H extends { create: unknown } ? true : false;
+    update: H extends { update: unknown } ? true : false;
+  };
+  serial: false;
+};
+type WithDBFieldValidate<Defined> = Defined & { validate: true };
+type WithDBFieldSerial<Defined> = Defined & {
+  serial: true;
+  hooks: { create: false; update: false };
+};
+type WithDBFieldCloneOptions<
+  Defined extends DefinedDBFieldMetadata,
+  NewOpt extends FieldOptions,
+> = Omit<Defined, "array"> & {
+  array: NewOpt extends { array: true } ? true : Defined["array"];
+};
+type FileKeyConflictError<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+> = Partial<
+  Record<
+    keyof output<TailorDBType<Fields, User>> & string,
+    TypeLevelError<"file keys cannot use existing field names">
+  >
+>;
 
 /**
  * Full TailorDBField interface with builder methods.
@@ -69,135 +168,74 @@ export interface TailorDBField<
    * typeName is not available on TailorDB fields.
    * Use typeName on pipeline fields (t.enum / t.object) instead.
    */
-  typeName(this: never, typeName: string): never;
+  typeName(this: DBFieldTypeNameThis<Defined, Output>, typeName: string): never;
 
   /**
    * Set a description for the field
    */
-  description<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { description: unknown }
-      ? never
-      : TailorFieldMinimal<CurrentDefined, Output>,
+  description(
+    this: DBFieldDescriptionThis<Defined, Output>,
     description: string,
-  ): TailorDBField<Prettify<CurrentDefined & { description: true }>, Output>;
+  ): TailorDBField<WithDBFieldDescription<Defined>, Output>;
 
   /**
    * Define a relation to another type.
    */
-  relation<S extends RelationType, T extends TailorAnyDBType, CurrentDefined extends Defined>(
-    this: CurrentDefined extends { relation: unknown }
-      ? never
-      : TailorDBField<CurrentDefined, Output>,
+  relation<S extends RelationType, T extends TailorAnyDBType>(
+    this: DBFieldRelationThis<Defined, Output>,
     config: RelationConfig<S, T>,
-  ): TailorDBField<
-    S extends "oneToOne" | "1-1"
-      ? Prettify<CurrentDefined & { unique: true; index: true; relation: true }>
-      : Prettify<CurrentDefined & { index: true; relation: true }>,
-    Output
-  >;
+  ): TailorDBField<WithDBFieldRelation<Defined, S>, Output>;
 
   /**
    * Define a self-referencing relation
    */
-  relation<S extends RelationSelfConfig, CurrentDefined extends Defined>(
-    this: CurrentDefined extends { relation: unknown }
-      ? never
-      : TailorDBField<CurrentDefined, Output>,
+  relation<S extends RelationSelfConfig>(
+    this: DBFieldRelationThis<Defined, Output>,
     config: S,
-  ): TailorDBField<
-    S["type"] extends "oneToOne" | "1-1"
-      ? Prettify<CurrentDefined & { unique: true; index: true; relation: true }>
-      : Prettify<CurrentDefined & { index: true; relation: true }>,
-    Output
-  >;
+  ): TailorDBField<WithDBFieldRelation<Defined, S>, Output>;
 
   /**
    * Add an index to the field
    */
-  index<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { index: unknown }
-      ? never
-      : CurrentDefined extends { array: true }
-        ? never
-        : TailorDBField<CurrentDefined, Output>,
-  ): TailorDBField<Prettify<CurrentDefined & { index: true }>, Output>;
+  index(this: DBFieldIndexThis<Defined, Output>): TailorDBField<WithDBFieldIndex<Defined>, Output>;
 
   /**
    * Make the field unique (also adds an index)
    */
-  unique<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { unique: unknown }
-      ? never
-      : CurrentDefined extends { array: true }
-        ? never
-        : TailorDBField<CurrentDefined, Output>,
-  ): TailorDBField<Prettify<CurrentDefined & { unique: true; index: true }>, Output>;
+  unique(
+    this: DBFieldUniqueThis<Defined, Output>,
+  ): TailorDBField<WithDBFieldUnique<Defined>, Output>;
 
   /**
    * Enable vector search on the field (string type only)
    */
-  vector<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { vector: unknown }
-      ? never
-      : CurrentDefined extends { type: "string"; array: false }
-        ? TailorDBField<CurrentDefined, Output>
-        : never,
-  ): TailorDBField<Prettify<CurrentDefined & { vector: true }>, Output>;
+  vector(
+    this: DBFieldVectorThis<Defined, Output>,
+  ): TailorDBField<WithDBFieldVector<Defined>, Output>;
 
   /**
    * Add hooks for create/update operations on this field.
    */
-  hooks<CurrentDefined extends Defined, const H extends Hook<unknown, Output>>(
-    this: CurrentDefined extends { hooks: unknown }
-      ? never
-      : CurrentDefined extends { type: "nested" }
-        ? never
-        : TailorDBField<CurrentDefined, Output>,
+  hooks<const H extends Hook<unknown, Output>>(
+    this: DBFieldHooksThis<Defined, Output>,
     hooks: H,
-  ): TailorDBField<
-    Prettify<
-      CurrentDefined & {
-        hooks?: {
-          create: H extends { create: unknown } ? true : false;
-          update: H extends { update: unknown } ? true : false;
-        };
-        serial: false;
-      }
-    >,
-    Output
-  >;
+  ): TailorDBField<WithDBFieldHooks<Defined, H>, Output>;
 
   /**
    * Add validation functions to the field.
    */
-  validate<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { validate: unknown }
-      ? never
-      : TailorDBField<CurrentDefined, Output>,
+  validate(
+    this: DBFieldValidateThis<Defined, Output>,
     ...validate: FieldValidateInput<Output>[]
-  ): TailorDBField<Prettify<CurrentDefined & { validate: true }>, Output>;
+  ): TailorDBField<WithDBFieldValidate<Defined>, Output>;
 
   /**
    * Configure serial/auto-increment behavior
    */
-  serial<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { serial: unknown }
-      ? never
-      : Output extends null
-        ? never
-        : CurrentDefined extends { type: "integer" | "string"; array: false }
-          ? TailorDBField<CurrentDefined, Output>
-          : never,
-    config: SerialConfig<CurrentDefined["type"] & ("integer" | "string")>,
-  ): TailorDBField<
-    Prettify<
-      CurrentDefined & {
-        serial: true;
-        hooks: { create: false; update: false };
-      }
-    >,
-    Output
-  >;
+  serial(
+    this: DBFieldSerialThis<Defined, Output>,
+    config: SerialConfig<Defined["type"] & ("integer" | "string")>,
+  ): TailorDBField<WithDBFieldSerial<Defined>, Output>;
 
   /**
    * Clone the field with optional overrides for field options
@@ -205,11 +243,7 @@ export interface TailorDBField<
   clone<const NewOpt extends FieldOptions>(
     options?: NewOpt,
   ): TailorDBField<
-    Prettify<
-      Omit<Defined, "array"> & {
-        array: NewOpt extends { array: true } ? true : Defined["array"];
-      }
-    >,
+    WithDBFieldCloneOptions<Defined, NewOpt>,
     FieldOutput<TailorToTs[Defined["type"]], NewOpt>
   >;
 }
@@ -230,7 +264,7 @@ export interface TailorDBType<
   features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
   indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
   files<const F extends string>(
-    files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
+    files: Record<F, string> & FileKeyConflictError<Fields, User>,
   ): TailorDBType<Fields, User>;
   permission<
     U extends object = User,
@@ -1003,9 +1037,7 @@ function createTailorDBType<
       return this;
     },
 
-    files<const F extends string>(
-      files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
-    ) {
+    files<const F extends string>(files: Record<F, string> & FileKeyConflictError<Fields, User>) {
       _files = files;
       return this;
     },

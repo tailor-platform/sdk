@@ -10,12 +10,35 @@ import type {
   FieldValidateInput,
 } from "#/configure/types/field.types";
 import type { TailorUser } from "#/runtime/types";
-import type { InferFieldsOutput, Prettify } from "#/types/helpers";
+import type { InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // This helper type intentionally uses `any` as a placeholder for unknown field output.
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyField = TailorField<any>;
+
+type DuplicateFieldMethodError<Method extends string> =
+  TypeLevelError<`.${Method}() has already been set`>;
+type FieldDescriptionThis<Defined extends DefinedFieldMetadata, Output> = Defined extends {
+  description: unknown;
+}
+  ? DuplicateFieldMethodError<"description">
+  : TailorField<Defined, Output> | TypeLevelError<string>;
+type FieldTypeNameThis<Defined extends DefinedFieldMetadata, Output> = Defined extends {
+  typeName: unknown;
+}
+  ? DuplicateFieldMethodError<"typeName">
+  : Defined extends { type: "enum" | "nested" }
+    ? TailorField<Defined, Output> | TypeLevelError<string>
+    : TypeLevelError<"typeName can only be set on enum or object fields">;
+type FieldValidateThis<Defined extends DefinedFieldMetadata, Output> = Defined extends {
+  validate: unknown;
+}
+  ? DuplicateFieldMethodError<"validate">
+  : TailorField<Defined, Output> | TypeLevelError<string>;
+type WithFieldDescription<Defined> = Defined & { description: true };
+type WithFieldTypeName<Defined> = Defined & { typeName: true };
+type WithFieldValidate<Defined> = Defined & { validate: true };
 
 /**
  * Full TailorField interface with builder methods.
@@ -37,38 +60,30 @@ export interface TailorField<
    * @param description - The description text
    * @returns The field with updated metadata
    */
-  description<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { description: unknown }
-      ? never
-      : TailorField<CurrentDefined, Output>,
+  description(
+    this: FieldDescriptionThis<Defined, Output>,
     description: string,
-  ): TailorField<Prettify<CurrentDefined & { description: true }>, Output>;
+  ): TailorField<WithFieldDescription<Defined>, Output>;
 
   /**
    * Set a custom type name for enum or nested types
    * @param typeName - The custom type name
    * @returns The field with updated metadata
    */
-  typeName<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { typeName: unknown }
-      ? never
-      : CurrentDefined extends { type: "enum" | "nested" }
-        ? TailorField<CurrentDefined, Output>
-        : never,
+  typeName(
+    this: FieldTypeNameThis<Defined, Output>,
     typeName: string,
-  ): TailorField<Prettify<CurrentDefined & { typeName: true }>, Output>;
+  ): TailorField<WithFieldTypeName<Defined>, Output>;
 
   /**
    * Add validation functions to the field
    * @param validate - One or more validation functions
    * @returns The field with updated metadata
    */
-  validate<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { validate: unknown }
-      ? never
-      : TailorField<CurrentDefined, Output>,
+  validate(
+    this: FieldValidateThis<Defined, Output>,
     ...validate: FieldValidateInput<Output>[]
-  ): TailorField<Prettify<CurrentDefined & { validate: true }>, Output>;
+  ): TailorField<WithFieldValidate<Defined>, Output>;
 
   /**
    * Parse and validate a value against this field's validation rules
