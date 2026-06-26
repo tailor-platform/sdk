@@ -43,8 +43,6 @@ export type TailorAnyDBField = TailorDBField<any, any>;
 export type TailorAnyDBType = TailorDBType<any, any>;
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
-type DuplicateFieldMethodError<Method extends string> =
-  TypeLevelError<`.${Method}() has already been set`>;
 type DBFieldTypeNameThis<Defined extends DefinedDBFieldMetadata> =
   IsAny<Defined> extends true
     ? TypeLevelError<string>
@@ -52,31 +50,31 @@ type DBFieldTypeNameThis<Defined extends DefinedDBFieldMetadata> =
 type DBFieldDescriptionThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   description: unknown;
 }
-  ? DuplicateFieldMethodError<"description">
+  ? TypeLevelError<".description() has already been set">
   : TailorFieldMinimal<Defined, Output> | TypeLevelError<string>;
 type DBFieldRelationThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   relation: unknown;
 }
-  ? DuplicateFieldMethodError<"relation">
+  ? TypeLevelError<".relation() has already been set">
   : TailorDBField<Defined, Output>;
 type DBFieldIndexThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   index: unknown;
 }
-  ? DuplicateFieldMethodError<"index">
+  ? TypeLevelError<".index() has already been set">
   : Defined extends { array: true }
     ? TypeLevelError<"index cannot be set on array fields">
     : TailorDBField<Defined, Output>;
 type DBFieldUniqueThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   unique: unknown;
 }
-  ? DuplicateFieldMethodError<"unique">
+  ? TypeLevelError<".unique() has already been set">
   : Defined extends { array: true }
     ? TypeLevelError<"unique cannot be set on array fields">
     : TailorDBField<Defined, Output>;
 type DBFieldVectorThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   vector: unknown;
 }
-  ? DuplicateFieldMethodError<"vector">
+  ? TypeLevelError<".vector() has already been set">
   : Defined extends { type: "string"; array: false }
     ? TailorDBField<Defined, Output>
     : TypeLevelError<"vector can only be set on non-array string fields">;
@@ -88,19 +86,19 @@ type DBFieldHooksThis<Defined extends DefinedDBFieldMetadata, Output> = Defined 
   : Defined extends {
         hooks: unknown;
       }
-    ? DuplicateFieldMethodError<"hooks">
+    ? TypeLevelError<".hooks() has already been set">
     : Defined extends { type: "nested" }
       ? TypeLevelError<"hooks cannot be set on nested type fields">
       : TailorDBField<Defined, Output>;
 type DBFieldValidateThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   validate: unknown;
 }
-  ? DuplicateFieldMethodError<"validate">
+  ? TypeLevelError<".validate() has already been set">
   : TailorFieldMinimal<Defined, Output> | TypeLevelError<string>;
 type DBFieldSerialThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   serial: true;
 }
-  ? DuplicateFieldMethodError<"serial">
+  ? TypeLevelError<".serial() has already been set">
   : Defined extends { serial: false }
     ? TypeLevelError<"serial cannot be set after hooks">
     : Output extends null

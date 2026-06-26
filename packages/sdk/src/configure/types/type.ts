@@ -18,17 +18,15 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
 export type TailorAnyField = TailorField<any>;
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
-type DuplicateFieldMethodError<Method extends string> =
-  TypeLevelError<`.${Method}() has already been set`>;
 type FieldDescriptionThis<Defined extends DefinedFieldMetadata, Output> = Defined extends {
   description: unknown;
 }
-  ? DuplicateFieldMethodError<"description">
+  ? TypeLevelError<".description() has already been set">
   : TailorField<Defined, Output> | TypeLevelError<string>;
 type FieldTypeNameThis<Defined extends DefinedFieldMetadata, Output> = Defined extends {
   typeName: unknown;
 }
-  ? DuplicateFieldMethodError<"typeName">
+  ? TypeLevelError<".typeName() has already been set">
   : IsAny<Defined> extends true
     ? TypeLevelError<string>
     : Defined extends { type: "enum" | "nested" }
@@ -37,7 +35,7 @@ type FieldTypeNameThis<Defined extends DefinedFieldMetadata, Output> = Defined e
 type FieldValidateThis<Defined extends DefinedFieldMetadata, Output> = Defined extends {
   validate: unknown;
 }
-  ? DuplicateFieldMethodError<"validate">
+  ? TypeLevelError<".validate() has already been set">
   : TailorField<Defined, Output> | TypeLevelError<string>;
 type WithFieldDescription<Defined> = Defined & { description: true };
 type WithFieldTypeName<Defined> = Defined & { typeName: true };
