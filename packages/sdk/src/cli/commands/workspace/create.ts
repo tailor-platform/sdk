@@ -150,7 +150,6 @@ export const createCommand = defineAppCommand({
     // This command does not expose `--profile`, so the guard resolves the
     // active profile from `TAILOR_PLATFORM_PROFILE` only.
     await assertWritable();
-    const platformConfig = await loadPlatformClientConfig();
     // Execute workspace create logic
     const workspace = await createWorkspace({
       name: args.name,
@@ -163,6 +162,7 @@ export const createCommand = defineAppCommand({
     let profileInfo: ProfileInfo | undefined;
     const profileName = args["profile-name"];
     if (profileName) {
+      const platformConfig = await loadPlatformClientConfig();
       const config = await readPlatformConfig();
       if (config.profiles[profileName]) {
         throw new Error(`Profile "${profileName}" already exists.`);

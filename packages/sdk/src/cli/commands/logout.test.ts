@@ -120,6 +120,37 @@ describe("logout --profile", () => {
     );
   });
 
+  test("clears current user when profile logout removes the only token for that user", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "dev-access-token",
+          refresh_token: "dev-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+        },
+      },
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
+  });
+
   test("cleans local state when keyring credentials are missing", async () => {
     writePlatformConfig({
       version: 2,

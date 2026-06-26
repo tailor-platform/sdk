@@ -667,7 +667,7 @@ describe("loadAccessToken", () => {
       expect(result).toBe(validToken);
     });
 
-    test("falls back to a legacy user token for a profile platform URL", async () => {
+    test("falls back to a legacy user token for a profile platform URL without persisting it", async () => {
       vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
       writePlatformConfig({
         version: 2,
@@ -694,7 +694,7 @@ describe("loadAccessToken", () => {
 
       expect(result).toBe(validToken);
       const updatedConfig = await readPlatformConfig();
-      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toBeDefined();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toBeUndefined();
     });
 
     test("does not fall back to an unscoped token for a profile platform URL without matching env", async () => {

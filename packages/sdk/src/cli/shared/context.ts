@@ -712,7 +712,6 @@ export async function fetchLatestToken(
   platformConfig?: PlatformClientConfig,
 ): Promise<string> {
   const { userKey, userEntry } = findUserEntry(config, user, platformConfig);
-  const expectedUserKey = platformUserKey(user, platformConfig);
   if (!userEntry) {
     throw new Error(ml`
       User "${user}" not found.
@@ -723,10 +722,6 @@ export async function fetchLatestToken(
   const tokens = await resolveTokens(userEntry, userKey, user);
 
   if (new Date(userEntry.token_expires_at) > new Date()) {
-    if (userKey !== expectedUserKey) {
-      await saveUserTokens(config, user, tokens, userEntry.token_expires_at, platformConfig);
-      writePlatformConfig(config);
-    }
     rememberPlatformConfigForToken(tokens.accessToken, platformConfig);
     return tokens.accessToken;
   }
