@@ -215,6 +215,11 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
     ],
     legacyPatterns: ["tailor-sdk crash-report", "--machineuser"],
+    sourceStringLegacyPatterns: [
+      ["tailor-sdk", "crash-report"],
+      ["tailor", "crash-report"],
+      "--machineuser",
+    ],
     examples: [
       {
         lang: "sh",
