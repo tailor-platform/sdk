@@ -247,14 +247,14 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
 /**
  * Resolve the output path for the generated type definition file.
  *
- * When the `TAILOR_PLATFORM_SDK_DTS_PATH` environment variable is set, the value is
+ * When the `TAILOR_DTS_PATH` environment variable is set, the value is
  * used as the output path (resolved relative to cwd when relative).
  * Otherwise, the file is written next to the config file as `tailor.d.ts`.
  * @param configPath - Path to Tailor config file
  * @returns Absolute path to the type definition file
  */
 export function resolveTypeDefinitionPath(configPath: string): string {
-  const envPath = process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+  const envPath = process.env.TAILOR_DTS_PATH;
   if (envPath) {
     return path.resolve(envPath);
   }

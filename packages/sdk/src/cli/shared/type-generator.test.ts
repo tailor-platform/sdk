@@ -123,17 +123,17 @@ describe("generateTypeDefinition", () => {
 });
 
 describe("resolveTypeDefinitionPath", () => {
-  const originalEnv = process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+  const originalEnv = process.env.TAILOR_DTS_PATH;
 
   beforeEach(() => {
-    delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+    delete process.env.TAILOR_DTS_PATH;
   });
 
   afterEach(() => {
     if (originalEnv !== undefined) {
-      process.env.TAILOR_PLATFORM_SDK_DTS_PATH = originalEnv;
+      process.env.TAILOR_DTS_PATH = originalEnv;
     } else {
-      delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+      delete process.env.TAILOR_DTS_PATH;
     }
   });
 
@@ -142,14 +142,14 @@ describe("resolveTypeDefinitionPath", () => {
     expect(result).toBe(path.resolve("/project", "tailor.d.ts"));
   });
 
-  test("should use TAILOR_PLATFORM_SDK_DTS_PATH when set to an absolute path", () => {
-    process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "/custom/output/types.d.ts";
+  test("should use TAILOR_DTS_PATH when set to an absolute path", () => {
+    process.env.TAILOR_DTS_PATH = "/custom/output/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe("/custom/output/types.d.ts");
   });
 
-  test("should resolve TAILOR_PLATFORM_SDK_DTS_PATH relative to cwd when relative", () => {
-    process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "custom/types.d.ts";
+  test("should resolve TAILOR_DTS_PATH relative to cwd when relative", () => {
+    process.env.TAILOR_DTS_PATH = "custom/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe(path.resolve("custom/types.d.ts"));
   });

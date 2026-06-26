@@ -32,7 +32,7 @@ Profiles are created with `write` permission by default. The production profile 
 ```ini
 # .env.production
 APP_ENV=production
-LOG_LEVEL=WARN
+TAILOR_APP_LOG_LEVEL=WARN
 ```
 
 ```bash
@@ -42,7 +42,7 @@ tailor-sdk deploy -w <production-workspace-id> --env-file .env.production
 ```typescript
 export default defineConfig({
   name: "my-app",
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
 });
 ```
 

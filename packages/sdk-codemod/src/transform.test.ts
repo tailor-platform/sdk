@@ -87,6 +87,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/cli-rename")).resolves.toBeUndefined();
   });
 
+  test("v2/env-var-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/env-var-rename")).resolves.toBeUndefined();
+  });
+
   test("v2/auth-invoker-unwrap transforms correctly", async () => {
     await expect(runFixtureCases("v2/auth-invoker-unwrap")).resolves.toBeUndefined();
   });

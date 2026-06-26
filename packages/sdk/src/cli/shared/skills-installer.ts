@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
 export const SKILL_NAME = "tailor-sdk";
-const SKILLS_SOURCE_ENV_KEY = "TAILOR_SDK_SKILLS_SOURCE";
+const SKILLS_SOURCE_ENV_KEY = "TAILOR_SKILLS_SOURCE";
 
 interface ChildProcessLike {
   on(event: "close", listener: (code: number | null) => void): ChildProcessLike;
