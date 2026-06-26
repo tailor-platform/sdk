@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
-import { hasUserTokenEntry, readPlatformConfig } from "#/cli/shared/context";
+import {
+  hasUserTokenEntry,
+  loadPlatformClientConfig,
+  readPlatformConfig,
+} from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 
@@ -9,6 +13,7 @@ export const currentCommand = defineAppCommand({
   description: "Show current user.",
   args: z.object({}).strict(),
   run: async () => {
+    const platformConfig = await loadPlatformClientConfig();
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;
 
@@ -21,7 +26,7 @@ export const currentCommand = defineAppCommand({
     }
 
     // Check if user exists
-    if (!hasUserTokenEntry(config, config.current_user)) {
+    if (!hasUserTokenEntry(config, config.current_user, platformConfig)) {
       throw new Error(ml`
         Current user '${config.current_user}' not found in registered users.
         Please login again using 'tailor-sdk login' command to register the user.
