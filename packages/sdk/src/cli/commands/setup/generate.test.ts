@@ -189,7 +189,8 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain(
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"',
     );
-    expect(content).toContain('run_tailor_sdk tailordb erd export --config "$base_config"');
+    expect(content).toContain('cd "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR"');
+    expect(content).toContain('run_tailor_sdk_bin tailordb erd export --config "$base_config"');
     expect(content).toContain('head_missing="false"');
     expect(content).toContain('echo "head-missing=$head_missing" >> "$GITHUB_OUTPUT"');
     expect(content).toContain("grep -q 'not found in local config.db'");

@@ -176,6 +176,22 @@ jobs:
             esac
           }
 
+          tailor_sdk_bin="$(
+            cd "$GITHUB_WORKSPACE/$APP_DIR"
+            node <<'NODE'
+          const path = require("node:path");
+          const { createRequire } = require("node:module");
+          const requireFromApp = createRequire(path.join(process.cwd(), "package.json"));
+          process.stdout.write(
+            path.join(path.dirname(requireFromApp.resolve("@tailor-platform/sdk/cli")), "index.mjs"),
+          );
+          NODE
+          )"
+
+          run_tailor_sdk_bin() {
+            node "$tailor_sdk_bin" "$@"
+          }
+
           head_output="$RUNNER_TEMP/tailor-erd/head"
           base_output="$RUNNER_TEMP/tailor-erd/base"
           preview_output="$RUNNER_TEMP/tailor-erd/preview"
@@ -212,9 +228,9 @@ jobs:
 
           base_missing="false"
           if ! (
-            cd "$GITHUB_WORKSPACE/$APP_DIR"
+            cd "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR"
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
-              run_tailor_sdk tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
+              run_tailor_sdk_bin tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
             if grep -q 'not found in local config.db' "$base_log"; then
               cat "$base_log"
