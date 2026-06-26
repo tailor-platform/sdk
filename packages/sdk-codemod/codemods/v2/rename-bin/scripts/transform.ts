@@ -1,8 +1,9 @@
 import * as path from "pathe";
 
-// `npx tailor-sdk@...` must become `npx @tailor-platform/sdk@...` — rewriting
-// to `npx tailor@...` would resolve the unrelated npm `tailor` package.
-const NPX_RE = /\bnpx\s+tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
+// Package-runner forms (`npx`, `pnpm dlx`, `yarn dlx`, `bunx`) resolve npm package
+// names, so `tailor-sdk@...` must become `@tailor-platform/sdk@...` — rewriting
+// to `tailor@...` would download the unrelated CSS Sprites Generator instead.
+const PKG_RUNNER_RE = /\b(npx|pnpm\s+dlx|yarn\s+dlx|bunx)\s+tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 
 // Match the `tailor-sdk` binary, optionally with a version pin (`@latest`,
 // `@2.0.0`, etc.). Lookbehind excludes `.tailor-sdk` (preceded by `.`) and
@@ -11,10 +12,10 @@ const NPX_RE = /\bnpx\s+tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 
 function renameBinary(value: string): string {
-  const withNpx = value.replace(NPX_RE, (_, version?: string) =>
-    version ? `npx @tailor-platform/sdk${version}` : "npx @tailor-platform/sdk",
+  const withRunners = value.replace(PKG_RUNNER_RE, (_, runner: string, version?: string) =>
+    version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
   );
-  return withNpx.replace(TAILOR_SDK_RE, (_match, version?: string) =>
+  return withRunners.replace(TAILOR_SDK_RE, (_match, version?: string) =>
     version ? `tailor${version}` : "tailor",
   );
 }
@@ -50,7 +51,8 @@ function transformPackageJson(source: string): string | null {
  * Rename `tailor-sdk` binary references to `tailor`.
  *
  * Handles optional `@version` pins:
- * - `npx tailor-sdk@latest` → `npx @tailor-platform/sdk@latest` (package-manager form)
+ * - `npx tailor-sdk@latest` → `npx @tailor-platform/sdk@latest` (package-runner form)
+ * - `pnpm dlx tailor-sdk@latest` → `pnpm dlx @tailor-platform/sdk@latest` (package-runner form)
  * - `tailor-sdk@latest` elsewhere → `tailor@latest`
  * Does not rewrite `.tailor-sdk` directory paths or `create-tailor-sdk`.
  * @param source - File contents
