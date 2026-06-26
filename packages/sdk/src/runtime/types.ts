@@ -5,16 +5,16 @@
 // without pulling any runtime dependency.
 
 // Interfaces for module augmentation
-// Users can extend these via: declare module "@tailor-platform/sdk" { interface AttributeMap { ... } }
+// Users can extend these via: declare module "@tailor-platform/sdk" { interface Attributes { ... } }
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface AttributeMap {}
+export interface Attributes {}
 export interface AttributeList {
   __tuple?: []; // Marker for tuple type
 }
 
-export type InferredAttributeMap = keyof AttributeMap extends never
+export type InferredAttributes = keyof Attributes extends never
   ? Record<string, string | string[] | boolean | boolean[] | undefined>
-  : AttributeMap;
+  : Attributes;
 
 export type InferredAttributeList = AttributeList["__tuple"] extends []
   ? string[]
@@ -29,7 +29,7 @@ export type TailorPrincipal = {
   /** The ID of the workspace the principal belongs to. */
   workspaceId: string;
   /** A map of the principal's attributes. */
-  attributes: InferredAttributeMap;
+  attributes: InferredAttributes;
   /** A list of the principal's attribute IDs. */
   attributeList: InferredAttributeList;
 };
