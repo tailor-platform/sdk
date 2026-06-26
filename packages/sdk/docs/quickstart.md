@@ -24,8 +24,10 @@ The following command creates a new project with the required configuration file
 
 ```bash
 npm create @tailor-platform/sdk -- --template hello-world example-app
+cd example-app
 # Or with Bun:
 # bun create @tailor-platform/sdk --template hello-world example-app
+# cd example-app
 ```
 
 Before deploying your app, you need to create a workspace:
@@ -49,7 +51,6 @@ npx tailor workspace list
 Run the deploy command to deploy your project:
 
 ```bash
-cd example-app
 npm run deploy -- --workspace-id <your-workspace-id>
 # Or with Bun:
 # bun run deploy --workspace-id <your-workspace-id>
