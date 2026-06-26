@@ -22,6 +22,14 @@ function platformUserKeyFor(user: string, platformUrl?: string): string {
   return `${normalizedPlatformUrl}|${user}`;
 }
 
+function canUseLegacyUserKey(platformUrl?: string): boolean {
+  if (!platformUrl) return true;
+  return (
+    process.env.PLATFORM_URL !== undefined &&
+    normalizeBaseUrl(process.env.PLATFORM_URL) === normalizeBaseUrl(platformUrl)
+  );
+}
+
 function currentUserKeyFor(
   config: PlatformConfig,
   user: string,
@@ -44,7 +52,7 @@ function activeCurrentUserKey(config: PlatformConfig): string | null {
   const profile = config.profiles[activeProfile];
   if (!profile) return null;
   return currentUserKeyFor(config, profile.user, profile.platform_url ?? process.env.PLATFORM_URL, {
-    allowDefaultFallback: profile.platform_url === undefined,
+    allowDefaultFallback: canUseLegacyUserKey(profile.platform_url),
   });
 }
 
