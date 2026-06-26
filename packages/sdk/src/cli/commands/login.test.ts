@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import { runCommand } from "politty";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { fetchPlatformMachineUserToken } from "#/cli/shared/client";
-import { writePlatformConfig } from "#/cli/shared/context";
+import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
 
@@ -24,6 +24,7 @@ vi.mock("@napi-rs/keyring", () => ({
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
+  closeConnectionPool: vi.fn(),
   fetchPlatformMachineUserToken: vi.fn(),
 }));
 
@@ -72,5 +73,52 @@ describe("login --profile", () => {
       'Profile "dev" is configured for "u@example.com"',
     );
     expect(fetchPlatformMachineUserToken).not.toHaveBeenCalled();
+  });
+
+  test("keeps current user when machine-user login targets a non-default platform profile", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "default@example.com": {
+          storage: "file",
+          access_token: "default-token",
+          token_expires_at: "2099-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "machine-client",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: "default@example.com",
+    });
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+
+    const result = await runCommand(loginCommand, [
+      "--profile",
+      "dev",
+      "--machine-user",
+      "--client-id",
+      "machine-client",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(true);
+    const pfConfig = await readPlatformConfig();
+    expect(pfConfig.current_user).toBe("default@example.com");
+    expect(pfConfig.users["default@example.com"]).toMatchObject({
+      access_token: "default-token",
+    });
+    expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
+      access_token: "dev-token",
+    });
   });
 });

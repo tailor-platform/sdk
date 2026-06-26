@@ -6,9 +6,13 @@ import { arg } from "politty";
 import { z } from "zod";
 import {
   closeConnectionPool,
+  defaultPlatformBaseUrl,
   fetchPlatformMachineUserToken,
+  getPlatformBaseUrl,
   fetchUserInfo,
   initOAuth2Client,
+  normalizeBaseUrl,
+  type PlatformClientConfig,
 } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
@@ -26,6 +30,8 @@ const redirectUri = `http://localhost:${redirectPort}/callback`;
 type ProfileLoginOptions = {
   profile?: string;
   profileUser?: string;
+  platformConfig?: PlatformClientConfig;
+  updateCurrentUser?: boolean;
 };
 
 function randomState() {
@@ -40,8 +46,16 @@ function assertProfileLoginUser(args: ProfileLoginOptions, authenticatedUser: st
   }
 }
 
+function shouldUpdateCurrentUser(
+  profile: string | undefined,
+  platformConfig: PlatformClientConfig | undefined,
+) {
+  if (!profile) return true;
+  return getPlatformBaseUrl(platformConfig) === normalizeBaseUrl(defaultPlatformBaseUrl);
+}
+
 const startAuthServer = async (args: ProfileLoginOptions = {}) => {
-  const client = initOAuth2Client();
+  const client = initOAuth2Client(args.platformConfig);
   const state = randomState();
   const codeVerifier = await generateCodeVerifier();
 
@@ -73,8 +87,11 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           new Date(
             assertDefined(tokens.expiresAt, "token response missing expiresAt"),
           ).toISOString(),
+          args.platformConfig,
         );
-        pfConfig.current_user = userInfo.email;
+        if (args.updateCurrentUser ?? true) {
+          pfConfig.current_user = userInfo.email;
+        }
         writePlatformConfig(pfConfig);
 
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -141,8 +158,11 @@ async function loginAsMachineUser(
     args.clientId,
     { accessToken: tokens.accessToken },
     new Date(assertDefined(tokens.expiresAt, "token response missing expiresAt")).toISOString(),
+    args.platformConfig,
   );
-  pfConfig.current_user = args.clientId;
+  if (args.updateCurrentUser ?? true) {
+    pfConfig.current_user = args.clientId;
+  }
   writePlatformConfig(pfConfig);
 }
 
@@ -186,23 +206,32 @@ export const loginCommand = defineAppCommand({
       .describe("Machine User Login"),
   ]),
   run: async (args) => {
+    let platformConfig: PlatformClientConfig | undefined;
     let profileUser: string | undefined;
     if ("profile" in args) {
-      await loadPlatformClientConfig({ profile: args.profile });
+      platformConfig = await loadPlatformClientConfig({ profile: args.profile });
       if (args.profile) {
         const pfConfig = await readPlatformConfig();
         profileUser = pfConfig.profiles[args.profile]?.user;
       }
     }
+    const updateCurrentUser = shouldUpdateCurrentUser(args.profile, platformConfig);
     if ("machine-user" in args) {
       await loginAsMachineUser({
         clientId: args.clientId,
         clientSecret: args.clientSecret,
         profile: args.profile,
         profileUser,
+        platformConfig,
+        updateCurrentUser,
       });
     } else {
-      await startAuthServer({ profile: args.profile, profileUser });
+      await startAuthServer({
+        profile: args.profile,
+        profileUser,
+        platformConfig,
+        updateCurrentUser,
+      });
     }
     logger.success("Successfully logged in to Tailor Platform.");
     await closeConnectionPool();
