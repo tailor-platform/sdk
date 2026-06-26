@@ -79,7 +79,21 @@ export default function transform(source: string, _filePath?: string): string | 
     });
     for (const decl of localDecls) {
       if (isInsideImportStatement(decl)) continue;
-      const nameChild = decl.children().find((c: SgNode) => c.kind() === "identifier");
+      // For variable_declarator: check direct identifier bindings and shorthand
+      // destructuring patterns (const { x } = ...) — both create local shadows.
+      const nameChild =
+        decl
+          .children()
+          .filter((c: SgNode) => c.kind() === "identifier")
+          .find((c: SgNode) => needsBodyRename.has(c.text())) ??
+        decl
+          .children()
+          .find((c: SgNode) => c.kind() === "object_pattern")
+          ?.children()
+          .find(
+            (c: SgNode) =>
+              c.kind() === "shorthand_property_identifier_pattern" && needsBodyRename.has(c.text()),
+          );
       if (!nameChild || !needsBodyRename.has(nameChild.text())) continue;
 
       // Walk up to the nearest statement_block or program — that is the scope
@@ -160,20 +174,25 @@ export default function transform(source: string, _filePath?: string): string | 
       }
     }
 
-    const identifiers = root.findAll({ rule: { kind: "identifier" } });
-    for (const ident of identifiers) {
-      const name = ident.text();
-      if (!needsBodyRename.has(name)) continue;
-      if (isInsideImportStatement(ident)) continue;
-
-      // Skip identifiers that fall inside a scope where this name is locally declared.
+    const renameNode = (node: SgNode) => {
+      const name = node.text();
+      if (!needsBodyRename.has(name)) return;
+      if (isInsideImportStatement(node)) return;
       const ranges = shadowedRanges.get(name);
       if (ranges) {
-        const pos = ident.range().start.index;
-        if (ranges.some((r) => pos >= r.start && pos <= r.end)) continue;
+        const pos = node.range().start.index;
+        if (ranges.some((r) => pos >= r.start && pos <= r.end)) return;
       }
+      edits.push(node.replace(RENAMES[name]!));
+    };
 
-      edits.push(ident.replace(RENAMES[name]!));
+    for (const ident of root.findAll({ rule: { kind: "identifier" } })) {
+      renameNode(ident);
+    }
+    // Shorthand property references in object literals ({ defineWaitPoints }) use a
+    // distinct AST node kind and must be renamed separately.
+    for (const prop of root.findAll({ rule: { kind: "shorthand_property_identifier" } })) {
+      renameNode(prop);
     }
   }
 
