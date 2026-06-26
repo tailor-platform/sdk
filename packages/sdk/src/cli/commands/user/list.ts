@@ -22,20 +22,30 @@ function platformUserKeyFor(user: string, platformUrl?: string): string {
   return `${normalizedPlatformUrl}|${user}`;
 }
 
-function currentUserKeyFor(config: PlatformConfig, user: string, platformUrl?: string): string {
+function currentUserKeyFor(
+  config: PlatformConfig,
+  user: string,
+  platformUrl: string | undefined,
+  opts: { allowDefaultFallback: boolean },
+): string {
   const selectedUserKey = platformUserKeyFor(user, platformUrl);
-  return config.users[selectedUserKey] ? selectedUserKey : user;
+  if (config.users[selectedUserKey]) return selectedUserKey;
+  return opts.allowDefaultFallback ? user : selectedUserKey;
 }
 
 function activeCurrentUserKey(config: PlatformConfig): string | null {
   const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
   if (!activeProfile) {
     if (!config.current_user) return null;
-    return currentUserKeyFor(config, config.current_user, process.env.PLATFORM_URL);
+    return currentUserKeyFor(config, config.current_user, process.env.PLATFORM_URL, {
+      allowDefaultFallback: true,
+    });
   }
   const profile = config.profiles[activeProfile];
   if (!profile) return null;
-  return currentUserKeyFor(config, profile.user, profile.platform_url ?? process.env.PLATFORM_URL);
+  return currentUserKeyFor(config, profile.user, profile.platform_url ?? process.env.PLATFORM_URL, {
+    allowDefaultFallback: profile.platform_url === undefined,
+  });
 }
 
 function toUserListInfo(userKey: string, currentUserKey: string | null): UserListInfo {
