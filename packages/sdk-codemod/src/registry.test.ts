@@ -41,6 +41,7 @@ describe("getApplicableCodemods", () => {
     expect(ids).toContain("v2/test-run-arg-input");
     expect(ids).toContain("v2/auth-invoker-call-unwrap");
     expect(authInvokerCallUnwrap?.suspiciousPatterns).toEqual(["auth.invoker"]);
+    expect(authInvokerCallUnwrap?.reviewSupersededBy).toEqual(["v2/auth-invoker-unwrap"]);
     expect(ids).not.toContain("v2/execute-script-arg");
     expect(ids).not.toContain("v2/principal-unify");
   });
