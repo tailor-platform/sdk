@@ -155,7 +155,6 @@ describe("summarizePlanResults", () => {
       update: 4,
       delete: 1,
       replace: 0,
-      unchanged: 0,
     });
   });
 
@@ -171,7 +170,6 @@ describe("summarizePlanResults", () => {
       update: 1,
       delete: 0,
       replace: 0,
-      unchanged: 0,
     });
   });
 
@@ -186,7 +184,6 @@ describe("summarizePlanResults", () => {
       update: 0,
       delete: 0,
       replace: 0,
-      unchanged: 0,
     });
   });
 
@@ -210,7 +207,6 @@ describe("summarizePlanResults", () => {
       update: 2,
       delete: 0,
       replace: 0,
-      unchanged: 0,
     });
   });
 });

@@ -456,13 +456,7 @@ export function summarizePlanResults(
   displayEntries: ReadonlyArray<GroupedDisplayEntry>,
   serviceActions: ReadonlyArray<NamespaceAction>,
 ): PlanSummary {
-  const summary: PlanSummary = {
-    create: 0,
-    update: 0,
-    delete: 0,
-    replace: 0,
-    unchanged: 0,
-  };
+  const summary: PlanSummary = { create: 0, update: 0, delete: 0, replace: 0 };
 
   // Count grouped display entries
   for (const entry of displayEntries) {

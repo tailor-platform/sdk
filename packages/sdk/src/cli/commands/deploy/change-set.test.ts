@@ -27,9 +27,6 @@ describe("ChangeSet.lines", () => {
 
 describe("summarizeChangeSets", () => {
   test("summarizes resource counts for plan output", () => {
-    const unchanged = createNamedChangeSet("Applications");
-    unchanged.unchanged.push({ name: "app-a" }, { name: "app-b" });
-
     const create = createNamedChangeSet("Executors");
     create.creates.push({ name: "executor-a" }, { name: "executor-b" });
 
@@ -42,12 +39,11 @@ describe("summarizeChangeSets", () => {
     const replace = createNamedChangeSet("OAuth2 clients");
     replace.replaces.push({ name: "client-a" }, { name: "client-b" });
 
-    expect(summarizeChangeSets([unchanged, create, update, deleteSet, replace])).toEqual({
+    expect(summarizeChangeSets([create, update, deleteSet, replace])).toEqual({
       create: 2,
       update: 3,
       delete: 1,
       replace: 2,
-      unchanged: 2,
     });
   });
 });
@@ -60,7 +56,6 @@ describe("formatPlanSummary", () => {
         update: 2,
         delete: 0,
         replace: 0,
-        unchanged: 15,
       }),
     ).toBe("Plan: 1 to create, 2 to update, 0 to delete");
   });
@@ -72,7 +67,6 @@ describe("formatPlanSummary", () => {
         update: 2,
         delete: 0,
         replace: 3,
-        unchanged: 15,
       }),
     ).toBe("Plan: 1 to create, 2 to update, 0 to delete, 3 to replace");
   });

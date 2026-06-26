@@ -32,7 +32,6 @@ export interface PlanSummary {
   update: number;
   delete: number;
   replace: number;
-  unchanged: number;
 }
 
 /**
@@ -90,24 +89,17 @@ export function summarizeChangeSets(
   changeSets: Array<
     Pick<
       ChangeSet<HasName, HasName, HasName, HasName>,
-      "creates" | "updates" | "deletes" | "replaces" | "unchanged"
+      "creates" | "updates" | "deletes" | "replaces"
     >
   >,
 ): PlanSummary {
-  const summary: PlanSummary = {
-    create: 0,
-    update: 0,
-    delete: 0,
-    replace: 0,
-    unchanged: 0,
-  };
+  const summary: PlanSummary = { create: 0, update: 0, delete: 0, replace: 0 };
 
   for (const changeSet of changeSets) {
     summary.create += changeSet.creates.length;
     summary.update += changeSet.updates.length;
     summary.delete += changeSet.deletes.length;
     summary.replace += changeSet.replaces.length;
-    summary.unchanged += changeSet.unchanged.length;
   }
 
   return summary;
