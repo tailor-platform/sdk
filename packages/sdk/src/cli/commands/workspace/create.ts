@@ -1,12 +1,11 @@
 import { arg } from "politty";
 import { z } from "zod";
 import {
-  defaultPlatformBaseUrl,
   getConsoleBaseUrl,
   getOAuth2ClientId,
   getPlatformBaseUrl,
   initOperatorClient,
-  normalizeBaseUrl,
+  isDefaultPlatform,
   type OperatorClient,
   type PlatformClientConfig,
 } from "#/cli/shared/client";
@@ -14,7 +13,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
   loadAccessToken,
-  loadPlatformClientConfig,
+  platformConfigFromProfile,
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
@@ -60,15 +59,14 @@ const validateRegion = async (region: string, client: OperatorClient) => {
 };
 
 function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
-  const platformUrl = getPlatformBaseUrl(platformConfig);
   const hasOAuth2ClientId =
     platformConfig?.oauth2ClientId || process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID;
   const hasConsoleUrl = platformConfig?.consoleUrl || process.env.TAILOR_PLATFORM_CONSOLE_URL;
 
   return {
-    ...(platformUrl !== normalizeBaseUrl(defaultPlatformBaseUrl)
-      ? { platform_url: platformUrl }
-      : {}),
+    ...(isDefaultPlatform(platformConfig)
+      ? {}
+      : { platform_url: getPlatformBaseUrl(platformConfig) }),
     ...(hasOAuth2ClientId ? { oauth2_client_id: getOAuth2ClientId(platformConfig) } : {}),
     ...(hasConsoleUrl ? { console_url: getConsoleBaseUrl(platformConfig) } : {}),
   };
@@ -160,16 +158,19 @@ export const createCommand = defineAppCommand({
         }
       | undefined;
     if (profileName) {
-      const platformConfig = await loadPlatformClientConfig({ allowMissingProfile: true });
       const config = await readPlatformConfig();
       if (config.profiles[profileName]) {
         throw new Error(`Profile "${profileName}" already exists.`);
       }
 
-      const activeProfileUser = process.env.TAILOR_PLATFORM_PROFILE
-        ? config.profiles[process.env.TAILOR_PLATFORM_PROFILE]?.user
+      const activeProfileName = process.env.TAILOR_PLATFORM_PROFILE;
+      const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
+      const fromProfile = activeProfileEntry
+        ? platformConfigFromProfile(activeProfileEntry)
         : undefined;
-      const profileUser = args["profile-user"] || activeProfileUser || config.current_user;
+      const platformConfig =
+        fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
+      const profileUser = args["profile-user"] || activeProfileEntry?.user || config.current_user;
       if (!profileUser) {
         throw new Error(
           "Current user not found. Please login or specify --profile-user to create a profile.",

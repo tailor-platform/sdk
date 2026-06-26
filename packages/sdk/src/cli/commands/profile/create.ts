@@ -70,14 +70,10 @@ export const createCommand = defineAppCommand({
     };
     const platformConfig =
       Object.keys(platformConfigInput).length > 0 ? platformConfigInput : undefined;
-    const token = platformConfig
-      ? await fetchLatestToken(config, args.user, platformConfig)
-      : await fetchLatestToken(config, args.user);
+    const token = await fetchLatestToken(config, args.user, platformConfig);
 
     // Check if workspace exists
-    const client = platformConfig
-      ? await initOperatorClient(token, platformConfig)
-      : await initOperatorClient(token);
+    const client = await initOperatorClient(token, platformConfig);
     const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
       const { workspaces, nextPageToken } = await client.listWorkspaces({
         pageToken,

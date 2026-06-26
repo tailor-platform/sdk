@@ -6,17 +6,15 @@ import { arg } from "politty";
 import { z } from "zod";
 import {
   closeConnectionPool,
-  defaultPlatformBaseUrl,
   fetchPlatformMachineUserToken,
-  getPlatformBaseUrl,
   fetchUserInfo,
   initOAuth2Client,
-  normalizeBaseUrl,
+  isDefaultPlatform,
   type PlatformClientConfig,
 } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
-  loadPlatformClientConfig,
+  platformConfigFromProfile,
   readPlatformConfig,
   saveUserTokens,
   writePlatformConfig,
@@ -51,7 +49,7 @@ function shouldUpdateCurrentUser(
   platformConfig: PlatformClientConfig | undefined,
 ) {
   if (!profile) return true;
-  return getPlatformBaseUrl(platformConfig) === normalizeBaseUrl(defaultPlatformBaseUrl);
+  return isDefaultPlatform(platformConfig);
 }
 
 const startAuthServer = async (args: ProfileLoginOptions = {}) => {
@@ -212,12 +210,15 @@ export const loginCommand = defineAppCommand({
   run: async (args) => {
     let platformConfig: PlatformClientConfig | undefined;
     let profileUser: string | undefined;
-    if ("profile" in args) {
-      platformConfig = await loadPlatformClientConfig({ profile: args.profile });
-      if (args.profile) {
-        const pfConfig = await readPlatformConfig();
-        profileUser = pfConfig.profiles[args.profile]?.user;
+    if ("profile" in args && args.profile) {
+      const pfConfig = await readPlatformConfig();
+      const profileEntry = pfConfig.profiles[args.profile];
+      if (!profileEntry) {
+        throw new Error(`Profile "${args.profile}" not found`);
       }
+      const fromProfile = platformConfigFromProfile(profileEntry);
+      platformConfig = Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
+      profileUser = profileEntry.user;
     }
     const updateCurrentUser = shouldUpdateCurrentUser(args.profile, platformConfig);
     if ("machine-user" in args) {

@@ -1,7 +1,7 @@
 import { initOperatorClient } from "#/cli/shared/client";
 import {
   fetchLatestToken,
-  loadPlatformClientConfig,
+  platformConfigFromProfile,
   readPlatformConfig,
 } from "#/cli/shared/context";
 
@@ -16,8 +16,15 @@ export function resolvePatUser(config: PlatformConfig): string | null {
 }
 
 export async function createPatOperatorClient() {
-  const platformConfig = await loadPlatformClientConfig();
   const config = await readPlatformConfig();
+  const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
+  const profileEntry = activeProfile ? config.profiles[activeProfile] : undefined;
+  if (activeProfile && !profileEntry) {
+    throw new Error(`Profile "${activeProfile}" not found`);
+  }
+  const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  const platformConfig =
+    fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
   const user = resolvePatUser(config);
 
   if (!user) {

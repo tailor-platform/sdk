@@ -121,7 +121,11 @@ describe("profile update --permission", () => {
     await runCommand(updateCommand, ["rw", "--user", "new@example.com", "--permission", "read"]);
 
     expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "new@example.com");
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
+      expect.anything(),
+      "new@example.com",
+      undefined,
+    );
     expect(vi.mocked(initOperatorClient)).toHaveBeenCalledTimes(1);
 
     const config = await readPlatformConfig();

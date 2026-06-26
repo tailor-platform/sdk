@@ -95,7 +95,6 @@ type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
 type PfConfig = z.output<typeof pfConfigSchema>;
 type PfConfigV2 = PfConfig & { version: typeof V2_CONFIG_VERSION };
 type PfConfigV3 = PfConfig & { version: typeof LATEST_CONFIG_VERSION };
-type PfProfile = z.output<typeof pfProfileSchema>;
 type LoadWorkspaceIdOptions = {
   workspaceId?: string;
   profile?: string;
@@ -531,21 +530,6 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
   `);
 }
 
-async function tryLoadPlatformConfigFromProfile(
-  profile: string | undefined,
-): Promise<PlatformClientConfig | undefined> {
-  if (!profile) return undefined;
-  try {
-    const pfConfig = await readPlatformConfig();
-    const profileEntry = pfConfig.profiles[profile];
-    if (!profileEntry) return undefined;
-    const platformConfig = platformConfigFromProfile(profileEntry);
-    return Object.keys(platformConfig).length > 0 ? platformConfig : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Load machine user name from command options, environment variables, or platform config.
  * In CLI context, env fallback is also handled by politty's arg env option.
@@ -603,51 +587,32 @@ export async function loadMachineUserName(
  */
 export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
-
-  // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
-  if (process.env.TAILOR_PLATFORM_TOKEN) {
-    const platformConfig = await tryLoadPlatformConfigFromProfile(profile);
-    rememberPlatformConfigForToken(process.env.TAILOR_PLATFORM_TOKEN, platformConfig);
-    return process.env.TAILOR_PLATFORM_TOKEN;
-  }
-  // TAILOR_TOKEN is deprecated
-  if (process.env.TAILOR_TOKEN) {
+  const envToken = process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+  if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
     logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
-    const platformConfig = await tryLoadPlatformConfigFromProfile(profile);
-    rememberPlatformConfigForToken(process.env.TAILOR_TOKEN, platformConfig);
-    return process.env.TAILOR_TOKEN;
   }
 
-  let pfConfig: PfConfig | undefined;
-  let profileEntry: PfProfile | undefined;
-  let platformConfig: PlatformClientConfig | undefined;
-  if (profile) {
-    pfConfig = await readPlatformConfig();
-    profileEntry = pfConfig.profiles[profile];
-    platformConfig = platformConfigFromProfile(profileEntry);
+  if (envToken) {
+    const platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
+    rememberPlatformConfigForToken(envToken, platformConfig);
+    return envToken;
   }
 
-  pfConfig ??= await readPlatformConfig();
-  let user;
-  if (profile) {
-    const u = profileEntry?.user;
-    if (!u) {
-      throw new Error(`Profile "${profile}" not found`);
-    }
-    user = u;
-  } else {
-    // config/currentUser
-    const u = pfConfig.current_user;
-    if (!u) {
-      // error
-      throw new Error(ml`
-        Tailor Platform token not found.
-        Please specify token via TAILOR_PLATFORM_TOKEN environment variable or login using 'tailor-sdk login' command.
-      `);
-    }
-    user = u;
+  const pfConfig = await readPlatformConfig();
+  const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
+  if (profile && !profileEntry) {
+    throw new Error(`Profile "${profile}" not found`);
   }
-
+  const user = profileEntry?.user ?? pfConfig.current_user;
+  if (!user) {
+    throw new Error(ml`
+      Tailor Platform token not found.
+      Please specify token via TAILOR_PLATFORM_TOKEN environment variable or login using 'tailor-sdk login' command.
+    `);
+  }
+  const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  const platformConfig =
+    fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
   return await fetchLatestToken(pfConfig, user, platformConfig);
 }
 

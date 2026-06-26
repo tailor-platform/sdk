@@ -72,6 +72,10 @@ export function getPlatformBaseUrl(config: PlatformClientConfig = {}) {
   );
 }
 
+export function isDefaultPlatform(config?: PlatformClientConfig): boolean {
+  return getPlatformBaseUrl(config) === normalizeBaseUrl(defaultPlatformBaseUrl);
+}
+
 export function getOAuth2ClientId(config: PlatformClientConfig = {}) {
   return (
     config.oauth2ClientId ?? process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID ?? defaultOAuth2ClientId

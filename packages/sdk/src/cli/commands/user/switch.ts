@@ -3,7 +3,7 @@ import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
-  loadPlatformClientConfig,
+  platformConfigFromProfile,
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
@@ -22,8 +22,17 @@ export const switchCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const platformConfig = await loadPlatformClientConfig();
     const config = await readPlatformConfig();
+    const activeProfileName = process.env.TAILOR_PLATFORM_PROFILE;
+    const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
+    if (activeProfileName && !activeProfileEntry) {
+      throw new Error(`Profile "${activeProfileName}" not found`);
+    }
+    const fromProfile = activeProfileEntry
+      ? platformConfigFromProfile(activeProfileEntry)
+      : undefined;
+    const platformConfig =
+      fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
 
     if (args.user.includes("|")) {
       throw new Error(
@@ -39,13 +48,8 @@ export const switchCommand = defineAppCommand({
       `);
     }
 
-    const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
-    if (activeProfile) {
-      const profile = config.profiles[activeProfile];
-      if (!profile) {
-        throw new Error(`Profile "${activeProfile}" not found`);
-      }
-      profile.user = args.user;
+    if (activeProfileEntry) {
+      activeProfileEntry.user = args.user;
     } else {
       config.current_user = args.user;
     }

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
-  loadPlatformClientConfig,
+  platformConfigFromProfile,
   readPlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -13,10 +13,16 @@ export const currentCommand = defineAppCommand({
   description: "Show current user.",
   args: z.object({}).strict(),
   run: async () => {
-    const platformConfig = await loadPlatformClientConfig();
     const config = await readPlatformConfig();
     const profile = process.env.TAILOR_PLATFORM_PROFILE;
-    const currentUser = profile ? (config.profiles[profile]?.user ?? null) : config.current_user;
+    const profileEntry = profile ? config.profiles[profile] : undefined;
+    if (profile && !profileEntry) {
+      throw new Error(`Profile "${profile}" not found`);
+    }
+    const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+    const platformConfig =
+      fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
+    const currentUser = profile ? (profileEntry?.user ?? null) : config.current_user;
     const jsonOutput = logger.jsonMode;
 
     // Check if current user is set

@@ -1,18 +1,13 @@
 import { arg } from "politty";
 import { z } from "zod";
-import {
-  defaultPlatformBaseUrl,
-  getPlatformBaseUrl,
-  initOAuth2Client,
-  normalizeBaseUrl,
-} from "#/cli/shared/client";
+import { defaultPlatformBaseUrl, initOAuth2Client, isDefaultPlatform } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   deleteUserTokens,
   hasAnyUserTokenEntry,
   hasUserTokenEntry,
-  loadPlatformClientConfig,
   loadStoredUserTokens,
+  platformConfigFromProfile,
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
@@ -32,11 +27,16 @@ export const logoutCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     const profile = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
-    const platformConfig = await loadPlatformClientConfig({ profile });
     const pfConfig = await readPlatformConfig();
-    const currentUser = profile ? pfConfig.profiles[profile]?.user : pfConfig.current_user;
-    const deletesDefaultToken =
-      getPlatformBaseUrl(platformConfig) === normalizeBaseUrl(defaultPlatformBaseUrl);
+    const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
+    if (profile && !profileEntry) {
+      throw new Error(`Profile "${profile}" not found`);
+    }
+    const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+    const platformConfig =
+      fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
+    const currentUser = profileEntry ? profileEntry.user : pfConfig.current_user;
+    const deletesDefaultToken = isDefaultPlatform(platformConfig);
     const lookupOptions = { allowLegacyUserKey: profile !== undefined };
     if (!currentUser) {
       logger.info("You are not logged in.");
