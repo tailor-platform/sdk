@@ -49,7 +49,7 @@ export const logoutCommand = defineAppCommand({
     }
     if (!storedTokens && !tokenLoadFailed) {
       logger.info("You are not logged in.");
-      if (deletesDefaultToken && pfConfig.current_user === currentUser) {
+      if (pfConfig.current_user === currentUser && (!profile || deletesDefaultToken)) {
         pfConfig.current_user = null;
       }
       writePlatformConfig(pfConfig);
@@ -74,7 +74,7 @@ export const logoutCommand = defineAppCommand({
     }
 
     await deleteUserTokens(pfConfig, currentUser, platformConfig);
-    if (deletesDefaultToken && pfConfig.current_user === currentUser) {
+    if (pfConfig.current_user === currentUser && (!profile || deletesDefaultToken)) {
       pfConfig.current_user = null;
     }
     writePlatformConfig(pfConfig);

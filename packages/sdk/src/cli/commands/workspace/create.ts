@@ -2,7 +2,12 @@ import { arg } from "politty";
 import { z } from "zod";
 import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import {
+  hasUserTokenEntry,
+  loadAccessToken,
+  readPlatformConfig,
+  writePlatformConfig,
+} from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
@@ -145,7 +150,7 @@ export const createCommand = defineAppCommand({
         );
       }
 
-      if (!config.users[profileUser]) {
+      if (!hasUserTokenEntry(config, profileUser)) {
         throw new Error(
           `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
         );

@@ -142,4 +142,29 @@ describe("logout --profile", () => {
     expect(config.current_user).toBeNull();
     expect(config.users["u@example.com"]).toBeUndefined();
   });
+
+  test("clears current user when logging out a non-default platform without a profile", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "dev-access-token",
+          refresh_token: "dev-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
+  });
 });

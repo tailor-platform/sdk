@@ -19,6 +19,12 @@ export const switchCommand = defineAppCommand({
   run: async (args) => {
     const config = await readPlatformConfig();
 
+    if (args.user.includes("|")) {
+      throw new Error(
+        `User "${args.user}" looks like a platform-scoped token key. Pass the user name without the platform URL and select the platform with PLATFORM_URL or a profile.`,
+      );
+    }
+
     // Check if user exists
     if (!hasUserTokenEntry(config, args.user)) {
       throw new Error(ml`
