@@ -441,6 +441,9 @@ describe("TailorDBField type error message tests", () => {
 
     const hooked = db.string().hooks({ create: () => "created" });
     type _HooksDuplicate = Expect<ThisEquals<typeof hooked.hooks, ".hooks() has already been set">>;
+    type _SerialAfterHooks = Expect<
+      ThisEquals<typeof hooked.serial, "serial cannot be set after hooks">
+    >;
 
     const nested = db.object({ name: db.string() });
     type _Hooks = Expect<
@@ -455,6 +458,9 @@ describe("TailorDBField type error message tests", () => {
     const serial = db.string().serial({ start: 0 });
     type _SerialDuplicate = Expect<
       ThisEquals<typeof serial.serial, ".serial() has already been set">
+    >;
+    type _HooksAfterSerial = Expect<
+      ThisEquals<typeof serial.hooks, "hooks cannot be set after serial">
     >;
 
     const nonSerial = db.bool();

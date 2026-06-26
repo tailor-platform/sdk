@@ -81,26 +81,32 @@ type DBFieldVectorThis<Defined extends DefinedDBFieldMetadata, Output> = Defined
     ? TailorDBField<Defined, Output>
     : TypeLevelError<"vector can only be set on non-array string fields">;
 type DBFieldHooksThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
-  hooks: unknown;
+  hooks: { create: false; update: false };
 }
-  ? DuplicateFieldMethodError<"hooks">
-  : Defined extends { type: "nested" }
-    ? TypeLevelError<"hooks cannot be set on nested type fields">
-    : TailorDBField<Defined, Output>;
+  ? TypeLevelError<"hooks cannot be set after serial">
+  : Defined extends {
+        hooks: unknown;
+      }
+    ? DuplicateFieldMethodError<"hooks">
+    : Defined extends { type: "nested" }
+      ? TypeLevelError<"hooks cannot be set on nested type fields">
+      : TailorDBField<Defined, Output>;
 type DBFieldValidateThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   validate: unknown;
 }
   ? DuplicateFieldMethodError<"validate">
   : TailorFieldMinimal<Defined, Output> | TypeLevelError<string>;
 type DBFieldSerialThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
-  serial: unknown;
+  serial: true;
 }
   ? DuplicateFieldMethodError<"serial">
-  : Output extends null
-    ? TypeLevelError<"serial can only be set on non-array integer or string fields">
-    : Defined extends { type: "integer" | "string"; array: false }
-      ? TailorDBField<Defined, Output>
-      : TypeLevelError<"serial can only be set on non-array integer or string fields">;
+  : Defined extends { serial: false }
+    ? TypeLevelError<"serial cannot be set after hooks">
+    : Output extends null
+      ? TypeLevelError<"serial can only be set on non-array integer or string fields">
+      : Defined extends { type: "integer" | "string"; array: false }
+        ? TailorDBField<Defined, Output>
+        : TypeLevelError<"serial can only be set on non-array integer or string fields">;
 
 type WithDBFieldDescription<Defined> = Defined & { description: true };
 type WithDBFieldRelation<Defined, S extends RelationType | RelationSelfConfig> = S extends
