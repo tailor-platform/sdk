@@ -204,11 +204,16 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/cli-rename",
     name: "v2 CLI rename",
     description:
-      "Rewrite `tailor-sdk crash-report` to `tailor-sdk crashreport` and `--machineuser` to `--machine-user` across package.json scripts, shell scripts, CI configs, and docs",
+      "Rewrite `tailor-sdk crash-report` to `tailor-sdk crashreport` and `--machineuser` to `--machine-user` across package.json scripts, shell scripts, CI configs, source files, and docs",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/cli-rename/scripts/transform.js",
-    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,yml,yaml}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+      "**/*.md",
+    ],
     legacyPatterns: ["tailor-sdk crash-report", "--machineuser"],
     examples: [
       {
