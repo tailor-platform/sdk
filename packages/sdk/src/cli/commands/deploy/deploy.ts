@@ -215,6 +215,13 @@ type PrintPlanOptions = {
   dryRun?: boolean;
 };
 
+/**
+ * Format and output the plan diff, then return a summary of change counts.
+ * In dry-run mode the diff is written to stdout; in apply mode it goes to stderr.
+ * @param results - Planned results across all services
+ * @param opts - Output options (dry-run mode flag)
+ * @returns Aggregated plan summary counts
+ */
 export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions): PlanSummary {
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
