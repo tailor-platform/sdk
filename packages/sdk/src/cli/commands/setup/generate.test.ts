@@ -314,6 +314,30 @@ describe("renderBranchWorkflow", () => {
     expect(buildStep).not.toContain('case "$BASE_PACKAGE_MANAGER" in');
   });
 
+  test("fails ERD preview script when the head app directory cannot be entered", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(buildStep.match(/cd "\$GITHUB_WORKSPACE\/\$APP_DIR" \|\| exit 1/g)).toHaveLength(4);
+    expect(buildStep).not.toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_head_node');
+    expect(buildStep).not.toContain(
+      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n              case "__PACKAGE_MANAGER__"',
+    );
+    expect(buildStep).not.toContain(
+      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            TAILOR_PLATFORM_SDK_DTS_PATH',
+    );
+    expect(buildStep).not.toContain(
+      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_sdk tailordb erd diff',
+    );
+  });
+
   test("treats missing ERD preview configs as empty diff sides", () => {
     const { content } = renderBranchWorkflow({
       ...branchBase,
