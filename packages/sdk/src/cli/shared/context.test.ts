@@ -655,6 +655,8 @@ describe("loadAccessToken", () => {
       const result = await loadAccessToken({ profile: "dev" });
 
       expect(result).toBe(validToken);
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toBeDefined();
     });
 
     test("does not fall back to an unscoped token for a profile platform URL without matching env", async () => {

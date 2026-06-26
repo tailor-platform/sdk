@@ -125,4 +125,40 @@ describe("user current", () => {
 
     expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
   });
+
+  test("shows the active profile user instead of the global current user", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "default@example.com": {
+          storage: "file",
+          access_token: "default-token",
+          refresh_token: "refresh",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+        "https://api.dev.tailor.tech|profile@example.com": {
+          storage: "file",
+          access_token: "profile-token",
+          refresh_token: "refresh",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "profile@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: "default@example.com",
+    });
+    using stdout = captureStdout();
+    using _json = jsonMode();
+
+    await runCommand(currentCommand, []);
+
+    expect(JSON.parse(stdout.output)).toEqual({ user: "profile@example.com" });
+  });
 });

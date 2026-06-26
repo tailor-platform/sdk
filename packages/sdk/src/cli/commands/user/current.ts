@@ -15,10 +15,12 @@ export const currentCommand = defineAppCommand({
   run: async () => {
     const platformConfig = await loadPlatformClientConfig();
     const config = await readPlatformConfig();
+    const profile = process.env.TAILOR_PLATFORM_PROFILE;
+    const currentUser = profile ? (config.profiles[profile]?.user ?? null) : config.current_user;
     const jsonOutput = logger.jsonMode;
 
     // Check if current user is set
-    if (!config.current_user) {
+    if (!currentUser) {
       throw new Error(ml`
         Current user not set.
         Please login first using 'tailor-sdk login' command to register a user.
@@ -26,18 +28,18 @@ export const currentCommand = defineAppCommand({
     }
 
     // Check if user exists
-    if (!hasUserTokenEntry(config, config.current_user, platformConfig)) {
+    if (!hasUserTokenEntry(config, currentUser, platformConfig)) {
       throw new Error(ml`
-        Current user '${config.current_user}' not found in registered users.
+        Current user '${currentUser}' not found in registered users.
         Please login again using 'tailor-sdk login' command to register the user.
       `);
     }
 
     if (jsonOutput) {
-      logger.out({ user: config.current_user });
+      logger.out({ user: currentUser });
       return;
     }
 
-    logger.out(config.current_user);
+    logger.out(currentUser);
   },
 });
