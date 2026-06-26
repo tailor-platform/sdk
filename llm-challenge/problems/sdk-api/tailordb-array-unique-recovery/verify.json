@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "profile-domain-kept",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "creator|profile",
+      "flags": "i",
+      "description": "source keeps the creator profile domain"
+    },
+    {
+      "id": "handle-uniqueness-kept",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "handle[\\s\\S]*unique|unique[\\s\\S]*handle",
+      "flags": "i",
+      "description": "source declares uniqueness behavior for the public handle"
+    },
+    {
+      "id": "tag-list-kept",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "tags",
+      "flags": "i",
+      "description": "source keeps topical tags as profile data"
+    },
+    {
+      "id": "avatar-label-data-kept",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "avatarLabel",
+      "flags": "i",
+      "description": "source keeps avatar label as regular profile data"
+    },
+    {
+      "id": "avatar-image-asset-kept",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "avatarImage",
+      "flags": "i",
+      "description": "source keeps uploaded avatar image evidence"
+    }
+  ]
+}

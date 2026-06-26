@@ -107,11 +107,12 @@ describe("problem discovery", () => {
   test("discovers the initial problem set from group directories", async () => {
     const problems = await discoverProblems(packageRoot);
 
-    expect(problems).toHaveLength(21);
-    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(17);
+    expect(problems).toHaveLength(22);
+    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(18);
     expect(problems.filter((problem) => problem.group === "cli")).toHaveLength(4);
     expect(problems.map((problem) => problem.id)).toContain("plugin-registration");
     expect(problems.map((problem) => problem.id)).toContain("tailordb-profile-assets");
+    expect(problems.map((problem) => problem.id)).toContain("tailordb-array-unique-recovery");
     expect(problems.every((problem) => problem.verifyPath !== undefined)).toBe(true);
     expect(
       problems.every((problem) => problem.sourcePath === `problems/${problem.group}/${problem.id}`),
