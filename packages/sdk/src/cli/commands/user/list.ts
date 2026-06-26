@@ -4,6 +4,29 @@ import { readPlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 
+type UserListInfo = {
+  user: string;
+  platformUrl: string | null;
+  current: boolean;
+};
+
+function toUserListInfo(userKey: string, currentUser: string | null): UserListInfo {
+  const separatorIndex = userKey.indexOf("|");
+  const platformUrl = separatorIndex === -1 ? null : userKey.slice(0, separatorIndex);
+  const user = separatorIndex === -1 ? userKey : userKey.slice(separatorIndex + 1);
+  return {
+    user,
+    platformUrl,
+    current: currentUser === user,
+  };
+}
+
+function formatUserListInfo(info: UserListInfo): string {
+  return `${info.user}${info.platformUrl ? ` [${info.platformUrl}]` : ""}${
+    info.current ? " (current)" : ""
+  }`;
+}
+
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all users.",
@@ -24,19 +47,17 @@ export const listCommand = defineAppCommand({
       return;
     }
 
+    const userInfos = users.map((user) => toUserListInfo(user, config.current_user));
     if (jsonOutput) {
-      logger.out(users);
+      logger.out([...new Set(userInfos.map((userInfo) => userInfo.user))]);
       return;
     }
 
-    users.forEach((user) => {
-      if (
-        user === config.current_user ||
-        (config.current_user && user.endsWith(`|${config.current_user}`))
-      ) {
-        logger.success(`${user} (current)`, { mode: "plain" });
+    userInfos.forEach((userInfo) => {
+      if (userInfo.current) {
+        logger.success(formatUserListInfo(userInfo), { mode: "plain" });
       } else {
-        logger.log(user);
+        logger.log(formatUserListInfo(userInfo));
       }
     });
   },

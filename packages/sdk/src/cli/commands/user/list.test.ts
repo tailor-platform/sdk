@@ -86,4 +86,54 @@ describe("user list", () => {
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual(["u@example.com"]);
   });
+
+  test("renders scoped users as user-facing entries in json mode", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "token",
+          refresh_token: "refresh",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    using stdout = captureStdout();
+    using _json = jsonMode();
+
+    await runCommand(userCommand, []);
+
+    expect(stdout.output).not.toBe("");
+    expect(JSON.parse(stdout.output)).toEqual(["u@example.com"]);
+  });
+
+  test("renders scoped users without exposing the storage key in text mode", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "token",
+          refresh_token: "refresh",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    using stderr = captureStderr();
+
+    await runCommand(userCommand, []);
+
+    expect(stderr.output).toContain("u@example.com");
+    expect(stderr.output).toContain("https://api.dev.tailor.tech");
+    expect(stderr.output).not.toContain("https://api.dev.tailor.tech|u@example.com");
+  });
 });

@@ -2,7 +2,11 @@ import { arg } from "politty";
 import { z } from "zod";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
+import {
+  fetchLatestToken,
+  loadPlatformClientConfig,
+  readPlatformConfig,
+} from "#/cli/shared/context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import ml from "#/utils/multiline";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
@@ -24,6 +28,7 @@ export const updateCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     await assertWritable();
+    const platformConfig = await loadPlatformClientConfig();
     const config = await readPlatformConfig();
 
     if (!config.current_user) {
@@ -33,8 +38,8 @@ export const updateCommand = defineAppCommand({
       `);
     }
 
-    const token = await fetchLatestToken(config, config.current_user);
-    const client = await initOperatorClient(token);
+    const token = await fetchLatestToken(config, config.current_user, platformConfig);
+    const client = await initOperatorClient(token, platformConfig);
 
     // Delete the existing token
     await client.deletePersonalAccessToken({

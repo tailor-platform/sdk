@@ -2,7 +2,11 @@ import { z } from "zod";
 import { paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
+import {
+  fetchLatestToken,
+  loadPlatformClientConfig,
+  readPlatformConfig,
+} from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
@@ -13,6 +17,7 @@ export const listCommand = defineAppCommand({
   args: z.object({ ...paginationArgs() }).strict(),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
+    const platformConfig = await loadPlatformClientConfig();
     const config = await readPlatformConfig();
 
     if (!config.current_user) {
@@ -22,8 +27,8 @@ export const listCommand = defineAppCommand({
       `);
     }
 
-    const token = await fetchLatestToken(config, config.current_user);
-    const client = await initOperatorClient(token);
+    const token = await fetchLatestToken(config, config.current_user, platformConfig);
+    const client = await initOperatorClient(token, platformConfig);
 
     const pageDirection = toPageDirection(args.order);
     const pats = await fetchPaged(
