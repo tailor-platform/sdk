@@ -55,6 +55,17 @@ describe("getApplicableCodemods", () => {
     expect(getApplicableCodemods("2.0.0-next.2", "2.0.0-next.2")).toEqual([]);
   });
 
+  test("runs stable-only codemods when upgrading from a prerelease to stable", () => {
+    const ids = getApplicableCodemods("2.0.0-next.2", "2.0.0").map((codemod) => codemod.id);
+
+    expect(ids).toContain("v2/auth-attributes-rename");
+    expect(ids).toContain("v2/env-var-rename");
+    expect(ids).toContain("v2/rename-bin");
+    expect(ids).toContain("v2/node-minimum-22-15-0");
+    expect(ids).not.toContain("v2/principal-unify");
+    expect(ids).not.toContain("v2/auth-invoker-unwrap");
+  });
+
   test("returns empty when the target prerelease is before the codemod boundary", () => {
     expect(getApplicableCodemods("1.67.1", "1.99.0-next.1")).toEqual([]);
   });
