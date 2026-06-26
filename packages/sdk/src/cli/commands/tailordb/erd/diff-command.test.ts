@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { runPreviewDiffCli } from "./preview-diff";
+import { writeErdDiff } from "./diff-command";
 import type { TailorDbErdSchema } from "./types";
 
 let tempDir: string;
@@ -25,9 +25,9 @@ function htmlWithSchema(value: TailorDbErdSchema): string {
   return `<script type="application/json" id="erd-schema">${JSON.stringify(value)}</script>`;
 }
 
-describe("runPreviewDiffCli", () => {
+describe("writeErdDiff", () => {
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-preview-diff-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-diff-"));
   });
 
   afterEach(() => {
@@ -61,21 +61,42 @@ describe("runPreviewDiffCli", () => {
       "utf8",
     );
 
-    runPreviewDiffCli([
-      "--base-html",
-      baseHtml,
-      "--head-html",
-      headHtml,
-      "--output-html",
-      outputHtml,
-      "--output-json",
-      outputJson,
-    ]);
+    const result = writeErdDiff({ baseHtml, headHtml, outputHtml, outputJson });
 
     expect(fs.readFileSync(outputHtml, "utf8")).toContain("TailorDB ERD diff - tailordb");
     expect(JSON.parse(fs.readFileSync(outputJson, "utf8"))).toMatchObject({
       namespace: "tailordb",
       summary: { added: 1, changed: 0, removed: 0 },
     });
+    expect(result.diff.changed).toBe(true);
+  });
+
+  test("uses an empty base when only head HTML is supplied", () => {
+    const headHtml = path.join(tempDir, "head.html");
+    const outputHtml = path.join(tempDir, "diff.html");
+
+    fs.writeFileSync(
+      headHtml,
+      htmlWithSchema(
+        schema({
+          tables: [
+            {
+              name: "User",
+              pluralForm: "users",
+              columns: [],
+              indexes: [],
+              forwardRelationships: [],
+              backwardRelationships: [],
+            },
+          ],
+        }),
+      ),
+      "utf8",
+    );
+
+    const result = writeErdDiff({ headHtml, outputHtml });
+
+    expect(result.diff.baseRevision).toBe("missing-base");
+    expect(result.diff.summary).toEqual({ added: 1, changed: 0, removed: 0 });
   });
 });
