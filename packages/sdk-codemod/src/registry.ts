@@ -1,6 +1,6 @@
 import * as url from "node:url";
 import * as path from "pathe";
-import { lt, gte, valid } from "semver";
+import { gte, lt, parse, valid } from "semver";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
@@ -564,9 +564,28 @@ export function resolveCodemodScript(scriptPath: string): string {
   return path.resolve(CODEMODS_ROOT, scriptPath);
 }
 
+function reachesCodemodBoundary(toVersion: string, boundaryVersion: string): boolean {
+  if (gte(toVersion, boundaryVersion)) {
+    return true;
+  }
+
+  const target = parse(toVersion);
+  const boundary = parse(boundaryVersion);
+
+  return (
+    target !== null &&
+    boundary !== null &&
+    target.prerelease.length > 0 &&
+    target.major === boundary.major &&
+    target.minor === boundary.minor &&
+    target.patch === boundary.patch
+  );
+}
+
 /**
  * Get codemod packages applicable for a version range.
- * A codemod applies when: since <= fromVersion < until <= toVersion
+ * A codemod applies when: since <= fromVersion < until <= toVersion.
+ * A target prerelease for `until` also reaches that boundary.
  * @param fromVersion - Current SDK version (semver)
  * @param toVersion - Target SDK version (semver)
  * @returns Array of applicable codemod packages in registration order
@@ -583,6 +602,6 @@ export function getApplicableCodemods(fromVersion: string, toVersion: string): C
     (codemod) =>
       gte(fromVersion, codemod.since) &&
       lt(fromVersion, codemod.until) &&
-      gte(toVersion, codemod.until),
+      reachesCodemodBoundary(toVersion, codemod.until),
   );
 }
