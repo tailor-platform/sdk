@@ -130,6 +130,44 @@ describe("logout --profile", () => {
     expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeDefined();
   });
 
+  test("clears current user when profile logout removes the default token while env selects another platform", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          access_token: "default-access-token",
+          refresh_token: "default-refresh-token",
+          token_expires_at: futureDate,
+        },
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "dev-access-token",
+          refresh_token: "dev-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {
+        prod: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.tailor.tech",
+        },
+      },
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, ["--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["u@example.com"]).toBeUndefined();
+    expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeDefined();
+  });
+
   test("preserves current user when profile logout leaves another scoped token", async () => {
     writePlatformConfig({
       version: 2,

@@ -42,12 +42,13 @@ export const logoutCommand = defineAppCommand({
       logger.info("You are not logged in.");
       return;
     }
+    const hasDefaultUserToken = () =>
+      hasUserTokenEntry(pfConfig, currentUser, { platformUrl: defaultPlatformBaseUrl });
     const shouldClearCurrentUser = () =>
       pfConfig.current_user === currentUser &&
       (deletesDefaultToken
-        ? !hasUserTokenEntry(pfConfig, currentUser, undefined)
-        : !hasAnyUserTokenEntry(pfConfig, currentUser) &&
-          !hasUserTokenEntry(pfConfig, currentUser, undefined));
+        ? !hasDefaultUserToken()
+        : !hasAnyUserTokenEntry(pfConfig, currentUser) && !hasDefaultUserToken());
     let storedTokens: Awaited<ReturnType<typeof loadStoredUserTokens>>;
     let tokenLoadFailed = false;
     try {
