@@ -1,5 +1,20 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.2
+### Patch Changes
+
+
+
+- [#1525](https://github.com/tailor-platform/sdk/pull/1525) [`425a19d`](https://github.com/tailor-platform/sdk/commit/425a19dd58da6e373b739d3b3e838c2ff3d1736a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.5
+
+
+
+- [#1533](https://github.com/tailor-platform/sdk/pull/1533) [`e3bc2ce`](https://github.com/tailor-platform/sdk/commit/e3bc2ce65ab30ee53e5de0eb48ca6c24049fcd1b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.9.2
+
+
+
+- [#1554](https://github.com/tailor-platform/sdk/pull/1554) [`a2ca1f9`](https://github.com/tailor-platform/sdk/commit/a2ca1f989a69153138ddef66931f1e8a94c8c3e9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.44.0
+
 ## 0.3.1
 ### Patch Changes
 
