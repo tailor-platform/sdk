@@ -1,5 +1,9 @@
 import * as path from "pathe";
 
+// `npx tailor-sdk@...` must become `npx @tailor-platform/sdk@...` — rewriting
+// to `npx tailor@...` would resolve the unrelated npm `tailor` package.
+const NPX_RE = /\bnpx\s+tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
+
 // Match the `tailor-sdk` binary, optionally with a version pin (`@latest`,
 // `@2.0.0`, etc.). Lookbehind excludes `.tailor-sdk` (preceded by `.`) and
 // `create-tailor-sdk` (preceded by `-`). Lookahead excludes trailing `-word`
@@ -7,7 +11,10 @@ import * as path from "pathe";
 const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 
 function renameBinary(value: string): string {
-  return value.replace(TAILOR_SDK_RE, (_match, version?: string) =>
+  const withNpx = value.replace(NPX_RE, (_, version?: string) =>
+    version ? `npx @tailor-platform/sdk${version}` : "npx @tailor-platform/sdk",
+  );
+  return withNpx.replace(TAILOR_SDK_RE, (_match, version?: string) =>
     version ? `tailor${version}` : "tailor",
   );
 }
@@ -42,7 +49,9 @@ function transformPackageJson(source: string): string | null {
 /**
  * Rename `tailor-sdk` binary references to `tailor`.
  *
- * Handles optional `@version` pins (`tailor-sdk@latest` → `tailor@latest`).
+ * Handles optional `@version` pins:
+ * - `npx tailor-sdk@latest` → `npx @tailor-platform/sdk@latest` (package-manager form)
+ * - `tailor-sdk@latest` elsewhere → `tailor@latest`
  * Does not rewrite `.tailor-sdk` directory paths or `create-tailor-sdk`.
  * @param source - File contents
  * @param filePath - Absolute path to the file (used to dispatch package.json vs text)
