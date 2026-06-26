@@ -406,22 +406,22 @@ Manage workflows using the CLI:
 
 ```bash
 # List workflows
-tailor-sdk workflow list
+tailor workflow list
 
 # Get workflow details
-tailor-sdk workflow get <name>
+tailor workflow get <name>
 
 # Start a workflow
-tailor-sdk workflow start <name> -m <machine-user> -a '{"key": "value"}'
+tailor workflow start <name> -m <machine-user> -a '{"key": "value"}'
 
 # List executions
-tailor-sdk workflow executions
+tailor workflow executions
 
 # Get execution details with logs
-tailor-sdk workflow executions <execution-id> --logs
+tailor workflow executions <execution-id> --logs
 
 # Resume a failed execution
-tailor-sdk workflow resume <execution-id>
+tailor workflow resume <execution-id>
 ```
 
 See [Workflow CLI Commands](../cli/workflow.md) for full documentation.

@@ -49,6 +49,13 @@ export interface CodemodPackage {
    */
   legacyPatterns?: CodemodPatternGroup[];
   /**
+   * Patterns to detect only inside string/template fragments of source files
+   * after a transform runs. Use this when a migration normally masks source
+   * strings for residual matching, but selected string content still needs a
+   * manual follow-up warning.
+   */
+  sourceStringLegacyPatterns?: CodemodPatternGroup[];
+  /**
    * Patterns that, when present in a file's post-transform content, mark it
    * as a candidate for LLM-assisted review. Use this for migrations the
    * deterministic transform cannot safely complete on its own (e.g. a value

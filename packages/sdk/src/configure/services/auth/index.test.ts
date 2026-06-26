@@ -19,7 +19,7 @@ const userType = db.type("User", {
   externalId: db.uuid(),
 });
 
-type AttributeMap = {
+type Attributes = {
   role: true;
   isActive: true;
   tags: true;
@@ -28,7 +28,7 @@ type AttributeMap = {
 
 type AttributeList = ["externalId"];
 
-const attributeMapConfig: AttributeMap = {
+const attributeMapConfig: Attributes = {
   role: true,
   isActive: true,
   tags: true,

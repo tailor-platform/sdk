@@ -2,7 +2,7 @@ import { ScalarType } from "@bufbuild/protobuf";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import type { DescField, DescMessage, DescMethodUnary } from "@bufbuild/protobuf";
 
-// `tailor-sdk api` issues a single JSON POST and reads one JSON response, so
+// `tailor api` issues a single JSON POST and reads one JSON response, so
 // only unary RPCs can be invoked. Streaming methods are filtered out of all
 // discovery surfaces (`api list`, `api inspect`). `OperatorService.methods`
 // is invariant at runtime, so we filter once and reuse — completion-script

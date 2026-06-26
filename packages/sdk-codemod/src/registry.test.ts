@@ -35,6 +35,26 @@ describe("getApplicableCodemods", () => {
     );
   });
 
+  test("env-var-rename scans env files, CI configs, and source files", () => {
+    const envVarRename = getApplicableCodemods("1.67.1", "2.0.0").find(
+      (codemod) => codemod.id === "v2/env-var-rename",
+    );
+
+    expect(envVarRename?.filePatterns).toEqual(
+      expect.arrayContaining([
+        "**/.env",
+        "**/.env.*",
+        "**/*.{env,sh,bash,zsh,yml,yaml,json,md}",
+        "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+      ]),
+    );
+    expect(envVarRename?.legacyPatterns).toContain("TAILOR_PLATFORM_SDK_CONFIG_PATH");
+    expect(envVarRename?.legacyPatterns).toContain("TAILOR_TOKEN");
+    expect(envVarRename?.sourceStringLegacyPatterns).toEqual(
+      expect.arrayContaining(["PLATFORM_URL", "PLATFORM_OAUTH2_CLIENT_ID", "LOG_LEVEL"]),
+    );
+  });
+
   test("flags CommonJS TypeScript files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 

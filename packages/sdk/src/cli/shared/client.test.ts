@@ -27,6 +27,20 @@ vi.mock("#/cli/crashreport/index", () => ({
   reportCrash: vi.fn(),
 }));
 
+describe("client environment configuration", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  test("uses TAILOR_PLATFORM_URL for the platform base URL", async () => {
+    vi.resetModules();
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.staging.tailor.test");
+    const client = await import("./client");
+    expect(client.platformBaseUrl).toBe("https://api.staging.tailor.test");
+  });
+});
+
 describe("createTransport", () => {
   afterEach(() => {
     vi.clearAllMocks();

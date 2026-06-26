@@ -7,7 +7,7 @@ import type {
   FieldMetadata,
   TailorField,
 } from "#/configure/types/field.types";
-import type { InferredAttributeMap, TailorPrincipal } from "#/runtime/types";
+import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
 import type { InferFieldsOutput, output, Prettify } from "#/types/helpers";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
@@ -121,7 +121,7 @@ export interface TailorDBType<
   Fields extends Record<string, TailorAnyDBField> = any,
   // Generic parameter kept for compatibility with full TailorDBType in configure/
   // oxlint-disable-next-line no-unused-vars
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
 > {
   readonly name: string;
   readonly fields: Fields;
@@ -138,7 +138,7 @@ export type TailorDBInstance<
   // Default kept loose for convenience; callers still get fully inferred types from `db.type()`.
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
 > = TailorDBType<Fields, User>;
 
 // --- Hook types (UX-focused, for configure layer) ---

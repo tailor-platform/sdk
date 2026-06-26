@@ -148,7 +148,7 @@ export const createCommand = defineAppCommand({
 
       if (!config.users[profileUser]) {
         throw new Error(
-          `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
+          `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor login' command.`,
         );
       }
       config.profiles[profileName] = {

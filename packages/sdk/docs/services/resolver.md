@@ -306,7 +306,7 @@ createResolver({
 
 - When `publishEvents: true`, resolver execution events are published
 - When not specified, it is **automatically set to `true`** if an executor uses this resolver with `resolverExecutedTrigger`
-- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor-sdk deploy`
+- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor deploy`
 
 **Use cases:**
 

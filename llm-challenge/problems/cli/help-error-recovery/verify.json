@@ -12,7 +12,7 @@
       "id": "note-names-local-cli",
       "kind": "content-match",
       "glob": "**/*.md",
-      "pattern": "tailor-sdk|pnpm",
+      "pattern": "tailor|pnpm",
       "flags": "i",
       "description": "maintenance note names the local CLI command path"
     }

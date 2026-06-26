@@ -35,16 +35,9 @@ import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
-import { isNativeTypeScriptRuntime } from "./shared/runtime";
+import { registerTsHook } from "./shared/register-ts-hook";
 
-// Register tsx for TypeScript loading on Node.js.
-// Bun and Deno handle TypeScript natively, so registration is skipped.
-// tsx's own register() picks `module.registerHooks` on Node ≥ 24.11.1 / 25.1 / 26
-// (avoiding the DEP0205 deprecation) and falls back to `module.register` on older runtimes.
-if (!isNativeTypeScriptRuntime()) {
-  const { register } = await import("tsx/esm/api");
-  register();
-}
+await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 
 // Runs before globalArgs effects load --env-file, so env file overrides for
 // TAILOR_CRASH_REPORTS_* are not available for early startup failures.
@@ -53,7 +46,7 @@ if (!isNativeTypeScriptRuntime()) {
 initCrashReporting();
 
 const packageJson = await readPackageJson();
-const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk";
+const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor";
 
 export const mainCommand = withCompletionCommand(
   defineCommand({

@@ -260,7 +260,7 @@ export function buildTailorDbErdSchema(options: BuildTailorDbErdSchemaOptions): 
     namespace: namespaceData.namespace,
     source: options.source ?? "local",
     cleanRoom: {
-      implementation: "tailor-sdk" as const,
+      implementation: "tailor" as const,
       notes: CLEAN_ROOM_NOTES,
     },
     tables,

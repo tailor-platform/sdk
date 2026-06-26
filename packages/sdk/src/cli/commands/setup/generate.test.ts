@@ -174,7 +174,7 @@ describe("renderBranchWorkflow", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain("uses: tailor-platform/actions/generate-check@");
     expect(content).not.toContain("git add -A");
-    expect(content).not.toContain("tailor-sdk generate");
+    expect(content).not.toContain("tailor generate");
   });
 
   test("--no-plan drops the plan job, pull_request trigger, and dry-run input", () => {

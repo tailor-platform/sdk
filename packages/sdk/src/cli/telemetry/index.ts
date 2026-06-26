@@ -44,7 +44,7 @@ export async function initTelemetry(): Promise<void> {
   const version = packageJson.version ?? "unknown";
 
   const resource = resourceFromAttributes({
-    [ATTR_SERVICE_NAME]: "tailor-sdk",
+    [ATTR_SERVICE_NAME]: "tailor",
     [ATTR_SERVICE_VERSION]: version,
   });
 
@@ -79,7 +79,7 @@ export async function shutdownTelemetry(): Promise<void> {
  * @returns Result of fn
  */
 export async function withSpan<T>(name: string, fn: (span: Span) => Promise<T>): Promise<T> {
-  const tracer = trace.getTracer("tailor-sdk");
+  const tracer = trace.getTracer("tailor");
 
   return tracer.startActiveSpan(name, async (span) => {
     try {

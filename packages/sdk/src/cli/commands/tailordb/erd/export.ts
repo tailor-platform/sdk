@@ -10,7 +10,7 @@ import { initErdCommand } from "./utils";
 import { writeViewerDist } from "./viewer";
 import type { TailorDBNamespaceData } from "#/plugin/types";
 
-const DEFAULT_ERD_BASE_DIR = ".tailor-sdk/erd";
+const DEFAULT_ERD_BASE_DIR = ".tailor/erd";
 
 interface ResolveTargetsOptions {
   context: LocalErdSchemaContext;

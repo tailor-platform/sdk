@@ -1,5 +1,5 @@
 /**
- * `tailor-sdk function test-run` command
+ * `tailor function test-run` command
  *
  * Bundles and executes a function on the Tailor Platform server
  * without deploying (applying) the application.
@@ -281,7 +281,7 @@ async function resolveMachineUserName(options: ResolveMachineUserNameOptions): P
     }
   }
   throw new Error(
-    "Machine user is required. Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
+    "Machine user is required. Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
   );
 }
 

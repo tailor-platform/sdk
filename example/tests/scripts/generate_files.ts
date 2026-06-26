@@ -6,7 +6,7 @@ import { generate, deploy } from "@tailor-platform/sdk/cli";
 
 // Disable inline sourcemaps during test fixture generation so that snapshot
 // comparisons remain stable across environments.
-process.env.TAILOR_ENABLE_INLINE_SOURCEMAP ??= "false";
+process.env.TAILOR_INLINE_SOURCEMAP ??= "false";
 
 const __filename = url.fileURLToPath(import.meta.url);
 
@@ -52,7 +52,7 @@ export async function generateExpectedFiles(): Promise<void> {
       console.log("Removed existing expected directory");
     }
 
-    process.env.TAILOR_SDK_OUTPUT_DIR = expectedDir;
+    process.env.TAILOR_BUILD_OUTPUT_DIR = expectedDir;
     await generate({
       configPath: "./tests/tailor.config.expected.ts",
     });
@@ -101,7 +101,7 @@ export async function generateCompatFiles(): Promise<void> {
   await generate({ configPath: "./tests/tailor.config.plugins-compat.ts" });
 
   // Also run deploy --buildOnly for plugins-compat (used by bundled_execution tests)
-  process.env.TAILOR_SDK_OUTPUT_DIR = pluginsCompatDir;
+  process.env.TAILOR_BUILD_OUTPUT_DIR = pluginsCompatDir;
   const result = await deploy({
     configPath: "./tests/tailor.config.plugins-compat.ts",
     buildOnly: true,
