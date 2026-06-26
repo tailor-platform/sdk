@@ -8,12 +8,23 @@ describe("getApplicableCodemods", () => {
     expect(codemods[0]!.id).toBe("v2/define-generators-to-plugins");
   });
 
+  test("returns all v2 codemods when upgrading to the stable boundary", () => {
+    expect(getApplicableCodemods("1.67.1", "2.0.0").map((codemod) => codemod.id)).toEqual(
+      allCodemods.map((codemod) => codemod.id),
+    );
+  });
+
   test("returns codemods when upgrading to a prerelease at their version boundary", () => {
-    const stableCodemods = getApplicableCodemods("1.67.1", "2.0.0");
     const prereleaseCodemods = getApplicableCodemods("1.67.1", "2.0.0-next.2");
 
     expect(prereleaseCodemods.map((codemod) => codemod.id)).toEqual(
-      stableCodemods.map((codemod) => codemod.id),
+      allCodemods
+        .filter(
+          (codemod) =>
+            codemod.prereleaseUntil === "2.0.0-next.1" ||
+            codemod.prereleaseUntil === "2.0.0-next.2",
+        )
+        .map((codemod) => codemod.id),
     );
   });
 
@@ -27,6 +38,10 @@ describe("getApplicableCodemods", () => {
     expect(ids).toContain("v2/test-run-arg-input");
     expect(ids).not.toContain("v2/execute-script-arg");
     expect(ids).not.toContain("v2/principal-unify");
+  });
+
+  test("returns empty when the source prerelease already reached the codemod boundary", () => {
+    expect(getApplicableCodemods("2.0.0-next.2", "2.0.0-next.2")).toEqual([]);
   });
 
   test("returns empty when the target prerelease is before the codemod boundary", () => {
