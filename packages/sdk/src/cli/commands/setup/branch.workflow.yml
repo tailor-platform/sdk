@@ -295,13 +295,20 @@ jobs:
           )"
 
           run_head_tailor_sdk_bin() {
+            local command_cwd="$1"
+            shift
+
+            run_head_cli_env() {
+              env TAILOR_SDK_BIN="$tailor_sdk_bin" TAILOR_SDK_CWD="$command_cwd" "$@"
+            }
+
             (
               cd "$GITHUB_WORKSPACE/$APP_DIR"
               case "__PACKAGE_MANAGER__" in
-                pnpm) pnpm exec node "$tailor_sdk_bin" "$@" ;;
-                npm) node "$tailor_sdk_bin" "$@" ;;
-                yarn) yarn node "$tailor_sdk_bin" "$@" ;;
-                bun) bun "$tailor_sdk_bin" "$@" ;;
+                pnpm) run_head_cli_env pnpm exec node "$head_cli_runner" "$@" ;;
+                npm) run_head_cli_env node "$head_cli_runner" "$@" ;;
+                yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;
+                bun) run_head_cli_env bun "$head_cli_runner" "$@" ;;
                 *)
                   echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
                   exit 1
@@ -315,10 +322,24 @@ jobs:
           preview_output="$RUNNER_TEMP/tailor-erd/preview"
           diff_output="$RUNNER_TEMP/tailor-erd/diff"
           dts_output="$RUNNER_TEMP/tailor-erd/dts"
+          head_cli_runner="$RUNNER_TEMP/tailor-erd/run-head-tailor-sdk.mjs"
           head_log="$RUNNER_TEMP/tailor-erd/head-$NAMESPACE.log"
           base_log="$RUNNER_TEMP/tailor-erd/base-$NAMESPACE.log"
           rm -rf "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
           mkdir -p "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
+          cat > "$head_cli_runner" <<'NODE'
+          import { pathToFileURL } from "node:url";
+
+          const cliBin = process.env.TAILOR_SDK_BIN;
+          const commandCwd = process.env.TAILOR_SDK_CWD;
+          if (!cliBin || !commandCwd) {
+            throw new Error("TAILOR_SDK_BIN and TAILOR_SDK_CWD are required.");
+          }
+
+          process.chdir(commandCwd);
+          process.argv = [process.argv[0], cliBin, ...process.argv.slice(2)];
+          await import(pathToFileURL(cliBin).href);
+          NODE
 
           head_config="$GITHUB_WORKSPACE/$APP_DIR/tailor.config.ts"
           base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"
@@ -327,7 +348,10 @@ jobs:
           diff_html="$diff_output/$NAMESPACE-diff.html"
 
           head_missing="false"
-          if ! (
+          if [ ! -f "$head_config" ]; then
+            echo "Head ERD config not found; rendering base objects as removed."
+            head_missing="true"
+          elif ! (
             cd "$GITHUB_WORKSPACE/$APP_DIR"
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts" \
               run_tailor_sdk tailordb erd export --config "$head_config" --namespace "$NAMESPACE" --output "$head_output"
@@ -345,9 +369,12 @@ jobs:
           fi
 
           base_missing="false"
-          if ! (
+          if [ ! -f "$base_config" ]; then
+            echo "Base ERD config not found; rendering current objects as added."
+            base_missing="true"
+          elif ! (
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
-              run_head_tailor_sdk_bin tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
+              run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
             if grep -q 'not found in local config.db' "$base_log"; then
               cat "$base_log"
