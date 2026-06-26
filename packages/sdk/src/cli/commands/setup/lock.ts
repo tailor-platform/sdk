@@ -131,25 +131,3 @@ export function findTarget(
 ): LockTarget | undefined {
   return lock?.targets.find((t) => t.kind === kind && t.workspaceName === workspaceName);
 }
-
-/**
- * Find a lock target by name alone, regardless of kind.
- * Useful for resolving per-app action references in coordinate commands.
- * @param lock - Lock file to search, or null
- * @param workspaceName - Workspace name (tailor- prefix optional)
- * @returns Matching target, or undefined
- */
-export function findTargetByName(
-  lock: LockFile | null,
-  workspaceName: string,
-): LockTarget | undefined {
-  const normalized = workspaceName.startsWith("tailor-")
-    ? workspaceName.slice("tailor-".length)
-    : workspaceName;
-  return lock?.targets.find(
-    (t) =>
-      t.workspaceName === workspaceName ||
-      t.workspaceName === normalized ||
-      t.workspaceName === `tailor-${normalized}`,
-  );
-}
