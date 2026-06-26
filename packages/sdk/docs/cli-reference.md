@@ -307,10 +307,11 @@ Commands for managing crash reports.
 
 Commands for setting up project infrastructure.
 
-| Command                                   | Description                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------------- |
-| [setup](./cli/setup.md#setup)             | Generate a CI deploy workflow for your project. (beta)                           |
-| [setup check](./cli/setup.md#setup-check) | Audit generated workflows for drift against the current config/repo (read-only). |
+| Command                                             | Description                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [setup](./cli/setup.md#setup)                       | Generate a CI deploy workflow for your project. (beta)                                           |
+| [setup check](./cli/setup.md#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
+| [setup coordinate](./cli/setup.md#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
 
 ### [Upgrade Commands](./cli/upgrade.md)
 

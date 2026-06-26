@@ -6,7 +6,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 2;
+export const TEMPLATE_VERSION = 3;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -28,6 +28,10 @@ export type RenderBranchParams = {
   environment: string;
   packageManager: PackageManager;
   plan: boolean;
+  /** Include the seed-validate step in the plan job (default: false). */
+  seedValidate?: boolean;
+  /** Include the migration-drift-check step in the plan job (default: false). */
+  migrationDriftCheck?: boolean;
 };
 
 export type RenderTagParams = {
@@ -39,6 +43,10 @@ export type RenderTagParams = {
   /** GitHub Environment for the plan/deploy jobs; defaults to the workspace name. */
   environment: string;
   packageManager: PackageManager;
+  /** Include the seed-validate step in the plan job (default: false). */
+  seedValidate?: boolean;
+  /** Include the migration-drift-check step in the plan job (default: false). */
+  migrationDriftCheck?: boolean;
 };
 
 export type RenderResult = {
@@ -123,11 +131,17 @@ function applyCommon(
  */
 export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   const { branch, plan } = params;
+  const seedValidate = params.seedValidate ?? false;
+  const migrationDriftCheck = params.migrationDriftCheck ?? false;
 
   let out = branchTemplate;
   out = block(out, "PLAN_JOB", plan);
   out = block(out, "PULL_REQUEST", plan);
   out = block(out, "DISPATCH_INPUTS", plan);
+  out = block(out, "SEED_VALIDATE", seedValidate);
+  out = block(out, "MIGRATION_DRIFT_CHECK", migrationDriftCheck);
+  // SEED_DATA is dropped from the default rendering; users add their own step.
+  out = block(out, "SEED_DATA", false);
   // With no plan there is no PR/dry-run path, so the deploy job always runs.
   out = line(
     out,
@@ -150,15 +164,25 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-plan",
       "tailor-plan/tailor-checkout",
       "tailor-plan/tailor-setup",
+      "tailor-plan/tailor-install",
       "tailor-plan/tailor-generate-check",
-      "tailor-plan/tailor-plan",
     );
+    if (seedValidate) {
+      generatedIds.push("tailor-plan/tailor-seed-validate");
+    }
+    generatedIds.push("tailor-plan/tailor-drift-check");
+    if (migrationDriftCheck) {
+      generatedIds.push("tailor-plan/tailor-migration-drift-check");
+    }
+    generatedIds.push("tailor-plan/tailor-plan");
   }
   generatedIds.push(
     "tailor-deploy",
     "tailor-deploy/tailor-checkout",
     "tailor-deploy/tailor-setup",
+    "tailor-deploy/tailor-install",
     "tailor-deploy/tailor-apply",
+    "tailor-deploy/tailor-notify",
   );
 
   return { content: out, generatedIds };
@@ -175,9 +199,15 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
 export function renderTagWorkflow(params: RenderTagParams): RenderResult {
   const { tagPattern, branch } = params;
   const hasGuard = branch !== undefined;
+  const seedValidate = params.seedValidate ?? false;
+  const migrationDriftCheck = params.migrationDriftCheck ?? false;
 
   let out = tagTemplate;
   out = block(out, "TAG_GUARD_JOB", hasGuard);
+  out = block(out, "SEED_VALIDATE", seedValidate);
+  out = block(out, "MIGRATION_DRIFT_CHECK", migrationDriftCheck);
+  // SEED_DATA is dropped from the default rendering; users add their own step.
+  out = block(out, "SEED_DATA", false);
   out = line(out, "PLAN_NEEDS", hasGuard ? "needs: tailor-tag-guard" : undefined);
   out = line(
     out,
@@ -204,12 +234,24 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
     "tailor-plan",
     "tailor-plan/tailor-checkout",
     "tailor-plan/tailor-setup",
+    "tailor-plan/tailor-install",
     "tailor-plan/tailor-generate-check",
+  );
+  if (seedValidate) {
+    generatedIds.push("tailor-plan/tailor-seed-validate");
+  }
+  generatedIds.push("tailor-plan/tailor-drift-check");
+  if (migrationDriftCheck) {
+    generatedIds.push("tailor-plan/tailor-migration-drift-check");
+  }
+  generatedIds.push(
     "tailor-plan/tailor-plan",
     "tailor-deploy",
     "tailor-deploy/tailor-checkout",
     "tailor-deploy/tailor-setup",
+    "tailor-deploy/tailor-install",
     "tailor-deploy/tailor-apply",
+    "tailor-deploy/tailor-notify",
   );
 
   return { content: out, generatedIds };

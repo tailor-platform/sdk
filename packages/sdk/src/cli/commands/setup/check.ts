@@ -148,6 +148,11 @@ function readHash(absFile: string): string | null {
 export type CheckGitHubOptions = {
   /** Repository root where `.github` lives. */
   outputDir: string;
+  /**
+   * When true, run in CI mode: skip checks that are handled at runtime by
+   * the deployed GitHub Actions (e.g. TAILOR_PLATFORM_WORKSPACE_ID presence).
+   */
+  ci?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
   /** Injectable config-existence probe, for testing. */
@@ -173,6 +178,20 @@ export function checkGitHub(options: CheckGitHubOptions): void {
       "No managed workflows found (.github/tailor-sdk.lock is missing or empty). " +
         "Run `tailor-sdk setup` first.",
     );
+  }
+
+  // In local (non-CI) mode, check that TAILOR_PLATFORM_WORKSPACE_ID is set for
+  // targets that use it. In CI the plan action handles this at runtime.
+  if (!options.ci) {
+    const needsWorkspaceId = lock.targets.some((t) => t.inputs.plan !== false);
+    if (needsWorkspaceId && !process.env["TAILOR_PLATFORM_WORKSPACE_ID"]) {
+      throw new Error(
+        "TAILOR_PLATFORM_WORKSPACE_ID is not set. " +
+          "Provision the workspace and set the variable:\n" +
+          "  tailor-sdk workspace create   # if it does not exist yet; copy the id\n" +
+          "  gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env <environment>",
+      );
+    }
   }
 
   const exists = options.configExistsAt ?? ((p: string) => fs.existsSync(p));

@@ -33,6 +33,13 @@ export type SetupGitHubOptions = {
   environment?: string;
   plan: boolean;
   dir: string;
+  /**
+   * When set, generate a per-app composite action at
+   * `.github/actions/tailor-<action>/action.yml` instead of a full workflow.
+   */
+  action?: string;
+  /** When true, generate a preview workflow (PR label-triggered). */
+  preview?: boolean;
   force: boolean;
   outputDir: string;
   /** Injectable git runner, for testing. */
@@ -389,6 +396,19 @@ function printNextSteps(obj: { environment: string; idInjected: boolean }): void
  */
 export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
   logBetaWarning("setup");
+
+  if (options.action !== undefined) {
+    throw new Error(
+      "--action is not yet implemented. " +
+        "Use setup without --action to generate a full workflow, or check for a newer SDK version.",
+    );
+  }
+  if (options.preview) {
+    throw new Error(
+      "--preview is not yet implemented. " +
+        "Check for a newer SDK version.",
+    );
+  }
 
   const resolved = await resolve(options);
 

@@ -199,43 +199,67 @@ describe("checkGitHub (integration)", () => {
 
   const wfPath = (): string => path.join(testDir, ".github/workflows/tailor-my-app.yml");
 
+  // ci: true skips the WORKSPACE_ID env check so these tests focus on drift detection.
+  const check = (gitRunner: () => string = () => "origin/main") =>
+    checkGitHub({ outputDir: testDir, ci: true, gitRunner });
+
   test("passes for a freshly generated target", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app" }));
-    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).not.toThrow();
+    expect(() => check()).not.toThrow();
   });
 
   test("errors when no lock exists", () => {
-    expect(() => checkGitHub({ outputDir: testDir })).toThrow(/No managed workflows/);
+    expect(() => check()).toThrow(/No managed workflows/);
   });
 
   test("detects a hand-edited workflow file", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app" }));
     fs.appendFileSync(wfPath(), "\n# hand edit\n");
-    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).toThrow(
-      /drift/,
-    );
+    expect(() => check()).toThrow(/drift/);
   });
 
   test("detects a default-branch change for auto-detected branch", async () => {
     await setupGitHub(
       setupOptions({ workspaceName: "my-app", branch: undefined, gitRunner: () => "origin/main" }),
     );
-    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/develop" })).toThrow(
-      /drift/,
-    );
+    expect(() => check(() => "origin/develop")).toThrow(/drift/);
   });
 
   test("skips default-branch drift when branch was explicitly set", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app", branch: "staging" }));
-    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).not.toThrow();
+    expect(() => check()).not.toThrow();
   });
 
   test("detects a missing config under the recorded dir", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app" }));
     fs.rmSync(path.join(testDir, "tailor.config.ts"));
-    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).toThrow(
-      /drift/,
-    );
+    expect(() => check()).toThrow(/drift/);
+  });
+
+  test("throws when WORKSPACE_ID is unset and a plan target exists (local mode)", async () => {
+    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
+    delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
+    try {
+      expect(() =>
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", ci: false }),
+      ).toThrow(/TAILOR_PLATFORM_WORKSPACE_ID/);
+    } finally {
+      if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
+    }
+  });
+
+  test("skips WORKSPACE_ID check in CI mode", async () => {
+    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
+    delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
+    try {
+      expect(() =>
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", ci: true }),
+      ).not.toThrow();
+    } finally {
+      if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
+    }
   });
 
   const lockTarget = (file: string): LockTarget => ({
@@ -258,17 +282,13 @@ describe("checkGitHub (integration)", () => {
 
   test("reports drift instead of reading outside the repo on a traversing lock path", () => {
     writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget("../escape.yml")] });
-    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).toThrow(
-      /drift/,
-    );
+    expect(() => check()).toThrow(/drift/);
   });
 
   test("does not crash when the recorded file path is a directory", () => {
     const file = ".github/workflows/tailor-my-app.yml";
     writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget(file)] });
     fs.mkdirSync(path.join(testDir, file), { recursive: true });
-    expect(() => checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" })).toThrow(
-      /drift/,
-    );
+    expect(() => check()).toThrow(/drift/);
   });
 });

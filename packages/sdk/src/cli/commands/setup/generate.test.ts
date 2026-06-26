@@ -71,12 +71,13 @@ describe("renderBranchWorkflow", () => {
   test("pins actions with SHA + version comment, including the tailor actions", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
-    expect(content).toMatch(/uses: tailor-platform\/actions\/setup@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    // tailor-platform actions use a branch/tag comment (e.g. "# feat/setup"), not semver
+    expect(content).toMatch(/uses: tailor-platform\/actions\/setup@[0-9a-f]{40} # \S+/);
     expect(content).toMatch(
-      /uses: tailor-platform\/actions\/generate-check@[0-9a-f]{40} # v\d+\.\d+\.\d+/,
+      /uses: tailor-platform\/actions\/generate-check@[0-9a-f]{40} # \S+/,
     );
-    expect(content).toMatch(/uses: tailor-platform\/actions\/plan@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
-    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: tailor-platform\/actions\/plan@[0-9a-f]{40} # \S+/);
+    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[0-9a-f]{40} # \S+/);
   });
 
   test("pins every `uses:` to a full commit SHA (no moving tags/branches)", () => {
@@ -111,9 +112,10 @@ describe("renderBranchWorkflow", () => {
     expect(content).not.toContain("secrets.PLATFORM_MACHINE_USER_CLIENT_ID");
   });
 
-  test("targets the workspace by id, never by name or region", () => {
+  test("targets the workspace by id, never by region or folder", () => {
     const { content } = renderBranchWorkflow(branchBase);
-    expect(content).not.toContain("workspace-name:");
+    // workspace-name is used by tailor-notify as a display label — that is intentional.
+    // The workspace-id variable is how plan/deploy actually target the workspace.
     expect(content).not.toContain("workspace-region:");
     expect(content).not.toContain("organization-id:");
     expect(content).not.toContain("folder-id:");
@@ -199,8 +201,8 @@ describe("renderBranchWorkflow", () => {
     const scoped = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/foo" }).content;
     expect(scoped).not.toMatch(NO_MARKER);
     expect(scoped).toContain('paths: ["apps/foo/**"]');
-    // Install stays at the repo root (single root lockfile), so setup gets no
-    // working-directory. plan job: generate-check + plan action; deploy job: deploy action.
+    // Install, drift-check, and notify run at the repo root — no working-directory.
+    // plan job: generate-check + plan; deploy job: deploy action.
     expect(scoped.match(/working-directory: apps\/foo/g)).toHaveLength(3);
     expect(() => parseYAML(scoped)).not.toThrow();
   });

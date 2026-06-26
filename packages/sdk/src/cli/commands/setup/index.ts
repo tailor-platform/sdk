@@ -1,15 +1,63 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
 import { checkGitHub } from "./check";
 import { setupGitHub } from "./generate";
 
 const checkCommand = defineAppCommand({
   name: "check",
   description: "Audit generated workflows for drift against the current config/repo (read-only).",
-  args: z.object({}).strict(),
-  run: () => {
-    checkGitHub({ outputDir: process.cwd() });
+  args: z
+    .object({
+      ci: arg(z.boolean().default(false), {
+        description:
+          "Run in CI mode: skip checks that are handled by the runtime " +
+          "(e.g. TAILOR_PLATFORM_WORKSPACE_ID).",
+      }),
+    })
+    .strict(),
+  run: (args) => {
+    checkGitHub({ outputDir: process.cwd(), ci: args.ci });
+  },
+});
+
+const coordinateCommand = defineAppCommand({
+  name: "coordinate",
+  description:
+    "Generate a coordinator workflow that orchestrates multiple --action-generated composite actions.",
+  args: z
+    .object({
+      "workspace-name": arg(z.string().min(1), {
+        alias: "n",
+        description:
+          "Coordinator name (used in the generated workflow file name and job names)",
+      }),
+      action: arg(z.array(z.string()).default([]), {
+        description:
+          "Composite action to include (can be specified multiple times). tailor- prefix optional.",
+      }),
+      branch: arg(z.string().min(1).optional(), {
+        description:
+          "Branch target: deploy trigger branch (defaults to the detected default branch)",
+      }),
+      tag: arg(z.boolean().default(false), {
+        description: "Generate a tag target coordinator",
+      }),
+      preview: arg(z.boolean().default(false), {
+        description: "Generate a preview coordinator",
+      }),
+      environment: arg(z.string().min(1).optional(), {
+        description: "GitHub Environment for the plan/deploy jobs",
+      }),
+      force: arg(z.boolean().default(false), {
+        description: "Discard hand edits and regenerate",
+      }),
+    })
+    .strict(),
+  run: async (_args) => {
+    // TODO: implement coordinate generation
+    logger.warn("setup coordinate is not yet implemented");
   },
 });
 
@@ -43,7 +91,8 @@ export const setupCommand = defineAppCommand({
         description: "Tag glob to match (requires --tag; defaults to v*)",
       }),
       environment: arg(z.string().min(1).optional(), {
-        description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
+        description:
+          "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
       }),
       "no-plan": arg(z.boolean().default(false), {
         description: "Disable the plan job for a branch target (cannot be combined with --tag)",
@@ -52,6 +101,15 @@ export const setupCommand = defineAppCommand({
         alias: "d",
         description: "App directory (for monorepo setups)",
       }),
+      action: arg(z.string().min(1).optional(), {
+        description:
+          "Generate a per-app composite action instead of a full workflow. " +
+          "The action is written to .github/actions/tailor-<name>/action.yml.",
+      }),
+      preview: arg(z.boolean().default(false), {
+        description:
+          "Generate a preview workflow (PR label-triggered deploy to per-PR workspace).",
+      }),
       force: arg(z.boolean().default(false), {
         description: "Discard hand edits / take over unmanaged files and regenerate",
       }),
@@ -59,6 +117,7 @@ export const setupCommand = defineAppCommand({
     .strict(),
   subCommands: {
     check: checkCommand,
+    coordinate: coordinateCommand,
   },
   run: async (args) => {
     if (args["tag-pattern"] !== undefined && !args.tag) {
@@ -66,6 +125,12 @@ export const setupCommand = defineAppCommand({
     }
     if (args["no-plan"] && args.tag) {
       throw new Error("--no-plan cannot be combined with --tag.");
+    }
+    if (args.action !== undefined && args.tag) {
+      throw new Error("--action cannot be combined with --tag (use setup coordinate for multi-app tag deploys).");
+    }
+    if (args.preview && args.tag) {
+      throw new Error("--preview cannot be combined with --tag.");
     }
 
     // `provider` is validated by the enum to the only value supported today;
@@ -78,6 +143,8 @@ export const setupCommand = defineAppCommand({
       environment: args.environment,
       plan: !args["no-plan"],
       dir: args.dir,
+      action: args.action,
+      preview: args.preview,
       force: args.force,
       outputDir: process.cwd(),
     });
