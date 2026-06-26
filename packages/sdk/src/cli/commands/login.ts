@@ -23,12 +23,24 @@ import { assertDefined } from "#/utils/assert";
 
 const redirectPort = 8085;
 const redirectUri = `http://localhost:${redirectPort}/callback`;
+type ProfileLoginOptions = {
+  profile?: string;
+  profileUser?: string;
+};
 
 function randomState() {
   return crypto.randomBytes(32).toString("base64url");
 }
 
-const startAuthServer = async () => {
+function assertProfileLoginUser(args: ProfileLoginOptions, authenticatedUser: string) {
+  if (args.profile && args.profileUser && authenticatedUser !== args.profileUser) {
+    throw new Error(
+      `Profile "${args.profile}" is configured for "${args.profileUser}", but login authenticated "${authenticatedUser}".`,
+    );
+  }
+}
+
+const startAuthServer = async (args: ProfileLoginOptions = {}) => {
   const client = initOAuth2Client();
   const state = randomState();
   const codeVerifier = await generateCodeVerifier();
@@ -48,6 +60,7 @@ const startAuthServer = async () => {
           },
         );
         const userInfo = await fetchUserInfo(tokens.accessToken);
+        assertProfileLoginUser(args, userInfo.email);
 
         const pfConfig = await readPlatformConfig();
         await saveUserTokens(
@@ -115,7 +128,10 @@ const startAuthServer = async () => {
   });
 };
 
-async function loginAsMachineUser(args: { clientId: string; clientSecret?: string }) {
+async function loginAsMachineUser(
+  args: { clientId: string; clientSecret?: string } & ProfileLoginOptions,
+) {
+  assertProfileLoginUser(args, args.clientId);
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
   const tokens = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
 
@@ -170,16 +186,23 @@ export const loginCommand = defineAppCommand({
       .describe("Machine User Login"),
   ]),
   run: async (args) => {
+    let profileUser: string | undefined;
     if ("profile" in args) {
       await loadPlatformClientConfig({ profile: args.profile });
+      if (args.profile) {
+        const pfConfig = await readPlatformConfig();
+        profileUser = pfConfig.profiles[args.profile]?.user;
+      }
     }
     if ("machine-user" in args) {
       await loginAsMachineUser({
         clientId: args.clientId,
         clientSecret: args.clientSecret,
+        profile: args.profile,
+        profileUser,
       });
     } else {
-      await startAuthServer();
+      await startAuthServer({ profile: args.profile, profileUser });
     }
     logger.success("Successfully logged in to Tailor Platform.");
     await closeConnectionPool();

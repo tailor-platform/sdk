@@ -137,10 +137,21 @@ function platformUserKey(user: string, config?: PlatformClientConfig): string {
   return `${platformUrl}|${user}`;
 }
 
+function canUseLegacyUserKey(platformUrl: string): boolean {
+  return (
+    process.env.PLATFORM_URL !== undefined &&
+    normalizeBaseUrl(process.env.PLATFORM_URL) === platformUrl
+  );
+}
+
 function findUserEntry(config: PfConfig, user: string, platformConfig?: PlatformClientConfig) {
   const userKey = platformUserKey(user, platformConfig);
   const userEntry = config.users[userKey];
   if (userEntry) {
+    return { userKey, userEntry };
+  }
+  const platformUrl = getPlatformBaseUrl(platformConfig);
+  if (userKey !== user && !canUseLegacyUserKey(platformUrl)) {
     return { userKey, userEntry };
   }
   const legacyEntry = config.users[user];

@@ -1,6 +1,11 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { initOAuth2Client } from "#/cli/shared/client";
+import {
+  defaultPlatformBaseUrl,
+  getPlatformBaseUrl,
+  initOAuth2Client,
+  normalizeBaseUrl,
+} from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   deleteUserTokens,
@@ -28,6 +33,8 @@ export const logoutCommand = defineAppCommand({
     const platformConfig = await loadPlatformClientConfig({ profile });
     const pfConfig = await readPlatformConfig();
     const currentUser = profile ? pfConfig.profiles[profile]?.user : pfConfig.current_user;
+    const deletesDefaultToken =
+      getPlatformBaseUrl(platformConfig) === normalizeBaseUrl(defaultPlatformBaseUrl);
     if (!currentUser) {
       logger.info("You are not logged in.");
       return;
@@ -35,7 +42,7 @@ export const logoutCommand = defineAppCommand({
     const storedTokens = await loadStoredUserTokens(pfConfig, currentUser, platformConfig);
     if (!storedTokens) {
       logger.info("You are not logged in.");
-      if (pfConfig.current_user === currentUser) {
+      if (deletesDefaultToken && pfConfig.current_user === currentUser) {
         pfConfig.current_user = null;
       }
       writePlatformConfig(pfConfig);
@@ -58,7 +65,7 @@ export const logoutCommand = defineAppCommand({
     }
 
     await deleteUserTokens(pfConfig, currentUser, platformConfig);
-    if (pfConfig.current_user === currentUser) {
+    if (deletesDefaultToken && pfConfig.current_user === currentUser) {
       pfConfig.current_user = null;
     }
     writePlatformConfig(pfConfig);

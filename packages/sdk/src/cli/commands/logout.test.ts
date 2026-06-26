@@ -71,12 +71,22 @@ describe("logout --profile", () => {
       config,
       "u@example.com",
       {
+        accessToken: "default-access-token",
+        refreshToken: "default-refresh-token",
+      },
+      futureDate,
+    );
+    await saveUserTokens(
+      config,
+      "u@example.com",
+      {
         accessToken: "dev-access-token",
         refreshToken: "dev-refresh-token",
       },
       futureDate,
       { platformUrl: "https://api.dev.tailor.tech", oauth2ClientId: "dev-client" },
     );
+    config.current_user = "u@example.com";
     writePlatformConfig(config);
   });
 
@@ -102,6 +112,9 @@ describe("logout --profile", () => {
       },
       "refresh_token",
     );
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBe("u@example.com");
+    await expect(loadAccessToken()).resolves.toBe("default-access-token");
     await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
       'User "u@example.com" not found',
     );
