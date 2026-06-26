@@ -3,7 +3,10 @@ import * as path from "pathe";
 // Package-runner forms (`npx`, `pnpm dlx`, `yarn dlx`, `bunx`) resolve npm package
 // names, so `tailor-sdk@...` must become `@tailor-platform/sdk@...` — rewriting
 // to `tailor@...` would download the unrelated CSS Sprites Generator instead.
-const PKG_RUNNER_RE = /\b(npx|pnpm\s+dlx|yarn\s+dlx|bunx)\s+tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
+// Optional flags (e.g. `-y`, `--yes`) between the runner and the package name are
+// captured as part of the runner group so the replacement preserves them.
+const PKG_RUNNER_RE =
+  /\b((?:npx|pnpm\s+dlx|yarn\s+dlx|bunx)(?:\s+(?:-\w+|--\w[\w-]*))*)\s+tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 
 // Match the `tailor-sdk` binary, optionally with a version pin (`@latest`,
 // `@2.0.0`, etc.). Lookbehind excludes `.tailor-sdk` (preceded by `.`) and
@@ -52,6 +55,7 @@ function transformPackageJson(source: string): string | null {
  *
  * Handles optional `@version` pins:
  * - `npx tailor-sdk@latest` → `npx @tailor-platform/sdk@latest` (package-runner form)
+ * - `npx -y tailor-sdk login` → `npx -y @tailor-platform/sdk login` (runner flags preserved)
  * - `pnpm dlx tailor-sdk@latest` → `pnpm dlx @tailor-platform/sdk@latest` (package-runner form)
  * - `tailor-sdk@latest` elsewhere → `@tailor-platform/sdk@latest`
  * Does not rewrite `.tailor-sdk` directory paths or `create-tailor-sdk`.
