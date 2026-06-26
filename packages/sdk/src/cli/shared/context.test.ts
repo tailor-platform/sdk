@@ -630,6 +630,33 @@ describe("loadAccessToken", () => {
       expect(result).toBe(validToken);
       expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
     });
+
+    test("falls back to a legacy user token for a profile platform URL", async () => {
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          testuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+            storage: "file",
+          },
+        },
+        profiles: {
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+
+      const result = await loadAccessToken({ profile: "dev" });
+
+      expect(result).toBe(validToken);
+    });
   });
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
@@ -710,6 +737,49 @@ describe("loadAccessToken", () => {
     test("throws error when no token source is available", async () => {
       await expect(loadAccessToken()).rejects.toThrow("Tailor Platform token not found");
     });
+  });
+});
+
+describe("saveUserTokens", () => {
+  const validToken = "valid-access-token";
+  const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
+
+  beforeEach(() => {
+    resetKeyringState();
+    vi.stubEnv("PLATFORM_URL", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("preserves current_user when writing a token scoped to a custom platform URL", async () => {
+    const config = await readPlatformConfig();
+    await saveUserTokens(
+      config,
+      "testuser",
+      {
+        accessToken: validToken,
+        refreshToken: "refresh",
+      },
+      futureDate,
+      { platformUrl: "https://api.dev.tailor.tech" },
+    );
+    config.current_user = "testuser";
+    writePlatformConfig(config);
+
+    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    const reloaded = await readPlatformConfig();
+
+    expect(reloaded.current_user).toBe("testuser");
+    await expect(loadAccessToken()).resolves.toBe(validToken);
   });
 });
 

@@ -137,6 +137,23 @@ function platformUserKey(user: string, config?: PlatformClientConfig): string {
   return `${platformUrl}|${user}`;
 }
 
+function findUserEntry(config: PfConfig, user: string, platformConfig?: PlatformClientConfig) {
+  const userKey = platformUserKey(user, platformConfig);
+  const userEntry = config.users[userKey];
+  if (userEntry) {
+    return { userKey, userEntry };
+  }
+  const legacyEntry = config.users[user];
+  return legacyEntry ? { userKey: user, userEntry: legacyEntry } : { userKey, userEntry };
+}
+
+function hasCurrentUserEntry(users: PfConfigV1["users"], currentUser: string): boolean {
+  return (
+    users[currentUser] !== undefined ||
+    Object.keys(users).some((key) => key.endsWith(`|${currentUser}`))
+  );
+}
+
 /**
  * Migrate a v1 config to v2.
  * Tokens are kept in the config file (storage: "file") during migration.
@@ -250,10 +267,10 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
       token_expires_at: entry.token_expires_at,
     };
   }
-  // Clear current_user when it points at a user missing from the rebuilt v1
-  // users map, so the downgraded file never references a non-existent user.
   const currentUser =
-    config.current_user && users[config.current_user] ? config.current_user : null;
+    config.current_user && hasCurrentUserEntry(users, config.current_user)
+      ? config.current_user
+      : null;
   return {
     version: 1,
     users,
@@ -620,8 +637,7 @@ export async function deleteUserTokens(
   user: string,
   platformConfig?: PlatformClientConfig,
 ): Promise<void> {
-  const userKey = platformUserKey(user, platformConfig);
-  const userEntry = config.users[userKey];
+  const { userKey, userEntry } = findUserEntry(config, user, platformConfig);
   if (userEntry?.storage === "keyring") {
     await deleteKeyringTokens(userKey);
   }
@@ -647,8 +663,7 @@ export async function loadStoredUserTokens(
     }
   | undefined
 > {
-  const userKey = platformUserKey(user, platformConfig);
-  const userEntry = config.users[userKey];
+  const { userKey, userEntry } = findUserEntry(config, user, platformConfig);
   if (!userEntry) return undefined;
   const tokens = await resolveTokens(userEntry, userKey, user);
   return { userEntry, ...tokens };
@@ -667,8 +682,7 @@ export async function fetchLatestToken(
   platformConfig?: PlatformClientConfig,
 ): Promise<string> {
   activatePlatformConfig(platformConfig);
-  const userKey = platformUserKey(user, platformConfig);
-  const userEntry = config.users[userKey];
+  const { userKey, userEntry } = findUserEntry(config, user, platformConfig);
   if (!userEntry) {
     throw new Error(ml`
       User "${user}" not found.
