@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
-import { register } from "node:module";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { findUpSync } from "find-up-simple";
@@ -34,7 +33,6 @@ async function install() {
   try {
     const configDir = dirname(configPath);
     process.chdir(configDir);
-    register("tsx", import.meta.url, { data: {} });
 
     const { generateUserTypes, loadConfig } = await import(
       pathToFileURL(resolve(__dirname, "dist", "cli", "lib.mjs")).href
