@@ -76,8 +76,9 @@ export const DEFAULT_DECIMAL_SCALE = 6;
  * when omitted, which avoids false drift between local schemas (where scale
  * may be omitted) and the platform (which always materializes a scale).
  * @param {SnapshotFieldConfig} field - Field configuration to normalize
+ * @returns The same field object after normalization
  */
-function normalizeSnapshotField(field: SnapshotFieldConfig): void {
+function normalizeSnapshotField(field: SnapshotFieldConfig): SnapshotFieldConfig {
   if (field.type === "decimal" && field.scale === undefined) {
     field.scale = DEFAULT_DECIMAL_SCALE;
   }
@@ -86,6 +87,7 @@ function normalizeSnapshotField(field: SnapshotFieldConfig): void {
       normalizeSnapshotField(nested);
     }
   }
+  return field;
 }
 
 /**
@@ -97,8 +99,9 @@ function normalizeSnapshotField(field: SnapshotFieldConfig): void {
  *
  * Idempotent — safe to call multiple times on the same input.
  * @param {TailorDBSnapshotType} type - Snapshot type to normalize
+ * @returns The same snapshot type object after normalization
  */
-function normalizeSnapshotType(type: TailorDBSnapshotType): void {
+function normalizeSnapshotType(type: TailorDBSnapshotType): TailorDBSnapshotType {
   // `pluralForm` is typed as required by TailorDBSnapshotType, but JSON.parse'd legacy
   // snapshots may have it undefined at runtime — backfill from inflection.
   if (!(type as { pluralForm?: string }).pluralForm) {
@@ -107,6 +110,19 @@ function normalizeSnapshotType(type: TailorDBSnapshotType): void {
   for (const field of Object.values(type.fields)) {
     normalizeSnapshotField(field);
   }
+  return type;
+}
+
+/**
+ * Normalize a schema snapshot in place to the canonical comparison shape.
+ * @param {SchemaSnapshot} snapshot - Schema snapshot to normalize
+ * @returns The same schema snapshot object after normalization
+ */
+export function normalizeSchemaSnapshot(snapshot: SchemaSnapshot): SchemaSnapshot {
+  for (const type of Object.values(snapshot.types)) {
+    normalizeSnapshotType(type);
+  }
+  return snapshot;
 }
 
 // Re-export SCHEMA_SNAPSHOT_VERSION for convenience
@@ -490,7 +506,7 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
     }
   }
 
-  return snapshotType;
+  return normalizeSnapshotType(snapshotType);
 }
 
 /**
@@ -524,12 +540,12 @@ export function createSnapshotFromLocalTypes(
     snapshotTypes[typeName] = createSnapshotType(type);
   }
 
-  return {
+  return normalizeSchemaSnapshot({
     version: SCHEMA_SNAPSHOT_VERSION,
     namespace,
     createdAt: new Date().toISOString(),
     types: snapshotTypes,
-  };
+  });
 }
 
 // ============================================================================
@@ -556,10 +572,7 @@ export function loadSnapshot(filePath: string): SchemaSnapshot {
     });
   }
   const snapshot = result.data;
-  for (const type of Object.values(snapshot.types)) {
-    normalizeSnapshotType(type);
-  }
-  return snapshot;
+  return normalizeSchemaSnapshot(snapshot);
 }
 
 /**
@@ -1462,12 +1475,8 @@ function comparePermissions(
  * @returns {MigrationDiff} Migration diff between snapshots
  */
 export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapshot): MigrationDiff {
-  // Defense-in-depth: factory functions (`createSnapshotType`, `loadSnapshot`,
-  // `convertRemoteFieldsToSnapshot`) are expected to produce normalized
-  // snapshots, but a caller assembling a SchemaSnapshot literal would otherwise
-  // produce silent false drift (e.g. decimal scale 6 vs unset). Idempotent.
-  for (const type of Object.values(previous.types)) normalizeSnapshotType(type);
-  for (const type of Object.values(current.types)) normalizeSnapshotType(type);
+  normalizeSchemaSnapshot(previous);
+  normalizeSchemaSnapshot(current);
 
   const ctx: DiffContext = { changes: [], breakingChanges: [], warnings: [] };
 
@@ -1836,6 +1845,43 @@ function convertRemoteFieldsToSnapshot(
   return fields;
 }
 
+function convertRemoteTypeToSnapshot(remoteType: ProtoTailorDBType): TailorDBSnapshotType {
+  const snapshotType: TailorDBSnapshotType = {
+    name: remoteType.name,
+    pluralForm: remoteType.schema?.settings?.pluralForm || inflection.pluralize(remoteType.name),
+    fields: convertRemoteFieldsToSnapshot(remoteType),
+  };
+
+  if (remoteType.schema?.description) {
+    snapshotType.description = remoteType.schema.description;
+  }
+
+  return normalizeSnapshotType(snapshotType);
+}
+
+/**
+ * Convert remote TailorDB types into the normalized snapshot shape used by drift checks.
+ * @param {ProtoTailorDBType[]} remoteTypes - Remote TailorDB types from the API
+ * @param {string} namespace - Namespace for the reconstructed snapshot
+ * @returns {SchemaSnapshot} Normalized snapshot-shaped remote state
+ */
+export function createSnapshotFromRemoteTypes(
+  remoteTypes: ProtoTailorDBType[],
+  namespace: string,
+): SchemaSnapshot {
+  const types: Record<string, TailorDBSnapshotType> = {};
+  for (const remoteType of remoteTypes) {
+    types[remoteType.name] = convertRemoteTypeToSnapshot(remoteType);
+  }
+
+  return normalizeSchemaSnapshot({
+    version: SCHEMA_SNAPSHOT_VERSION,
+    namespace,
+    createdAt: new Date().toISOString(),
+    types,
+  });
+}
+
 /**
  * Compare a single field between remote and snapshot
  * @param {string} typeName - Name of the type
@@ -1952,19 +1998,16 @@ export function compareRemoteWithSnapshot(
   remoteTypes: ProtoTailorDBType[],
   snapshot: SchemaSnapshot,
 ): SchemaDrift[] {
-  // Defense-in-depth normalize — matches `compareSnapshots`. Idempotent.
-  for (const type of Object.values(snapshot.types)) normalizeSnapshotType(type);
+  normalizeSchemaSnapshot(snapshot);
+  const remoteSnapshot = createSnapshotFromRemoteTypes(remoteTypes, snapshot.namespace);
 
   const drifts: SchemaDrift[] = [];
 
   // Build maps for easy lookup
-  const remoteTypeMap = new Map<string, ProtoTailorDBType>();
-  for (const remoteType of remoteTypes) {
-    remoteTypeMap.set(remoteType.name, remoteType);
-  }
+  const remoteTypeMap = new Map(Object.entries(remoteSnapshot.types));
 
   const snapshotTypeNames = new Set(Object.keys(snapshot.types));
-  const remoteTypeNames = new Set(remoteTypeMap.keys());
+  const remoteTypeNames = new Set(Object.keys(remoteSnapshot.types));
 
   // Check for types missing in remote
   for (const typeName of snapshotTypeNames) {
@@ -2001,7 +2044,7 @@ export function compareRemoteWithSnapshot(
       `type "${typeName}" missing from snapshot`,
     );
 
-    const remoteFields = convertRemoteFieldsToSnapshot(remoteType);
+    const remoteFields = remoteType.fields;
     const snapshotFields = snapshotType.fields;
 
     // Exclude system fields (like 'id') from comparison

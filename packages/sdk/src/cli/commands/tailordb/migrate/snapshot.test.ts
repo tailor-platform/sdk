@@ -12,7 +12,9 @@ import {
   compareSnapshots,
   compareLocalTypesWithSnapshot,
   compareRemoteWithSnapshot,
+  createSnapshotFromRemoteTypes,
   formatSchemaDrifts,
+  normalizeSchemaSnapshot,
   writeSnapshot,
   writeDiff,
   validateMigrationFiles,
@@ -199,6 +201,38 @@ describe("snapshot", () => {
 
       expect(snapshot.version).toBe(SCHEMA_SNAPSHOT_VERSION);
       expect(snapshot.types).toEqual({});
+    });
+  });
+
+  describe("normalizeSchemaSnapshot", () => {
+    test("normalizes legacy type and nested field defaults in one pass", () => {
+      const snapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Product: {
+            name: "Product",
+            fields: {
+              price: { type: "decimal", required: true },
+              metadata: {
+                type: "object",
+                required: false,
+                fields: {
+                  discount: { type: "decimal", required: false },
+                },
+              },
+            },
+          },
+        },
+      } as unknown as SchemaSnapshot;
+
+      const normalized = normalizeSchemaSnapshot(snapshot);
+
+      expect(normalized).toBe(snapshot);
+      expect(snapshot.types.Product?.pluralForm).toBe("Products");
+      expect(snapshot.types.Product?.fields.price?.scale).toBe(6);
+      expect(snapshot.types.Product?.fields.metadata?.fields?.discount?.scale).toBe(6);
     });
   });
 
@@ -1982,6 +2016,22 @@ describe("snapshot", () => {
         },
       } as unknown as ProtoTailorDBType;
     }
+
+    test("reconstructs remote types as normalized schema snapshots", () => {
+      const snapshot = createSnapshotFromRemoteTypes(
+        [
+          createMockRemoteType("Order", {
+            id: { type: "uuid", required: true },
+            amount: { type: "decimal", required: true },
+          }),
+        ],
+        namespace,
+      );
+
+      expect(snapshot.namespace).toBe(namespace);
+      expect(snapshot.types.Order?.pluralForm).toBe("Orders");
+      expect(snapshot.types.Order?.fields.amount?.scale).toBe(6);
+    });
 
     test("returns empty array when remote and snapshot match exactly", () => {
       const snapshot: SchemaSnapshot = {
