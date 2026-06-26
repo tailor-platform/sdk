@@ -34,9 +34,13 @@ describe("getApplicableCodemods", () => {
 
   test("uses each codemod's prerelease boundary", () => {
     const ids = getApplicableCodemods("1.67.1", "2.0.0-next.1").map((codemod) => codemod.id);
+    const authInvokerCallUnwrap = getApplicableCodemods("1.67.1", "2.0.0-next.1").find(
+      (codemod) => codemod.id === "v2/auth-invoker-call-unwrap",
+    );
 
     expect(ids).toContain("v2/test-run-arg-input");
     expect(ids).toContain("v2/auth-invoker-call-unwrap");
+    expect(authInvokerCallUnwrap?.suspiciousPatterns).toEqual(["auth.invoker"]);
     expect(ids).not.toContain("v2/execute-script-arg");
     expect(ids).not.toContain("v2/principal-unify");
   });
