@@ -198,16 +198,41 @@ jobs:
               *)
                 echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
                 exit 1
-              ;;
+                ;;
             esac
           }
 
-          run_base_tailor_sdk() {
+          run_head_node() {
+            case "__PACKAGE_MANAGER__" in
+              pnpm) pnpm exec node "$@" ;;
+              npm) node "$@" ;;
+              yarn) yarn node "$@" ;;
+              bun) node "$@" ;;
+              *)
+                echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
+                exit 1
+                ;;
+            esac
+          }
+
+          tailor_sdk_bin="$(
+            cd "$GITHUB_WORKSPACE/$APP_DIR"
+            run_head_node - <<'NODE'
+          const path = require("node:path");
+          const { createRequire } = require("node:module");
+          const requireFromApp = createRequire(path.join(process.cwd(), "package.json"));
+          process.stdout.write(
+            path.join(path.dirname(requireFromApp.resolve("@tailor-platform/sdk/cli")), "index.mjs"),
+          );
+          NODE
+          )"
+
+          run_base_tailor_sdk_bin() {
             case "$BASE_PACKAGE_MANAGER" in
-              pnpm) pnpm exec tailor-sdk "$@" ;;
-              npm) npx tailor-sdk "$@" ;;
-              yarn) yarn tailor-sdk "$@" ;;
-              bun) bunx tailor-sdk "$@" ;;
+              pnpm) pnpm exec node "$tailor_sdk_bin" "$@" ;;
+              npm) node "$tailor_sdk_bin" "$@" ;;
+              yarn) yarn node "$tailor_sdk_bin" "$@" ;;
+              bun) bun "$tailor_sdk_bin" "$@" ;;
               *)
                 echo "::error::Unsupported base package-manager '$BASE_PACKAGE_MANAGER' (expected pnpm, npm, yarn, or bun)"
                 exit 1
@@ -253,7 +278,7 @@ jobs:
           if ! (
             cd "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR"
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
-              run_base_tailor_sdk tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
+              run_base_tailor_sdk_bin tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
             if grep -q 'not found in local config.db' "$base_log"; then
               cat "$base_log"
