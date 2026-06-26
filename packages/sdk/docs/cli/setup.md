@@ -9,7 +9,7 @@ Generate a CI deploy workflow for your project. (beta)
 **Usage**
 
 ```
-tailor-sdk setup [options] [command]
+tailor setup [options] [command]
 ```
 
 **Options**
@@ -41,7 +41,7 @@ Audit generated workflows for drift against the current config/repo (read-only).
 **Usage**
 
 ```
-tailor-sdk setup check
+tailor setup check
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.

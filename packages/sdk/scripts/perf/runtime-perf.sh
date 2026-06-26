@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runtime performance benchmark for tailor-sdk generate and apply -d commands
+# Runtime performance benchmark for tailor generate and apply -d commands
 # These options ensure the script fails on errors
 set -euo pipefail
 
@@ -46,7 +46,7 @@ if ! pnpm generate > "${LOG_DIR}/generate-warmup.log" 2>&1; then
 fi
 
 echo "Warmup: Running apply (build-only)..."
-if ! TAILOR_DEPLOY_BUILD_ONLY=true pnpm exec tailor-sdk deploy -c tailor.config.ts > "${LOG_DIR}/apply-warmup.log" 2>&1; then
+if ! TAILOR_DEPLOY_BUILD_ONLY=true pnpm exec tailor deploy -c tailor.config.ts > "${LOG_DIR}/apply-warmup.log" 2>&1; then
   echo "ERROR: apply warmup failed"
   cat "${LOG_DIR}/apply-warmup.log"
   exit 1
@@ -78,7 +78,7 @@ echo "Measuring apply (build-only) command..."
 for i in $(seq 1 $ITERATIONS); do
   echo "  apply iteration $i/$ITERATIONS..."
   START=$(get_timestamp_ms)
-  if ! TAILOR_DEPLOY_BUILD_ONLY=true pnpm exec tailor-sdk deploy -c tailor.config.ts > "${LOG_DIR}/apply-iter-${i}.log" 2>&1; then
+  if ! TAILOR_DEPLOY_BUILD_ONLY=true pnpm exec tailor deploy -c tailor.config.ts > "${LOG_DIR}/apply-iter-${i}.log" 2>&1; then
     echo "ERROR: apply iteration $i failed"
     cat "${LOG_DIR}/apply-iter-${i}.log"
     exit 1

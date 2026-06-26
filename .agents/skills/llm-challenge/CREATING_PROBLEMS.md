@@ -18,7 +18,7 @@ Rules:
 - `verify.json`, when present, contains visible minimum-correctness checks only. Checks should encode conditions where missing evidence is definitely wrong, similar to type checking; do not put ideal implementations, hidden answers, scores, or broad quality judgments there.
 - Write `prompt.md` in English.
 - For `sdk-api`, do not include SDK API names, imports, code examples, or direct solution hints.
-- For `cli`, the prompt may name the `tailor-sdk` binary, but must not name the target subcommand or exact arguments.
+- For `cli`, the prompt may name the `tailor` binary, but must not name the target subcommand or exact arguments.
 - Keep `scaffold/` minimal and runnable enough for the task. Do not add `solution/`, evaluator tests, scoring metadata, or hidden hints.
 
 Validate discovery and focused behavior with narrow tests or a targeted dry run when practical.

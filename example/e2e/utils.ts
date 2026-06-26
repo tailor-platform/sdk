@@ -23,7 +23,7 @@ function userAgentInterceptor(): Interceptor {
       return await next(req);
     }
 
-    req.header.set("User-Agent", "tailor-sdk-ci");
+    req.header.set("User-Agent", "tailor-ci");
     return await next(req);
   };
 }

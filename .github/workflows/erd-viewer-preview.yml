@@ -34,7 +34,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
+      # install-deps builds the SDK once, so the `tailor` CLI bin resolves.
       - name: Install deps
         uses: ./.github/actions/install-deps
 
@@ -47,7 +47,7 @@ jobs:
         env:
           NAMESPACE: ${{ matrix.namespace }}
         run: |
-          pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
+          pnpm exec tailor tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
           mkdir -p "$RUNNER_TEMP/erd-preview"
           cp "$RUNNER_TEMP/erd-export/$NAMESPACE/dist/index.html" "$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
 

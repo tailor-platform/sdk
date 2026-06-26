@@ -1,4 +1,4 @@
-// Type-level checks against the generated `tailor.d.ts`. Once `tailor-sdk
+// Type-level checks against the generated `tailor.d.ts`. Once `tailor
 // generate` augments `MachineUserNameRegistry`, `MachineUserName` narrows to the
 // registered machine user union for both SDK entries — `@tailor-platform/sdk`
 // (resolver `invoker`) and `@tailor-platform/sdk/cli` (workflow-start

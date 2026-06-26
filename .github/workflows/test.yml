@@ -66,7 +66,7 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Login as machine user
-        run: pnpm tailor-sdk login --machine-user
+        run: pnpm tailor login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}

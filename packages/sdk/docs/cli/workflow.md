@@ -9,7 +9,7 @@ Manage workflows and workflow executions.
 **Usage**
 
 ```
-tailor-sdk workflow [command]
+tailor workflow [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -32,7 +32,7 @@ List all workflows in the workspace.
 **Usage**
 
 ```
-tailor-sdk workflow list [options]
+tailor workflow list [options]
 ```
 
 **Options**
@@ -53,7 +53,7 @@ Get workflow details.
 **Usage**
 
 ```
-tailor-sdk workflow get [options] <name>
+tailor workflow get [options] <name>
 ```
 
 **Arguments**
@@ -78,7 +78,7 @@ Start a workflow execution.
 **Usage**
 
 ```
-tailor-sdk workflow start [options] <name>
+tailor workflow start [options] <name>
 ```
 
 **Arguments**
@@ -108,13 +108,13 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 # Start a workflow
-tailor-sdk workflow start my-workflow -m admin-machine-user
+tailor workflow start my-workflow -m admin-machine-user
 
 # Start with argument
-tailor-sdk workflow start my-workflow -m admin -a '{"userId": "123"}'
+tailor workflow start my-workflow -m admin -a '{"userId": "123"}'
 
 # Start and wait for completion
-tailor-sdk workflow start my-workflow -m admin -W
+tailor workflow start my-workflow -m admin -W
 ```
 
 ### workflow wait
@@ -124,7 +124,7 @@ Wait for a workflow execution.
 **Usage**
 
 ```
-tailor-sdk workflow wait [options] <execution-id>
+tailor workflow wait [options] <execution-id>
 ```
 
 **Arguments**
@@ -151,19 +151,19 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Wait for workflow success**
 
 ```bash
-$ tailor-sdk workflow wait execution-id --until success --timeout 10m --json
+$ tailor workflow wait execution-id --until success --timeout 10m --json
 ```
 
 **Wait for a workflow wait point**
 
 ```bash
-$ tailor-sdk workflow wait execution-id --until suspended --timeout 6m --logs --json
+$ tailor workflow wait execution-id --until suspended --timeout 6m --logs --json
 ```
 
 **Wait for success, failure, or suspension**
 
 ```bash
-$ tailor-sdk workflow wait execution-id --until terminal
+$ tailor workflow wait execution-id --until terminal
 ```
 
 **Shell automation**
@@ -173,10 +173,10 @@ separate command:
 
 ```bash
 execution_id="$(
-  tailor-sdk workflow start order-workflow --json | jq -r '.executionId'
+  tailor workflow start order-workflow --json | jq -r '.executionId'
 )"
 
-tailor-sdk workflow wait "$execution_id" \
+tailor workflow wait "$execution_id" \
   --until success \
   --timeout 10m \
   --interval 5s \
@@ -186,7 +186,7 @@ tailor-sdk workflow wait "$execution_id" \
 Wait until a workflow reaches a wait point, such as an approval step:
 
 ```bash
-tailor-sdk workflow wait "$execution_id" \
+tailor workflow wait "$execution_id" \
   --until suspended \
   --timeout 6m \
   --logs \
@@ -226,7 +226,7 @@ List or get workflow executions.
 **Usage**
 
 ```
-tailor-sdk workflow executions [options] [execution-id]
+tailor workflow executions [options] [execution-id]
 ```
 
 **Arguments**
@@ -257,22 +257,22 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 # List all executions
-tailor-sdk workflow executions
+tailor workflow executions
 
 # Filter by workflow name
-tailor-sdk workflow executions -n my-workflow
+tailor workflow executions -n my-workflow
 
 # Filter by status
-tailor-sdk workflow executions -s RUNNING
+tailor workflow executions -s RUNNING
 
 # Get execution details
-tailor-sdk workflow executions <execution-id>
+tailor workflow executions <execution-id>
 
 # Get execution details with logs
-tailor-sdk workflow executions <execution-id> --logs
+tailor workflow executions <execution-id> --logs
 
 # Wait for execution to complete
-tailor-sdk workflow executions <execution-id> -W
+tailor workflow executions <execution-id> -W
 ```
 
 ### workflow resume
@@ -282,7 +282,7 @@ Resume a failed or pending workflow execution.
 **Usage**
 
 ```
-tailor-sdk workflow resume [options] <execution-id>
+tailor workflow resume [options] <execution-id>
 ```
 
 **Arguments**

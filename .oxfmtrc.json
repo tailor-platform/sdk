@@ -22,7 +22,7 @@
     "pnpm-debug.log*",
     "lerna-debug.log*",
     "coverage/",
-    ".tailor-sdk",
+    ".tailor",
     "example/tests/fixtures/",
     "example/seed/",
     "packages/tailor-proto/",

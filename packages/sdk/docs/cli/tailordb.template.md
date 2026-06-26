@@ -25,19 +25,19 @@ Commands for managing TailorDB tables, data, and schema migrations.
 
 ```bash
 # Truncate all tables in all namespaces (requires confirmation)
-tailor-sdk tailordb truncate --all
+tailor tailordb truncate --all
 
 # Truncate all tables in all namespaces (skip confirmation)
-tailor-sdk tailordb truncate --all --yes
+tailor tailordb truncate --all --yes
 
 # Truncate all tables in a specific namespace
-tailor-sdk tailordb truncate --namespace myNamespace
+tailor tailordb truncate --namespace myNamespace
 
 # Truncate specific types (namespace is auto-detected)
-tailor-sdk tailordb truncate User Post Comment
+tailor tailordb truncate User Post Comment
 
 # Truncate specific types with confirmation skipped
-tailor-sdk tailordb truncate User Post --yes
+tailor tailordb truncate User Post --yes
 ```
 
 **Notes:**
@@ -55,7 +55,7 @@ tailor-sdk tailordb truncate User Post --yes
 
 {{politty:command:tailordb migration:description}}
 
-Note: Migration scripts are automatically executed during `tailor-sdk deploy`. See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details.
+Note: Migration scripts are automatically executed during `tailor deploy`. See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details.
 
 {{politty:command:tailordb migration:usage}}
 
@@ -95,13 +95,13 @@ Note: Migration scripts are automatically executed during `tailor-sdk deploy`. S
 
 ```bash
 # Deploy ERD for all namespaces with erdSite configured
-tailor-sdk tailordb erd deploy
+tailor tailordb erd deploy
 
 # Deploy ERD for a specific namespace
-tailor-sdk tailordb erd deploy --namespace myNamespace
+tailor tailordb erd deploy --namespace myNamespace
 
 # Deploy ERD with JSON output
-tailor-sdk tailordb erd deploy --json
+tailor tailordb erd deploy --json
 ```
 
 **Notes:**

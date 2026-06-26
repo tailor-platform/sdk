@@ -60,7 +60,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/test-run-arg-input",
     name: "function test-run --arg input unwrap",
     description:
-      "Strip the deprecated {input: ...} wrapper from `tailor-sdk function test-run --arg` JSON in scripts and docs",
+      "Strip the deprecated {input: ...} wrapper from `tailor function test-run --arg` JSON in scripts and docs",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/test-run-arg-input/scripts/transform.js",
@@ -68,8 +68,8 @@ export const allCodemods: CodemodPackage[] = [
     examples: [
       {
         lang: "sh",
-        before: 'tailor-sdk function test-run resolvers/add.ts --arg \'{"input":{"a":1}}\'',
-        after: "tailor-sdk function test-run resolvers/add.ts --arg '{\"a\":1}'",
+        before: 'tailor function test-run resolvers/add.ts --arg \'{"input":{"a":1}}\'',
+        after: "tailor function test-run resolvers/add.ts --arg '{\"a\":1}'",
       },
     ],
   },
@@ -516,10 +516,33 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/function-logs-content-hash",
     name: "function logs require a content hash for source mapping",
     description:
-      "`tailor-sdk function logs` maps stack traces against the function bundle only when the execution recorded a `contentHash`. Executions without one now show raw stack traces instead of mapped frames. No source change is required.",
+      "`tailor function logs` maps stack traces against the function bundle only when the execution recorded a `contentHash`. Executions without one now show raw stack traces instead of mapped frames. No source change is required.",
     since: "1.0.0",
     until: "2.0.0",
     notice: true,
+  },
+  {
+    id: "v2/rename-bin",
+    name: "tailor-sdk binary → tailor",
+    description:
+      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Update `.gitignore` entries manually (the codemod skips paths preceded by a dot).",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/rename-bin/scripts/transform.js",
+    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    legacyPatterns: ["tailor-sdk"],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor-sdk deploy\nnpx tailor-sdk@latest login",
+        after: "tailor deploy\nnpx @tailor-platform/sdk@latest login",
+      },
+    ],
+    prompt: [
+      "Rename any remaining `tailor-sdk` binary invocations to `tailor`. Only rewrite",
+      "the binary name — leave `.tailor-sdk` directory paths and `create-tailor-sdk`",
+      "package references unchanged.",
+    ].join("\n"),
   },
   {
     id: "v2/node-minimum-22-15-0",

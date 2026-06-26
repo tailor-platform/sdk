@@ -100,7 +100,7 @@ async function script(options: ScriptOptions): Promise<void> {
 
   logger.newline();
   logger.log("Edit the script to implement your data migration logic.");
-  logger.log("It will be executed by 'tailor-sdk deploy' between Pre and Post phases.");
+  logger.log("It will be executed by 'tailor deploy' between Pre and Post phases.");
 
   const editor = getConfiguredEditorCommand();
   if (!editor) return;

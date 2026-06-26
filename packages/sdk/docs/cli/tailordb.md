@@ -9,7 +9,7 @@ Manage TailorDB tables and data.
 **Usage**
 
 ```
-tailor-sdk tailordb <command>
+tailor tailordb <command>
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -29,7 +29,7 @@ Truncate (delete all records from) TailorDB tables.
 **Usage**
 
 ```
-tailor-sdk tailordb truncate [options] [types]
+tailor tailordb truncate [options] [types]
 ```
 
 **Arguments**
@@ -55,19 +55,19 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 # Truncate all tables in all namespaces (requires confirmation)
-tailor-sdk tailordb truncate --all
+tailor tailordb truncate --all
 
 # Truncate all tables in all namespaces (skip confirmation)
-tailor-sdk tailordb truncate --all --yes
+tailor tailordb truncate --all --yes
 
 # Truncate all tables in a specific namespace
-tailor-sdk tailordb truncate --namespace myNamespace
+tailor tailordb truncate --namespace myNamespace
 
 # Truncate specific types (namespace is auto-detected)
-tailor-sdk tailordb truncate User Post Comment
+tailor tailordb truncate User Post Comment
 
 # Truncate specific types with confirmation skipped
-tailor-sdk tailordb truncate User Post --yes
+tailor tailordb truncate User Post --yes
 ```
 
 **Notes:**
@@ -85,12 +85,12 @@ tailor-sdk tailordb truncate User Post --yes
 
 Manage TailorDB schema migrations.
 
-Note: Migration scripts are automatically executed during `tailor-sdk deploy`. See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details.
+Note: Migration scripts are automatically executed during `tailor deploy`. See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details.
 
 **Usage**
 
 ```
-tailor-sdk tailordb migration <command>
+tailor tailordb migration <command>
 ```
 
 **Commands**
@@ -112,7 +112,7 @@ Generate migration files by detecting schema differences between current local t
 **Usage**
 
 ```
-tailor-sdk tailordb migration generate [options]
+tailor tailordb migration generate [options]
 ```
 
 **Options**
@@ -133,7 +133,7 @@ Add a migration script (migrate.ts) template to an existing migration directory.
 **Usage**
 
 ```
-tailor-sdk tailordb migration script [options] <number>
+tailor tailordb migration script [options] <number>
 ```
 
 **Arguments**
@@ -158,7 +158,7 @@ Set migration checkpoint to a specific number.
 **Usage**
 
 ```
-tailor-sdk tailordb migration set [options] <number>
+tailor tailordb migration set [options] <number>
 ```
 
 **Arguments**
@@ -186,7 +186,7 @@ Show the current migration status for TailorDB namespaces, including applied and
 **Usage**
 
 ```
-tailor-sdk tailordb migration status [options]
+tailor tailordb migration status [options]
 ```
 
 **Options**
@@ -207,7 +207,7 @@ Sync remote TailorDB schema to a specific migration snapshot (recovery from --no
 **Usage**
 
 ```
-tailor-sdk tailordb migration sync [options] <number>
+tailor tailordb migration sync [options] <number>
 ```
 
 **Arguments**
@@ -237,7 +237,7 @@ Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)
 **Usage**
 
 ```
-tailor-sdk tailordb erd <command>
+tailor tailordb erd <command>
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -257,7 +257,7 @@ Export TailorDB ERD static viewer from local TailorDB schema.
 **Usage**
 
 ```
-tailor-sdk tailordb erd export [options]
+tailor tailordb erd export [options]
 ```
 
 **Options**
@@ -266,7 +266,7 @@ tailor-sdk tailordb erd export [options]
 | ------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
 | `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                                     | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
 | `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                  | No       | -                    | -                    |
-| `--output <OUTPUT>`       | `-o`  | Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`) | No       | `".tailor-sdk/erd"`  | -                    |
+| `--output <OUTPUT>`       | `-o`  | Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`) | No       | `".tailor/erd"`      | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -277,7 +277,7 @@ Generate and serve TailorDB ERD locally with watch reload. (beta)
 **Usage**
 
 ```
-tailor-sdk tailordb erd serve [options]
+tailor tailordb erd serve [options]
 ```
 
 **Options**
@@ -298,7 +298,7 @@ Deploy ERD static website for TailorDB namespace(s).
 **Usage**
 
 ```
-tailor-sdk tailordb erd deploy [options]
+tailor tailordb erd deploy [options]
 ```
 
 **Options**
@@ -323,13 +323,13 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 # Deploy ERD for all namespaces with erdSite configured
-tailor-sdk tailordb erd deploy
+tailor tailordb erd deploy
 
 # Deploy ERD for a specific namespace
-tailor-sdk tailordb erd deploy --namespace myNamespace
+tailor tailordb erd deploy --namespace myNamespace
 
 # Deploy ERD with JSON output
-tailor-sdk tailordb erd deploy --json
+tailor tailordb erd deploy --json
 ```
 
 **Notes:**

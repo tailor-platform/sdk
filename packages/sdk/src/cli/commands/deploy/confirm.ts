@@ -118,7 +118,7 @@ async function confirmNameMismatch(
 }
 
 /**
- * Confirm allowing tailor-sdk to manage previously unmanaged resources.
+ * Confirm allowing tailor to manage previously unmanaged resources.
  * @param resources - Unmanaged resources
  * @param appName - Target application name
  * @param yes - Whether to auto-confirm without prompting
@@ -131,7 +131,7 @@ export async function confirmUnmanagedResources(
 ): Promise<void> {
   if (resources.length === 0) return;
 
-  logger.warn("Existing resources not tracked by tailor-sdk were found:");
+  logger.warn("Existing resources not tracked by tailor were found:");
 
   logger.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
@@ -139,7 +139,7 @@ export async function confirmUnmanagedResources(
   }
   logger.newline();
   logger.log("  These resources may have been created by older SDK versions, Terraform, or CUE.");
-  logger.log("  To continue, confirm that tailor-sdk should manage them.");
+  logger.log("  To continue, confirm that tailor should manage them.");
   logger.log(
     "  If they are managed by another tool (e.g., Terraform), cancel and manage them there instead.",
   );
@@ -152,7 +152,7 @@ export async function confirmUnmanagedResources(
   }
 
   const confirmed = await prompt.confirm({
-    message: `Allow tailor-sdk to manage these resources for "${appName}"?`,
+    message: `Allow tailor to manage these resources for "${appName}"?`,
     default: false,
   });
   if (!confirmed) {

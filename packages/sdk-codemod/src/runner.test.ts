@@ -288,7 +288,7 @@ describe("runCodemods", () => {
       await fs.promises.writeFile(workflowPath, "hello", "utf-8");
       await fs.promises.writeFile(
         agentPackagePath,
-        '{"scripts":{"deploy":"tailor-sdk apply"}}',
+        '{"scripts":{"deploy":"tailor apply"}}',
         "utf-8",
       );
       await fs.promises.writeFile(nextYamlPath, "hello", "utf-8");
@@ -307,7 +307,7 @@ describe("runCodemods", () => {
       expect(result.filesModified).toEqual([workflowPath]);
       await expect(fs.promises.readFile(workflowPath, "utf-8")).resolves.toBe("HELLO");
       await expect(fs.promises.readFile(agentPackagePath, "utf-8")).resolves.toBe(
-        '{"scripts":{"deploy":"tailor-sdk apply"}}',
+        '{"scripts":{"deploy":"tailor apply"}}',
       );
       await expect(fs.promises.readFile(nextYamlPath, "utf-8")).resolves.toBe("hello");
     });
@@ -320,7 +320,7 @@ describe("runCodemods", () => {
       await fs.promises.writeFile(
         partialTransformPath,
         `export default function transform(source) {
-          return source.replaceAll("tailor-sdk crash-report", "tailor-sdk crashreport");
+          return source.replaceAll("tailor crash-report", "tailor crashreport");
         }`,
         "utf-8",
       );
@@ -335,7 +335,7 @@ describe("runCodemods", () => {
       tmpDir = dir;
       await fs.promises.writeFile(
         path.join(dir, "README.md"),
-        "Run `tailor-sdk crash-report list`.\nRun tailor-sdk login --machineuser.\n",
+        "Run `tailor crash-report list`.\nRun tailor login --machineuser.\n",
         "utf-8",
       );
 
@@ -348,7 +348,7 @@ describe("runCodemods", () => {
               "test/partial",
               partialTransformPath,
               ["**/*.md"],
-              ["tailor-sdk crash-report", "--machineuser"],
+              ["tailor crash-report", "--machineuser"],
             ),
             scriptPath: partialTransformPath,
           },

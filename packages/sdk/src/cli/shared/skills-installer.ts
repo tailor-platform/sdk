@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-export const SKILL_NAME = "tailor-sdk";
+export const SKILL_NAME = "tailor";
 const SKILLS_SOURCE_ENV_KEY = "TAILOR_SKILLS_SOURCE";
 
 interface ChildProcessLike {
@@ -30,7 +30,7 @@ function resolveSkillsSource(source: string): string {
 }
 
 /**
- * Build CLI arguments for `skills add` with the fixed tailor-sdk skill target.
+ * Build CLI arguments for `skills add` with the fixed tailor skill target.
  * `--copy` is included so the installed skill survives `pnpm install` wiping `node_modules`.
  * @param options - Options controlling the generated `skills add` arguments
  * @param options.source
@@ -57,7 +57,7 @@ export function buildSkillsAddArgs(options: {
 }
 
 /**
- * Run `npx skills add` to install the tailor-sdk skill.
+ * Run `npx skills add` to install the tailor skill.
  * @param options - Runtime options for skill installation
  * @returns Process exit code from the spawned `npx` command
  */

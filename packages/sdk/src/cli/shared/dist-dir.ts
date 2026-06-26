@@ -5,7 +5,7 @@ export const getDistDir = (): string => {
   if (configured && configured !== distPath) {
     distPath = configured;
   } else if (distPath === null) {
-    distPath = configured || ".tailor-sdk";
+    distPath = configured || ".tailor";
   }
   return distPath;
 };
