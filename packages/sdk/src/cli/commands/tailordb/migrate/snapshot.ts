@@ -70,6 +70,10 @@ export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
  */
 export const DEFAULT_DECIMAL_SCALE = 6;
 
+function createSnapshotRecord<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>;
+}
+
 /**
  * Normalize a snapshot field in place so the snapshot becomes the canonical
  * form for comparison. Currently fills in the platform default decimal scale
@@ -402,7 +406,7 @@ function createSnapshotFieldConfigFromOperatorConfig(
  * @returns {TailorDBSnapshotType} Snapshot type configuration
  */
 export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
-  const fields: Record<string, SnapshotFieldConfig> = {};
+  const fields = createSnapshotRecord<SnapshotFieldConfig>();
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
     fields[fieldName] = createSnapshotFieldConfig(field);
@@ -534,7 +538,7 @@ export function createSnapshotFromLocalTypes(
   types: Record<string, TailorDBType>,
   namespace: string,
 ): SchemaSnapshot {
-  const snapshotTypes: Record<string, TailorDBSnapshotType> = {};
+  const snapshotTypes = createSnapshotRecord<TailorDBSnapshotType>();
 
   for (const [typeName, type] of Object.entries(types)) {
     snapshotTypes[typeName] = createSnapshotType(type);
@@ -1782,7 +1786,7 @@ export function assertValidMigrationFiles(migrationsDir: string, namespace: stri
 function convertRemoteFieldsToSnapshot(
   remoteType: ProtoTailorDBType,
 ): Record<string, SnapshotFieldConfig> {
-  const fields: Record<string, SnapshotFieldConfig> = {};
+  const fields = createSnapshotRecord<SnapshotFieldConfig>();
   const remoteFields = remoteType.schema?.fields ?? {};
 
   for (const [fieldName, remoteField] of Object.entries(remoteFields)) {
@@ -1869,7 +1873,7 @@ export function createSnapshotFromRemoteTypes(
   remoteTypes: ProtoTailorDBType[],
   namespace: string,
 ): SchemaSnapshot {
-  const types: Record<string, TailorDBSnapshotType> = {};
+  const types = createSnapshotRecord<TailorDBSnapshotType>();
   for (const remoteType of remoteTypes) {
     types[remoteType.name] = convertRemoteTypeToSnapshot(remoteType);
   }

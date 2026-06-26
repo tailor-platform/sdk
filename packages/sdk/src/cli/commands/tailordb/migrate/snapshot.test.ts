@@ -2033,6 +2033,33 @@ describe("snapshot", () => {
       expect(snapshot.types.Order?.fields.amount?.scale).toBe(6);
     });
 
+    test("keeps remote type names that match Object prototype keys", () => {
+      const remoteTypes = [
+        createMockRemoteType("__proto__", {
+          id: { type: "uuid", required: true },
+        }),
+      ];
+
+      const remoteSnapshot = createSnapshotFromRemoteTypes(remoteTypes, namespace);
+      expect(Object.hasOwn(remoteSnapshot.types, "__proto__")).toBe(true);
+
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {},
+      };
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts).toEqual([
+        {
+          typeName: "__proto__",
+          kind: "type_missing_local",
+          details: "Type '__proto__' exists in remote but not in snapshot",
+        },
+      ]);
+    });
+
     test("returns empty array when remote and snapshot match exactly", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
