@@ -9,6 +9,7 @@ import {
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   deleteUserTokens,
+  hasAnyUserTokenEntry,
   hasUserTokenEntry,
   loadPlatformClientConfig,
   loadStoredUserTokens,
@@ -43,6 +44,7 @@ export const logoutCommand = defineAppCommand({
     }
     const shouldClearCurrentUser = () =>
       pfConfig.current_user === currentUser &&
+      !hasAnyUserTokenEntry(pfConfig, currentUser) &&
       (deletesDefaultToken || !hasUserTokenEntry(pfConfig, currentUser, undefined));
     let storedTokens: Awaited<ReturnType<typeof loadStoredUserTokens>>;
     let tokenLoadFailed = false;

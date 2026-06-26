@@ -198,11 +198,22 @@ export function hasUserTokenEntry(
   return findUserEntry(config, user, platformConfig, opts).userEntry !== undefined;
 }
 
+function hasUserKeyForName(users: Record<string, unknown>, user: string): boolean {
+  return users[user] !== undefined || Object.keys(users).some((key) => key.endsWith(`|${user}`));
+}
+
+/**
+ * Check whether any platform has tokens registered for a user.
+ * @param config - Platform config
+ * @param user - User name
+ * @returns True when the user has a token entry for any platform
+ */
+export function hasAnyUserTokenEntry(config: Pick<PfConfig, "users">, user: string): boolean {
+  return hasUserKeyForName(config.users, user);
+}
+
 function hasCurrentUserEntry(users: PfConfigV1["users"], currentUser: string): boolean {
-  return (
-    users[currentUser] !== undefined ||
-    Object.keys(users).some((key) => key.endsWith(`|${currentUser}`))
-  );
+  return hasUserKeyForName(users, currentUser);
 }
 
 /**

@@ -13,7 +13,7 @@ type UserListInfo = {
   current: boolean;
 };
 
-function currentUserKeyFor(user: string, platformUrl?: string): string {
+function platformUserKeyFor(user: string, platformUrl?: string): string {
   if (!platformUrl) return user;
   const normalizedPlatformUrl = normalizeBaseUrl(platformUrl);
   if (normalizedPlatformUrl === normalizeBaseUrl(defaultPlatformBaseUrl)) {
@@ -22,18 +22,20 @@ function currentUserKeyFor(user: string, platformUrl?: string): string {
   return `${normalizedPlatformUrl}|${user}`;
 }
 
+function currentUserKeyFor(config: PlatformConfig, user: string, platformUrl?: string): string {
+  const selectedUserKey = platformUserKeyFor(user, platformUrl);
+  return config.users[selectedUserKey] ? selectedUserKey : user;
+}
+
 function activeCurrentUserKey(config: PlatformConfig): string | null {
   const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
   if (!activeProfile) {
     if (!config.current_user) return null;
-    const envPlatformUserKey = process.env.PLATFORM_URL
-      ? currentUserKeyFor(config.current_user, process.env.PLATFORM_URL)
-      : config.current_user;
-    return config.users[envPlatformUserKey] ? envPlatformUserKey : config.current_user;
+    return currentUserKeyFor(config, config.current_user, process.env.PLATFORM_URL);
   }
   const profile = config.profiles[activeProfile];
   if (!profile) return null;
-  return currentUserKeyFor(profile.user, profile.platform_url);
+  return currentUserKeyFor(config, profile.user, profile.platform_url ?? process.env.PLATFORM_URL);
 }
 
 function toUserListInfo(userKey: string, currentUserKey: string | null): UserListInfo {
