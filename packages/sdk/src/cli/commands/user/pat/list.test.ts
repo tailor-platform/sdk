@@ -77,7 +77,7 @@ describe("user pat list", () => {
           platform_url: "https://api.dev.tailor.tech",
         },
       },
-      current_user: "u@example.com",
+      current_user: null,
     });
     using _json = jsonMode();
 

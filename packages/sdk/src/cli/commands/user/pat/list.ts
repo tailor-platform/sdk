@@ -10,6 +10,7 @@ import {
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
+import { resolvePatUser } from "./user";
 
 export const listCommand = defineAppCommand({
   name: "list",
@@ -19,15 +20,16 @@ export const listCommand = defineAppCommand({
     const jsonOutput = logger.jsonMode;
     const platformConfig = await loadPlatformClientConfig();
     const config = await readPlatformConfig();
+    const user = resolvePatUser(config);
 
-    if (!config.current_user) {
+    if (!user) {
       throw new Error(ml`
         No user logged in.
         Please login first using 'tailor-sdk login' command.
       `);
     }
 
-    const token = await fetchLatestToken(config, config.current_user, platformConfig);
+    const token = await fetchLatestToken(config, user, platformConfig);
     const client = await initOperatorClient(token, platformConfig);
 
     const pageDirection = toPageDirection(args.order);

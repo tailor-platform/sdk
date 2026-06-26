@@ -10,6 +10,7 @@ import {
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import ml from "#/utils/multiline";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
+import { resolvePatUser } from "./user";
 
 export const updateCommand = defineAppCommand({
   name: "update",
@@ -30,15 +31,16 @@ export const updateCommand = defineAppCommand({
     await assertWritable();
     const platformConfig = await loadPlatformClientConfig();
     const config = await readPlatformConfig();
+    const user = resolvePatUser(config);
 
-    if (!config.current_user) {
+    if (!user) {
       throw new Error(ml`
         No user logged in.
         Please login first using 'tailor-sdk login' command.
       `);
     }
 
-    const token = await fetchLatestToken(config, config.current_user, platformConfig);
+    const token = await fetchLatestToken(config, user, platformConfig);
     const client = await initOperatorClient(token, platformConfig);
 
     // Delete the existing token
