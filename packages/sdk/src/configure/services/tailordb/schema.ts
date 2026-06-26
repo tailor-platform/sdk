@@ -409,6 +409,46 @@ type FieldParseInternalArgs = {
   pathArray: string[];
 };
 
+type DBFieldDefined<T extends TailorFieldType, Opt extends FieldOptions> = {
+  type: T;
+  array: Opt extends { array: true } ? true : false;
+};
+type DBFieldOutput<
+  T extends TailorFieldType,
+  Opt extends FieldOptions,
+  OutputBase = TailorToTs[T],
+> = FieldOutput<OutputBase, Opt>;
+type TailorDBFieldInstance<
+  T extends TailorFieldType,
+  Opt extends FieldOptions,
+  OutputBase = TailorToTs[T],
+> = TailorDBField<DBFieldDefined<T, Opt>, DBFieldOutput<T, Opt, OutputBase>>;
+type TailorDBFieldRuntimeInstance<
+  T extends TailorFieldType,
+  Opt extends FieldOptions,
+  OutputBase = TailorToTs[T],
+> = TailorDBFieldRuntime<DBFieldDefined<T, Opt>, DBFieldOutput<T, Opt, OutputBase>>;
+type TailorDBFieldRuntime<Defined extends DefinedDBFieldMetadata, Output> = Omit<
+  TailorDBFieldBase<Defined, Output>,
+  "fields"
+> & {
+  readonly fields: Record<string, TailorAnyDBField>;
+  _metadata: DBFieldMetadata;
+  description(description: string): object;
+  typeName(typeName: string): object;
+  validate(...validate: FieldValidateInput<Output>[]): object;
+  relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig): object;
+  index(): object;
+  unique(): object;
+  vector(): object;
+  hooks(hooks: Hook<unknown, Output>): object;
+  serial(config: SerialConfig): object;
+  clone(options?: FieldOptions): TailorDBFieldRuntime<DefinedDBFieldMetadata, AnyBuilderMethod>;
+  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
+  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
+  _setRawRelation(relation: RawRelationConfig): void;
+};
+
 /**
  * Creates a new TailorDBField instance.
  * @param type - Field type
@@ -426,14 +466,28 @@ function createTailorDBField<
   options?: TOptions,
   fields?: Record<string, TailorAnyDBField>,
   values?: AllowedValues,
-): TailorDBField<
-  { type: T; array: TOptions extends { array: true } ? true : false },
-  FieldOutput<OutputBase, TOptions>
-> {
-  type FieldType = TailorDBField<
-    { type: T; array: TOptions extends { array: true } ? true : false },
-    FieldOutput<OutputBase, TOptions>
-  >;
+): TailorDBFieldInstance<T, TOptions, OutputBase>;
+function createTailorDBField<const T extends TailorFieldType, const TOptions extends FieldOptions>(
+  type: T,
+  options?: TOptions,
+  fields?: Record<string, TailorAnyDBField>,
+  values?: AllowedValues,
+): object {
+  return createTailorDBFieldRuntime(type, options, fields, values);
+}
+
+function createTailorDBFieldRuntime<
+  const T extends TailorFieldType,
+  const TOptions extends FieldOptions,
+  const OutputBase = TailorToTs[T],
+>(
+  type: T,
+  options?: TOptions,
+  fields?: Record<string, TailorAnyDBField>,
+  values?: AllowedValues,
+): TailorDBFieldRuntimeInstance<T, TOptions, OutputBase> {
+  type FieldValue = DBFieldOutput<T, TOptions, OutputBase>;
+  type FieldType = TailorDBFieldRuntimeInstance<T, TOptions, OutputBase>;
 
   const _metadata: DBFieldMetadata = { required: true };
   let _rawRelation: RawRelationConfig | undefined;
@@ -609,9 +663,7 @@ function createTailorDBField<
    * @param args - Parse arguments
    * @returns Parse result with value or issues
    */
-  function parseInternal(
-    args: FieldParseInternalArgs,
-  ): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
+  function parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<FieldValue> {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
@@ -660,7 +712,7 @@ function createTailorDBField<
       if (issues.length > 0) {
         return { issues };
       }
-      return { value: value as FieldOutput<OutputBase, TOptions> };
+      return { value: value as FieldValue };
     }
 
     // 3. Type-specific validation and custom validation
@@ -682,12 +734,9 @@ function createTailorDBField<
 
   const field: FieldType = {
     type,
-    fields: (fields ?? {}) as Record<string, TailorAnyDBField>,
-    _defined: undefined as unknown as {
-      type: T;
-      array: TOptions extends { array: true } ? true : false;
-    },
-    _output: undefined as FieldOutput<OutputBase, TOptions>,
+    fields: fields ?? {},
+    _defined: undefined as unknown as DBFieldDefined<T, TOptions>,
+    _output: undefined as FieldValue,
     _metadata,
 
     get metadata() {
@@ -698,20 +747,19 @@ function createTailorDBField<
       return _rawRelation ? { ..._rawRelation, toward: { ..._rawRelation.toward } } : undefined;
     },
 
-    description: ((description: string) => {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ description }) as any;
-    }) as AnyBuilderMethod,
+    description(description: string) {
+      return cloneWith({ description });
+    },
 
-    // oxlint-disable-next-line no-explicit-any
-    typeName: ((typeName: string) => cloneWith({ typeName })) as AnyBuilderMethod,
+    typeName(typeName: string) {
+      return cloneWith({ typeName });
+    },
 
-    validate: ((...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) => {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ validate: validateInputs }) as any;
-    }) as AnyBuilderMethod,
+    validate(...validateInputs: FieldValidateInput<FieldValue>[]) {
+      return cloneWith({ validate: validateInputs });
+    },
 
-    parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
+    parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldValue> {
       return parseInternal({
         value: args.value,
         data: args.data,
@@ -723,11 +771,10 @@ function createTailorDBField<
     _parseInternal: parseInternal,
 
     // TailorDBField specific methods
-    relation: ((config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) => {
+    relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {
       const cloned = field.clone();
       const targetType = isRelationSelfConfig(config) ? "self" : config.toward.type.name;
-      // oxlint-disable-next-line no-explicit-any
-      (cloned as any)._setRawRelation({
+      cloned._setRawRelation({
         type: config.type,
         toward: {
           type: targetType,
@@ -736,34 +783,28 @@ function createTailorDBField<
         },
         backward: config.backward,
       });
-      // oxlint-disable-next-line no-explicit-any
-      return cloned as any;
-    }) as AnyBuilderMethod,
+      return cloned;
+    },
 
-    index: (() => {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ index: true }) as any;
-    }) as AnyBuilderMethod,
+    index() {
+      return cloneWith({ index: true });
+    },
 
-    unique: (() => {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ unique: true, index: true }) as any;
-    }) as AnyBuilderMethod,
+    unique() {
+      return cloneWith({ unique: true, index: true });
+    },
 
-    vector: (() => {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ vector: true }) as any;
-    }) as AnyBuilderMethod,
+    vector() {
+      return cloneWith({ vector: true });
+    },
 
-    hooks: ((hooks: Hook<unknown, FieldOutput<OutputBase, TOptions>>) => {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ hooks }) as any;
-    }) as AnyBuilderMethod,
+    hooks(hooks: Hook<unknown, FieldValue>) {
+      return cloneWith({ hooks });
+    },
 
-    serial: ((config: SerialConfig) => {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ serial: config }) as any;
-    }) as AnyBuilderMethod,
+    serial(config: SerialConfig) {
+      return cloneWith({ serial: config });
+    },
 
     clone(cloneOptions?: FieldOptions) {
       // Deep clone nested object fields if present
@@ -777,7 +818,7 @@ function createTailorDBField<
       }
 
       // Create a new field with cloned configuration
-      const clonedField = createTailorDBField(type, options, clonedFields, values);
+      const clonedField = createTailorDBFieldRuntime(type, options, clonedFields, values);
 
       // Deep copy metadata using cloneDeep (preserves function references)
       Object.assign(clonedField._metadata, cloneDeep(this._metadata));
@@ -794,17 +835,12 @@ function createTailorDBField<
 
       // Copy raw relation if exists
       if (_rawRelation) {
-        const clonedRawRelation = cloneDeep(_rawRelation);
-        // oxlint-disable-next-line no-explicit-any
-        (clonedField as any)._setRawRelation(clonedRawRelation);
+        clonedField._setRawRelation(cloneDeep(_rawRelation));
       }
 
-      // oxlint-disable-next-line no-explicit-any
-      return clonedField as any;
+      return clonedField;
     },
 
-    // Internal method for clone to set rawRelation
-    // @ts-ignore - Internal method not in interface
     _setRawRelation(relation: RawRelationConfig) {
       _rawRelation = relation;
     },
