@@ -45,9 +45,9 @@ export type TailorAnyDBType = TailorDBType<any, any>;
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type DuplicateFieldMethodError<Method extends string> =
   TypeLevelError<`.${Method}() has already been set`>;
-type DBFieldTypeNameThis<Defined extends DefinedDBFieldMetadata, Output> =
+type DBFieldTypeNameThis<Defined extends DefinedDBFieldMetadata> =
   IsAny<Defined> extends true
-    ? TailorFieldMinimal<Defined, Output> | TypeLevelError<string>
+    ? TypeLevelError<string>
     : TypeLevelError<"typeName cannot be used on TailorDB fields">;
 type DBFieldDescriptionThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
   description: unknown;
@@ -168,7 +168,7 @@ export interface TailorDBField<
    * typeName is not available on TailorDB fields.
    * Use typeName on pipeline fields (t.enum / t.object) instead.
    */
-  typeName(this: DBFieldTypeNameThis<Defined, Output>, typeName: string): never;
+  typeName(this: DBFieldTypeNameThis<Defined>, typeName: string): never;
 
   /**
    * Set a description for the field

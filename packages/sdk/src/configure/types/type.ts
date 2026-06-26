@@ -17,6 +17,7 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyField = TailorField<any>;
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
 type DuplicateFieldMethodError<Method extends string> =
   TypeLevelError<`.${Method}() has already been set`>;
 type FieldDescriptionThis<Defined extends DefinedFieldMetadata, Output> = Defined extends {
@@ -28,9 +29,11 @@ type FieldTypeNameThis<Defined extends DefinedFieldMetadata, Output> = Defined e
   typeName: unknown;
 }
   ? DuplicateFieldMethodError<"typeName">
-  : Defined extends { type: "enum" | "nested" }
-    ? TailorField<Defined, Output> | TypeLevelError<string>
-    : TypeLevelError<"typeName can only be set on enum or object fields">;
+  : IsAny<Defined> extends true
+    ? TypeLevelError<string>
+    : Defined extends { type: "enum" | "nested" }
+      ? TailorField<Defined, Output> | TypeLevelError<string>
+      : TypeLevelError<"typeName can only be set on enum or object fields">;
 type FieldValidateThis<Defined extends DefinedFieldMetadata, Output> = Defined extends {
   validate: unknown;
 }

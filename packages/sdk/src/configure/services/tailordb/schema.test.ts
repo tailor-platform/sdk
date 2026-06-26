@@ -2,7 +2,7 @@
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { t } from "#/configure/types/index";
 import { unauthenticatedTailorUser } from "#/configure/user";
-import { db } from "./schema";
+import { db, type TailorAnyDBField } from "./schema";
 import type { FieldValidateInput, ValidateConfig } from "#/configure/types/field.types";
 import type { TailorUser } from "#/runtime/types";
 import type { output, TypeLevelError } from "#/types/helpers";
@@ -388,6 +388,10 @@ describe("TailorDBField type error message tests", () => {
     type _TypeName = Expect<
       ThisEquals<typeof dbField.typeName, "typeName cannot be used on TailorDB fields">
     >;
+
+    const erasedDBField: TailorAnyDBField = db.string();
+    // @ts-expect-error typeName cannot be used on TailorDB fields
+    erasedDBField.typeName("InvalidTypeName");
 
     const described = db.string().description("Name");
     type _Description = Expect<
