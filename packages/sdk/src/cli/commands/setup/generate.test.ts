@@ -200,12 +200,11 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain(
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"',
     );
-    expect(content).toContain('cd "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR"');
     expect(content).toContain("BASE_PACKAGE_MANAGER:");
     expect(content).toContain("tailor_sdk_bin");
     expect(content).toContain("run_head_node - <<'NODE'");
     expect(content).toContain(
-      'run_base_tailor_sdk_bin tailordb erd export --config "$base_config"',
+      'run_head_tailor_sdk_bin tailordb erd export --config "$base_config"',
     );
     expect(content).toContain('yarn) yarn node "$tailor_sdk_bin" "$@" ;;');
     expect(content).toContain('head_missing="false"');
@@ -262,6 +261,31 @@ describe("renderBranchWorkflow", () => {
     expect(baseSetup).toContain("npm ci");
     expect(baseSetup).toContain("yarn install --frozen-lockfile");
     expect(baseSetup).toContain("bun install --frozen-lockfile");
+  });
+
+  test("runs ERD base export through the head SDK toolchain", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(buildStep).toContain("run_head_tailor_sdk_bin() {");
+    expect(buildStep).toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"');
+    expect(buildStep).toContain('case "pnpm" in');
+    expect(buildStep).toContain('pnpm) pnpm exec node "$tailor_sdk_bin" "$@" ;;');
+    expect(buildStep).toContain('npm) node "$tailor_sdk_bin" "$@" ;;');
+    expect(buildStep).toContain('yarn) yarn node "$tailor_sdk_bin" "$@" ;;');
+    expect(buildStep).toContain('bun) bun "$tailor_sdk_bin" "$@" ;;');
+    expect(buildStep).toContain(
+      'run_head_tailor_sdk_bin tailordb erd export --config "$base_config"',
+    );
+    expect(buildStep).not.toContain("run_base_tailor_sdk_bin");
+    expect(buildStep).not.toContain('case "$BASE_PACKAGE_MANAGER" in');
   });
 
   test("passes the package manager to the setup action", () => {
