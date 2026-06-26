@@ -102,6 +102,16 @@ describe("repository ERD preview workflow", () => {
     expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
   });
 
+  test("uploads artifacts with names matched by the sticky comment", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain("name: ${{ matrix.namespace }}.html");
+    expect(content).toContain("name: ${{ matrix.namespace }}-diff.html");
+    expect(content).toContain('select(.name | endswith(".html"))');
+    expect(content).not.toContain("name: erd-viewer-preview-${{ matrix.namespace }}");
+    expect(content).not.toContain("name: erd-viewer-diff-${{ matrix.namespace }}");
+  });
+
   test.skipIf(!actionlintAvailable)("passes actionlint", () => {
     const { ok, output } = runActionlint(ERD_PREVIEW_WORKFLOW);
     expect(ok, `actionlint errors for ${ERD_PREVIEW_WORKFLOW}:\n${output}`).toBe(true);

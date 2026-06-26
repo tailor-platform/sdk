@@ -140,7 +140,7 @@ jobs:
         if: steps.build-erd.outputs.head-missing != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: erd-viewer-preview-${{ matrix.namespace }}
+          name: ${{ matrix.namespace }}.html
           path: ${{ runner.temp }}/erd-preview/${{ matrix.namespace }}.html
           if-no-files-found: error
           archive: false
@@ -149,7 +149,7 @@ jobs:
       - name: Upload ERD diff preview
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: erd-viewer-diff-${{ matrix.namespace }}
+          name: ${{ matrix.namespace }}-diff.html
           path: ${{ runner.temp }}/erd-diff/${{ matrix.namespace }}-diff.html
           if-no-files-found: error
           archive: false
