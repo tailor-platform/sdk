@@ -29,27 +29,56 @@ jobs:
         namespace: [tailordb, analyticsdb]
 
     steps:
-      - name: Checkout
+      - name: Checkout PR head
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
       - name: Install deps
         uses: ./.github/actions/install-deps
 
+      - name: Checkout base branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .erd-base
+          persist-credentials: false
+
       # `erd export` is fully local (no platform login/network needed) and emits
-      # a single self-contained index.html per namespace. Rename it to
-      # "<namespace>.html" so the artifacts REST API (which reports a non-zipped
-      # artifact's name as the file basename) stays identifiable per namespace.
-      - name: Build ERD viewer (self-contained HTML)
-        working-directory: example
+      # a single self-contained index.html per namespace. The base checkout is
+      # built with this PR's SDK so the diff reflects schema changes, not viewer
+      # implementation changes.
+      - name: Build ERD viewers and diff
         env:
           NAMESPACE: ${{ matrix.namespace }}
         run: |
-          pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
-          mkdir -p "$RUNNER_TEMP/erd-preview"
-          cp "$RUNNER_TEMP/erd-export/$NAMESPACE/dist/index.html" "$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
+          set -euo pipefail
+
+          mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-diff"
+
+          (
+            cd example
+            TAILOR_PLATFORM_SDK_DTS_PATH="$RUNNER_TEMP/erd-dts/head-$NAMESPACE.d.ts" \
+              pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-head"
+          )
+          (
+            cd .erd-base/example
+            TAILOR_PLATFORM_SDK_DTS_PATH="$RUNNER_TEMP/erd-dts/base-$NAMESPACE.d.ts" \
+              "$GITHUB_WORKSPACE/node_modules/.bin/tailor-sdk" tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-base"
+          )
+
+          pnpm --filter @tailor-platform/sdk exec tsx src/cli/commands/tailordb/erd/preview-diff.ts \
+            --base-html "$RUNNER_TEMP/erd-base/$NAMESPACE/dist/index.html" \
+            --head-html "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" \
+            --output-html "$RUNNER_TEMP/erd-diff/$NAMESPACE-diff.html"
+
+          # Rename to "<namespace>.html" / "<namespace>-diff.html" so the
+          # artifacts REST API stays identifiable per namespace.
+          cp "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" "$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
 
       # archive: false (upload-artifact v7+) keeps the file unzipped so the HTML
       # can be viewed directly in the browser from the run's artifact list. Only
@@ -60,6 +89,15 @@ jobs:
         with:
           name: erd-viewer-preview-${{ matrix.namespace }}
           path: ${{ runner.temp }}/erd-preview/${{ matrix.namespace }}.html
+          if-no-files-found: error
+          archive: false
+          retention-days: 7
+
+      - name: Upload ERD diff preview
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: erd-viewer-diff-${{ matrix.namespace }}
+          path: ${{ runner.temp }}/erd-diff/${{ matrix.namespace }}-diff.html
           if-no-files-found: error
           archive: false
           retention-days: 7
@@ -84,21 +122,29 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           SERVER: ${{ github.server_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           MARKER: "<!-- erd-viewer-preview -->"
         run: |
           set -euo pipefail
 
           # Build the comment body from this run's ERD preview artifacts. The
           # artifacts REST API reports a non-zipped artifact's name as the file
-          # basename ("<namespace>.html"), so match on that.
+          # basename, so match on "<namespace>.html" and "<namespace>-diff.html".
           body="$MARKER"$'\n'"### 🗺️ ERD viewer preview"$'\n\n'
-          body+="Self-contained HTML built for this run — open the artifact, then view it in your browser:"$'\n'
+          body+="Self-contained HTML built for this run. Diff previews compare this PR with base branch \`$BASE_REF\`:"$'\n'
+
           while IFS=$'\t' read -r name id; do
             [ -z "$name" ] && continue
-            ns=${name%.html}
-            body+=$'\n'"- **$ns**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
+            if [[ "$name" == *-diff.html ]]; then
+              ns=${name%-diff.html}
+              label="$ns diff"
+            else
+              ns=${name%.html}
+              label="$ns viewer"
+            fi
+            body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
           done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv')
+            --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv' | sort)
 
           # Upsert: update the existing sticky comment if present, else create one.
           existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \

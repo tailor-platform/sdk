@@ -1,0 +1,81 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { runPreviewDiffCli } from "./preview-diff";
+import type { TailorDbErdSchema } from "./types";
+
+let tempDir: string;
+
+function schema(overrides: Partial<TailorDbErdSchema> = {}): TailorDbErdSchema {
+  return {
+    version: 1,
+    namespace: "tailordb",
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    revision: "revision",
+    source: "local",
+    cleanRoom: { implementation: "tailor-sdk", notes: [] },
+    tables: [],
+    relations: [],
+    ...overrides,
+  };
+}
+
+function htmlWithSchema(value: TailorDbErdSchema): string {
+  return `<script type="application/json" id="erd-schema">${JSON.stringify(value)}</script>`;
+}
+
+describe("runPreviewDiffCli", () => {
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-preview-diff-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test("writes diff HTML and JSON files", () => {
+    const baseHtml = path.join(tempDir, "base.html");
+    const headHtml = path.join(tempDir, "head.html");
+    const outputHtml = path.join(tempDir, "out", "diff.html");
+    const outputJson = path.join(tempDir, "out", "diff.json");
+
+    fs.writeFileSync(baseHtml, htmlWithSchema(schema()), "utf8");
+    fs.writeFileSync(
+      headHtml,
+      htmlWithSchema(
+        schema({
+          revision: "head-revision",
+          tables: [
+            {
+              name: "User",
+              pluralForm: "users",
+              columns: [],
+              indexes: [],
+              forwardRelationships: [],
+              backwardRelationships: [],
+            },
+          ],
+        }),
+      ),
+      "utf8",
+    );
+
+    runPreviewDiffCli([
+      "--base-html",
+      baseHtml,
+      "--head-html",
+      headHtml,
+      "--output-html",
+      outputHtml,
+      "--output-json",
+      outputJson,
+    ]);
+
+    expect(fs.readFileSync(outputHtml, "utf8")).toContain("TailorDB ERD diff - tailordb");
+    expect(JSON.parse(fs.readFileSync(outputJson, "utf8"))).toMatchObject({
+      namespace: "tailordb",
+      summary: { added: 1, changed: 0, removed: 0 },
+    });
+  });
+});
