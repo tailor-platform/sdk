@@ -1060,6 +1060,51 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     expect(diskConfig.current_user).toBe("file@example.com");
   });
 
+  test("keeps profile platform settings in a min-SDK gated config format", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "file@example.com": {
+          storage: "file",
+          access_token: "file-access-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {
+        dev: {
+          user: "file@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: "file@example.com",
+    });
+
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      version: number;
+      min_sdk_version?: string;
+      profiles: Record<
+        string,
+        {
+          platform_url?: string;
+          oauth2_client_id?: string;
+          console_url?: string;
+        }
+      >;
+    };
+    expect(diskConfig.version).toBe(3);
+    expect(diskConfig.min_sdk_version).toBe("1.70.0");
+    expect(diskConfig.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
+    expect(diskConfig.profiles.dev?.oauth2_client_id).toBe("dev-client");
+    expect(diskConfig.profiles.dev?.console_url).toBe("https://console.dev.tailor.tech");
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
+  });
+
   test("clears current_user on V1 downgrade when it points at a user not representable in V1", () => {
     writePlatformConfig({
       version: 2,

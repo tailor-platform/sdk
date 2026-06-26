@@ -36,24 +36,30 @@ export const logoutCommand = defineAppCommand({
     const currentUser = profile ? pfConfig.profiles[profile]?.user : pfConfig.current_user;
     const deletesDefaultToken =
       getPlatformBaseUrl(platformConfig) === normalizeBaseUrl(defaultPlatformBaseUrl);
+    const lookupOptions = { allowLegacyUserKey: profile !== undefined };
     if (!currentUser) {
       logger.info("You are not logged in.");
       return;
     }
+    const shouldClearCurrentUser = () =>
+      pfConfig.current_user === currentUser &&
+      (deletesDefaultToken || !hasUserTokenEntry(pfConfig, currentUser, undefined));
     let storedTokens: Awaited<ReturnType<typeof loadStoredUserTokens>>;
     let tokenLoadFailed = false;
     try {
-      storedTokens = await loadStoredUserTokens(pfConfig, currentUser, platformConfig);
+      storedTokens = await loadStoredUserTokens(
+        pfConfig,
+        currentUser,
+        platformConfig,
+        lookupOptions,
+      );
     } catch (error) {
       tokenLoadFailed = true;
       logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
     }
     if (!storedTokens && !tokenLoadFailed) {
       logger.info("You are not logged in.");
-      if (
-        pfConfig.current_user === currentUser &&
-        (!profile || deletesDefaultToken || !hasUserTokenEntry(pfConfig, currentUser))
-      ) {
+      if (shouldClearCurrentUser()) {
         pfConfig.current_user = null;
       }
       writePlatformConfig(pfConfig);
@@ -77,11 +83,8 @@ export const logoutCommand = defineAppCommand({
       }
     }
 
-    await deleteUserTokens(pfConfig, currentUser, platformConfig);
-    if (
-      pfConfig.current_user === currentUser &&
-      (!profile || deletesDefaultToken || !hasUserTokenEntry(pfConfig, currentUser))
-    ) {
+    await deleteUserTokens(pfConfig, currentUser, platformConfig, lookupOptions);
+    if (shouldClearCurrentUser()) {
       pfConfig.current_user = null;
     }
     writePlatformConfig(pfConfig);

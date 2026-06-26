@@ -151,7 +151,7 @@ describe("logout --profile", () => {
     expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
   });
 
-  test("clears current user in V2 config when profile logout removes the only token for that user", async () => {
+  test("clears current user when profile logout removes the only token for that user in a gated config", async () => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -182,7 +182,7 @@ describe("logout --profile", () => {
 
     expect(result.success).toBe(true);
     const config = await readPlatformConfig();
-    expect(config.version).toBe(2);
+    expect(config.version).toBe(3);
     expect(config.current_user).toBeNull();
     expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
     expect(config.users["keyring@example.com"]?.storage).toBe("keyring");
@@ -234,5 +234,68 @@ describe("logout --profile", () => {
     const config = await readPlatformConfig();
     expect(config.current_user).toBeNull();
     expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
+  });
+
+  test("preserves default login when logging out an env-selected platform", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          access_token: "default-access-token",
+          refresh_token: "default-refresh-token",
+          token_expires_at: futureDate,
+        },
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "dev-access-token",
+          refresh_token: "dev-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBe("u@example.com");
+    expect(config.users["u@example.com"]).toBeDefined();
+    expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
+
+    vi.stubEnv("PLATFORM_URL", undefined);
+    await expect(loadAccessToken()).resolves.toBe("default-access-token");
+  });
+
+  test("preserves default login when env-selected platform has no stored token", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          access_token: "default-access-token",
+          refresh_token: "default-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBe("u@example.com");
+    expect(config.users["u@example.com"]).toBeDefined();
+
+    vi.stubEnv("PLATFORM_URL", undefined);
+    await expect(loadAccessToken()).resolves.toBe("default-access-token");
   });
 });

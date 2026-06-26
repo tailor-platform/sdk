@@ -68,8 +68,10 @@ const pfConfigSchemaV1 = z.object({
   current_user: z.string().nullable(),
 });
 
-const LATEST_CONFIG_VERSION = 2;
+const V2_CONFIG_VERSION = 2;
+const LATEST_CONFIG_VERSION = 3;
 const V2_MIN_SDK_VERSION = "1.29.0";
+const V3_MIN_SDK_VERSION = "1.70.0";
 
 const semverSchema = z.templateLiteral([
   z.number().int(),
@@ -80,6 +82,16 @@ const semverSchema = z.templateLiteral([
 ]);
 
 const pfConfigSchemaV2 = z.object({
+  version: z.literal(V2_CONFIG_VERSION),
+  min_sdk_version: semverSchema,
+  latest_version: z.number().int().optional(),
+  latest_min_sdk_version: semverSchema.optional(),
+  users: z.partialRecord(z.string(), pfUserSchemaV2),
+  profiles: z.partialRecord(z.string(), pfProfileSchema),
+  current_user: z.string().nullable(),
+});
+
+const pfConfigSchemaV3 = z.object({
   version: z.literal(LATEST_CONFIG_VERSION),
   min_sdk_version: semverSchema,
   latest_version: z.number().int().optional(),
@@ -90,7 +102,9 @@ const pfConfigSchemaV2 = z.object({
 });
 
 type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
-type PfConfig = z.output<typeof pfConfigSchemaV2>;
+type PfConfigV2 = z.output<typeof pfConfigSchemaV2>;
+type PfConfigV3 = z.output<typeof pfConfigSchemaV3>;
+type PfConfig = PfConfigV2 | PfConfigV3;
 type PfProfile = z.output<typeof pfProfileSchema>;
 type LoadWorkspaceIdOptions = {
   workspaceId?: string;
@@ -140,14 +154,26 @@ function canUseLegacyUserKey(platformUrl: string): boolean {
   );
 }
 
-function findUserEntry(config: PfConfig, user: string, platformConfig?: PlatformClientConfig) {
+type UserEntryLookupOptions = {
+  allowLegacyUserKey?: boolean;
+};
+
+function findUserEntry(
+  config: PfConfig,
+  user: string,
+  platformConfig?: PlatformClientConfig,
+  opts: UserEntryLookupOptions = {},
+) {
   const userKey = platformUserKey(user, platformConfig);
   const userEntry = config.users[userKey];
   if (userEntry) {
     return { userKey, userEntry };
   }
   const platformUrl = getPlatformBaseUrl(platformConfig);
-  if (userKey !== user && !canUseLegacyUserKey(platformUrl)) {
+  if (
+    userKey !== user &&
+    (opts.allowLegacyUserKey === false || !canUseLegacyUserKey(platformUrl))
+  ) {
     return { userKey, userEntry };
   }
   const legacyEntry = config.users[user];
@@ -159,14 +185,16 @@ function findUserEntry(config: PfConfig, user: string, platformConfig?: Platform
  * @param config - Platform config
  * @param user - User name
  * @param platformConfig - Optional platform connection settings
+ * @param opts - Token lookup options
  * @returns True when the user has a registered token entry
  */
 export function hasUserTokenEntry(
   config: PfConfig,
   user: string,
   platformConfig?: PlatformClientConfig,
+  opts?: UserEntryLookupOptions,
 ): boolean {
-  return findUserEntry(config, user, platformConfig).userEntry !== undefined;
+  return findUserEntry(config, user, platformConfig, opts).userEntry !== undefined;
 }
 
 function hasCurrentUserEntry(users: PfConfigV1["users"], currentUser: string): boolean {
@@ -183,7 +211,7 @@ function hasCurrentUserEntry(users: PfConfigV1["users"], currentUser: string): b
  * @param v1Config - v1 configuration to migrate
  * @returns Migrated v2 configuration
  */
-function migrateV1ToV2(v1Config: PfConfigV1): PfConfig {
+function migrateV1ToV2(v1Config: PfConfigV1): PfConfigV2 {
   const users: PfConfig["users"] = {};
 
   for (const [name, v1User] of Object.entries(v1Config.users)) {
@@ -198,12 +226,24 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfig {
   }
 
   return {
-    version: LATEST_CONFIG_VERSION,
+    version: V2_CONFIG_VERSION,
     min_sdk_version: V2_MIN_SDK_VERSION,
     users,
     profiles: v1Config.profiles,
     current_user: v1Config.current_user,
   };
+}
+
+async function warnIfNewerConfigAvailable(config: PfConfig) {
+  if (!config.latest_min_sdk_version) return;
+  const packageJson = await readPackageJson();
+  const sdkVersion = packageJson.version ?? "0.0.0";
+  if (semverLt(sdkVersion, config.latest_min_sdk_version)) {
+    logger.warn(ml`
+      A newer config version (${String(config.latest_version)}) is available.
+      Please update your SDK to >= ${config.latest_min_sdk_version}: pnpm update @tailor-platform/sdk
+    `);
+  }
 }
 
 /**
@@ -250,19 +290,17 @@ export async function readPlatformConfig(): Promise<PfConfig> {
     `);
   }
 
-  // Try v2 first
+  // Try latest first
+  const v3Result = pfConfigSchemaV3.safeParse(rawConfig);
+  if (v3Result.success) {
+    await warnIfNewerConfigAvailable(v3Result.data);
+    return v3Result.data;
+  }
+
+  // Try v2
   const v2Result = pfConfigSchemaV2.safeParse(rawConfig);
   if (v2Result.success) {
-    if (v2Result.data.latest_min_sdk_version) {
-      const packageJson = await readPackageJson();
-      const sdkVersion = packageJson.version ?? "0.0.0";
-      if (semverLt(sdkVersion, v2Result.data.latest_min_sdk_version)) {
-        logger.warn(ml`
-          A newer config version (${String(v2Result.data.latest_version)}) is available.
-          Please update your SDK to >= ${v2Result.data.latest_min_sdk_version}: pnpm update @tailor-platform/sdk
-        `);
-      }
-    }
+    await warnIfNewerConfigAvailable(v2Result.data);
     return v2Result.data;
   }
 
@@ -272,7 +310,7 @@ export async function readPlatformConfig(): Promise<PfConfig> {
     return migrateV1ToV2(v1Result.data);
   }
 
-  // Neither v1 nor v2
+  // Neither v1, v2, nor the latest format
   throw new Error(ml`
     Failed to parse config file at ${configPath}.
     The file may be corrupted or created by an incompatible SDK version.
@@ -301,15 +339,33 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
   };
 }
 
+function hasProfilePlatformSettings(config: Pick<PfConfig | PfConfigV1, "profiles">): boolean {
+  return Object.values(config.profiles).some(
+    (profile) =>
+      profile?.platform_url !== undefined ||
+      profile?.oauth2_client_id !== undefined ||
+      profile?.console_url !== undefined,
+  );
+}
+
+function toLatestForDisk(config: PfConfig | PfConfigV1): PfConfigV3 {
+  const latestInput = config.version === 1 ? migrateV1ToV2(config) : config;
+  return {
+    ...latestInput,
+    version: LATEST_CONFIG_VERSION,
+    min_sdk_version: V3_MIN_SDK_VERSION,
+  };
+}
+
 /**
  * Write Tailor Platform CLI configuration to disk.
- * By default, V2 configs are converted to V1 for backward compatibility, so an
- * older SDK can still read the file. Configs containing a keyring user are kept
- * as V2 regardless, because the keyring storage variant is not representable in
- * V1 and downgrading it would silently drop the user's login. Such configs are
- * already V2 on disk (a keyring entry is only ever persisted with
- * TAILOR_USE_KEYRING set), so keeping V2 does not regress backward compatibility.
- * Set TAILOR_USE_KEYRING to write V2 format unconditionally.
+ * By default, file-backed configs without newer fields are converted to V1 for
+ * backward compatibility, so an older SDK can still read the file. Configs
+ * containing a keyring user are kept in V2 or later because the keyring storage
+ * variant is not representable in V1. Configs containing profile-level Platform
+ * settings are written in the latest min-SDK-gated format because older SDKs
+ * would silently drop those settings.
+ * Set TAILOR_USE_KEYRING to write the current in-memory format unconditionally.
  *
  * The config file may contain access/refresh tokens when the OS keyring is
  * unavailable, so it is written via {@link writeSecretFile} so other users
@@ -319,9 +375,10 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
 export function writePlatformConfig(config: PfConfig | PfConfigV1) {
   const configPath = platformConfigPath();
   const hasKeyringUser =
-    config.version === 2 && Object.values(config.users).some((u) => u?.storage === "keyring");
-  const diskConfig =
-    config.version === 2 && !process.env.TAILOR_USE_KEYRING && !hasKeyringUser
+    config.version !== 1 && Object.values(config.users).some((u) => u?.storage === "keyring");
+  const diskConfig = hasProfilePlatformSettings(config)
+    ? toLatestForDisk(config)
+    : config.version !== 1 && !process.env.TAILOR_USE_KEYRING && !hasKeyringUser
       ? toV1ForDisk(config)
       : config;
   writeSecretFile(configPath, stringifyYAML(diskConfig));
@@ -661,13 +718,15 @@ export async function saveUserTokens(
  * @param config - Platform config
  * @param user - User identifier
  * @param platformConfig - Optional platform connection settings
+ * @param opts - Token lookup options
  */
 export async function deleteUserTokens(
   config: PfConfig,
   user: string,
   platformConfig?: PlatformClientConfig,
+  opts?: UserEntryLookupOptions,
 ): Promise<void> {
-  const { userKey, userEntry } = findUserEntry(config, user, platformConfig);
+  const { userKey, userEntry } = findUserEntry(config, user, platformConfig, opts);
   if (userEntry?.storage === "keyring") {
     await deleteKeyringTokens(userKey);
   }
@@ -679,12 +738,14 @@ export async function deleteUserTokens(
  * @param config - Platform config
  * @param user - User name
  * @param platformConfig - Optional platform connection settings
+ * @param opts - Token lookup options
  * @returns Stored user entry and token values, or undefined when the user is not logged in
  */
 export async function loadStoredUserTokens(
   config: PfConfig,
   user: string,
   platformConfig?: PlatformClientConfig,
+  opts?: UserEntryLookupOptions,
 ): Promise<
   | {
       userEntry: PfUserV2;
@@ -693,7 +754,7 @@ export async function loadStoredUserTokens(
     }
   | undefined
 > {
-  const { userKey, userEntry } = findUserEntry(config, user, platformConfig);
+  const { userKey, userEntry } = findUserEntry(config, user, platformConfig, opts);
   if (!userEntry) return undefined;
   const tokens = await resolveTokens(userEntry, userKey, user);
   return { userEntry, ...tokens };
