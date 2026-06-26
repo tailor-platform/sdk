@@ -36,6 +36,7 @@ describe("getApplicableCodemods", () => {
     const ids = getApplicableCodemods("1.67.1", "2.0.0-next.1").map((codemod) => codemod.id);
 
     expect(ids).toContain("v2/test-run-arg-input");
+    expect(ids).toContain("v2/auth-invoker-call-unwrap");
     expect(ids).not.toContain("v2/execute-script-arg");
     expect(ids).not.toContain("v2/principal-unify");
   });
