@@ -132,7 +132,20 @@ function platformConfigPath() {
   return path.join(xdgConfig, "tailor-platform", "config.yaml");
 }
 
-function platformConfigFromProfile(profile: PfProfile | undefined): PlatformClientConfig {
+type ProfilePlatformSettings = {
+  platform_url?: string;
+  oauth2_client_id?: string;
+  console_url?: string;
+};
+
+/**
+ * Convert stored profile platform fields to platform client settings.
+ * @param profile - Profile platform settings
+ * @returns Platform client settings
+ */
+export function platformConfigFromProfile(
+  profile: ProfilePlatformSettings | undefined,
+): PlatformClientConfig {
   return {
     ...(profile?.platform_url ? { platformUrl: profile.platform_url } : {}),
     ...(profile?.oauth2_client_id ? { oauth2ClientId: profile.oauth2_client_id } : {}),
@@ -181,6 +194,23 @@ function findUserEntry(
   }
   const legacyEntry = config.users[user];
   return legacyEntry ? { userKey: user, userEntry: legacyEntry } : { userKey, userEntry };
+}
+
+/**
+ * Resolve the config user key that would be used for a user on the selected platform.
+ * @param config - Platform config
+ * @param user - User name
+ * @param platformConfig - Optional platform connection settings
+ * @param opts - Token lookup options
+ * @returns Resolved config user key
+ */
+export function resolveUserTokenKey(
+  config: PfConfig,
+  user: string,
+  platformConfig?: PlatformClientConfig,
+  opts?: UserEntryLookupOptions,
+): string {
+  return findUserEntry(config, user, platformConfig, opts).userKey;
 }
 
 /**

@@ -1,7 +1,10 @@
 import { z } from "zod";
-import { defaultPlatformBaseUrl, normalizeBaseUrl } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { readPlatformConfig } from "#/cli/shared/context";
+import {
+  platformConfigFromProfile,
+  readPlatformConfig,
+  resolveUserTokenKey,
+} from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 
@@ -13,49 +16,15 @@ type UserListInfo = {
   current: boolean;
 };
 
-function platformUserKeyFor(user: string, platformUrl?: string): string {
-  if (!platformUrl) return user;
-  const normalizedPlatformUrl = normalizeBaseUrl(platformUrl);
-  if (normalizedPlatformUrl === normalizeBaseUrl(defaultPlatformBaseUrl)) {
-    return user;
-  }
-  return `${normalizedPlatformUrl}|${user}`;
-}
-
-function canUseLegacyUserKey(platformUrl?: string): boolean {
-  if (!platformUrl) return true;
-  if (process.env.PLATFORM_URL === undefined) return false;
-  try {
-    return normalizeBaseUrl(process.env.PLATFORM_URL) === normalizeBaseUrl(platformUrl);
-  } catch {
-    return false;
-  }
-}
-
-function currentUserKeyFor(
-  config: PlatformConfig,
-  user: string,
-  platformUrl: string | undefined,
-  opts: { canUseDefaultFallback: () => boolean },
-): string {
-  const selectedUserKey = platformUserKeyFor(user, platformUrl);
-  if (config.users[selectedUserKey]) return selectedUserKey;
-  return opts.canUseDefaultFallback() ? user : selectedUserKey;
-}
-
 function activeCurrentUserKey(config: PlatformConfig): string | null {
   const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
   if (!activeProfile) {
     if (!config.current_user) return null;
-    return currentUserKeyFor(config, config.current_user, process.env.PLATFORM_URL, {
-      canUseDefaultFallback: () => true,
-    });
+    return resolveUserTokenKey(config, config.current_user);
   }
   const profile = config.profiles[activeProfile];
   if (!profile) return null;
-  return currentUserKeyFor(config, profile.user, profile.platform_url ?? process.env.PLATFORM_URL, {
-    canUseDefaultFallback: () => canUseLegacyUserKey(profile.platform_url),
-  });
+  return resolveUserTokenKey(config, profile.user, platformConfigFromProfile(profile));
 }
 
 function toUserListInfo(userKey: string, currentUserKey: string | null): UserListInfo {
