@@ -175,7 +175,7 @@ Before applying changes, `deploy` shows a preview of the planned resource change
 After the detailed list, a summary line is printed:
 
 ```text
-Plan: 5 to create, 3 to update, 1 to delete, 25 unchanged
+Plan: 5 to create, 3 to update, 1 to delete
 ```
 
 Use `--dry-run` to preview the plan without applying anything. In dry-run mode the plan is written to **stdout**, so it can be captured in CI without `2>&1`:
@@ -194,7 +194,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 
 ```json
 {
-  "summary": { "create": 2, "update": 1, "delete": 0, "replace": 0, "unchanged": 5 },
+  "summary": { "create": 2, "update": 1, "delete": 0, "replace": 0 },
   "changes": [
     { "action": "create", "name": "Order", "labels": ["tailorDB"], "namespace": "tailordb" }
   ],
@@ -215,7 +215,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 
 ```json
 {
-  "summary": { "create": 2, "update": 1, "delete": 0, "replace": 0, "unchanged": 5 },
+  "summary": { "create": 2, "update": 1, "delete": 0, "replace": 0 },
   "status": "applied"
 }
 ```
