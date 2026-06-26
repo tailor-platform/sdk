@@ -1,10 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  buildErdSchemaDiff,
-  extractEmbeddedErdSchema,
-  renderErdDiffHtml,
-  renderErdDiffMarkdown,
-} from "./diff";
+import { buildErdSchemaDiff, extractEmbeddedErdSchema, renderErdDiffHtml } from "./diff";
 import type { TailorDbErdSchema, TailorDbErdTable } from "./types";
 
 function table(name: string, overrides: Partial<TailorDbErdTable> = {}): TailorDbErdTable {
@@ -200,7 +195,7 @@ describe("buildErdSchemaDiff", () => {
 });
 
 describe("ERD diff rendering", () => {
-  test("renders markdown and self-contained HTML summaries", () => {
+  test("renders a self-contained HTML summary", () => {
     const diff = buildErdSchemaDiff({
       base: schema(),
       head: schema({
@@ -208,8 +203,6 @@ describe("ERD diff rendering", () => {
         tables: [table("Account"), table("User")],
       }),
     });
-
-    expect(renderErdDiffMarkdown(diff)).toContain("| tailordb | 1 | 0 | 0 |");
 
     const html = renderErdDiffHtml(diff);
     expect(html).toContain("<title>TailorDB ERD diff - tailordb</title>");

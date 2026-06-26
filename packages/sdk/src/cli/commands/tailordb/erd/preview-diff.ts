@@ -1,19 +1,13 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import {
-  buildErdSchemaDiff,
-  extractEmbeddedErdSchema,
-  renderErdDiffHtml,
-  renderErdDiffMarkdown,
-} from "./diff";
+import { buildErdSchemaDiff, extractEmbeddedErdSchema, renderErdDiffHtml } from "./diff";
 
 interface PreviewDiffCliOptions {
   baseHtml: string;
   headHtml: string;
   outputHtml: string;
   outputJson?: string;
-  outputMarkdown?: string;
 }
 
 function readRequiredValue(args: string[], index: number, flag: string): string {
@@ -46,10 +40,6 @@ function parseArgs(args: string[]): PreviewDiffCliOptions {
         options.outputJson = readRequiredValue(args, index, arg);
         index += 1;
         break;
-      case "--output-markdown":
-        options.outputMarkdown = readRequiredValue(args, index, arg);
-        index += 1;
-        break;
       default:
         throw new Error(`Unknown argument: ${String(arg)}`);
     }
@@ -76,9 +66,6 @@ export function runPreviewDiffCli(args: string[]): void {
   writeFile(options.outputHtml, renderErdDiffHtml(diff));
   if (options.outputJson) {
     writeFile(options.outputJson, `${JSON.stringify(diff, null, 2)}\n`);
-  }
-  if (options.outputMarkdown) {
-    writeFile(options.outputMarkdown, renderErdDiffMarkdown(diff));
   }
 }
 

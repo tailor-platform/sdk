@@ -332,18 +332,6 @@ export function buildErdSchemaDiff(options: BuildErdSchemaDiffOptions): ErdSchem
   };
 }
 
-export function renderErdDiffMarkdown(diff: ErdSchemaDiff): string {
-  const lines = [
-    "| Namespace | Added | Changed | Removed |",
-    "|---|---:|---:|---:|",
-    `| ${diff.namespace} | ${diff.summary.added} | ${diff.summary.changed} | ${diff.summary.removed} |`,
-  ];
-  if (!diff.changed) {
-    lines.push("", "No ERD schema changes.");
-  }
-  return `${lines.join("\n")}\n`;
-}
-
 export function renderErdDiffHtml(diff: ErdSchemaDiff): string {
   const rows = diff.changes.length
     ? diff.changes
