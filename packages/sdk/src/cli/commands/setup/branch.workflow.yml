@@ -155,7 +155,7 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .tailor-erd-base
           persist-credentials: false
-      - id: tailor-install-base
+      - id: tailor-detect-base-package-manager
         shell: bash
         run: |
           set -euo pipefail
@@ -173,16 +173,13 @@ jobs:
               echo "__PACKAGE_MANAGER__"
             fi
           )"
-          case "$base_package_manager" in
-            pnpm) pnpm install --frozen-lockfile ;;
-            npm) npm ci ;;
-            yarn) yarn install --immutable || yarn install --frozen-lockfile ;;
-            bun) bun install --frozen-lockfile ;;
-            *)
-              echo "::error::Unsupported package-manager '$base_package_manager' (expected pnpm, npm, yarn, or bun)"
-              exit 1
-              ;;
-          esac
+          echo "package-manager=$base_package_manager" >> "$GITHUB_OUTPUT"
+      - id: tailor-setup-base
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: ${{ steps.tailor-detect-base-package-manager.outputs.package-manager }}
+          node-version-file: .tailor-erd-base/package.json
+          working-directory: .tailor-erd-base
       - id: tailor-build-erd-preview
         shell: bash
         env:

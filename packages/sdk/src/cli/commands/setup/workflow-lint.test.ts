@@ -91,6 +91,17 @@ describe("repository ERD preview workflow", () => {
     expect(content).toContain("pnpm --filter @tailor-platform/sdk run build");
   });
 
+  test("renders a diff when the base namespace is missing", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain('base_missing="false"');
+    expect(content).toContain("grep -q 'not found in local config.db'");
+    expect(content).toContain("Base ERD namespace '$NAMESPACE' not found");
+    expect(content).toContain('diff_args=(--namespace "$NAMESPACE"');
+    expect(content).toContain('diff_args+=(--base-html "$base_html")');
+    expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
+  });
+
   test.skipIf(!actionlintAvailable)("passes actionlint", () => {
     const { ok, output } = runActionlint(ERD_PREVIEW_WORKFLOW);
     expect(ok, `actionlint errors for ${ERD_PREVIEW_WORKFLOW}:\n${output}`).toBe(true);

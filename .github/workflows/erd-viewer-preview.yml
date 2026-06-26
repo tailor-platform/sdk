@@ -57,6 +57,7 @@ jobs:
       # built with this PR's SDK so the diff reflects schema changes, not viewer
       # implementation changes.
       - name: Build ERD viewers and diff
+        id: build-erd
         env:
           NAMESPACE: ${{ matrix.namespace }}
         run: |
@@ -64,31 +65,79 @@ jobs:
 
           mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-diff" "$RUNNER_TEMP/erd-dts"
 
-          (
+          head_output="$RUNNER_TEMP/erd-head"
+          base_output="$RUNNER_TEMP/erd-base"
+          diff_output="$RUNNER_TEMP/erd-diff"
+          head_html="$head_output/$NAMESPACE/dist/index.html"
+          base_html="$base_output/$NAMESPACE/dist/index.html"
+          diff_html="$diff_output/$NAMESPACE-diff.html"
+          head_log="$RUNNER_TEMP/erd-head-$NAMESPACE.log"
+          base_log="$RUNNER_TEMP/erd-base-$NAMESPACE.log"
+
+          head_missing="false"
+          if ! (
             cd example
             TAILOR_PLATFORM_SDK_DTS_PATH="$RUNNER_TEMP/erd-dts/head-$NAMESPACE.d.ts" \
-              pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-head"
-          )
-          (
+              pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$head_output"
+          ) >"$head_log" 2>&1; then
+            if grep -q 'not found in local config.db' "$head_log"; then
+              cat "$head_log"
+              echo "Head ERD namespace '$NAMESPACE' not found; rendering base objects as removed."
+              head_missing="true"
+            else
+              cat "$head_log"
+              exit 1
+            fi
+          elif [ -s "$head_log" ]; then
+            cat "$head_log"
+          fi
+
+          base_missing="false"
+          if ! (
             cd .erd-base/example
             TAILOR_PLATFORM_SDK_DTS_PATH="$RUNNER_TEMP/erd-dts/base-$NAMESPACE.d.ts" \
-              "$GITHUB_WORKSPACE/node_modules/.bin/tailor-sdk" tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-base"
-          )
+              "$GITHUB_WORKSPACE/node_modules/.bin/tailor-sdk" tailordb erd export --namespace "$NAMESPACE" --output "$base_output"
+          ) >"$base_log" 2>&1; then
+            if grep -q 'not found in local config.db' "$base_log"; then
+              cat "$base_log"
+              echo "Base ERD namespace '$NAMESPACE' not found; rendering current objects as added."
+              base_missing="true"
+            else
+              cat "$base_log"
+              exit 1
+            fi
+          elif [ -s "$base_log" ]; then
+            cat "$base_log"
+          fi
 
-          pnpm exec tailor-sdk tailordb erd diff \
-            --base-html "$RUNNER_TEMP/erd-base/$NAMESPACE/dist/index.html" \
-            --head-html "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" \
-            --output "$RUNNER_TEMP/erd-diff/$NAMESPACE-diff.html"
+          if [ "$head_missing" = "true" ] && [ "$base_missing" = "true" ]; then
+            echo "::error::ERD namespace '$NAMESPACE' was not found in head or base."
+            exit 1
+          fi
+
+          diff_args=(--namespace "$NAMESPACE" --output "$diff_html")
+          if [ "$head_missing" = "false" ]; then
+            diff_args+=(--head-html "$head_html")
+          fi
+          if [ "$base_missing" = "false" ]; then
+            diff_args+=(--base-html "$base_html")
+          fi
+
+          pnpm exec tailor-sdk tailordb erd diff "${diff_args[@]}"
 
           # Rename to "<namespace>.html" / "<namespace>-diff.html" so the
           # artifacts REST API stays identifiable per namespace.
-          cp "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" "$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
+          if [ "$head_missing" = "false" ]; then
+            cp "$head_html" "$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
+          fi
+          echo "head-missing=$head_missing" >> "$GITHUB_OUTPUT"
 
       # archive: false (upload-artifact v7+) keeps the file unzipped so the HTML
       # can be viewed directly in the browser from the run's artifact list. Only
       # a single file may be uploaded per artifact when archive is false.
       # https://github.blog/changelog/2026-02-26-github-actions-now-supports-uploading-and-downloading-non-zipped-artifacts/
       - name: Upload ERD viewer preview
+        if: steps.build-erd.outputs.head-missing != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: erd-viewer-preview-${{ matrix.namespace }}

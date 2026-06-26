@@ -186,12 +186,17 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain(".tailor-erd-base/.github/tailor-sdk.lock");
     expect(content).toContain("run_tailor_sdk tailordb erd export");
     expect(content).toContain("run_tailor_sdk tailordb erd diff");
-    expect(content).toContain("id: tailor-install-base");
+    expect(content).toContain("id: tailor-detect-base-package-manager");
+    expect(content).toContain("id: tailor-setup-base");
+    expect(content).toContain(
+      "package-manager: ${{ steps.tailor-detect-base-package-manager.outputs.package-manager }}",
+    );
+    expect(content).toContain("node-version-file: .tailor-erd-base/package.json");
+    expect(content).toContain("working-directory: .tailor-erd-base");
     expect(content).toContain('base_package_manager="$(');
     expect(content).toContain("package-lock.json");
-    expect(content).toContain('case "$base_package_manager" in');
-    expect(content).toContain("cd .tailor-erd-base");
-    expect(content).toContain("pnpm install --frozen-lockfile");
+    expect(content).toContain('echo "package-manager=$base_package_manager" >> "$GITHUB_OUTPUT"');
+    expect(content).not.toContain('case "$base_package_manager" in');
     expect(content).toContain(
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"',
     );
@@ -216,7 +221,8 @@ describe("renderBranchWorkflow", () => {
         "tailor-erd-preview",
         "tailor-erd-preview/tailor-checkout",
         "tailor-erd-preview/tailor-checkout-base",
-        "tailor-erd-preview/tailor-install-base",
+        "tailor-erd-preview/tailor-detect-base-package-manager",
+        "tailor-erd-preview/tailor-setup-base",
         "tailor-erd-preview/tailor-build-erd-preview",
         "tailor-erd-preview/tailor-upload-erd-viewer",
         "tailor-erd-preview/tailor-upload-erd-diff",
