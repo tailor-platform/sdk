@@ -525,7 +525,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/rename-bin",
     name: "tailor-sdk binary → tailor",
     description:
-      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock` — update `.gitignore` entries manually (the codemod skips paths preceded by a dot).",
+      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock` — update `.gitignore` entries manually (the codemod skips paths preceded by a dot). If you use auth connections (`defineAuth()` → `connections`), copy `.tailor-sdk/secrets-state.json` to `.tailor/secrets-state.json` to preserve existing connection state; without it v2 will treat connections as new and revoke their tokens.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/rename-bin/scripts/transform.js",
