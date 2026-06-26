@@ -55,6 +55,16 @@ describe("getApplicableCodemods", () => {
     );
   });
 
+  test("rename-bin scans source files and declaration comments", () => {
+    const renameBin = getApplicableCodemods("1.67.1", "2.0.0").find(
+      (codemod) => codemod.id === "v2/rename-bin",
+    );
+
+    expect(renameBin?.filePatterns).toEqual(
+      expect.arrayContaining(["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]),
+    );
+  });
+
   test("flags CommonJS TypeScript files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
