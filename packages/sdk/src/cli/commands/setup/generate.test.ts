@@ -255,6 +255,7 @@ describe("renderBranchWorkflow", () => {
     expect(baseSetup).not.toContain("tailor-platform/actions/setup@");
     expect(baseSetup).not.toContain("cache:");
     expect(baseSetup).toContain("pnpm/action-setup@");
+    expect(baseSetup).toContain("package_json_file: .tailor-erd-base/package.json");
     expect(baseSetup).toContain("actions/setup-node@");
     expect(baseSetup).toContain("oven-sh/setup-bun@");
     expect(baseSetup).toContain("pnpm install --frozen-lockfile");

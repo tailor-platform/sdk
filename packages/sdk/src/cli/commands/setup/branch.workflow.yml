@@ -178,6 +178,7 @@ jobs:
         if: steps.tailor-detect-base-package-manager.outputs['package-manager'] == 'pnpm'
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
+          package_json_file: .tailor-erd-base/package.json
           run_install: false
       - id: tailor-setup-base-node
         if: steps.tailor-detect-base-package-manager.outputs['package-manager'] != 'bun'
