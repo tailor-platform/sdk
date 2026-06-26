@@ -4,7 +4,7 @@
   "scripts": {
     "deploy": "tailor deploy",
     "login": "pnpm exec tailor login",
-    "generate": "tailor@latest generate",
+    "generate": "@tailor-platform/sdk@latest generate",
     "build": "tsc"
   }
 }
