@@ -41,32 +41,32 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/setup@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/install@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/generate-check@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_START__
       - id: tailor-seed-validate
-        uses: tailor-platform/actions/seed-validate@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/seed-validate@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/drift-check@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           package-manager: __PACKAGE_MANAGER__
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/migration-drift-check@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -74,14 +74,17 @@ jobs:
       - id: tailor-plan
         # Fork PRs cannot read secrets; the checks above still run for them.
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-        uses: tailor-platform/actions/plan@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/plan@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
           label: __WORKSPACE_NAME__
           # __WORKING_DIRECTORY__
+          # PAT fallback: if a Proxy-Free Machine User (PFMU) is not available,
+          # comment out the two lines below and uncomment platform-token instead.
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+          # platform-token: ${{ secrets.TAILOR_PLATFORM_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
   # __PLAN_JOB_END__
   tailor-deploy:
@@ -98,21 +101,24 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/setup@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/install@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/deploy@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
+          # PAT fallback: if a Proxy-Free Machine User (PFMU) is not available,
+          # comment out the two lines below and uncomment platform-token instead.
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+          # platform-token: ${{ secrets.TAILOR_PLATFORM_TOKEN }}
       # __SEED_DATA_START__
       - id: seed-data
         if: false
@@ -126,7 +132,7 @@ jobs:
       # __SEED_DATA_END__
       - id: tailor-notify
         if: always()
-        uses: tailor-platform/actions/notify@201d54f0f13f3ebdb64e5202a975c57618fc3213 # feat/setup
+        uses: tailor-platform/actions/notify@e698b5e417c2c320e7292c68b14ad5090048746b # feat/setup
         with:
           provider: slack
           status: ${{ job.status }}
