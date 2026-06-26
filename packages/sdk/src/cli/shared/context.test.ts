@@ -3,11 +3,15 @@ import * as os from "node:os";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
+import { getPlatformBaseUrl } from "./client";
 import {
+  loadConsoleBaseUrl,
   loadAccessToken,
   loadConfigPath,
   loadMachineUserName,
   loadWorkspaceId,
+  readPlatformConfig,
+  saveUserTokens,
   writePlatformConfig,
 } from "./context";
 import { isCLIError } from "./errors";
@@ -472,6 +476,8 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("TAILOR_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("PLATFORM_URL", undefined);
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", undefined);
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -591,6 +597,39 @@ describe("loadAccessToken", () => {
       const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(otherToken);
     });
+
+    test("returns the token saved for the profile platform URL", async () => {
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {},
+        profiles: {
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+      const config = await readPlatformConfig();
+      await saveUserTokens(
+        config,
+        "testuser",
+        {
+          accessToken: validToken,
+          refreshToken: "refresh",
+        },
+        futureDate,
+        { platformUrl: "https://api.dev.tailor.tech" },
+      );
+      writePlatformConfig(config);
+
+      const result = await loadAccessToken({ profile: "dev" });
+
+      expect(result).toBe(validToken);
+      expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
+    });
   });
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
@@ -671,6 +710,67 @@ describe("loadAccessToken", () => {
     test("throws error when no token source is available", async () => {
       await expect(loadAccessToken()).rejects.toThrow("Tailor Platform token not found");
     });
+  });
+});
+
+describe("loadConsoleBaseUrl", () => {
+  beforeEach(() => {
+    resetKeyringState();
+    vi.stubEnv("PLATFORM_URL", undefined);
+    vi.stubEnv("PLATFORM_CONSOLE_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("returns console_url from the selected profile", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+
+    await expect(loadConsoleBaseUrl({ profile: "dev" })).resolves.toBe(
+      "https://console.dev.tailor.tech",
+    );
+  });
+
+  test("infers console URL from an api.* platform URL", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+
+    await expect(loadConsoleBaseUrl({ profile: "dev" })).resolves.toBe(
+      "https://console.dev.tailor.tech",
+    );
   });
 });
 

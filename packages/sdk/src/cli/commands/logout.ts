@@ -3,8 +3,8 @@ import { initOAuth2Client } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   deleteUserTokens,
+  loadStoredUserTokens,
   readPlatformConfig,
-  resolveTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -16,21 +16,26 @@ export const logoutCommand = defineAppCommand({
   run: async () => {
     const pfConfig = await readPlatformConfig();
     const currentUser = pfConfig.current_user;
-    const userEntry = currentUser ? pfConfig.users[currentUser] : undefined;
-    if (!userEntry || !currentUser) {
+    if (!currentUser) {
       logger.info("You are not logged in.");
+      return;
+    }
+    const storedTokens = await loadStoredUserTokens(pfConfig, currentUser);
+    if (!storedTokens) {
+      logger.info("You are not logged in.");
+      pfConfig.current_user = null;
+      writePlatformConfig(pfConfig);
       return;
     }
 
     try {
-      const { accessToken, refreshToken } = await resolveTokens(userEntry, currentUser);
       const client = initOAuth2Client();
-      const tokenTypeHint = refreshToken ? "refresh_token" : "access_token";
+      const tokenTypeHint = storedTokens.refreshToken ? "refresh_token" : "access_token";
       await client.revoke(
         {
-          accessToken,
-          refreshToken: refreshToken ?? null,
-          expiresAt: Date.parse(userEntry.token_expires_at),
+          accessToken: storedTokens.accessToken,
+          refreshToken: storedTokens.refreshToken ?? null,
+          expiresAt: Date.parse(storedTokens.userEntry.token_expires_at),
         },
         tokenTypeHint,
       );
@@ -39,7 +44,6 @@ export const logoutCommand = defineAppCommand({
     }
 
     await deleteUserTokens(pfConfig, currentUser);
-    delete pfConfig.users[currentUser];
     pfConfig.current_user = null;
     writePlatformConfig(pfConfig);
     logger.success("Successfully logged out from Tailor Platform.");

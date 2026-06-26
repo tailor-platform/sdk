@@ -1,7 +1,7 @@
 import open from "open";
 import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { loadWorkspaceId } from "#/cli/shared/context";
+import { loadConsoleBaseUrl, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { openAuthConnectionCommand } from "./open";
@@ -12,6 +12,7 @@ vi.mock("open", () => ({
 }));
 
 vi.mock("#/cli/shared/context", () => ({
+  loadConsoleBaseUrl: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
@@ -19,6 +20,7 @@ describe("authconnection open --json", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
+    vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.tailor.tech");
     vi.mocked(open).mockResolvedValue({} as ChildProcess);
   });
 

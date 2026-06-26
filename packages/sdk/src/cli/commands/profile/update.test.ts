@@ -182,6 +182,114 @@ describe("profile update --machine-user", () => {
   });
 });
 
+describe("profile update --platform", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("PLATFORM_URL", undefined);
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", undefined);
+    vi.stubEnv("PLATFORM_CONSOLE_URL", undefined);
+    vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
+    vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkspaces: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u@example.com", workspace_id: validUUID },
+      },
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("stores platform settings and validates the workspace against that platform", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(updateCommand, [
+      "myprofile",
+      "--platform-url",
+      "https://api.dev.tailor.tech",
+      "--oauth2-client-id",
+      "dev-client",
+      "--console-url",
+      "https://console.dev.tailor.tech",
+    ]);
+
+    const expectedPlatformConfig = {
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    };
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
+      expect.anything(),
+      "u@example.com",
+      expectedPlatformConfig,
+    );
+    expect(vi.mocked(initOperatorClient)).toHaveBeenCalledWith(
+      "mock-token",
+      expectedPlatformConfig,
+    );
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile).toMatchObject({
+      platform_url: "https://api.dev.tailor.tech",
+      oauth2_client_id: "dev-client",
+      console_url: "https://console.dev.tailor.tech",
+    });
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
+
+  test("clears platform settings when empty strings are passed", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+
+    await runCommand(updateCommand, [
+      "myprofile",
+      "--platform-url",
+      "",
+      "--oauth2-client-id",
+      "",
+      "--console-url",
+      "",
+    ]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.platform_url).toBeUndefined();
+    expect(config.profiles.myprofile?.oauth2_client_id).toBeUndefined();
+    expect(config.profiles.myprofile?.console_url).toBeUndefined();
+  });
+});
+
 describe("profile update --machine-user-override", () => {
   beforeEach(() => {
     vi.clearAllMocks();

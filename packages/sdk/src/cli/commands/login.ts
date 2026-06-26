@@ -11,7 +11,12 @@ import {
   initOAuth2Client,
 } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { readPlatformConfig, saveUserTokens, writePlatformConfig } from "#/cli/shared/context";
+import {
+  loadPlatformClientConfig,
+  readPlatformConfig,
+  saveUserTokens,
+  writePlatformConfig,
+} from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertDefined } from "#/utils/assert";
@@ -129,7 +134,16 @@ export const loginCommand = defineAppCommand({
   name: "login",
   description: "Login to Tailor Platform.",
   args: z.xor([
-    z.object({}).strict().describe("User Login"),
+    z
+      .object({
+        profile: arg(z.string().optional(), {
+          alias: "p",
+          description: "Workspace profile whose platform settings should be used for login.",
+          env: "TAILOR_PLATFORM_PROFILE",
+        }),
+      })
+      .strict()
+      .describe("User Login"),
     z
       .object({
         "machine-user": arg(z.literal(true), {
@@ -146,11 +160,19 @@ export const loginCommand = defineAppCommand({
           description: "Client secret",
           env: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
         }),
+        profile: arg(z.string().optional(), {
+          alias: "p",
+          description: "Workspace profile whose platform settings should be used for login.",
+          env: "TAILOR_PLATFORM_PROFILE",
+        }),
       })
       .strict()
       .describe("Machine User Login"),
   ]),
   run: async (args) => {
+    if ("profile" in args) {
+      await loadPlatformClientConfig({ profile: args.profile });
+    }
     if ("machine-user" in args) {
       await loginAsMachineUser({
         clientId: args.clientId,

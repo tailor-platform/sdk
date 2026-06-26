@@ -17,20 +17,61 @@ import { logger } from "./logger";
 import { userAgent } from "./user-agent";
 import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 
-export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+export const defaultPlatformBaseUrl = "https://api.tailor.tech";
+export const defaultConsoleBaseUrl = "https://console.tailor.tech";
 
-const oauth2ClientId =
-  process.env.PLATFORM_OAUTH2_CLIENT_ID ?? "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
+const defaultOAuth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
 const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
+
+export type PlatformClientConfig = {
+  platformUrl?: string;
+  oauth2ClientId?: string;
+  consoleUrl?: string;
+};
+
+let activePlatformConfig: PlatformClientConfig | undefined;
+
+export function normalizeBaseUrl(value: string): string {
+  const url = new URL(value);
+  url.hash = "";
+  url.search = "";
+  return url.toString().replace(/\/$/, "");
+}
+
+export function setActivePlatformConfig(config?: PlatformClientConfig) {
+  activePlatformConfig = config;
+}
+
+export function getPlatformBaseUrl(config: PlatformClientConfig = activePlatformConfig ?? {}) {
+  return normalizeBaseUrl(config.platformUrl ?? process.env.PLATFORM_URL ?? defaultPlatformBaseUrl);
+}
+
+export function getOAuth2ClientId(config: PlatformClientConfig = activePlatformConfig ?? {}) {
+  return config.oauth2ClientId ?? process.env.PLATFORM_OAUTH2_CLIENT_ID ?? defaultOAuth2ClientId;
+}
+
+export function getConsoleBaseUrl(config: PlatformClientConfig = activePlatformConfig ?? {}) {
+  if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
+  if (process.env.PLATFORM_CONSOLE_URL) return normalizeBaseUrl(process.env.PLATFORM_CONSOLE_URL);
+
+  const platformUrl = new URL(getPlatformBaseUrl(config));
+  if (platformUrl.hostname.startsWith("api.")) {
+    platformUrl.hostname = platformUrl.hostname.replace(/^api\./, "console.");
+    return normalizeBaseUrl(platformUrl.toString());
+  }
+
+  return defaultConsoleBaseUrl;
+}
 
 /**
  * Initialize an OAuth2 client for Tailor Platform.
+ * @param config - Optional platform connection settings
  * @returns Configured OAuth2 client
  */
-export function initOAuth2Client() {
+export function initOAuth2Client(config?: PlatformClientConfig) {
   return new OAuth2Client({
-    clientId: oauth2ClientId,
-    server: platformBaseUrl,
+    clientId: getOAuth2ClientId(config),
+    server: getPlatformBaseUrl(config),
     discoveryEndpoint: oauth2DiscoveryEndpoint,
   });
 }
@@ -40,9 +81,10 @@ export type OperatorClient = Client<typeof OperatorService>;
 /**
  * Initialize an Operator client with the given access token.
  * @param accessToken - Access token for authentication
+ * @param config - Optional platform connection settings
  * @returns Configured Operator client
  */
-export async function initOperatorClient(accessToken: string) {
+export async function initOperatorClient(accessToken: string, config?: PlatformClientConfig) {
   const [{ createTracingInterceptor }, { OperatorService }] = await Promise.all([
     import("#/cli/telemetry/interceptor"),
     import("@tailor-platform/tailor-proto/service_pb"),
@@ -59,7 +101,7 @@ export async function initOperatorClient(accessToken: string) {
     concurrencyLimitInterceptor(),
   ];
 
-  const transport = await createTransport(platformBaseUrl, interceptors);
+  const transport = await createTransport(getPlatformBaseUrl(config), interceptors);
   return createClient(OperatorService, transport);
 }
 
@@ -496,7 +538,7 @@ export async function fetchPaged<T>(
  * @returns Parsed user info
  */
 export async function fetchUserInfo(accessToken: string) {
-  const userInfoUrl = new URL("/auth/platform/userinfo", platformBaseUrl).href;
+  const userInfoUrl = new URL("/auth/platform/userinfo", getPlatformBaseUrl()).href;
   const resp = await fetch(userInfoUrl, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -643,7 +685,7 @@ export async function fetchPlatformMachineUserToken(clientId: string, clientSecr
   const client = new OAuth2Client({
     clientId,
     clientSecret,
-    server: platformBaseUrl,
+    server: getPlatformBaseUrl(),
     discoveryEndpoint: oauth2DiscoveryEndpoint,
   });
   return await client.clientCredentials();
