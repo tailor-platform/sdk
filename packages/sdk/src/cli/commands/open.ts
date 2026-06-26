@@ -22,7 +22,10 @@ export const openCommand = defineAppCommand({
     const { config } = await loadConfig(args.config);
     const applicationName = config.name;
     const consolePath = `/workspaces/${workspaceId}/applications/${encodeURIComponent(applicationName)}/overview`;
-    const consoleBaseUrl = await loadConsoleBaseUrl({ profile: args.profile });
+    const consoleBaseUrl = await loadConsoleBaseUrl({
+      profile: args.profile,
+      ...(args["workspace-id"] !== undefined ? { allowMissingProfile: true } : {}),
+    });
     const consoleUrl = new URL(consolePath, consoleBaseUrl).toString();
     const jsonOutput = logger.jsonMode;
 

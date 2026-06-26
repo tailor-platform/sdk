@@ -16,8 +16,10 @@ import {
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { resetKeyringState } from "./token-store";
+import type * as ClientModule from "./client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
+const refreshTokenMock = vi.hoisted(() => vi.fn());
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
@@ -32,6 +34,16 @@ vi.mock("@napi-rs/keyring", () => ({
     deletePassword() {}
   },
 }));
+
+vi.mock("./client", async (importOriginal) => {
+  const actual = await importOriginal<typeof ClientModule>();
+  return {
+    ...actual,
+    initOAuth2Client: vi.fn(() => ({
+      refreshToken: refreshTokenMock,
+    })),
+  };
+});
 
 function writeFuturePlatformConfig() {
   const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
@@ -132,6 +144,7 @@ describe("loadWorkspaceId", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    refreshTokenMock.mockReset();
     resetKeyringState();
     process.env = { ...originalEnv };
     delete process.env.TAILOR_PLATFORM_WORKSPACE_ID;
@@ -750,6 +763,43 @@ describe("loadAccessToken", () => {
       await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
         'User "testuser" not found',
       );
+    });
+
+    test("removes a legacy unscoped token after refreshing it into a scoped platform key", async () => {
+      vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+      const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
+      const refreshedExpiresAt = Date.now() + 3600 * 1000;
+      refreshTokenMock.mockResolvedValueOnce({
+        accessToken: "refreshed-token",
+        refreshToken: "refreshed-refresh",
+        expiresAt: refreshedExpiresAt,
+      });
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          testuser: {
+            access_token: "legacy-token",
+            refresh_token: "legacy-refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {},
+        current_user: "testuser",
+      });
+
+      const result = await loadAccessToken();
+
+      expect(result).toBe("refreshed-token");
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users.testuser).toBeUndefined();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toMatchObject({
+        storage: "file",
+        access_token: "refreshed-token",
+        refresh_token: "refreshed-refresh",
+        token_expires_at: new Date(refreshedExpiresAt).toISOString(),
+      });
     });
   });
 

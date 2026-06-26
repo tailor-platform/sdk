@@ -86,4 +86,21 @@ describe("open --json", () => {
     });
     expect(loadConsoleBaseUrl).toHaveBeenCalledWith({ profile: "dev" });
   });
+
+  test("allows a missing profile when the workspace ID is overridden", async () => {
+    using _stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await runCommand(openCommand, [
+      "--profile",
+      "missing",
+      "--workspace-id",
+      "12345678-1234-4abc-8def-123456789012",
+    ]);
+
+    expect(loadConsoleBaseUrl).toHaveBeenCalledWith({
+      profile: "missing",
+      allowMissingProfile: true,
+    });
+  });
 });

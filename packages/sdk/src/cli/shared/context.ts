@@ -119,6 +119,7 @@ type LoadPlatformClientConfigOptions = {
 };
 type LoadConsoleBaseUrlOptions = {
   profile?: string;
+  allowMissingProfile?: boolean;
 };
 type LoadMachineUserNameOptions = {
   machineUser?: string;
@@ -875,6 +876,13 @@ export async function fetchLatestToken(
     newExpiresAt,
     platformConfig,
   );
+  const refreshedUserKey = platformUserKey(user, platformConfig);
+  if (userKey !== refreshedUserKey) {
+    if (userEntry.storage === "keyring") {
+      await deleteKeyringTokens(userKey);
+    }
+    delete config.users[userKey];
+  }
   writePlatformConfig(config);
   rememberPlatformConfigForToken(resp.accessToken, platformConfig);
   return resp.accessToken;

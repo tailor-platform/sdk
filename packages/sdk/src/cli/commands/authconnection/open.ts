@@ -15,7 +15,10 @@ export const openAuthConnectionCommand = defineAppCommand({
       profile: args.profile,
     });
     const consolePath = `/workspaces/${workspaceId}/settings/connections`;
-    const consoleBaseUrl = await loadConsoleBaseUrl({ profile: args.profile });
+    const consoleBaseUrl = await loadConsoleBaseUrl({
+      profile: args.profile,
+      ...(args["workspace-id"] !== undefined ? { allowMissingProfile: true } : {}),
+    });
     const consoleUrl = new URL(consolePath, consoleBaseUrl).toString();
     const jsonOutput = logger.jsonMode;
 
