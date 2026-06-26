@@ -120,6 +120,16 @@ describe("logout --profile", () => {
     );
   });
 
+  test("clears current user when default logout leaves another scoped token", async () => {
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["u@example.com"]).toBeUndefined();
+    expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeDefined();
+  });
+
   test("preserves current user when profile logout leaves another scoped token", async () => {
     writePlatformConfig({
       version: 2,
