@@ -4,14 +4,14 @@ import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { AppConfig } from "#/configure/config/types";
 
-export interface AttributeMapConfig {
+export interface AttributesConfig {
   [key: string]: string;
 }
 
 export type AttributeListConfig = readonly string[];
 
 interface ExtractedAttributes {
-  attributeMap?: AttributeMapConfig;
+  attributes?: AttributesConfig;
   attributeList?: AttributeListConfig;
   env?: Record<string, string | number | boolean>;
   machineUserNames?: string[];
@@ -29,7 +29,7 @@ type AttributeFieldLike = {
 /**
  * Extract attribute definitions from the app config for user-defined typing.
  * @param config - Application config to inspect
- * @returns Extracted attribute map/list and env values
+ * @returns Extracted attributes/list and env values
  * @internal
  */
 export function extractAttributesFromConfig(config: AppConfig): ExtractedAttributes {
@@ -38,7 +38,7 @@ export function extractAttributesFromConfig(config: AppConfig): ExtractedAttribu
 
 /**
  * Generate the contents of the user-defined type definition file.
- * @param attributeMap - Attribute map configuration
+ * @param attributes - Attribute configuration
  * @param attributeList - Attribute list configuration
  * @param env - Environment configuration
  * @param machineUserNames - Registered machine user names (used to narrow `invoker` strings)
@@ -46,25 +46,25 @@ export function extractAttributesFromConfig(config: AppConfig): ExtractedAttribu
  * @returns Generated type definition source
  */
 export function generateTypeDefinition(
-  attributeMap: AttributeMapConfig | undefined,
+  attributes: AttributesConfig | undefined,
   attributeList: AttributeListConfig | undefined,
   env?: Record<string, string | number | boolean>,
   machineUserNames?: readonly string[],
   idpNames?: readonly string[],
 ): string {
-  // Generate AttributeMap interface
-  // attributeMap values are type string representations (e.g., "string", "boolean", "string[]")
-  const mapFields = attributeMap
-    ? Object.entries(attributeMap)
+  // Generate Attributes interface
+  // attributes values are type string representations (e.g., "string", "boolean", "string[]")
+  const attributeFields = attributes
+    ? Object.entries(attributes)
         .map(([key, value]) => `    ${key}: ${value};`)
         .join("\n")
     : "";
 
-  const mapBody =
-    !attributeMap || Object.keys(attributeMap).length === 0
+  const attributesBody =
+    !attributes || Object.keys(attributes).length === 0
       ? "{}"
       : `{
-${mapFields}
+${attributeFields}
   }`;
 
   // Generate AttributeList type as a tuple of strings based on the length
@@ -129,7 +129,7 @@ ${idpNameFields}
 // Regenerated automatically when running 'tailor-sdk deploy' or 'tailor-sdk generate'
 
 declare module "@tailor-platform/sdk" {
-  interface AttributeMap ${mapBody}
+  interface Attributes ${attributesBody}
   interface AttributeList ${listBody}
   interface Env ${envBody}
   interface MachineUserNameRegistry ${machineUserBody}
@@ -198,20 +198,20 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
       }
     ).userProfile;
 
-    const attributes = userProfile?.attributes;
+    const selectedAttributes = userProfile?.attributes;
     const fields = userProfile?.type?.fields;
     const attributeList = userProfile?.attributeList;
 
-    // Convert attributes to AttributeMapConfig by inferring types from field metadata
-    const attributeMap: AttributeMapConfig | undefined = attributes
-      ? Object.keys(attributes).reduce((acc, key) => {
+    // Convert attributes to AttributesConfig by inferring types from field metadata
+    const attributes: AttributesConfig | undefined = selectedAttributes
+      ? Object.keys(selectedAttributes).reduce((acc, key) => {
           acc[key] = inferAttributeType(fields?.[key]);
           return acc;
-        }, {} as AttributeMapConfig)
+        }, {} as AttributesConfig)
       : undefined;
 
     return {
-      attributeMap,
+      attributes,
       attributeList,
       machineUserNames,
       idpNames,
@@ -229,13 +229,13 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
       return { machineUserNames, idpNames };
     }
 
-    const attributeMap = Object.entries(machineUserAttributes).reduce((acc, [key, field]) => {
+    const attributes = Object.entries(machineUserAttributes).reduce((acc, [key, field]) => {
       acc[key] = inferAttributeType(field);
       return acc;
-    }, {} as AttributeMapConfig);
+    }, {} as AttributesConfig);
 
     return {
-      attributeMap,
+      attributes,
       machineUserNames,
       idpNames,
     };
@@ -279,14 +279,14 @@ interface GenerateUserTypesOptions {
 export async function generateUserTypes(options: GenerateUserTypesOptions): Promise<void> {
   const { config, configPath } = options;
   try {
-    const { attributeMap, attributeList, machineUserNames, idpNames } =
+    const { attributes, attributeList, machineUserNames, idpNames } =
       extractAttributesFromConfig(config);
-    if (!attributeMap && !attributeList) {
+    if (!attributes && !attributeList) {
       logger.info("No attributes found in configuration", { mode: "plain" });
     }
 
-    if (attributeMap) {
-      logger.debug(`Extracted AttributeMap: ${JSON.stringify(attributeMap)}`);
+    if (attributes) {
+      logger.debug(`Extracted Attributes: ${JSON.stringify(attributes)}`);
     }
     if (attributeList) {
       logger.debug(`Extracted AttributeList: ${JSON.stringify(attributeList)}`);
@@ -305,7 +305,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
 
     // Generate type definition
     const typeDefContent = generateTypeDefinition(
-      attributeMap,
+      attributes,
       attributeList,
       env,
       machineUserNames,
