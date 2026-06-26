@@ -496,7 +496,7 @@ export async function loadMachineUserName(
 /**
  * Load access token from environment variables, command options, or platform config.
  * In CLI context, profile env fallback is also handled by politty's arg env option.
- * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
+ * Priority: env/TAILOR_PLATFORM_TOKEN > opts/profile > env/profile > config/currentUser > error
  * @param opts - Profile options
  * @returns Resolved access token
  */
@@ -505,12 +505,6 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   if (process.env.TAILOR_PLATFORM_TOKEN) {
     return process.env.TAILOR_PLATFORM_TOKEN;
   }
-  // TAILOR_TOKEN is deprecated
-  if (process.env.TAILOR_TOKEN) {
-    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
-    return process.env.TAILOR_TOKEN;
-  }
-
   const pfConfig = await readPlatformConfig();
   let user;
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
@@ -750,8 +744,8 @@ export function loadConfigPath(configPath?: string): string | undefined {
   if (configPath) {
     return configPath;
   }
-  if (process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH) {
-    return process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+  if (process.env.TAILOR_CONFIG_PATH) {
+    return process.env.TAILOR_CONFIG_PATH;
   }
 
   // Search for config file in current directory and parent directories

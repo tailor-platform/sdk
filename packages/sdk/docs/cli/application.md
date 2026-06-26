@@ -57,17 +57,17 @@ tailor-sdk deploy [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                                 |
-| `--dry-run`                     | `-d`  | Run the command without making any changes                        | No       | -                    | -                                 |
-| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots                | No       | -                    | -                                 |
-| `--no-validate`                 | -     | Skip client-side validation against platform resource constraints | No       | -                    | -                                 |
-| `--no-cache`                    | -     | Disable bundle caching for this run                               | No       | -                    | -                                 |
-| `--clean-cache`                 | -     | Clean the bundle cache before building                            | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                              |
+| `--dry-run`                     | `-d`  | Run the command without making any changes                        | No       | -                    | -                              |
+| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots                | No       | -                    | -                              |
+| `--no-validate`                 | -     | Skip client-side validation against platform resource constraints | No       | -                    | -                              |
+| `--no-cache`                    | -     | Disable bundle caching for this run                               | No       | -                    | -                              |
+| `--clean-cache`                 | -     | Clean the bundle cache before building                            | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 **Config File Modification:**
@@ -125,12 +125,12 @@ tailor-sdk remove [options]
 
 **Options**
 
-| Option                          | Alias | Description               | Required | Default              | Env                               |
-| ------------------------------- | ----- | ------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false`              | -                                 |
+| Option                          | Alias | Description                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts  | No       | `false`              | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -146,11 +146,11 @@ tailor-sdk show [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -166,11 +166,11 @@ tailor-sdk open [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -192,13 +192,13 @@ tailor-sdk api [options] [command] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description                                                                       | Required | Default              | Env                               |
-| ------------------------------- | ----- | --------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--body <BODY>`                 | `-b`  | Request body as JSON.                                                             | No       | `"{}"`               | -                                 |
-| `--field <FIELD>`               | `-f`  | Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body. | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                                       | Required | Default              | Env                            |
+| ------------------------------- | ----- | --------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--body <BODY>`                 | `-b`  | Request body as JSON.                                                             | No       | `"{}"`               | -                              |
+| `--field <FIELD>`               | `-f`  | Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body. | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

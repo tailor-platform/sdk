@@ -394,7 +394,7 @@ export async function deploy(options?: DeployOptions) {
     } = await withSpan("build", async () => {
       const dryRun = options?.dryRun ?? false;
       const buildOnly =
-        options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
+        options?.buildOnly ?? parseBoolean(process.env.TAILOR_DEPLOY_BUILD_ONLY) === true;
 
       const { config, plugins } = await withSpan("build.loadConfig", async () => {
         const foundPath = loadConfigPath(options?.configPath);

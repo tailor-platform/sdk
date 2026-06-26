@@ -64,7 +64,7 @@ jobs:
       # the build and hang the job. The build itself only needs create-sdk's own deps.
       - name: Build create-sdk with pkg.pr.new SDK
         env:
-          TAILOR_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
+          TAILOR_TEMPLATE_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
         run: |
           node packages/create-sdk/scripts/prepare-templates.js
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build

@@ -4,11 +4,11 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, copyFileSync } fr
 import { resolve } from "node:path";
 
 // Get SDK version or URL from environment variable or package.json
-const sdkVersionOrUrl = process.env.TAILOR_SDK_VERSION;
+const sdkVersionOrUrl = process.env.TAILOR_TEMPLATE_SDK_VERSION;
 
 let version;
 if (sdkVersionOrUrl) {
-  // If TAILOR_SDK_VERSION is set, use it (can be version string or pkg-pr-new URL)
+  // If TAILOR_TEMPLATE_SDK_VERSION is set, use it (can be version string or pkg-pr-new URL)
   version = sdkVersionOrUrl;
   console.log(`Using SDK version from environment: ${version}`);
 } else {

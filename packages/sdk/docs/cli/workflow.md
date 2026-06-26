@@ -93,7 +93,7 @@ tailor-sdk workflow start [options] <name>
 | ------------------------------- | ----- | --------------------------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                           | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                     | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH`   |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                  | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`                |
 | `--machine-user <MACHINE_USER>` | `-m`  | Machine user name. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
 | `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                             | No       | -                    | -                                   |
 | `--wait`                        | `-W`  | Wait for execution to complete                                              | No       | `false`              | -                                   |
