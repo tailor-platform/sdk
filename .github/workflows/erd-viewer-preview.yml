@@ -48,7 +48,9 @@ jobs:
 
       - name: Install base deps
         working-directory: .erd-base
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @tailor-platform/sdk run build
 
       # `erd export` is fully local (no platform login/network needed) and emits
       # a single self-contained index.html per namespace. The base checkout is

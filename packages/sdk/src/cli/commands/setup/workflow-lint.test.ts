@@ -88,6 +88,7 @@ describe("repository ERD preview workflow", () => {
     expect(installBase).toBeLessThan(baseExport);
     expect(content).toContain("working-directory: .erd-base");
     expect(content).toContain("pnpm install --frozen-lockfile");
+    expect(content).toContain("pnpm --filter @tailor-platform/sdk run build");
   });
 
   test.skipIf(!actionlintAvailable)("passes actionlint", () => {

@@ -160,13 +160,26 @@ jobs:
         run: |
           set -euo pipefail
           cd .tailor-erd-base
-          case "__PACKAGE_MANAGER__" in
+          base_package_manager="$(
+            if [ -f pnpm-lock.yaml ]; then
+              echo pnpm
+            elif [ -f yarn.lock ]; then
+              echo yarn
+            elif [ -f bun.lockb ] || [ -f bun.lock ]; then
+              echo bun
+            elif [ -f package-lock.json ]; then
+              echo npm
+            else
+              echo "__PACKAGE_MANAGER__"
+            fi
+          )"
+          case "$base_package_manager" in
             pnpm) pnpm install --frozen-lockfile ;;
             npm) npm ci ;;
             yarn) yarn install --immutable || yarn install --frozen-lockfile ;;
             bun) bun install --frozen-lockfile ;;
             *)
-              echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
+              echo "::error::Unsupported package-manager '$base_package_manager' (expected pnpm, npm, yarn, or bun)"
               exit 1
               ;;
           esac

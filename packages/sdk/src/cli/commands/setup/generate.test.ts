@@ -187,6 +187,9 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("run_tailor_sdk tailordb erd export");
     expect(content).toContain("run_tailor_sdk tailordb erd diff");
     expect(content).toContain("id: tailor-install-base");
+    expect(content).toContain('base_package_manager="$(');
+    expect(content).toContain("package-lock.json");
+    expect(content).toContain('case "$base_package_manager" in');
     expect(content).toContain("cd .tailor-erd-base");
     expect(content).toContain("pnpm install --frozen-lockfile");
     expect(content).toContain(
