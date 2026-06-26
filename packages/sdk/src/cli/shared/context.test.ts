@@ -986,6 +986,15 @@ describe("loadConsoleBaseUrl", () => {
       "https://console.dev.tailor.tech",
     );
   });
+
+  test("falls back to the default console URL when missing profiles are allowed and config is unreadable", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "missing");
+    writeFuturePlatformConfig();
+
+    await expect(loadConsoleBaseUrl({ allowMissingProfile: true })).resolves.toBe(
+      "https://console.tailor.tech",
+    );
+  });
 });
 
 describe("profile readonly field", () => {

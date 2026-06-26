@@ -682,7 +682,15 @@ export async function loadPlatformClientConfig(
     return undefined;
   }
 
-  const pfConfig = await readPlatformConfig();
+  let pfConfig: PfConfig;
+  try {
+    pfConfig = await readPlatformConfig();
+  } catch (error) {
+    if (opts?.allowMissingProfile) {
+      return undefined;
+    }
+    throw error;
+  }
   const profileEntry = pfConfig.profiles[profile];
   if (!profileEntry) {
     if (opts?.allowMissingProfile) {
