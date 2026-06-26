@@ -1,7 +1,5 @@
-import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
-import * as path from "pathe";
-import { buildErdSchemaDiff, extractEmbeddedErdSchema, renderErdDiffHtml } from "./diff";
+import { writeErdDiff } from "./diff-command";
 
 interface PreviewDiffCliOptions {
   baseHtml: string;
@@ -52,21 +50,9 @@ function parseArgs(args: string[]): PreviewDiffCliOptions {
   return options as PreviewDiffCliOptions;
 }
 
-function writeFile(filePath: string, content: string): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, content, "utf8");
-}
-
 export function runPreviewDiffCli(args: string[]): void {
   const options = parseArgs(args);
-  const base = extractEmbeddedErdSchema(fs.readFileSync(options.baseHtml, "utf8"));
-  const head = extractEmbeddedErdSchema(fs.readFileSync(options.headHtml, "utf8"));
-  const diff = buildErdSchemaDiff({ base, head });
-
-  writeFile(options.outputHtml, renderErdDiffHtml(diff));
-  if (options.outputJson) {
-    writeFile(options.outputJson, `${JSON.stringify(diff, null, 2)}\n`);
-  }
+  writeErdDiff(options);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

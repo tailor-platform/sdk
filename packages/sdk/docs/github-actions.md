@@ -63,6 +63,31 @@ What it does:
 Fork pull requests cannot read repository secrets. For forks, the plan step is
 automatically skipped; `generate-check` and other non-secret checks still run.
 
+#### ERD preview artifacts
+
+Pass `--erd-preview` on a branch target to add TailorDB ERD preview artifacts
+to pull requests:
+
+```bash
+tailor-sdk setup -n my-app-stg --erd-preview
+```
+
+The generated workflow builds a self-contained ERD viewer HTML file and an ERD
+diff HTML file for each owned TailorDB namespace in `tailor.config.ts`. The diff
+compares the pull request merge result with the base branch, uploads the HTML
+files as unarchived Actions artifacts, and upserts a PR comment with artifact
+links.
+
+ERD preview does not use Tailor Platform credentials. Fork pull requests still
+build artifacts, but the comment step is skipped because fork tokens cannot
+write PR comments.
+
+`--erd-preview` is only available for branch targets with the plan job enabled;
+it cannot be combined with `--tag` or `--no-plan`. The namespace matrix is
+generated from the config when you run `setup`, so re-run `setup` after adding
+or removing TailorDB namespaces. `setup check` reports drift when the recorded
+ERD preview namespaces no longer match the current config.
+
 ### Tag target (recommended for production)
 
 The tag target fires when a tag matching `--tag-pattern` (default `v*`) is

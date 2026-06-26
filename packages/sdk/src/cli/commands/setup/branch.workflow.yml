@@ -62,6 +62,143 @@ jobs:
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
   # __PLAN_JOB_END__
+  # __ERD_PREVIEW_JOB_START__
+  tailor-erd-preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        namespace: [__ERD_NAMESPACES__]
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-checkout-base
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .tailor-erd-base
+          persist-credentials: false
+      - id: tailor-build-erd-preview
+        shell: bash
+        env:
+          APP_DIR: "__APP_DIR__"
+          NAMESPACE: ${{ matrix.namespace }}
+        run: |
+          set -euo pipefail
+
+          run_tailor_sdk() {
+            case "__PACKAGE_MANAGER__" in
+              pnpm) pnpm exec tailor-sdk "$@" ;;
+              npm) npx tailor-sdk "$@" ;;
+              yarn) yarn tailor-sdk "$@" ;;
+              bun) bunx tailor-sdk "$@" ;;
+              *)
+                echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
+                exit 1
+                ;;
+            esac
+          }
+
+          head_output="$RUNNER_TEMP/tailor-erd/head"
+          base_output="$RUNNER_TEMP/tailor-erd/base"
+          preview_output="$RUNNER_TEMP/tailor-erd/preview"
+          diff_output="$RUNNER_TEMP/tailor-erd/diff"
+          dts_output="$RUNNER_TEMP/tailor-erd/dts"
+          rm -rf "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
+          mkdir -p "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
+
+          (
+            cd "$GITHUB_WORKSPACE/$APP_DIR"
+            TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts" \
+              run_tailor_sdk tailordb erd export --namespace "$NAMESPACE" --output "$head_output"
+          )
+          (
+            cd "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR"
+            TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
+              run_tailor_sdk tailordb erd export --namespace "$NAMESPACE" --output "$base_output"
+          )
+
+          cp "$head_output/$NAMESPACE/dist/index.html" "$preview_output/$NAMESPACE.html"
+          run_tailor_sdk tailordb erd diff \
+            --base-html "$base_output/$NAMESPACE/dist/index.html" \
+            --head-html "$head_output/$NAMESPACE/dist/index.html" \
+            --output "$diff_output/$NAMESPACE-diff.html"
+      - id: tailor-upload-erd-viewer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tailor-erd-viewer-${{ matrix.namespace }}
+          path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}.html
+          if-no-files-found: error
+          archive: false
+          retention-days: 7
+      - id: tailor-upload-erd-diff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tailor-erd-diff-${{ matrix.namespace }}
+          path: ${{ runner.temp }}/tailor-erd/diff/${{ matrix.namespace }}-diff.html
+          if-no-files-found: error
+          archive: false
+          retention-days: 7
+
+  # __ERD_PREVIEW_JOB_END__
+  # __ERD_PREVIEW_COMMENT_JOB_START__
+  tailor-erd-preview-comment:
+    needs: tailor-erd-preview
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - id: tailor-comment-erd-preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER: ${{ github.server_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MARKER: "<!-- tailor-erd-preview: __WORKSPACE_NAME__ -->"
+        run: |
+          set -euo pipefail
+
+          body="$MARKER"$'\n'"### TailorDB ERD preview (__WORKSPACE_NAME__)"$'\n\n'
+          body+="Self-contained HTML artifacts for this pull request. Diff previews compare this pull request with base branch \`$BASE_REF\`."$'\n'
+
+          while IFS=$'\t' read -r name id; do
+            [ -z "$name" ] && continue
+            if [[ "$name" == *-diff.html ]]; then
+              ns=${name%-diff.html}
+              label="$ns diff"
+            else
+              ns=${name%.html}
+              label="$ns viewer"
+            fi
+            body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
+          done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+            --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv' | sort)
+
+          existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
+          fi
+
+  # __ERD_PREVIEW_COMMENT_JOB_END__
   tailor-deploy:
     # __DEPLOY_IF__
     runs-on: ubuntu-latest

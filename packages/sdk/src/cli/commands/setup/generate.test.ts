@@ -21,6 +21,7 @@ const branchBase: RenderBranchParams = {
   environment: "my-app",
   packageManager: "pnpm",
   plan: true,
+  erdPreview: null,
 };
 
 const tagBase: RenderTagParams = {
@@ -155,6 +156,46 @@ describe("renderBranchWorkflow", () => {
     const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
     expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
     expect(content.match(/id: tailor-generate-check/g)).toHaveLength(1);
+  });
+
+  test("omits ERD preview jobs by default", () => {
+    const { content, generatedIds } = renderBranchWorkflow(branchBase);
+    const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
+    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
+    expect(content).not.toContain("tailor-erd-preview");
+    expect(generatedIds).not.toContain("tailor-erd-preview");
+  });
+
+  test("adds ERD preview and comment jobs when enabled", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
+    });
+    const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
+
+    expect(Object.keys(parsed.jobs)).toEqual([
+      "tailor-plan",
+      "tailor-erd-preview",
+      "tailor-erd-preview-comment",
+      "tailor-deploy",
+    ]);
+    expect(content).toContain("namespace: [tailordb, analyticsdb]");
+    expect(content).toContain("run_tailor_sdk tailordb erd export");
+    expect(content).toContain("run_tailor_sdk tailordb erd diff");
+    expect(content).toContain("archive: false");
+    expect(content).toContain("github.event.pull_request.head.repo.full_name == github.repository");
+    expect(generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-erd-preview",
+        "tailor-erd-preview/tailor-checkout",
+        "tailor-erd-preview/tailor-checkout-base",
+        "tailor-erd-preview/tailor-build-erd-preview",
+        "tailor-erd-preview/tailor-upload-erd-viewer",
+        "tailor-erd-preview/tailor-upload-erd-diff",
+        "tailor-erd-preview-comment",
+        "tailor-erd-preview-comment/tailor-comment-erd-preview",
+      ]),
+    );
   });
 
   test("passes the package manager to the setup action", () => {
@@ -360,6 +401,7 @@ describe("setupGitHub (integration)", () => {
     tag: false,
     tagPattern: "v*",
     plan: true,
+    erdPreview: false,
     dir: ".",
     force: false,
     outputDir: testDir,
@@ -401,6 +443,35 @@ describe("setupGitHub (integration)", () => {
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
     expect(wf).toContain("environment: production");
     expect(readLock(testDir)?.targets[0]?.inputs.environment).toBe("production");
+  });
+
+  test("records ERD preview namespaces in the generated workflow and lock", async () => {
+    await setupGitHub(
+      baseOptions({
+        workspaceName: "my-app",
+        erdPreview: true,
+        loadErdNamespaces: async () => ["tailordb", "analyticsdb"],
+      }),
+    );
+
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    const lock = readLock(testDir);
+    expect(wf).toContain("tailor-erd-preview:");
+    expect(wf).toContain("namespace: [tailordb, analyticsdb]");
+    expect(lock?.targets[0]?.inputs.erdPreview).toBe(true);
+    expect(lock?.targets[0]?.inputs.erdNamespaces).toEqual(["tailordb", "analyticsdb"]);
+  });
+
+  test("rejects ERD preview when no owned TailorDB namespaces exist", async () => {
+    await expect(
+      setupGitHub(
+        baseOptions({
+          workspaceName: "my-app",
+          erdPreview: true,
+          loadErdNamespaces: async () => [],
+        }),
+      ),
+    ).rejects.toThrow(/No TailorDB namespaces/);
   });
 
   test("injects an app id when missing", async () => {
@@ -451,6 +522,15 @@ describe("setupGitHub (integration)", () => {
     await expect(
       setupGitHub(baseOptions({ workspaceName: "my-app", tag: true, plan: false })),
     ).rejects.toThrow(/--no-plan/);
+  });
+
+  test("rejects ERD preview for targets without a PR plan", async () => {
+    await expect(
+      setupGitHub(baseOptions({ workspaceName: "my-app", erdPreview: true, plan: false })),
+    ).rejects.toThrow(/--erd-preview/);
+    await expect(
+      setupGitHub(baseOptions({ workspaceName: "my-app", erdPreview: true, tag: true })),
+    ).rejects.toThrow(/--erd-preview/);
   });
 
   test("rejects a branch name with YAML-unsafe characters", async () => {

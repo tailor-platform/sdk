@@ -69,10 +69,10 @@ jobs:
               "$GITHUB_WORKSPACE/node_modules/.bin/tailor-sdk" tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-base"
           )
 
-          pnpm --filter @tailor-platform/sdk exec tsx src/cli/commands/tailordb/erd/preview-diff.ts \
+          pnpm exec tailor-sdk tailordb erd diff \
             --base-html "$RUNNER_TEMP/erd-base/$NAMESPACE/dist/index.html" \
             --head-html "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" \
-            --output-html "$RUNNER_TEMP/erd-diff/$NAMESPACE-diff.html"
+            --output "$RUNNER_TEMP/erd-diff/$NAMESPACE-diff.html"
 
           # Rename to "<namespace>.html" / "<namespace>-diff.html" so the
           # artifacts REST API stays identifiable per namespace.

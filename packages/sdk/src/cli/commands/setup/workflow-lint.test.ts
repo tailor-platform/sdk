@@ -87,6 +87,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
         branch: "main",
         packageManager: pm,
         plan: true,
+        erdPreview: null,
       });
       const { ok, output } = writeAndLint(`branch-${pm}-plan`, content);
       expect(ok, `actionlint errors for branch/${pm}/plan=true:\n${output}`).toBe(true);
@@ -101,6 +102,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
         branch: "main",
         packageManager: pm,
         plan: false,
+        erdPreview: null,
       });
       const { ok, output } = writeAndLint(`branch-${pm}-noplan`, content);
       expect(ok, `actionlint errors for branch/${pm}/plan=false:\n${output}`).toBe(true);
@@ -114,6 +116,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       branch: "main",
       packageManager: "pnpm",
       plan: true,
+      erdPreview: null,
       workingDirectory: "apps/backend",
     });
     const { ok, output } = writeAndLint("branch-pnpm-plan-dir", content);
@@ -127,9 +130,22 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       branch: "main",
       packageManager: "pnpm",
       plan: true,
+      erdPreview: null,
       environment: "production",
     });
     const { ok, output } = writeAndLint("branch-pnpm-plan-env", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+
+  test("branch / pnpm / plan=true / with ERD preview", () => {
+    const { content } = renderBranchWorkflow({
+      ...COMMON,
+      branch: "main",
+      packageManager: "pnpm",
+      plan: true,
+      erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
+    });
+    const { ok, output } = writeAndLint("branch-pnpm-plan-erd-preview", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
@@ -140,6 +156,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       branch: "develop",
       packageManager: "npm",
       plan: false,
+      erdPreview: null,
       workingDirectory: "apps/api",
       environment: "staging",
     });

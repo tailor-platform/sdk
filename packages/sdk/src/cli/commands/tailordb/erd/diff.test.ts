@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { buildErdSchemaDiff, extractEmbeddedErdSchema, renderErdDiffHtml } from "./diff";
+import {
+  buildErdSchemaDiff,
+  createEmptyErdSchema,
+  extractEmbeddedErdSchema,
+  renderErdDiffHtml,
+} from "./diff";
 import type { TailorDbErdSchema, TailorDbErdTable } from "./types";
 
 function table(name: string, overrides: Partial<TailorDbErdTable> = {}): TailorDbErdTable {
@@ -191,6 +196,16 @@ describe("buildErdSchemaDiff", () => {
         detail: "Changed fields: required",
       },
     ]);
+  });
+
+  test("represents a missing base namespace as added tables", () => {
+    const diff = buildErdSchemaDiff({
+      base: createEmptyErdSchema({ namespace: "tailordb", revision: "missing-base" }),
+      head: schema({ tables: [table("Account"), table("User")] }),
+    });
+
+    expect(diff.summary).toEqual({ added: 2, changed: 0, removed: 0 });
+    expect(diff.changes.map((change) => change.path)).toEqual(["Account", "User"]);
   });
 });
 

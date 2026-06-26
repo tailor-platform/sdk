@@ -39,6 +39,11 @@ export interface BuildErdSchemaDiffOptions {
   head: TailorDbErdSchema;
 }
 
+export interface CreateEmptyErdSchemaOptions {
+  namespace: string;
+  revision: string;
+}
+
 function stableValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => stableValue(item));
@@ -307,6 +312,22 @@ export function extractEmbeddedErdSchema(html: string): TailorDbErdSchema {
   } catch (error) {
     throw new Error(`Failed to parse ERD schema block: ${String(error)}`, { cause: error });
   }
+}
+
+export function createEmptyErdSchema(options: CreateEmptyErdSchemaOptions): TailorDbErdSchema {
+  return {
+    version: 1,
+    namespace: options.namespace,
+    generatedAt: new Date(0).toISOString(),
+    revision: options.revision,
+    source: "local",
+    cleanRoom: {
+      implementation: "tailor-sdk",
+      notes: ["Synthetic empty schema used for ERD diff generation."],
+    },
+    tables: [],
+    relations: [],
+  };
 }
 
 export function buildErdSchemaDiff(options: BuildErdSchemaDiffOptions): ErdSchemaDiff {
