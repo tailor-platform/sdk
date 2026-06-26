@@ -88,6 +88,20 @@ describe("profile update --permission", () => {
     expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
   });
 
+  test("does not treat PLATFORM_URL as an implicit update value", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");
+    using _logger = silenceLogger("out", "success");
+
+    await runCommand(updateCommand, ["rw", "--permission", "read"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.rw?.readonly).toBe(true);
+    expect(config.profiles.rw?.platform_url).toBeUndefined();
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
+  });
+
   test("clears readonly when --permission write is passed and skips remote validation", async () => {
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["ro", "--permission", "write"]);

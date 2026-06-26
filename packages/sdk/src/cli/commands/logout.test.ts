@@ -119,4 +119,27 @@ describe("logout --profile", () => {
       'User "u@example.com" not found',
     );
   });
+
+  test("cleans local state when keyring credentials are missing", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "keyring",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(revokeMock).not.toHaveBeenCalled();
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["u@example.com"]).toBeUndefined();
+  });
 });

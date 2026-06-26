@@ -39,8 +39,15 @@ export const logoutCommand = defineAppCommand({
       logger.info("You are not logged in.");
       return;
     }
-    const storedTokens = await loadStoredUserTokens(pfConfig, currentUser, platformConfig);
-    if (!storedTokens) {
+    let storedTokens: Awaited<ReturnType<typeof loadStoredUserTokens>>;
+    let tokenLoadFailed = false;
+    try {
+      storedTokens = await loadStoredUserTokens(pfConfig, currentUser, platformConfig);
+    } catch (error) {
+      tokenLoadFailed = true;
+      logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
+    }
+    if (!storedTokens && !tokenLoadFailed) {
       logger.info("You are not logged in.");
       if (deletesDefaultToken && pfConfig.current_user === currentUser) {
         pfConfig.current_user = null;
@@ -49,19 +56,21 @@ export const logoutCommand = defineAppCommand({
       return;
     }
 
-    try {
-      const client = initOAuth2Client(platformConfig);
-      const tokenTypeHint = storedTokens.refreshToken ? "refresh_token" : "access_token";
-      await client.revoke(
-        {
-          accessToken: storedTokens.accessToken,
-          refreshToken: storedTokens.refreshToken ?? null,
-          expiresAt: Date.parse(storedTokens.userEntry.token_expires_at),
-        },
-        tokenTypeHint,
-      );
-    } catch (error) {
-      logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
+    if (storedTokens) {
+      try {
+        const client = initOAuth2Client(platformConfig);
+        const tokenTypeHint = storedTokens.refreshToken ? "refresh_token" : "access_token";
+        await client.revoke(
+          {
+            accessToken: storedTokens.accessToken,
+            refreshToken: storedTokens.refreshToken ?? null,
+            expiresAt: Date.parse(storedTokens.userEntry.token_expires_at),
+          },
+          tokenTypeHint,
+        );
+      } catch (error) {
+        logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
+      }
     }
 
     await deleteUserTokens(pfConfig, currentUser, platformConfig);
