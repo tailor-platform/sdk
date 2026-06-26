@@ -3,7 +3,7 @@
 // Regenerated automatically when running 'tailor deploy' or 'tailor generate'
 
 declare module "@tailor-platform/sdk" {
-  interface AttributeMap {}
+  interface Attributes {}
   interface AttributeList {
     __tuple?: [];
   }

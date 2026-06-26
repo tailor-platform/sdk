@@ -434,6 +434,9 @@ importers:
       '@urql/core':
         specifier: 6.0.2
         version: 6.0.2(graphql@17.0.1)
+      amaro:
+        specifier: 1.1.10
+        version: 1.1.10
       chalk:
         specifier: 5.6.2
         version: 5.6.2
@@ -509,9 +512,6 @@ importers:
       ts-cron-validator:
         specifier: 1.1.5
         version: 1.1.5
-      tsx:
-        specifier: 4.22.4
-        version: 4.22.4
       type-fest:
         specifier: 5.7.0
         version: 5.7.0
@@ -2418,6 +2418,10 @@ packages:
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
+
+  amaro@1.1.10:
+    resolution: {integrity: sha512-ceFv+QA3SlhFsn0hu8Q8oyj36YZdIgoJFpyS2sGJGK2dyncwcMWuBlNzhXfc1oLWtbDWM2Ol2rrzOYa+HNyEjg==}
+    engines: {node: '>=22'}
 
   ansi-regex@5.0.1:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
@@ -5186,6 +5190,8 @@ snapshots:
       fast-uri: 3.1.2
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
+
+  amaro@1.1.10: {}
 
   ansi-regex@5.0.1: {}
 

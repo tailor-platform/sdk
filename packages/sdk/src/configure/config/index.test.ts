@@ -14,7 +14,7 @@ describe("defineConfig", () => {
   test("accepts logLevel from an environment variable fallback", () => {
     defineConfig({
       name: "my-app",
-      logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+      logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
     });
   });
 });

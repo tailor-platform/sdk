@@ -96,17 +96,17 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> {
   const userBody = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
-  const body = process.env.TAILOR_PLATFORM_BUNDLE
+  const body = process.env.__TAILOR_PLATFORM_BUNDLE
     ? userBody
     : (input: I, context: WorkflowJobContext): O | Promise<O> =>
         withWorkflowTestInvoker(context.invoker, () => userBody(input, context));
 
   // Test-only local runner registry; the platform bundle sets the flag so it is DCE'd.
-  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
+  if (!process.env.__TAILOR_PLATFORM_BUNDLE) {
     registerJob(config.name, body as RegisteredJobBody);
   }
 
-  const trigger = process.env.TAILOR_PLATFORM_BUNDLE
+  const trigger = process.env.__TAILOR_PLATFORM_BUNDLE
     ? () => {
         throw new Error(
           "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",

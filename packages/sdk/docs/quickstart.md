@@ -12,7 +12,7 @@ Contact us [here](https://www.tailor.tech/demo) to get started.
 
 ### Install Node.js
 
-The SDK requires Node.js 22 or later. Install Node.js via your package manager by following the official Node.js instructions.
+The SDK requires Node.js 22.15.0 or later. Install Node.js via your package manager by following the official Node.js instructions.
 
 Alternatively, you can use [Bun](https://bun.sh/) as the runtime.
 

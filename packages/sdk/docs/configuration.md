@@ -27,7 +27,7 @@ export default defineConfig({
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
   disableIntrospection: false,
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
 });
 ```
 
@@ -46,11 +46,11 @@ export default defineConfig({
 ```typescript
 export default defineConfig({
   name: "my-app",
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
 });
 ```
 
-This is a bundle-time setting. Changing `LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
+This is a bundle-time setting. Changing `TAILOR_APP_LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
 
 ### Service Configuration
 

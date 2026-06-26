@@ -178,7 +178,7 @@ previously deployed resources.
 
 If your pipeline intentionally deploys a fresh, throwaway application on every
 run (for example an end-to-end test harness that creates and deletes its own
-workspace), set `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true` to opt back
+workspace), set `TAILOR_CI_ALLOW_ID_INJECTION=true` to opt back
 into automatic id injection for that pipeline.
 
 ## Secrets

@@ -1,4 +1,4 @@
-import type { InferredAttributeMap } from "#/runtime/types";
+import type { InferredAttributes } from "#/runtime/types";
 
 // --- Permission types (UX-focused, for configure layer) ---
 
@@ -19,7 +19,7 @@ import type { InferredAttributeMap } from "#/runtime/types";
  * };
  */
 export type TailorTypePermission<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Type extends object = object,
 > = {
   create: readonly ActionPermission<"record", User, Type, false>[];
@@ -30,7 +30,7 @@ export type TailorTypePermission<
 
 type ActionPermission<
   Level extends "record" | "gql" = "record" | "gql",
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Type extends object = object,
   Update extends boolean = boolean,
 > =
@@ -50,14 +50,11 @@ type ActionPermission<
   | readonly [...PermissionCondition<Level, User, Update, Type>[], ...([] | [boolean])]; // multiple array condition
 
 export type TailorTypeGqlPermission<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Type extends object = object,
 > = readonly GqlPermissionPolicy<User, Type>[];
 
-type GqlPermissionPolicy<
-  User extends object = InferredAttributeMap,
-  Type extends object = object,
-> = {
+type GqlPermissionPolicy<User extends object = InferredAttributes, Type extends object = object> = {
   conditions: readonly PermissionCondition<"gql", User, boolean, Type>[];
   actions: "all" | readonly GqlPermissionAction[];
   /**
@@ -91,19 +88,19 @@ type BooleanArrayFieldKeys<User extends object> = {
   [K in keyof User]: User[K] extends boolean[] ? K : never;
 }[keyof User];
 
-type UserStringOperand<User extends object = InferredAttributeMap> = {
+type UserStringOperand<User extends object = InferredAttributes> = {
   user: StringFieldKeys<User> | "id";
 };
 
-type UserStringArrayOperand<User extends object = InferredAttributeMap> = {
+type UserStringArrayOperand<User extends object = InferredAttributes> = {
   user: StringArrayFieldKeys<User>;
 };
 
-type UserBooleanOperand<User extends object = InferredAttributeMap> = {
+type UserBooleanOperand<User extends object = InferredAttributes> = {
   user: BooleanFieldKeys<User> | "_loggedIn";
 };
 
-type UserBooleanArrayOperand<User extends object = InferredAttributeMap> = {
+type UserBooleanArrayOperand<User extends object = InferredAttributes> = {
   user: BooleanArrayFieldKeys<User>;
 };
 
@@ -160,7 +157,7 @@ type BooleanEqualityCondition<
 
 type EqualityCondition<
   Level extends "record" | "gql" = "record",
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
   Type extends object = object,
 > =
@@ -216,7 +213,7 @@ type BooleanContainsCondition<
 
 type ContainsCondition<
   Level extends "record" | "gql" = "record",
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
   Type extends object = object,
 > =
@@ -270,7 +267,7 @@ type HasAnyCondition<
  */
 export type PermissionCondition<
   Level extends "record" | "gql" = "record",
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
   Type extends object = object,
 > =
