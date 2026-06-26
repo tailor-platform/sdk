@@ -71,6 +71,7 @@ jobs:
       contents: read
     outputs:
       namespaces: ${{ steps.tailor-erd-preview-matrix.outputs.namespaces }}
+      base-app-dir: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dir'] }}
     steps:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -86,37 +87,60 @@ jobs:
       - id: tailor-erd-preview-matrix
         shell: bash
         env:
+          APP_DIR: "__APP_DIR__"
           WORKSPACE_NAME: "__WORKSPACE_NAME__"
         run: |
           set -euo pipefail
           node <<'NODE'
           const fs = require("node:fs");
 
+          const appDir = process.env.APP_DIR || ".";
           const workspaceName = process.env.WORKSPACE_NAME;
           const output = process.env.GITHUB_OUTPUT;
+          const dirPattern = /^[A-Za-z0-9._/-]+$/;
 
-          function namespacesFromLock(file) {
+          function lockTarget(file) {
             try {
               const lock = JSON.parse(fs.readFileSync(file, "utf8"));
-              const target = lock.targets?.find(
+              return lock.targets?.find(
                 (candidate) =>
                   candidate.kind === "branch" &&
-                  candidate.workspaceName === workspaceName &&
-                  candidate.inputs?.erdPreview === true,
+                  candidate.workspaceName === workspaceName,
               );
-              return Array.isArray(target?.inputs?.erdNamespaces)
-                ? target.inputs.erdNamespaces
-                : [];
             } catch (error) {
-              if (error && error.code === "ENOENT") return [];
+              if (error && error.code === "ENOENT") return undefined;
               throw error;
             }
           }
 
+          function namespacesFromTarget(target) {
+            return target?.inputs?.erdPreview === true && Array.isArray(target.inputs?.erdNamespaces)
+              ? target.inputs.erdNamespaces
+              : [];
+          }
+
+          function normalizeDir(value, label) {
+            const raw = typeof value === "string" && value.length > 0 ? value : appDir;
+            const normalized =
+              raw.replaceAll("\\", "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "").replace(/\/$/, "") ||
+              ".";
+            if (
+              !dirPattern.test(normalized) ||
+              normalized.startsWith("/") ||
+              normalized.split("/").includes("..")
+            ) {
+              throw new Error(`Invalid ERD app dir in ${label}: ${raw}`);
+            }
+            return normalized;
+          }
+
+          const headTarget = lockTarget(".github/tailor-sdk.lock");
+          const baseTarget = lockTarget(".tailor-erd-base/.github/tailor-sdk.lock");
+          const baseAppDir = normalizeDir(baseTarget?.inputs?.dir, "base setup lock");
           const namespaces = [
             ...new Set([
-              ...namespacesFromLock(".github/tailor-sdk.lock"),
-              ...namespacesFromLock(".tailor-erd-base/.github/tailor-sdk.lock"),
+              ...namespacesFromTarget(headTarget),
+              ...namespacesFromTarget(baseTarget),
             ]),
           ].sort((a, b) => a.localeCompare(b));
 
@@ -126,6 +150,7 @@ jobs:
           }
 
           fs.appendFileSync(output, `namespaces=${JSON.stringify(namespaces)}\n`);
+          fs.appendFileSync(output, `base-app-dir=${baseAppDir}\n`);
           NODE
 
   tailor-erd-preview:
@@ -251,6 +276,7 @@ jobs:
         shell: bash
         env:
           APP_DIR: "__APP_DIR__"
+          BASE_APP_DIR: ${{ needs.tailor-erd-preview-matrix.outputs['base-app-dir'] }}
           BASE_PACKAGE_MANAGER: ${{ steps.tailor-detect-base-package-manager.outputs['package-manager'] }}
           NAMESPACE: ${{ matrix.namespace }}
         run: |
@@ -342,7 +368,7 @@ jobs:
           NODE
 
           head_config="$GITHUB_WORKSPACE/$APP_DIR/tailor.config.ts"
-          base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"
+          base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"
           head_html="$head_output/$NAMESPACE/dist/index.html"
           base_html="$base_output/$NAMESPACE/dist/index.html"
           diff_html="$diff_output/$NAMESPACE-diff.html"
@@ -374,7 +400,7 @@ jobs:
             base_missing="true"
           elif ! (
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
-              run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
+              run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
             if grep -q 'not found in local config.db' "$base_log"; then
               cat "$base_log"

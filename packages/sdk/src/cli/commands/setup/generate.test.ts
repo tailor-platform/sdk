@@ -199,13 +199,13 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain('echo "package-manager=$base_package_manager" >> "$GITHUB_OUTPUT"');
     expect(content).not.toContain('case "$base_package_manager" in');
     expect(content).toContain(
-      'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"',
+      'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
     );
     expect(content).toContain("BASE_PACKAGE_MANAGER:");
     expect(content).toContain("tailor_sdk_bin");
     expect(content).toContain("run_head_node - <<'NODE'");
     expect(content).toContain(
-      'run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR" tailordb erd export --config "$base_config"',
+      'run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
     expect(content).toContain('yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;');
     expect(content).toContain('head_missing="false"');
@@ -308,10 +308,35 @@ describe("renderBranchWorkflow", () => {
     expect(buildStep).toContain('yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;');
     expect(buildStep).toContain('bun) run_head_cli_env bun "$head_cli_runner" "$@" ;;');
     expect(buildStep).toContain(
-      'run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR" tailordb erd export --config "$base_config"',
+      'run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
     expect(buildStep).not.toContain("run_base_tailor_sdk_bin");
     expect(buildStep).not.toContain('case "$BASE_PACKAGE_MANAGER" in');
+  });
+
+  test("uses the base setup app directory for ERD base export", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(content).toContain(
+      "base-app-dir: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dir'] }}",
+    );
+    expect(content).toContain(
+      "BASE_APP_DIR: ${{ needs.tailor-erd-preview-matrix.outputs['base-app-dir'] }}",
+    );
+    expect(buildStep).toContain(
+      'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
+    );
+    expect(buildStep).toContain(
+      'run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+    );
+    expect(buildStep).not.toContain(".tailor-erd-base/$APP_DIR/tailor.config.ts");
+    expect(buildStep).not.toContain('.tailor-erd-base/$APP_DIR" tailordb erd export');
   });
 
   test("fails ERD preview script when the head app directory cannot be entered", () => {
