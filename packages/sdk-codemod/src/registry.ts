@@ -451,7 +451,7 @@ export const allCodemods: CodemodPackage[] = [
       {
         lang: "sh",
         before: "tailor-sdk deploy\nnpx tailor-sdk@latest login",
-        after: "tailor deploy\nnpx tailor@latest login",
+        after: "tailor deploy\nnpx @tailor-platform/sdk@latest login",
       },
     ],
     prompt: [
