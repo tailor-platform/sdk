@@ -30,8 +30,7 @@ const coordinateCommand = defineAppCommand({
     .object({
       "workspace-name": arg(z.string().min(1), {
         alias: "n",
-        description:
-          "Coordinator name (used in the generated workflow file name and job names)",
+        description: "Coordinator name (used in the generated workflow file name and job names)",
       }),
       action: arg(z.array(z.string()).default([]), {
         description:
@@ -91,8 +90,7 @@ export const setupCommand = defineAppCommand({
         description: "Tag glob to match (requires --tag; defaults to v*)",
       }),
       environment: arg(z.string().min(1).optional(), {
-        description:
-          "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
+        description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
       }),
       "no-plan": arg(z.boolean().default(false), {
         description: "Disable the plan job for a branch target (cannot be combined with --tag)",
@@ -107,8 +105,7 @@ export const setupCommand = defineAppCommand({
           "The action is written to .github/actions/tailor-<name>/action.yml.",
       }),
       preview: arg(z.boolean().default(false), {
-        description:
-          "Generate a preview workflow (PR label-triggered deploy to per-PR workspace).",
+        description: "Generate a preview workflow (PR label-triggered deploy to per-PR workspace).",
       }),
       force: arg(z.boolean().default(false), {
         description: "Discard hand edits / take over unmanaged files and regenerate",
@@ -127,7 +124,9 @@ export const setupCommand = defineAppCommand({
       throw new Error("--no-plan cannot be combined with --tag.");
     }
     if (args.action !== undefined && args.tag) {
-      throw new Error("--action cannot be combined with --tag (use setup coordinate for multi-app tag deploys).");
+      throw new Error(
+        "--action cannot be combined with --tag (use setup coordinate for multi-app tag deploys).",
+      );
     }
     if (args.preview && args.tag) {
       throw new Error("--preview cannot be combined with --tag.");

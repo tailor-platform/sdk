@@ -404,10 +404,7 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
     );
   }
   if (options.preview) {
-    throw new Error(
-      "--preview is not yet implemented. " +
-        "Check for a newer SDK version.",
-    );
+    throw new Error("--preview is not yet implemented. " + "Check for a newer SDK version.");
   }
 
   const resolved = await resolve(options);

@@ -73,9 +73,7 @@ describe("renderBranchWorkflow", () => {
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
     // tailor-platform actions use a branch/tag comment (e.g. "# feat/setup"), not semver
     expect(content).toMatch(/uses: tailor-platform\/actions\/setup@[0-9a-f]{40} # \S+/);
-    expect(content).toMatch(
-      /uses: tailor-platform\/actions\/generate-check@[0-9a-f]{40} # \S+/,
-    );
+    expect(content).toMatch(/uses: tailor-platform\/actions\/generate-check@[0-9a-f]{40} # \S+/);
     expect(content).toMatch(/uses: tailor-platform\/actions\/plan@[0-9a-f]{40} # \S+/);
     expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[0-9a-f]{40} # \S+/);
   });
