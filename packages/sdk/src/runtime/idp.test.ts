@@ -87,4 +87,19 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
       },
     ]);
   });
+
+  test("Client.unenrollMfa forwards", async () => {
+    using idpM = mockIdp();
+    const client = new idp.Client({ namespace: "ns" });
+    const ok = await client.unenrollMfa({ userId: "u-1", mfaFactorId: "f-1" });
+
+    expect(ok).toBe(true);
+    expect(idpM.calls).toEqual([
+      {
+        method: "unenrollMfa",
+        args: [{ userId: "u-1", mfaFactorId: "f-1" }],
+        namespace: "ns",
+      },
+    ]);
+  });
 });

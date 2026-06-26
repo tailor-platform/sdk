@@ -209,6 +209,20 @@ defineIdp("my-idp", {
 - `enableMfa: true` requires at least one entry in `allowedReturnOrigins`.
 - `enableMfa: true` requires `permission` to be defined and to include an explicit `unenrollMfa` policy (an empty array `[]` to deny is fine), unless `gqlOperations.unenrollMfa` is `false` (or `gqlOperations: "query"`, which normalizes to the same), in which case the operation is turned off and the policy may be omitted.
 
+**Runtime API:** function code can inspect and revoke a user's enrolled factor through `idp.Client`. The `User` records returned by `user`, `userByName`, `users`, `createUser`, and `updateUser` expose `mfaEnrolled` (boolean) and `mfaFactorIds` (string array), and `client.unenrollMfa({ userId, mfaFactorId })` removes a single factor. The factor ID to pass back is one of the entries in `user.mfaFactorIds`. Calling `unenrollMfa` requires the `unenrollMfa` permission above.
+
+```typescript
+import { idp } from "@tailor-platform/sdk/runtime";
+
+const client = new idp.Client({ namespace: "my-idp" });
+const user = await client.user("user-id");
+if (user.mfaEnrolled) {
+  for (const factorId of user.mfaFactorIds) {
+    await client.unenrollMfa({ userId: user.id, mfaFactorId: factorId });
+  }
+}
+```
+
 ### gqlOperations
 
 Controls which GraphQL user-management operations the IdP exposes. All operations are enabled by default. Use this to turn operations off entirely, independent of the `permission` policies that decide who may call them.
