@@ -75,6 +75,14 @@ function createSnapshotRecord<T>(): Record<string, T> {
   return Object.create(null) as Record<string, T>;
 }
 
+function copySnapshotRecord<T>(record: Record<string, T> | undefined): Record<string, T> {
+  const copy = createSnapshotRecord<T>();
+  for (const [key, value] of Object.entries(record ?? {})) {
+    copy[key] = value;
+  }
+  return copy;
+}
+
 /**
  * Normalize a snapshot field in place so the snapshot becomes the canonical
  * form for comparison. Currently fills in the platform default decimal scale
@@ -689,7 +697,7 @@ function applyDiffToSnapshot(
   snapshot: SchemaSnapshot,
   diff: MigrationDiff,
 ): NormalizedSchemaSnapshot {
-  const types = { ...snapshot.types };
+  const types = copySnapshotRecord(snapshot.types);
 
   for (const change of diff.changes) {
     switch (change.kind) {
@@ -715,12 +723,11 @@ function applyDiffToSnapshot(
       case "field_modified": {
         const existing = types[change.typeName];
         if (existing) {
+          const fields = copySnapshotRecord(existing.fields);
+          fields[change.fieldName] = change.after;
           types[change.typeName] = {
             ...existing,
-            fields: {
-              ...existing.fields,
-              [change.fieldName]: change.after,
-            },
+            fields,
           };
         }
         break;
@@ -728,7 +735,8 @@ function applyDiffToSnapshot(
       case "field_removed": {
         const existing = types[change.typeName];
         if (existing) {
-          const { [change.fieldName]: _, ...remainingFields } = existing.fields;
+          const remainingFields = copySnapshotRecord(existing.fields);
+          delete remainingFields[change.fieldName];
           types[change.typeName] = {
             ...existing,
             fields: remainingFields,
@@ -740,12 +748,11 @@ function applyDiffToSnapshot(
       case "index_modified": {
         const existing = types[change.typeName];
         if (existing) {
+          const indexes = copySnapshotRecord(existing.indexes);
+          indexes[change.indexName] = change.after;
           types[change.typeName] = {
             ...existing,
-            indexes: {
-              ...existing.indexes,
-              [change.indexName]: change.after,
-            },
+            indexes,
           };
         }
         break;
@@ -753,7 +760,8 @@ function applyDiffToSnapshot(
       case "index_removed": {
         const existing = types[change.typeName];
         if (existing && existing.indexes) {
-          const { [change.indexName]: _, ...remainingIndexes } = existing.indexes;
+          const remainingIndexes = copySnapshotRecord(existing.indexes);
+          delete remainingIndexes[change.indexName];
           types[change.typeName] = {
             ...existing,
             indexes: Object.keys(remainingIndexes).length > 0 ? remainingIndexes : undefined,
@@ -765,12 +773,11 @@ function applyDiffToSnapshot(
       case "file_modified": {
         const existing = types[change.typeName];
         if (existing) {
+          const files = copySnapshotRecord(existing.files);
+          files[change.fieldName] = change.after;
           types[change.typeName] = {
             ...existing,
-            files: {
-              ...existing.files,
-              [change.fieldName]: change.after,
-            },
+            files,
           };
         }
         break;
@@ -778,7 +785,8 @@ function applyDiffToSnapshot(
       case "file_removed": {
         const existing = types[change.typeName];
         if (existing && existing.files) {
-          const { [change.fieldName]: _, ...remainingFiles } = existing.files;
+          const remainingFiles = copySnapshotRecord(existing.files);
+          delete remainingFiles[change.fieldName];
           types[change.typeName] = {
             ...existing,
             files: Object.keys(remainingFiles).length > 0 ? remainingFiles : undefined,
@@ -801,20 +809,18 @@ function applyDiffToSnapshot(
                 : "forward");
 
           if (targetType === "forward") {
+            const forwardRelationships = copySnapshotRecord(existing.forwardRelationships);
+            forwardRelationships[change.relationshipName] = rel;
             types[change.typeName] = {
               ...existing,
-              forwardRelationships: {
-                ...existing.forwardRelationships,
-                [change.relationshipName]: rel,
-              },
+              forwardRelationships,
             };
           } else {
+            const backwardRelationships = copySnapshotRecord(existing.backwardRelationships);
+            backwardRelationships[change.relationshipName] = rel;
             types[change.typeName] = {
               ...existing,
-              backwardRelationships: {
-                ...existing.backwardRelationships,
-                [change.relationshipName]: rel,
-              },
+              backwardRelationships,
             };
           }
         }
@@ -833,7 +839,8 @@ function applyDiffToSnapshot(
                 : null);
 
           if (targetType === "forward" && type.forwardRelationships?.[change.relationshipName]) {
-            const { [change.relationshipName]: _, ...remaining } = type.forwardRelationships;
+            const remaining = copySnapshotRecord(type.forwardRelationships);
+            delete remaining[change.relationshipName];
             types[change.typeName] = {
               ...type,
               forwardRelationships: Object.keys(remaining).length > 0 ? remaining : undefined,
@@ -842,7 +849,8 @@ function applyDiffToSnapshot(
             targetType === "backward" &&
             type.backwardRelationships?.[change.relationshipName]
           ) {
-            const { [change.relationshipName]: _, ...remaining } = type.backwardRelationships;
+            const remaining = copySnapshotRecord(type.backwardRelationships);
+            delete remaining[change.relationshipName];
             types[change.typeName] = {
               ...type,
               backwardRelationships: Object.keys(remaining).length > 0 ? remaining : undefined,

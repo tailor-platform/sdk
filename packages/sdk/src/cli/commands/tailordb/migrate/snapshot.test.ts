@@ -1017,6 +1017,29 @@ describe("snapshot", () => {
       expect(loaded.version).toBe(SCHEMA_SNAPSHOT_VERSION);
       expect(loaded.types.User).toBeDefined();
     });
+
+    test("preserves type names that match Object prototype keys", () => {
+      const types = Object.create(null) as SchemaSnapshot["types"];
+      types["__proto__"] = {
+        name: "__proto__",
+        pluralForm: "__proto__",
+        fields: { id: { type: "uuid", required: true } },
+      };
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types,
+      };
+
+      const filePath = path.join(testDir, "proto_schema.json");
+      fs.writeFileSync(filePath, JSON.stringify(snapshot, null, 2));
+
+      const loaded = loadSnapshot(filePath);
+
+      expect(Object.hasOwn(loaded.types, "__proto__")).toBe(true);
+      expect(loaded.types["__proto__"]?.fields.id).toBeDefined();
+    });
   });
 
   describe("loadDiff", () => {
@@ -1538,6 +1561,45 @@ describe("snapshot", () => {
 
       expect(reconstructed?.types.User!.fields.id).toBeDefined();
       expect(reconstructed?.types.User!.fields.email).toBeDefined();
+    });
+
+    test("applies added type names that match Object prototype keys", () => {
+      const initialSnapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {},
+      };
+
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "type_added",
+            typeName: "__proto__",
+            after: {
+              name: "__proto__",
+              pluralForm: "__proto__",
+              fields: { id: { type: "uuid", required: true } },
+            },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: false,
+      };
+
+      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, initialSnapshot);
+      writeDiffToDir(testDir, 1, diff);
+
+      const reconstructed = reconstructSnapshotFromMigrations(testDir);
+
+      expect(Object.hasOwn(reconstructed?.types ?? {}, "__proto__")).toBe(true);
+      expect(reconstructed?.types["__proto__"]?.fields.id).toBeDefined();
     });
 
     test("applies multiple diffs sequentially (directory structure)", () => {
