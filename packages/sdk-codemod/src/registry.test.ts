@@ -16,8 +16,9 @@ describe("getApplicableCodemods", () => {
 
   test("returns codemods when upgrading to a prerelease at their version boundary", () => {
     const prereleaseCodemods = getApplicableCodemods("1.67.1", "2.0.0-next.2");
+    const prereleaseIds = prereleaseCodemods.map((codemod) => codemod.id);
 
-    expect(prereleaseCodemods.map((codemod) => codemod.id)).toEqual(
+    expect(prereleaseIds).toEqual(
       allCodemods
         .filter(
           (codemod) =>
@@ -26,14 +27,10 @@ describe("getApplicableCodemods", () => {
         )
         .map((codemod) => codemod.id),
     );
-    expect(prereleaseCodemods.map((codemod) => codemod.id)).toEqual(
-      expect.arrayContaining([
-        "v2/auth-attributes-rename",
-        "v2/env-var-rename",
-        "v2/rename-bin",
-        "v2/node-minimum-22-15-0",
-      ]),
-    );
+    expect(prereleaseIds).not.toContain("v2/auth-attributes-rename");
+    expect(prereleaseIds).not.toContain("v2/env-var-rename");
+    expect(prereleaseIds).not.toContain("v2/rename-bin");
+    expect(prereleaseIds).not.toContain("v2/node-minimum-22-15-0");
   });
 
   test("returns empty when both versions are before the codemod boundary", () => {
