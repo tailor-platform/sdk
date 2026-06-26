@@ -81,6 +81,7 @@ type DBFieldVectorThis<Defined extends DefinedDBFieldMetadata, Output> = Defined
     ? TailorDBField<Defined, Output>
     : TypeLevelError<"vector can only be set on non-array string fields">;
 type DBFieldHooksThis<Defined extends DefinedDBFieldMetadata, Output> = Defined extends {
+  serial: true;
   hooks: { create: false; update: false };
 }
   ? TypeLevelError<"hooks cannot be set after serial">
