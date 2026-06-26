@@ -5,7 +5,7 @@ import { GraphQLClient } from "graphql-request";
 import { inject } from "vitest";
 
 export function createOperatorClient() {
-  const baseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+  const baseUrl = process.env.TAILOR_PLATFORM_URL ?? "https://api.tailor.tech";
   const workspaceId = inject("workspaceId");
   const platformToken = inject("platformToken");
 
@@ -23,7 +23,7 @@ function userAgentInterceptor(): Interceptor {
       return await next(req);
     }
 
-    req.header.set("User-Agent", "tailor-sdk-ci");
+    req.header.set("User-Agent", "tailor-ci");
     return await next(req);
   };
 }

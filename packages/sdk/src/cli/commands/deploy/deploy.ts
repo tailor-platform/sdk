@@ -394,7 +394,7 @@ export async function deploy(options?: DeployOptions) {
     } = await withSpan("build", async () => {
       const dryRun = options?.dryRun ?? false;
       const buildOnly =
-        options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
+        options?.buildOnly ?? parseBoolean(process.env.TAILOR_DEPLOY_BUILD_ONLY) === true;
 
       const { config, plugins } = await withSpan("build.loadConfig", async () => {
         const foundPath = loadConfigPath(options?.configPath);
@@ -482,7 +482,7 @@ export async function deploy(options?: DeployOptions) {
     }
 
     // Note: the normal apply path intentionally skips writing bundle files to
-    // .tailor-sdk/. Bundles are kept in memory and uploaded directly to the
+    // .tailor/. Bundles are kept in memory and uploaded directly to the
     // function registry. To test a function locally, use `function test-run`
     // with a .ts source file instead of a pre-bundled .js file.
 

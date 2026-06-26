@@ -16,7 +16,7 @@ vi.mock("node:fs", () => ({
 
 // Mock dist-dir to avoid getDistDir issues
 vi.mock("#/cli/shared/dist-dir", () => ({
-  getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
+  getDistDir: vi.fn().mockReturnValue(".tailor"),
 }));
 
 // Mock config values for tests

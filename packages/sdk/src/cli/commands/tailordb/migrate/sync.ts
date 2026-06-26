@@ -199,7 +199,7 @@ async function assertMigrationsReproduceLocalTypes(
     { mode: "plain" },
   );
   logger.info(
-    "  - Type definitions changed without a new migration — run 'tailor-sdk tailordb migration generate' first.",
+    "  - Type definitions changed without a new migration — run 'tailor tailordb migration generate' first.",
     { mode: "plain" },
   );
   logger.newline();
@@ -453,7 +453,7 @@ async function sync(options: SyncOptions): Promise<void> {
   } catch (error) {
     handleOptionalToRequiredError(error, [
       "The target snapshot marks a field as required, but existing remote records have no value for it.",
-      "Populate those records first (e.g. with a migration script applied via 'tailor-sdk deploy'), then re-run the sync.",
+      "Populate those records first (e.g. with a migration script applied via 'tailor deploy'), then re-run the sync.",
     ]);
   }
   await Promise.all(
@@ -498,7 +498,7 @@ async function sync(options: SyncOptions): Promise<void> {
   if (targetVersion < latest) {
     logger.newline();
     logger.info(
-      `Run 'tailor-sdk deploy' to apply migrations ${formatMigrationNumber(
+      `Run 'tailor deploy' to apply migrations ${formatMigrationNumber(
         targetVersion + 1,
       )}–${formatMigrationNumber(latest)} from the working tree.`,
     );

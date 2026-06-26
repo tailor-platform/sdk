@@ -25,7 +25,7 @@ export async function prepareFixtures(): Promise<{
 
   const configPath = path.join(fixtureDir, "tailor.config.ts");
 
-  process.env.TAILOR_SDK_OUTPUT_DIR = outputDir;
+  process.env.TAILOR_BUILD_OUTPUT_DIR = outputDir;
 
   // Generate plugin output (db.ts, enums.ts)
   await generate({ configPath });

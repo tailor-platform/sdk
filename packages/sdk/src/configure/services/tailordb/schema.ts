@@ -27,7 +27,7 @@ import type {
   Validators,
 } from "#/configure/types/field.types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
-import type { InferredAttributeMap, TailorPrincipal } from "#/runtime/types";
+import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
 import type { output, InferFieldsOutput, Prettify } from "#/types/helpers";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
@@ -221,7 +221,7 @@ export interface TailorDBField<
 export interface TailorDBType<
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
 > extends TailorDBTypeBase<Fields, User> {
   _description?: string;
 
@@ -271,7 +271,7 @@ export interface TailorDBType<
 export type TailorDBInstance<
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
 > = TailorDBType<Fields, User>;
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
@@ -900,7 +900,7 @@ function object<
 function createTailorDBType<
   // oxlint-disable-next-line no-explicit-any
   const Fields extends Record<string, TailorAnyDBField> = any,
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
 >(
   name: string,
   fields: Fields,

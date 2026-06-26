@@ -21,7 +21,7 @@ import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, Creat
 import type { AddCustomDomainRequestSchema, AddCustomDomainResponseSchema, CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetCustomDomainRequestSchema, GetCustomDomainResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListCustomDomainsRequestSchema, ListCustomDomainsResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, RemoveCustomDomainRequestSchema, RemoveCustomDomainResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
 import type { CreateWorkflowJobFunctionExecutionPolicyRequestSchema, CreateWorkflowJobFunctionExecutionPolicyResponseSchema, CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowJobFunctionExecutionPolicyRequestSchema, DeleteWorkflowJobFunctionExecutionPolicyResponseSchema, DeleteWorkflowJobFunctionRequestSchema, DeleteWorkflowJobFunctionResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionExecutionPolicyByKeyRequestSchema, GetWorkflowJobFunctionExecutionPolicyByKeyResponseSchema, GetWorkflowJobFunctionExecutionPolicyRequestSchema, GetWorkflowJobFunctionExecutionPolicyResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionExecutionPoliciesRequestSchema, ListWorkflowJobFunctionExecutionPoliciesResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, TestResumeWorkflowRequestSchema, TestResumeWorkflowResponseSchema, TestStartWorkflowRequestSchema, TestStartWorkflowResponseSchema, UpdateWorkflowJobFunctionExecutionPolicyRequestSchema, UpdateWorkflowJobFunctionExecutionPolicyResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
 import type { GetMetadataRequestSchema, GetMetadataResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
-import type { CreateResourceAttributesConfigRequestSchema, CreateResourceAttributesConfigResponseSchema, CreateTelemetryExportRequestSchema, CreateTelemetryExportResponseSchema, DeleteResourceAttributesConfigRequestSchema, DeleteResourceAttributesConfigResponseSchema, DeleteTelemetryExportRequestSchema, DeleteTelemetryExportResponseSchema, GetResourceAttributesConfigRequestSchema, GetResourceAttributesConfigResponseSchema, GetTelemetryExportRequestSchema, GetTelemetryExportResponseSchema, ListTelemetryExportsRequestSchema, ListTelemetryExportsResponseSchema, TestTelemetryExportRequestSchema, TestTelemetryExportResponseSchema, UpdateResourceAttributesConfigRequestSchema, UpdateResourceAttributesConfigResponseSchema, UpdateTelemetryExportRequestSchema, UpdateTelemetryExportResponseSchema } from "./telemetryrouter_pb";
+import type { CreateOTLPExporterRequestSchema, CreateOTLPExporterResponseSchema, CreateResourceAttributesConfigRequestSchema, CreateResourceAttributesConfigResponseSchema, DeleteOTLPExporterRequestSchema, DeleteOTLPExporterResponseSchema, DeleteResourceAttributesConfigRequestSchema, DeleteResourceAttributesConfigResponseSchema, GetOTLPExporterRequestSchema, GetOTLPExporterResponseSchema, GetResourceAttributesConfigRequestSchema, GetResourceAttributesConfigResponseSchema, ListOTLPExportersRequestSchema, ListOTLPExportersResponseSchema, TestOTLPExporterRequestSchema, TestOTLPExporterResponseSchema, UpdateOTLPExporterRequestSchema, UpdateOTLPExporterResponseSchema, UpdateResourceAttributesConfigRequestSchema, UpdateResourceAttributesConfigResponseSchema } from "./telemetryrouter_pb";
 
 /**
  * Describes the file tailor/v1/service.proto.
@@ -957,7 +957,8 @@ export declare const OperatorService: GenService<{
     output: typeof CreateAIGatewayResponseSchema;
   },
   /**
-   * UpdateAIGateway updates an AI Gateway. Only `auth_namespace` is mutable.
+   * UpdateAIGateway updates an AI Gateway. The mutable fields are
+   * `auth_namespace`, `cors`, and `disabled`.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
@@ -2362,7 +2363,7 @@ export declare const OperatorService: GenService<{
     output: typeof ListAuthConnectionsResponseSchema;
   },
   /**
-   * RevokeAuthConnection revokes an auth connection.
+   * RevokeAuthConnection revokes an auth connection's active session.
    *
    * @generated from rpc tailor.v1.OperatorService.RevokeAuthConnection
    */
@@ -3412,99 +3413,99 @@ export declare const OperatorService: GenService<{
     output: typeof DeleteControlplaneMachineUserResponseSchema;
   },
   /**
-   * CreateTelemetryExport creates a new telemetry export configuration.
+   * CreateOTLPExporter creates a new OTLP exporter configuration.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid
    * - PermissionDenied: can view workspace but no permission to update
    * - NotFound: workspace does not exist or can not be accessed
-   * - AlreadyExists: telemetry export with the same name already exists
+   * - AlreadyExists: OTLP exporter with the same name already exists
    *
-   * @generated from rpc tailor.v1.OperatorService.CreateTelemetryExport
+   * @generated from rpc tailor.v1.OperatorService.CreateOTLPExporter
    */
-  createTelemetryExport: {
+  createOTLPExporter: {
     methodKind: "unary";
-    input: typeof CreateTelemetryExportRequestSchema;
-    output: typeof CreateTelemetryExportResponseSchema;
+    input: typeof CreateOTLPExporterRequestSchema;
+    output: typeof CreateOTLPExporterResponseSchema;
   },
   /**
-   * UpdateTelemetryExport updates an existing telemetry export configuration.
+   * UpdateOTLPExporter updates an existing OTLP exporter configuration.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid
    * - PermissionDenied: can view workspace but no permission to update
-   * - NotFound: workspace or telemetry export does not exist or can not be accessed
+   * - NotFound: workspace or OTLP exporter does not exist or can not be accessed
    *
-   * @generated from rpc tailor.v1.OperatorService.UpdateTelemetryExport
+   * @generated from rpc tailor.v1.OperatorService.UpdateOTLPExporter
    */
-  updateTelemetryExport: {
+  updateOTLPExporter: {
     methodKind: "unary";
-    input: typeof UpdateTelemetryExportRequestSchema;
-    output: typeof UpdateTelemetryExportResponseSchema;
+    input: typeof UpdateOTLPExporterRequestSchema;
+    output: typeof UpdateOTLPExporterResponseSchema;
   },
   /**
-   * GetTelemetryExport returns a telemetry export configuration.
+   * GetOTLPExporter returns an OTLP exporter configuration.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid
-   * - NotFound: workspace or telemetry export does not exist or can not be accessed
+   * - NotFound: workspace or OTLP exporter does not exist or can not be accessed
    *
-   * @generated from rpc tailor.v1.OperatorService.GetTelemetryExport
+   * @generated from rpc tailor.v1.OperatorService.GetOTLPExporter
    */
-  getTelemetryExport: {
+  getOTLPExporter: {
     methodKind: "unary";
-    input: typeof GetTelemetryExportRequestSchema;
-    output: typeof GetTelemetryExportResponseSchema;
+    input: typeof GetOTLPExporterRequestSchema;
+    output: typeof GetOTLPExporterResponseSchema;
   },
   /**
-   * ListTelemetryExports returns telemetry export configurations in a workspace.
+   * ListOTLPExporters returns OTLP exporter configurations in a workspace.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid
    * - NotFound: workspace does not exist or can not be accessed
    *
-   * @generated from rpc tailor.v1.OperatorService.ListTelemetryExports
+   * @generated from rpc tailor.v1.OperatorService.ListOTLPExporters
    */
-  listTelemetryExports: {
+  listOTLPExporters: {
     methodKind: "unary";
-    input: typeof ListTelemetryExportsRequestSchema;
-    output: typeof ListTelemetryExportsResponseSchema;
+    input: typeof ListOTLPExportersRequestSchema;
+    output: typeof ListOTLPExportersResponseSchema;
   },
   /**
-   * DeleteTelemetryExport deletes a telemetry export configuration.
+   * DeleteOTLPExporter deletes an OTLP exporter configuration.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid
    * - PermissionDenied: can view workspace but no permission to delete
-   * - NotFound: workspace or telemetry export does not exist or can not be accessed
+   * - NotFound: workspace or OTLP exporter does not exist or can not be accessed
    *
-   * @generated from rpc tailor.v1.OperatorService.DeleteTelemetryExport
+   * @generated from rpc tailor.v1.OperatorService.DeleteOTLPExporter
    */
-  deleteTelemetryExport: {
+  deleteOTLPExporter: {
     methodKind: "unary";
-    input: typeof DeleteTelemetryExportRequestSchema;
-    output: typeof DeleteTelemetryExportResponseSchema;
+    input: typeof DeleteOTLPExporterRequestSchema;
+    output: typeof DeleteOTLPExporterResponseSchema;
   },
   /**
-   * TestTelemetryExport sends a test span to validate endpoint reachability.
+   * TestOTLPExporter sends a test span to validate endpoint reachability.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
    * - InvalidArgument: request is invalid
    * - PermissionDenied: can view workspace but no permission to update
-   * - NotFound: workspace or telemetry export does not exist or can not be accessed
+   * - NotFound: workspace or OTLP exporter does not exist or can not be accessed
    *
-   * @generated from rpc tailor.v1.OperatorService.TestTelemetryExport
+   * @generated from rpc tailor.v1.OperatorService.TestOTLPExporter
    */
-  testTelemetryExport: {
+  testOTLPExporter: {
     methodKind: "unary";
-    input: typeof TestTelemetryExportRequestSchema;
-    output: typeof TestTelemetryExportResponseSchema;
+    input: typeof TestOTLPExporterRequestSchema;
+    output: typeof TestOTLPExporterResponseSchema;
   },
   /**
    * CreateResourceAttributesConfig creates the workspace-level resource

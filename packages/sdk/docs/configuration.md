@@ -27,7 +27,7 @@ export default defineConfig({
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
   disableIntrospection: false,
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
 });
 ```
 
@@ -46,11 +46,11 @@ export default defineConfig({
 ```typescript
 export default defineConfig({
   name: "my-app",
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
 });
 ```
 
-This is a bundle-time setting. Changing `LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
+This is a bundle-time setting. Changing `TAILOR_APP_LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
 
 ### Service Configuration
 
@@ -118,8 +118,14 @@ Configure the Built-in IdP service using `defineIdp()`. See [IdP](./services/idp
 import { defineIdp } from "@tailor-platform/sdk";
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["my-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
 });
 
 export default defineConfig({

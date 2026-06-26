@@ -150,7 +150,7 @@ async function loadOptions(options: QueryBaseOptions) {
   });
   if (!machineUser) {
     throw new Error(
-      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
     );
   }
 
@@ -822,9 +822,7 @@ export const queryCommand = defineAppCommand({
 
     if (mode.mode === "repl") {
       const newlineOnEnter =
-        args["newline-on-enter"] ??
-        parseBoolean(process.env.TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER) ??
-        true;
+        args["newline-on-enter"] ?? parseBoolean(process.env.TAILOR_QUERY_NEWLINE_ON_ENTER) ?? true;
       await runRepl({
         ...sharedOptions,
         json: args.json,

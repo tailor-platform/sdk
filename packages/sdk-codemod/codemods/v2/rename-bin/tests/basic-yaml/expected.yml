@@ -1,0 +1,5 @@
+steps:
+  - name: Deploy
+    run: tailor deploy -w ${{ secrets.WORKSPACE_ID }}
+  - name: Login check
+    run: npx @tailor-platform/sdk@latest login --help

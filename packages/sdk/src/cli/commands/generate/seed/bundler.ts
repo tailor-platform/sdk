@@ -112,7 +112,7 @@ export async function bundleSeedScript(
   namespace: string,
   typeNames: string[],
 ): Promise<SeedBundleResult> {
-  // Output directory in .tailor-sdk (relative to project root)
+  // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "seed");
   fs.mkdirSync(outputDir, { recursive: true });
 

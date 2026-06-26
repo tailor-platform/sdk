@@ -29,7 +29,7 @@ export const updateCommand = defineAppCommand({
     if (!config.current_user) {
       throw new Error(ml`
         No user logged in.
-        Please login first using 'tailor-sdk login' command.
+        Please login first using 'tailor login' command.
       `);
     }
 

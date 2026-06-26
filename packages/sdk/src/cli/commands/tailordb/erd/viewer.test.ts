@@ -9,7 +9,7 @@ function buildSchema(overrides: Partial<TailorDbErdSchema> = {}): TailorDbErdSch
     generatedAt: "2026-01-01T00:00:00.000Z",
     revision: "test-revision",
     source: "local",
-    cleanRoom: { implementation: "tailor-sdk", notes: [] },
+    cleanRoom: { implementation: "tailor", notes: [] },
     tables: [
       {
         name: "User",

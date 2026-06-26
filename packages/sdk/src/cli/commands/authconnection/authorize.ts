@@ -185,7 +185,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         logger.warn(
           `Could not start the local callback server on port ${args.port}${code ? ` (${code})` : ""}.\n` +
             `${portHint}\n` +
-            `  tailor-sdk authconnection open`,
+            `  tailor authconnection open`,
         );
         reject(err);
       });
@@ -199,7 +199,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         );
         logger.info(
           `If this flow doesn't complete, you can authorize via the Console instead:\n` +
-            `  tailor-sdk authconnection open`,
+            `  tailor authconnection open`,
         );
         if (!args["no-browser"]) {
           try {

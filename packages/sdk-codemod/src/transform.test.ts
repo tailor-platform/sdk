@@ -79,12 +79,20 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/principal-unify")).resolves.toBeUndefined();
   });
 
+  test("v2/auth-attributes-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/auth-attributes-rename")).resolves.toBeUndefined();
+  });
+
   test("v2/apply-to-deploy transforms correctly", async () => {
     await expect(runFixtureCases("v2/apply-to-deploy")).resolves.toBeUndefined();
   });
 
   test("v2/cli-rename transforms correctly", async () => {
     await expect(runFixtureCases("v2/cli-rename")).resolves.toBeUndefined();
+  });
+
+  test("v2/env-var-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/env-var-rename")).resolves.toBeUndefined();
   });
 
   test("v2/auth-invoker-unwrap transforms correctly", async () => {
@@ -97,6 +105,10 @@ describe("codemod transforms", () => {
 
   test("v2/execute-script-arg transforms correctly", async () => {
     await expect(runFixtureCases("v2/execute-script-arg")).resolves.toBeUndefined();
+  });
+
+  test("v2/rename-bin transforms correctly", async () => {
+    await expect(runFixtureCases("v2/rename-bin")).resolves.toBeUndefined();
   });
 
   test("v2/wait-point-rename transforms correctly", async () => {

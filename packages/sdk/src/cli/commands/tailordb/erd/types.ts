@@ -96,7 +96,7 @@ export interface TailorDbErdSchema {
   revision: string;
   source: TailorDbErdSource;
   cleanRoom: {
-    implementation: "tailor-sdk";
+    implementation: "tailor";
     notes: string[];
   };
   tables: TailorDbErdTable[];

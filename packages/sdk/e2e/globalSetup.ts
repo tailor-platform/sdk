@@ -8,7 +8,7 @@ import * as path from "node:path";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 
-// e2e must authenticate as the machine user from `tailor-sdk login --machine-user`,
+// e2e must authenticate as the machine user from `tailor login --machine-user`,
 // never as the developer's locally configured profile.
 delete process.env.TAILOR_PLATFORM_PROFILE;
 

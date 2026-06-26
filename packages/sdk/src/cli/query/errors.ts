@@ -27,7 +27,7 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
     return CLIError({
       code: "not_found",
       message: `Machine user '${args.machineUser ?? "unknown"}' was not found.`,
-      suggestion: "Run `tailor-sdk machineuser list` and use an existing name.",
+      suggestion: "Run `tailor machineuser list` and use an existing name.",
     });
   }
 

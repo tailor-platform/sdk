@@ -19,7 +19,7 @@ const DEFAULT_AGENT = "claude-code";
 
 export const installCommand = defineAppCommand({
   name: "install",
-  description: "Install the tailor-sdk agent skill from the installed SDK package.",
+  description: "Install the tailor agent skill from the installed SDK package.",
   args: z
     .object({
       agent: arg(z.string().default(DEFAULT_AGENT), {

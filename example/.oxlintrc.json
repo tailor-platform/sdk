@@ -8,7 +8,7 @@
     "builtin": true
   },
   "ignorePatterns": [
-    ".tailor-sdk/",
+    ".tailor/",
     "generated-perf",
     "generated/",
     "migrations",

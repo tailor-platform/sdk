@@ -6,7 +6,7 @@ import * as path from "pathe";
 export const LOCK_VERSION = 1;
 
 /** Lock file path, relative to the repository root. */
-const LOCK_FILENAME = ".github/tailor-sdk.lock";
+const LOCK_FILENAME = ".github/tailor.lock";
 
 export type TargetKind = "branch" | "tag";
 
@@ -78,14 +78,14 @@ export function readLock(outputDir: string): LockFile | null {
   } catch (cause) {
     throw new Error(
       `${LOCK_FILENAME} is not valid JSON. The lock file is machine-owned; ` +
-        "restore it from git (git checkout -- .github/tailor-sdk.lock) and re-run setup.",
+        "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
       { cause },
     );
   }
   if (typeof parsed.version !== "number") {
     throw new Error(
       `${LOCK_FILENAME} has no valid 'version' field. The lock file is machine-owned; ` +
-        "restore it from git (git checkout -- .github/tailor-sdk.lock) and re-run setup.",
+        "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
   if (parsed.version > LOCK_VERSION) {
@@ -97,7 +97,7 @@ export function readLock(outputDir: string): LockFile | null {
   if (!Array.isArray(parsed.targets)) {
     throw new Error(
       `${LOCK_FILENAME} has no valid 'targets' array. The lock file is machine-owned; ` +
-        "restore it from git (git checkout -- .github/tailor-sdk.lock) and re-run setup.",
+        "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
   return parsed;

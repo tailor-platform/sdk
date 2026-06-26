@@ -60,7 +60,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/test-run-arg-input",
     name: "function test-run --arg input unwrap",
     description:
-      "Strip the deprecated {input: ...} wrapper from `tailor-sdk function test-run --arg` JSON in scripts and docs",
+      "Strip the deprecated {input: ...} wrapper from `tailor function test-run --arg` JSON in scripts and docs",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/test-run-arg-input/scripts/transform.js",
@@ -68,8 +68,8 @@ export const allCodemods: CodemodPackage[] = [
     examples: [
       {
         lang: "sh",
-        before: 'tailor-sdk function test-run resolvers/add.ts --arg \'{"input":{"a":1}}\'',
-        after: "tailor-sdk function test-run resolvers/add.ts --arg '{\"a\":1}'",
+        before: 'tailor function test-run resolvers/add.ts --arg \'{"input":{"a":1}}\'',
+        after: "tailor function test-run resolvers/add.ts --arg '{\"a\":1}'",
       },
     ],
   },
@@ -147,6 +147,38 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/auth-attributes-rename",
+    name: "AttributeMap → Attributes",
+    description:
+      "Rename auth attribute module augmentation and related SDK type names from `AttributeMap` to `Attributes`",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/auth-attributes-rename/scripts/transform.js",
+    legacyPatterns: [
+      "AttributeMap",
+      "interface AttributeMap",
+      "UserAttributeMap",
+      "InferredAttributeMap",
+    ],
+    examples: [
+      {
+        caption: "Module augmentation uses `Attributes`:",
+        before:
+          'declare module "@tailor-platform/sdk" {\n  interface AttributeMap {\n    role: string;\n  }\n}',
+        after:
+          'declare module "@tailor-platform/sdk" {\n  interface Attributes {\n    role: string;\n  }\n}',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, the auth attribute type API is renamed from `AttributeMap`",
+      "to `Attributes`; related SDK types are renamed to `UserAttributes` and",
+      "`InferredAttributes`. The codemod rewrites SDK imports, re-exports,",
+      "namespace-qualified references, import() type references, and module",
+      "augmentations. Review any remaining matches manually and leave unrelated",
+      "local names or deploy/proto wire field names unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v2/apply-to-deploy",
     name: "tailor-sdk apply → tailor-sdk deploy",
     description:
@@ -190,6 +222,58 @@ export const allCodemods: CodemodPackage[] = [
       "invocations are rewritten): `tailor-sdk crash-report` -> `tailor-sdk crashreport`",
       "and the `--machineuser` option -> `--machine-user`. Leave unrelated commands that",
       "happen to use `--machineuser` alone.",
+    ].join("\n"),
+  },
+  {
+    id: "v2/env-var-rename",
+    name: "SDK environment variable rename",
+    description:
+      "Rewrite unambiguous removed SDK environment variable names to their v2 `TAILOR_*` names and flag generic names for manual review",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/env-var-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/.env",
+      "**/.env.*",
+      "**/*.{env,sh,bash,zsh,yml,yaml,json,md}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [
+      "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+      "TAILOR_PLATFORM_SDK_DTS_PATH",
+      "TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION",
+      "TAILOR_PLATFORM_SDK_BUILD_ONLY",
+      "TAILOR_SDK_OUTPUT_DIR",
+      "TAILOR_SDK_SKILLS_SOURCE",
+      "TAILOR_SDK_VERSION",
+      "PLATFORM_URL",
+      "PLATFORM_OAUTH2_CLIENT_ID",
+      "TAILOR_ENABLE_INLINE_SOURCEMAP",
+      "TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER",
+      "LOG_LEVEL",
+      "TAILOR_TOKEN",
+    ],
+    sourceStringLegacyPatterns: ["PLATFORM_URL", "PLATFORM_OAUTH2_CLIENT_ID", "LOG_LEVEL"],
+    examples: [
+      {
+        lang: "sh",
+        before: "TAILOR_PLATFORM_SDK_BUILD_ONLY=true tailor-sdk deploy",
+        after: "TAILOR_DEPLOY_BUILD_ONLY=true tailor-sdk deploy",
+      },
+      {
+        before: "const token = process.env.TAILOR_TOKEN;",
+        after: "const token = process.env.TAILOR_PLATFORM_TOKEN;",
+      },
+    ],
+    prompt: [
+      "Review any remaining removed SDK environment variable names after the codemod",
+      "runs. The codemod intentionally leaves generic names such as `LOG_LEVEL`,",
+      "`PLATFORM_URL`, and `PLATFORM_OAUTH2_CLIENT_ID` for manual review because",
+      "they can configure non-SDK tools. Replace only actual SDK usages with their",
+      "v2 names. If a remaining match is an unrelated local identifier, fixture",
+      "label, or historical documentation that intentionally does not configure the",
+      "SDK, leave it unchanged.",
     ].join("\n"),
   },
   {
@@ -450,7 +534,39 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/function-logs-content-hash",
     name: "function logs require a content hash for source mapping",
     description:
-      "`tailor-sdk function logs` maps stack traces against the function bundle only when the execution recorded a `contentHash`. Executions without one now show raw stack traces instead of mapped frames. No source change is required.",
+      "`tailor function logs` maps stack traces against the function bundle only when the execution recorded a `contentHash`. Executions without one now show raw stack traces instead of mapped frames. No source change is required.",
+    since: "1.0.0",
+    until: "2.0.0",
+    notice: true,
+  },
+  {
+    id: "v2/rename-bin",
+    name: "tailor-sdk binary → tailor",
+    description:
+      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Update `.gitignore` entries manually (the codemod skips paths preceded by a dot).",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/rename-bin/scripts/transform.js",
+    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    legacyPatterns: ["tailor-sdk"],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor-sdk deploy\nnpx tailor-sdk@latest login",
+        after: "tailor deploy\nnpx @tailor-platform/sdk@latest login",
+      },
+    ],
+    prompt: [
+      "Rename any remaining `tailor-sdk` binary invocations to `tailor`. Only rewrite",
+      "the binary name — leave `.tailor-sdk` directory paths and `create-tailor-sdk`",
+      "package references unchanged.",
+    ].join("\n"),
+  },
+  {
+    id: "v2/node-minimum-22-15-0",
+    name: "Node.js minimum version raised to 22.15.0",
+    description:
+      "v2 requires Node.js **22.15.0** or later. This is the first version that includes `module.registerHooks()`, which the SDK uses to register its TypeScript loader hook synchronously in the main thread. No source change is required; ensure your environment runs Node.js 22.15.0+.",
     since: "1.0.0",
     until: "2.0.0",
     notice: true,
