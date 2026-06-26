@@ -131,6 +131,20 @@ describe("findTargetDrift", () => {
     expect(findings.map((f) => f.rule)).toEqual(["erd-namespaces"]);
   });
 
+  test("does not report ERD namespace drift when the config is missing", () => {
+    const findings = findTargetDrift(
+      baseTarget({
+        inputs: {
+          ...baseTarget().inputs,
+          erdPreview: true,
+          erdNamespaces: ["tailordb"],
+        },
+      }),
+      cleanState({ configExists: false, erdNamespaces: null }),
+    );
+    expect(findings.map((f) => f.rule)).toEqual(["config-dir"]);
+  });
+
   test("accumulates multiple findings", () => {
     const findings = findTargetDrift(
       baseTarget({ templateVersion: TEMPLATE_VERSION - 1 }),

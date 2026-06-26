@@ -106,7 +106,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     });
   }
 
-  if (target.kind === "branch" && target.inputs.erdPreview) {
+  if (target.kind === "branch" && target.inputs.erdPreview && state.configExists) {
     const recorded = [...(target.inputs.erdNamespaces ?? [])].toSorted((a, b) =>
       a.localeCompare(b),
     );

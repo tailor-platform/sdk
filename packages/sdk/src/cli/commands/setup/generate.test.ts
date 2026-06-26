@@ -182,6 +182,12 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("namespace: [tailordb, analyticsdb]");
     expect(content).toContain("run_tailor_sdk tailordb erd export");
     expect(content).toContain("run_tailor_sdk tailordb erd diff");
+    expect(content).toContain(
+      'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"',
+    );
+    expect(content).toContain('run_tailor_sdk tailordb erd export --config "$base_config"');
+    expect(content).toContain("grep -q 'not found in local config.db'");
+    expect(content).toContain('diff_args+=(--namespace "$NAMESPACE")');
     expect(content).toContain("archive: false");
     expect(content).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(generatedIds).toEqual(

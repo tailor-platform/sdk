@@ -115,25 +115,56 @@ jobs:
           preview_output="$RUNNER_TEMP/tailor-erd/preview"
           diff_output="$RUNNER_TEMP/tailor-erd/diff"
           dts_output="$RUNNER_TEMP/tailor-erd/dts"
+          base_log="$RUNNER_TEMP/tailor-erd/base-$NAMESPACE.log"
           rm -rf "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
           mkdir -p "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
+
+          head_config="$GITHUB_WORKSPACE/$APP_DIR/tailor.config.ts"
+          base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR/tailor.config.ts"
+          head_html="$head_output/$NAMESPACE/dist/index.html"
+          base_html="$base_output/$NAMESPACE/dist/index.html"
+          diff_html="$diff_output/$NAMESPACE-diff.html"
 
           (
             cd "$GITHUB_WORKSPACE/$APP_DIR"
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts" \
-              run_tailor_sdk tailordb erd export --namespace "$NAMESPACE" --output "$head_output"
-          )
-          (
-            cd "$GITHUB_WORKSPACE/.tailor-erd-base/$APP_DIR"
-            TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
-              run_tailor_sdk tailordb erd export --namespace "$NAMESPACE" --output "$base_output"
+              run_tailor_sdk tailordb erd export --config "$head_config" --namespace "$NAMESPACE" --output "$head_output"
           )
 
-          cp "$head_output/$NAMESPACE/dist/index.html" "$preview_output/$NAMESPACE.html"
-          run_tailor_sdk tailordb erd diff \
-            --base-html "$base_output/$NAMESPACE/dist/index.html" \
-            --head-html "$head_output/$NAMESPACE/dist/index.html" \
-            --output "$diff_output/$NAMESPACE-diff.html"
+          base_missing="false"
+          if ! (
+            cd "$GITHUB_WORKSPACE/$APP_DIR"
+            TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
+              run_tailor_sdk tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
+          ) >"$base_log" 2>&1; then
+            if grep -q 'not found in local config.db' "$base_log"; then
+              cat "$base_log"
+              echo "Base ERD namespace '$NAMESPACE' not found; rendering current objects as added."
+              base_missing="true"
+            else
+              cat "$base_log"
+              exit 1
+            fi
+          elif [ -s "$base_log" ]; then
+            cat "$base_log"
+          fi
+
+          if [ "$base_missing" = "false" ] && [ ! -f "$base_html" ]; then
+            echo "::error::Base ERD viewer was not generated at $base_html"
+            exit 1
+          fi
+
+          cp "$head_html" "$preview_output/$NAMESPACE.html"
+          diff_args=(--head-html "$head_html" --output "$diff_html")
+          if [ "$base_missing" = "true" ]; then
+            diff_args+=(--namespace "$NAMESPACE")
+          else
+            diff_args+=(--base-html "$base_html")
+          fi
+          (
+            cd "$GITHUB_WORKSPACE/$APP_DIR"
+            run_tailor_sdk tailordb erd diff "${diff_args[@]}"
+          )
       - id: tailor-upload-erd-viewer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
