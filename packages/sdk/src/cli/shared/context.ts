@@ -115,6 +115,7 @@ type LoadAccessTokenOptions = {
 };
 type LoadPlatformClientConfigOptions = {
   profile?: string;
+  allowMissingProfile?: boolean;
 };
 type LoadConsoleBaseUrlOptions = {
   profile?: string;
@@ -348,6 +349,10 @@ function hasProfilePlatformSettings(config: Pick<PfConfig | PfConfigV1, "profile
   );
 }
 
+function hasScopedUserKeys(config: Pick<PfConfig | PfConfigV1, "users">): boolean {
+  return Object.keys(config.users).some((userKey) => userKey.includes("|"));
+}
+
 function toLatestForDisk(config: PfConfig | PfConfigV1): PfConfigV3 {
   const latestInput = config.version === 1 ? migrateV1ToV2(config) : config;
   return {
@@ -363,8 +368,9 @@ function toLatestForDisk(config: PfConfig | PfConfigV1): PfConfigV3 {
  * backward compatibility, so an older SDK can still read the file. Configs
  * containing a keyring user are kept in V2 or later because the keyring storage
  * variant is not representable in V1. Configs containing profile-level Platform
- * settings are written in the latest min-SDK-gated format because older SDKs
- * would silently drop those settings.
+ * settings or platform-scoped user tokens are written in the latest
+ * min-SDK-gated format because older SDKs would silently drop or misread those
+ * settings.
  * Set TAILOR_USE_KEYRING to write the current in-memory format unconditionally.
  *
  * The config file may contain access/refresh tokens when the OS keyring is
@@ -376,11 +382,12 @@ export function writePlatformConfig(config: PfConfig | PfConfigV1) {
   const configPath = platformConfigPath();
   const hasKeyringUser =
     config.version !== 1 && Object.values(config.users).some((u) => u?.storage === "keyring");
-  const diskConfig = hasProfilePlatformSettings(config)
-    ? toLatestForDisk(config)
-    : config.version !== 1 && !process.env.TAILOR_USE_KEYRING && !hasKeyringUser
-      ? toV1ForDisk(config)
-      : config;
+  const diskConfig =
+    hasProfilePlatformSettings(config) || hasScopedUserKeys(config)
+      ? toLatestForDisk(config)
+      : config.version !== 1 && !process.env.TAILOR_USE_KEYRING && !hasKeyringUser
+        ? toV1ForDisk(config)
+        : config;
   writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
@@ -634,6 +641,9 @@ export async function loadPlatformClientConfig(
   const pfConfig = await readPlatformConfig();
   const profileEntry = pfConfig.profiles[profile];
   if (!profileEntry) {
+    if (opts?.allowMissingProfile) {
+      return undefined;
+    }
     throw new Error(`Profile "${profile}" not found`);
   }
   const platformConfig = platformConfigFromProfile(profileEntry);

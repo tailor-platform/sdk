@@ -150,19 +150,16 @@ export const createCommand = defineAppCommand({
     // This command does not expose `--profile`, so the guard resolves the
     // active profile from `TAILOR_PLATFORM_PROFILE` only.
     await assertWritable();
-    // Execute workspace create logic
-    const workspace = await createWorkspace({
-      name: args.name,
-      region: args.region,
-      deleteProtection: args["delete-protection"],
-      organizationId: args["organization-id"],
-      folderId: args["folder-id"],
-    });
-
-    let profileInfo: ProfileInfo | undefined;
     const profileName = args["profile-name"];
+    let profileSetup:
+      | {
+          name: string;
+          user: string;
+          platformSettings: ReturnType<typeof profilePlatformSettings>;
+        }
+      | undefined;
     if (profileName) {
-      const platformConfig = await loadPlatformClientConfig();
+      const platformConfig = await loadPlatformClientConfig({ allowMissingProfile: true });
       const config = await readPlatformConfig();
       if (config.profiles[profileName]) {
         throw new Error(`Profile "${profileName}" already exists.`);
@@ -183,17 +180,36 @@ export const createCommand = defineAppCommand({
           `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
         );
       }
-      const platformSettings = profilePlatformSettings(platformConfig);
-      config.profiles[profileName] = {
+      profileSetup = {
+        name: profileName,
         user: profileUser,
+        platformSettings: profilePlatformSettings(platformConfig),
+      };
+    }
+
+    // Execute workspace create logic
+    const workspace = await createWorkspace({
+      name: args.name,
+      region: args.region,
+      deleteProtection: args["delete-protection"],
+      organizationId: args["organization-id"],
+      folderId: args["folder-id"],
+    });
+
+    let profileInfo: ProfileInfo | undefined;
+    if (profileSetup) {
+      const config = await readPlatformConfig();
+      const platformSettings = profileSetup.platformSettings;
+      config.profiles[profileSetup.name] = {
+        user: profileSetup.user,
         workspace_id: workspace.id,
         ...(args.permission === "read" ? { readonly: true } : {}),
         ...platformSettings,
       };
       writePlatformConfig(config);
       profileInfo = {
-        name: profileName,
-        user: profileUser,
+        name: profileSetup.name,
+        user: profileSetup.user,
         workspaceId: workspace.id,
         permission: args.permission,
         ...(platformSettings.platform_url ? { platformUrl: platformSettings.platform_url } : {}),
@@ -204,7 +220,7 @@ export const createCommand = defineAppCommand({
       };
 
       if (!args.json) {
-        logger.success(`Profile "${profileName}" created successfully.`);
+        logger.success(`Profile "${profileSetup.name}" created successfully.`);
       }
     }
 

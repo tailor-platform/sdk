@@ -1,8 +1,11 @@
 import { z } from "zod";
+import { defaultPlatformBaseUrl, normalizeBaseUrl } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { readPlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
+
+type PlatformConfig = Awaited<ReturnType<typeof readPlatformConfig>>;
 
 type UserListInfo = {
   user: string;
@@ -10,14 +13,37 @@ type UserListInfo = {
   current: boolean;
 };
 
-function toUserListInfo(userKey: string, currentUser: string | null): UserListInfo {
+function currentUserKeyFor(user: string, platformUrl?: string): string {
+  if (!platformUrl) return user;
+  const normalizedPlatformUrl = normalizeBaseUrl(platformUrl);
+  if (normalizedPlatformUrl === normalizeBaseUrl(defaultPlatformBaseUrl)) {
+    return user;
+  }
+  return `${normalizedPlatformUrl}|${user}`;
+}
+
+function activeCurrentUserKey(config: PlatformConfig): string | null {
+  const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
+  if (!activeProfile) {
+    if (!config.current_user) return null;
+    const envPlatformUserKey = process.env.PLATFORM_URL
+      ? currentUserKeyFor(config.current_user, process.env.PLATFORM_URL)
+      : config.current_user;
+    return config.users[envPlatformUserKey] ? envPlatformUserKey : config.current_user;
+  }
+  const profile = config.profiles[activeProfile];
+  if (!profile) return null;
+  return currentUserKeyFor(profile.user, profile.platform_url);
+}
+
+function toUserListInfo(userKey: string, currentUserKey: string | null): UserListInfo {
   const separatorIndex = userKey.indexOf("|");
   const platformUrl = separatorIndex === -1 ? null : userKey.slice(0, separatorIndex);
   const user = separatorIndex === -1 ? userKey : userKey.slice(separatorIndex + 1);
   return {
     user,
     platformUrl,
-    current: currentUser === user,
+    current: currentUserKey === userKey,
   };
 }
 
@@ -47,11 +73,8 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
-    const currentUser = activeProfile
-      ? (config.profiles[activeProfile]?.user ?? null)
-      : config.current_user;
-    const userInfos = users.map((user) => toUserListInfo(user, currentUser));
+    const currentUserKey = activeCurrentUserKey(config);
+    const userInfos = users.map((user) => toUserListInfo(user, currentUserKey));
     if (jsonOutput) {
       logger.out([...new Set(userInfos.map((userInfo) => userInfo.user))]);
       return;

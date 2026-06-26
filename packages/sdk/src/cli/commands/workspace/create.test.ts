@@ -141,6 +141,28 @@ describe("workspace create --permission", () => {
     expect(config.profiles.missing).toBeUndefined();
   });
 
+  test("creates a requested profile with an env token when the active profile is missing", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "missing");
+    using _logger = silenceLogger("out", "success", "warn");
+
+    const result = await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--profile-name",
+      "bootstrap",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(initOperatorClient).toHaveBeenCalledWith("mock-token");
+    const config = await readPlatformConfig();
+    expect(config.profiles.bootstrap).toMatchObject({
+      user: "u@example.com",
+      workspace_id: validUUID,
+    });
+  });
+
   test("creates a profile for a user whose token is scoped to PLATFORM_URL", async () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("PLATFORM_URL", "https://api.dev.tailor.tech");

@@ -1105,6 +1105,33 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     expect(config.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
   });
 
+  test("keeps scoped token keys in a min-SDK gated config format", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|file@example.com": {
+          storage: "file",
+          access_token: "file-access-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "file@example.com",
+    });
+
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      version: number;
+      min_sdk_version?: string;
+      users: Record<string, unknown>;
+      current_user: string | null;
+    };
+    expect(diskConfig.version).toBe(3);
+    expect(diskConfig.min_sdk_version).toBe("1.70.0");
+    expect(diskConfig.users["https://api.dev.tailor.tech|file@example.com"]).toBeDefined();
+    expect(diskConfig.current_user).toBe("file@example.com");
+  });
+
   test("clears current_user on V1 downgrade when it points at a user not representable in V1", () => {
     writePlatformConfig({
       version: 2,
