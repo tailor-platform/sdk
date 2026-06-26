@@ -388,6 +388,24 @@ export const allCodemods: CodemodPackage[] = [
     ],
   },
   {
+    id: "v2/wait-point-rename",
+    name: "defineWaitPoint/defineWaitPoints → createWaitPoint/createWaitPoints",
+    description:
+      "Rename `defineWaitPoint` and `defineWaitPoints` to `createWaitPoint` and `createWaitPoints`. The functions create runtime instances with `.wait()` / `.resolve()` methods, so the `create*` prefix is used consistently.",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/wait-point-rename/scripts/transform.js",
+    legacyPatterns: ["defineWaitPoint", "defineWaitPoints"],
+    examples: [
+      {
+        before:
+          'import { defineWaitPoints } from "@tailor-platform/sdk";\n\nexport const { approval } = defineWaitPoints((define) => ({\n  approval: define<{ message: string }, { approved: boolean }>(),\n}));',
+        after:
+          'import { createWaitPoints } from "@tailor-platform/sdk";\n\nexport const { approval } = createWaitPoints((define) => ({\n  approval: define<{ message: string }, { approved: boolean }>(),\n}));',
+      },
+    ],
+  },
+  {
     id: "v2/open-download-stream",
     name: "openDownloadStream → downloadStream",
     description:
