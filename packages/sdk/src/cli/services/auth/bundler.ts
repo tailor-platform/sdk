@@ -137,7 +137,7 @@ export async function bundleAuthHooks(
         plugins,
         transform: {
           define: {
-            "process.env.LOG_LEVEL": JSON.stringify(bundleLogLevel),
+            "process.env.TAILOR_APP_LOG_LEVEL": JSON.stringify(bundleLogLevel),
           },
         },
         treeshake: composeFunctionTreeshakeOptions([

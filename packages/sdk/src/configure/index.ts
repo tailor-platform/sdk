@@ -18,7 +18,7 @@ export namespace t {
 export { type TailorField } from "#/configure/types/type";
 export {
   type TailorPrincipal,
-  type AttributeMap,
+  type Attributes,
   type AttributeList,
   type Env,
 } from "#/runtime/types";

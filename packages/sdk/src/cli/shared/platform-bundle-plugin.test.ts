@@ -10,7 +10,7 @@ const run = (code: string): string | null => {
 
 describe("platformBundleDefinePlugin", () => {
   test("folds the gate member-expression to true", () => {
-    expect(run("if (!process.env.TAILOR_PLATFORM_BUNDLE) register();")).toBe(
+    expect(run("if (!process.env.__TAILOR_PLATFORM_BUNDLE) register();")).toBe(
       "if (!true) register();",
     );
   });
@@ -20,9 +20,9 @@ describe("platformBundleDefinePlugin", () => {
   });
 
   test("does not rewrite a longer key or a different owner", () => {
-    const longerKey = "read(process.env.TAILOR_PLATFORM_BUNDLE_MODE);";
+    const longerKey = "read(process.env.__TAILOR_PLATFORM_BUNDLE_MODE);";
     expect(run(longerKey)).toBe(longerKey);
-    const otherOwner = "read(self.process.env.TAILOR_PLATFORM_BUNDLE);";
+    const otherOwner = "read(self.process.env.__TAILOR_PLATFORM_BUNDLE);";
     expect(run(otherOwner)).toBe(otherOwner);
   });
 });

@@ -5,14 +5,14 @@ import { parseBoolean } from "./parse-boolean";
  *
  * Resolution order:
  * 1. Config value (`inlineSourcemap` in defineConfig) — if explicitly set
- * 2. Environment variable `TAILOR_ENABLE_INLINE_SOURCEMAP` — if explicitly set
+ * 2. Environment variable `TAILOR_INLINE_SOURCEMAP` — if explicitly set
  * 3. Default: `true`
  * @param configValue - The `inlineSourcemap` value from AppConfig
  * @returns Whether inline sourcemaps should be enabled
  */
 export function resolveInlineSourcemap(configValue?: boolean): boolean {
   if (configValue !== undefined) return configValue;
-  const envValue = parseBoolean(process.env.TAILOR_ENABLE_INLINE_SOURCEMAP);
+  const envValue = parseBoolean(process.env.TAILOR_INLINE_SOURCEMAP);
   if (envValue !== undefined) return envValue;
   return true;
 }

@@ -201,8 +201,8 @@ export const workspaceArgs = {
 export const configArg = {
   config: arg(z.string().default("tailor.config.ts"), {
     alias: "c",
-    description: "Path to SDK config file",
-    env: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+    description: "Path to Tailor config file",
+    env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;

@@ -147,6 +147,38 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/auth-attributes-rename",
+    name: "AttributeMap → Attributes",
+    description:
+      "Rename auth attribute module augmentation and related SDK type names from `AttributeMap` to `Attributes`",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/auth-attributes-rename/scripts/transform.js",
+    legacyPatterns: [
+      "AttributeMap",
+      "interface AttributeMap",
+      "UserAttributeMap",
+      "InferredAttributeMap",
+    ],
+    examples: [
+      {
+        caption: "Module augmentation uses `Attributes`:",
+        before:
+          'declare module "@tailor-platform/sdk" {\n  interface AttributeMap {\n    role: string;\n  }\n}',
+        after:
+          'declare module "@tailor-platform/sdk" {\n  interface Attributes {\n    role: string;\n  }\n}',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, the auth attribute type API is renamed from `AttributeMap`",
+      "to `Attributes`; related SDK types are renamed to `UserAttributes` and",
+      "`InferredAttributes`. The codemod rewrites SDK imports, re-exports,",
+      "namespace-qualified references, import() type references, and module",
+      "augmentations. Review any remaining matches manually and leave unrelated",
+      "local names or deploy/proto wire field names unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v2/apply-to-deploy",
     name: "tailor-sdk apply → tailor-sdk deploy",
     description:
@@ -190,6 +222,58 @@ export const allCodemods: CodemodPackage[] = [
       "invocations are rewritten): `tailor-sdk crash-report` -> `tailor-sdk crashreport`",
       "and the `--machineuser` option -> `--machine-user`. Leave unrelated commands that",
       "happen to use `--machineuser` alone.",
+    ].join("\n"),
+  },
+  {
+    id: "v2/env-var-rename",
+    name: "SDK environment variable rename",
+    description:
+      "Rewrite unambiguous removed SDK environment variable names to their v2 `TAILOR_*` names and flag generic names for manual review",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/env-var-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/.env",
+      "**/.env.*",
+      "**/*.{env,sh,bash,zsh,yml,yaml,json,md}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [
+      "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+      "TAILOR_PLATFORM_SDK_DTS_PATH",
+      "TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION",
+      "TAILOR_PLATFORM_SDK_BUILD_ONLY",
+      "TAILOR_SDK_OUTPUT_DIR",
+      "TAILOR_SDK_SKILLS_SOURCE",
+      "TAILOR_SDK_VERSION",
+      "PLATFORM_URL",
+      "PLATFORM_OAUTH2_CLIENT_ID",
+      "TAILOR_ENABLE_INLINE_SOURCEMAP",
+      "TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER",
+      "LOG_LEVEL",
+      "TAILOR_TOKEN",
+    ],
+    sourceStringLegacyPatterns: ["PLATFORM_URL", "PLATFORM_OAUTH2_CLIENT_ID", "LOG_LEVEL"],
+    examples: [
+      {
+        lang: "sh",
+        before: "TAILOR_PLATFORM_SDK_BUILD_ONLY=true tailor-sdk deploy",
+        after: "TAILOR_DEPLOY_BUILD_ONLY=true tailor-sdk deploy",
+      },
+      {
+        before: "const token = process.env.TAILOR_TOKEN;",
+        after: "const token = process.env.TAILOR_PLATFORM_TOKEN;",
+      },
+    ],
+    prompt: [
+      "Review any remaining removed SDK environment variable names after the codemod",
+      "runs. The codemod intentionally leaves generic names such as `LOG_LEVEL`,",
+      "`PLATFORM_URL`, and `PLATFORM_OAUTH2_CLIENT_ID` for manual review because",
+      "they can configure non-SDK tools. Replace only actual SDK usages with their",
+      "v2 names. If a remaining match is an unrelated local identifier, fixture",
+      "label, or historical documentation that intentionally does not configure the",
+      "SDK, leave it unchanged.",
     ].join("\n"),
   },
   {
@@ -459,6 +543,15 @@ export const allCodemods: CodemodPackage[] = [
       "the binary name — leave `.tailor-sdk` directory paths and `create-tailor-sdk`",
       "package references unchanged.",
     ].join("\n"),
+  },
+  {
+    id: "v2/node-minimum-22-15-0",
+    name: "Node.js minimum version raised to 22.15.0",
+    description:
+      "v2 requires Node.js **22.15.0** or later. This is the first version that includes `module.registerHooks()`, which the SDK uses to register its TypeScript loader hook synchronously in the main thread. No source change is required; ensure your environment runs Node.js 22.15.0+.",
+    since: "1.0.0",
+    until: "2.0.0",
+    notice: true,
   },
 ];
 

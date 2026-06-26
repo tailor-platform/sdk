@@ -294,8 +294,8 @@ export function createGenerationManager(params: {
     const args = process.argv.slice(2);
     const env = {
       ...process.env,
-      TAILOR_WATCH_GENERATION: (
-        parseInt(process.env.TAILOR_WATCH_GENERATION || "0", 10) + 1
+      __TAILOR_WATCH_GENERATION: (
+        parseInt(process.env.__TAILOR_WATCH_GENERATION || "0", 10) + 1
       ).toString(),
     };
 
