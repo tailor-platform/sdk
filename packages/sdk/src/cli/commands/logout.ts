@@ -9,6 +9,7 @@ import {
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   deleteUserTokens,
+  hasUserTokenEntry,
   loadPlatformClientConfig,
   loadStoredUserTokens,
   readPlatformConfig,
@@ -49,7 +50,10 @@ export const logoutCommand = defineAppCommand({
     }
     if (!storedTokens && !tokenLoadFailed) {
       logger.info("You are not logged in.");
-      if (pfConfig.current_user === currentUser && (!profile || deletesDefaultToken)) {
+      if (
+        pfConfig.current_user === currentUser &&
+        (!profile || deletesDefaultToken || !hasUserTokenEntry(pfConfig, currentUser))
+      ) {
         pfConfig.current_user = null;
       }
       writePlatformConfig(pfConfig);
@@ -74,7 +78,10 @@ export const logoutCommand = defineAppCommand({
     }
 
     await deleteUserTokens(pfConfig, currentUser, platformConfig);
-    if (pfConfig.current_user === currentUser && (!profile || deletesDefaultToken)) {
+    if (
+      pfConfig.current_user === currentUser &&
+      (!profile || deletesDefaultToken || !hasUserTokenEntry(pfConfig, currentUser))
+    ) {
       pfConfig.current_user = null;
     }
     writePlatformConfig(pfConfig);

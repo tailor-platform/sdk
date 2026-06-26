@@ -74,17 +74,20 @@ export function getOAuth2ClientId(config: PlatformClientConfig = {}) {
   return config.oauth2ClientId ?? process.env.PLATFORM_OAUTH2_CLIENT_ID ?? defaultOAuth2ClientId;
 }
 
-export function getConsoleBaseUrl(config: PlatformClientConfig = {}) {
-  if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
-  if (process.env.PLATFORM_CONSOLE_URL) return normalizeBaseUrl(process.env.PLATFORM_CONSOLE_URL);
-
-  const platformUrl = new URL(getPlatformBaseUrl(config));
+function inferConsoleBaseUrl(platformBaseUrl: string) {
+  const platformUrl = new URL(platformBaseUrl);
   if (platformUrl.hostname.startsWith("api.")) {
     platformUrl.hostname = platformUrl.hostname.replace(/^api\./, "console.");
     return normalizeBaseUrl(platformUrl.toString());
   }
-
   return defaultConsoleBaseUrl;
+}
+
+export function getConsoleBaseUrl(config: PlatformClientConfig = {}) {
+  if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
+  if (config.platformUrl) return inferConsoleBaseUrl(config.platformUrl);
+  if (process.env.PLATFORM_CONSOLE_URL) return normalizeBaseUrl(process.env.PLATFORM_CONSOLE_URL);
+  return inferConsoleBaseUrl(getPlatformBaseUrl(config));
 }
 
 /**
