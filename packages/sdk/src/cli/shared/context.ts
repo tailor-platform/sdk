@@ -413,11 +413,6 @@ function validateUUID(value: string, source: string): string {
  */
 export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<string> {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
-  let profileEntry: PfProfile | undefined;
-  if (profile) {
-    const pfConfig = await readPlatformConfig();
-    profileEntry = pfConfig.profiles[profile];
-  }
 
   if (opts?.workspaceId) {
     return validateUUID(opts.workspaceId, "--workspace-id option");
@@ -431,6 +426,8 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
   }
 
   if (profile) {
+    const pfConfig = await readPlatformConfig();
+    const profileEntry = pfConfig.profiles[profile];
     const wsId = profileEntry?.workspace_id;
     if (!wsId) {
       throw new Error(`Profile "${profile}" not found`);
@@ -442,6 +439,21 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
     Workspace ID not found.
     Please specify workspace ID via --workspace-id option or TAILOR_PLATFORM_WORKSPACE_ID environment variable.
   `);
+}
+
+async function tryLoadPlatformConfigFromProfile(
+  profile: string | undefined,
+): Promise<PlatformClientConfig | undefined> {
+  if (!profile) return undefined;
+  try {
+    const pfConfig = await readPlatformConfig();
+    const profileEntry = pfConfig.profiles[profile];
+    if (!profileEntry) return undefined;
+    const platformConfig = platformConfigFromProfile(profileEntry);
+    return Object.keys(platformConfig).length > 0 ? platformConfig : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -501,6 +513,21 @@ export async function loadMachineUserName(
  */
 export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+
+  // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
+  if (process.env.TAILOR_PLATFORM_TOKEN) {
+    const platformConfig = await tryLoadPlatformConfigFromProfile(profile);
+    rememberPlatformConfigForToken(process.env.TAILOR_PLATFORM_TOKEN, platformConfig);
+    return process.env.TAILOR_PLATFORM_TOKEN;
+  }
+  // TAILOR_TOKEN is deprecated
+  if (process.env.TAILOR_TOKEN) {
+    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
+    const platformConfig = await tryLoadPlatformConfigFromProfile(profile);
+    rememberPlatformConfigForToken(process.env.TAILOR_TOKEN, platformConfig);
+    return process.env.TAILOR_TOKEN;
+  }
+
   let pfConfig: PfConfig | undefined;
   let profileEntry: PfProfile | undefined;
   let platformConfig: PlatformClientConfig | undefined;
@@ -508,18 +535,6 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
     pfConfig = await readPlatformConfig();
     profileEntry = pfConfig.profiles[profile];
     platformConfig = platformConfigFromProfile(profileEntry);
-  }
-
-  // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
-  if (process.env.TAILOR_PLATFORM_TOKEN) {
-    rememberPlatformConfigForToken(process.env.TAILOR_PLATFORM_TOKEN, platformConfig);
-    return process.env.TAILOR_PLATFORM_TOKEN;
-  }
-  // TAILOR_TOKEN is deprecated
-  if (process.env.TAILOR_TOKEN) {
-    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
-    rememberPlatformConfigForToken(process.env.TAILOR_TOKEN, platformConfig);
-    return process.env.TAILOR_TOKEN;
   }
 
   pfConfig ??= await readPlatformConfig();

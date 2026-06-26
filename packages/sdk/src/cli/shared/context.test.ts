@@ -33,6 +33,15 @@ vi.mock("@napi-rs/keyring", () => ({
   },
 }));
 
+function writeFuturePlatformConfig() {
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(
+    configPath,
+    "version: 999\nmin_sdk_version: 999.0.0\nusers: {}\nprofiles: {}\ncurrent_user: null\n",
+  );
+}
+
 describe("loadConfigPath", () => {
   const originalEnv = process.env;
   let tempDir: string;
@@ -146,6 +155,15 @@ describe("loadWorkspaceId", () => {
       expect(result).toBe(validUUID);
     });
 
+    test("opts.workspaceId takes precedence over an unreadable env profile config", async () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      writeFuturePlatformConfig();
+
+      const result = await loadWorkspaceId({ workspaceId: validUUID });
+
+      expect(result).toBe(validUUID);
+    });
+
     test("throws error when opts.workspaceId is invalid UUID", async () => {
       await expect(loadWorkspaceId({ workspaceId: invalidUUID })).rejects.toThrow(
         "Invalid value from --workspace-id option: must be a valid UUID",
@@ -185,6 +203,16 @@ describe("loadWorkspaceId", () => {
         current_user: null,
       });
       const result = await loadWorkspaceId({ profile: "myprofile" });
+      expect(result).toBe(validUUID);
+    });
+
+    test("env workspace ID takes precedence over an unreadable env profile config", async () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
+      writeFuturePlatformConfig();
+
+      const result = await loadWorkspaceId();
+
       expect(result).toBe(validUUID);
     });
   });
@@ -490,6 +518,16 @@ describe("loadAccessToken", () => {
     test("returns token from TAILOR_PLATFORM_TOKEN when set", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+    });
+
+    test("returns token from TAILOR_PLATFORM_TOKEN before reading an unreadable env profile config", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
+      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+      writeFuturePlatformConfig();
+
+      const result = await loadAccessToken();
+
       expect(result).toBe(validToken);
     });
 
