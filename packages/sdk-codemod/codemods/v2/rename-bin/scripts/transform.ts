@@ -16,7 +16,7 @@ function renameBinary(value: string): string {
     version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
   );
   return withRunners.replace(TAILOR_SDK_RE, (_match, version?: string) =>
-    version ? `tailor${version}` : "tailor",
+    version ? `@tailor-platform/sdk${version}` : "tailor",
   );
 }
 
@@ -53,7 +53,7 @@ function transformPackageJson(source: string): string | null {
  * Handles optional `@version` pins:
  * - `npx tailor-sdk@latest` → `npx @tailor-platform/sdk@latest` (package-runner form)
  * - `pnpm dlx tailor-sdk@latest` → `pnpm dlx @tailor-platform/sdk@latest` (package-runner form)
- * - `tailor-sdk@latest` elsewhere → `tailor@latest`
+ * - `tailor-sdk@latest` elsewhere → `@tailor-platform/sdk@latest`
  * Does not rewrite `.tailor-sdk` directory paths or `create-tailor-sdk`.
  * @param source - File contents
  * @param filePath - Absolute path to the file (used to dispatch package.json vs text)
