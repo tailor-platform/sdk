@@ -105,7 +105,11 @@ export const setupCommand = defineAppCommand({
           "The action is written to .github/actions/tailor-<name>/action.yml.",
       }),
       preview: arg(z.boolean().default(false), {
-        description: "Generate a preview workflow (PR label-triggered deploy to per-PR workspace).",
+        description: "Generate a preview workflow (PR-triggered deploy to per-PR workspace).",
+      }),
+      region: arg(z.string().min(1).optional(), {
+        description:
+          "Workspace region for preview workspace creation (e.g. us-west). Required with --preview.",
       }),
       force: arg(z.boolean().default(false), {
         description: "Discard hand edits / take over unmanaged files and regenerate",
@@ -131,6 +135,9 @@ export const setupCommand = defineAppCommand({
     if (args.preview && args.tag) {
       throw new Error("--preview cannot be combined with --tag.");
     }
+    if (args.region !== undefined && !args.preview) {
+      throw new Error("--region requires --preview.");
+    }
 
     // `provider` is validated by the enum to the only value supported today;
     // a second provider would branch here to its own generator.
@@ -144,6 +151,7 @@ export const setupCommand = defineAppCommand({
       dir: args.dir,
       action: args.action,
       preview: args.preview,
+      region: args.region,
       force: args.force,
       outputDir: process.cwd(),
     });

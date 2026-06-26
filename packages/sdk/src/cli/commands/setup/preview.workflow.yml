@@ -1,0 +1,93 @@
+# __HEADER__
+name: Tailor Preview (__WORKSPACE_NAME__)
+
+on:
+  pull_request:
+    branches: ["__BRANCH__"]
+    types: [opened, synchronize, reopened, closed]
+    # __PATHS__
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  tailor-preview-deploy:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: __ENVIRONMENT__
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: tailor-preview-__WORKSPACE_NAME__-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-install
+        uses: tailor-platform/actions/install@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-generate-check
+        uses: tailor-platform/actions/generate-check@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        with:
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+      - id: tailor-preview-deploy
+        uses: tailor-platform/actions/preview-deploy@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        with:
+          workspace-name-prefix: __WORKSPACE_NAME__
+          region: __REGION__
+          organization-id: ${{ vars.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          folder-id: ${{ vars.TAILOR_PLATFORM_FOLDER_ID }}
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+          # platform-token: ${{ secrets.TAILOR_PLATFORM_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - id: tailor-preview-comment
+        if: always()
+        uses: tailor-platform/actions/preview-comment@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        with:
+          workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
+          workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
+          status: ${{ job.status == 'success' && 'success' || 'failure' }}
+          app-url: ${{ steps.tailor-preview-deploy.outputs.app-url }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  tailor-preview-cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: __ENVIRONMENT__
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-install
+        uses: tailor-platform/actions/install@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-preview-cleanup
+        uses: tailor-platform/actions/preview-cleanup@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        with:
+          workspace-name-prefix: __WORKSPACE_NAME__
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+          # platform-token: ${{ secrets.TAILOR_PLATFORM_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -25,7 +25,8 @@ tailor-sdk setup [options] [command]
 | `--no-plan`                         | -     | Disable the plan job for a branch target (cannot be combined with --tag)                                                                          | No       | `false`    |
 | `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                                                                                               | No       | `"."`      |
 | `--action <ACTION>`                 | -     | Generate a per-app composite action instead of a full workflow. The action is written to .github/actions/tailor-<name>/action.yml.                | No       | -          |
-| `--preview`                         | -     | Generate a preview workflow (PR label-triggered deploy to per-PR workspace).                                                                      | No       | `false`    |
+| `--preview`                         | -     | Generate a preview workflow (PR-triggered deploy to per-PR workspace).                                                                            | No       | `false`    |
+| `--region <REGION>`                 | -     | Workspace region for preview workspace creation (e.g. us-west). Required with --preview.                                                          | No       | -          |
 | `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                                                                                     | No       | `false`    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.

@@ -505,10 +505,18 @@ describe("setupGitHub (integration)", () => {
     );
   });
 
-  test("conflict on same path with different kind", async () => {
+  test("branch and tag targets coexist under the same workspace name", async () => {
+    // Branch target generates tailor-my-app.yml; tag target generates
+    // tailor-my-app-tag.yml — no filename collision, no --workspace-name workaround needed.
     await setupGitHub(baseOptions({ workspaceName: "my-app" }));
     await expect(
       setupGitHub(baseOptions({ workspaceName: "my-app", tag: true, branch: undefined })),
-    ).rejects.toThrow(/conflicts with this tag target|--workspace-name/);
+    ).resolves.toBeUndefined();
+    const lock = readLock(testDir);
+    expect(lock?.targets).toHaveLength(2);
+    expect(lock?.targets.map((t) => t.file).toSorted()).toEqual([
+      ".github/workflows/tailor-my-app-tag.yml",
+      ".github/workflows/tailor-my-app.yml",
+    ]);
   });
 });

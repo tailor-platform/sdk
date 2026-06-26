@@ -19,6 +19,7 @@ import {
 import {
   detectPackageManager,
   renderBranchWorkflow,
+  renderPreviewWorkflow,
   renderTagWorkflow,
   TEMPLATE_VERSION,
   type PackageManager,
@@ -38,8 +39,13 @@ export type SetupGitHubOptions = {
    * `.github/actions/tailor-<action>/action.yml` instead of a full workflow.
    */
   action?: string;
-  /** When true, generate a preview workflow (PR label-triggered). */
+  /** When true, generate a preview workflow (PR-triggered deploy/cleanup). */
   preview?: boolean;
+  /**
+   * Workspace region for preview workspace creation (e.g. `us-west`).
+   * Required when `preview` is true.
+   */
+  region?: string;
   force: boolean;
   outputDir: string;
   /** Injectable git runner, for testing. */
@@ -216,7 +222,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   }
   validateWorkspaceName(workspaceName);
 
-  const kind: TargetKind = options.tag ? "tag" : "branch";
+  const kind: TargetKind = options.tag ? "tag" : options.preview ? "preview" : "branch";
   const packageManager = detectPackageManager(options.outputDir);
   // The env-scoped TAILOR_PLATFORM_WORKSPACE_ID variable is only readable by a
   // job that declares `environment:`, so every plan/deploy job sets one. When
@@ -243,7 +249,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       packageManager,
       plan: options.plan,
     });
-  } else {
+  } else if (kind === "tag") {
     branch = options.branch ?? null;
     if (branch !== null) {
       validateBranch(branch);
@@ -256,17 +262,40 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       environment,
       packageManager,
     });
+  } else {
+    // preview
+    if (!options.region) {
+      throw new Error(
+        "--region is required for preview targets. " +
+          "Pass the workspace region (e.g. --region us-west).",
+      );
+    }
+    branchAutoDetected = options.branch === undefined;
+    branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
+    validateBranch(branch);
+    render = renderPreviewWorkflow({
+      workspaceName,
+      branch,
+      workingDirectory,
+      environment,
+      packageManager,
+      region: options.region,
+    });
   }
 
-  const file = `.github/workflows/tailor-${workspaceName}.yml`;
+  // File name encodes the target kind so branch + tag + preview can coexist
+  // under the same workspace name without colliding.
+  const kindSuffix = kind === "tag" ? "-tag" : kind === "preview" ? "-preview" : "";
+  const file = `.github/workflows/tailor-${workspaceName}${kindSuffix}.yml`;
   const inputs: LockInputs = {
     branch,
-    branchAutoDetected: kind === "branch" ? branchAutoDetected : undefined,
+    branchAutoDetected: kind === "branch" || kind === "preview" ? branchAutoDetected : undefined,
     tagPattern: kind === "tag" ? options.tagPattern : null,
     environment,
     dir,
     packageManager,
     plan: kind === "branch" ? options.plan : true,
+    region: kind === "preview" ? options.region : undefined,
   };
 
   return {
@@ -403,10 +432,6 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
         "Use setup without --action to generate a full workflow, or check for a newer SDK version.",
     );
   }
-  if (options.preview) {
-    throw new Error("--preview is not yet implemented. " + "Check for a newer SDK version.");
-  }
-
   const resolved = await resolve(options);
 
   const lock = readLock(options.outputDir);

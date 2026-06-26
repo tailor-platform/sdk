@@ -208,6 +208,14 @@ describe("checkGitHub (integration)", () => {
     expect(() => check()).not.toThrow();
   });
 
+  test("passes after --force regeneration following a hand edit", async () => {
+    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    fs.appendFileSync(wfPath(), "\n# hand edit\n");
+    // --force should overwrite edits and update the lock's contentHash
+    await setupGitHub(setupOptions({ workspaceName: "my-app", force: true }));
+    expect(() => check()).not.toThrow();
+  });
+
   test("errors when no lock exists", () => {
     expect(() => check()).toThrow(/No managed workflows/);
   });

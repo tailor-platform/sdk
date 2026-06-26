@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import branchTemplate from "./branch.workflow.yml";
+import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
 // Bump on material template-structure changes (managed step ids, placeholders)
@@ -47,6 +48,17 @@ export type RenderTagParams = {
   seedValidate?: boolean;
   /** Include the migration-drift-check step in the plan job (default: false). */
   migrationDriftCheck?: boolean;
+};
+
+export type RenderPreviewParams = {
+  workspaceName: string;
+  branch: string;
+  workingDirectory?: string;
+  /** GitHub Environment for the preview jobs; defaults to the workspace name. */
+  environment: string;
+  packageManager: PackageManager;
+  /** Workspace region passed to `workspace create` on first PR push. */
+  region: string;
 };
 
 export type RenderResult = {
@@ -253,6 +265,47 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
     "tailor-deploy/tailor-apply",
     "tailor-deploy/tailor-notify",
   );
+
+  return { content: out, generatedIds };
+}
+
+/**
+ * Render the preview workflow (PR open/sync/close triggers).
+ *
+ * The deploy job runs on opened/synchronize/reopened events; the cleanup job
+ * runs on the closed event.  Both jobs run in the same workflow so PR number
+ * context is always available.
+ * @param params - Workspace and rendering configuration
+ * @returns Rendered YAML and the list of managed job/step ids
+ */
+export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult {
+  const { branch } = params;
+
+  let out = previewTemplate;
+  out = line(
+    out,
+    "PATHS",
+    params.workingDirectory ? `paths: ["${params.workingDirectory}/**"]` : undefined,
+  );
+
+  out = applyCommon(out, params)
+    .replaceAll("__BRANCH__", () => branch)
+    .replaceAll("__REGION__", () => params.region);
+
+  const generatedIds: string[] = [
+    "tailor-preview-deploy",
+    "tailor-preview-deploy/tailor-checkout",
+    "tailor-preview-deploy/tailor-setup",
+    "tailor-preview-deploy/tailor-install",
+    "tailor-preview-deploy/tailor-generate-check",
+    "tailor-preview-deploy/tailor-preview-deploy",
+    "tailor-preview-deploy/tailor-preview-comment",
+    "tailor-preview-cleanup",
+    "tailor-preview-cleanup/tailor-checkout",
+    "tailor-preview-cleanup/tailor-setup",
+    "tailor-preview-cleanup/tailor-install",
+    "tailor-preview-cleanup/tailor-preview-cleanup",
+  ];
 
   return { content: out, generatedIds };
 }

@@ -8,7 +8,7 @@ export const LOCK_VERSION = 1;
 /** Lock file path, relative to the repository root. */
 const LOCK_FILENAME = ".github/tailor-sdk.lock";
 
-export type TargetKind = "branch" | "tag" | "action" | "coordinate";
+export type TargetKind = "branch" | "tag" | "preview" | "action" | "coordinate";
 
 export type LockInputs = {
   branch: string | null;
@@ -19,6 +19,8 @@ export type LockInputs = {
   dir: string;
   packageManager: string;
   plan: boolean;
+  /** For `preview` kind: workspace region used when creating the preview workspace. */
+  region?: string;
   /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
   actionDirs?: string[];
 };
