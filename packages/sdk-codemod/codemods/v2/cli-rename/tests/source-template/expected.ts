@@ -23,6 +23,8 @@ const envFilePath = "tailor-sdk --env-file=/tmp/--machineuser crashreport";
 const envFileCommandSubstitutionPath = "tailor-sdk --env-file=$(pwd)/--machineuser crashreport --machine-user";
 const argPayload = "tailor-sdk function test-run --arg=--machineuser";
 const argCommandSubstitutionPayload = "tailor-sdk function test-run --arg=$(printf --machineuser) --machine-user";
+const quotedArgCommandPayload = "tailor-sdk function test-run --arg='tailor-sdk crash-report --machineuser' --machine-user";
+const escapedQueryCommand = "tailor-sdk query --query \"select 1\" --machine-user";
 const profileCommand = "tailor-sdk --profile prod crashreport --machine-user";
 const profileMachineUserValue = "tailor-sdk --profile --machineuser crashreport --machine-user";
 const workspaceCommand = "tailor-sdk -w workspace-1 crashreport";

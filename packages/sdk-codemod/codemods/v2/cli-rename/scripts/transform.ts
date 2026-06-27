@@ -9,16 +9,9 @@ const OPTION_RENAMES: ReadonlyArray<readonly [string, string]> = [
 ];
 
 const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
-const BOOLEAN_GLOBAL_ARG = "(?:--verbose|--json|--yes|-j|-y)";
-const VALUE_GLOBAL_ARG =
-  "(?:--env-file|--env-file-if-exists|--profile|--config|--workspace-id|-e|-p|-c|-w)";
-const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
 const TAILOR_BINARY = `(?<![\\w-])tailor-sdk(?:@[^\\s'"\`]+)?(?![\\w-])`;
-const COMMAND_PATTERN = new RegExp(
-  `${TAILOR_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
-  "g",
-);
 const TAILOR_BINARY_PATTERN = new RegExp(TAILOR_BINARY, "g");
+const TAILOR_BINARY_START_PATTERN = new RegExp(`^${TAILOR_BINARY}`);
 const SHELL_ASSIGNMENT_PREFIX_PATTERN = new RegExp(
   `^(?:env\\s+)?(?:[A-Za-z_]\\w*=${ARG_VALUE}\\s+)+${TAILOR_BINARY}(?=\\s|$)`,
 );
@@ -666,12 +659,39 @@ function replaceOptionsInCommand(command: string): string {
 }
 
 function replaceCommandNameInCommand(command: string): string {
-  COMMAND_PATTERN.lastIndex = 0;
-  return command.replace(
-    COMMAND_PATTERN,
-    (match, _prefix: string, cmd: string) =>
-      `${match.slice(0, -cmd.length)}${COMMAND_MAP.get(cmd) ?? cmd}`,
-  );
+  const binary = command.match(TAILOR_BINARY_START_PATTERN)?.[0];
+  if (!binary) return command;
+
+  let index = binary.length;
+  for (;;) {
+    const whitespace = command.slice(index).match(/^\s+/)?.[0];
+    if (whitespace) index += whitespace.length;
+    if (index >= command.length) return command;
+
+    const tokenEnd = findShellArgEnd(command, index);
+    const token = command.slice(index, tokenEnd);
+    const name = optionName(token);
+    if (GLOBAL_BOOLEAN_ARGS.has(name)) {
+      index = tokenEnd;
+      continue;
+    }
+    if (isGlobalSeparateValueArg(name)) {
+      index = tokenEnd;
+      if (!token.includes("=") || token.endsWith("=")) {
+        const valueWhitespace = command.slice(index).match(/^\s+/)?.[0];
+        if (!valueWhitespace) return command;
+        index += valueWhitespace.length;
+        index = findShellArgEnd(command, index);
+      }
+      continue;
+    }
+    if (token.startsWith("-")) return command;
+
+    const replacement = COMMAND_MAP.get(token);
+    return replacement
+      ? `${command.slice(0, index)}${replacement}${command.slice(tokenEnd)}`
+      : command;
+  }
 }
 
 function replaceCliRenamesInCommand(command: string): string {
@@ -693,14 +713,11 @@ function sourceStringToken(node: SgNode, source: string): SourceStringToken | un
     return undefined;
   }
 
-  const fragments = node.children().filter((child: SgNode) => child.kind() === "string_fragment");
-  if (fragments.length !== 1) return undefined;
-
-  const range = fragments[0]!.range();
+  const range = node.range();
   return {
-    value: source.slice(range.start.index, range.end.index),
-    start: range.start.index,
-    end: range.end.index,
+    value: source.slice(range.start.index + 1, range.end.index - 1),
+    start: range.start.index + 1,
+    end: range.end.index - 1,
   };
 }
 
