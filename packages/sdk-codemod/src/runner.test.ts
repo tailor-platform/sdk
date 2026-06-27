@@ -27,7 +27,10 @@ function makeCodemod(
   scriptPath?: string,
   filePatterns?: string[],
   legacyPatterns?: Array<string | string[]>,
-  extra?: Pick<CodemodPackage, "sourceStringLegacyPatterns" | "suspiciousPatterns" | "prompt">,
+  extra?: Pick<
+    CodemodPackage,
+    "sourceStringLegacyPatterns" | "sourceTextLegacyPatterns" | "suspiciousPatterns" | "prompt"
+  >,
 ): CodemodPackage {
   return {
     id,
@@ -546,6 +549,31 @@ describe("runCodemods", () => {
       expect(result.warnings).toEqual([]);
     });
 
+    test("keeps generic source string residual checks out of comments", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "env.ts"),
+        "// PLATFORM_URL is documented here\nconst value = 1;",
+        "utf-8",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: ["PLATFORM_URL"],
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual([]);
+    });
+
     test("keeps escaped quoted Tailor values out of rename-bin residual warnings", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
       tmpDir = dir;
@@ -646,7 +674,7 @@ describe("runCodemods", () => {
         [
           {
             codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.tsx"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
+              sourceTextLegacyPatterns: renameBin?.sourceTextLegacyPatterns,
             }),
             scriptPath: partialTransformPath,
           },
