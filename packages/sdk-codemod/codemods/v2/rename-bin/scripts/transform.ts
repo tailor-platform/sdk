@@ -3,7 +3,7 @@ import * as path from "pathe";
 import type { SgNode } from "@ast-grep/napi";
 
 const SOURCE_ARG_VALUE = `(?:[^\\s'"\`;|&]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
-const PACKAGE_RUNNER_COMMAND = `(?:npx|bunx|(?:pnpm|yarn)(?:\\s+(?:-\\w+|--\\w[\\w-]*(?:=${SOURCE_ARG_VALUE})?))*\\s+dlx)`;
+const PACKAGE_RUNNER_COMMAND = `(?:npx|bunx|(?:pnpm|yarn)(?:\\s+(?:-\\w+|--\\w[\\w-]*)(?:=${SOURCE_ARG_VALUE})?(?:\\s+(?!dlx\\b|-)${SOURCE_ARG_VALUE})?)*\\s+dlx)`;
 
 // Package-runner forms (`npx`, `pnpm dlx`, `yarn dlx`, `bunx`) resolve npm package
 // names, so `tailor-sdk@...` must become `@tailor-platform/sdk@...` — rewriting
@@ -79,9 +79,10 @@ const SOURCE_CLI_VALUE_REFERENCE_RE = new RegExp(
   `(${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+))(${SOURCE_ARG_VALUE})`,
   "g",
 );
+const SOURCE_TEMPLATE_EXPR_PLACEHOLDER = "__TAILOR_SDK_TEMPLATE_EXPR_\\d+__";
 const SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD = "\\s+(?:--help|-h|--version|-v)\\b";
 const SOURCE_DIRECT_INVOCATION_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b|${SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD})`;
-const SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD = `(?:${SOURCE_DIRECT_INVOCATION_LOOKAHEAD}|\\s*$)`;
+const SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD = `(?:${SOURCE_DIRECT_INVOCATION_LOOKAHEAD}|\\s+${SOURCE_TEMPLATE_EXPR_PLACEHOLDER}\\s*$|\\s*$)`;
 const SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD = `(?:${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD}|\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`;
 const SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD = `(?=\\s+${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+)\\s*$)`;
 const SOURCE_PKG_RUNNER_RE = new RegExp(
@@ -101,7 +102,7 @@ const SOURCE_TAILOR_SDK_RE = new RegExp(
   "g",
 );
 const SOURCE_DYNAMIC_TAILOR_SDK_RE = new RegExp(
-  `(^\\s*|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+$)`,
+  `(^\\s*|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+(?:${SOURCE_TEMPLATE_EXPR_PLACEHOLDER}\\s*)?$)`,
   "g",
 );
 const SOURCE_DYNAMIC_OPTION_TAILOR_SDK_RE = new RegExp(
@@ -498,6 +499,41 @@ function pushSourceStringEdit(
   }
 }
 
+function pushTemplateStringEdit(
+  edits: Array<[number, number, string]>,
+  source: string,
+  node: SgNode,
+): void {
+  const range = node.range();
+  const start = range.start.index + 1;
+  const end = range.end.index - 1;
+  let text = source.slice(start, end);
+  const substitutions: Array<{ placeholder: string; text: string }> = [];
+
+  const substitutionNodes = node
+    .children()
+    .filter((child: SgNode) => child.kind() === "template_substitution");
+  for (const child of substitutionNodes.toReversed()) {
+    const childRange = child.range();
+    const childStart = childRange.start.index - start;
+    const childEnd = childRange.end.index - start;
+    const placeholder = `__TAILOR_SDK_TEMPLATE_EXPR_${substitutions.length}__`;
+    substitutions.push({
+      placeholder,
+      text: source.slice(childRange.start.index, childRange.end.index),
+    });
+    text = `${text.slice(0, childStart)}${placeholder}${text.slice(childEnd)}`;
+  }
+
+  let replacement = renameSourceCommandText(text);
+  for (const substitution of substitutions) {
+    replacement = replacement.replaceAll(substitution.placeholder, substitution.text);
+  }
+  if (replacement !== source.slice(start, end)) {
+    edits.push([start, end, replacement]);
+  }
+}
+
 function transformSourceFile(source: string, filePath: string): string | null {
   let root: SgNode;
   try {
@@ -529,6 +565,8 @@ function transformSourceFile(source: string, filePath: string): string | null {
         pushSourceStringEdit(edits, source, node);
         return;
       }
+      pushTemplateStringEdit(edits, source, node);
+      return;
     }
 
     for (const child of node.children()) {
