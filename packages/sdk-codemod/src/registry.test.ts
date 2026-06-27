@@ -64,6 +64,9 @@ describe("getApplicableCodemods", () => {
 
     expect(renameBin?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
     expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(1);
+    const sourceStringPattern = renameBin?.sourceStringLegacyPatterns?.[0] as RegExp;
+    expect(sourceStringPattern.test("tailor-sdk deploy")).toBe(true);
+    expect(sourceStringPattern.test("tailor --profile tailor-sdk deploy")).toBe(false);
     const matches = picomatch(renameBin?.filePatterns ?? [], { dot: true });
     expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
     expect(matches("tailor.d.ts")).toBe(true);

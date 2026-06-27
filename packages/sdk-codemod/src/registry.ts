@@ -4,6 +4,72 @@ import { lt, gte, valid } from "semver";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
+const RENAME_BIN_SOURCE_VALUE_FLAGS = [
+  "--env-file-if-exists",
+  "--env-file",
+  "--profile",
+  "--config",
+  "--workspace-id",
+  "--arg",
+  "--query",
+  "--file",
+  "-e",
+  "-p",
+  "-c",
+  "-w",
+  "-a",
+  "-q",
+  "-f",
+];
+const RENAME_BIN_SOURCE_COMMANDS = [
+  "api",
+  "apply",
+  "authconnection",
+  "completion",
+  "crash-report",
+  "crashreport",
+  "deploy",
+  "executor",
+  "function",
+  "generate",
+  "init",
+  "login",
+  "logout",
+  "machineuser",
+  "oauth2client",
+  "open",
+  "organization",
+  "profile",
+  "query",
+  "remove",
+  "secret",
+  "setup",
+  "show",
+  "skills",
+  "staticwebsite",
+  "tailordb",
+  "upgrade",
+  "user",
+  "workflow",
+  "workspace",
+];
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const RENAME_BIN_SOURCE_VALUE_GUARDS = RENAME_BIN_SOURCE_VALUE_FLAGS.flatMap((flag) => {
+  const escaped = escapeRegExp(flag);
+  return [`(?<!${escaped} )`, `(?<!${escaped}=)`];
+}).join("");
+const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
+  [
+    "(?<![.\\w-])",
+    RENAME_BIN_SOURCE_VALUE_GUARDS,
+    "tailor-sdk(?![\\w-])(?:@[^\\s'\"`;|&)]+)?",
+    `(?=\\s+(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})\\b)`,
+  ].join(""),
+);
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -536,9 +602,7 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
     ],
     legacyPatterns: ["tailor-sdk"],
-    sourceStringLegacyPatterns: [
-      /(?<![.\w-])tailor-sdk(?![\w-])(?:@[^\s'"`;|&)]+)?(?=\s+(?:--?[\w-]+|api|apply|authconnection|completion|crash-report|crashreport|deploy|executor|function|generate|init|login|logout|machineuser|oauth2client|open|organization|profile|query|remove|secret|setup|show|skills|staticwebsite|tailordb|upgrade|user|workflow|workspace)\b)/,
-    ],
+    sourceStringLegacyPatterns: [RENAME_BIN_SOURCE_LEGACY_PATTERN],
     examples: [
       {
         lang: "sh",
