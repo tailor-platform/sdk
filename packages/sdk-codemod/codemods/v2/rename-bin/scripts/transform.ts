@@ -111,6 +111,8 @@ const SOURCE_DYNAMIC_OPTION_TAILOR_SDK_RE = new RegExp(
   "g",
 );
 const TAILOR_SDK_TOKEN_RE = /^tailor-sdk(@[^\s'"`;|&)]+)?$/;
+const TAILOR_CLI_TOKEN_RE =
+  /^(?:tailor|tailor-sdk(?:@[^\s'"`;|&)]+)?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
 const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)$/;
 const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
@@ -541,13 +543,13 @@ function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: stri
   if (argumentsNode?.kind() === "arguments") {
     const callArgs = sourceArrayElements(argumentsNode);
     const executable = callArgs[0] == null ? null : sourceStringContent(callArgs[0]!, source);
-    if (executable != null && TAILOR_SDK_TOKEN_RE.test(executable)) return true;
+    if (executable != null && TAILOR_CLI_TOKEN_RE.test(executable)) return true;
   }
 
   const elements = sourceArrayElements(arrayNode);
   return elements.slice(0, index).some((element) => {
     const value = sourceStringContent(element, source);
-    return value != null && (value === "tailor" || TAILOR_SDK_TOKEN_RE.test(value));
+    return value != null && TAILOR_CLI_TOKEN_RE.test(value);
   });
 }
 
