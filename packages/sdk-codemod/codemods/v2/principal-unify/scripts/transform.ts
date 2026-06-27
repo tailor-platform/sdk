@@ -2186,16 +2186,40 @@ function addReviewFinding(
   findings.push({ file, line, message, excerpt });
 }
 
+interface ReviewPrincipalBinding {
+  name: string;
+  bindingStart: number;
+  scope: [number, number];
+  shadowRoot?: SgNode;
+}
+
+function resolvesToReviewPrincipalBinding(
+  node: SgNode,
+  bindings: ReviewPrincipalBinding[],
+  root: SgNode,
+): boolean {
+  if (node.kind() !== "identifier") return false;
+  const pos = node.range().start.index;
+  return bindings.some((binding) => {
+    if (binding.name !== node.text() || !rangeContains(binding.scope, pos)) return false;
+    if (binding.shadowRoot) {
+      return !isInsideAnyRange(pos, collectAllShadowRanges(binding.shadowRoot, binding.name));
+    }
+    return !isShadowedLocalReference(root, binding.name, pos, binding.bindingStart);
+  });
+}
+
 function isPrincipalOptionalMemberExpression(
   node: SgNode,
-  principalLocalNames: Set<string>,
+  principalBindings: ReviewPrincipalBinding[],
+  root: SgNode,
 ): boolean {
   if (node.kind() !== "member_expression") return false;
   if (!node.children().some((child) => child.kind() === "optional_chain")) return false;
   const object = node.field("object");
   if (!object) return false;
   if (object.kind() === "identifier") {
-    return object.text() === "caller" || principalLocalNames.has(object.text());
+    return resolvesToReviewPrincipalBinding(object, principalBindings, root);
   }
   if (object.kind() !== "member_expression") return false;
   return object.field("property")?.text() === "caller";
@@ -2203,13 +2227,14 @@ function isPrincipalOptionalMemberExpression(
 
 function nodeContainsArgumentPrincipalOptionalAccess(
   node: SgNode,
-  principalLocalNames: Set<string>,
+  principalBindings: ReviewPrincipalBinding[],
+  root: SgNode,
 ): boolean {
   if (isFunctionNode(node)) return false;
-  if (isPrincipalOptionalMemberExpression(node, principalLocalNames)) return true;
+  if (isPrincipalOptionalMemberExpression(node, principalBindings, root)) return true;
   return node
     .children()
-    .some((child) => nodeContainsArgumentPrincipalOptionalAccess(child, principalLocalNames));
+    .some((child) => nodeContainsArgumentPrincipalOptionalAccess(child, principalBindings, root));
 }
 
 function reviewCallName(call: SgNode): string {
@@ -2227,7 +2252,7 @@ function collectNullableCallerReviewFindings(
   root: SgNode,
   source: string,
   file: string,
-  principalLocalNames: Set<string>,
+  principalBindings: ReviewPrincipalBinding[],
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {
@@ -2236,7 +2261,7 @@ function collectNullableCallerReviewFindings(
     const args = call.field("arguments");
     const nullableArg = args
       ?.children()
-      .find((child) => nodeContainsArgumentPrincipalOptionalAccess(child, principalLocalNames));
+      .find((child) => nodeContainsArgumentPrincipalOptionalAccess(child, principalBindings, root));
     if (!nullableArg) continue;
 
     const memberName = findMemberCallName(call);
@@ -2269,6 +2294,26 @@ function functionIdentifierParamName(fn: SgNode): string | null {
   return pattern?.kind() === "identifier" ? pattern.text() : null;
 }
 
+function objectPatternHasTopLevelProperty(pattern: SgNode, propertyName: string): boolean {
+  if (pattern.kind() !== "object_pattern") return false;
+  for (const child of pattern.children()) {
+    const kind = child.kind();
+    if (kind === "shorthand_property_identifier_pattern" && child.text() === propertyName) {
+      return true;
+    }
+    if (kind === "pair_pattern" && child.field("key")?.text() === propertyName) {
+      return true;
+    }
+    if (kind === "object_assignment_pattern") {
+      const inner = child
+        .children()
+        .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
+      if (inner?.text() === propertyName) return true;
+    }
+  }
+  return false;
+}
+
 function functionReadsContextUser(fn: SgNode, contextName: string): boolean {
   const body = fn.field("body");
   if (!body) return false;
@@ -2283,6 +2328,23 @@ function functionReadsContextUser(fn: SgNode, contextName: string): boolean {
     if (!object || object.kind() !== "identifier" || object.text() !== contextName) continue;
     if (isInsideAnyRange(object.range().start.index, shadowRanges)) continue;
     return true;
+  }
+
+  const destructures = body.findAll({
+    rule: {
+      kind: "variable_declarator",
+      has: {
+        field: "value",
+        kind: "identifier",
+        regex: `^${escapeRegex(contextName)}$`,
+      },
+    },
+  });
+  for (const decl of destructures) {
+    const value = decl.field("value");
+    if (!value || isInsideAnyRange(value.range().start.index, shadowRanges)) continue;
+    const name = decl.field("name");
+    if (name && objectPatternHasTopLevelProperty(name, "user")) return true;
   }
   return false;
 }
@@ -2402,37 +2464,56 @@ function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
   return bodies;
 }
 
-function collectCallerPatternBindings(pattern: SgNode, bindings: Set<string>): void {
+function collectCallerPatternBindings(
+  pattern: SgNode,
+  scope: [number, number],
+  bindings: ReviewPrincipalBinding[],
+  shadowRoot?: SgNode,
+): void {
   if (pattern.kind() !== "object_pattern") return;
   for (const child of pattern.children()) {
     const kind = child.kind();
     if (kind === "shorthand_property_identifier_pattern" && child.text() === "caller") {
-      bindings.add("caller");
+      bindings.push({ name: "caller", bindingStart: child.range().start.index, scope, shadowRoot });
     } else if (kind === "pair_pattern") {
       const key = child.field("key");
       const value = child.field("value");
       if (key?.text() === "caller" && value?.kind() === "identifier") {
-        bindings.add(value.text());
+        bindings.push({
+          name: value.text(),
+          bindingStart: value.range().start.index,
+          scope,
+          shadowRoot,
+        });
       }
     } else if (kind === "object_assignment_pattern") {
       const inner = child
         .children()
         .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
-      if (inner?.text() === "caller") bindings.add("caller");
+      if (inner?.text() === "caller") {
+        bindings.push({
+          name: "caller",
+          bindingStart: inner.range().start.index,
+          scope,
+          shadowRoot,
+        });
+      }
     }
   }
 }
 
-function collectResolverPrincipalLocalNames(root: SgNode): Set<string> {
-  const bindings = new Set<string>();
+function collectResolverPrincipalBindings(root: SgNode): ReviewPrincipalBinding[] {
+  const bindings: ReviewPrincipalBinding[] = [];
   for (const arrow of collectResolverBodyArrows(root)) {
     const param = getFirstFunctionParam(arrow);
     const pattern = param ? getFunctionParamPattern(param) : null;
     const body = arrow.field("body");
     if (!pattern || !body) continue;
+    const bodyRange = body.range();
+    const bodyScope: [number, number] = [bodyRange.start.index, bodyRange.end.index];
 
     if (pattern.kind() === "object_pattern") {
-      collectCallerPatternBindings(pattern, bindings);
+      collectCallerPatternBindings(pattern, bodyScope, bindings, body);
       continue;
     }
 
@@ -2452,7 +2533,8 @@ function collectResolverPrincipalLocalNames(root: SgNode): Set<string> {
     for (const decl of contextDestructures) {
       if (isInsideAnyRange(decl.range().start.index, shadowRanges)) continue;
       const name = decl.field("name");
-      if (name) collectCallerPatternBindings(name, bindings);
+      if (name)
+        collectCallerPatternBindings(name, enclosingScopeRange(decl) ?? bodyScope, bindings);
     }
   }
   return bindings;
@@ -2519,7 +2601,7 @@ export function reviewFindings(
   _filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!source.includes("?.") && !source.includes(".user")) return [];
+  if (!source.includes("?.") && !source.includes(".user") && !source.includes("user")) return [];
 
   let root: SgNode;
   try {
@@ -2530,12 +2612,12 @@ export function reviewFindings(
 
   const findings: LlmReviewFinding[] = [];
   const seen = new Set<string>();
-  const principalLocalNames = collectResolverPrincipalLocalNames(root);
+  const principalBindings = collectResolverPrincipalBindings(root);
   collectNullableCallerReviewFindings(
     root,
     source,
     relativePath,
-    principalLocalNames,
+    principalBindings,
     findings,
     seen,
   );
