@@ -186,6 +186,8 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain(".tailor-erd-base/.github/tailor-sdk.lock");
     expect(content).toContain("run_tailor_sdk tailordb erd export");
     expect(content).toContain("run_tailor_sdk tailordb erd diff");
+    expect(content).toContain("const namespacePattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;");
+    expect(content).toContain("Invalid ERD namespace in");
     expect(content).toContain("id: tailor-detect-base-package-manager");
     expect(content).toContain("id: tailor-setup-base-pnpm");
     expect(content).toContain("id: tailor-setup-base-node");

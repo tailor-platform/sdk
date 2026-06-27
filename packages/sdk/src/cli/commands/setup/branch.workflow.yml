@@ -98,6 +98,7 @@ jobs:
           const workspaceName = process.env.WORKSPACE_NAME;
           const output = process.env.GITHUB_OUTPUT;
           const dirPattern = /^[A-Za-z0-9._/-]+$/;
+          const namespacePattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
           function lockTarget(file) {
             try {
@@ -113,10 +114,17 @@ jobs:
             }
           }
 
-          function namespacesFromTarget(target) {
-            return target?.inputs?.erdPreview === true && Array.isArray(target.inputs?.erdNamespaces)
-              ? target.inputs.erdNamespaces
-              : [];
+          function namespacesFromTarget(target, label) {
+            const namespaces =
+              target?.inputs?.erdPreview === true && Array.isArray(target.inputs?.erdNamespaces)
+                ? target.inputs.erdNamespaces
+                : [];
+            for (const namespace of namespaces) {
+              if (typeof namespace !== "string" || !namespacePattern.test(namespace)) {
+                throw new Error(`Invalid ERD namespace in ${label}: ${String(namespace)}`);
+              }
+            }
+            return namespaces;
           }
 
           function normalizeDir(value, label) {
@@ -139,8 +147,8 @@ jobs:
           const baseAppDir = normalizeDir(baseTarget?.inputs?.dir, "base setup lock");
           const namespaces = [
             ...new Set([
-              ...namespacesFromTarget(headTarget),
-              ...namespacesFromTarget(baseTarget),
+              ...namespacesFromTarget(headTarget, "head setup lock"),
+              ...namespacesFromTarget(baseTarget, "base setup lock"),
             ]),
           ].sort((a, b) => a.localeCompare(b));
 
