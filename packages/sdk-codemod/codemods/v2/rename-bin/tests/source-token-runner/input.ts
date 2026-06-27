@@ -51,6 +51,7 @@ const profileCommandPayload = ["tailor-sdk", "--profile", "tailor-sdk deploy", "
 const argCommandPayload = ["tailor-sdk", "function", "test-run", "--arg", "{\"cmd\":\"tailor-sdk deploy\"}"];
 const argCommandPayloadExpression = ["tailor-sdk", "function", "test-run", "--arg", cond ? "tailor-sdk deploy" : "{}"];
 const argCommandPayloadTemplate = ["tailor-sdk", "function", "test-run", "--arg", `tailor-sdk deploy`];
+const dynamicArgFlagPayload = ["tailor-sdk", "function", "test-run", includeArg ? "--arg" : "", "tailor-sdk deploy"];
 const dynamicBinaryArgs = ["tailor-sdk", cmd];
 const spreadBinaryArgs = ["tailor-sdk", ...args];
 const wrappedCommandArgs = ["tailor-sdk", "login" as const];

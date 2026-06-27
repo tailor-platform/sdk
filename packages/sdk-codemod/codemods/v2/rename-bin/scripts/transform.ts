@@ -1478,18 +1478,60 @@ function protectStandaloneTailorSdkSourceStrings(
     const parent = element.parent();
     return parent?.kind() === "array" && !isLikelyTailorArgvArray(parent);
   };
-  const sourceStringFragmentTokens = (node: SgNode): SourceStringToken[] => {
-    return node
-      .children()
-      .filter((child: SgNode) => child.kind() === "string_fragment")
-      .map((fragment: SgNode) => {
-        const range = fragment.range();
-        return {
+  const templateFragmentsWithOffsets = (
+    node: SgNode,
+  ): Array<{ fragment: SourceStringToken; offset: number }> => {
+    const fragments: Array<{ fragment: SourceStringToken; offset: number }> = [];
+    let offset = 0;
+    for (const child of node.children()) {
+      if (child.kind() === "string_fragment") {
+        const range = child.range();
+        const fragment = {
           value: source.slice(range.start.index, range.end.index),
           start: range.start.index,
           end: range.end.index,
         };
-      });
+        fragments.push({ fragment, offset });
+        offset += fragment.value.length;
+      } else if (child.kind() === "template_substitution") {
+        offset += TEMPLATE_SUBSTITUTION_PLACEHOLDER.length;
+      }
+    }
+    return fragments;
+  };
+  const templateStaticText = (node: SgNode): string => {
+    let text = "";
+    for (const child of node.children()) {
+      if (child.kind() === "string_fragment") {
+        const range = child.range();
+        text += source.slice(range.start.index, range.end.index);
+      } else if (child.kind() === "template_substitution") {
+        text += TEMPLATE_SUBSTITUTION_PLACEHOLDER;
+      }
+    }
+    return text;
+  };
+  const expressionStringValues = (node: SgNode): string[] => {
+    const token = sourceStringExpressionToken(node);
+    if (token) return [token.value];
+    const values: string[] = [];
+    const expressionChildren = runnerPackageExpressionChildren(node);
+    const children = expressionChildren.length > 0 ? expressionChildren : node.children();
+    for (const child of children) {
+      values.push(...expressionStringValues(child));
+    }
+    return values;
+  };
+  const isDynamicOpenTailorCliValueFlag = (node: SgNode): boolean => {
+    const values = expressionStringValues(node)
+      .map((value) => value.trim())
+      .filter((value) => value !== "");
+    return values.length > 0 && values.every((value) => isOpenTailorCliValueFlag(value));
+  };
+  const isDynamicOpenTailorCliValueFlagToken = (token: TemplateToken): boolean => {
+    return token.substitutions.some((substitution) =>
+      isDynamicOpenTailorCliValueFlag(substitution),
+    );
   };
   const protectTemplateSubstitutions = (token: TemplateToken): void => {
     for (const substitution of token.substitutions) {
@@ -1527,6 +1569,10 @@ function protectStandaloneTailorSdkSourceStrings(
         continue;
       }
       if (isOpenTailorCliValueFlag(token.value)) {
+        skipNextTailorValue = true;
+        continue;
+      }
+      if (isDynamicOpenTailorCliValueFlagToken(token)) {
         skipNextTailorValue = true;
       }
     }
@@ -1581,6 +1627,12 @@ function protectStandaloneTailorSdkSourceStrings(
         }
       }
 
+      if (afterTailorBinary && isDynamicOpenTailorCliValueFlag(child)) {
+        skipNextTailorValue = true;
+        visit(child);
+        continue;
+      }
+
       visit(child);
     }
   };
@@ -1613,26 +1665,22 @@ function protectStandaloneTailorSdkSourceStrings(
       kind === "template_string" &&
       node.children().some((child: SgNode) => child.kind() === "template_substitution")
     ) {
-      const fragments = sourceStringFragmentTokens(node);
-      const staticText = fragments
-        .map((fragment) => fragment.value)
-        .join(TEMPLATE_SUBSTITUTION_PLACEHOLDER);
-      if (fragments.some((fragment) => fragment.value.includes("tailor-sdk"))) {
+      const fragments = templateFragmentsWithOffsets(node);
+      const staticText = templateStaticText(node);
+      if (fragments.some(({ fragment }) => fragment.value.includes("tailor-sdk"))) {
         const rewriteableRanges = [
           ...collectRewriteableTailorSdkRanges(staticText),
           ...collectDynamicTemplateTailorCommandRanges(staticText),
         ];
-        let fragmentOffset = 0;
-        for (const fragment of fragments) {
+        for (const { fragment, offset } of fragments) {
           ranges.push(
             ...collectNonCommandTailorSdkRanges(
               fragment.value,
               fragment.start,
               rewriteableRanges,
-              fragmentOffset,
+              offset,
             ),
           );
-          fragmentOffset += fragment.value.length + TEMPLATE_SUBSTITUTION_PLACEHOLDER.length;
         }
       }
       protectTailorCliTemplateValues(node);
