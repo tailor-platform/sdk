@@ -404,7 +404,6 @@ export async function runCodemods(
           existing.push(...findings);
           findingsByCodemod.set(lt.id, existing);
         }
-        continue;
       }
       if (lt.suspiciousPatterns.length === 0) continue;
       if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
