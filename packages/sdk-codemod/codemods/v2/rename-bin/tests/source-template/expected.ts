@@ -24,6 +24,8 @@ const dynamicNpxRegistryCommand = `npx --registry ${registry} @tailor-platform/s
 const dynamicRunnerCommand = `${runner} tailor-sdk login`;
 const literalPlaceholderCommand = `prefix __TAILOR_SDK_TEMPLATE_EXPR_0__ tailor-sdk ${subcommand}`;
 const npxOtherPackage = "npx foo tailor-sdk login";
+const npxOtherPackageFlag = "npx foo -p tailor-sdk tailor-sdk login";
+const npxOtherPackageFlagEquals = "npx foo --package=tailor-sdk tailor-sdk login";
 const dynamicBunxCommand = `bunx @tailor-platform/sdk ${subcommand}`;
 const dynamicDlxCommand = `pnpm dlx @tailor-platform/sdk ${subcommand}`;
 const pnpmDlxWithOption = "pnpm --silent dlx @tailor-platform/sdk login";
@@ -43,6 +45,7 @@ const npxProfileValue = "npx @tailor-platform/sdk -p tailor-sdk login";
 const pnpmDlxPackageFlag = "pnpm dlx --package @tailor-platform/sdk tailor login";
 const pnpmDlxPackageFlagEquals = "pnpm dlx --package=@tailor-platform/sdk tailor login";
 const yarnDlxPackageFlag = "yarn dlx --package @tailor-platform/sdk tailor login";
+const pnpmDlxOtherPackageFlag = "pnpm dlx foo -p tailor-sdk tailor-sdk login";
 const npxOtherPackageQuoted = "npx foo \"tailor-sdk login\"";
 const npxOtherPackageSingleQuoted = "npx foo 'tailor-sdk login'";
 const shellWrapped = "sh -c \"tailor deploy\"";
