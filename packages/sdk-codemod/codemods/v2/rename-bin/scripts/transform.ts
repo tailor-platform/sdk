@@ -389,6 +389,43 @@ function packageRunnerPackageStartTokenIndex(tokens: readonly string[]): number 
 }
 
 function renameSourcePackageRunnerTokens(value: string): string {
+  return transformSourceCommandSegments(value, renameSourcePackageRunnerTokenSegment);
+}
+
+function transformSourceCommandSegments(
+  value: string,
+  transform: (segment: string) => string,
+): string {
+  let result = "";
+  let segmentStart = 0;
+  let quote: string | null = null;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]!;
+    if (quote != null) {
+      if (char === "\\") {
+        index += 1;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "\\" && (value[index + 1] === '"' || value[index + 1] === "'")) {
+      index += 1;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === ";" || char === "&" || char === "|") {
+      result += transform(value.slice(segmentStart, index)) + char;
+      segmentStart = index + 1;
+    }
+  }
+  return result + transform(value.slice(segmentStart));
+}
+
+function renameSourcePackageRunnerTokenSegment(value: string): string {
   const spans = sourceTokenSpans(value);
   if (spans == null) return value;
   const tokens = spans.map((span) => span.value);
@@ -865,7 +902,73 @@ function sourceStaticStringContent(
 ): string | null {
   return (
     sourceStringContent(node, source) ??
-    (node.kind() === "identifier" ? (sourceStringVariables.get(node.text()) ?? null) : null)
+    (node.kind() === "identifier"
+      ? (sourceScopedStringVariableContent(node, source) ??
+        sourceStringVariables.get(node.text()) ??
+        null)
+      : null)
+  );
+}
+
+function sourceScopedStringVariableContent(identifier: SgNode, source: string): string | null {
+  const name = identifier.text();
+  const before = identifier.range().start.index;
+  let current = identifier.parent();
+  while (current != null) {
+    if (isSourceScopeNode(current)) {
+      const value = findSourceStringVariableInScope(current, name, before, source);
+      if (value != null) return value;
+    }
+    current = current.parent();
+  }
+  return null;
+}
+
+function findSourceStringVariableInScope(
+  scope: SgNode,
+  name: string,
+  before: number,
+  source: string,
+): string | null {
+  let value: string | null = null;
+  const visit = (node: SgNode): void => {
+    if (node !== scope && isSourceScopeNode(node)) return;
+    if (node.kind() === "variable_declarator" && node.range().end.index < before) {
+      const declarationValue = sourceStringVariableDeclarationValue(node, name, source);
+      if (declarationValue != null) value = declarationValue;
+      return;
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(scope);
+  return value;
+}
+
+function sourceStringVariableDeclarationValue(
+  node: SgNode,
+  name: string,
+  source: string,
+): string | null {
+  if (!isConstVariableDeclarator(node)) return null;
+  const children = node.children();
+  const identifier = children.find((child) => child.kind() === "identifier");
+  if (identifier?.text() !== name) return null;
+  const initializer = children.findLast(
+    (child) => sourceConstInitializerContent(child, source) != null,
+  );
+  return initializer == null ? null : sourceConstInitializerContent(initializer, source);
+}
+
+function isSourceScopeNode(node: SgNode): boolean {
+  const kind = node.kind();
+  return (
+    kind === "program" ||
+    kind === "statement_block" ||
+    kind === "function_declaration" ||
+    kind === "arrow_function" ||
+    kind === "method_definition"
   );
 }
 
@@ -1351,22 +1454,26 @@ function templateSubstitutionPlaceholder(
 
 function templateSubstitutionsNeedCliRenameMigration(
   text: string,
-  substitutions: ReadonlyArray<{ placeholder: string; text: string }>,
-  sourceStringVariables: ReadonlyMap<string, string>,
+  substitutions: ReadonlyArray<{ placeholder: string; migrationText: string }>,
 ): boolean {
   let restored = text;
   for (const substitution of substitutions) {
-    restored = restored.replaceAll(substitution.placeholder, () =>
-      templateSubstitutionMigrationText(substitution.text, sourceStringVariables),
-    );
+    restored = restored.replaceAll(substitution.placeholder, () => substitution.migrationText);
   }
   return needsCliRenameMigration(restored);
 }
 
 function templateSubstitutionMigrationText(
+  node: SgNode,
+  source: string,
   value: string,
   sourceStringVariables: ReadonlyMap<string, string>,
 ): string {
+  const identifier = node.children().find((child) => child.kind() === "identifier");
+  if (identifier != null && node.text() === `\${${identifier.text()}}`) {
+    const identifierValue = sourceStaticStringContent(identifier, source, sourceStringVariables);
+    if (identifierValue != null) return identifierValue;
+  }
   if (!value.startsWith("${") || !value.endsWith("}")) return value;
   const expression = value.slice(2, -1).trim();
   return sourceStringVariables.get(expression) ?? expression;
@@ -1382,7 +1489,7 @@ function pushTemplateStringEdit(
   const start = range.start.index + 1;
   const end = range.end.index - 1;
   let text = source.slice(start, end);
-  const substitutions: Array<{ placeholder: string; text: string }> = [];
+  const substitutions: Array<{ placeholder: string; text: string; migrationText: string }> = [];
   const usedPlaceholders = new Set<string>();
 
   const substitutionNodes = node
@@ -1397,22 +1504,25 @@ function pushTemplateStringEdit(
       text,
       usedPlaceholders,
     );
+    const substitutionText = isTemplateSubstitutionCliValue(text, childStart)
+      ? source.slice(childRange.start.index, childRange.end.index)
+      : transformTemplateSubstitutionText(
+          source.slice(childRange.start.index, childRange.end.index),
+        );
     substitutions.push({
       placeholder,
-      text: isTemplateSubstitutionCliValue(text, childStart)
-        ? source.slice(childRange.start.index, childRange.end.index)
-        : transformTemplateSubstitutionText(
-            source.slice(childRange.start.index, childRange.end.index),
-          ),
+      text: substitutionText,
+      migrationText: templateSubstitutionMigrationText(
+        child,
+        source,
+        substitutionText,
+        sourceStringVariables,
+      ),
     });
     text = `${text.slice(0, childStart)}${placeholder}${text.slice(childEnd)}`;
   }
 
-  let replacement = templateSubstitutionsNeedCliRenameMigration(
-    text,
-    substitutions,
-    sourceStringVariables,
-  )
+  let replacement = templateSubstitutionsNeedCliRenameMigration(text, substitutions)
     ? text
     : renameSourceCommandText(text);
   for (const substitution of substitutions) {
