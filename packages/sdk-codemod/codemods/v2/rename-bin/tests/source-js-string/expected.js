@@ -1,6 +1,7 @@
 const script = "tailor deploy";
 const spawned = spawn("tailor", ["deploy"]);
 const argSpawned = spawn("tailor", ["--arg", "tailor-sdk deploy", "deploy"]);
+const inlineArgSpawned = spawn("tailor", ["--arg=tailor-sdk deploy", "deploy"]);
 const shellSpawned = spawn("sh", ["-c", "tailor deploy"]);
 const npxSpawned = spawn("npx", ["@tailor-platform/sdk", "login"]);
 const npxOptionSpawned = spawn("npx", ["--yes", "@tailor-platform/sdk@latest", "login"]);
@@ -20,6 +21,7 @@ const pnpmDlxDynamicSpawned = spawn("pnpm", ["dlx", "@tailor-platform/sdk"]);
 const pnpmDlxOtherPackageSpawned = spawn("pnpm", ["dlx", "foo", "tailor-sdk", "login"]);
 const pnpmDlxOptionSpawned = spawn("pnpm", ["--silent", "dlx", "@tailor-platform/sdk", "login"]);
 const pnpmDlxSplitOptionSpawned = spawn("pnpm", ["--filter", "app", "dlx", "@tailor-platform/sdk", "login"]);
+const pnpmDlxRegistrySpawned = spawn("pnpm", ["--registry", registry, "dlx", "@tailor-platform/sdk", "login"]);
 const pnpmExecSplitOptionSpawned = spawn("pnpm", ["--filter", "app", "exec", "tailor", "deploy"]);
 const yarnDlxOptionSpawned = spawn("yarn", ["--quiet", "dlx", "@tailor-platform/sdk", "login"]);
 const pnpmBinarySpawned = spawn("pnpm", ["tailor-sdk", "deploy"]);
