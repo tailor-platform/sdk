@@ -255,7 +255,7 @@ function protectSourceCliValueReferences(value: string): {
 function restoreSourceCliValueReferences(value: string, protectedValues: string[]): string {
   let restored = value;
   for (const [index, protectedValue] of protectedValues.entries()) {
-    restored = restored.replaceAll(`__TAILOR_SDK_SOURCE_VALUE_${index}__`, protectedValue);
+    restored = restored.replaceAll(`__TAILOR_SDK_SOURCE_VALUE_${index}__`, () => protectedValue);
   }
   return restored;
 }
@@ -1233,8 +1233,7 @@ function templateSubstitutionsNeedCliRenameMigration(
 ): boolean {
   let restored = text;
   for (const substitution of substitutions) {
-    restored = restored.replaceAll(
-      substitution.placeholder,
+    restored = restored.replaceAll(substitution.placeholder, () =>
       templateSubstitutionMigrationText(substitution.text),
     );
   }
@@ -1284,7 +1283,7 @@ function pushTemplateStringEdit(
     ? text
     : renameSourceCommandText(text);
   for (const substitution of substitutions) {
-    replacement = replacement.replaceAll(substitution.placeholder, substitution.text);
+    replacement = replacement.replaceAll(substitution.placeholder, () => substitution.text);
   }
   if (replacement !== source.slice(start, end)) {
     edits.push([start, end, replacement]);
