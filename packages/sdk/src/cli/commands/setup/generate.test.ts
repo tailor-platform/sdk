@@ -191,6 +191,7 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("id: tailor-detect-base-package-manager");
     expect(content).toContain("id: tailor-setup-base-pnpm");
     expect(content).toContain("id: tailor-setup-base-node");
+    expect(content).toContain("id: tailor-setup-base-yarn");
     expect(content).toContain("id: tailor-setup-base-bun");
     expect(content).toContain("id: tailor-install-base");
     expect(content).toContain("id: tailor-restore-head-setup");
@@ -235,6 +236,7 @@ describe("renderBranchWorkflow", () => {
         "tailor-erd-preview/tailor-detect-base-package-manager",
         "tailor-erd-preview/tailor-setup-base-pnpm",
         "tailor-erd-preview/tailor-setup-base-node",
+        "tailor-erd-preview/tailor-setup-base-yarn",
         "tailor-erd-preview/tailor-setup-base-bun",
         "tailor-erd-preview/tailor-install-base",
         "tailor-erd-preview/tailor-restore-head-setup",
@@ -268,9 +270,13 @@ describe("renderBranchWorkflow", () => {
     expect(baseSetup).toContain('fallback = "10";');
     expect(baseSetup).toContain('echo "pnpm-version=$base_pnpm_version" >> "$GITHUB_OUTPUT"');
     expect(baseSetup).toContain("actions/setup-node@");
+    expect(baseSetup).toContain("id: tailor-setup-base-yarn");
+    expect(baseSetup).toContain("corepack enable");
     expect(baseSetup).toContain("oven-sh/setup-bun@");
     expect(baseSetup).toContain("pnpm install --frozen-lockfile");
     expect(baseSetup).toContain("npm ci");
+    expect(baseSetup).toContain("grep -q '^__metadata:' yarn.lock");
+    expect(baseSetup).toContain("yarn install --immutable");
     expect(baseSetup).toContain("yarn install --frozen-lockfile");
     expect(baseSetup).toContain("bun install --frozen-lockfile");
   });
