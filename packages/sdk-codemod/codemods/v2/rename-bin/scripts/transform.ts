@@ -90,7 +90,7 @@ const SOURCE_PKG_RUNNER_RE = new RegExp(
   "g",
 );
 const SOURCE_NPX_PACKAGE_FLAG_VALUE_RE = new RegExp(
-  `\\b(npx(?:(?!\\s+(?:-p|--package)(?:=|\\s+))\\s+${SOURCE_ARG_VALUE})*\\s+(?:-p|--package)(?:=|\\s+))tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`,
+  `\\b(npx(?:(?!\\s+(?:-p|--package)(?:=|\\s+))\\s+${SOURCE_ARG_VALUE})*\\s+(?:-p|--package)(?:=|\\s+))tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
   "g",
 );
 const SOURCE_NPX_PACKAGE_FLAG_BINARY_RE = new RegExp(
@@ -189,8 +189,10 @@ function renameSourceCommandText(value: string): string {
   );
   const withPackageFlagBinaries = withPackageRunners.replace(
     SOURCE_NPX_PACKAGE_FLAG_BINARY_RE,
-    (_match, prefix: string, version?: string) =>
-      version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}tailor`,
+    (match: string, prefix: string, version?: string) => {
+      if (/(?:^|\s)(?:-p|--package)\s+$/.test(prefix)) return match;
+      return version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}tailor`;
+    },
   );
   const withCommands = withPackageFlagBinaries.replace(
     SOURCE_TAILOR_SDK_RE,

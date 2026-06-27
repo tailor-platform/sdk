@@ -27,6 +27,8 @@ const yarnDlxWithOption = "yarn --quiet dlx @tailor-platform/sdk login";
 const nestedCommand = `run ${"tailor deploy"}`;
 const nestedTailorCommand = `tailor deploy ${"tailor login"}`;
 const npxPackageFlag = "npx -p @tailor-platform/sdk tailor login";
+const npxPackageSplitOnly = "npx --package @tailor-platform/sdk";
+const npxPackageSplitHelp = "npx -p @tailor-platform/sdk --help";
 const npxPackageFlagEquals = "npx --package=@tailor-platform/sdk tailor login";
 const npxPackageFlagDynamic = `npx -p @tailor-platform/sdk tailor ${subcommand}`;
 const npxPackageEqualsDynamic = `npx --package=@tailor-platform/sdk tailor ${subcommand}`;

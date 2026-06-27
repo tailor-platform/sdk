@@ -60,6 +60,24 @@ const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Se
   "string_fragment",
   "jsx_text",
 ]);
+const SOURCE_STRING_FRAGMENT_SEPARATOR = "\u0000";
+const SOURCE_VALUE_FLAGS = new Set([
+  "--env-file-if-exists",
+  "--env-file",
+  "--profile",
+  "--config",
+  "--workspace-id",
+  "--arg",
+  "--query",
+  "--file",
+  "-e",
+  "-p",
+  "-c",
+  "-w",
+  "-a",
+  "-q",
+  "-f",
+]);
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
@@ -161,6 +179,7 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   const fragments: string[] = [];
   const visit = (node: SgNode): void => {
     if (node.kind() === "string_fragment") {
+      if (isSourceValueArgument(node, content)) return;
       fragments.push(node.text());
       return;
     }
@@ -169,7 +188,59 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
     }
   };
   visit(root);
-  return fragments.join("\n");
+  return fragments.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function isSyntaxOnlyNode(node: SgNode): boolean {
+  const kind = node.kind();
+  return (
+    kind === "[" ||
+    kind === "]" ||
+    kind === "(" ||
+    kind === ")" ||
+    kind === "," ||
+    kind === "comment"
+  );
+}
+
+function sourceArrayElements(node: SgNode): SgNode[] {
+  return node.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
+}
+
+function nodeRangeKey(node: SgNode): string {
+  const range = node.range();
+  return `${range.start.index}:${range.end.index}`;
+}
+
+function sourceStringNodeContent(node: SgNode, source: string): string | null {
+  const kind = node.kind();
+  if (kind !== "string" && kind !== "template_string") return null;
+  if (
+    kind === "template_string" &&
+    node.children().some((child: SgNode) => child.kind() === "template_substitution")
+  ) {
+    return null;
+  }
+  const range = node.range();
+  return source.slice(range.start.index + 1, range.end.index - 1);
+}
+
+function isSourceValueArgument(fragment: SgNode, source: string): boolean {
+  const stringNode = fragment.parent();
+  if (stringNode == null) return false;
+  const parent = stringNode.parent();
+  if (parent?.kind() !== "array") return false;
+
+  const elements = sourceArrayElements(parent);
+  const index = elements.findIndex((element) => nodeRangeKey(element) === nodeRangeKey(stringNode));
+  if (index <= 0) return false;
+
+  const previous = sourceStringNodeContent(elements[index - 1]!, source);
+  return (
+    previous != null &&
+    SOURCE_VALUE_FLAGS.has(previous.split("=", 1)[0]!) &&
+    !previous.includes("=")
+  );
 }
 
 function sourceLang(relative: string): Lang {
