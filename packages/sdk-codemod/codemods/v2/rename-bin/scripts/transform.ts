@@ -16,6 +16,7 @@ const PKG_RUNNER_RE =
 // (e.g. `tailor-sdk-skills`) to avoid partial-match rewrites.
 const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const SOURCE_ARG_VALUE = `(?:[^\\s'"\`;|&]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
 const TAILOR_CLI_COMMANDS = [
   "api",
   "apply",
@@ -49,14 +50,31 @@ const TAILOR_CLI_COMMANDS = [
   "workspace",
 ] as const;
 const TAILOR_CLI_COMMAND_PATTERN = `(?:${TAILOR_CLI_COMMANDS.join("|")})`;
+const TAILOR_CLI_VALUE_FLAG =
+  "(?:--env-file-if-exists|--env-file|--profile|--config|--workspace-id|--arg|--query|--file|-e|-p|-c|-w|-a|-q|-f)";
+const SOURCE_COMMAND_GAP = `(?:\\s+--?[\\w-]+(?:=${SOURCE_ARG_VALUE})?(?:\\s+${SOURCE_ARG_VALUE})?)*`;
+const SOURCE_CLI_VALUE_REFERENCE_RE = new RegExp(
+  `(${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+))(${SOURCE_ARG_VALUE})`,
+  "g",
+);
 const SOURCE_PKG_RUNNER_RE = new RegExp(
-  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b)`,
+  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b)`,
   "g",
 );
 const SOURCE_TAILOR_SDK_RE = new RegExp(
-  `(?<![.\\w-])tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b)`,
+  `(?<![.\\w-])tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b)`,
   "g",
 );
+const SOURCE_DYNAMIC_PKG_RUNNER_RE = new RegExp(
+  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+$)`,
+  "g",
+);
+const SOURCE_DYNAMIC_TAILOR_SDK_RE = new RegExp(
+  `(^|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+$)`,
+  "g",
+);
+const TAILOR_SDK_TOKEN_RE = /^tailor-sdk(@[^\s'"`;|&)]+)?$/;
+const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)$/;
 
 function renameBinary(value: string): string {
   const withRunners = value.replace(PKG_RUNNER_RE, (_, runner: string, version?: string) =>
@@ -67,13 +85,52 @@ function renameBinary(value: string): string {
   );
 }
 
-function renameSourceCommandText(value: string): string {
-  const withRunners = value.replace(SOURCE_PKG_RUNNER_RE, (_, runner: string, version?: string) =>
-    version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
+function protectSourceCliValueReferences(value: string): {
+  source: string;
+  protectedValues: string[];
+} {
+  const protectedValues: string[] = [];
+  const source = value.replace(
+    SOURCE_CLI_VALUE_REFERENCE_RE,
+    (match, prefix: string, arg: string) => {
+      if (!arg.includes("tailor-sdk")) return match;
+      const placeholder = `__TAILOR_SDK_SOURCE_VALUE_${protectedValues.length}__`;
+      protectedValues.push(arg);
+      return `${prefix}${placeholder}`;
+    },
   );
-  return withRunners.replace(SOURCE_TAILOR_SDK_RE, (_match, version?: string) =>
+  return { source, protectedValues };
+}
+
+function restoreSourceCliValueReferences(value: string, protectedValues: string[]): string {
+  let restored = value;
+  for (const [index, protectedValue] of protectedValues.entries()) {
+    restored = restored.replaceAll(`__TAILOR_SDK_SOURCE_VALUE_${index}__`, protectedValue);
+  }
+  return restored;
+}
+
+function renameSourceCommandText(value: string): string {
+  const protectedValue = protectSourceCliValueReferences(value);
+  const withRunners = protectedValue.source.replace(
+    SOURCE_PKG_RUNNER_RE,
+    (_, runner: string, version?: string) =>
+      version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
+  );
+  const withCommands = withRunners.replace(SOURCE_TAILOR_SDK_RE, (_match, version?: string) =>
     version ? `@tailor-platform/sdk${version}` : "tailor",
   );
+  const withDynamicRunners = withCommands.replace(
+    SOURCE_DYNAMIC_PKG_RUNNER_RE,
+    (_, runner: string, version?: string) =>
+      version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
+  );
+  const updated = withDynamicRunners.replace(
+    SOURCE_DYNAMIC_TAILOR_SDK_RE,
+    (_match, prefix: string, version?: string) =>
+      version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}tailor`,
+  );
+  return restoreSourceCliValueReferences(updated, protectedValue.protectedValues);
 }
 
 function sourceLang(filePath: string): Lang {
@@ -89,6 +146,80 @@ function pushSourceTextEdit(
 ): void {
   const text = source.slice(start, end);
   const replacement = renameSourceCommandText(text);
+  if (replacement !== text) {
+    edits.push([start, end, replacement]);
+  }
+}
+
+function nodeRangeKey(node: SgNode): string {
+  const range = node.range();
+  return `${range.start.index}:${range.end.index}`;
+}
+
+function sourceStringContent(node: SgNode, source: string): string | null {
+  const kind = node.kind();
+  if (kind !== "string" && kind !== "template_string") return null;
+  if (
+    kind === "template_string" &&
+    node.children().some((child: SgNode) => child.kind() === "template_substitution")
+  ) {
+    return null;
+  }
+  const range = node.range();
+  return source.slice(range.start.index + 1, range.end.index - 1);
+}
+
+function isSyntaxOnlyNode(node: SgNode): boolean {
+  const kind = node.kind();
+  return (
+    kind === "[" ||
+    kind === "]" ||
+    kind === "(" ||
+    kind === ")" ||
+    kind === "," ||
+    kind === "comment"
+  );
+}
+
+function isStaticTailorCommandNode(node: SgNode, source: string): boolean {
+  const value = sourceStringContent(node, source);
+  return (
+    value != null && TAILOR_CLI_COMMANDS.includes(value as (typeof TAILOR_CLI_COMMANDS)[number])
+  );
+}
+
+function isCliBinaryArgument(node: SgNode, source: string): boolean {
+  const parent = node.parent();
+  if (parent?.kind() === "array") {
+    const elements = parent.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
+    const index = elements.findIndex((child: SgNode) => nodeRangeKey(child) === nodeRangeKey(node));
+    const next = elements[index + 1];
+    return index === 0 && next != null && isStaticTailorCommandNode(next, source);
+  }
+
+  if (parent?.kind() !== "arguments") return false;
+  const parentRange = nodeRangeKey(parent);
+  const call = parent.parent();
+  if (call?.kind() !== "call_expression") return false;
+  const callee = call.children().find((child: SgNode) => nodeRangeKey(child) !== parentRange);
+  if (!CLI_ARGUMENT_CALLEE_RE.test(callee?.text() ?? "")) return false;
+  const args = parent.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
+  return args[0] != null && nodeRangeKey(args[0]) === nodeRangeKey(node);
+}
+
+function pushSourceStringEdit(
+  edits: Array<[number, number, string]>,
+  source: string,
+  node: SgNode,
+): void {
+  const range = node.range();
+  const start = range.start.index + 1;
+  const end = range.end.index - 1;
+  const text = source.slice(start, end);
+  const replacement =
+    TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
+      ? renameBinary(text)
+      : renameSourceCommandText(text);
   if (replacement !== text) {
     edits.push([start, end, replacement]);
   }
@@ -113,7 +244,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
     }
 
     if (kind === "string") {
-      pushSourceTextEdit(edits, source, range.start.index + 1, range.end.index - 1);
+      pushSourceStringEdit(edits, source, node);
       return;
     }
 
@@ -122,7 +253,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
         .children()
         .some((child: SgNode) => child.kind() === "template_substitution");
       if (!hasSubstitution) {
-        pushSourceTextEdit(edits, source, range.start.index + 1, range.end.index - 1);
+        pushSourceStringEdit(edits, source, node);
         return;
       }
     }
