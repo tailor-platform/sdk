@@ -7,8 +7,8 @@ const inlineTemplateArgSpawned = spawn("tailor", [`--arg=tailor-sdk ${cmd}`, "de
 const nameValueSpawned = spawn("tailor", ["tailordb", "migration", "generate", "--name", "tailor-sdk deploy"]);
 const directNameValueSpawned = spawn("tailor", ["tailordb", "migration", "generate", "--name", "tailor-sdk deploy"]);
 const shellSpawned = spawn("sh", ["-c", "tailor deploy"]);
-const cliRenameCommandSpawned = spawn("tailor-sdk", ["crash-report", "list"]);
-const cliRenameFlagSpawned = spawn("tailor-sdk", ["login", "--machineuser"]);
+const cliRenameCommandSpawned = spawn("tailor", ["crash-report", "list"]);
+const cliRenameFlagSpawned = spawn("tailor", ["login", "--machineuser"]);
 const npxSpawned = spawn("npx", ["@tailor-platform/sdk", "login"]);
 const npxOptionSpawned = spawn("npx", ["--yes", "@tailor-platform/sdk@latest", "login"]);
 const npxProfileSpawned = spawn("npx", ["@tailor-platform/sdk", "--profile", "dev", "login"]);
@@ -24,6 +24,8 @@ const npxOtherPackageEqualsSpawned = spawn("npx", ["foo", "--package=tailor-sdk"
 const npxOtherPackageSplitSpawned = spawn("npx", ["foo", "--package", "tailor-sdk", "tailor-sdk", "login"]);
 const npxToolValueSpawned = spawn("npx", ["-p", "some-tool", "tool", "--name", "tailor-sdk", "deploy"]);
 const npxPackageFlagSpawned = spawn("npx", ["-p", "@tailor-platform/sdk", "tailor", "login"]);
+const npxPackageFlagWithRunnerOptionSpawned = spawn("npx", ["--package", "@tailor-platform/sdk", "--yes", "tailor", "login"]);
+const npxMigratedPackageFlagWithRunnerOptionSpawned = spawn("npx", ["--package", "@tailor-platform/sdk", "--yes", "tailor", "login"]);
 const npxMultiPackageFlagSpawned = spawn("npx", ["-p", "@tailor-platform/sdk", "-p", "dotenv-cli", "tailor", "login"]);
 const npxMultiPackageFlagSecondSpawned = spawn("npx", ["-p", "dotenv-cli", "-p", "@tailor-platform/sdk", "tailor", "login"]);
 const npxPackageEqualsSpawned = spawn("npx", ["--package=@tailor-platform/sdk", "tailor", "login"]);
