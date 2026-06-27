@@ -1488,7 +1488,13 @@ function collectTokenizedSourceEdits(
 
           const name = optionName(token.value);
           const renameCommand = commandMayBeNext && !token.value.startsWith("-");
-          const replacement = rewriteTokenizedCliArg(token.value, renameCommand);
+          const replacement =
+            commandMayBeNext &&
+            token.value.startsWith("-") &&
+            !GLOBAL_BOOLEAN_ARGS.has(name) &&
+            !isOpenGlobalValueArg(token.value)
+              ? token.value
+              : rewriteTokenizedCliArg(token.value, renameCommand);
           if (replacement !== token.value) {
             edits.push([token.start, token.end, replacement]);
           }

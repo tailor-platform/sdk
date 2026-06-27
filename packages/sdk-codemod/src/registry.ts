@@ -4,6 +4,7 @@ import { lt, gte, valid } from "semver";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
+const TAILOR_COMMAND_TOKEN_RE = /(?:^|[\s;&|])tailor(?=[\s;&|]|$)/;
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -217,7 +218,7 @@ export const allCodemods: CodemodPackage[] = [
     legacyPatterns: ["tailor-sdk crash-report", "--machineuser"],
     sourceStringLegacyPatterns: [
       ["tailor-sdk", "crash-report"],
-      ["tailor", "crash-report"],
+      [TAILOR_COMMAND_TOKEN_RE, "crash-report"],
       "--machineuser",
     ],
     examples: [

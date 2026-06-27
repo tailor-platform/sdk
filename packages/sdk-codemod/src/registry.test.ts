@@ -74,7 +74,7 @@ describe("getApplicableCodemods", () => {
     expect(cliRename?.sourceStringLegacyPatterns).toEqual(
       expect.arrayContaining([
         ["tailor-sdk", "crash-report"],
-        ["tailor", "crash-report"],
+        [/(?:^|[\s;&|])tailor(?=[\s;&|]|$)/, "crash-report"],
         "--machineuser",
       ]),
     );
