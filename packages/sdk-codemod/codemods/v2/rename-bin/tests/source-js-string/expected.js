@@ -1,6 +1,7 @@
 const script = "tailor deploy";
 const proseApply = "Run tailor deploy to apply changes";
 const spawned = spawn("tailor", ["deploy"]);
+const optionOverloadSpawned = spawn("tailor", { stdio: "inherit" });
 const runtimeArg = getArg();
 const scopedRuntimeArgSpawned = spawn("tailor", [runtimeArg]);
 const hiddenApplyArgs = ["apply"];
@@ -49,6 +50,9 @@ const secretShortValueApplySpawned = spawn("tailor", ["secret", "create", "-v", 
 const dynamicCliRenameCommandSpawned = spawn("tailor-sdk", [`${"apply"}`]);
 const dynamicCliRenameAliasCommand = `tailor-sdk ${legacyTemplateArg}`;
 const npxSpawned = spawn("npx", ["@tailor-platform/sdk", "login"]);
+const npxLegacyApplySpawned = spawn("npx", ["tailor-sdk", "apply"]);
+const npxLegacyCrashReportSpawned = spawn("npx", ["tailor-sdk", "crash-report", "list"]);
+const npxLegacyMachineUserSpawned = spawn("npx", ["tailor-sdk", "login", "--machineuser"]);
 const npxOptionSpawned = spawn("npx", ["--yes", "@tailor-platform/sdk@latest", "login"]);
 const npxProfileSpawned = spawn("npx", ["@tailor-platform/sdk", "--profile", "dev", "login"]);
 const npxShortProfileSpawned = spawn("npx", ["@tailor-platform/sdk", "-p", "dev", "login"]);
