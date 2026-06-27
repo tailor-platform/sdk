@@ -12,6 +12,7 @@ on:
       - .github/workflows/*.yaml
       - .github/workflows/*.yml
       - .github/actions/**
+      - .github/scripts/**
       - aqua.yaml
       - aqua-checksums.json
       - .ghalint.yaml
@@ -40,10 +41,7 @@ jobs:
         uses: ./.github/actions/install-aqua
 
       - name: Run actionlint
-        # actionlint v1.7.12 does not recognize GitHub's step-level parallel syntax yet.
-        run: >-
-          actionlint -color
-          -ignore '^step must run script with "run" section or run action with "uses" section$'
+        run: node .github/scripts/actionlint-allow-parallel.mjs
 
       - name: Run ghalint workflows
         run: ghalint run
