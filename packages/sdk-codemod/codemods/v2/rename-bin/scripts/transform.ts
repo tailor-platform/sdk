@@ -76,26 +76,9 @@ const SOURCE_CLI_VALUE_REFERENCE_RE = new RegExp(
 );
 const SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD = "\\s+(?:--help|-h|--version|-v)\\b";
 const SOURCE_DIRECT_INVOCATION_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b|${SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD})`;
-const SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD = `(?:${SOURCE_DIRECT_INVOCATION_LOOKAHEAD}|\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`;
 const SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD = `(?=\\s+${TAILOR_CLI_VALUE_FLAG}\\s*$)`;
-const SOURCE_NPX_PACKAGE_FLAG_VALUE_RE = new RegExp(
-  `\\b(npx(?:\\s+(?!(?:-p|--package)=)(?:-\\w+|--\\w[\\w-]*))*\\s+(?:-p|--package)=)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`,
-  "g",
-);
-const SOURCE_PKG_RUNNER_RE = new RegExp(
-  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
-  "g",
-);
 const SOURCE_TAILOR_SDK_RE = new RegExp(
   `(?<![.\\w-])tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`,
-  "g",
-);
-const SOURCE_DYNAMIC_PKG_RUNNER_RE = new RegExp(
-  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+$)`,
-  "g",
-);
-const SOURCE_DYNAMIC_OPTION_PKG_RUNNER_RE = new RegExp(
-  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?${SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD}`,
   "g",
 );
 const SOURCE_DYNAMIC_TAILOR_SDK_RE = new RegExp(
@@ -108,10 +91,9 @@ const SOURCE_DYNAMIC_OPTION_TAILOR_SDK_RE = new RegExp(
 );
 const TAILOR_SDK_TOKEN_RE = /^tailor-sdk(@[^\s'"`;|&)]+)?$/;
 const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)$/;
-const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
-const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
 const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
-const NPX_PACKAGE_FLAG_CONTEXT_RE = /(?:^|[;&|]\s*)npx(?:\s+(?:-\w+|--\w[\w-]*))*\s*$/;
+const SOURCE_PACKAGE_RUNNER_CONTEXT_RE = /\b(?:npx|pnpm\s+dlx|yarn\s+dlx|bunx)\b/;
+const SOURCE_ESCAPED_QUOTE_RE = /\\["']/;
 
 function renameBinary(value: string): string {
   const withRunners = value.replace(PKG_RUNNER_RE, (_, runner: string, version?: string) =>
@@ -122,12 +104,6 @@ function renameBinary(value: string): string {
   );
 }
 
-function renamePackageName(value: string): string {
-  return value.replace(TAILOR_SDK_TOKEN_RE, (_match, version?: string) =>
-    version ? `@tailor-platform/sdk${version}` : "@tailor-platform/sdk",
-  );
-}
-
 function protectSourceCliValueReferences(value: string): {
   source: string;
   protectedValues: string[];
@@ -135,11 +111,8 @@ function protectSourceCliValueReferences(value: string): {
   const protectedValues: string[] = [];
   const source = value.replace(
     SOURCE_CLI_VALUE_REFERENCE_RE,
-    (match: string, prefix: string, arg: string, offset: number) => {
+    (match: string, prefix: string, arg: string) => {
       if (!arg.includes("tailor-sdk")) return match;
-      if (prefix.startsWith("-p") && NPX_PACKAGE_FLAG_CONTEXT_RE.test(value.slice(0, offset))) {
-        return match;
-      }
       const placeholder = `__TAILOR_SDK_SOURCE_VALUE_${protectedValues.length}__`;
       protectedValues.push(arg);
       return `${prefix}${placeholder}`;
@@ -157,31 +130,15 @@ function restoreSourceCliValueReferences(value: string, protectedValues: string[
 }
 
 function renameSourceCommandText(value: string): string {
+  if (SOURCE_PACKAGE_RUNNER_CONTEXT_RE.test(value) || SOURCE_ESCAPED_QUOTE_RE.test(value)) {
+    return value;
+  }
   const protectedValue = protectSourceCliValueReferences(value);
-  const withNpxPackageValues = protectedValue.source.replace(
-    SOURCE_NPX_PACKAGE_FLAG_VALUE_RE,
-    (_match, prefix: string, version?: string) =>
-      version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}@tailor-platform/sdk`,
+  const withCommands = protectedValue.source.replace(
+    SOURCE_TAILOR_SDK_RE,
+    (_match, version?: string) => (version ? `@tailor-platform/sdk${version}` : "tailor"),
   );
-  const withRunners = withNpxPackageValues.replace(
-    SOURCE_PKG_RUNNER_RE,
-    (_, runner: string, version?: string) =>
-      version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
-  );
-  const withCommands = withRunners.replace(SOURCE_TAILOR_SDK_RE, (_match, version?: string) =>
-    version ? `@tailor-platform/sdk${version}` : "tailor",
-  );
-  const withDynamicRunners = withCommands.replace(
-    SOURCE_DYNAMIC_PKG_RUNNER_RE,
-    (_, runner: string, version?: string) =>
-      version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
-  );
-  const withDynamicOptionRunners = withDynamicRunners.replace(
-    SOURCE_DYNAMIC_OPTION_PKG_RUNNER_RE,
-    (_, runner: string, version?: string) =>
-      version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
-  );
-  const withDynamicCommands = withDynamicOptionRunners.replace(
+  const withDynamicCommands = withCommands.replace(
     SOURCE_DYNAMIC_TAILOR_SDK_RE,
     (_match, prefix: string, version?: string) =>
       version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}tailor`,
@@ -287,7 +244,7 @@ function hasTailorCommandAfter(elements: SgNode[], start: number, source: string
   return false;
 }
 
-function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
+function isPackageRunnerArrayArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array") return false;
 
@@ -302,23 +259,12 @@ function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
   const executable = sourceStringContent(executableNode, source);
   if (executable == null) return false;
 
+  if (executable === "bunx" || executable === "npx") return true;
+  if (executable !== "pnpm" && executable !== "yarn") return false;
+
   const elements = sourceArrayElements(parent);
-  const index = nodeIndex(elements, node);
-  if (index < 0 || !hasTailorCommandAfter(elements, index + 1, source)) return false;
-
-  if (SOURCE_PACKAGE_RUNNERS.has(executable)) {
-    return firstNonOptionIndex(elements, 0, source) === index;
-  }
-
-  if (SOURCE_DLX_PACKAGE_RUNNERS.has(executable)) {
-    const dlxIndex = firstNonOptionIndex(elements, 0, source);
-    if (dlxIndex == null || sourceStringContent(elements[dlxIndex]!, source) !== "dlx") {
-      return false;
-    }
-    return firstNonOptionIndex(elements, dlxIndex + 1, source) === index;
-  }
-
-  return false;
+  const dlxIndex = firstNonOptionIndex(elements, 0, source);
+  return dlxIndex != null && sourceStringContent(elements[dlxIndex]!, source) === "dlx";
 }
 
 function isPackageManagerExecBinaryArgument(node: SgNode, source: string): boolean {
@@ -350,6 +296,7 @@ function isPackageManagerExecBinaryArgument(node: SgNode, source: string): boole
 function isCliBinaryArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() === "array") {
+    if (isPackageRunnerArrayArgument(node, source)) return false;
     const elements = sourceArrayElements(parent);
     const index = nodeIndex(elements, node);
     return (
@@ -374,11 +321,9 @@ function pushSourceStringEdit(
   const end = range.end.index - 1;
   const text = source.slice(start, end);
   const replacement =
-    TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
-      ? renamePackageName(text)
-      : TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
-        ? renameBinary(text)
-        : renameSourceCommandText(text);
+    TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
+      ? renameBinary(text)
+      : renameSourceCommandText(text);
   if (replacement !== text) {
     edits.push([start, end, replacement]);
   }
