@@ -756,7 +756,7 @@ export async function deploy(options?: DeployOptions) {
 
     if (dryRun) {
       logger.info("Dry run enabled. No changes applied.");
-      return;
+      return undefined;
     }
 
     // Phase 2: Create/Update services that Application depends on
@@ -815,5 +815,6 @@ export async function deploy(options?: DeployOptions) {
     );
 
     logger.success("Successfully applied changes.");
+    return undefined;
   });
 }
