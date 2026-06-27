@@ -152,8 +152,20 @@ function localDeclarationNames(root: SgNode): Set<string> {
   }
 
   for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
-    const binding = catchClause.children().find((child) => child.kind() === "identifier");
-    if (binding) names.add(binding.text());
+    for (const child of catchClause.children()) {
+      if (["identifier", "object_pattern", "array_pattern"].includes(child.kind())) {
+        collectBindingNames(child, names);
+      }
+    }
+  }
+
+  for (const arrow of root.findAll({ rule: { kind: "arrow_function" } })) {
+    const children = arrow.children();
+    const arrowIndex = children.findIndex((child) => child.kind() === "=>");
+    if (arrowIndex === -1) continue;
+    for (const child of children.slice(0, arrowIndex)) {
+      collectBindingNames(child, names);
+    }
   }
 
   for (const loop of root.findAll({ rule: { kind: "for_in_statement" } })) {
@@ -192,8 +204,8 @@ function runtimeIdpLocalName(imports: SgNode[]): string | null {
   return null;
 }
 
-function hasCollision(imports: SgNode[], localNames: Set<string>): boolean {
-  if (localNames.has("tailor") || localNames.has("idp")) return true;
+function hasCollision(imports: SgNode[], localNames: Set<string>, idpLocal: string): boolean {
+  if (localNames.has("tailor") || localNames.has("idp") || localNames.has(idpLocal)) return true;
 
   for (const importStmt of imports) {
     for (const binding of importBindings(importStmt)) {
@@ -235,6 +247,10 @@ function importInsertionIndex(root: SgNode, imports: SgNode[], source: string): 
 
   for (const child of root.children()) {
     if (child.range().start.index < pos) continue;
+    if (child.kind() === "comment") {
+      pos = child.range().end.index;
+      continue;
+    }
     if (!isDirectiveStatement(child)) break;
     pos = child.range().end.index;
   }
@@ -293,10 +309,10 @@ export default function transform(source: string, filePath: string): string | nu
   if (constructors.length === 0) return null;
 
   const imports = findImportStatements(root);
-  if (hasCollision(imports, localDeclarationNames(root))) return null;
-
   const existingIdpLocal = runtimeIdpLocalName(imports);
   const idpLocal = existingIdpLocal ?? "idp";
+  if (hasCollision(imports, localDeclarationNames(root), idpLocal)) return null;
+
   const edits: Edit[] = constructors.map((constructor) =>
     constructor.replace(`${idpLocal}.Client`),
   );
