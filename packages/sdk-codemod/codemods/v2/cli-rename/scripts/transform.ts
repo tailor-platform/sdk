@@ -65,6 +65,13 @@ const PACKAGE_RUNNER_VALUE_ARGS = new Set([
   "-C",
 ]);
 const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)$/;
+const SOURCE_STRING_WRAPPER_NODE_KINDS = new Set([
+  "as_expression",
+  "non_null_expression",
+  "parenthesized_expression",
+  "satisfies_expression",
+  "type_assertion",
+]);
 
 interface TextRange {
   start: number;
@@ -718,6 +725,24 @@ function sourceStringToken(node: SgNode, source: string): SourceStringToken | un
   };
 }
 
+function sourceStringExpressionToken(
+  node: SgNode,
+  source: string,
+  visited = new Set<string>(),
+): SourceStringToken | undefined {
+  const direct = sourceStringToken(node, source);
+  if (direct) return direct;
+  if (!SOURCE_STRING_WRAPPER_NODE_KINDS.has(node.kind())) return undefined;
+  const key = nodeRangeKey(node);
+  if (visited.has(key)) return undefined;
+  visited.add(key);
+  for (const child of node.children()) {
+    const token = sourceStringExpressionToken(child, source, visited);
+    if (token) return token;
+  }
+  return undefined;
+}
+
 function ensureTemplateToken(state: TemplateTokenState): TemplateToken {
   state.token ??= { value: "", segments: [], substitutions: [], quoted: false };
   return state.token;
@@ -864,6 +889,10 @@ function isPackageRunnerSeparatePackageArg(value: string | undefined): boolean {
 
 function isPackageRunnerSeparateValueArg(value: string | undefined): boolean {
   return value != null && PACKAGE_RUNNER_VALUE_ARGS.has(value);
+}
+
+function isPackageRunnerSeparateArg(value: string | undefined): boolean {
+  return isPackageRunnerSeparatePackageArg(value) || isPackageRunnerSeparateValueArg(value);
 }
 
 function replaceOptionsInToken(value: string): string {
@@ -1048,7 +1077,7 @@ function collectCliExpressionEdits(
   source: string,
   renameCommand: boolean,
 ): Array<[number, number, string]> {
-  const token = sourceStringToken(node, source);
+  const token = sourceStringExpressionToken(node, source);
   if (token) {
     const replacement = rewriteTokenizedCliArg(token.value, renameCommand);
     return replacement === token.value ? [] : [[token.start, token.end, replacement]];
@@ -1064,7 +1093,7 @@ function collectCliExpressionEdits(
 }
 
 function sourceStringValues(node: SgNode, source: string): string[] {
-  const token = sourceStringToken(node, source);
+  const token = sourceStringExpressionToken(node, source);
   if (token) return [token.value];
 
   const values: string[] = [];
@@ -1125,6 +1154,14 @@ function dynamicCliValueArgState(node: SgNode, source: string): "skip-value" | n
     .filter((value) => value !== "");
   if (values.length === 0) return null;
   return values.every((value) => isOpenCliValueArg(value)) ? "skip-value" : null;
+}
+
+function dynamicPackageRunnerArgState(node: SgNode, source: string): "skip-value" | null {
+  const values = sourceStringValues(node, source)
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+  if (values.length === 0) return null;
+  return values.some((value) => isPackageRunnerSeparateArg(value)) ? "skip-value" : null;
 }
 
 function advanceCliTemplateState(state: CliTemplateState, value: string): void {
@@ -1195,12 +1232,13 @@ function collectCliTemplateEdits(node: SgNode, source: string): CliTemplateEditR
     }
 
     if (!state.afterTailorBinary) {
+      if (skipNextPackageRunnerValue) {
+        protectTemplateSubstitutions(token);
+        skipNextPackageRunnerValue = false;
+        continue;
+      }
       if (value !== undefined) {
-        if (skipNextPackageRunnerValue) {
-          skipNextPackageRunnerValue = false;
-          continue;
-        }
-        if (isPackageRunnerSeparatePackageArg(value) || isPackageRunnerSeparateValueArg(value)) {
+        if (isPackageRunnerSeparateArg(value)) {
           skipNextPackageRunnerValue = true;
           continue;
         }
@@ -1211,6 +1249,14 @@ function collectCliTemplateEdits(node: SgNode, source: string): CliTemplateEditR
           continue;
         }
         advanceCliTemplateState(state, value);
+      } else {
+        const dynamicState =
+          token.value === TEMPLATE_SUBSTITUTION_PLACEHOLDER && token.substitutions.length === 1
+            ? dynamicPackageRunnerArgState(token.substitutions[0]!, source)
+            : null;
+        if (dynamicState === "skip-value") {
+          skipNextPackageRunnerValue = true;
+        }
       }
       continue;
     }
@@ -1441,7 +1487,7 @@ function collectTokenizedSourceEdits(
 
   const visit = (node: SgNode, inheritedAfterTailorBinary = false): void => {
     if (inheritedAfterTailorBinary) {
-      const token = sourceStringToken(node, source);
+      const token = sourceStringExpressionToken(node, source);
       if (token) {
         const replacement = rewriteTokenizedCliArg(token.value, true);
         if (replacement !== token.value) {
@@ -1459,7 +1505,7 @@ function collectTokenizedSourceEdits(
       let skipNextPackageRunnerValue = false;
       let previousTokenValue: string | undefined;
       for (const child of node.children()) {
-        const token = sourceStringToken(child, source);
+        const token = sourceStringExpressionToken(child, source);
         if (token) {
           const previous = previousTokenValue;
           previousTokenValue = token.value;
@@ -1469,10 +1515,7 @@ function collectTokenizedSourceEdits(
               skipNextPackageRunnerValue = false;
               continue;
             }
-            if (
-              isPackageRunnerSeparatePackageArg(token.value) ||
-              isPackageRunnerSeparateValueArg(token.value)
-            ) {
+            if (isPackageRunnerSeparateArg(token.value)) {
               skipNextPackageRunnerValue = true;
               continue;
             }
@@ -1526,7 +1569,7 @@ function collectTokenizedSourceEdits(
         }
 
         if (!afterTailorBinary && skipNextPackageRunnerValue) {
-          visit(child);
+          protectNode(child);
           skipNextPackageRunnerValue = false;
           previousTokenValue = undefined;
           continue;
@@ -1542,9 +1585,18 @@ function collectTokenizedSourceEdits(
         const childCanHoldCommand =
           isTokenSequenceNode(child) || cliArgExpressionChildren(child).length > 0;
 
+        if (!afterTailorBinary) {
+          visit(child);
+          const dynamicState = dynamicPackageRunnerArgState(child, source);
+          if (dynamicState === "skip-value") {
+            skipNextPackageRunnerValue = true;
+          }
+          continue;
+        }
+
         if (afterTailorBinary && commandMayBeNext) {
           edits.push(...collectInterpolatedOptionEdits(child, source, commandMayBeNext));
-        } else if (afterTailorBinary) {
+        } else {
           edits.push(...collectInterpolatedOptionEdits(child, source, false));
           if (!templateStartsWithInlineOptionValue(child, source)) {
             edits.push(...collectCliExpressionEdits(child, source, false));
@@ -1565,7 +1617,7 @@ function collectTokenizedSourceEdits(
             continue;
           }
           commandMayBeNext = false;
-        } else if (afterTailorBinary) {
+        } else {
           const dynamicState = dynamicCliValueArgState(child, source);
           if (dynamicState === "skip-value") {
             skipNextValue = true;
