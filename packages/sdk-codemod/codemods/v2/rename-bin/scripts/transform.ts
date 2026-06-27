@@ -52,13 +52,31 @@ const TAILOR_CLI_COMMANDS = [
 const TAILOR_CLI_COMMAND_PATTERN = `(?:${TAILOR_CLI_COMMANDS.join("|")})`;
 const TAILOR_CLI_VALUE_FLAG =
   "(?:--env-file-if-exists|--env-file|--profile|--config|--workspace-id|--arg|--query|--file|-e|-p|-c|-w|-a|-q|-f)";
+const TAILOR_CLI_VALUE_FLAGS = new Set([
+  "--env-file-if-exists",
+  "--env-file",
+  "--profile",
+  "--config",
+  "--workspace-id",
+  "--arg",
+  "--query",
+  "--file",
+  "-e",
+  "-p",
+  "-c",
+  "-w",
+  "-a",
+  "-q",
+  "-f",
+]);
 const SOURCE_COMMAND_GAP = `(?:\\s+--?[\\w-]+(?:=${SOURCE_ARG_VALUE})?(?:\\s+${SOURCE_ARG_VALUE})?)*`;
 const SOURCE_CLI_VALUE_REFERENCE_RE = new RegExp(
   `(${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+))(${SOURCE_ARG_VALUE})`,
   "g",
 );
+const SOURCE_CLI_COMMAND_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b|\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b)`;
 const SOURCE_PKG_RUNNER_RE = new RegExp(
-  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b)`,
+  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_CLI_COMMAND_LOOKAHEAD})`,
   "g",
 );
 const SOURCE_TAILOR_SDK_RE = new RegExp(
@@ -77,6 +95,7 @@ const TAILOR_SDK_TOKEN_RE = /^tailor-sdk(@[^\s'"`;|&)]+)?$/;
 const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)$/;
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
 const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
+const NPX_PACKAGE_FLAG_CONTEXT_RE = /(?:^|[;&|]\s*)npx(?:\s+(?:-\w+|--\w[\w-]*))*\s*$/;
 
 function renameBinary(value: string): string {
   const withRunners = value.replace(PKG_RUNNER_RE, (_, runner: string, version?: string) =>
@@ -100,8 +119,11 @@ function protectSourceCliValueReferences(value: string): {
   const protectedValues: string[] = [];
   const source = value.replace(
     SOURCE_CLI_VALUE_REFERENCE_RE,
-    (match, prefix: string, arg: string) => {
+    (match: string, prefix: string, arg: string, offset: number) => {
       if (!arg.includes("tailor-sdk")) return match;
+      if (prefix.startsWith("-p") && NPX_PACKAGE_FLAG_CONTEXT_RE.test(value.slice(0, offset))) {
+        return match;
+      }
       const placeholder = `__TAILOR_SDK_SOURCE_VALUE_${protectedValues.length}__`;
       protectedValues.push(arg);
       return `${prefix}${placeholder}`;
@@ -189,13 +211,6 @@ function isSyntaxOnlyNode(node: SgNode): boolean {
   );
 }
 
-function isStaticTailorCommandNode(node: SgNode, source: string): boolean {
-  const value = sourceStringContent(node, source);
-  return (
-    value != null && TAILOR_CLI_COMMANDS.includes(value as (typeof TAILOR_CLI_COMMANDS)[number])
-  );
-}
-
 function sourceArrayElements(node: SgNode): SgNode[] {
   return node.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
 }
@@ -221,6 +236,26 @@ function firstNonOptionIndex(elements: SgNode[], start: number, source: string):
   return null;
 }
 
+function isTailorCliValueFlag(value: string): boolean {
+  return TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!);
+}
+
+function hasTailorCommandAfter(elements: SgNode[], start: number, source: string): boolean {
+  for (let index = start; index < elements.length; index += 1) {
+    const value = sourceStringContent(elements[index]!, source);
+    if (value == null) return false;
+    if (TAILOR_CLI_COMMANDS.includes(value as (typeof TAILOR_CLI_COMMANDS)[number])) return true;
+    if (value.startsWith("-")) {
+      if (isTailorCliValueFlag(value) && !value.includes("=")) {
+        index += 1;
+      }
+      continue;
+    }
+    return false;
+  }
+  return false;
+}
+
 function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array") return false;
@@ -238,8 +273,7 @@ function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
 
   const elements = sourceArrayElements(parent);
   const index = nodeIndex(elements, node);
-  const next = elements[index + 1];
-  if (index < 0 || next == null || !isStaticTailorCommandNode(next, source)) return false;
+  if (index < 0 || !hasTailorCommandAfter(elements, index + 1, source)) return false;
 
   if (SOURCE_PACKAGE_RUNNERS.has(executable)) {
     return firstNonOptionIndex(elements, 0, source) === index;
@@ -261,8 +295,7 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
   if (parent?.kind() === "array") {
     const elements = sourceArrayElements(parent);
     const index = nodeIndex(elements, node);
-    const next = elements[index + 1];
-    return index === 0 && next != null && isStaticTailorCommandNode(next, source);
+    return index === 0 && hasTailorCommandAfter(elements, index + 1, source);
   }
 
   if (parent?.kind() !== "arguments") return false;
