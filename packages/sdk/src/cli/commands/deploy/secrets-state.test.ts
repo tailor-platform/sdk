@@ -46,6 +46,32 @@ describe("secrets-state", () => {
     expect(loaded).toEqual(state);
   });
 
+  test("loadSecretsState strips unknown state fields", () => {
+    const statePath = getSecretsStatePath();
+    mkdirSync(path.dirname(statePath), { recursive: true });
+    writeFileSync(
+      statePath,
+      JSON.stringify({
+        vaults: {
+          "my-vault": {
+            "secret-a": "abc123",
+          },
+        },
+        futureField: true,
+      }),
+      "utf-8",
+    );
+
+    const loaded = loadSecretsState();
+    expect(loaded).toEqual({
+      vaults: {
+        "my-vault": {
+          "secret-a": "abc123",
+        },
+      },
+    });
+  });
+
   test("loadSecretsState returns empty state when file contains invalid JSON", () => {
     const statePath = getSecretsStatePath();
     mkdirSync(path.dirname(statePath), { recursive: true });

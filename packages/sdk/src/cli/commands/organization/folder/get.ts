@@ -8,8 +8,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
-// strip unknown keys
-const getFolderOptionsSchema = z.object({
+const getFolderOptionsSchema = z.strictObject({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
 });

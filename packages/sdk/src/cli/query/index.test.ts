@@ -8,9 +8,14 @@ import {
 } from "./index";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
+const mockReplPrompt = vi.hoisted(() => vi.fn());
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
+}));
+
+vi.mock("@toiroakr/read-multiline", () => ({
+  createPrompt: vi.fn(() => mockReplPrompt),
 }));
 
 vi.mock("node:fs/promises", () => ({
@@ -74,6 +79,8 @@ vi.mock("./type-field-order", () => ({
 describe("query", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockReplPrompt.mockReset();
+    mockReplPrompt.mockResolvedValue(["", { kind: "eof" }]);
 
     Object.defineProperty(process.stdin, "isTTY", {
       configurable: true,
@@ -614,6 +621,21 @@ describe("query", () => {
         query: 'select * from "User";',
       }),
     ).rejects.toThrow("Machine user is required");
+  });
+
+  test("starts REPL without validating REPL-only options as query base options", async () => {
+    const { bundleQueryScript } = await import("../bundler/query/query-bundler");
+
+    await queryCommand.run({
+      config: "tailor.config.ts",
+      engine: "sql",
+      json: true,
+      "machine-user": "bot",
+      "newline-on-enter": false,
+    } as never);
+
+    expect(bundleQueryScript).toHaveBeenCalledWith("sql");
+    expect(mockReplPrompt).toHaveBeenCalledWith("sql> ");
   });
 });
 

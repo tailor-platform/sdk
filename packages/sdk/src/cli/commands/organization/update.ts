@@ -9,8 +9,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
-// strip unknown keys
-const updateOrganizationOptionsSchema = z.object({
+const updateOrganizationOptionsSchema = z.strictObject({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   name: z.string().min(1, "Name must not be empty"),
 });

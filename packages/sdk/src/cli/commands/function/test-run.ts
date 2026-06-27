@@ -26,8 +26,7 @@ import { detectFunctionType, type DetectedFunction } from "./detect";
 export const testRunCommand = defineAppCommand({
   name: "test-run",
   description: "Run a function on the Tailor Platform server without deploying.",
-  // strip unknown keys
-  args: z.object({
+  args: z.strictObject({
     ...workspaceArgs,
     file: arg(z.string(), {
       positional: true,

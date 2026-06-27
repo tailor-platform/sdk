@@ -412,11 +412,11 @@ export type AuthConfigInput =
       connections?:
         | {
             [x: string]: {
-              type: "oauth2";
               providerUrl: string;
               issuerUrl: string;
               clientId: string;
               clientSecret: string;
+              type: "oauth2";
               authUrl?: string | undefined;
               tokenUrl?: string | undefined;
             };
@@ -610,11 +610,11 @@ export type AuthConfigInput =
       connections?:
         | {
             [x: string]: {
-              type: "oauth2";
               providerUrl: string;
               issuerUrl: string;
               clientId: string;
               clientSecret: string;
+              type: "oauth2";
               authUrl?: string | undefined;
               tokenUrl?: string | undefined;
             };
@@ -760,11 +760,11 @@ export type AuthConfig =
       connections?:
         | {
             [x: string]: {
-              type: "oauth2";
               providerUrl: string;
               issuerUrl: string;
               clientId: string;
               clientSecret: string;
+              type: "oauth2";
               authUrl?: string | undefined;
               tokenUrl?: string | undefined;
             };
@@ -968,11 +968,11 @@ export type AuthConfig =
       connections?:
         | {
             [x: string]: {
-              type: "oauth2";
               providerUrl: string;
               issuerUrl: string;
               clientId: string;
               clientSecret: string;
+              type: "oauth2";
               authUrl?: string | undefined;
               tokenUrl?: string | undefined;
             };

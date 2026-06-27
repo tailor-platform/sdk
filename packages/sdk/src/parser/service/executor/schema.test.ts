@@ -37,6 +37,16 @@ describe("GqlOperationSchema", () => {
     const data = expectParseSuccess(result);
     expect(data.query).toBe("query { users { id } }");
   });
+
+  test("rejects unknown fields", () => {
+    const result = GqlOperationSchema.safeParse({
+      kind: "graphql",
+      query: "query { users { id } }",
+      typo: true,
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("WorkflowOperationSchema", () => {

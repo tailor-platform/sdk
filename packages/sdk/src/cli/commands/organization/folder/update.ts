@@ -9,8 +9,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
-// strip unknown keys
-const updateFolderOptionsSchema = z.object({
+const updateFolderOptionsSchema = z.strictObject({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
   name: z.string().min(1, "Name must not be empty"),

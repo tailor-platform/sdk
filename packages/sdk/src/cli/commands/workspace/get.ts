@@ -12,8 +12,7 @@ import {
   type WorkspaceDetails,
 } from "./transform";
 
-// strip unknown keys
-const getWorkspaceOptionsSchema = z.object({
+const getWorkspaceOptionsSchema = z.strictObject({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
 });

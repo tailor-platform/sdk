@@ -41,8 +41,7 @@ import type { Application } from "@tailor-platform/tailor-proto/application_reso
 export type { QueryEngine } from "./types";
 
 const queryEngineSchema = z.enum(queryEngines);
-// strip unknown keys
-const queryBaseOptionsSchema = z.object({
+const queryBaseOptionsSchema = z.strictObject({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
   configPath: z.string().optional(),
@@ -375,8 +374,9 @@ export async function query(options: QueryOptions): Promise<QueryDispatchResult>
     );
   }
 
-  const executor = await prepareQueryExecutor(result.data);
-  return await executor(result.data.query);
+  const { query: queryText, ...baseOptions } = result.data;
+  const executor = await prepareQueryExecutor(baseOptions);
+  return await executor(queryText);
 }
 
 async function prepareQueryExecutor(
@@ -510,7 +510,8 @@ async function runRepl(
     );
   }
 
-  const execute = await prepareQueryExecutor(options);
+  const { json: _json, newlineOnEnter: _newlineOnEnter, ...baseOptions } = options;
+  const execute = await prepareQueryExecutor(baseOptions);
   const historyPath = getReplHistoryPath(options.engine, options.profile, options.workspaceId);
   const validate = createReplValidator(options.engine);
   // Lazy-load the editor module so the `graphql` and `sql-highlight` libs are

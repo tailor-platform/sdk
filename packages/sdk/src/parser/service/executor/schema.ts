@@ -38,8 +38,7 @@ export const ScheduleTriggerSchema = z.object({
     .describe("Timezone for the CRON schedule (default: UTC)"),
 });
 
-// strip unknown keys
-export const IncomingWebhookTriggerResponseSchema = z.object({
+export const IncomingWebhookTriggerResponseSchema = z.strictObject({
   body: functionSchema.optional().describe("Function returning the response body"),
   statusCode: z.number().int().optional().describe("HTTP status code for the response"),
 });
@@ -91,15 +90,13 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
   AuthAccessTokenTriggerSchema,
 ]);
 
-// strip unknown keys
-export const FunctionOperationSchema = z.object({
+export const FunctionOperationSchema = z.strictObject({
   kind: z.enum(["function", "jobFunction"]),
   body: functionSchema.describe("Function implementation"),
   authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the function execution"),
 });
 
-// strip unknown keys
-export const GqlOperationSchema = z.object({
+export const GqlOperationSchema = z.strictObject({
   kind: z.literal("graphql"),
   appName: z.string().optional().describe("Target application name for the GraphQL query"),
   query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
@@ -107,19 +104,14 @@ export const GqlOperationSchema = z.object({
   authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the GraphQL execution"),
 });
 
-// strip unknown keys
-export const WebhookOperationSchema = z.object({
+export const WebhookOperationSchema = z.strictObject({
   kind: z.literal("webhook"),
   url: functionSchema.describe("Function returning the webhook URL"),
   requestBody: functionSchema.optional().describe("Function to compute the request body"),
   headers: z
     .record(
       z.string(),
-      z.union([
-        z.string(),
-        // strip unknown keys
-        z.object({ vault: z.string(), key: z.string() }),
-      ]),
+      z.union([z.string(), z.strictObject({ vault: z.string(), key: z.string() })]),
     )
     .optional()
     .describe("HTTP headers for the webhook request"),
@@ -140,8 +132,7 @@ export const WorkflowOperationSchema = z.preprocess(
     const { workflow, ...rest } = val as { workflow: { name: string } };
     return { ...rest, workflowName: workflow.name };
   },
-  // strip unknown keys
-  z.object({
+  z.strictObject({
     kind: z.literal("workflow"),
     workflowName: z.string().describe("Name of the workflow to execute"),
     args: z

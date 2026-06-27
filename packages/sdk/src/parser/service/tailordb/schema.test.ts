@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { GQL_PERMISSION_INVALID_OPERAND_MESSAGE, TailorDBTypeSchema } from "./schema";
+import {
+  GQL_PERMISSION_INVALID_OPERAND_MESSAGE,
+  GqlOperationsSchema,
+  TailorDBTypeSchema,
+} from "./schema";
 
 const makeType = (gql: unknown) => ({
   name: "Test",
@@ -71,5 +75,16 @@ describe("TailorDBTypeSchema gqlPermission validation", () => {
     ]);
     const result = TailorDBTypeSchema.safeParse(input);
     expect(result.success).toBe(true);
+  });
+});
+
+describe("GqlOperationsSchema validation", () => {
+  test("rejects unknown fields", () => {
+    const result = GqlOperationsSchema.safeParse({
+      read: true,
+      typo: true,
+    });
+
+    expect(result.success).toBe(false);
   });
 });

@@ -798,6 +798,15 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.unenrollMfa).toBeUndefined();
   });
 
+  test("rejects unknown fields", () => {
+    const result = IdPGqlOperationsSchema.safeParse({
+      read: true,
+      typo: true,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   test("accepts 'query' alias and normalizes to read-only mode", () => {
     const result = IdPGqlOperationsSchema.parse("query");
     expect(result.create).toBe(false);

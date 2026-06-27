@@ -94,8 +94,7 @@ export const mainCommand = withCompletionCommand(
 
 runMain(mainCommand, {
   version: packageJson.version,
-  // strip unknown keys
-  globalArgs: z.object(commonArgs),
+  globalArgs: z.strictObject(commonArgs),
   displayErrors: false,
   cleanup: async ({ error }) => {
     if (error) {

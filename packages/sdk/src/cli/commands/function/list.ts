@@ -9,8 +9,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
-// strip unknown keys
-const listFunctionRegistriesOptionsSchema = z.object({
+const listFunctionRegistriesOptionsSchema = z.strictObject({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   order: z.enum(["asc", "desc"]).optional(),
