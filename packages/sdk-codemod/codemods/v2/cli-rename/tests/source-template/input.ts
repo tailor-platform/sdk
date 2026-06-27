@@ -10,6 +10,7 @@ const separatedTemplate = `tailor-sdk crash-report; ${next}`;
 const packageRunnerTemplate = `npx --package tailor-sdk tailor-sdk crash-report --machineuser=ci`;
 const shortPackageRunnerTemplate = `npx -p tailor-sdk tailor-sdk crash-report --machineuser=ci`;
 const valueFlagPackageRunnerTemplate = `npx --cache tailor-sdk tailor-sdk crash-report --machineuser=ci`;
+const dynamicValueFlagPackageRunnerTemplate = `npx ${useCache ? "--cache" : "--yes"} tailor-sdk crash-report --machineuser=ci`;
 const repeatedTemplate = `tailor-sdk crash-report --machineuser
 tailor-sdk crash-report --machineuser`;
 const repeatedSeparatedTemplate = `tailor-sdk crash-report; tailor-sdk crash-report --machineuser`;

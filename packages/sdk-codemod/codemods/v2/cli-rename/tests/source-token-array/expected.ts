@@ -1,6 +1,9 @@
 const args = ["tailor-sdk", "crashreport", "list", "--machine-user", "ci"];
 const withRunner = ["npx", "tailor-sdk@latest", "crashreport", "--machine-user=ci"];
+const wrappedBinary = ["tailor-sdk" as const, "crashreport", "--machine-user"];
+const parenthesizedBinary = [("tailor-sdk"), "crashreport", "--machine-user"];
 const packageRunnerValueArg = ["npx", "--cache", "tailor-sdk", "tailor-sdk", "crashreport", "--machine-user"];
+const dynamicPackageRunnerValueArg = ["npx", useCache ? "--cache" : "--yes", "tailor-sdk", "crash-report", "--machineuser"];
 const packageRunner = ["npx", "--package", "tailor-sdk", "tailor-sdk", "crashreport"];
 const shortPackageRunner = ["npx", "-p", "tailor-sdk", "tailor-sdk", "crashreport"];
 const nested = spawn("tailor-sdk", ["crashreport", "list", "--machine-user", "ci"]);
