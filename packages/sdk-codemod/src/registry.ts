@@ -88,6 +88,7 @@ const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
 );
 const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
   [
+    RENAME_BIN_SOURCE_VALUE_GUARDS,
     "[\"']",
     RENAME_BIN_SOURCE_COMMAND_TOKEN,
     "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",

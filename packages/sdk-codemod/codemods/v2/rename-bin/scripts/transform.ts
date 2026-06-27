@@ -103,7 +103,7 @@ const SOURCE_OPTION_VALUE_REFERENCE_RE = new RegExp(
 const SOURCE_TEMPLATE_EXPR_PLACEHOLDER = "__TAILOR_SDK_TEMPLATE_EXPR_\\d+_\\d+__";
 const SOURCE_TEMPLATE_EXPR_PLACEHOLDER_RE = /^__TAILOR_SDK_TEMPLATE_EXPR_\d+_\d+__$/;
 const SOURCE_TEMPLATE_DYNAMIC_ARGS = `\\s+${SOURCE_TEMPLATE_EXPR_PLACEHOLDER}(?:\\s+${SOURCE_ARG_VALUE})*(?=\\s*(?:$|[;&|]))`;
-const SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD = "\\s+(?:--help|-h|--version|-v)\\b";
+const SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD = `${SOURCE_COMMAND_GAP}\\s+(?:--help|-h|--version|-v)\\b`;
 const SOURCE_DIRECT_INVOCATION_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b|${SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD})`;
 const SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD = `(?:${SOURCE_DIRECT_INVOCATION_LOOKAHEAD}|${SOURCE_TEMPLATE_DYNAMIC_ARGS}|\\s*$)`;
 const SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD = `(?:${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD}|\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`;
@@ -224,11 +224,30 @@ function replaceSourceSpans(
   return updated;
 }
 
+type ProtectedSourceValue = { placeholder: string; value: string };
+
+function sourceValuePlaceholder(
+  index: number,
+  source: string,
+  usedPlaceholders: Set<string>,
+): string {
+  let attempt = 0;
+  while (true) {
+    const placeholder = `__TAILOR_SDK_SOURCE_VALUE_${index}_${attempt}__`;
+    if (!source.includes(placeholder) && !usedPlaceholders.has(placeholder)) {
+      usedPlaceholders.add(placeholder);
+      return placeholder;
+    }
+    attempt += 1;
+  }
+}
+
 function protectSourceCliValueReferences(value: string): {
   source: string;
-  protectedValues: string[];
+  protectedValues: ProtectedSourceValue[];
 } {
-  const protectedValues: string[] = [];
+  const protectedValues: ProtectedSourceValue[] = [];
+  const usedPlaceholders = new Set<string>();
   const source = value.replace(
     SOURCE_OPTION_VALUE_REFERENCE_RE,
     (match: string, prefix: string, arg: string, offset: number) => {
@@ -244,18 +263,21 @@ function protectSourceCliValueReferences(value: string): {
       if (isPackageFlag(flag) && NPX_PACKAGE_FLAG_CONTEXT_RE.test(value.slice(0, offset))) {
         return match;
       }
-      const placeholder = `__TAILOR_SDK_SOURCE_VALUE_${protectedValues.length}__`;
-      protectedValues.push(arg);
+      const placeholder = sourceValuePlaceholder(protectedValues.length, value, usedPlaceholders);
+      protectedValues.push({ placeholder, value: arg });
       return `${prefix}${placeholder}`;
     },
   );
   return { source, protectedValues };
 }
 
-function restoreSourceCliValueReferences(value: string, protectedValues: string[]): string {
+function restoreSourceCliValueReferences(
+  value: string,
+  protectedValues: ProtectedSourceValue[],
+): string {
   let restored = value;
-  for (const [index, protectedValue] of protectedValues.entries()) {
-    restored = restored.replaceAll(`__TAILOR_SDK_SOURCE_VALUE_${index}__`, () => protectedValue);
+  for (const protectedValue of protectedValues) {
+    restored = restored.replaceAll(protectedValue.placeholder, () => protectedValue.value);
   }
   return restored;
 }
