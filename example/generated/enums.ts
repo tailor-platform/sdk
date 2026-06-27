@@ -1,3 +1,16 @@
+export const CustomerLoyaltyTier = {
+  "standard": "standard",
+  "gold": "gold",
+  "platinum": "platinum"
+} as const;
+export type CustomerLoyaltyTier = (typeof CustomerLoyaltyTier)[keyof typeof CustomerLoyaltyTier];
+
+export const CustomerNoteVisibility = {
+  "internal": "internal",
+  "shared": "shared"
+} as const;
+export type CustomerNoteVisibility = (typeof CustomerNoteVisibility)[keyof typeof CustomerNoteVisibility];
+
 /**
  * Invoice status
  *
@@ -31,12 +44,6 @@ export const UserRole = {
   "STAFF": "STAFF"
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
-
-export const UserSettingLanguage = {
-  "jp": "jp",
-  "en": "en"
-} as const;
-export type UserSettingLanguage = (typeof UserSettingLanguage)[keyof typeof UserSettingLanguage];
 
 export const EventName = {
   "CLICK": "CLICK",

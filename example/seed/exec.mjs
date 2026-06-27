@@ -147,6 +147,7 @@ if (!machineUserName) {
 const namespaceEntities = {
   "tailordb": [
     "Customer",
+    "CustomerNote",
     "Invoice",
     "NestedProfile",
     "PurchaseOrder",
@@ -156,7 +157,6 @@ const namespaceEntities = {
     "Supplier",
     "User",
     "UserLog",
-    "UserSetting",
   ],
   "analyticsdb": [
     "Event",
@@ -165,6 +165,7 @@ const namespaceEntities = {
 const namespaceDeps = {
   "tailordb": {
     "Customer": [],
+    "CustomerNote": ["Customer"],
     "Invoice": ["SalesOrder"],
     "NestedProfile": [],
     "PurchaseOrder": ["Supplier"],
@@ -173,8 +174,7 @@ const namespaceDeps = {
     "Selfie": [],
     "Supplier": [],
     "User": [],
-    "UserLog": ["User"],
-    "UserSetting": ["User"]
+    "UserLog": ["User"]
   },
   "analyticsdb": {
     "Event": []

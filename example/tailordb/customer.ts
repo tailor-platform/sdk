@@ -4,10 +4,10 @@ import { defaultGqlPermission, defaultPermission } from "./permissions";
 export const customer = db
   .type("Customer", "Customer information", {
     name: db.string(),
-    email: db.string(),
-    phone: db.string({ optional: true }),
+    email: db.string().description("Primary contact email"),
+    loyaltyTier: db.enum(["standard", "gold", "platinum"], { optional: true }),
     country: db.string(),
-    postalCode: db.string(),
+    postalCode: db.string({ optional: true }),
     address: db.string({ optional: true }),
     city: db.string({ optional: true }).validate(
       ({ value }) => (value ? value.length > 1 : true),

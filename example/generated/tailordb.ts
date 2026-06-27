@@ -19,13 +19,22 @@ export interface Namespace {
       id: Generated<string>;
       name: string;
       email: string;
-      phone: string | null;
+      loyaltyTier: "standard" | "gold" | "platinum" | null;
       country: string;
-      postalCode: string;
+      postalCode: string | null;
       address: string | null;
       city: string | null;
       fullAddress: Generated<string>;
       state: string;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    CustomerNote: {
+      id: Generated<string>;
+      customerID: string;
+      body: string;
+      visibility: "internal" | "shared" | null;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
@@ -133,14 +142,6 @@ export interface Namespace {
       id: Generated<string>;
       userID: string;
       message: string;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    }
-
-    UserSetting: {
-      id: Generated<string>;
-      language: "jp" | "en";
-      userID: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }

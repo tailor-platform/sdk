@@ -1,0 +1,444 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-06-27T03:58:23.436Z",
+  "changes": [
+    {
+      "kind": "type_added",
+      "typeName": "CustomerNote",
+      "after": {
+        "name": "CustomerNote",
+        "pluralForm": "CustomerNotes",
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "customerID": {
+            "type": "uuid",
+            "required": true,
+            "index": true,
+            "foreignKey": true,
+            "foreignKeyType": "Customer",
+            "foreignKeyField": "id"
+          },
+          "body": {
+            "type": "string",
+            "required": true
+          },
+          "visibility": {
+            "type": "enum",
+            "required": false,
+            "allowedValues": [
+              {
+                "value": "internal"
+              },
+              {
+                "value": "shared"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "datetime",
+            "required": true,
+            "description": "Record creation timestamp",
+            "hooks": {
+              "create": {
+                "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              }
+            }
+          },
+          "updatedAt": {
+            "type": "datetime",
+            "required": false,
+            "description": "Record last update timestamp",
+            "hooks": {
+              "update": {
+                "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              }
+            }
+          }
+        },
+        "settings": {},
+        "indexes": {
+          "idx_customerID_createdAt": {
+            "fields": ["customerID", "createdAt"],
+            "unique": false
+          }
+        },
+        "forwardRelationships": {
+          "customer": {
+            "targetType": "Customer",
+            "targetField": "customerID",
+            "sourceField": "id",
+            "isArray": false,
+            "description": "Customer information"
+          }
+        },
+        "permissions": {
+          "record": {
+            "create": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "read": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              },
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "_loggedIn"
+                    },
+                    "eq",
+                    true
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "update": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "delete": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ]
+          },
+          "gql": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "actions": ["read"],
+              "permit": "allow"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "type_removed",
+      "typeName": "UserSetting",
+      "before": {
+        "name": "UserSetting",
+        "pluralForm": "UserSettings",
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "language": {
+            "type": "enum",
+            "required": true,
+            "allowedValues": [
+              {
+                "value": "jp"
+              },
+              {
+                "value": "en"
+              }
+            ]
+          },
+          "userID": {
+            "type": "uuid",
+            "required": true,
+            "index": true,
+            "unique": true,
+            "foreignKey": true,
+            "foreignKeyType": "User",
+            "foreignKeyField": "id"
+          },
+          "createdAt": {
+            "type": "datetime",
+            "required": true,
+            "description": "Record creation timestamp",
+            "hooks": {
+              "create": {
+                "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              }
+            }
+          },
+          "updatedAt": {
+            "type": "datetime",
+            "required": false,
+            "description": "Record last update timestamp",
+            "hooks": {
+              "update": {
+                "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              }
+            }
+          }
+        },
+        "settings": {},
+        "forwardRelationships": {
+          "user": {
+            "targetType": "User",
+            "targetField": "userID",
+            "sourceField": "id",
+            "isArray": false,
+            "description": ""
+          }
+        },
+        "permissions": {
+          "record": {
+            "create": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "read": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              },
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "_loggedIn"
+                    },
+                    "eq",
+                    true
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "update": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "delete": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ]
+          },
+          "gql": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "actions": ["read"],
+              "permit": "allow"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "field_added",
+      "typeName": "Customer",
+      "fieldName": "loyaltyTier",
+      "after": {
+        "type": "enum",
+        "required": false,
+        "allowedValues": [
+          {
+            "value": "standard"
+          },
+          {
+            "value": "gold"
+          },
+          {
+            "value": "platinum"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "field_removed",
+      "typeName": "Customer",
+      "fieldName": "phone",
+      "before": {
+        "type": "string",
+        "required": false
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "email",
+      "before": {
+        "type": "string",
+        "required": true
+      },
+      "after": {
+        "type": "string",
+        "required": true,
+        "description": "Primary contact email"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "postalCode",
+      "before": {
+        "type": "string",
+        "required": true
+      },
+      "after": {
+        "type": "string",
+        "required": false
+      }
+    },
+    {
+      "kind": "relationship_added",
+      "typeName": "Customer",
+      "relationshipName": "customerNotes",
+      "relationshipType": "backward",
+      "after": {
+        "targetType": "CustomerNote",
+        "targetField": "customerID",
+        "sourceField": "id",
+        "isArray": true,
+        "description": ""
+      }
+    },
+    {
+      "kind": "relationship_removed",
+      "typeName": "User",
+      "relationshipName": "setting",
+      "relationshipType": "backward",
+      "before": {
+        "targetType": "UserSetting",
+        "targetField": "userID",
+        "sourceField": "id",
+        "isArray": false,
+        "description": ""
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "hasWarnings": true,
+  "warnings": [
+    {
+      "typeName": "UserSetting",
+      "reason": "Type removed (all records of this type will be dropped in the post-migration phase)"
+    },
+    {
+      "typeName": "Customer",
+      "fieldName": "phone",
+      "reason": "Field removed (existing data will be dropped in the post-migration phase)"
+    }
+  ],
+  "requiresMigrationScript": false,
+  "description": "erd-preview-demo"
+}
