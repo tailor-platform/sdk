@@ -3,6 +3,7 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
+const ARGUMENT_PUNCTUATION = new Set(["(", ")", ","]);
 
 interface ImportBinding {
   localName: string;
@@ -134,10 +135,13 @@ function localDeclarationNames(root: SgNode): Set<string> {
     rule: {
       any: [
         { kind: "function_declaration" },
+        { kind: "function_expression" },
         { kind: "class_declaration" },
+        { kind: "class" },
         { kind: "interface_declaration" },
         { kind: "type_alias_declaration" },
         { kind: "enum_declaration" },
+        { kind: "internal_module" },
       ],
     },
   })) {
@@ -145,6 +149,11 @@ function localDeclarationNames(root: SgNode): Set<string> {
       .children()
       .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
     if (name) names.add(name.text());
+  }
+
+  for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
+    const binding = catchClause.children().find((child) => child.kind() === "identifier");
+    if (binding) names.add(binding.text());
   }
 
   return names;
@@ -229,9 +238,19 @@ function buildAddRuntimeImportEdit(source: string, imports: SgNode[]): Edit {
   return { startPos: pos, endPos: pos, insertedText };
 }
 
+function argumentExpressions(args: SgNode): SgNode[] {
+  return args.children().filter((child) => !ARGUMENT_PUNCTUATION.has(child.kind()));
+}
+
+function hasConstructorArguments(newExpression: SgNode): boolean {
+  const args = newExpression.field("arguments");
+  return args ? argumentExpressions(args).length > 0 : false;
+}
+
 function findTailorIdpClientConstructors(root: SgNode): SgNode[] {
   return root
     .findAll({ rule: { kind: "new_expression" } })
+    .filter(hasConstructorArguments)
     .map((node) => node.field("constructor"))
     .filter((node): node is SgNode => node?.text() === TAILOR_IDP_CLIENT);
 }
@@ -261,6 +280,7 @@ export default function transform(source: string, filePath: string): string | nu
   );
 
   if (!existingIdpLocal) {
+    if (filePath.endsWith(".cts")) return null;
     edits.push(buildAddRuntimeImportEdit(source, imports));
   }
 
