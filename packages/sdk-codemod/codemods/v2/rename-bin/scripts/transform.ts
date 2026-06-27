@@ -77,6 +77,10 @@ const SOURCE_CLI_VALUE_REFERENCE_RE = new RegExp(
 const SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD = "\\s+(?:--help|-h|--version|-v)\\b";
 const SOURCE_DIRECT_INVOCATION_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b|${SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD})`;
 const SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD = `(?=\\s+${TAILOR_CLI_VALUE_FLAG}\\s*$)`;
+const SOURCE_SIMPLE_PKG_RUNNER_RE = new RegExp(
+  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx))\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`,
+  "g",
+);
 const SOURCE_TAILOR_SDK_RE = new RegExp(
   `(?<![.\\w-])tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`,
   "g",
@@ -130,11 +134,22 @@ function restoreSourceCliValueReferences(value: string, protectedValues: string[
 }
 
 function renameSourceCommandText(value: string): string {
-  if (SOURCE_PACKAGE_RUNNER_CONTEXT_RE.test(value) || SOURCE_ESCAPED_QUOTE_RE.test(value)) {
+  if (SOURCE_ESCAPED_QUOTE_RE.test(value)) {
     return value;
   }
   const protectedValue = protectSourceCliValueReferences(value);
-  const withCommands = protectedValue.source.replace(
+  const withSimplePackageRunners = protectedValue.source.replace(
+    SOURCE_SIMPLE_PKG_RUNNER_RE,
+    (_match, runner: string, version?: string) =>
+      version ? `${runner} @tailor-platform/sdk${version}` : `${runner} @tailor-platform/sdk`,
+  );
+  if (SOURCE_PACKAGE_RUNNER_CONTEXT_RE.test(withSimplePackageRunners)) {
+    return restoreSourceCliValueReferences(
+      withSimplePackageRunners,
+      protectedValue.protectedValues,
+    );
+  }
+  const withCommands = withSimplePackageRunners.replace(
     SOURCE_TAILOR_SDK_RE,
     (_match, version?: string) => (version ? `@tailor-platform/sdk${version}` : "tailor"),
   );
@@ -297,12 +312,7 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() === "array") {
     if (isPackageRunnerArrayArgument(node, source)) return false;
-    const elements = sourceArrayElements(parent);
-    const index = nodeIndex(elements, node);
-    return (
-      (index === 0 && hasTailorCommandAfter(elements, index + 1, source)) ||
-      isPackageManagerExecBinaryArgument(node, source)
-    );
+    return isPackageManagerExecBinaryArgument(node, source);
   }
 
   if (parent?.kind() !== "arguments") return false;

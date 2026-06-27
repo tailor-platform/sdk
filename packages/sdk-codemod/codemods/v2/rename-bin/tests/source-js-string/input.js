@@ -7,6 +7,8 @@ const pnpmDlxSpawned = spawn("pnpm", ["dlx", "tailor-sdk", "login"]);
 const pnpmBinarySpawned = spawn("pnpm", ["tailor-sdk", "deploy"]);
 const pnpmExecSpawned = spawn("pnpm", ["exec", "tailor-sdk", "deploy"]);
 const arrayCommand = ["tailor-sdk", "--profile", "dev", "deploy"];
+const npxArgs = ["tailor-sdk", "login"];
+spawn("npx", npxArgs);
 const docs = (
   <>
     <p>package tailor-sdk is installed</p>

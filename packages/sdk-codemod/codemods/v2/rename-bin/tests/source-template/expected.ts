@@ -4,14 +4,14 @@ const deploy = "tailor deploy";
 const envFileDeploy = "tailor --env-file .env deploy";
 const profileValue = "tailor --profile tailor-sdk deploy";
 const help = "tailor --help";
-const npxVersion = "npx tailor-sdk --version";
+const npxVersion = "npx @tailor-platform/sdk --version";
 const generated = "Run tailor generate after changes";
 const dynamicCommand = `tailor ${subcommand}`;
 const dynamicPnpmCommand = `pnpm tailor ${subcommand}`;
 const dynamicProfileCommand = `tailor --profile ${profile} deploy`;
 const indentedDynamicCommand = `
   tailor ${subcommand}`;
-const latest = "npx tailor-sdk@latest login";
+const latest = "npx @tailor-platform/sdk@latest login";
 const npxPackageFlag = "npx -p tailor-sdk tailor-sdk login";
 const npxPackageFlagEquals = "npx --package=tailor-sdk tailor-sdk login";
 const packageName = "tailor-sdk";
