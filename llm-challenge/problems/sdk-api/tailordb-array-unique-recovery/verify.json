@@ -13,7 +13,7 @@
       "id": "handle-uniqueness-kept",
       "kind": "content-match",
       "glob": "**/*.ts",
-      "pattern": "handle[\\s\\S]*unique|unique[\\s\\S]*handle",
+      "pattern": "handle[^\\n]*(?:\\.unique\\s*\\(|unique\\s*:)",
       "flags": "i",
       "description": "source declares uniqueness behavior for the public handle"
     },
@@ -24,6 +24,14 @@
       "pattern": "tags",
       "flags": "i",
       "description": "source keeps topical tags as profile data"
+    },
+    {
+      "id": "tags-unique-removed",
+      "kind": "content-absent",
+      "glob": "**/*.ts",
+      "pattern": "tags\\s*:[\\s\\S]{0,160}\\.unique\\s*\\(",
+      "flags": "i",
+      "description": "source removes uniqueness from topical tags"
     },
     {
       "id": "avatar-label-data-kept",

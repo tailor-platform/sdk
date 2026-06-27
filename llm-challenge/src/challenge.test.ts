@@ -488,6 +488,18 @@ describe("verification summary", () => {
               glob: "src/*.txt",
               pattern: "customer",
             },
+            {
+              id: "secret-text-absent",
+              kind: "content-absent",
+              glob: "src/*.txt",
+              pattern: "secret",
+            },
+            {
+              id: "customer-text-absent",
+              kind: "content-absent",
+              glob: "src/*.txt",
+              pattern: "customer",
+            },
             { id: "missing-file", kind: "file-exists", path: "missing.txt" },
           ],
         },
@@ -524,6 +536,12 @@ describe("verification summary", () => {
     });
     expect(summary.checks.find((check) => check.id === "customer-text")).toMatchObject({
       outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "secret-text-absent")).toMatchObject({
+      outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "customer-text-absent")).toMatchObject({
+      outcome: "unsatisfied",
     });
     expect(summary.checks.find((check) => check.id === "missing-file")).toMatchObject({
       outcome: "unsatisfied",
