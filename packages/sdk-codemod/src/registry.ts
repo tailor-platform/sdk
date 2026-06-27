@@ -66,6 +66,7 @@ const RENAME_BIN_SOURCE_VALUE_GUARDS = RENAME_BIN_SOURCE_VALUE_FLAGS.flatMap((fl
   const escaped = escapeRegExp(flag);
   return [`(?<!${escaped} )`, `(?<!${escaped}=)`];
 }).join("");
+const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})`;
 const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
   [
     "(?<![.\\w-])",
@@ -73,7 +74,14 @@ const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
     "(?<!\\\\[\"'])",
     RENAME_BIN_SOURCE_VALUE_GUARDS,
     "tailor-sdk(?![\\w-])(?:@[^\\s'\"`;|&)]+)?",
-    `(?=\\s*(?:$|(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})\\b))`,
+    `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
+  ].join(""),
+);
+const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
+  [
+    "(?:^|[\\s;&|])(?:sh|bash|zsh)\\s+-c\\s+\\\\?[\"']",
+    "tailor-sdk(?![\\w-])(?:@[^\\s'\"`;|&)]+)?",
+    `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
   ].join(""),
 );
 
@@ -608,7 +616,10 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
     ],
     legacyPatterns: ["tailor-sdk"],
-    sourceStringLegacyPatterns: [RENAME_BIN_SOURCE_LEGACY_PATTERN],
+    sourceStringLegacyPatterns: [
+      RENAME_BIN_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
+    ],
     examples: [
       {
         lang: "sh",

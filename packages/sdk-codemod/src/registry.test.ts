@@ -63,12 +63,15 @@ describe("getApplicableCodemods", () => {
     );
 
     expect(renameBin?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
-    expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(1);
-    const sourceStringPattern = renameBin?.sourceStringLegacyPatterns?.[0] as RegExp;
-    expect(sourceStringPattern.test("tailor-sdk deploy")).toBe(true);
-    expect(sourceStringPattern.test("tailor-sdk apply")).toBe(true);
-    expect(sourceStringPattern.test("tailor --profile tailor-sdk deploy")).toBe(false);
-    expect(sourceStringPattern.test('tailor --arg "tailor-sdk deploy" deploy')).toBe(false);
+    expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(2);
+    const sourceStringPatterns = renameBin?.sourceStringLegacyPatterns as RegExp[];
+    const matchesSourceStringPattern = (value: string) =>
+      sourceStringPatterns.some((pattern) => pattern.test(value));
+    expect(matchesSourceStringPattern("tailor-sdk deploy")).toBe(true);
+    expect(matchesSourceStringPattern("tailor-sdk apply")).toBe(true);
+    expect(matchesSourceStringPattern('sh -c "tailor-sdk apply"')).toBe(true);
+    expect(matchesSourceStringPattern("tailor --profile tailor-sdk deploy")).toBe(false);
+    expect(matchesSourceStringPattern('tailor --arg "tailor-sdk deploy" deploy')).toBe(false);
     const matches = picomatch(renameBin?.filePatterns ?? [], { dot: true });
     expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
     expect(matches("tailor.d.ts")).toBe(true);

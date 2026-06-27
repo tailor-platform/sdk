@@ -184,6 +184,10 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
 
   const fragments: string[] = [];
   const visit = (node: SgNode): void => {
+    if (node.kind() === "comment" || node.kind() === "jsx_text") {
+      fragments.push(node.text());
+      return;
+    }
     if (node.kind() === "arguments") {
       const value = sourceArgumentsCommandContent(node, content);
       if (value != null) fragments.push(value);
