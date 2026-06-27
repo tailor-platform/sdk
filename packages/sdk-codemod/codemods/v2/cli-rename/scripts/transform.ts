@@ -887,6 +887,20 @@ function isCommandSeparatorOnlyToken(value: string): boolean {
   return value !== "" && /^[;&|]+$/.test(value) && hasCommandSeparatorToken(value);
 }
 
+function isShellAssignmentToken(value: string): boolean {
+  return /^[A-Za-z_]\w*=/.test(value);
+}
+
+function shellCommandPrefixEndIndex(values: string[]): number {
+  let index = values[0] === "env" ? 1 : 0;
+  const assignmentStart = index;
+  while (index < values.length && isShellAssignmentToken(values[index]!)) {
+    index += 1;
+  }
+  if (index > assignmentStart) return index;
+  return values[0] === "env" ? 1 : 0;
+}
+
 function rewriteTokenizedCliArg(value: string, renameCommand: boolean): string {
   const commandRenamed = renameCommand ? (COMMAND_MAP.get(value) ?? value) : value;
   return replaceOptionsInToken(commandRenamed);
@@ -984,6 +998,9 @@ function collectInterpolatedOptionEdits(
 
 function cliArgExpressionChildren(node: SgNode): SgNode[] {
   if (node.kind() === "parenthesized_expression") return node.children();
+  if (node.kind() === "as_expression" || node.kind() === "satisfies_expression") {
+    return node.children().slice(0, 1);
+  }
   if (node.kind() === "ternary_expression") return node.children().slice(1);
   if (node.kind() === "binary_expression" && /&&|\|\|/.test(node.text())) {
     return node.children().slice(1);
@@ -1273,16 +1290,28 @@ function isLikelyTemplateCommandToken(
     .slice(0, tokenIndex)
     .map((token) => staticTemplateTokenValue(token))
     .filter((value): value is string => value !== undefined);
-  const [first] = staticPrefixValues;
+  const shellPrefixEndIndex = shellCommandPrefixEndIndex(staticPrefixValues);
+  if (shellPrefixEndIndex > 0 && shellPrefixEndIndex === staticPrefixValues.length) return true;
+  const [first] = staticPrefixValues.slice(shellPrefixEndIndex);
   return first === "npx" || first === "bunx" || first === "pnpm" || first === "yarn";
 }
 
 function collectCliTemplateSourceEdits(
   root: SgNode,
   source: string,
+  protectedRanges: TextRange[] = [],
 ): Array<[number, number, string]> {
   const edits: Array<[number, number, string]> = [];
+  const isProtected = (node: SgNode): boolean => {
+    const range = node.range();
+    return protectedRanges.some(
+      (protectedRange) =>
+        protectedRange.start <= range.start.index && range.end.index <= protectedRange.end,
+    );
+  };
+
   const visit = (node: SgNode): void => {
+    if (isProtected(node)) return;
     if (node.kind() === "template_string") {
       edits.push(...collectCliTemplateEdits(node, source));
     }
@@ -1297,10 +1326,21 @@ function collectCliTemplateSourceEdits(
 function collectSourceLiteralCliCommandEdits(
   root: SgNode,
   source: string,
+  protectedRanges: TextRange[] = [],
 ): Array<[number, number, string]> {
   const edits: Array<[number, number, string]> = [];
 
+  const isProtected = (node: SgNode): boolean => {
+    const range = node.range();
+    return protectedRanges.some(
+      (protectedRange) =>
+        protectedRange.start <= range.start.index && range.end.index <= protectedRange.end,
+    );
+  };
+
   const visit = (node: SgNode): void => {
+    if (isProtected(node)) return;
+
     if (node.kind() === "comment") {
       const range = node.range();
       const text = source.slice(range.start.index, range.end.index);
@@ -1344,8 +1384,14 @@ function collectSourceLiteralCliCommandEdits(
 function collectTokenizedSourceEdits(
   root: SgNode,
   source: string,
-): Array<[number, number, string]> {
+): { edits: Array<[number, number, string]>; protectedRanges: TextRange[] } {
   const edits: Array<[number, number, string]> = [];
+  const protectedRanges: TextRange[] = [];
+
+  const protectNode = (node: SgNode): void => {
+    const range = node.range();
+    protectedRanges.push({ start: range.start.index, end: range.end.index });
+  };
 
   const visit = (node: SgNode, inheritedAfterTailorBinary = false): void => {
     if (inheritedAfterTailorBinary) {
@@ -1394,6 +1440,7 @@ function collectTokenizedSourceEdits(
             (previous != null &&
               (commandMayBeNext ? isOpenGlobalValueArg(previous) : isOpenCliValueArg(previous)))
           ) {
+            protectNode(child);
             skipNextValue = false;
             continue;
           }
@@ -1434,7 +1481,7 @@ function collectTokenizedSourceEdits(
         }
 
         if (skipNextValue) {
-          visit(child);
+          protectNode(child);
           skipNextValue = false;
           previousTokenValue = undefined;
           continue;
@@ -1490,7 +1537,7 @@ function collectTokenizedSourceEdits(
   };
 
   visit(root);
-  return edits;
+  return { edits, protectedRanges };
 }
 
 function replaceTokenizedSourceCliCommands(source: string, filePath: string): string {
@@ -1502,11 +1549,12 @@ function replaceTokenizedSourceCliCommands(source: string, filePath: string): st
   }
 
   let updated = source;
+  const tokenized = collectTokenizedSourceEdits(root, source);
   const editByRange = new Map<string, [number, number, string]>();
   for (const edit of [
-    ...collectTokenizedSourceEdits(root, source),
-    ...collectCliTemplateSourceEdits(root, source),
-    ...collectSourceLiteralCliCommandEdits(root, source),
+    ...tokenized.edits,
+    ...collectCliTemplateSourceEdits(root, source, tokenized.protectedRanges),
+    ...collectSourceLiteralCliCommandEdits(root, source, tokenized.protectedRanges),
   ]) {
     editByRange.set(`${edit[0]}:${edit[1]}`, edit);
   }

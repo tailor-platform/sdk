@@ -16,6 +16,16 @@ const workspaceGlobalOption = ["tailor-sdk", "-w", "workspace-1", "crash-report"
 const inlineEnvTemplate = ["tailor-sdk", `--env-file=${envFile}`, "crash-report", "list"];
 const openEnvFileValue = ["tailor-sdk", "--env-file=", ".env", "crash-report", "--machineuser"];
 const argValue = ["tailor-sdk", "function", "test-run", "--arg", "crash-report"];
+const argCommandPayload = ["tailor-sdk", "function", "test-run", "--arg", "tailor-sdk crash-report --machineuser"];
+const argCommandPayloadWithComment = [
+  "tailor-sdk",
+  "function",
+  "test-run",
+  "--arg",
+  /* payload */ "tailor-sdk crash-report --machineuser",
+];
+const argCommandPayloadExpression = ["tailor-sdk", "function", "test-run", "--arg", cond ? "tailor-sdk crash-report --machineuser" : "{}"];
+const argCommandPayloadTemplate = ["tailor-sdk", "function", "test-run", "--arg", `tailor-sdk crash-report --machineuser`];
 const openArgValue = ["tailor-sdk", "function", "test-run", "--arg=", "--machineuser", "--machineuser"];
 const shortArgValue = ["tailor-sdk", "function", "test-run", "-a", "--machineuser", "--machineuser"];
 const queryValue = ["tailor-sdk", "query", "--query", "select --machineuser", "--machineuser", "ci"];
