@@ -70,6 +70,7 @@ const npxPackageSplitHelp = "npx -p @tailor-platform/sdk --help";
 const npxPackageFlagEquals = "npx --package=@tailor-platform/sdk tailor login";
 const npxPackageSingleQuoted = "npx --package '@tailor-platform/sdk' tailor login";
 const npxPackageDoubleQuoted = "npx --package \"@tailor-platform/sdk\" tailor login";
+const npxPackageEqualsSingleQuoted = "npx --package='@tailor-platform/sdk' tailor login";
 const npxPackageEqualsDoubleQuoted = "npx --package=\"@tailor-platform/sdk\" tailor login";
 const npxPackageDoubleQuotedBeforeAnd = "npx --package \"@tailor-platform/sdk\" tailor login && echo done";
 const npxDynamicPackageFlag = `npx -p ${pkg} tailor-sdk login`;

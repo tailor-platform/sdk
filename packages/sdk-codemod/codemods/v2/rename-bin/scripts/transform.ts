@@ -289,12 +289,30 @@ function sourceTokenSpans(value: string): Array<{
   }
   if (value.slice(lastEnd).trim() !== "") return null;
 
-  return [...value.matchAll(new RegExp(SOURCE_CLI_ARG_VALUE, "g"))].map((match) => ({
+  const spans = [...value.matchAll(new RegExp(SOURCE_CLI_ARG_VALUE, "g"))].map((match) => ({
     start: match.index ?? 0,
     end: (match.index ?? 0) + match[0].length,
     text: match[0],
     value: sourceTokenValue(match[0]),
   }));
+  return mergeSourceEqualsQuotedTokenSpans(spans);
+}
+
+function mergeSourceEqualsQuotedTokenSpans(
+  spans: Array<{ start: number; end: number; text: string; value: string }>,
+): Array<{ start: number; end: number; text: string; value: string }> {
+  const merged: Array<{ start: number; end: number; text: string; value: string }> = [];
+  for (const span of spans) {
+    const previous = merged.at(-1);
+    if (previous != null && previous.end === span.start && previous.text.endsWith("=")) {
+      previous.end = span.end;
+      previous.text += span.text;
+      previous.value += span.value;
+      continue;
+    }
+    merged.push({ ...span });
+  }
+  return merged;
 }
 
 function sourceTokenValue(token: string): string {
