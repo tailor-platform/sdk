@@ -87,6 +87,11 @@ describe("getApplicableCodemods", () => {
           pattern.test("const getInvoker = tailor.context.getInvoker;"),
       ),
     ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const { upload } = tailordb.file;"),
+      ),
+    ).toBe(true);
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 

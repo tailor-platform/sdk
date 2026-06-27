@@ -461,6 +461,7 @@ export const allCodemods: CodemodPackage[] = [
       /\btailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
       "tailor[",
       /\btailordb\.file\.[A-Za-z_$][\w$]*\s*\(/,
+      /(?:(?:[=(:,{]|\[)\s*|\b(?:return|await)\s+)tailordb\.file\b/,
       /(?:\bnew\s+|[:=]\s*)tailordb\.(?:Client|CommandType|QueryResult)\b/,
       "tailordb[",
       /(?:\bnew\s+|\bthrow\s+|\binstanceof\s+)Tailor(?:DBFileError|Errors|ErrorMessage)\b/,

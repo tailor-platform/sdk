@@ -53,6 +53,7 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const SOURCE_STRING_FRAGMENT_SEPARATOR = "\0";
 const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
   "comment",
   "string",
@@ -169,7 +170,7 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
     }
   };
   visit(root);
-  return fragments.join("\n");
+  return fragments.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
 function sourceLang(relative: string): Lang {
