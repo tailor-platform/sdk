@@ -134,9 +134,11 @@ const SOURCE_DYNAMIC_OPTION_TAILOR_SDK_RE = new RegExp(
   "g",
 );
 const TAILOR_SDK_TOKEN_RE = /^tailor-sdk(@[^\s'"`;|&)]+)?$/;
-const TAILOR_SDK_PATH_RE = /(?:^|[\\/])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/;
+const TAILOR_SDK_COMMAND_TOKEN_RE = /^tailor-sdk(@[^\s'"`;|&)]+)?(?:\.(?:cmd|ps1|exe))?$/;
+const TAILOR_COMMAND_TOKEN_RE = /^tailor(?:\.(?:cmd|ps1|exe))?$/;
+const TAILOR_SDK_PATH_RE = /(?:^|[\\/])tailor-sdk(?:\.(?:cmd|ps1|exe))?$/;
 const TAILOR_CLI_TOKEN_RE =
-  /^(?:tailor|tailor-sdk(?:@[^\s'"`;|&)]+)?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
+  /^(?:tailor(?:\.(?:cmd|ps1|exe))?|tailor-sdk(?:@[^\s'"`;|&)]+)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
 const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)$/;
 const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
@@ -176,16 +178,17 @@ function renameSourcePackageToken(token: string): string | null {
 
 function renameSourceBinaryToken(token: string): string | null {
   const value = sourceTokenValue(token);
-  if (!TAILOR_SDK_TOKEN_RE.test(value)) return null;
-  return replaceSourceTokenValue(token, value.includes("@") ? renamePackageName(value) : "tailor");
+  if (!TAILOR_SDK_COMMAND_TOKEN_RE.test(value)) return null;
+  return replaceSourceTokenValue(
+    token,
+    value.includes("@") && !/\.(?:cmd|ps1|exe)$/.test(value)
+      ? renamePackageName(value)
+      : renameBinary(value),
+  );
 }
 
 function isTailorPackageValue(value: string): boolean {
-  return (
-    TAILOR_SDK_TOKEN_RE.test(value) ||
-    TAILOR_PLATFORM_SDK_TOKEN_RE.test(value) ||
-    SOURCE_TEMPLATE_EXPR_PLACEHOLDER_RE.test(value)
-  );
+  return TAILOR_SDK_TOKEN_RE.test(value) || TAILOR_PLATFORM_SDK_TOKEN_RE.test(value);
 }
 
 function sourcePathBasename(value: string): string {
@@ -193,13 +196,15 @@ function sourcePathBasename(value: string): string {
 }
 
 function isTailorSdkBinaryTokenValue(value: string): boolean {
-  return TAILOR_SDK_TOKEN_RE.test(sourcePathBasename(value));
+  return TAILOR_SDK_COMMAND_TOKEN_RE.test(sourcePathBasename(value));
 }
 
 function isTailorCliTokenValue(value: string): boolean {
   const basename = sourcePathBasename(value);
   return (
-    TAILOR_CLI_TOKEN_RE.test(value) || basename === "tailor" || TAILOR_SDK_TOKEN_RE.test(basename)
+    TAILOR_CLI_TOKEN_RE.test(value) ||
+    TAILOR_COMMAND_TOKEN_RE.test(basename) ||
+    TAILOR_SDK_COMMAND_TOKEN_RE.test(basename)
   );
 }
 
@@ -522,10 +527,7 @@ function sourcePackageFlagsAllowBinaryRewrite(source: string): boolean {
     if (SOURCE_PACKAGE_FLAG_RE.test(token)) {
       hasPackageFlag = true;
       const value = token.includes("=") ? token.slice(token.indexOf("=") + 1) : tokens[index + 1];
-      if (
-        value != null &&
-        (TAILOR_CLI_TOKEN_RE.test(value) || SOURCE_TEMPLATE_EXPR_PLACEHOLDER_RE.test(value))
-      ) {
+      if (value != null && isTailorPackageValue(value)) {
         hasTailorPackageFlag = true;
       }
       if (!token.includes("=")) index += 1;

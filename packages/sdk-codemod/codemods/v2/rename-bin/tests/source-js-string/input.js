@@ -55,6 +55,9 @@ const npmExecPackageFlagSpawned = spawn("npm", ["exec", "--package", "tailor-sdk
 const npmExecPackageEqualsSpawned = spawn("npm", ["exec", "--package=tailor-sdk", "tailor-sdk", "login"]);
 const pathQualifiedSpawned = spawn("./node_modules/.bin/tailor-sdk", ["deploy"]);
 const pathQualifiedArgSpawned = spawn("./node_modules/.bin/tailor-sdk", ["--arg", "tailor-sdk deploy", "deploy"]);
+const packageDirectoryPathSpawned = spawn("./node_modules/tailor-sdk/bin/cli.js", ["deploy"]);
+const windowsShimArgSpawned = spawn("tailor-sdk.cmd", ["--arg", "tailor-sdk deploy", "deploy"]);
+const pathQualifiedWindowsShimArgSpawned = spawn("./node_modules/.bin/tailor-sdk.cmd", ["--arg", "tailor-sdk deploy", "deploy"]);
 const arrayCommand = ["tailor-sdk", "--profile", "dev", "deploy"];
 const npxArgs = ["tailor-sdk", "login"];
 spawn("npx", npxArgs);
