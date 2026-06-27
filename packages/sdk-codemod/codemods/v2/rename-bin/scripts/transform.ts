@@ -829,29 +829,6 @@ function sourceStringRawContent(node: SgNode, source: string): string | null {
   return source.slice(range.start.index + 1, range.end.index - 1);
 }
 
-function collectSourceStringVariables(root: SgNode, source: string): ReadonlyMap<string, string> {
-  const values = new Map<string, string>();
-  const ambiguous = new Set<string>();
-  const visit = (node: SgNode): void => {
-    if (node.kind() === "variable_declarator" && isConstVariableDeclarator(node)) {
-      const children = node.children();
-      const identifier = children.find((child) => child.kind() === "identifier");
-      const initializer = children.findLast(
-        (child) => sourceConstInitializerContent(child, source) != null,
-      );
-      const value = initializer == null ? null : sourceConstInitializerContent(initializer, source);
-      if (identifier != null && value != null) {
-        rememberSourceStringVariable(values, ambiguous, identifier.text(), value);
-      }
-    }
-    for (const child of node.children()) {
-      visit(child);
-    }
-  };
-  visit(root);
-  return values;
-}
-
 function sourceConstInitializerContent(node: SgNode, source: string): string | null {
   const directValue = sourceStringContent(node, source);
   if (directValue != null) return directValue;
@@ -878,35 +855,10 @@ function isConstVariableDeclarator(node: SgNode): boolean {
   );
 }
 
-function rememberSourceStringVariable(
-  values: Map<string, string>,
-  ambiguous: Set<string>,
-  name: string,
-  value: string,
-): void {
-  if (ambiguous.has(name)) return;
-  const existingValue = values.get(name);
-  if (existingValue != null) {
-    if (existingValue === value) return;
-    values.delete(name);
-    ambiguous.add(name);
-    return;
-  }
-  values.set(name, value);
-}
-
-function sourceStaticStringContent(
-  node: SgNode,
-  source: string,
-  sourceStringVariables: ReadonlyMap<string, string>,
-): string | null {
+function sourceStaticStringContent(node: SgNode, source: string): string | null {
   return (
     sourceStringContent(node, source) ??
-    (node.kind() === "identifier"
-      ? (sourceScopedStringVariableContent(node, source) ??
-        sourceStringVariables.get(node.text()) ??
-        null)
-      : null)
+    (node.kind() === "identifier" ? sourceScopedStringVariableContent(node, source) : null)
   );
 }
 
@@ -1219,11 +1171,7 @@ function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
   return firstTailorPackageIndex(elements, start, source, executable) === index;
 }
 
-function isPackageRunnerCommandBinaryArgument(
-  node: SgNode,
-  source: string,
-  sourceStringVariables: ReadonlyMap<string, string>,
-): boolean {
+function isPackageRunnerCommandBinaryArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array" || !isPackageRunnerArrayArgument(node, source)) return false;
 
@@ -1245,7 +1193,7 @@ function isPackageRunnerCommandBinaryArgument(
   ) {
     return false;
   }
-  if (arrayHasCliRenameLegacyArgs(elements, index + 1, source, sourceStringVariables)) {
+  if (arrayHasCliRenameLegacyArgs(elements, index + 1, source)) {
     return false;
   }
   const commandIndex = packageRunnerCommandIndex(elements, start, source, executable);
@@ -1281,11 +1229,7 @@ function packageRunnerCommandIndex(
   return null;
 }
 
-function isPackageManagerExecBinaryArgument(
-  node: SgNode,
-  source: string,
-  sourceStringVariables: ReadonlyMap<string, string>,
-): boolean {
+function isPackageManagerExecBinaryArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array") return false;
 
@@ -1310,20 +1254,16 @@ function isPackageManagerExecBinaryArgument(
   }
   return (
     firstNonOptionIndex(elements, execIndex + 1, source, executable) === index &&
-    !arrayHasCliRenameLegacyArgs(elements, index + 1, source, sourceStringVariables)
+    !arrayHasCliRenameLegacyArgs(elements, index + 1, source)
   );
 }
 
-function isCliBinaryArgument(
-  node: SgNode,
-  source: string,
-  sourceStringVariables: ReadonlyMap<string, string>,
-): boolean {
+function isCliBinaryArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() === "array") {
-    if (isPackageRunnerCommandBinaryArgument(node, source, sourceStringVariables)) return true;
+    if (isPackageRunnerCommandBinaryArgument(node, source)) return true;
     if (isPackageRunnerArrayArgument(node, source)) return false;
-    return isPackageManagerExecBinaryArgument(node, source, sourceStringVariables);
+    return isPackageManagerExecBinaryArgument(node, source);
   }
 
   if (parent?.kind() !== "arguments") return false;
@@ -1332,21 +1272,15 @@ function isCliBinaryArgument(
   if (args[0] == null || nodeRangeKey(args[0]) !== nodeRangeKey(node)) return false;
   const argv = args[1];
   return (
-    argv?.kind() !== "array" ||
-    !arrayHasCliRenameLegacyArgs(sourceArrayElements(argv), 0, source, sourceStringVariables)
+    argv?.kind() !== "array" || !arrayHasCliRenameLegacyArgs(sourceArrayElements(argv), 0, source)
   );
 }
 
-function arrayHasCliRenameLegacyArgs(
-  elements: SgNode[],
-  start: number,
-  source: string,
-  sourceStringVariables: ReadonlyMap<string, string>,
-): boolean {
+function arrayHasCliRenameLegacyArgs(elements: SgNode[], start: number, source: string): boolean {
   let commandSeen = false;
   for (let index = start; index < elements.length; index += 1) {
     const value =
-      sourceStaticStringContent(elements[index]!, source, sourceStringVariables) ??
+      sourceStaticStringContent(elements[index]!, source) ??
       sourceStringRawContent(elements[index]!, source);
     if (value == null) continue;
     if (value === "--machineuser" || value.startsWith("--machineuser=")) return true;
@@ -1367,40 +1301,28 @@ function arrayHasCliRenameLegacyArgs(
   return false;
 }
 
-function isTailorCliArgumentArray(
-  arrayNode: SgNode,
-  index: number,
-  source: string,
-  sourceStringVariables: ReadonlyMap<string, string>,
-): boolean {
+function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
   const argumentsNode = arrayNode.parent();
   if (argumentsNode?.kind() === "arguments") {
     const callArgs = sourceArrayElements(argumentsNode);
-    const executable =
-      callArgs[0] == null
-        ? null
-        : sourceStaticStringContent(callArgs[0]!, source, sourceStringVariables);
+    const executable = callArgs[0] == null ? null : sourceStaticStringContent(callArgs[0]!, source);
     if (executable != null && isTailorCliTokenValue(executable)) return true;
   }
 
   const elements = sourceArrayElements(arrayNode);
   return elements.slice(0, index).some((element) => {
-    const value = sourceStaticStringContent(element, source, sourceStringVariables);
+    const value = sourceStaticStringContent(element, source);
     return value != null && isTailorCliTokenValue(value);
   });
 }
 
-function isCliValueArgument(
-  node: SgNode,
-  source: string,
-  sourceStringVariables: ReadonlyMap<string, string>,
-): boolean {
+function isCliValueArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array") return false;
   const elements = sourceArrayElements(parent);
   const index = nodeIndex(elements, node);
   if (index < 0) return false;
-  if (!isTailorCliArgumentArray(parent, index, source, sourceStringVariables)) return false;
+  if (!isTailorCliArgumentArray(parent, index, source)) return false;
   const text = sourceStringContent(node, source) ?? sourceStringRawContent(node, source);
   if (
     text != null &&
@@ -1411,11 +1333,7 @@ function isCliValueArgument(
     return true;
   }
   if (index === 0) return false;
-  const previousValue = sourceStaticStringContent(
-    elements[index - 1]!,
-    source,
-    sourceStringVariables,
-  );
+  const previousValue = sourceStaticStringContent(elements[index - 1]!, source);
   return (
     text != null &&
     text.includes("tailor-sdk") &&
@@ -1429,7 +1347,6 @@ function pushSourceStringEdit(
   edits: Array<[number, number, string]>,
   source: string,
   node: SgNode,
-  sourceStringVariables: ReadonlyMap<string, string>,
 ): void {
   const range = node.range();
   const start = range.start.index + 1;
@@ -1442,9 +1359,9 @@ function pushSourceStringEdit(
       : TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
         ? renamePackageName(text)
         : (TAILOR_SDK_TOKEN_RE.test(text) || TAILOR_SDK_PATH_RE.test(text)) &&
-            isCliBinaryArgument(node, source, sourceStringVariables)
+            isCliBinaryArgument(node, source)
           ? renameBinary(text)
-          : isCliValueArgument(node, source, sourceStringVariables)
+          : isCliValueArgument(node, source)
             ? text
             : renameSourceCommandText(text);
   if (replacement !== text) {
@@ -1493,27 +1410,20 @@ function hasOnlyProtectedSourceCliValueLegacyToken(value: string): boolean {
   );
 }
 
-function templateSubstitutionMigrationText(
-  node: SgNode,
-  source: string,
-  value: string,
-  sourceStringVariables: ReadonlyMap<string, string>,
-): string {
+function templateSubstitutionMigrationText(node: SgNode, source: string, value: string): string {
   const identifier = node.children().find((child) => child.kind() === "identifier");
   if (identifier != null && node.text() === `\${${identifier.text()}}`) {
-    const identifierValue = sourceStaticStringContent(identifier, source, sourceStringVariables);
+    const identifierValue = sourceStaticStringContent(identifier, source);
     if (identifierValue != null) return identifierValue;
   }
   if (!value.startsWith("${") || !value.endsWith("}")) return value;
-  const expression = value.slice(2, -1).trim();
-  return sourceStringVariables.get(expression) ?? expression;
+  return value.slice(2, -1).trim();
 }
 
 function pushTemplateStringEdit(
   edits: Array<[number, number, string]>,
   source: string,
   node: SgNode,
-  sourceStringVariables: ReadonlyMap<string, string>,
 ): void {
   const range = node.range();
   const start = range.start.index + 1;
@@ -1542,12 +1452,7 @@ function pushTemplateStringEdit(
     substitutions.push({
       placeholder,
       text: substitutionText,
-      migrationText: templateSubstitutionMigrationText(
-        child,
-        source,
-        substitutionText,
-        sourceStringVariables,
-      ),
+      migrationText: templateSubstitutionMigrationText(child, source, substitutionText),
     });
     text = `${text.slice(0, childStart)}${placeholder}${text.slice(childEnd)}`;
   }
@@ -1583,7 +1488,6 @@ function transformSourceFile(source: string, filePath: string): string | null {
     return null;
   }
 
-  const sourceStringVariables = collectSourceStringVariables(root, source);
   const edits: Array<[number, number, string]> = [];
   const visit = (node: SgNode): void => {
     const kind = node.kind();
@@ -1595,7 +1499,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
     }
 
     if (kind === "string") {
-      pushSourceStringEdit(edits, source, node, sourceStringVariables);
+      pushSourceStringEdit(edits, source, node);
       return;
     }
 
@@ -1604,11 +1508,11 @@ function transformSourceFile(source: string, filePath: string): string | null {
         .children()
         .some((child: SgNode) => child.kind() === "template_substitution");
       if (!hasSubstitution) {
-        pushSourceStringEdit(edits, source, node, sourceStringVariables);
+        pushSourceStringEdit(edits, source, node);
         return;
       }
-      if (isCliValueArgument(node, source, sourceStringVariables)) return;
-      pushTemplateStringEdit(edits, source, node, sourceStringVariables);
+      if (isCliValueArgument(node, source)) return;
+      pushTemplateStringEdit(edits, source, node);
       return;
     }
 

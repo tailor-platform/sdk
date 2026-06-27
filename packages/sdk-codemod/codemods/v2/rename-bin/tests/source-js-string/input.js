@@ -1,6 +1,8 @@
 const script = "tailor-sdk deploy";
 const proseApply = "Run tailor-sdk deploy to apply changes";
 const spawned = spawn("tailor-sdk", ["deploy"]);
+const runtimeArg = getArg();
+const scopedRuntimeArgSpawned = spawn("tailor-sdk", [runtimeArg]);
 const argSpawned = spawn("tailor-sdk", ["--arg", "tailor-sdk deploy", "deploy"]);
 const tailorBin = "tailor";
 const aliasArgSpawned = spawn(tailorBin, ["--arg", "tailor-sdk deploy", "deploy"]);
@@ -17,6 +19,10 @@ const templateBin = "tailor";
 const templatedAliasArg = `${templateBin} --arg "tailor-sdk deploy" deploy`;
 const applySpawned = spawn("tailor-sdk", ["apply"]);
 const applyAliasSpawned = spawn("tailor-sdk", [legacyApplyArg]);
+function unrelatedRuntimeArgScope() {
+  const runtimeArg = "apply";
+  return runtimeArg;
+}
 function duplicateAliasOne() {
   const duplicateLegacyArg = "apply";
   return spawn("tailor-sdk", [duplicateLegacyArg]);
