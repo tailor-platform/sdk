@@ -78,7 +78,8 @@ const SOURCE_VALUE_FLAGS = new Set([
   "-q",
   "-f",
 ]);
-const SOURCE_CLI_BINARY_RE = /^(?:tailor|tailor-sdk(?:@[^\s'"`;|&)]+)?)$/;
+const SOURCE_CLI_BINARY_RE =
+  /^(?:tailor|tailor-sdk(?:@[^\s'"`;|&)]+)?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
@@ -179,6 +180,12 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
 
   const fragments: string[] = [];
   const visit = (node: SgNode): void => {
+    if (node.kind() === "string") {
+      if (isSourceValueArgument(node, content)) return;
+      const value = sourceStringNodeContent(node, content);
+      if (value != null) fragments.push(value);
+      return;
+    }
     if (node.kind() === "string_fragment") {
       if (isSourceValueArgument(node, content)) return;
       fragments.push(node.text());
@@ -227,7 +234,7 @@ function sourceStringNodeContent(node: SgNode, source: string): string | null {
 }
 
 function isSourceValueArgument(fragment: SgNode, source: string): boolean {
-  const stringNode = fragment.parent();
+  const stringNode = fragment.kind() === "string_fragment" ? fragment.parent() : fragment;
   if (stringNode == null) return false;
   const parent = stringNode.parent();
   if (parent?.kind() !== "array") return false;

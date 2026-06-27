@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { allCodemods } from "./registry";
 import { runCodemods } from "./runner";
 import type { CodemodPackage } from "./types";
 
@@ -524,6 +525,7 @@ describe("runCodemods", () => {
           'const packageName = "tailor-sdk";',
           'const command = "deploy";',
           'spawn("tailor", ["--arg", "tailor-sdk deploy", "deploy"]);',
+          'spawn("npx", ["@tailor-platform/sdk", "--arg", "tailor-sdk deploy", "deploy"]);',
         ].join("\n"),
         "utf-8",
       );
@@ -533,6 +535,32 @@ describe("runCodemods", () => {
           {
             codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
               sourceStringLegacyPatterns: [/tailor-sdk(?=\s+deploy)/],
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual([]);
+    });
+
+    test("keeps escaped quoted Tailor values out of rename-bin residual warnings", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "commands.ts"),
+        'const command = "tailor --arg \\"tailor-sdk deploy\\" deploy";',
+        "utf-8",
+      );
+      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
             }),
             scriptPath: partialTransformPath,
           },
