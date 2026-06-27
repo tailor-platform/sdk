@@ -56,3 +56,4 @@ const label = "crash-report";
 const regexPattern = /tailor-sdk crash-report --machineuser/;
 const prose = "package tailor-sdk crash-report --machineuser";
 const proseTemplate = `package tailor-sdk crash-report --machineuser`;
+const packageOptionData = ["tailor-sdk", "--machineuser"];

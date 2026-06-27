@@ -519,7 +519,7 @@ describe("runCodemods", () => {
           },
           {
             codemod: makeCodemod("test/cli-rename", undefined, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: [["tailor", "crash-report"]],
+              sourceStringLegacyPatterns: [[/(?:^|[\s;&|])tailor(?=[\s;&|]|$)/, "crash-report"]],
             }),
           },
         ],
@@ -528,8 +528,32 @@ describe("runCodemods", () => {
       );
 
       expect(result.warnings).toEqual([
-        "cli.ts: contains tailor + crash-report but was not migrated automatically (rule: test/cli-rename). Manual migration may be needed.",
+        "cli.ts: contains /(?:^|[\\s;&|])tailor(?=[\\s;&|]|$)/ + crash-report but was not migrated automatically (rule: test/cli-rename). Manual migration may be needed.",
       ]);
+    });
+
+    test("does not treat SDK package specifiers as tailor command tokens", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "cli.ts"),
+        ['import "@tailor-platform/sdk";', 'const commandName = "crash-report";'].join("\n"),
+        "utf-8",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/cli-rename", undefined, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: [[/(?:^|[\s;&|])tailor(?=[\s;&|]|$)/, "crash-report"]],
+            }),
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.warnings).toEqual([]);
     });
 
     test("flags files matching a suspicious pattern for LLM review", async () => {

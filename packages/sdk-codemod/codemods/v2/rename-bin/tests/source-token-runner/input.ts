@@ -60,4 +60,5 @@ const unrelatedNpxValues = ["npx", "create-tailor-sdk", "tailor-sdk-skills", "ta
 const packageNames = ["tailor-sdk", "react"];
 const packageTuple = [["tailor-sdk", version]];
 const packageTupleValue = ["tailor-sdk", version];
+const packageOptionData = ["tailor-sdk", "--not-cli"];
 const outputDir = ".tailor-sdk";

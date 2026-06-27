@@ -94,6 +94,26 @@ const TAILOR_CLI_SEPARATE_VALUE_FLAGS = new Set([
   "-q",
   "-f",
 ]);
+const TAILOR_CLI_GLOBAL_FLAGS = new Set([
+  "--env-file-if-exists",
+  "--env-file",
+  "--profile",
+  "--config",
+  "--workspace-id",
+  "--verbose",
+  "--json",
+  "--yes",
+  "--help",
+  "--version",
+  "-e",
+  "-p",
+  "-c",
+  "-w",
+  "-j",
+  "-y",
+  "-h",
+  "-v",
+]);
 const SOURCE_STRING_WRAPPER_NODE_KINDS = new Set([
   "as_expression",
   "non_null_expression",
@@ -442,7 +462,16 @@ function isPathLikeRunnerFlagValue(value: string): boolean {
 
 function isTailorCliCommandToken(value: string): boolean {
   const token = value.replace(/[),.:!?]+$/, "");
-  return token.startsWith("-") || TAILOR_CLI_COMMANDS.has(token);
+  return TAILOR_CLI_COMMANDS.has(token) || isTailorCliGlobalFlag(token);
+}
+
+function optionName(value: string): string {
+  const equalsIndex = value.indexOf("=");
+  return equalsIndex === -1 ? value : value.slice(0, equalsIndex);
+}
+
+function isTailorCliGlobalFlag(value: string): boolean {
+  return TAILOR_CLI_GLOBAL_FLAGS.has(optionName(value));
 }
 
 function tailorCliValueFlagName(value: string | undefined): string | undefined {
