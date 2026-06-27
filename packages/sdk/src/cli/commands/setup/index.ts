@@ -7,7 +7,7 @@ import { setupGitHub } from "./generate";
 const checkCommand = defineAppCommand({
   name: "check",
   description: "Audit generated workflows for drift against the current config/repo (read-only).",
-  args: z.object({}).strict(),
+  args: z.strictObject({}),
   run: () => {
     checkGitHub({ outputDir: process.cwd() });
   },
@@ -16,47 +16,43 @@ const checkCommand = defineAppCommand({
 export const setupCommand = defineAppCommand({
   name: "setup",
   description: "Generate a CI deploy workflow for your project. (beta)",
-  args: z
-    .object({
-      provider: arg(
-        z
-          .enum(["github"], { message: "Only the 'github' provider is supported." })
-          .default("github"),
-        {
-          alias: "p",
-          description: "CI provider to generate for (only 'github' is supported)",
-        },
-      ),
-      "workspace-name": arg(z.string().min(1).optional(), {
-        alias: "n",
-        description: "Workspace name (defaults to the config 'name')",
-      }),
-      branch: arg(z.string().min(1).optional(), {
-        description:
-          "Branch target: deploy trigger branch (defaults to the detected default branch). " +
-          "Tag target: tag-reachability guard branch (no guard when omitted)",
-      }),
-      tag: arg(z.boolean().default(false), {
-        description: "Generate a tag target (deploy on tag push)",
-      }),
-      "tag-pattern": arg(z.string().min(1).optional(), {
-        description: "Tag glob to match (requires --tag; defaults to v*)",
-      }),
-      environment: arg(z.string().min(1).optional(), {
-        description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
-      }),
-      "no-plan": arg(z.boolean().default(false), {
-        description: "Disable the plan job for a branch target (cannot be combined with --tag)",
-      }),
-      dir: arg(z.string().min(1).default("."), {
-        alias: "d",
-        description: "App directory (for monorepo setups)",
-      }),
-      force: arg(z.boolean().default(false), {
-        description: "Discard hand edits / take over unmanaged files and regenerate",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    provider: arg(
+      z.enum(["github"], { message: "Only the 'github' provider is supported." }).default("github"),
+      {
+        alias: "p",
+        description: "CI provider to generate for (only 'github' is supported)",
+      },
+    ),
+    "workspace-name": arg(z.string().min(1).optional(), {
+      alias: "n",
+      description: "Workspace name (defaults to the config 'name')",
+    }),
+    branch: arg(z.string().min(1).optional(), {
+      description:
+        "Branch target: deploy trigger branch (defaults to the detected default branch). " +
+        "Tag target: tag-reachability guard branch (no guard when omitted)",
+    }),
+    tag: arg(z.boolean().default(false), {
+      description: "Generate a tag target (deploy on tag push)",
+    }),
+    "tag-pattern": arg(z.string().min(1).optional(), {
+      description: "Tag glob to match (requires --tag; defaults to v*)",
+    }),
+    environment: arg(z.string().min(1).optional(), {
+      description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
+    }),
+    "no-plan": arg(z.boolean().default(false), {
+      description: "Disable the plan job for a branch target (cannot be combined with --tag)",
+    }),
+    dir: arg(z.string().min(1).default("."), {
+      alias: "d",
+      description: "App directory (for monorepo setups)",
+    }),
+    force: arg(z.boolean().default(false), {
+      description: "Discard hand edits / take over unmanaged files and regenerate",
+    }),
+  }),
   subCommands: {
     check: checkCommand,
   },

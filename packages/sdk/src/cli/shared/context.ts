@@ -20,6 +20,7 @@ import {
   deleteKeyringTokens,
 } from "./token-store";
 
+// strip unknown keys
 const pfProfileSchema = z.object({
   user: z.string(),
   workspace_id: z.string(),
@@ -28,17 +29,20 @@ const pfProfileSchema = z.object({
   machine_user_override: z.enum(["allow", "deny"]).optional(),
 });
 
+// strip unknown keys
 const pfUserSchemaV1 = z.object({
   access_token: z.string(),
   refresh_token: z.string().optional(),
   token_expires_at: z.string(),
 });
 
+// strip unknown keys
 const pfUserKeyringSchema = z.object({
   storage: z.literal("keyring"),
   token_expires_at: z.string(),
 });
 
+// strip unknown keys
 const pfUserFileSchema = z.object({
   storage: z.literal("file"),
   token_expires_at: z.string(),
@@ -58,6 +62,7 @@ const pfUserFileSchemaV3 = pfUserFileSchema.extend({
 
 const pfUserSchemaV3 = z.discriminatedUnion("storage", [pfUserKeyringSchemaV3, pfUserFileSchemaV3]);
 
+// strip unknown keys
 const pfConfigSchemaV1 = z.object({
   version: z.literal(1),
   users: z.partialRecord(z.string(), pfUserSchemaV1),
@@ -78,6 +83,7 @@ const semverSchema = z.templateLiteral([
   z.number().int(),
 ]);
 
+// strip unknown keys
 const pfConfigSchemaV2 = z.object({
   version: z.literal(V2_CONFIG_VERSION),
   min_sdk_version: semverSchema,
@@ -88,6 +94,7 @@ const pfConfigSchemaV2 = z.object({
   current_user: z.string().nullable(),
 });
 
+// strip unknown keys
 const pfConfigSchemaV3 = z.object({
   version: z.literal(LATEST_CONFIG_VERSION),
   min_sdk_version: semverSchema,
@@ -333,6 +340,7 @@ export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) 
   writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
+// strip unknown keys
 const tcContextConfigSchema = z.object({
   username: z.string().optional(),
   controlplaneaccesstoken: z.string().optional(),
@@ -341,8 +349,10 @@ const tcContextConfigSchema = z.object({
   workspaceid: z.string().optional(),
 });
 
+// strip unknown keys
 const tcConfigSchema = z
   .object({
+    // strip unknown keys
     global: z
       .object({
         context: z.string().optional(),

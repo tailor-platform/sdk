@@ -36,7 +36,7 @@ function connectionInfo(connection: AuthConnection): ConnectionInfo {
 export const listAuthConnectionCommand = defineAppCommand({
   name: "list",
   description: "List all auth connections.",
-  args: z.object({ ...workspaceArgs, ...paginationArgs() }).strict(),
+  args: z.strictObject({ ...workspaceArgs, ...paginationArgs() }),
   run: async (args) => {
     const accessToken = await loadAccessToken({
       profile: args.profile,

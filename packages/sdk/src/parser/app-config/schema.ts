@@ -22,6 +22,7 @@ const logLevelSchema = z
  * label-compatible prefix is added at the metadata boundary, so user-facing
  * configs only need to carry a UUID.
  */
+// strip unknown keys
 export const AppConfigSchema = z.object({
   id: z.uuid({ message: "'id' must be a UUID." }).optional(),
   name: z.string().min(1, { message: "'name' must be a non-empty string." }),

@@ -26,11 +26,9 @@ function formatCrashReportFiles(files: string[], localDir: string) {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List local crash report files.",
-  args: z
-    .object({
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const config = parseCrashReportConfig();
     const jsonOutput = logger.jsonMode;

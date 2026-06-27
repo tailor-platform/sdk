@@ -509,21 +509,18 @@ export const syncCommand = defineAppCommand({
   name: "sync",
   description:
     "Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).",
-  args: z
-    .object({
-      ...deploymentArgs,
-      ...confirmationArgs,
-      number: arg(z.string(), {
-        positional: true,
-        description:
-          "Migration number to sync to (e.g., 0001 or 1; 0 targets the baseline snapshot)",
-      }),
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description: "Target TailorDB namespace (required if multiple namespaces exist)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    ...confirmationArgs,
+    number: arg(z.string(), {
+      positional: true,
+      description: "Migration number to sync to (e.g., 0001 or 1; 0 targets the baseline snapshot)",
+    }),
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "Target TailorDB namespace (required if multiple namespaces exist)",
+    }),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     await sync({

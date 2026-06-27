@@ -11,16 +11,14 @@ import { initErdDeployContext } from "./utils";
 export const erdDeployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy ERD static website for TailorDB namespace(s).",
-  args: z
-    .object({
-      ...deploymentArgs,
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description:
-          "TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description:
+        "TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)",
+    }),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const { client, workspaceId } = await initErdDeployContext(args);

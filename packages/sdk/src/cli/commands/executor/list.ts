@@ -48,12 +48,10 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all executors",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const executors = await listExecutors({

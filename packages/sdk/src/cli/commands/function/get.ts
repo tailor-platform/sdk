@@ -10,6 +10,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
+// strip unknown keys
 const getFunctionRegistryOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
@@ -71,15 +72,13 @@ export async function getFunctionRegistry(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get a function registry by name",
-  args: z
-    .object({
-      ...workspaceArgs,
-      name: arg(z.string(), {
-        description: "Function name",
-        alias: "n",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    name: arg(z.string(), {
+      description: "Function name",
+      alias: "n",
+    }),
+  }),
   run: async (args) => {
     const fn = await getFunctionRegistry({
       workspaceId: args["workspace-id"],

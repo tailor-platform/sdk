@@ -295,16 +295,14 @@ Stack traces are mapped only when the execution includes a content hash for the 
       desc: "Get execution details as JSON",
     },
   ],
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...pagedLogArgs,
-      "execution-id": arg(z.string().optional(), {
-        positional: true,
-        description: "Execution ID (if provided, shows details with logs)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...pagedLogArgs,
+    "execution-id": arg(z.string().optional(), {
+      positional: true,
+      description: "Execution ID (if provided, shows details with logs)",
+    }),
+  }),
   run: async (args) => {
     const accessToken = await loadAccessToken({
       profile: args.profile,

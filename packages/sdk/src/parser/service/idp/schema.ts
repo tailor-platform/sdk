@@ -36,6 +36,7 @@ function normalizeIdPGqlOperations(
 export const IdPGqlOperationsSchema = z
   .union([
     z.literal("query"),
+    // strip unknown keys
     z.object({
       create: z.boolean().optional().describe("Enable _createUser mutation (default: true)"),
       update: z.boolean().optional().describe("Enable _updateUser mutation (default: true)"),
@@ -63,6 +64,7 @@ export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
 const allowedReturnOriginPattern =
   /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url)$/;
 
+// strip unknown keys
 export const IdPUserAuthPolicySchema = z
   .object({
     useNonEmailIdentifier: z
@@ -229,6 +231,7 @@ const emailFieldSchema = z
   .max(200, "must be 200 characters or less")
   .regex(/^[^\r\n]*$/, "must not contain newline characters");
 
+// strip unknown keys
 export const IdPEmailConfigSchema = z
   .object({
     fromName: emailFieldSchema.optional().describe("Default sender display name for emails"),
@@ -243,9 +246,13 @@ const IdPPermissionOperandSchema = z.union([
   z.boolean(),
   z.array(z.string()).readonly(),
   z.array(z.boolean()).readonly(),
+  // strip unknown keys
   z.object({ user: z.string() }),
+  // strip unknown keys
   z.object({ idpUser: z.enum(["id", "name", "disabled"]) }),
+  // strip unknown keys
   z.object({ oldIdpUser: z.enum(["id", "name", "disabled"]) }),
+  // strip unknown keys
   z.object({ newIdpUser: z.enum(["id", "name", "disabled"]) }),
 ]);
 
@@ -257,6 +264,7 @@ const IdPPermissionConditionSchema = z
 
 const IdPActionPermissionSchema = z.union([
   // Object format: { conditions, description?, permit? }
+  // strip unknown keys
   z.object({
     conditions: z.union([
       IdPPermissionConditionSchema,
@@ -291,6 +299,7 @@ const IdPActionPermissionSchema = z.union([
     .readonly(),
 ]);
 
+// strip unknown keys
 export const IdPPermissionSchema = z
   .object({
     create: z.array(IdPActionPermissionSchema).readonly(),
@@ -302,11 +311,12 @@ export const IdPPermissionSchema = z
   })
   .describe("Per-operation permission policies for IdP users");
 
+// strip unknown keys
 export const IdPSchema = z
   .object({
     name: z.string().describe("IdP service name"),
     authorization: z
-      .union([z.literal("insecure"), z.literal("loggedIn"), z.object({ cel: z.string() })])
+      .union([z.literal("insecure"), z.literal("loggedIn"), z.strictObject({ cel: z.string() })])
       .optional()
       .describe("Authorization mode for IdP API access"),
     clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),

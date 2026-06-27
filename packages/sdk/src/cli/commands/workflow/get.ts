@@ -88,12 +88,10 @@ export async function getWorkflow<W extends WorkflowLike>(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get workflow details.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...nameArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...nameArgs,
+  }),
   run: async (args) => {
     const workflow = await getWorkflow({
       name: args.name,

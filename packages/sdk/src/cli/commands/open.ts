@@ -11,11 +11,9 @@ const consoleBaseUrl = "https://console.tailor.tech";
 export const openCommand = defineAppCommand({
   name: "open",
   description: "Open Tailor Platform Console.",
-  args: z
-    .object({
-      ...deploymentArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+  }),
   run: async (args) => {
     const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
