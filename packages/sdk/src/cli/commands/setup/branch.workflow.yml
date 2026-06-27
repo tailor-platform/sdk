@@ -236,9 +236,7 @@ jobs:
           }
 
           process.stdout.write(
-            pnpmVersion(readManifest("package.json")) ??
-              pnpmVersion(readManifest("../package.json")) ??
-              fallback,
+            pnpmVersion(readManifest("package.json")) ?? fallback,
           );
           NODE
           )"
@@ -384,6 +382,29 @@ jobs:
             )
           }
 
+          run_base_tailor_sdk_bin() {
+            local command_cwd="$1"
+            shift
+
+            run_head_cli_env() {
+              env TAILOR_SDK_BIN="$tailor_sdk_bin" TAILOR_SDK_CWD="$command_cwd" "$@"
+            }
+
+            (
+              cd "$command_cwd" || exit 1
+              case "$BASE_PACKAGE_MANAGER" in
+                pnpm) run_head_cli_env pnpm exec node "$head_cli_runner" "$@" ;;
+                npm) run_head_cli_env node "$head_cli_runner" "$@" ;;
+                yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;
+                bun) run_head_cli_env bun "$head_cli_runner" "$@" ;;
+                *)
+                  echo "::error::Unsupported base package-manager '$BASE_PACKAGE_MANAGER' (expected pnpm, npm, yarn, or bun)"
+                  exit 1
+                  ;;
+              esac
+            )
+          }
+
           head_output="$RUNNER_TEMP/tailor-erd/head"
           base_output="$RUNNER_TEMP/tailor-erd/base"
           preview_output="$RUNNER_TEMP/tailor-erd/preview"
@@ -441,7 +462,7 @@ jobs:
             base_missing="true"
           elif ! (
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
-              run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
+              run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
             if grep -q 'not found in local config.db' "$base_log"; then
               cat "$base_log"
