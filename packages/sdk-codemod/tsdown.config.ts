@@ -32,6 +32,8 @@ export default defineConfig([
         "codemods/v2/auth-invoker-unwrap/scripts/transform.ts",
       "v2/tailordb-namespace/scripts/transform":
         "codemods/v2/tailordb-namespace/scripts/transform.ts",
+      "v2/runtime-globals-opt-in/scripts/transform":
+        "codemods/v2/runtime-globals-opt-in/scripts/transform.ts",
       "v2/execute-script-arg/scripts/transform":
         "codemods/v2/execute-script-arg/scripts/transform.ts",
       "v2/rename-bin/scripts/transform": "codemods/v2/rename-bin/scripts/transform.ts",
