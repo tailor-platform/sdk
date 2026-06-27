@@ -43,6 +43,7 @@ const TAILOR_CLI_VALUE_REFERENCE_RE = new RegExp(
 const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 const TAILOR_SDK_TOKEN = /^tailor-sdk(@[^\s'"`;|&)]+)?$/;
+const TAILOR_CLI_CONTEXT_TOKEN = /^(?:tailor|tailor-sdk(?:@[^\s'"`;|&)]+)?)$/;
 const TAILOR_SDK_COMMAND_TOKEN_RE =
   /(?<![=.\w-])tailor-sdk(?![\w-])(?:@[^\s'"`;|&)]+)?\s+([^\s'"`;|&)]+)/g;
 const TAILOR_CLI_COMMANDS = new Set([
@@ -1318,7 +1319,9 @@ function protectStandaloneTailorSdkSourceStrings(
     return tokens.some((token, index) => {
       const next = tokens[index + 1];
       return (
-        TAILOR_SDK_TOKEN.test(token.value) && next != null && isTailorCliCommandToken(next.value)
+        TAILOR_CLI_CONTEXT_TOKEN.test(token.value) &&
+        next != null &&
+        isTailorCliCommandToken(next.value)
       );
     });
   };
@@ -1425,7 +1428,7 @@ function protectStandaloneTailorSdkSourceStrings(
   };
   const hasDynamicTailorArgvRemainder = (node: SgNode, tokens: SourceStringToken[]): boolean => {
     const [first] = tokens;
-    if (!first || !TAILOR_SDK_TOKEN.test(first.value)) return false;
+    if (!first || !TAILOR_CLI_CONTEXT_TOKEN.test(first.value)) return false;
     if (node.parent()?.kind() === "array") return false;
     const firstElementIndex = arrayElementNodes(node).findIndex((child) => {
       const token = sourceStringExpressionToken(child);
@@ -1447,7 +1450,7 @@ function protectStandaloneTailorSdkSourceStrings(
     const tokenIndex = tokens.findIndex(
       (candidate) => candidate.start === token.start && candidate.end === token.end,
     );
-    if (tokenIndex === -1 || !TAILOR_SDK_TOKEN.test(token.value)) return false;
+    if (tokenIndex === -1 || !TAILOR_CLI_CONTEXT_TOKEN.test(token.value)) return false;
     if (isOpenTailorCliValueFlag(tokens[tokenIndex - 1]?.value)) return false;
     const next = tokens[tokenIndex + 1];
     if (next != null && isTailorCliCommandToken(next.value)) return true;
@@ -1465,7 +1468,9 @@ function protectStandaloneTailorSdkSourceStrings(
       return hasTailorExecRunnerToken(tokens);
     }
     return (
-      TAILOR_SDK_TOKEN.test(first.value) && second != null && isTailorCliCommandToken(second.value)
+      TAILOR_CLI_CONTEXT_TOKEN.test(first.value) &&
+      second != null &&
+      isTailorCliCommandToken(second.value)
     );
   };
   const isProtectedArrayDataToken = (node: SgNode): boolean => {
@@ -1498,7 +1503,7 @@ function protectStandaloneTailorSdkSourceStrings(
     for (const token of collectTemplateTokens(node, source)) {
       const value = staticTemplateTokenValue(token);
       if (!afterTailorBinary) {
-        if (value !== undefined && TAILOR_SDK_TOKEN.test(value)) {
+        if (value !== undefined && TAILOR_CLI_CONTEXT_TOKEN.test(value)) {
           afterTailorBinary = true;
         }
         continue;
@@ -1657,7 +1662,16 @@ function protectStandaloneTailorSdkSourceStrings(
 
   let updated = source;
   const protectedValues: string[] = [];
-  for (const [start, end, value] of ranges.toSorted(([a], [b]) => b - a)) {
+  const nonOverlappingRanges: Array<[number, number, string]> = [];
+  let coveredEnd = -1;
+  for (const range of ranges.toSorted(([aStart, aEnd], [bStart, bEnd]) => {
+    return aStart - bStart || bEnd - aEnd;
+  })) {
+    if (range[0] < coveredEnd) continue;
+    nonOverlappingRanges.push(range);
+    coveredEnd = range[1];
+  }
+  for (const [start, end, value] of nonOverlappingRanges.toSorted(([a], [b]) => b - a)) {
     const placeholder = `__TAILOR_SDK_CODEMOD_STANDALONE_${protectedValues.length}__`;
     protectedValues.push(value);
     updated = `${updated.slice(0, start)}${placeholder}${updated.slice(end)}`;

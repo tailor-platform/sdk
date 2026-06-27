@@ -12,6 +12,7 @@ const dynamicCommandWithConditionalFlags = `tailor-sdk ${useJson ? "--json" : ""
 const profileValue = "tailor-sdk --profile tailor-sdk deploy";
 const shortProfileValue = "tailor-sdk -p tailor-sdk deploy";
 const substitutedArgValue = `tailor-sdk function test-run --arg ${cond ? "tailor-sdk deploy" : "{}"}`;
+const substitutedSingleArgValue = `tailor-sdk function test-run --arg ${"tailor-sdk"}`;
 const latest = "npx tailor-sdk@latest login";
 const cacheRunner = "npx --cache .npm tailor-sdk login";
 const registryRunner = "npx --registry=https://npm.example/tailor-sdk tailor-sdk login";
@@ -24,6 +25,7 @@ const quotedPackageOptionRunner = 'npx --package="tailor-sdk" tailor-sdk login';
 const dynamicPackageOptionRunner = `npx --package=${useLocal ? "tailor-sdk" : pkg} tailor-sdk login`;
 const dynamicSeparatePackageOptionRunner = `npx ${useLocal ? "--package" : ""} ${useLocal ? "tailor-sdk" : pkg} tailor-sdk login`;
 const dynamicPackageOptionCommand = `npx --package tailor-sdk tailor-sdk ${subcommand}`;
+const packageOptionArgValue = `npx --package tailor-sdk tailor-sdk function test-run --arg ${cond ? "tailor-sdk deploy" : "{}"}`;
 const dynamicInlinePackageOptionCommand = `npx --package=${pkg} tailor-sdk ${subcommand}`;
 const dynamicFlagStaticTemplate = `npx ${yes ? "-y" : ""} tailor-sdk login`;
 const dynamicFlagConditionTemplate = `npx ${mode === "prod" ? "-y" : "--yes"} tailor-sdk login`;
