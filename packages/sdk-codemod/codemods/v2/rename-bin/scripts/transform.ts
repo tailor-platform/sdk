@@ -1006,37 +1006,6 @@ function isCliValueArgument(node: SgNode, source: string): boolean {
   );
 }
 
-function sourceStringValue(node: SgNode, source: string): string | null {
-  return sourceStringContent(node, source) ?? sourceStringRawContent(node, source);
-}
-
-function collectSourceStringValues(node: SgNode, source: string, values: string[]): void {
-  const value = sourceStringValue(node, source);
-  if (value != null) {
-    values.push(value);
-    return;
-  }
-  for (const child of node.children()) {
-    collectSourceStringValues(child, source, values);
-  }
-}
-
-function cliInvocationContextNode(node: SgNode): SgNode | null {
-  const parent = node.parent();
-  if (parent?.kind() === "array" && parent.parent()?.kind() === "arguments") {
-    return parent.parent()!;
-  }
-  return parent?.kind() === "arguments" ? parent : null;
-}
-
-function contextNeedsCliRenameMigration(node: SgNode, source: string): boolean {
-  const context = cliInvocationContextNode(node);
-  if (context == null) return false;
-  const values: string[] = [];
-  collectSourceStringValues(context, source, values);
-  return values.some((value) => CLI_RENAME_LEGACY_RE.test(value));
-}
-
 function pushSourceStringEdit(
   edits: Array<[number, number, string]>,
   source: string,
@@ -1048,18 +1017,16 @@ function pushSourceStringEdit(
   const text = source.slice(start, end);
   const packageFlagReplacement = sourcePackageFlagReplacement(node, source);
   const replacement =
-    contextNeedsCliRenameMigration(node, source) && text.includes("tailor-sdk")
-      ? text
-      : isCliValueArgument(node, source)
-        ? text
-        : packageFlagReplacement != null
-          ? packageFlagReplacement.replacement
-          : TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
-            ? renamePackageName(text)
-            : (TAILOR_SDK_TOKEN_RE.test(text) || TAILOR_SDK_PATH_RE.test(text)) &&
-                isCliBinaryArgument(node, source)
-              ? renameBinary(text)
-              : renameSourceCommandText(text);
+    packageFlagReplacement != null
+      ? packageFlagReplacement.replacement
+      : TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
+        ? renamePackageName(text)
+        : (TAILOR_SDK_TOKEN_RE.test(text) || TAILOR_SDK_PATH_RE.test(text)) &&
+            isCliBinaryArgument(node, source)
+          ? renameBinary(text)
+          : isCliValueArgument(node, source)
+            ? text
+            : renameSourceCommandText(text);
   if (replacement !== text) {
     edits.push([start, end, replacement]);
   }
