@@ -29,6 +29,7 @@ const dynamicPackageOptionCommand = `npx --package @tailor-platform/sdk tailor $
 const packageOptionArgValue = `npx --package @tailor-platform/sdk tailor function test-run --arg ${cond ? "tailor-sdk deploy" : "{}"}`;
 const dynamicInlinePackageOptionCommand = `npx --package=${pkg} tailor ${subcommand}`;
 const dynamicFlagStaticTemplate = `npx ${yes ? "-y" : ""} @tailor-platform/sdk login`;
+const staticSubstitutionRunner = `${"npx"} @tailor-platform/sdk login`;
 const dynamicFlagConditionTemplate = `npx ${mode === "prod" ? "-y" : "--yes"} @tailor-platform/sdk login`;
 const dynamicDlxValueFlagTemplate = `pnpm ${use ? "--filter" : ""} app dlx @tailor-platform/sdk login`;
 const dynamicDlxInlineValueFlagTemplate = `pnpm ${use ? "--filter=tailor-sdk" : ""} dlx @tailor-platform/sdk login`;
