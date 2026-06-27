@@ -114,6 +114,7 @@ const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync
 const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
 const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
+const PACKAGE_MANAGER_OPTION_VALUE_FLAGS = new Set(["--filter", "-F", "--dir", "-C", "--cwd"]);
 const SOURCE_PACKAGE_FLAG_RE = /^(?:-p|--package)(?:=.*)?$/;
 const NPX_OPTION_WITH_VALUE = "(?:--registry|--cache|--userconfig|--prefix)";
 const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
@@ -277,6 +278,9 @@ function firstNonOptionIndex(elements: SgNode[], start: number, source: string):
     const value = sourceStringContent(elements[index]!, source);
     if (value == null) return null;
     if (!value.startsWith("-")) return index;
+    if (PACKAGE_MANAGER_OPTION_VALUE_FLAGS.has(value.split("=", 1)[0]!) && !value.includes("=")) {
+      index += 1;
+    }
   }
   return null;
 }
@@ -520,7 +524,9 @@ function pushTemplateStringEdit(
     const placeholder = `__TAILOR_SDK_TEMPLATE_EXPR_${substitutions.length}__`;
     substitutions.push({
       placeholder,
-      text: source.slice(childRange.start.index, childRange.end.index),
+      text: transformTemplateSubstitutionText(
+        source.slice(childRange.start.index, childRange.end.index),
+      ),
     });
     text = `${text.slice(0, childStart)}${placeholder}${text.slice(childEnd)}`;
   }
@@ -532,6 +538,15 @@ function pushTemplateStringEdit(
   if (replacement !== source.slice(start, end)) {
     edits.push([start, end, replacement]);
   }
+}
+
+function transformTemplateSubstitutionText(value: string): string {
+  if (!value.includes("tailor-sdk") || !value.startsWith("${") || !value.endsWith("}")) {
+    return value;
+  }
+  const expression = value.slice(2, -1);
+  const transformed = transformSourceFile(expression, "template-expression.ts");
+  return transformed == null ? value : `\${${transformed}}`;
 }
 
 function transformSourceFile(source: string, filePath: string): string | null {
