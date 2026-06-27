@@ -123,4 +123,26 @@ describe("principal-unify review findings", () => {
       }),
     ]);
   });
+
+  test("keeps file-level suspicious-pattern fallback without precise findings", async () => {
+    await writeProjectFile(
+      "resolvers/context-type.ts",
+      [
+        'import type { ResolverContext } from "@tailor-platform/sdk";',
+        "",
+        "export type AdapterContext = ResolverContext;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/context-type.ts"],
+      }),
+    ]);
+    expect(result.llmReviews[0]).not.toHaveProperty("findings");
+  });
 });
