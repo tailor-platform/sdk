@@ -148,6 +148,32 @@ function contentForResidualMatching(relative: string, content: string): string {
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
 }
 
+function sourceStringFragmentGapForResidualMatching(gap: string): string {
+  return /^(?:\\(?:[nrtvf]|\r\n|\r|\n)|\s)+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
+}
+
+function sourceStringNodeContentForResidualMatching(node: SgNode, content: string): string | null {
+  const parts: string[] = [];
+  let previousFragmentEnd: number | null = null;
+
+  for (const child of node.children()) {
+    if (child.kind() !== "string_fragment") continue;
+
+    const range = child.range();
+    if (previousFragmentEnd != null && range.start.index > previousFragmentEnd) {
+      parts.push(
+        sourceStringFragmentGapForResidualMatching(
+          content.slice(previousFragmentEnd, range.start.index),
+        ),
+      );
+    }
+    parts.push(child.text());
+    previousFragmentEnd = range.end.index;
+  }
+
+  return parts.length === 0 ? null : parts.join("");
+}
+
 function sourceStringContentForResidualMatching(relative: string, content: string): string | null {
   const ext = path.extname(relative).toLowerCase();
   if (!SOURCE_EXTENSIONS.has(ext)) return null;
@@ -159,18 +185,20 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
     return null;
   }
 
-  const fragments: string[] = [];
+  const sourceStrings: string[] = [];
   const visit = (node: SgNode): void => {
-    if (node.kind() === "string_fragment") {
-      fragments.push(node.text());
-      return;
+    const kind = node.kind();
+    if (kind === "string" || kind === "template_string") {
+      const sourceString = sourceStringNodeContentForResidualMatching(node, content);
+      if (sourceString != null) sourceStrings.push(sourceString);
     }
     for (const child of node.children()) {
+      if (child.kind() === "string_fragment") continue;
       visit(child);
     }
   };
   visit(root);
-  return fragments.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+  return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
 function sourceLang(relative: string): Lang {
