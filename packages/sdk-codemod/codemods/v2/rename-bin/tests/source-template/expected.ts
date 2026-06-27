@@ -65,6 +65,8 @@ const npxPackageSingleQuoted = "npx --package '@tailor-platform/sdk' tailor logi
 const npxPackageDoubleQuoted = "npx --package \"@tailor-platform/sdk\" tailor login";
 const npxPackageEqualsDoubleQuoted = "npx --package=\"@tailor-platform/sdk\" tailor login";
 const npxDynamicPackageFlag = `npx -p ${pkg} tailor-sdk login`;
+const npxDynamicPackageFlagEquals = `npx --package=${pkg} tailor-sdk login`;
+const npxOtherPackageFlagEqualsSource = "npx --package=dotenv-cli tailor-sdk login";
 const npxPackageFlagDynamic = `npx -p @tailor-platform/sdk tailor ${subcommand}`;
 const npxPackageEqualsDynamic = `npx --package=@tailor-platform/sdk tailor ${subcommand}`;
 const npxRegistryValue = "npx --registry tailor-sdk @tailor-platform/sdk login";

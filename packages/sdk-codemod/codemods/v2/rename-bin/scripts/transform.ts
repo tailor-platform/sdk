@@ -469,6 +469,11 @@ function firstRunnerPackageToken(tokens: string[]): string | null {
   if (start == null) return null;
   for (let index = start; index < tokens.length; index += 1) {
     const token = tokens[index]!;
+    if (SOURCE_PACKAGE_FLAG_RE.test(token)) {
+      return token.includes("=")
+        ? sourceTokenValue(token.slice(token.indexOf("=") + 1))
+        : (tokens[index + 1] ?? null);
+    }
     if (token.startsWith("-")) {
       if (skipsRunnerOptionValue(token)) index += 1;
       continue;
@@ -528,7 +533,10 @@ function sourcePackageFlagsAllowBinaryRewrite(source: string): boolean {
     const token = tokens[index]!;
     if (SOURCE_PACKAGE_FLAG_RE.test(token)) {
       hasPackageFlag = true;
-      const value = token.includes("=") ? token.slice(token.indexOf("=") + 1) : tokens[index + 1];
+      const rawValue = token.includes("=")
+        ? token.slice(token.indexOf("=") + 1)
+        : tokens[index + 1];
+      const value = rawValue == null ? null : sourceTokenValue(rawValue);
       if (value != null && isTailorPackageValue(value)) {
         hasTailorPackageFlag = true;
       }
