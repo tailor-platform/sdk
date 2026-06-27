@@ -145,4 +145,39 @@ describe("principal-unify review findings", () => {
     ]);
     expect(result.llmReviews[0]).not.toHaveProperty("findings");
   });
+
+  test("reports nullable aliased caller values passed to non-null-looking calls", async () => {
+    await writeProjectFile(
+      "resolvers/aliased.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "declare function publishAudit(userId: string): Promise<void>;",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async ({ user: currentUser }) => {",
+        "    await publishAudit(currentUser.id);",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/aliased.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/aliased.ts",
+            line: 7,
+            message: expect.stringContaining("non-null argument"),
+            excerpt: expect.stringContaining("publishAudit(currentUser?.id)"),
+          }),
+        ],
+      }),
+    ]);
+  });
 });

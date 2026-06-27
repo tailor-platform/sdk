@@ -2186,20 +2186,30 @@ function addReviewFinding(
   findings.push({ file, line, message, excerpt });
 }
 
-function isCallerOptionalMemberExpression(node: SgNode): boolean {
+function isPrincipalOptionalMemberExpression(
+  node: SgNode,
+  principalLocalNames: Set<string>,
+): boolean {
   if (node.kind() !== "member_expression") return false;
   if (!node.children().some((child) => child.kind() === "optional_chain")) return false;
   const object = node.field("object");
   if (!object) return false;
-  if (object.kind() === "identifier") return object.text() === "caller";
+  if (object.kind() === "identifier") {
+    return object.text() === "caller" || principalLocalNames.has(object.text());
+  }
   if (object.kind() !== "member_expression") return false;
   return object.field("property")?.text() === "caller";
 }
 
-function nodeContainsArgumentCallerOptionalAccess(node: SgNode): boolean {
+function nodeContainsArgumentPrincipalOptionalAccess(
+  node: SgNode,
+  principalLocalNames: Set<string>,
+): boolean {
   if (isFunctionNode(node)) return false;
-  if (isCallerOptionalMemberExpression(node)) return true;
-  return node.children().some((child) => nodeContainsArgumentCallerOptionalAccess(child));
+  if (isPrincipalOptionalMemberExpression(node, principalLocalNames)) return true;
+  return node
+    .children()
+    .some((child) => nodeContainsArgumentPrincipalOptionalAccess(child, principalLocalNames));
 }
 
 function reviewCallName(call: SgNode): string {
@@ -2217,6 +2227,7 @@ function collectNullableCallerReviewFindings(
   root: SgNode,
   source: string,
   file: string,
+  principalLocalNames: Set<string>,
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {
@@ -2225,7 +2236,7 @@ function collectNullableCallerReviewFindings(
     const args = call.field("arguments");
     const nullableArg = args
       ?.children()
-      .find((child) => nodeContainsArgumentCallerOptionalAccess(child));
+      .find((child) => nodeContainsArgumentPrincipalOptionalAccess(child, principalLocalNames));
     if (!nullableArg) continue;
 
     const memberName = findMemberCallName(call);
@@ -2316,7 +2327,7 @@ function addResolverContextBody(arrow: SgNode, bodies: ResolverContextBody[]): v
   bodies.push({ arrow, body, contextName: paramName });
 }
 
-function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
+function collectResolverBodyArrows(root: SgNode): SgNode[] {
   const sdkImports = root.findAll({
     rule: {
       kind: "import_statement",
@@ -2334,7 +2345,7 @@ function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
     }
   }
 
-  const bodies: ResolverContextBody[] = [];
+  const arrows: SgNode[] = [];
   for (const localName of createResolverLocalNames) {
     const shadowRanges = collectAllShadowRanges(root, localName);
     const calls = root.findAll({
@@ -2351,7 +2362,7 @@ function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
       const callee = call.field("function");
       if (!callee || isInsideAnyRange(callee.range().start.index, shadowRanges)) continue;
       const arrow = findResolverBodyArrow(call);
-      if (arrow) addResolverContextBody(arrow, bodies);
+      if (arrow) arrows.push(arrow);
     }
   }
 
@@ -2377,10 +2388,74 @@ function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
       if (!object || object.kind() !== "identifier" || object.text() !== namespaceName) continue;
       if (isInsideAnyRange(object.range().start.index, shadowRanges)) continue;
       const arrow = findResolverBodyArrow(call);
-      if (arrow) addResolverContextBody(arrow, bodies);
+      if (arrow) arrows.push(arrow);
     }
   }
+  return arrows;
+}
+
+function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
+  const bodies: ResolverContextBody[] = [];
+  for (const arrow of collectResolverBodyArrows(root)) {
+    addResolverContextBody(arrow, bodies);
+  }
   return bodies;
+}
+
+function collectCallerPatternBindings(pattern: SgNode, bindings: Set<string>): void {
+  if (pattern.kind() !== "object_pattern") return;
+  for (const child of pattern.children()) {
+    const kind = child.kind();
+    if (kind === "shorthand_property_identifier_pattern" && child.text() === "caller") {
+      bindings.add("caller");
+    } else if (kind === "pair_pattern") {
+      const key = child.field("key");
+      const value = child.field("value");
+      if (key?.text() === "caller" && value?.kind() === "identifier") {
+        bindings.add(value.text());
+      }
+    } else if (kind === "object_assignment_pattern") {
+      const inner = child
+        .children()
+        .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
+      if (inner?.text() === "caller") bindings.add("caller");
+    }
+  }
+}
+
+function collectResolverPrincipalLocalNames(root: SgNode): Set<string> {
+  const bindings = new Set<string>();
+  for (const arrow of collectResolverBodyArrows(root)) {
+    const param = getFirstFunctionParam(arrow);
+    const pattern = param ? getFunctionParamPattern(param) : null;
+    const body = arrow.field("body");
+    if (!pattern || !body) continue;
+
+    if (pattern.kind() === "object_pattern") {
+      collectCallerPatternBindings(pattern, bindings);
+      continue;
+    }
+
+    if (pattern.kind() !== "identifier") continue;
+    const contextName = pattern.text();
+    const shadowRanges = collectCtxShadowRanges(body, contextName, arrow);
+    const contextDestructures = body.findAll({
+      rule: {
+        kind: "variable_declarator",
+        has: {
+          field: "value",
+          kind: "identifier",
+          regex: `^${escapeRegex(contextName)}$`,
+        },
+      },
+    });
+    for (const decl of contextDestructures) {
+      if (isInsideAnyRange(decl.range().start.index, shadowRanges)) continue;
+      const name = decl.field("name");
+      if (name) collectCallerPatternBindings(name, bindings);
+    }
+  }
+  return bindings;
 }
 
 function firstIdentifierArgument(call: SgNode): SgNode | null {
@@ -2444,7 +2519,7 @@ export function reviewFindings(
   _filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!source.includes("caller?.") && !source.includes(".user")) return [];
+  if (!source.includes("?.") && !source.includes(".user")) return [];
 
   let root: SgNode;
   try {
@@ -2455,7 +2530,15 @@ export function reviewFindings(
 
   const findings: LlmReviewFinding[] = [];
   const seen = new Set<string>();
-  collectNullableCallerReviewFindings(root, source, relativePath, findings, seen);
+  const principalLocalNames = collectResolverPrincipalLocalNames(root);
+  collectNullableCallerReviewFindings(
+    root,
+    source,
+    relativePath,
+    principalLocalNames,
+    findings,
+    seen,
+  );
   collectContextUserHelperReviewFindings(root, source, relativePath, findings, seen);
   return findings;
 }
