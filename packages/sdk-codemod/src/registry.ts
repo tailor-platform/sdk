@@ -536,6 +536,9 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
     ],
     legacyPatterns: ["tailor-sdk"],
+    sourceStringLegacyPatterns: [
+      /(?<![.\w-])tailor-sdk(?![\w-])(?=\s+(?:--?[\w-]+|api|apply|authconnection|completion|crash-report|crashreport|deploy|executor|function|generate|init|login|logout|machineuser|oauth2client|open|organization|profile|query|remove|secret|setup|show|skills|staticwebsite|tailordb|upgrade|user|workflow|workspace)\b)/,
+    ],
     examples: [
       {
         lang: "sh",

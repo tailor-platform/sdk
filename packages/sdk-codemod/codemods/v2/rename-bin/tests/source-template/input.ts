@@ -3,13 +3,17 @@ const setup = `pnpm tailor-sdk staticwebsite deploy --name ${siteName}`;
 const deploy = "tailor-sdk deploy";
 const envFileDeploy = "tailor-sdk --env-file .env deploy";
 const profileValue = "tailor-sdk --profile tailor-sdk deploy";
+const help = "tailor-sdk --help";
+const npxVersion = "npx tailor-sdk --version";
 const generated = "Run tailor-sdk generate after changes";
 const dynamicCommand = `tailor-sdk ${subcommand}`;
 const dynamicPnpmCommand = `pnpm tailor-sdk ${subcommand}`;
+const dynamicProfileCommand = `tailor-sdk --profile ${profile} deploy`;
 const indentedDynamicCommand = `
   tailor-sdk ${subcommand}`;
 const latest = "npx tailor-sdk@latest login";
 const npxPackageFlag = "npx -p tailor-sdk tailor-sdk login";
+const npxPackageFlagEquals = "npx --package=tailor-sdk tailor-sdk login";
 const packageName = "tailor-sdk";
 const packageMessage = "package tailor-sdk is installed";
 const mixedPackageAndCommand = "Install tailor-sdk before running tailor-sdk deploy";
