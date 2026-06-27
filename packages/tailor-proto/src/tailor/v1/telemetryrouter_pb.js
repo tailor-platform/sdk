@@ -11,90 +11,90 @@ import { file_tailor_v1_telemetryrouter_resource } from "./telemetryrouter_resou
  * Describes the file tailor/v1/telemetryrouter.proto.
  */
 export const file_tailor_v1_telemetryrouter = /*@__PURE__*/
-  fileDesc("Ch90YWlsb3IvdjEvdGVsZW1ldHJ5cm91dGVyLnByb3RvEgl0YWlsb3IudjEifAocQ3JlYXRlVGVsZW1ldHJ5RXhwb3J0UmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEjwKEHRlbGVtZXRyeV9leHBvcnQYAiABKAsyGi50YWlsb3IudjEuVGVsZW1ldHJ5RXhwb3J0Qga6SAPIAQEiVQodQ3JlYXRlVGVsZW1ldHJ5RXhwb3J0UmVzcG9uc2USNAoQdGVsZW1ldHJ5X2V4cG9ydBgBIAEoCzIaLnRhaWxvci52MS5UZWxlbWV0cnlFeHBvcnQifAocVXBkYXRlVGVsZW1ldHJ5RXhwb3J0UmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEjwKEHRlbGVtZXRyeV9leHBvcnQYAiABKAsyGi50YWlsb3IudjEuVGVsZW1ldHJ5RXhwb3J0Qga6SAPIAQEiVQodVXBkYXRlVGVsZW1ldHJ5RXhwb3J0UmVzcG9uc2USNAoQdGVsZW1ldHJ5X2V4cG9ydBgBIAEoCzIaLnRhaWxvci52MS5UZWxlbWV0cnlFeHBvcnQicwoZR2V0VGVsZW1ldHJ5RXhwb3J0UmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEjYKBG5hbWUYAiABKAlCKLpIJXIjMiFeW2EtejAtOV1bYS16MC05LV17MSw2MX1bYS16MC05XSQiUgoaR2V0VGVsZW1ldHJ5RXhwb3J0UmVzcG9uc2USNAoQdGVsZW1ldHJ5X2V4cG9ydBgBIAEoCzIaLnRhaWxvci52MS5UZWxlbWV0cnlFeHBvcnQilgEKG0xpc3RUZWxlbWV0cnlFeHBvcnRzUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEhIKCnBhZ2VfdG9rZW4YAiABKAkSEQoJcGFnZV9zaXplGAMgASgNEjAKDnBhZ2VfZGlyZWN0aW9uGAQgASgOMhgudGFpbG9yLnYxLlBhZ2VEaXJlY3Rpb24igwEKHExpc3RUZWxlbWV0cnlFeHBvcnRzUmVzcG9uc2USNQoRdGVsZW1ldHJ5X2V4cG9ydHMYASADKAsyGi50YWlsb3IudjEuVGVsZW1ldHJ5RXhwb3J0EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCRITCgt0b3RhbF9jb3VudBgDIAEoAyJ2ChxEZWxldGVUZWxlbWV0cnlFeHBvcnRSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESNgoEbmFtZRgCIAEoCUIoukglciMyIV5bYS16MC05XVthLXowLTktXXsxLDYxfVthLXowLTldJCIfCh1EZWxldGVUZWxlbWV0cnlFeHBvcnRSZXNwb25zZSJ0ChpUZXN0VGVsZW1ldHJ5RXhwb3J0UmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEjYKBG5hbWUYAiABKAlCKLpIJXIjMiFeW2EtejAtOV1bYS16MC05LV17MSw2MX1bYS16MC05XSQiPwobVGVzdFRlbGVtZXRyeUV4cG9ydFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCSKYAQolQ3JlYXRlUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEk8KGnJlc291cmNlX2F0dHJpYnV0ZXNfY29uZmlnGAIgASgLMiMudGFpbG9yLnYxLlJlc291cmNlQXR0cmlidXRlc0NvbmZpZ0IGukgDyAEBInEKJkNyZWF0ZVJlc291cmNlQXR0cmlidXRlc0NvbmZpZ1Jlc3BvbnNlEkcKGnJlc291cmNlX2F0dHJpYnV0ZXNfY29uZmlnGAEgASgLMiMudGFpbG9yLnYxLlJlc291cmNlQXR0cmlidXRlc0NvbmZpZyJECiJHZXRSZXNvdXJjZUF0dHJpYnV0ZXNDb25maWdSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQEibgojR2V0UmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnUmVzcG9uc2USRwoacmVzb3VyY2VfYXR0cmlidXRlc19jb25maWcYASABKAsyIy50YWlsb3IudjEuUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnIpgBCiVVcGRhdGVSZXNvdXJjZUF0dHJpYnV0ZXNDb25maWdSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESTwoacmVzb3VyY2VfYXR0cmlidXRlc19jb25maWcYAiABKAsyIy50YWlsb3IudjEuUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnQga6SAPIAQEicQomVXBkYXRlUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnUmVzcG9uc2USRwoacmVzb3VyY2VfYXR0cmlidXRlc19jb25maWcYASABKAsyIy50YWlsb3IudjEuUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnIkcKJURlbGV0ZVJlc291cmNlQXR0cmlidXRlc0NvbmZpZ1JlcXVlc3QSHgoMd29ya3NwYWNlX2lkGAEgASgJQgi6SAVyA7ABASIoCiZEZWxldGVSZXNvdXJjZUF0dHJpYnV0ZXNDb25maWdSZXNwb25zZWIGcHJvdG8z", [file_buf_validate_validate, file_tailor_v1_resource, file_tailor_v1_telemetryrouter_resource]);
+  fileDesc("Ch90YWlsb3IvdjEvdGVsZW1ldHJ5cm91dGVyLnByb3RvEgl0YWlsb3IudjEicwoZQ3JlYXRlT1RMUEV4cG9ydGVyUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEjYKDW90bHBfZXhwb3J0ZXIYAiABKAsyFy50YWlsb3IudjEuT1RMUEV4cG9ydGVyQga6SAPIAQEiTAoaQ3JlYXRlT1RMUEV4cG9ydGVyUmVzcG9uc2USLgoNb3RscF9leHBvcnRlchgBIAEoCzIXLnRhaWxvci52MS5PVExQRXhwb3J0ZXIicwoZVXBkYXRlT1RMUEV4cG9ydGVyUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEjYKDW90bHBfZXhwb3J0ZXIYAiABKAsyFy50YWlsb3IudjEuT1RMUEV4cG9ydGVyQga6SAPIAQEiTAoaVXBkYXRlT1RMUEV4cG9ydGVyUmVzcG9uc2USLgoNb3RscF9leHBvcnRlchgBIAEoCzIXLnRhaWxvci52MS5PVExQRXhwb3J0ZXIicAoWR2V0T1RMUEV4cG9ydGVyUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEjYKBG5hbWUYAiABKAlCKLpIJXIjMiFeW2EtejAtOV1bYS16MC05LV17MSw2MX1bYS16MC05XSQiSQoXR2V0T1RMUEV4cG9ydGVyUmVzcG9uc2USLgoNb3RscF9leHBvcnRlchgBIAEoCzIXLnRhaWxvci52MS5PVExQRXhwb3J0ZXIikwEKGExpc3RPVExQRXhwb3J0ZXJzUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEhIKCnBhZ2VfdG9rZW4YAiABKAkSEQoJcGFnZV9zaXplGAMgASgNEjAKDnBhZ2VfZGlyZWN0aW9uGAQgASgOMhgudGFpbG9yLnYxLlBhZ2VEaXJlY3Rpb24iegoZTGlzdE9UTFBFeHBvcnRlcnNSZXNwb25zZRIvCg5vdGxwX2V4cG9ydGVycxgBIAMoCzIXLnRhaWxvci52MS5PVExQRXhwb3J0ZXISFwoPbmV4dF9wYWdlX3Rva2VuGAIgASgJEhMKC3RvdGFsX2NvdW50GAMgASgDInMKGURlbGV0ZU9UTFBFeHBvcnRlclJlcXVlc3QSHgoMd29ya3NwYWNlX2lkGAEgASgJQgi6SAVyA7ABARI2CgRuYW1lGAIgASgJQii6SCVyIzIhXlthLXowLTldW2EtejAtOS1dezEsNjF9W2EtejAtOV0kIhwKGkRlbGV0ZU9UTFBFeHBvcnRlclJlc3BvbnNlInEKF1Rlc3RPVExQRXhwb3J0ZXJSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESNgoEbmFtZRgCIAEoCUIoukglciMyIV5bYS16MC05XVthLXowLTktXXsxLDYxfVthLXowLTldJCI8ChhUZXN0T1RMUEV4cG9ydGVyUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJIpgBCiVDcmVhdGVSZXNvdXJjZUF0dHJpYnV0ZXNDb25maWdSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESTwoacmVzb3VyY2VfYXR0cmlidXRlc19jb25maWcYAiABKAsyIy50YWlsb3IudjEuUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnQga6SAPIAQEicQomQ3JlYXRlUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnUmVzcG9uc2USRwoacmVzb3VyY2VfYXR0cmlidXRlc19jb25maWcYASABKAsyIy50YWlsb3IudjEuUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnIkQKIkdldFJlc291cmNlQXR0cmlidXRlc0NvbmZpZ1JlcXVlc3QSHgoMd29ya3NwYWNlX2lkGAEgASgJQgi6SAVyA7ABASJuCiNHZXRSZXNvdXJjZUF0dHJpYnV0ZXNDb25maWdSZXNwb25zZRJHChpyZXNvdXJjZV9hdHRyaWJ1dGVzX2NvbmZpZxgBIAEoCzIjLnRhaWxvci52MS5SZXNvdXJjZUF0dHJpYnV0ZXNDb25maWcimAEKJVVwZGF0ZVJlc291cmNlQXR0cmlidXRlc0NvbmZpZ1JlcXVlc3QSHgoMd29ya3NwYWNlX2lkGAEgASgJQgi6SAVyA7ABARJPChpyZXNvdXJjZV9hdHRyaWJ1dGVzX2NvbmZpZxgCIAEoCzIjLnRhaWxvci52MS5SZXNvdXJjZUF0dHJpYnV0ZXNDb25maWdCBrpIA8gBASJxCiZVcGRhdGVSZXNvdXJjZUF0dHJpYnV0ZXNDb25maWdSZXNwb25zZRJHChpyZXNvdXJjZV9hdHRyaWJ1dGVzX2NvbmZpZxgBIAEoCzIjLnRhaWxvci52MS5SZXNvdXJjZUF0dHJpYnV0ZXNDb25maWciRwolRGVsZXRlUmVzb3VyY2VBdHRyaWJ1dGVzQ29uZmlnUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBIigKJkRlbGV0ZVJlc291cmNlQXR0cmlidXRlc0NvbmZpZ1Jlc3BvbnNlYgZwcm90bzM", [file_buf_validate_validate, file_tailor_v1_resource, file_tailor_v1_telemetryrouter_resource]);
 
 /**
- * Describes the message tailor.v1.CreateTelemetryExportRequest.
- * Use `create(CreateTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.CreateOTLPExporterRequest.
+ * Use `create(CreateOTLPExporterRequestSchema)` to create a new message.
  */
-export const CreateTelemetryExportRequestSchema = /*@__PURE__*/
+export const CreateOTLPExporterRequestSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 0);
 
 /**
- * Describes the message tailor.v1.CreateTelemetryExportResponse.
- * Use `create(CreateTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.CreateOTLPExporterResponse.
+ * Use `create(CreateOTLPExporterResponseSchema)` to create a new message.
  */
-export const CreateTelemetryExportResponseSchema = /*@__PURE__*/
+export const CreateOTLPExporterResponseSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 1);
 
 /**
- * Describes the message tailor.v1.UpdateTelemetryExportRequest.
- * Use `create(UpdateTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.UpdateOTLPExporterRequest.
+ * Use `create(UpdateOTLPExporterRequestSchema)` to create a new message.
  */
-export const UpdateTelemetryExportRequestSchema = /*@__PURE__*/
+export const UpdateOTLPExporterRequestSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 2);
 
 /**
- * Describes the message tailor.v1.UpdateTelemetryExportResponse.
- * Use `create(UpdateTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.UpdateOTLPExporterResponse.
+ * Use `create(UpdateOTLPExporterResponseSchema)` to create a new message.
  */
-export const UpdateTelemetryExportResponseSchema = /*@__PURE__*/
+export const UpdateOTLPExporterResponseSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 3);
 
 /**
- * Describes the message tailor.v1.GetTelemetryExportRequest.
- * Use `create(GetTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.GetOTLPExporterRequest.
+ * Use `create(GetOTLPExporterRequestSchema)` to create a new message.
  */
-export const GetTelemetryExportRequestSchema = /*@__PURE__*/
+export const GetOTLPExporterRequestSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 4);
 
 /**
- * Describes the message tailor.v1.GetTelemetryExportResponse.
- * Use `create(GetTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.GetOTLPExporterResponse.
+ * Use `create(GetOTLPExporterResponseSchema)` to create a new message.
  */
-export const GetTelemetryExportResponseSchema = /*@__PURE__*/
+export const GetOTLPExporterResponseSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 5);
 
 /**
- * Describes the message tailor.v1.ListTelemetryExportsRequest.
- * Use `create(ListTelemetryExportsRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.ListOTLPExportersRequest.
+ * Use `create(ListOTLPExportersRequestSchema)` to create a new message.
  */
-export const ListTelemetryExportsRequestSchema = /*@__PURE__*/
+export const ListOTLPExportersRequestSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 6);
 
 /**
- * Describes the message tailor.v1.ListTelemetryExportsResponse.
- * Use `create(ListTelemetryExportsResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.ListOTLPExportersResponse.
+ * Use `create(ListOTLPExportersResponseSchema)` to create a new message.
  */
-export const ListTelemetryExportsResponseSchema = /*@__PURE__*/
+export const ListOTLPExportersResponseSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 7);
 
 /**
- * Describes the message tailor.v1.DeleteTelemetryExportRequest.
- * Use `create(DeleteTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.DeleteOTLPExporterRequest.
+ * Use `create(DeleteOTLPExporterRequestSchema)` to create a new message.
  */
-export const DeleteTelemetryExportRequestSchema = /*@__PURE__*/
+export const DeleteOTLPExporterRequestSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 8);
 
 /**
- * Describes the message tailor.v1.DeleteTelemetryExportResponse.
- * Use `create(DeleteTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.DeleteOTLPExporterResponse.
+ * Use `create(DeleteOTLPExporterResponseSchema)` to create a new message.
  */
-export const DeleteTelemetryExportResponseSchema = /*@__PURE__*/
+export const DeleteOTLPExporterResponseSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 9);
 
 /**
- * Describes the message tailor.v1.TestTelemetryExportRequest.
- * Use `create(TestTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.TestOTLPExporterRequest.
+ * Use `create(TestOTLPExporterRequestSchema)` to create a new message.
  */
-export const TestTelemetryExportRequestSchema = /*@__PURE__*/
+export const TestOTLPExporterRequestSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 10);
 
 /**
- * Describes the message tailor.v1.TestTelemetryExportResponse.
- * Use `create(TestTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.TestOTLPExporterResponse.
+ * Use `create(TestOTLPExporterResponseSchema)` to create a new message.
  */
-export const TestTelemetryExportResponseSchema = /*@__PURE__*/
+export const TestOTLPExporterResponseSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_telemetryrouter, 11);
 
 /**

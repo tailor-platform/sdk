@@ -50,13 +50,13 @@ For more details, see the [Quickstart Guide](./docs/quickstart.md).
 
 ## Agent Skill
 
-Install the `tailor-sdk` skill from the locally installed SDK package:
+Install the `tailor` skill from the locally installed SDK package:
 
 ```bash
-npx tailor-sdk skills install
+npx tailor skills install
 
 # Example: install to Codex in non-interactive mode
-npx tailor-sdk skills install -a codex -y
+npx tailor skills install -a codex -y
 ```
 
 This uses the `skills` CLI under the hood, sourcing the skill from
@@ -96,5 +96,5 @@ See [Create Tailor Platform SDK](https://github.com/tailor-platform/sdk/tree/mai
 
 ## Requirements
 
-- Node.js 22 or later (or Bun)
+- Node.js 22.15.0 or later (or Bun)
 - A Tailor Platform account ([request access](https://www.tailor.tech/demo))

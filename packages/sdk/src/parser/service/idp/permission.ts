@@ -1,3 +1,4 @@
+import type { IdPPermission as RawIdPPermission } from "#/types/idp.generated";
 import type {
   StandardIdPPermission,
   StandardIdPActionPermission,
@@ -5,7 +6,6 @@ import type {
   IdPPermissionOperand,
   IdPUserField,
 } from "./types";
-import type { IdPPermission as RawIdPPermission } from "@/types/idp.generated";
 
 type PermissionOperator = "=" | "!=" | "in" | "not in";
 
@@ -129,6 +129,7 @@ export function normalizeIdPPermission(permission: RawIdPPermission): StandardId
     sendPasswordResetEmail: permission.sendPasswordResetEmail.map((p) =>
       normalizeIdPActionPermission(p),
     ),
+    unenrollMfa: (permission.unenrollMfa ?? []).map((p) => normalizeIdPActionPermission(p)),
   } as StandardIdPPermission;
 }
 
@@ -163,7 +164,7 @@ export function findOmittedPermitRules(permission: RawIdPPermission | undefined)
   }
   const locations: string[] = [];
   for (const action of Object.keys(permission) as Array<keyof typeof permission>) {
-    permission[action].forEach((rule: unknown, index: number) => {
+    permission[action]?.forEach((rule: unknown, index: number) => {
       if (isObjectFormat(rule) && rule.permit === undefined) {
         locations.push(`${String(action)}[${index}]`);
       }

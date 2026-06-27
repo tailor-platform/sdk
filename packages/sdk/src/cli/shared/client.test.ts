@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
-import { reportCrash } from "@/cli/crashreport";
+import { reportCrash } from "#/cli/crashreport/index";
 import {
   concurrencyLimitInterceptor,
   createTransport,
@@ -23,9 +23,23 @@ vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
 }));
 
-vi.mock("@/cli/crashreport", () => ({
+vi.mock("#/cli/crashreport/index", () => ({
   reportCrash: vi.fn(),
 }));
+
+describe("client environment configuration", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  test("uses TAILOR_PLATFORM_URL for the platform base URL", async () => {
+    vi.resetModules();
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.staging.tailor.test");
+    const client = await import("./client");
+    expect(client.platformBaseUrl).toBe("https://api.staging.tailor.test");
+  });
+});
 
 describe("createTransport", () => {
   afterEach(() => {

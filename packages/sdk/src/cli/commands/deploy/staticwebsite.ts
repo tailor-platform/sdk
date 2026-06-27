@@ -6,8 +6,8 @@ import {
   type DeleteStaticWebsiteRequestSchema,
   type RemoveCustomDomainRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
-} from "@tailor-proto/tailor/v1/staticwebsite_pb";
-import { type OperatorClient } from "@/cli/shared/client";
+} from "@tailor-platform/tailor-proto/staticwebsite_pb";
+import { type OperatorClient } from "#/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
@@ -16,10 +16,10 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
-import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-proto/tailor/v1/staticwebsite_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 
 /**
  * Apply static website changes for the given phase.

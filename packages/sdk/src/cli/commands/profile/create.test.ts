@@ -2,11 +2,11 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
-import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
-import { resetKeyringState } from "@/cli/shared/token-store";
+import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { resetKeyringState } from "#/cli/shared/token-store";
 import { createCommand } from "./create";
-import type * as ClientModule from "@/cli/shared/client";
+import type * as ClientModule from "#/cli/shared/client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-create-${Date.now()}-${Math.random()}`);
 const keyringPasswords = vi.hoisted(() => new Map<string, string>());
@@ -39,7 +39,7 @@ const clientMocks = vi.hoisted(() => ({
   fetchAll: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/client", async (importOriginal) => {
+vi.mock("#/cli/shared/client", async (importOriginal) => {
   const actual = await importOriginal<typeof ClientModule>();
   return {
     ...actual,

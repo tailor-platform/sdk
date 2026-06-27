@@ -9,26 +9,26 @@ import {
   type DeleteTailorDBTypeRequestSchema,
   type UpdateTailorDBGQLPermissionRequestSchema,
   type UpdateTailorDBTypeRequestSchema,
-} from "@tailor-proto/tailor/v1/tailordb_pb";
+} from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
   type TailorDBType as ProtoTailorDBType,
   type TailorDBTypeSchema,
-} from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
   type NamespaceWithMigrations,
-} from "@/cli/commands/tailordb/migrate/config";
+} from "#/cli/commands/tailordb/migrate/config";
 import {
   hasChanges,
   formatMigrationDiff,
   formatDiffSummary,
   type MigrationDiff,
-} from "@/cli/commands/tailordb/migrate/diff-calculator";
+} from "#/cli/commands/tailordb/migrate/diff-calculator";
 import {
   applyPreMigrationFieldAdjustments,
   buildPreMigrationChangesMap,
-} from "@/cli/commands/tailordb/migrate/pre-migration-schema";
+} from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -42,17 +42,17 @@ import {
   INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
-} from "@/cli/commands/tailordb/migrate/snapshot";
+} from "#/cli/commands/tailordb/migrate/snapshot";
 import {
   generateTailorDBTypeManifestFromSnapshot,
   protoGqlPermission,
-} from "@/cli/commands/tailordb/migrate/snapshot-manifest";
-import { handleOptionalToRequiredError } from "@/cli/commands/tailordb/migrate/types";
-import { type TailorDBService } from "@/cli/services/tailordb/service";
-import { byName } from "@/cli/shared/apply-concurrency";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+} from "#/cli/commands/tailordb/migrate/snapshot-manifest";
+import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
+import { type TailorDBService } from "#/cli/services/tailordb/service";
+import { byName } from "#/cli/shared/apply-concurrency";
+import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
@@ -70,15 +70,15 @@ import {
   updateMigrationLabel,
   type MigrationContext,
 } from "./migration";
-import type { OwnerConflict, UnmanagedResource } from "../confirm";
-import type { ApplyPhase, PlanContext } from "../types";
 import type {
   PendingMigration,
   RemoteSchemaVerificationResult,
-} from "@/cli/commands/tailordb/migrate/types";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "#/cli/commands/tailordb/migrate/types";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
+import type { OwnerConflict, UnmanagedResource } from "../confirm";
+import type { ApplyPhase, PlanContext } from "../types";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 // ============================================================================
 // Remote Schema Verification
@@ -272,7 +272,7 @@ async function validateAndDetectMigrations(
         logger.error("Schema changes detected that are not in migration files:");
         logger.log(formatMigrationCheckResults(migrationResults));
         logger.newline();
-        logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
+        logger.info("Run 'tailor tailordb migration generate' to create migration files.");
         logger.info("Or use '--no-schema-check' to skip this check.");
         throw new Error("Schema migration check failed");
       }
@@ -549,7 +549,7 @@ export async function applyTailorDB(
         ]);
       } catch (error) {
         handleOptionalToRequiredError(error, [
-          "Run 'tailor-sdk tailordb migration generate' to create migration files.",
+          "Run 'tailor tailordb migration generate' to create migration files.",
           "Migration scripts allow you to handle existing data before applying the schema change.",
         ]);
       }
@@ -1933,9 +1933,7 @@ function formatMigrationCheckResults(results: MigrationCheckResult[]): string {
     lines.push(`Namespace: ${result.namespace}`);
 
     if (!result.diff) {
-      lines.push(
-        "  No migration snapshot found. Run 'tailor-sdk tailordb migration generate' first.",
-      );
+      lines.push("  No migration snapshot found. Run 'tailor tailordb migration generate' first.");
     } else {
       lines.push(`  ${formatDiffSummary(result.diff)}`);
       lines.push("");

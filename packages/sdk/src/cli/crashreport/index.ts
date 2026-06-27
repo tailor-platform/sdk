@@ -1,6 +1,6 @@
-import { logger } from "@/cli/shared/logger";
-import { readPackageJson } from "@/cli/shared/package-json";
-import { userAgentFromVersion } from "@/cli/shared/user-agent";
+import { logger } from "#/cli/shared/logger";
+import { readPackageJson } from "#/cli/shared/package-json";
+import { userAgentFromVersion } from "#/cli/shared/user-agent";
 import { parseCrashReportConfig } from "./config";
 import { buildCrashReport, type ErrorType } from "./report";
 import { sendCrashReport } from "./sender";
@@ -35,7 +35,7 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
             `  ${filePath}`,
             "",
             "To submit this report:",
-            `  tailor-sdk crashreport send --file "${filePath}"`,
+            `  tailor crashreport send --file "${filePath}"`,
           ].join("\n"),
         );
       }

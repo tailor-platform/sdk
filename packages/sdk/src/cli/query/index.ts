@@ -5,14 +5,14 @@ import {
   AuthInvokerSchema,
   type AuthInvoker,
   type MachineUser,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { createPrompt } from "@toiroakr/read-multiline";
 import * as path from "pathe";
 import { parse as parseSql } from "pgsql-ast-parser";
 import { arg } from "politty";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { deploymentArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
@@ -36,7 +36,7 @@ import {
 } from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
 import { queryEngines, type QueryEngine } from "./types";
-import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
+import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export type { QueryEngine } from "./types";
 
@@ -150,7 +150,7 @@ async function loadOptions(options: QueryBaseOptions) {
   });
   if (!machineUser) {
     throw new Error(
-      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
     );
   }
 
@@ -822,9 +822,7 @@ export const queryCommand = defineAppCommand({
 
     if (mode.mode === "repl") {
       const newlineOnEnter =
-        args["newline-on-enter"] ??
-        parseBoolean(process.env.TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER) ??
-        true;
+        args["newline-on-enter"] ?? parseBoolean(process.env.TAILOR_QUERY_NEWLINE_ON_ENTER) ?? true;
       await runRepl({
         ...sharedOptions,
         json: args.json,

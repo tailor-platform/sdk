@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { paginationArgs, toPageDirection } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import ml from "@/utils/multiline";
+import { paginationArgs, toPageDirection } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import ml from "#/utils/multiline";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
 
 export const listCommand = defineAppCommand({
@@ -18,7 +18,7 @@ export const listCommand = defineAppCommand({
     if (!config.current_user) {
       throw new Error(ml`
         No user logged in.
-        Please login first using 'tailor-sdk login' command.
+        Please login first using 'tailor login' command.
       `);
     }
 
@@ -41,7 +41,7 @@ export const listCommand = defineAppCommand({
     if (pats.length === 0) {
       logger.info(ml`
         No personal access tokens found.
-        Please create a token using 'tailor-sdk user pat create' command.
+        Please create a token using 'tailor user pat create' command.
       `);
       if (!jsonOutput) {
         return;

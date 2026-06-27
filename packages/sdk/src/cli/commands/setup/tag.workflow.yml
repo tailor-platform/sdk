@@ -1,0 +1,91 @@
+# __HEADER__
+name: Tailor (__WORKSPACE_NAME__)
+
+on:
+  push:
+    tags: ["__TAG_PATTERN__"]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Preview changes without deploying
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # __TAG_GUARD_JOB_START__
+  tailor-tag-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      on-branch: ${{ steps.tailor-tag-guard.outputs.on-branch }}
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - id: tailor-tag-guard
+        uses: tailor-platform/actions/tag-guard@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          target-branch: "__BRANCH__"
+  # __TAG_GUARD_JOB_END__
+  tailor-plan:
+    # __PLAN_NEEDS__
+    # __PLAN_IF__
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: __ENVIRONMENT__
+    permissions:
+      contents: read
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-generate-check
+        uses: tailor-platform/actions/generate-check@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+      - id: tailor-plan
+        uses: tailor-platform/actions/plan@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          package-manager: __PACKAGE_MANAGER__
+          label: __WORKSPACE_NAME__
+          # __WORKING_DIRECTORY__
+          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
+  tailor-deploy:
+    needs: tailor-plan
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs['dry-run']) }}
+    environment: __ENVIRONMENT__
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    concurrency:
+      group: tailor-deploy-__WORKSPACE_NAME__
+      cancel-in-progress: false
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-apply
+        uses: tailor-platform/actions/deploy@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        with:
+          workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+          platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}

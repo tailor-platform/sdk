@@ -1,4 +1,3 @@
-#!/usr/bin/env -S pnpm exec tsx
 // Verify the src/ module graph is acyclic — including type-only edges.
 //
 // oxlint's import/no-cycle (ignoreTypes: false) already rejects cycles formed
@@ -38,8 +37,8 @@ function listSourceFiles(dir: string): string[] {
 
 function resolveSpecifier(file: string, specifier: string): string | null {
   let base: string;
-  if (specifier.startsWith("@/")) {
-    base = join(srcRoot, specifier.slice(2));
+  if (specifier.startsWith("#/")) {
+    base = join(srcRoot, specifier.slice("#/".length));
   } else if (specifier.startsWith(".")) {
     base = normalize(resolve(dirname(file), specifier));
   } else {

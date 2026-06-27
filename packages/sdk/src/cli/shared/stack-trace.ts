@@ -11,8 +11,8 @@
 
 import { TraceMap, generatedPositionFor, originalPositionFor } from "@jridgewell/trace-mapping";
 import * as path from "pathe";
-import { styles } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { styles } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 
 /** A single frame parsed from a V8 stack trace */
 export interface StackFrame {
@@ -295,7 +295,7 @@ export function formatMappedError(
       const rel = path.relative(process.cwd(), absolutePath);
       // Only paths escaping cwd (starting with `..`) are shown as-is; all
       // other relative paths get an explicit `./` prefix so dotfiles like
-      // `.tailor-sdk/...` are not mistaken for relative-path markers.
+      // `.tailor/...` are not mistaken for relative-path markers.
       const displaySource = rel.startsWith("..") ? rel : `./${rel}`;
       const fnName = name ?? frame.original.functionName;
       const link = buildSourceLink(displaySource, absolutePath, line, column);

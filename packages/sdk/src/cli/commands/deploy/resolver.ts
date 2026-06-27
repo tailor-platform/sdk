@@ -7,20 +7,20 @@ import {
   type DeletePipelineServiceRequestSchema,
   type UpdatePipelineResolverRequestSchema,
   type UpdatePipelineServiceRequestSchema,
-} from "@tailor-proto/tailor/v1/pipeline_pb";
+} from "@tailor-platform/tailor-proto/pipeline_pb";
 import {
   type PipelineResolver_FieldSchema,
   PipelineResolver_OperationType,
   type PipelineResolver_PipelineSchema,
   type PipelineResolver_TypeSchema,
   type PipelineResolverSchema,
-} from "@tailor-proto/tailor/v1/pipeline_resource_pb";
+} from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import * as inflection from "inflection";
-import { type ResolverService } from "@/cli/services/resolver/service";
-import { getApplicationAuthNamespace } from "@/cli/shared/auth-namespace";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-exprs";
-import { assertDefined } from "@/utils/assert";
+import { type ResolverService } from "#/cli/services/resolver/service";
+import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
+import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
@@ -38,12 +38,12 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
+import type { Executor } from "#/types/executor.generated";
+import type { TailorField } from "#/types/field.generated";
+import type { Resolver } from "#/types/resolver.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { Executor } from "@/types/executor.generated";
-import type { TailorField } from "@/types/field.generated";
-import type { Resolver } from "@/types/resolver.generated";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 // Scalar type mapping for field type conversion
 const SCALAR_TYPE_MAP = {

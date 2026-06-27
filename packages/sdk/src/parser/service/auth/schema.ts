@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { AuthConnectionConfigSchema } from "@/parser/service/auth-connection";
-import { TailorFieldSchema } from "@/parser/service/field/schema";
-import type { ValueOperand } from "@/configure/services/auth/types";
+import { AuthConnectionConfigSchema } from "#/parser/service/auth-connection/index";
+import { TailorFieldSchema } from "#/parser/service/field/schema";
+import type { ValueOperand } from "#/configure/services/auth/types";
 
 export const AuthInvokerObjectSchema = z.strictObject({
   namespace: z.string().describe("Auth namespace"),

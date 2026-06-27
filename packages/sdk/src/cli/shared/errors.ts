@@ -50,7 +50,7 @@ function formatError(error: CLIError): string {
 
   if (error.command) {
     parts.push(
-      `\n  ${chalk.gray("Help:")} Run \`tailor-sdk ${error.command} --help\` for usage information.`,
+      `\n  ${chalk.gray("Help:")} Run \`tailor ${error.command} --help\` for usage information.`,
     );
   }
 

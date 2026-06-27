@@ -8,9 +8,9 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
-import ml from "@/utils/multiline";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import ml from "#/utils/multiline";
 
 export type SeedBundleResult = {
   namespace: string;
@@ -112,7 +112,7 @@ export async function bundleSeedScript(
   namespace: string,
   typeNames: string[],
 ): Promise<SeedBundleResult> {
-  // Output directory in .tailor-sdk (relative to project root)
+  // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "seed");
   fs.mkdirSync(outputDir, { recursive: true });
 

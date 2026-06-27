@@ -15,7 +15,7 @@ function makeCrashReport(overrides?: Partial<CrashReport>): CrashReport {
     osRelease: "25.3.0",
     arch: "arm64",
     command: "apply",
-    argv: ["node", "tailor-sdk", "apply"],
+    argv: ["node", "tailor", "apply"],
     errorName: "TypeError",
     errorMessage: "Cannot read properties of undefined",
     stackTrace:
@@ -45,12 +45,10 @@ describe("formatCrashReport", () => {
 
   test("serializes argv as JSON array", () => {
     const report = makeCrashReport({
-      argv: ["node", "tailor-sdk", "apply", "--body", '{"a": "b c"}'],
+      argv: ["node", "tailor", "apply", "--body", '{"a": "b c"}'],
     });
     const text = formatCrashReport(report);
-    expect(text).toContain(
-      'Arguments: ["node","tailor-sdk","apply","--body","{\\"a\\": \\"b c\\"}"]',
-    );
+    expect(text).toContain('Arguments: ["node","tailor","apply","--body","{\\"a\\": \\"b c\\"}"]');
   });
 
   test("handles empty stack trace", () => {

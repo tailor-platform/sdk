@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import * as path from "pathe";
 import { z } from "zod";
-import { getDistDir } from "@/cli/shared/dist-dir";
+import { getDistDir } from "#/cli/shared/dist-dir";
 
 const SecretsStateSchema = z.object({
   vaults: z.record(z.string(), z.record(z.string(), z.string())),

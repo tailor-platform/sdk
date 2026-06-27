@@ -85,6 +85,11 @@ export declare type UpdateAIGatewayRequest = Message<"tailor.v1.UpdateAIGatewayR
   cors: string[];
 
   /**
+   * @generated from field: bool disabled = 5;
+   */
+  disabled: boolean;
+
+  /**
    * @generated from field: google.protobuf.FieldMask update_mask = 100;
    */
   updateMask?: FieldMask;

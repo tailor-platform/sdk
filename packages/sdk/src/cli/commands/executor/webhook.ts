@@ -1,10 +1,10 @@
 import { defineCommand, runCommand } from "politty";
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
 
 export interface WebhookExecutorInfo {
   name: string;
@@ -90,9 +90,7 @@ const listWebhookCommand = defineAppCommand({
     });
 
     if (!jsonOutput) {
-      logger.info(
-        'To test a webhook, run: tailor-sdk executor trigger <name> -d \'{"key":"value"}\'',
-      );
+      logger.info('To test a webhook, run: tailor executor trigger <name> -d \'{"key":"value"}\'');
     }
   },
 });

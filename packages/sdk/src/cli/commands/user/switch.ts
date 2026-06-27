@@ -1,9 +1,9 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { findConfigUserKey, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import ml from "@/utils/multiline";
+import { defineAppCommand } from "#/cli/shared/command";
+import { findConfigUserKey, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import ml from "#/utils/multiline";
 
 export const switchCommand = defineAppCommand({
   name: "switch",
@@ -23,7 +23,7 @@ export const switchCommand = defineAppCommand({
     if (!user) {
       throw new Error(ml`
         User "${args.user}" not found.
-        Please login first using 'tailor-sdk login' command to register this user.
+        Please login first using 'tailor login' command to register this user.
       `);
     }
 

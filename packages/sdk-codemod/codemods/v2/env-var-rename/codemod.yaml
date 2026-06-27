@@ -1,0 +1,7 @@
+name: "@tailor-platform/env-var-rename"
+version: "1.0.0"
+description: "Rewrite removed SDK environment variable names to their v2 `TAILOR_*` names"
+engine: jssg
+language: text
+since: "1.0.0"
+until: "2.0.0"

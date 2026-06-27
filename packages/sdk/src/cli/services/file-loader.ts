@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { logger } from "@/cli/shared/logger";
+import { logger } from "#/cli/shared/logger";
 
 export interface FileLoadConfig {
   files: string[];

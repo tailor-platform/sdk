@@ -1,5 +1,5 @@
+import type { AIGatewayInput } from "#/types/aigateway.generated";
 import type { AIGatewayDefinitionBrand } from "./types";
-import type { AIGatewayInput } from "@/types/aigateway.generated";
 export type { AIGatewayConfig } from "./types";
 
 /**

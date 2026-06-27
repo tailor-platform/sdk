@@ -56,6 +56,15 @@ export const IdPGqlOperationsSchema = z
 
 export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
 
+// Origins are either a literal http(s) origin (scheme + host + optional port,
+// no path/query/fragment) or a static-website `<name>:url` placeholder that
+// the CLI resolves to a real origin at apply time. The placeholder branch
+// uses the same slug rule as the platform's static-website name validator so
+// typos like `https://app.example.com:url` are rejected instead of being
+// silently interpreted as a website name at apply time.
+const allowedReturnOriginPattern =
+  /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url)$/;
+
 export const IdPUserAuthPolicySchema = z
   .object({
     useNonEmailIdentifier: z
@@ -105,6 +114,34 @@ export const IdPUserAuthPolicySchema = z
     allowGoogleOauth: z.boolean().optional().describe("Enable Google OAuth login"),
     allowMicrosoftOauth: z.boolean().optional().describe("Enable Microsoft OAuth login"),
     disablePasswordAuth: z.boolean().optional().describe("Disable password-based authentication"),
+    enableMfa: z
+      .boolean()
+      .optional()
+      .describe("Make TOTP MFA available for users in this namespace"),
+    requireMfa: z
+      .boolean()
+      .optional()
+      .describe(
+        "Require TOTP MFA enrollment and challenge for password-authenticated users (requires enableMfa)",
+      ),
+    allowedReturnOrigins: z
+      .array(
+        z
+          .string()
+          .regex(
+            allowedReturnOriginPattern,
+            'must be an http(s) origin like "https://app.example.com" (scheme + host + optional port, no path/query/fragment) or a static-website placeholder like "<name>:url"',
+          ),
+      )
+      .optional()
+      .describe(
+        "Application origins (scheme + host + optional port) allowed as MFA self-service return targets",
+      ),
+    mfaIssuer: z
+      .string()
+      .max(64, "mfaIssuer must be 64 characters or less")
+      .optional()
+      .describe("Label shown next to the user account in authenticator apps"),
   })
   .strict()
   .refine(
@@ -175,7 +212,20 @@ export const IdPUserAuthPolicySchema = z
   .refine((data) => !data.disablePasswordAuth || !data.allowSelfPasswordReset, {
     message: "disablePasswordAuth cannot be used with allowSelfPasswordReset",
     path: ["disablePasswordAuth"],
-  });
+  })
+  .refine((data) => !data.requireMfa || data.enableMfa === true, {
+    message: "requireMfa requires enableMfa to be enabled",
+    path: ["requireMfa"],
+  })
+  .refine(
+    (data) =>
+      !data.enableMfa || (data.allowedReturnOrigins && data.allowedReturnOrigins.length > 0),
+    {
+      message:
+        "enableMfa requires allowedReturnOrigins to list at least one origin so MFA self-service has a valid return target",
+      path: ["enableMfa"],
+    },
+  );
 
 const emailFieldSchema = z
   .string()
@@ -254,6 +304,7 @@ export const IdPPermissionSchema = z
     update: z.array(IdPActionPermissionSchema).readonly(),
     delete: z.array(IdPActionPermissionSchema).readonly(),
     sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly(),
+    unenrollMfa: z.array(IdPActionPermissionSchema).readonly().optional(),
   })
   .strict()
   .describe("Per-operation permission policies for IdP users");
@@ -286,4 +337,14 @@ export const IdPSchema = z
     ),
   })
   .strict()
+  .refine(
+    (data) =>
+      !data.userAuthPolicy?.enableMfa ||
+      (data.permission !== undefined && data.permission.unenrollMfa !== undefined),
+    {
+      message:
+        "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true (set [{ conditions: [...], permit: true }] to allow, or [] to deny all). permission itself must also be defined.",
+      path: ["permission", "unenrollMfa"],
+    },
+  )
   .brand("IdPConfig");

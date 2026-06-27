@@ -7,9 +7,9 @@
  * `tailordb`, and `TailorDBFileError` without depending on the platform
  * runtime injecting those values into the unit test environment.
  */
-import "@/runtime/globals";
+import "#/runtime/globals";
 import { describe, expectTypeOf, test } from "vitest";
-import type { TailordbCommandType } from "@/runtime";
+import type { TailordbCommandType } from "#/runtime/index";
 
 // @ts-expect-error Tailordb was removed in v2; use lowercase tailordb.*.
 const legacyTailordbQueryResult = null as unknown as Tailordb.QueryResult<{ id: string }>;

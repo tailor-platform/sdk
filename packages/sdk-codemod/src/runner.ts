@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 import * as url from "node:url";
+import { parse, Lang } from "@ast-grep/napi";
 import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage, LlmReview } from "./types";
+import type { CodemodPackage, CodemodPattern, CodemodPatternGroup, LlmReview } from "./types";
+import type { SgNode } from "@ast-grep/napi";
 
 /**
  * A transform function that receives source text and file path,
@@ -50,6 +52,13 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 /** Directory names always excluded from file scanning. */
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
+  "comment",
+  "string",
+  "regex",
+  "string_fragment",
+]);
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
@@ -123,33 +132,155 @@ async function loadTransform(scriptPath: string): Promise<TransformFn> {
 /** A loaded transform with its file matcher. */
 interface LoadedTransform {
   id: string;
-  transform: TransformFn;
+  /** Undefined for codemod-less ("manual") entries that ship only guidance. */
+  transform?: TransformFn;
   matches: (relativePath: string) => boolean;
-  legacyPatterns: Array<string | string[]>;
-  suspiciousPatterns: string[];
+  legacyPatterns: CodemodPatternGroup[];
+  sourceStringLegacyPatterns: CodemodPatternGroup[];
+  suspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
 }
 
-/** Resolve a legacy pattern against content, returning its label when matched. */
-function matchLegacyPattern(content: string, pattern: string | string[]): string | null {
-  if (typeof pattern === "string") {
-    return content.includes(pattern) ? pattern : null;
+function contentForResidualMatching(relative: string, content: string): string {
+  const ext = path.extname(relative).toLowerCase();
+  return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
+}
+
+function sourceStringContentForResidualMatching(relative: string, content: string): string | null {
+  const ext = path.extname(relative).toLowerCase();
+  if (!SOURCE_EXTENSIONS.has(ext)) return null;
+
+  let root: SgNode;
+  try {
+    root = parse(sourceLang(relative), content).root();
+  } catch {
+    return null;
   }
-  return pattern.every((p) => content.includes(p)) ? pattern.join(" + ") : null;
+
+  const fragments: string[] = [];
+  const visit = (node: SgNode): void => {
+    if (node.kind() === "string_fragment") {
+      fragments.push(node.text());
+      return;
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return fragments.join("\n");
+}
+
+function sourceLang(relative: string): Lang {
+  const ext = path.extname(relative).toLowerCase();
+  return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
+}
+
+function isProcessEnvSubscriptKey(node: SgNode): boolean {
+  const stringNode = node.kind() === "string_fragment" ? node.parent() : node;
+  if (stringNode == null) return false;
+  const stringNodeKind = stringNode.kind();
+  if (stringNodeKind !== "string" && stringNodeKind !== "template_string") {
+    return false;
+  }
+  const parent = stringNode.parent();
+  return parent?.kind() === "subscript_expression" && /^process\.env\s*\[/.test(parent.text());
+}
+
+function collectMaskedRanges(root: SgNode): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const visit = (node: SgNode): void => {
+    if (MASKED_SOURCE_NODE_KINDS.has(node.kind())) {
+      if (isProcessEnvSubscriptKey(node)) return;
+      const range = node.range();
+      ranges.push([range.start.index, range.end.index]);
+      return;
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return ranges;
+}
+
+function maskSourceNonCode(relative: string, content: string): string {
+  let ranges: Array<[number, number]>;
+  try {
+    const root = parse(sourceLang(relative), content).root();
+    ranges = collectMaskedRanges(root);
+  } catch {
+    return content;
+  }
+
+  ranges = ranges.toSorted(([a], [b]) => a - b);
+  const chars = content.split("");
+  for (const [start, end] of ranges) {
+    for (let i = start; i < end && i < chars.length; i++) {
+      if (chars[i] !== "\n" && chars[i] !== "\r") chars[i] = " ";
+    }
+  }
+  return chars.join("");
+}
+
+function isIdentifierChar(char: string | undefined): boolean {
+  return char != null && /^[A-Za-z0-9_$]$/.test(char);
+}
+
+function matchesPattern(content: string, pattern: CodemodPattern): boolean {
+  if (typeof pattern === "string") {
+    const checkLeft = isIdentifierChar(pattern[0]);
+    const checkRight = isIdentifierChar(pattern.at(-1));
+    let index = content.indexOf(pattern);
+    while (index !== -1) {
+      const before = index > 0 ? content[index - 1] : undefined;
+      const after = content[index + pattern.length];
+      if ((!checkLeft || !isIdentifierChar(before)) && (!checkRight || !isIdentifierChar(after))) {
+        return true;
+      }
+      index = content.indexOf(pattern, index + 1);
+    }
+    return false;
+  }
+  pattern.lastIndex = 0;
+  return pattern.test(content);
+}
+
+function patternLabel(pattern: CodemodPattern): string {
+  return typeof pattern === "string" ? pattern : pattern.toString();
+}
+
+/** Resolve a residual pattern against content, returning its label when matched. */
+function matchResidualPattern(content: string, pattern: CodemodPatternGroup): string | null {
+  if (!Array.isArray(pattern)) {
+    return matchesPattern(content, pattern) ? patternLabel(pattern) : null;
+  }
+  return pattern.every((p) => matchesPattern(content, p))
+    ? pattern.map((p) => patternLabel(p)).join(" + ")
+    : null;
 }
 
 function legacyPatternWarnings(
   relative: string,
   content: string,
+  sourceStringContent: string | null,
   transforms: LoadedTransform[],
 ): string[] {
   return transforms.flatMap((lt) => {
-    const found = lt.legacyPatterns
-      .map((p) => matchLegacyPattern(content, p))
-      .filter((label): label is string => label !== null);
-    if (found.length === 0) return [];
+    const found = new Set(
+      lt.legacyPatterns
+        .map((p) => matchResidualPattern(content, p))
+        .filter((label): label is string => label !== null),
+    );
+    if (sourceStringContent != null) {
+      for (const pattern of lt.sourceStringLegacyPatterns) {
+        const label = matchResidualPattern(sourceStringContent, pattern);
+        if (label != null) found.add(label);
+      }
+    }
+    if (found.size === 0) return [];
     return [
-      `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
+      `${relative}: contains ${Array.from(found).join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
     ];
   });
 }
@@ -166,7 +297,7 @@ function legacyPatternWarnings(
  * @returns Combined result of all codemod executions
  */
 export async function runCodemods(
-  codemods: Array<{ codemod: CodemodPackage; scriptPath: string }>,
+  codemods: Array<{ codemod: CodemodPackage; scriptPath?: string }>,
   targetPath: string,
   dryRun: boolean,
 ): Promise<CodemodRunResult> {
@@ -176,9 +307,10 @@ export async function runCodemods(
     const patterns = codemod.filePatterns ?? DEFAULT_FILE_PATTERNS;
     loaded.push({
       id: codemod.id,
-      transform: await loadTransform(scriptPath),
+      transform: scriptPath ? await loadTransform(scriptPath) : undefined,
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
+      sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
       prompt: codemod.prompt,
     });
@@ -208,6 +340,7 @@ export async function runCodemods(
 
     let current = original;
     for (const lt of matchedTransforms) {
+      if (!lt.transform) continue;
       const result = await lt.transform(current, absolute);
       if (result != null) {
         current = result;
@@ -224,11 +357,15 @@ export async function runCodemods(
       }
     }
 
-    warnings.push(...legacyPatternWarnings(relative, current, matchedTransforms));
+    const residualContent = contentForResidualMatching(relative, current);
+    const sourceStringContent = sourceStringContentForResidualMatching(relative, current);
+    warnings.push(
+      ...legacyPatternWarnings(relative, residualContent, sourceStringContent, matchedTransforms),
+    );
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => current.includes(p))) {
+      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
         const files = suspiciousByCodemod.get(lt.id) ?? [];
         files.push(relative);
         suspiciousByCodemod.set(lt.id, files);
@@ -238,10 +375,17 @@ export async function runCodemods(
 
   const llmReviews: LlmReview[] = [];
   for (const lt of loaded) {
-    const files = suspiciousByCodemod.get(lt.id);
-    if (!lt.prompt || !files) continue;
-    // Sort for deterministic output regardless of filesystem traversal order.
-    llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
+    if (!lt.prompt) continue;
+    if (lt.suspiciousPatterns.length > 0) {
+      // File-scoped: only surface when a suspicious pattern actually matched.
+      const files = suspiciousByCodemod.get(lt.id);
+      // Sort for deterministic output regardless of filesystem traversal order.
+      if (files) llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
+    } else if (lt.legacyPatterns.length === 0) {
+      // Codemod-less manual change with no pattern to scope by: surface as
+      // project-wide guidance (legacyPattern-only entries warn instead).
+      llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: [] });
+    }
   }
 
   return {

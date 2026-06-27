@@ -32,12 +32,12 @@ jobs:
       PR_NUMBER: ${{ github.event.number }}
       REVIEW_BODY_FILE: ${{ github.workspace }}/docs-consistency-review.md
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@9dd8b95a392eb34b6f5fb56cf5a64cb735912d4b # v1.0.150
+        uses: anthropics/claude-code-action@80b31826338489861333dc17217865dfe8085cdc # v1.0.155
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -111,7 +111,7 @@ jobs:
 
             For changed user-facing docs, check that they describe only what an SDK *user* needs and do not leak SDK/Platform internals. Flag the following:
 
-            - **Internal implementation details**: internal API / RPC / method / class names (e.g. `TestExecScript`), transport or wire-format terms the user never types (`proto` / `protobuf` / `gRPC` / `unary RPC` / `streaming method`), internal layer structure (`parser` / `configure` / `types` modules), runtime-internal delegation mechanics, internal wrapping behavior, internal on-disk layout or sanitization algorithms (e.g. how `.tailor-sdk/<id>` names are derived), and AST / code-injection internals.
+            - **Internal implementation details**: internal API / RPC / method / class names (e.g. `TestExecScript`), transport or wire-format terms the user never types (`proto` / `protobuf` / `gRPC` / `unary RPC` / `streaming method`), internal layer structure (`parser` / `configure` / `types` modules), runtime-internal delegation mechanics, internal wrapping behavior, internal on-disk layout or sanitization algorithms (e.g. how `.tailor/<id>` names are derived), and AST / code-injection internals.
             - **JSDoc duplication (SSOT)**: detailed API reference — full interface/type definitions, exhaustive field tables — copied into prose. JSDoc/IDE autocompletion is the single source of truth; the docs should explain intent and link out, not mirror every field.
             - **Private references**: links to or mentions of private/internal repositories or internal issue trackers (e.g. a `<org>/<private-repo>` link or an `<org>/<tracker>#NNN` reference).
             - **Wrong-audience notes**: content addressed to someone other than the reader (e.g. a "Note for Platform developers" block inside user docs).

@@ -8,7 +8,7 @@
  * - Apply with migrations
  *
  * Prerequisites:
- * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
  *
  * Running Tests:

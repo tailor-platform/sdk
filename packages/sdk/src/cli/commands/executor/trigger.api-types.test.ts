@@ -1,9 +1,9 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test } from "vitest";
-import { createExecutor } from "@/configure/services/executor";
-import { idpUserCreatedTrigger } from "@/configure/services/executor/trigger/event";
-import { scheduleTrigger } from "@/configure/services/executor/trigger/schedule";
-import { incomingWebhookTrigger } from "@/configure/services/executor/trigger/webhook";
+import { createExecutor } from "#/configure/services/executor/index";
+import { idpUserCreatedTrigger } from "#/configure/services/executor/trigger/event";
+import { scheduleTrigger } from "#/configure/services/executor/trigger/schedule";
+import { incomingWebhookTrigger } from "#/configure/services/executor/trigger/webhook";
 import { type TriggerExecutorOptions, type TriggerExecutorTypedOptions } from "./trigger";
 
 const incomingWebhookExecutor = createExecutor({

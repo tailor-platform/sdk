@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import ml from "@/utils/multiline";
+import { defineAppCommand } from "#/cli/shared/command";
+import { readPlatformConfig } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import ml from "#/utils/multiline";
 
 export const listCommand = defineAppCommand({
   name: "list",
@@ -16,7 +16,7 @@ export const listCommand = defineAppCommand({
     if (users.length === 0) {
       logger.info(ml`
         No users found.
-        Please login first using 'tailor-sdk login' command to register a user.
+        Please login first using 'tailor login' command to register a user.
       `);
       if (jsonOutput) {
         logger.out([]);

@@ -1,4 +1,4 @@
-import { isSdkBranded } from "@/utils/brand";
+import { isSdkBranded } from "#/utils/brand";
 
 const TAILORDB_TYPE_BUILDER_HELPER_KEYS = [
   "_output",

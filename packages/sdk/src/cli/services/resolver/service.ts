@@ -1,11 +1,11 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { logger, styles } from "@/cli/shared/logger";
-import { ResolverSchema } from "@/parser/service/resolver";
-import { isSdkBranded } from "@/utils/brand";
-import type { ResolverServiceConfig } from "@/configure/config/types";
-import type { Resolver } from "@/types/resolver.generated";
+import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { logger, styles } from "#/cli/shared/logger";
+import { ResolverSchema } from "#/parser/service/resolver/index";
+import { isSdkBranded } from "#/utils/brand";
+import type { ResolverServiceConfig } from "#/configure/config/types";
+import type { Resolver } from "#/types/resolver.generated";
 
 export type ResolverService = {
   readonly namespace: string;

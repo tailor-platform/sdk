@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { defineConfig } from "@/configure/config";
-import { defineAuth } from "@/configure/services/auth";
-import { defineIdp } from "@/configure/services/idp";
-import { defineStaticWebSite } from "@/configure/services/staticwebsite";
-import { db } from "@/configure/services/tailordb/schema";
+import { defineConfig } from "#/configure/config/index";
+import { defineAuth } from "#/configure/services/auth/index";
+import { defineIdp } from "#/configure/services/idp/index";
+import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
+import { db } from "#/configure/services/tailordb/schema";
 import { defineApplication } from "./application";
 
 describe("defineAuth parse wiring", () => {

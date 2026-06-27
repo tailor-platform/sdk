@@ -1,6 +1,6 @@
 import { GraphQLError, Lexer, Source, TokenKind } from "graphql";
 import { getSegments } from "sql-highlight";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#/utils/assert";
 import type { TransformEvent, TransformState } from "@toiroakr/read-multiline";
 
 // ANSI colour sequences. Kept inline (rather than going through `node:util`

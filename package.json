@@ -14,8 +14,11 @@
     "deploy": "pnpm run build && pnpm -r run deploy",
     "agent:rules:update": "node scripts/sync-agent-rules.mjs --write",
     "agent:rules:check": "node scripts/sync-agent-rules.mjs --check",
+    "codemod:docs:update": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --write",
+    "codemod:docs:check": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --check",
     "check": "pnpm run build && pnpm --filter @tailor-platform/sdk --filter example run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
+    "check:codemod-docs": "pnpm run codemod:docs:check",
     "check:lint": "pnpm -r run lint:fix && pnpm run lint:vitest",
     "check:typecheck": "pnpm -r run typecheck:go",
     "check:knip": "pnpm -r run knip",
@@ -41,17 +44,17 @@
     "@changesets/cli": "3.0.0-next.5",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.2",
-    "knip": "6.16.1",
+    "knip": "6.17.1",
     "lefthook": "2.1.9",
-    "oxfmt": "0.54.0",
-    "oxlint": "1.69.0",
+    "oxfmt": "0.55.0",
+    "oxlint": "1.70.0",
     "pkg-pr-new": "0.0.75",
     "publint": "0.3.21",
     "tsx": "4.22.4",
     "typescript": "6.0.3"
   },
   "engines": {
-    "node": ">= 22.14.0"
+    "node": ">= 22.15.0"
   },
-  "packageManager": "pnpm@11.6.0"
+  "packageManager": "pnpm@11.8.0"
 }

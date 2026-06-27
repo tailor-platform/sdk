@@ -7,10 +7,10 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { logger, styles } from "@/cli/shared/logger";
-import ml from "@/utils/multiline";
-import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "@/plugin/manager";
-import type { PluginGeneratedType } from "@/plugin/types";
+import { logger, styles } from "#/cli/shared/logger";
+import ml from "#/utils/multiline";
+import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "#/plugin/manager";
+import type { PluginGeneratedType } from "#/plugin/types";
 
 type FieldMetadata = {
   required?: boolean;
@@ -34,7 +34,7 @@ function isFieldDefinition(value: unknown): value is FieldDefinition {
  * Generate TypeScript files for plugin-generated types.
  * These files export the type definition and can be imported by executor files.
  * @param types - Array of plugin type information
- * @param outputDir - Base output directory (e.g., .tailor-sdk)
+ * @param outputDir - Base output directory (e.g., .tailor)
  * @returns Generation result with file paths
  */
 export function generatePluginTypeFiles(

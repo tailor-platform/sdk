@@ -39,6 +39,7 @@ const idp = defineIdp("my-idp", {
     update: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
   },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
@@ -49,6 +50,10 @@ const idp = defineIdp("my-idp", {
     passwordRequireNumeric: true,
     passwordMinLength: 8,
     passwordMaxLength: 128,
+    enableMfa: true,
+    requireMfa: false,
+    allowedReturnOrigins: [website.url],
+    mfaIssuer: "My App",
   },
   emailConfig: {
     fromName: "My App",
@@ -107,7 +112,7 @@ export default defineConfig({
   // SDK-managed app id — do not edit, except when copying this config to a separate app.
   id: "d0a3398a-f79c-4c2e-be1e-b81469bb0a43",
   name: "my-app",
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
   env: {
     foo: 1,
     bar: "hello",

@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -64,7 +64,7 @@ jobs:
       # the build and hang the job. The build itself only needs create-sdk's own deps.
       - name: Build create-sdk with pkg.pr.new SDK
         env:
-          TAILOR_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
+          TAILOR_TEMPLATE_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
         run: |
           node packages/create-sdk/scripts/prepare-templates.js
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
@@ -103,7 +103,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 

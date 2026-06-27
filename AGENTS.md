@@ -49,6 +49,8 @@ When editing files matching these globs, read and follow the linked rule documen
 
 - `pnpm agent:rules:update` - Regenerate `AGENTS.md`'s path-scoped rule index and `.claude/rules/*.md`
 - `pnpm agent:rules:check` - Verify generated agent rule files are up to date
+- `pnpm codemod:docs:update` - Regenerate `packages/sdk/docs/migration/v2.md` from the codemod registry
+- `pnpm codemod:docs:check` - Verify migration docs are up to date
 
 ### CLI
 
@@ -84,9 +86,9 @@ Key files:
 - All jobs **must** be named exports (including mainJob and triggered jobs)
 - Job names must be unique across the entire project
 - Job `.trigger()` returns `Awaited<Output>` directly; read the value synchronously unless the job output itself is promise-like
-- `defineWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
+- `createWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
 - Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; acquire the mock with `using wf = mockWorkflow()` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) and use `wf.setWaitHandler` / `wf.setResolveHandler` to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
-- Use `wps.key.wait()` for namespaced access, or `export const { key } = defineWaitPoints(...)` for destructured 2-level access
+- Use `wps.key.wait()` for namespaced access, or `export const { key } = createWaitPoints(...)` for destructured 2-level access
 
 ### Executors
 

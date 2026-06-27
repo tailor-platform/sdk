@@ -8,9 +8,9 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
-import ml from "@/utils/multiline";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import ml from "#/utils/multiline";
 
 export interface MigrationBundleResult {
   namespace: string;
@@ -38,7 +38,7 @@ export async function bundleMigrationScript(
   migrationNumber: number,
   env: Record<string, string | number | boolean> = {},
 ): Promise<MigrationBundleResult> {
-  // Output directory in .tailor-sdk (relative to project root)
+  // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
   fs.mkdirSync(outputDir, { recursive: true });
 

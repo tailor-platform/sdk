@@ -2,12 +2,12 @@ import * as crypto from "node:crypto";
 import * as http from "node:http";
 import open from "open";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertWritable } from "@/cli/shared/readonly-guard";
+import { workspaceArgs } from "#/cli/shared/args";
+import { fetchAll, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import { connectionNameArgs } from "./args";
 
 const defaultPort = 8080;
@@ -185,7 +185,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         logger.warn(
           `Could not start the local callback server on port ${args.port}${code ? ` (${code})` : ""}.\n` +
             `${portHint}\n` +
-            `  tailor-sdk authconnection open`,
+            `  tailor authconnection open`,
         );
         reject(err);
       });
@@ -199,7 +199,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         );
         logger.info(
           `If this flow doesn't complete, you can authorize via the Console instead:\n` +
-            `  tailor-sdk authconnection open`,
+            `  tailor authconnection open`,
         );
         if (!args["no-browser"]) {
           try {
