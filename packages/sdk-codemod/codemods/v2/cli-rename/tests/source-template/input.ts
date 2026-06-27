@@ -24,6 +24,7 @@ const envFileCommandSubstitutionPath = "tailor-sdk --env-file=$(pwd)/--machineus
 const argPayload = "tailor-sdk function test-run --arg=--machineuser";
 const argCommandSubstitutionPayload = "tailor-sdk function test-run --arg=$(printf --machineuser) --machineuser";
 const quotedArgCommandPayload = "tailor-sdk function test-run --arg='tailor-sdk crash-report --machineuser' --machineuser";
+const substitutedArgCommandPayload = `tailor-sdk function test-run --arg ${cond ? "tailor-sdk crash-report --machineuser" : "{}"} --machineuser`;
 const escapedQueryCommand = "tailor-sdk query --query \"select 1\" --machineuser";
 const profileCommand = "tailor-sdk --profile prod crash-report --machineuser";
 const profileMachineUserValue = "tailor-sdk --profile --machineuser crash-report --machineuser";
@@ -38,6 +39,7 @@ const argTemplatePayload = `tailor-sdk function test-run --arg=${payload ? "--ma
 const dynamicArgTemplatePayload = `tailor-sdk function test-run ${includeArg ? "--arg" : ""} ${payload ? "--machineuser" : ""} --machineuser`;
 const quotedQueryTemplate = `tailor-sdk query --query "select --machineuser ${where}" --machineuser`;
 const inlineQueryTemplate = `tailor-sdk query --query=${payload ? "--machineuser" : ""} --machineuser`;
+const postCommandConfigValue = ["tailor-sdk", "deploy", "--config", "/tmp/--machineuser"];
 const chainedCommandTemplate = `tailor-sdk login --machineuser && other-cli --machineuser`;
 const joinedSeparatorTemplate = `tailor-sdk login --machineuser;other-cli --machineuser`;
 const newlineCommandTemplate = `tailor-sdk login --machineuser

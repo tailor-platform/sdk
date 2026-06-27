@@ -1486,6 +1486,46 @@ function protectStandaloneTailorSdkSourceStrings(
         };
       });
   };
+  const protectTemplateSubstitutions = (token: TemplateToken): void => {
+    for (const substitution of token.substitutions) {
+      protectNodeText(substitution);
+    }
+  };
+  const protectTailorCliTemplateValues = (node: SgNode): void => {
+    let afterTailorBinary = false;
+    let skipNextTailorValue = false;
+
+    for (const token of collectTemplateTokens(node, source)) {
+      const value = staticTemplateTokenValue(token);
+      if (!afterTailorBinary) {
+        if (value !== undefined && TAILOR_SDK_TOKEN.test(value)) {
+          afterTailorBinary = true;
+        }
+        continue;
+      }
+
+      if (skipNextTailorValue) {
+        protectTemplateSubstitutions(token);
+        skipNextTailorValue = false;
+        continue;
+      }
+
+      if (value !== undefined) {
+        if (isOpenTailorCliValueFlag(value)) {
+          skipNextTailorValue = true;
+        }
+        continue;
+      }
+
+      if (hasInlineTailorCliValue(token.value)) {
+        protectTemplateSubstitutions(token);
+        continue;
+      }
+      if (isOpenTailorCliValueFlag(token.value)) {
+        skipNextTailorValue = true;
+      }
+    }
+  };
   const protectNodeText = (node: SgNode): void => {
     const range = node.range();
     ranges.push([
@@ -1590,6 +1630,7 @@ function protectStandaloneTailorSdkSourceStrings(
           fragmentOffset += fragment.value.length + TEMPLATE_SUBSTITUTION_PLACEHOLDER.length;
         }
       }
+      protectTailorCliTemplateValues(node);
     }
     const token = sourceStringToken(node, source);
     if (token) {

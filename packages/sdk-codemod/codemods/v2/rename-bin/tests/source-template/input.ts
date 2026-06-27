@@ -11,6 +11,7 @@ const dynamicCommandWithFlags = `tailor-sdk ${flags} deploy`;
 const dynamicCommandWithConditionalFlags = `tailor-sdk ${useJson ? "--json" : ""} deploy`;
 const profileValue = "tailor-sdk --profile tailor-sdk deploy";
 const shortProfileValue = "tailor-sdk -p tailor-sdk deploy";
+const substitutedArgValue = `tailor-sdk function test-run --arg ${cond ? "tailor-sdk deploy" : "{}"}`;
 const latest = "npx tailor-sdk@latest login";
 const cacheRunner = "npx --cache .npm tailor-sdk login";
 const registryRunner = "npx --registry=https://npm.example/tailor-sdk tailor-sdk login";
