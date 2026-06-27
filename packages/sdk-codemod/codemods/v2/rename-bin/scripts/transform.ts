@@ -70,11 +70,13 @@ const SOURCE_DYNAMIC_PKG_RUNNER_RE = new RegExp(
   "g",
 );
 const SOURCE_DYNAMIC_TAILOR_SDK_RE = new RegExp(
-  `(^|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+$)`,
+  `(^\\s*|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+$)`,
   "g",
 );
 const TAILOR_SDK_TOKEN_RE = /^tailor-sdk(@[^\s'"`;|&)]+)?$/;
 const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)$/;
+const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
+const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
 
 function renameBinary(value: string): string {
   const withRunners = value.replace(PKG_RUNNER_RE, (_, runner: string, version?: string) =>
@@ -82,6 +84,12 @@ function renameBinary(value: string): string {
   );
   return withRunners.replace(TAILOR_SDK_RE, (_match, version?: string) =>
     version ? `@tailor-platform/sdk${version}` : "tailor",
+  );
+}
+
+function renamePackageName(value: string): string {
+  return value.replace(TAILOR_SDK_TOKEN_RE, (_match, version?: string) =>
+    version ? `@tailor-platform/sdk${version}` : "@tailor-platform/sdk",
   );
 }
 
@@ -188,22 +196,78 @@ function isStaticTailorCommandNode(node: SgNode, source: string): boolean {
   );
 }
 
+function sourceArrayElements(node: SgNode): SgNode[] {
+  return node.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
+}
+
+function nodeIndex(nodes: SgNode[], node: SgNode): number {
+  return nodes.findIndex((child: SgNode) => nodeRangeKey(child) === nodeRangeKey(node));
+}
+
+function callExpressionCalleeText(argumentsNode: SgNode): string | null {
+  const parentRange = nodeRangeKey(argumentsNode);
+  const call = argumentsNode.parent();
+  if (call?.kind() !== "call_expression") return null;
+  const callee = call.children().find((child: SgNode) => nodeRangeKey(child) !== parentRange);
+  return callee?.text() ?? null;
+}
+
+function firstNonOptionIndex(elements: SgNode[], start: number, source: string): number | null {
+  for (let index = start; index < elements.length; index += 1) {
+    const value = sourceStringContent(elements[index]!, source);
+    if (value == null) return null;
+    if (!value.startsWith("-")) return index;
+  }
+  return null;
+}
+
+function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
+  const parent = node.parent();
+  if (parent?.kind() !== "array") return false;
+
+  const argumentsNode = parent.parent();
+  if (argumentsNode?.kind() !== "arguments") return false;
+  const callee = callExpressionCalleeText(argumentsNode);
+  if (!CLI_ARGUMENT_CALLEE_RE.test(callee ?? "")) return false;
+
+  const callArgs = sourceArrayElements(argumentsNode);
+  const executableNode = callArgs[0];
+  if (executableNode == null) return false;
+  const executable = sourceStringContent(executableNode, source);
+  if (executable == null) return false;
+
+  const elements = sourceArrayElements(parent);
+  const index = nodeIndex(elements, node);
+  const next = elements[index + 1];
+  if (index < 0 || next == null || !isStaticTailorCommandNode(next, source)) return false;
+
+  if (SOURCE_PACKAGE_RUNNERS.has(executable)) {
+    return firstNonOptionIndex(elements, 0, source) === index;
+  }
+
+  if (SOURCE_DLX_PACKAGE_RUNNERS.has(executable)) {
+    const dlxIndex = firstNonOptionIndex(elements, 0, source);
+    if (dlxIndex == null || sourceStringContent(elements[dlxIndex]!, source) !== "dlx") {
+      return false;
+    }
+    return firstNonOptionIndex(elements, dlxIndex + 1, source) === index;
+  }
+
+  return false;
+}
+
 function isCliBinaryArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() === "array") {
-    const elements = parent.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
-    const index = elements.findIndex((child: SgNode) => nodeRangeKey(child) === nodeRangeKey(node));
+    const elements = sourceArrayElements(parent);
+    const index = nodeIndex(elements, node);
     const next = elements[index + 1];
     return index === 0 && next != null && isStaticTailorCommandNode(next, source);
   }
 
   if (parent?.kind() !== "arguments") return false;
-  const parentRange = nodeRangeKey(parent);
-  const call = parent.parent();
-  if (call?.kind() !== "call_expression") return false;
-  const callee = call.children().find((child: SgNode) => nodeRangeKey(child) !== parentRange);
-  if (!CLI_ARGUMENT_CALLEE_RE.test(callee?.text() ?? "")) return false;
-  const args = parent.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
+  if (!CLI_ARGUMENT_CALLEE_RE.test(callExpressionCalleeText(parent) ?? "")) return false;
+  const args = sourceArrayElements(parent);
   return args[0] != null && nodeRangeKey(args[0]) === nodeRangeKey(node);
 }
 
@@ -217,9 +281,11 @@ function pushSourceStringEdit(
   const end = range.end.index - 1;
   const text = source.slice(start, end);
   const replacement =
-    TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
-      ? renameBinary(text)
-      : renameSourceCommandText(text);
+    TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
+      ? renamePackageName(text)
+      : TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
+        ? renameBinary(text)
+        : renameSourceCommandText(text);
   if (replacement !== text) {
     edits.push([start, end, replacement]);
   }

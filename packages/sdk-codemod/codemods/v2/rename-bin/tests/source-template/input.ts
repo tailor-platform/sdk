@@ -6,6 +6,8 @@ const profileValue = "tailor-sdk --profile tailor-sdk deploy";
 const generated = "Run tailor-sdk generate after changes";
 const dynamicCommand = `tailor-sdk ${subcommand}`;
 const dynamicPnpmCommand = `pnpm tailor-sdk ${subcommand}`;
+const indentedDynamicCommand = `
+  tailor-sdk ${subcommand}`;
 const latest = "npx tailor-sdk@latest login";
 const packageName = "tailor-sdk";
 const packageMessage = "package tailor-sdk is installed";
