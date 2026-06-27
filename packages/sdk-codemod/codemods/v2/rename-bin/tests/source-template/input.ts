@@ -22,6 +22,7 @@ const latestWithRunnerOption = "npx --yes tailor-sdk@latest login";
 const dynamicNpxCommand = `npx tailor-sdk ${subcommand}`;
 const dynamicNpxRegistryCommand = `npx --registry ${registry} tailor-sdk login`;
 const dynamicRunnerCommand = `${runner} tailor-sdk login`;
+const literalPlaceholderCommand = `prefix __TAILOR_SDK_TEMPLATE_EXPR_0__ tailor-sdk ${subcommand}`;
 const npxOtherPackage = "npx foo tailor-sdk login";
 const dynamicBunxCommand = `bunx tailor-sdk ${subcommand}`;
 const dynamicDlxCommand = `pnpm dlx tailor-sdk ${subcommand}`;

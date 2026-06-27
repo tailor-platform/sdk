@@ -81,7 +81,8 @@ const SOURCE_CLI_VALUE_REFERENCE_RE = new RegExp(
   `(${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+))(${SOURCE_CLI_ARG_VALUE})`,
   "g",
 );
-const SOURCE_TEMPLATE_EXPR_PLACEHOLDER = "__TAILOR_SDK_TEMPLATE_EXPR_\\d+__";
+const SOURCE_TEMPLATE_EXPR_PLACEHOLDER = "__TAILOR_SDK_TEMPLATE_EXPR_\\d+_\\d+__";
+const SOURCE_TEMPLATE_EXPR_PLACEHOLDER_RE = /^__TAILOR_SDK_TEMPLATE_EXPR_\d+_\d+__$/;
 const SOURCE_TEMPLATE_DYNAMIC_ARGS = `\\s+${SOURCE_TEMPLATE_EXPR_PLACEHOLDER}(?:\\s+${SOURCE_ARG_VALUE})*(?=\\s*(?:$|[;&|]))`;
 const SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD = "\\s+(?:--help|-h|--version|-v)\\b";
 const SOURCE_DIRECT_INVOCATION_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b|${SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD})`;
@@ -274,7 +275,7 @@ function isAfterTemplatePlaceholder(source: string, offset: number): boolean {
   );
   const segment = source.slice(segmentStart + 1, offset).trim();
   const tokens = sourceTokens(segment);
-  return tokens != null && tokens.some((token) => /^__TAILOR_SDK_TEMPLATE_EXPR_\d+__$/.test(token));
+  return tokens != null && tokens.some((token) => SOURCE_TEMPLATE_EXPR_PLACEHOLDER_RE.test(token));
 }
 
 function renameSourceCommandText(value: string): string {
@@ -354,6 +355,13 @@ function sourceStringContent(node: SgNode, source: string): string | null {
   ) {
     return null;
   }
+  const range = node.range();
+  return source.slice(range.start.index + 1, range.end.index - 1);
+}
+
+function sourceStringRawContent(node: SgNode, source: string): string | null {
+  const kind = node.kind();
+  if (kind !== "string" && kind !== "template_string") return null;
   const range = node.range();
   return source.slice(range.start.index + 1, range.end.index - 1);
 }
@@ -587,7 +595,7 @@ function isCliValueArgument(node: SgNode, source: string): boolean {
   const index = nodeIndex(elements, node);
   if (index < 0) return false;
   if (!isTailorCliArgumentArray(parent, index, source)) return false;
-  const text = sourceStringContent(node, source);
+  const text = sourceStringContent(node, source) ?? sourceStringRawContent(node, source);
   if (text != null && isTailorCliValueFlag(text) && text.includes("=")) return true;
   if (index === 0) return false;
   const previousValue = sourceStringContent(elements[index - 1]!, source);
@@ -620,6 +628,22 @@ function pushSourceStringEdit(
   }
 }
 
+function templateSubstitutionPlaceholder(
+  index: number,
+  text: string,
+  usedPlaceholders: Set<string>,
+): string {
+  let attempt = 0;
+  while (true) {
+    const placeholder = `__TAILOR_SDK_TEMPLATE_EXPR_${index}_${attempt}__`;
+    if (!text.includes(placeholder) && !usedPlaceholders.has(placeholder)) {
+      usedPlaceholders.add(placeholder);
+      return placeholder;
+    }
+    attempt += 1;
+  }
+}
+
 function pushTemplateStringEdit(
   edits: Array<[number, number, string]>,
   source: string,
@@ -630,6 +654,7 @@ function pushTemplateStringEdit(
   const end = range.end.index - 1;
   let text = source.slice(start, end);
   const substitutions: Array<{ placeholder: string; text: string }> = [];
+  const usedPlaceholders = new Set<string>();
 
   const substitutionNodes = node
     .children()
@@ -638,7 +663,11 @@ function pushTemplateStringEdit(
     const childRange = child.range();
     const childStart = childRange.start.index - start;
     const childEnd = childRange.end.index - start;
-    const placeholder = `__TAILOR_SDK_TEMPLATE_EXPR_${substitutions.length}__`;
+    const placeholder = templateSubstitutionPlaceholder(
+      substitutions.length,
+      text,
+      usedPlaceholders,
+    );
     substitutions.push({
       placeholder,
       text: transformTemplateSubstitutionText(
@@ -697,6 +726,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
         pushSourceStringEdit(edits, source, node);
         return;
       }
+      if (isCliValueArgument(node, source)) return;
       pushTemplateStringEdit(edits, source, node);
       return;
     }
