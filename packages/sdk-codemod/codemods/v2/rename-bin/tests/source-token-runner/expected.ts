@@ -1,5 +1,7 @@
 const packageName = "tailor-sdk";
 const runnerArgs = ["npx", "@tailor-platform/sdk@latest", "login"];
+const wrappedRunnerArgs = ["npx" as const, "@tailor-platform/sdk", "login"];
+const parenthesizedRunnerArgs = [("npx"), "@tailor-platform/sdk", "login"];
 const dynamicPackageVariableRunner = ["npx", pkg, "tailor", "login"];
 const dynamicDlxPackageVariableRunner = ["pnpm", "dlx", pkg, "tailor", "login"];
 const dynamicFlagRunner = ["npx", yes && "-y", "@tailor-platform/sdk", "login"];

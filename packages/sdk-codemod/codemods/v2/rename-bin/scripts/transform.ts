@@ -660,8 +660,25 @@ function collectTokenizedRunnerEdits(
     return changed;
   };
 
+  const sourceStringExpressionToken = (
+    node: SgNode,
+    visited = new Set<string>(),
+  ): SourceStringToken | undefined => {
+    const direct = sourceStringToken(node, source);
+    if (direct) return direct;
+    if (!SOURCE_STRING_WRAPPER_NODE_KINDS.has(node.kind())) return undefined;
+    const key = nodeRangeKey(node);
+    if (visited.has(key)) return undefined;
+    visited.add(key);
+    for (const child of node.children()) {
+      const token = sourceStringExpressionToken(child, visited);
+      if (token) return token;
+    }
+    return undefined;
+  };
+
   const protectTailorSdkStrings = (node: SgNode): void => {
-    const token = sourceStringToken(node, source);
+    const token = sourceStringExpressionToken(node);
     if (token) {
       protectToken(token);
       return;
@@ -672,7 +689,7 @@ function collectTokenizedRunnerEdits(
   };
 
   const collectPackageExpressionEdits = (node: SgNode): boolean => {
-    const token = sourceStringToken(node, source);
+    const token = sourceStringExpressionToken(node);
     if (token) {
       const replacement = runnerPackageReplacement(token.value);
       if (replacement) {
@@ -699,7 +716,7 @@ function collectTokenizedRunnerEdits(
   };
 
   const expressionStringValues = (node: SgNode): string[] => {
-    const token = sourceStringToken(node, source);
+    const token = sourceStringExpressionToken(node);
     if (token) return [token.value];
     const values: string[] = [];
     const packageChildren = runnerPackageExpressionChildren(node);
@@ -715,6 +732,9 @@ function collectTokenizedRunnerEdits(
       .map((value) => value.trim())
       .filter((value) => value !== "");
     if (values.length === 0) return null;
+    const runnerStates = values.map((value) => runnerStateAfterToken(value));
+    if (runnerStates.every((state) => state === "await-package")) return "await-package";
+    if (runnerStates.every((state) => state === "await-dlx")) return "await-dlx";
     if (values.every((value) => isRunnerOpenPackageFlag(value))) {
       return "await-package-option-value";
     }
@@ -948,7 +968,7 @@ function collectTokenizedRunnerEdits(
 
   const visit = (node: SgNode, inheritedRunnerState: RunnerState = "none"): void => {
     if (inheritedRunnerState === "await-package") {
-      const token = sourceStringToken(node, source);
+      const token = sourceStringExpressionToken(node);
       if (token) {
         const replacement = runnerPackageReplacement(token.value);
         if (replacement) {
@@ -975,7 +995,7 @@ function collectTokenizedRunnerEdits(
       let runnerState = inheritedRunnerState;
       let previousTokenValue: string | undefined;
       for (const child of node.children()) {
-        const token = sourceStringToken(child, source);
+        const token = sourceStringExpressionToken(child);
         if (token) {
           const previous = previousTokenValue;
           previousTokenValue = token.value;
