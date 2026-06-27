@@ -142,6 +142,7 @@ function localDeclarationNames(root: SgNode): Set<string> {
         { kind: "type_alias_declaration" },
         { kind: "enum_declaration" },
         { kind: "internal_module" },
+        { kind: "import_alias" },
       ],
     },
   })) {
