@@ -119,6 +119,38 @@ export default createHttpAdapter({
     );
   });
 
+  test("passes through nullish input handler results", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
+    const sourceFile = path.join(tmpDir, "adapter.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+
+export default createHttpAdapter({
+  name: "nullish",
+  pathPattern: "/x",
+  input: {
+    get: () => null,
+    post: () => undefined,
+  },
+});
+`,
+    );
+
+    const result = await bundleHttpAdapters([
+      { name: "nullish", sourceFile, methods: ["get", "post"], hasOutput: false },
+    ]);
+
+    const inputCode = result.bundledInputs.get("nullish");
+    expect(inputCode).toBeDefined();
+
+    const runtime: { transform?: (req: { method: string }) => unknown } = {};
+    new Function("globalThis", inputCode!).call(runtime, runtime);
+    expect(runtime.transform!({ method: "GET" })).toBeNull();
+    expect(runtime.transform!({ method: "POST" })).toBeUndefined();
+  });
+
   test("drops console calls below the configured log level", async () => {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
     const sourceFile = path.join(tmpDir, "adapter.ts");

@@ -223,7 +223,7 @@ function buildInputEntry(
   const supported = methods.map((m) => HTTP_METHODS[m]).join(", ");
   const documentNormalizer = `import { print as __printHttpAdapterDocument } from ${JSON.stringify(graphqlPrinterModule)};
 function __normalizeHttpAdapterGraphQLRequest(result) {
-  if (typeof result.query === "string") {
+  if (!result || typeof result.query === "string") {
     return result;
   }
   return { ...result, query: __printHttpAdapterDocument(result.query) };
