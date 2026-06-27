@@ -14,4 +14,6 @@ tailor-sdk workflow start approval --arg '{"ok":true}' \
   --machine-user ci
 tailor-sdk --json crashreport list
 tailor-sdk --profile --machineuser crashreport --machine-user ci
+npx --package tailor-sdk tailor-sdk crashreport --machine-user=ci
+npx --cache tailor-sdk tailor-sdk crashreport --machine-user=ci
 TOKEN=$(tailor-sdk query --machine-user ci) other-cli --machineuser=ci

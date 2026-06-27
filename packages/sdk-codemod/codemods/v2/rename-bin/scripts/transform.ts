@@ -18,6 +18,9 @@ const PKG_RUNNER_RE = new RegExp(
   `\\b((?:${DIRECT_PKG_RUNNER}|${DLX_PKG_RUNNER}))\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?`,
   "g",
 );
+const PACKAGE_RUNNER_EXECUTABLE_PREFIX_RE = new RegExp(
+  `(?:^|[;&|\n\`])\\s*(?:env\\s+)?(?:[A-Za-z_]\\w*=${SHELL_ARG_VALUE}\\s+)*(?:${DIRECT_PKG_RUNNER}|${DLX_PKG_RUNNER})\\s+(?:["'])?$`,
+);
 const RUNNER_VALUE_REFERENCE_RE = new RegExp(
   `(${RUNNER_VALUE_FLAG}(?:=|\\s+))(${SHELL_ARG_VALUE})`,
   "g",
@@ -388,14 +391,19 @@ function protectTailorCliValueReferences(source: string): TokenizedRunnerRewrite
   const protectedValues: string[] = [];
   const updated = source.replace(
     TAILOR_CLI_VALUE_REFERENCE_RE,
-    (match, prefix: string, value: string) => {
+    (match, prefix: string, value: string, offset: number) => {
       if (!value.includes("tailor-sdk")) return match;
+      if (isPackageRunnerExecutableReference(source, offset + prefix.length)) return match;
       const placeholder = `__TAILOR_SDK_CODEMOD_CLI_VALUE_${protectedValues.length}__`;
       protectedValues.push(value);
       return `${prefix}${placeholder}`;
     },
   );
   return { source: updated, protectedValues };
+}
+
+function isPackageRunnerExecutableReference(source: string, start: number): boolean {
+  return PACKAGE_RUNNER_EXECUTABLE_PREFIX_RE.test(source.slice(0, start));
 }
 
 function rewriteRunnerPackageValue(value: string): string | undefined {
