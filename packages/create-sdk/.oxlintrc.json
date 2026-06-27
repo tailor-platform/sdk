@@ -63,7 +63,10 @@
     "typescript/prefer-includes": "error",
     "typescript/prefer-nullish-coalescing": "error",
     "typescript/prefer-regexp-exec": "error",
-    "typescript/prefer-string-starts-ends-with": "error"
+    "typescript/prefer-string-starts-ends-with": "error",
+    "tailor-zod/require-object-policy-comment": "error",
+    "zod/prefer-loose-object": "error",
+    "zod/prefer-strict-object": "error"
   },
   "overrides": [
     {
@@ -156,5 +159,6 @@
         "node": true
       }
     }
-  ]
+  ],
+  "jsPlugins": ["eslint-plugin-zod", "../../scripts/oxlint/tailor-zod-plugin.cjs"]
 }

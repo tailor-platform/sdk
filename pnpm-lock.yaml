@@ -555,6 +555,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.9
         version: 4.1.9(vitest@4.1.9)
+      eslint-plugin-zod:
+        specifier: 4.7.0
+        version: 4.7.0(eslint@10.5.0(jiti@2.7.0))(oxlint@1.70.0(oxlint-tsgolint@0.23.0))(typescript@6.0.3)(zod@4.4.3)
       oxfmt:
         specifier: 0.55.0
         version: 0.55.0

@@ -89,7 +89,10 @@
     "typescript/no-unnecessary-type-constraint": "error",
     "typescript/no-unsafe-function-type": "error",
     "local/no-deprecated-type-matcher": "error",
-    "local/require-param-strict": "error"
+    "local/require-param-strict": "error",
+    "tailor-zod/require-object-policy-comment": "error",
+    "zod/prefer-loose-object": "error",
+    "zod/prefer-strict-object": "error"
   },
   "overrides": [
     {
@@ -466,5 +469,9 @@
   "options": {
     "typeAware": true
   },
-  "jsPlugins": ["./oxlint-plugins/index.js"]
+  "jsPlugins": [
+    "./oxlint-plugins/index.js",
+    "eslint-plugin-zod",
+    "../../scripts/oxlint/tailor-zod-plugin.cjs"
+  ]
 }

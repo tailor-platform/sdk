@@ -18,8 +18,8 @@
   "type": "module",
   "scripts": {
     "build": "tsdown",
-    "lint": "oxlint --config ../../.oxlintrc.json .",
-    "lint:fix": "oxlint --config ../../.oxlintrc.json . --fix",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "prepublish": "pnpm run build",
