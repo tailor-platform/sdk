@@ -315,7 +315,6 @@ describe("runCodemods", () => {
 
   describe("legacy pattern warnings", () => {
     const partialTransformPath = path.join(os.tmpdir(), "transform-partial.ts");
-    const renameBinaryTransformPath = path.join(os.tmpdir(), "transform-rename-binary.ts");
 
     beforeEach(async () => {
       await fs.promises.writeFile(
@@ -325,18 +324,10 @@ describe("runCodemods", () => {
         }`,
         "utf-8",
       );
-      await fs.promises.writeFile(
-        renameBinaryTransformPath,
-        `export default function transform(source) {
-          return source.replaceAll("tailor-sdk", "tailor");
-        }`,
-        "utf-8",
-      );
     });
 
     afterEach(async () => {
       await fs.promises.rm(partialTransformPath, { force: true });
-      await fs.promises.rm(renameBinaryTransformPath, { force: true });
     });
 
     test("warns when legacy patterns remain after a partial migration", async () => {
@@ -500,60 +491,6 @@ describe("runCodemods", () => {
       expect(result.warnings).toEqual([
         "env.ts: contains PLATFORM_URL, LOG_LEVEL but was not migrated automatically (rule: test/env). Manual migration may be needed.",
       ]);
-    });
-
-    test("checks source string warnings after chained transforms", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "cli.ts"),
-        'const command = ["tailor-sdk", mode, "crash-report"];',
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", renameBinaryTransformPath, ["**/*.ts"]),
-            scriptPath: renameBinaryTransformPath,
-          },
-          {
-            codemod: makeCodemod("test/cli-rename", undefined, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: [[/(?:^|[\s;&|])tailor(?=[\s;&|]|$)/, "crash-report"]],
-            }),
-          },
-        ],
-        dir,
-        false,
-      );
-
-      expect(result.warnings).toEqual([
-        "cli.ts: contains /(?:^|[\\s;&|])tailor(?=[\\s;&|]|$)/ + crash-report but was not migrated automatically (rule: test/cli-rename). Manual migration may be needed.",
-      ]);
-    });
-
-    test("does not treat SDK package specifiers as tailor command tokens", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "cli.ts"),
-        ['import "@tailor-platform/sdk";', 'const commandName = "crash-report";'].join("\n"),
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/cli-rename", undefined, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: [[/(?:^|[\s;&|])tailor(?=[\s;&|]|$)/, "crash-report"]],
-            }),
-          },
-        ],
-        dir,
-        false,
-      );
-
-      expect(result.warnings).toEqual([]);
     });
 
     test("flags files matching a suspicious pattern for LLM review", async () => {

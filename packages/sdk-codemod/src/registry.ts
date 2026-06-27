@@ -4,7 +4,6 @@ import { lt, gte, valid } from "semver";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
-const TAILOR_COMMAND_TOKEN_RE = /(?:^|[\s;&|])tailor(?=[\s;&|]|$)/;
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -205,22 +204,12 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/cli-rename",
     name: "v2 CLI rename",
     description:
-      "Rewrite `tailor-sdk crash-report` to `tailor-sdk crashreport` and `--machineuser` to `--machine-user` across package.json scripts, shell scripts, CI configs, source files, and docs",
+      "Rewrite `tailor-sdk crash-report` to `tailor-sdk crashreport` and `--machineuser` to `--machine-user` across package.json scripts, shell scripts, CI configs, and docs",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/cli-rename/scripts/transform.js",
-    filePatterns: [
-      "**/package.json",
-      "**/*.{sh,bash,zsh,yml,yaml}",
-      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
-      "**/*.md",
-    ],
+    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
     legacyPatterns: ["tailor-sdk crash-report", "--machineuser"],
-    sourceStringLegacyPatterns: [
-      ["tailor-sdk", "crash-report"],
-      [TAILOR_COMMAND_TOKEN_RE, "crash-report"],
-      "--machineuser",
-    ],
     examples: [
       {
         lang: "sh",
