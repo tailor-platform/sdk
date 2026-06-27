@@ -17,3 +17,9 @@ const migrate = "bunx @tailor-platform/sdk@2.0.0-next.2 generate";
 const escapedQuery = "tailor query --query \"select 1\"";
 const script = ["tailor", "deploy"].join(" ");
 const skills = "tailor-sdk-skills";
+const docs = (
+  <>
+    <p>package tailor-sdk is installed</p>
+    <code>tailor deploy</code>
+  </>
+);

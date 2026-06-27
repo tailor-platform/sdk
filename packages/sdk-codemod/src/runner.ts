@@ -173,7 +173,7 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
 
 function sourceLang(relative: string): Lang {
   const ext = path.extname(relative).toLowerCase();
-  return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
+  return ext === ".tsx" || ext === ".jsx" || ext === ".js" ? Lang.Tsx : Lang.TypeScript;
 }
 
 function isProcessEnvSubscriptKey(node: SgNode): boolean {
