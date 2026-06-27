@@ -536,12 +536,28 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
   return args[0] != null && nodeRangeKey(args[0]) === nodeRangeKey(node);
 }
 
+function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
+  const argumentsNode = arrayNode.parent();
+  if (argumentsNode?.kind() === "arguments") {
+    const callArgs = sourceArrayElements(argumentsNode);
+    const executable = callArgs[0] == null ? null : sourceStringContent(callArgs[0]!, source);
+    if (executable != null && TAILOR_SDK_TOKEN_RE.test(executable)) return true;
+  }
+
+  const elements = sourceArrayElements(arrayNode);
+  return elements.slice(0, index).some((element) => {
+    const value = sourceStringContent(element, source);
+    return value != null && (value === "tailor" || TAILOR_SDK_TOKEN_RE.test(value));
+  });
+}
+
 function isCliValueArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array") return false;
   const elements = sourceArrayElements(parent);
   const index = nodeIndex(elements, node);
   if (index <= 0) return false;
+  if (!isTailorCliArgumentArray(parent, index, source)) return false;
   const previousValue = sourceStringContent(elements[index - 1]!, source);
   return (
     previousValue != null && isTailorCliValueFlag(previousValue) && !previousValue.includes("=")

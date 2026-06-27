@@ -78,6 +78,7 @@ const SOURCE_VALUE_FLAGS = new Set([
   "-q",
   "-f",
 ]);
+const SOURCE_CLI_BINARY_RE = /^(?:tailor|tailor-sdk(?:@[^\s'"`;|&)]+)?)$/;
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
@@ -234,6 +235,7 @@ function isSourceValueArgument(fragment: SgNode, source: string): boolean {
   const elements = sourceArrayElements(parent);
   const index = elements.findIndex((element) => nodeRangeKey(element) === nodeRangeKey(stringNode));
   if (index <= 0) return false;
+  if (!isTailorCliArgumentArray(parent, index, source)) return false;
 
   const previous = sourceStringNodeContent(elements[index - 1]!, source);
   return (
@@ -241,6 +243,21 @@ function isSourceValueArgument(fragment: SgNode, source: string): boolean {
     SOURCE_VALUE_FLAGS.has(previous.split("=", 1)[0]!) &&
     !previous.includes("=")
   );
+}
+
+function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
+  const argumentsNode = arrayNode.parent();
+  if (argumentsNode?.kind() === "arguments") {
+    const callArgs = sourceArrayElements(argumentsNode);
+    const executable = callArgs[0] == null ? null : sourceStringNodeContent(callArgs[0]!, source);
+    if (executable != null && SOURCE_CLI_BINARY_RE.test(executable)) return true;
+  }
+
+  const elements = sourceArrayElements(arrayNode);
+  return elements.slice(0, index).some((element) => {
+    const value = sourceStringNodeContent(element, source);
+    return value != null && SOURCE_CLI_BINARY_RE.test(value);
+  });
 }
 
 function sourceLang(relative: string): Lang {
