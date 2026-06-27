@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.agent/**", "**/.tailor-sdk/**"],
+  "jsPlugins": ["eslint-plugin-zod"],
+  "rules": {
+    "zod/consistent-object-schema-type": [
+      "error",
+      {
+        "allow": ["object", "strictObject", "looseObject"]
+      }
+    ],
+    "typescript/no-duplicate-type-constituents": "off",
+    "typescript/no-redundant-type-constituents": "off",
+    "zod/prefer-loose-object": "error",
+    "zod/prefer-strict-object": "error"
+  }
+}

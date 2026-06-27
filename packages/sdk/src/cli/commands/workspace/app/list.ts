@@ -66,12 +66,10 @@ export async function listApps(options: ListAppsOptions): Promise<AppInfo[]> {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List applications in a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const apps = await listApps({

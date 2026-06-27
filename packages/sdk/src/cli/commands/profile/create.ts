@@ -9,35 +9,33 @@ import type { ProfileInfo } from "./types";
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new profile.",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        positional: true,
-        description: "Profile name",
-      }),
-      user: arg(z.string(), {
-        alias: "u",
-        description: "User email",
-      }),
-      "workspace-id": arg(z.string(), {
-        alias: "w",
-        description: "Workspace ID",
-      }),
-      permission: arg(z.enum(["write", "read"]).default("write"), {
-        description:
-          "Profile permission. 'read' blocks all write commands while the profile is active.",
-      }),
-      "machine-user": arg(z.string().optional(), {
-        alias: "m",
-        description:
-          "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).",
-      }),
-      "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
-        description:
-          "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user.",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      positional: true,
+      description: "Profile name",
+    }),
+    user: arg(z.string(), {
+      alias: "u",
+      description: "User email",
+    }),
+    "workspace-id": arg(z.string(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    permission: arg(z.enum(["write", "read"]).default("write"), {
+      description:
+        "Profile permission. 'read' blocks all write commands while the profile is active.",
+    }),
+    "machine-user": arg(z.string().optional(), {
+      alias: "m",
+      description:
+        "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).",
+    }),
+    "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
+      description:
+        "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user.",
+    }),
+  }),
   run: async (args) => {
     if (args["machine-user-override"] === "deny" && !args["machine-user"]) {
       throw new Error("--machine-user-override deny requires --machine-user.");

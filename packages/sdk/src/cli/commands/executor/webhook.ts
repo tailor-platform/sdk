@@ -60,12 +60,10 @@ export async function listWebhookExecutors(
 const listWebhookCommand = defineAppCommand({
   name: "list",
   description: "List executors with incoming webhook triggers",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const executors = await listWebhookExecutors({

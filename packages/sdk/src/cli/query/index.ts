@@ -746,7 +746,7 @@ export const queryCommand = defineAppCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
   args: z
-    .object({
+    .strictObject({
       ...deploymentArgs,
       engine: arg(queryEngineSchema, {
         description: "Query engine (sql or gql)",
@@ -798,8 +798,7 @@ export const queryCommand = defineAppCommand({
           message: "Pass only one of --edit, -q/--query, or -f/--file.",
         });
       }
-    })
-    .strict(),
+    }),
   run: async (args) => {
     const mode = await resolveQueryCommandInput({
       query: args.query,

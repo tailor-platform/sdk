@@ -80,43 +80,41 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        alias: "n",
-        description: "Workspace name",
-      }),
-      region: arg(z.string(), {
-        alias: "r",
-        description: "Workspace region (us-west, asia-northeast)",
-      }),
-      "delete-protection": arg(z.boolean().default(false), {
-        alias: "d",
-        description: "Enable delete protection",
-      }),
-      "organization-id": arg(z.string().optional(), {
-        alias: "o",
-        description: "Organization ID to workspace associate with",
-        env: "TAILOR_PLATFORM_ORGANIZATION_ID",
-      }),
-      "folder-id": arg(z.string().optional(), {
-        alias: "f",
-        description: "Folder ID to workspace associate with",
-        env: "TAILOR_PLATFORM_FOLDER_ID",
-      }),
-      "profile-name": arg(z.string().optional(), {
-        alias: "p",
-        description: "Profile name to create",
-      }),
-      "profile-user": arg(z.string().optional(), {
-        description: "User email for the profile (defaults to current user)",
-      }),
-      permission: arg(z.enum(["write", "read"]).default("write"), {
-        description:
-          "Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      alias: "n",
+      description: "Workspace name",
+    }),
+    region: arg(z.string(), {
+      alias: "r",
+      description: "Workspace region (us-west, asia-northeast)",
+    }),
+    "delete-protection": arg(z.boolean().default(false), {
+      alias: "d",
+      description: "Enable delete protection",
+    }),
+    "organization-id": arg(z.string().optional(), {
+      alias: "o",
+      description: "Organization ID to workspace associate with",
+      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+    }),
+    "folder-id": arg(z.string().optional(), {
+      alias: "f",
+      description: "Folder ID to workspace associate with",
+      env: "TAILOR_PLATFORM_FOLDER_ID",
+    }),
+    "profile-name": arg(z.string().optional(), {
+      alias: "p",
+      description: "Profile name to create",
+    }),
+    "profile-user": arg(z.string().optional(), {
+      description: "User email for the profile (defaults to current user)",
+    }),
+    permission: arg(z.enum(["write", "read"]).default("write"), {
+      description:
+        "Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.",
+    }),
+  }),
   run: async (args) => {
     // This command does not expose `--profile`, so the guard resolves the
     // active profile from `TAILOR_PLATFORM_PROFILE` only.

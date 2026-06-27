@@ -5,7 +5,7 @@ import type { Plugin } from "#/plugin/types";
 // Custom plugin schema (object form)
 // Using passthrough() to preserve additional properties on Plugin instances
 export const PluginConfigSchema = z
-  .object({
+  .looseObject({
     id: z.string(),
     description: z.string(),
     importPath: z.string().optional(),
@@ -19,7 +19,6 @@ export const PluginConfigSchema = z
     onResolverReady: functionSchema.optional(),
     onExecutorReady: functionSchema.optional(),
   })
-  .passthrough()
   .refine(
     (p) => {
       // importPath is required when plugin has definition-time hooks

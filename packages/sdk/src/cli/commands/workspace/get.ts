@@ -60,11 +60,9 @@ export async function getWorkspace(options: GetWorkspaceOptions): Promise<Worksp
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Show detailed information about a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+  }),
   run: async (args) => {
     const workspace = await getWorkspace({
       workspaceId: args["workspace-id"],

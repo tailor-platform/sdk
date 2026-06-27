@@ -46,15 +46,13 @@ export async function restoreWorkspace(options: RestoreWorkspaceOptions): Promis
 export const restoreCommand = defineAppCommand({
   name: "restore",
   description: "Restore a deleted workspace",
-  args: z
-    .object({
-      "workspace-id": arg(z.string(), {
-        alias: "w",
-        description: "Workspace ID",
-      }),
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    "workspace-id": arg(z.string(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable();
     const { client, workspaceId } = await loadOptions({

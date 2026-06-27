@@ -146,11 +146,11 @@
     "docs:check": "vitest run --project=unit* src/cli/docs.test.ts",
     "docs:update": "POLITTY_DOCS_UPDATE=true vitest run --project=unit* src/cli/docs.test.ts",
     "build": "tsdown && politty generate-worker --bin dist/cli/index.mjs --program tailor-sdk --shell zsh --verify",
-    "lint": "oxlint --type-aware .",
+    "lint": "oxlint --config ../../.oxlintrc.json --type-aware .",
     "check:public-api-jsdoc": "tsx scripts/check-public-api-jsdoc.ts",
     "check:zod-isolation": "tsx scripts/check-zod-isolation.ts",
     "check:import-cycles": "tsx scripts/check-import-cycles.ts",
-    "lint:fix": "oxlint --type-aware . --fix",
+    "lint:fix": "oxlint --config ../../.oxlintrc.json --type-aware . --fix",
     "typecheck": "tsc --noEmit",
     "typecheck:go": "tsgo",
     "perf:typecheck": "bash scripts/perf/exec.sh",
@@ -231,7 +231,7 @@
     "tsdown": "0.22.3",
     "typescript": "6.0.3",
     "vitest": "4.1.9",
-    "zinfer": "0.2.2"
+    "zinfer": "0.2.3"
   },
   "peerDependencies": {
     "vite": "^6.0.0 || ^7.0.0 || ^8.0.0",

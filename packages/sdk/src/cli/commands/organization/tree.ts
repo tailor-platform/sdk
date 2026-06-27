@@ -162,19 +162,17 @@ export async function organizationTree(
 export const treeCommand = defineAppCommand({
   name: "tree",
   description: "Display organization folder hierarchy as a tree.",
-  args: z
-    .object({
-      "organization-id": arg(z.string().optional(), {
-        alias: "o",
-        description: "Organization ID (show all if omitted)",
-        env: "TAILOR_PLATFORM_ORGANIZATION_ID",
-      }),
-      depth: arg(positiveIntArg.optional(), {
-        alias: "d",
-        description: "Maximum folder depth to display",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    "organization-id": arg(z.string().optional(), {
+      alias: "o",
+      description: "Organization ID (show all if omitted)",
+      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+    }),
+    depth: arg(positiveIntArg.optional(), {
+      alias: "d",
+      description: "Maximum folder depth to display",
+    }),
+  }),
   run: async (args) => {
     const accessToken = await loadAccessToken();
     const client = await initOperatorClient(accessToken);

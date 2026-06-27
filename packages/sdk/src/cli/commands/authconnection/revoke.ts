@@ -15,13 +15,11 @@ export const revokeAuthConnectionCommand = defineAppCommand({
     "Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it).",
   notes:
     "Revoke invalidates the connection's active session and tokens but keeps the connection and its stored credentials, so it can be re-authorized later. Use `delete` to remove the connection entirely.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...connectionNameArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...connectionNameArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({

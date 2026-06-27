@@ -147,7 +147,7 @@ export const GQL_PERMISSION_INVALID_OPERAND_MESSAGE =
 
 const GqlPermissionOperandSchema = z.union(
   [
-    z.object({ user: z.string() }).strict(),
+    z.strictObject({ user: z.string() }),
     z.string(),
     z.boolean(),
     z.array(z.string()),

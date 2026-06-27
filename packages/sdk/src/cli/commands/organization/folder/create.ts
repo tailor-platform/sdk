@@ -47,18 +47,16 @@ export async function createFolder(options: CreateFolderOptions): Promise<Folder
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new folder in an organization.",
-  args: z
-    .object({
-      ...organizationArgs,
-      "parent-folder-id": arg(z.string().optional(), {
-        description: "Parent folder ID",
-      }),
-      name: arg(z.string(), {
-        alias: "n",
-        description: "Folder name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    "parent-folder-id": arg(z.string().optional(), {
+      description: "Parent folder ID",
+    }),
+    name: arg(z.string(), {
+      alias: "n",
+      description: "Folder name",
+    }),
+  }),
   run: async (args) => {
     await assertWritable();
     const folder = await createFolder({

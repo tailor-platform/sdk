@@ -84,16 +84,14 @@ export async function getMachineUserToken(
 export const tokenCommand = defineAppCommand({
   name: "token",
   description: "Get an access token for a machine user.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      name: arg(z.string().optional(), {
-        positional: true,
-        description: "Machine user name. Falls back to the active profile's default machine user.",
-        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    name: arg(z.string().optional(), {
+      positional: true,
+      description: "Machine user name. Falls back to the active profile's default machine user.",
+      env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
+    }),
+  }),
   run: async (args) => {
     // Execute machineuser token logic
     const token = await getMachineUserToken({

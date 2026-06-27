@@ -54,15 +54,13 @@ export async function removeUser(options: RemoveUserOptions): Promise<void> {
 export const removeCommand = defineAppCommand({
   name: "remove",
   description: "Remove a user from a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-      email: arg(z.email(), {
-        description: "Email address of the user to remove",
-      }),
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    email: arg(z.email(), {
+      description: "Email address of the user to remove",
+    }),
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     if (!args.yes) {

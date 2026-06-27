@@ -50,15 +50,13 @@ export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a Tailor Platform workspace.",
-  args: z
-    .object({
-      "workspace-id": arg(z.string(), {
-        alias: "w",
-        description: "Workspace ID",
-      }),
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    "workspace-id": arg(z.string(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable();
     // Load and validate options

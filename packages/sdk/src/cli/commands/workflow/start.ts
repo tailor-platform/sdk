@@ -223,23 +223,21 @@ export async function startWorkflow<W extends WorkflowLike>(
 export const startCommand = defineAppCommand({
   name: "start",
   description: "Start a workflow execution.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      ...nameArgs,
-      "machine-user": arg(z.string().optional(), {
-        alias: "m",
-        hiddenAlias: "machineuser",
-        description: "Machine user name. Falls back to the active profile's default machine user.",
-        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
-      }),
-      arg: arg(z.string().optional(), {
-        alias: "a",
-        description: "Workflow argument (JSON string)",
-      }),
-      ...waitArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    ...nameArgs,
+    "machine-user": arg(z.string().optional(), {
+      alias: "m",
+      hiddenAlias: "machineuser",
+      description: "Machine user name. Falls back to the active profile's default machine user.",
+      env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
+    }),
+    arg: arg(z.string().optional(), {
+      alias: "a",
+      description: "Workflow argument (JSON string)",
+    }),
+    ...waitArgs,
+  }),
   run: async (args) => {
     const { executionId, wait } = await startWorkflowByName({
       name: args.name,

@@ -44,12 +44,10 @@ export async function getFolder(options: GetFolderOptions): Promise<FolderInfo> 
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Show detailed information about a folder.",
-  args: z
-    .object({
-      ...organizationArgs,
-      ...folderArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    ...folderArgs,
+  }),
   run: async (args) => {
     const folder = await getFolder({
       organizationId: args["organization-id"],

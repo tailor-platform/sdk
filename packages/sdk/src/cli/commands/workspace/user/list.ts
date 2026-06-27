@@ -65,12 +65,10 @@ export async function listUsers(options: ListUsersOptions): Promise<UserInfo[]> 
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List users in a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const users = await listUsers({
       workspaceId: args["workspace-id"],

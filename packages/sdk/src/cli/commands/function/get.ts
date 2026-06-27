@@ -71,15 +71,13 @@ export async function getFunctionRegistry(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get a function registry by name",
-  args: z
-    .object({
-      ...workspaceArgs,
-      name: arg(z.string(), {
-        description: "Function name",
-        alias: "n",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    name: arg(z.string(), {
+      description: "Function name",
+      alias: "n",
+    }),
+  }),
   run: async (args) => {
     const fn = await getFunctionRegistry({
       workspaceId: args["workspace-id"],

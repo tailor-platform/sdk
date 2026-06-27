@@ -177,22 +177,19 @@ export function prepareErdBuildsFromContext(
 export const erdExportCommand = defineAppCommand({
   name: "export",
   description: "Export TailorDB ERD static viewer from local TailorDB schema.",
-  args: z
-    .object({
-      ...configArg,
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description:
-          "TailorDB namespace name (optional if only one namespace is defined in config)",
-      }),
-      output: arg(z.string().default(DEFAULT_ERD_BASE_DIR), {
-        alias: "o",
-        description:
-          "Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`)",
-        completion: { type: "directory" },
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...configArg,
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "TailorDB namespace name (optional if only one namespace is defined in config)",
+    }),
+    output: arg(z.string().default(DEFAULT_ERD_BASE_DIR), {
+      alias: "o",
+      description:
+        "Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`)",
+      completion: { type: "directory" },
+    }),
+  }),
   run: async (args) => {
     initErdCommand();
 

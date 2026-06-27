@@ -38,13 +38,11 @@ export async function deleteFolder(options: DeleteFolderOptions): Promise<void> 
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a folder from an organization.",
-  args: z
-    .object({
-      ...organizationArgs,
-      ...folderArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    ...folderArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable();
     const accessToken = await loadAccessToken();

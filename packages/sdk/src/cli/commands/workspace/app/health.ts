@@ -56,15 +56,13 @@ export async function getAppHealth(options: HealthOptions): Promise<AppHealthInf
 export const healthCommand = defineAppCommand({
   name: "health",
   description: "Check application schema health",
-  args: z
-    .object({
-      ...workspaceArgs,
-      name: arg(z.string(), {
-        description: "Application name",
-        alias: "n",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    name: arg(z.string(), {
+      description: "Application name",
+      alias: "n",
+    }),
+  }),
   run: async (args) => {
     const health = await getAppHealth({
       workspaceId: args["workspace-id"],

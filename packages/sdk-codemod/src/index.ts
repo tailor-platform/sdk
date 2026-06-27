@@ -14,23 +14,21 @@ const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta
 const main = defineCommand({
   name: packageJson.name ?? "sdk-codemod",
   description: packageJson.description ?? "Codemod runner for Tailor Platform SDK upgrades",
-  args: z
-    .object({
-      from: arg(z.string(), {
-        description: "Source SDK version (the version before upgrade)",
-      }),
-      to: arg(z.string(), {
-        description: "Target SDK version (the version after upgrade)",
-      }),
-      target: arg(z.string().default("."), {
-        description: "Project directory to transform",
-      }),
-      "dry-run": arg(z.boolean().default(false), {
-        alias: "d",
-        description: "Preview changes without modifying files",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    from: arg(z.string(), {
+      description: "Source SDK version (the version before upgrade)",
+    }),
+    to: arg(z.string(), {
+      description: "Target SDK version (the version after upgrade)",
+    }),
+    target: arg(z.string().default("."), {
+      description: "Project directory to transform",
+    }),
+    "dry-run": arg(z.boolean().default(false), {
+      alias: "d",
+      description: "Preview changes without modifying files",
+    }),
+  }),
   run: async (args) => {
     const targetPath = path.resolve(args.target);
     const dryRun = args["dry-run"];

@@ -7,7 +7,7 @@ import ml from "#/utils/multiline";
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all users.",
-  args: z.object({}).strict(),
+  args: z.strictObject({}),
   run: async () => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;

@@ -10,7 +10,7 @@ import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./tr
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all personal access tokens.",
-  args: z.object({ ...paginationArgs() }).strict(),
+  args: z.strictObject({ ...paginationArgs() }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const config = await readPlatformConfig();

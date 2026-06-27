@@ -427,21 +427,19 @@ async function waitForShutdown(server: http.Server, watcher: FSWatcher): Promise
 export const erdServeCommand = defineAppCommand({
   name: "serve",
   description: "Generate and serve TailorDB ERD locally with watch reload. (beta)",
-  args: z
-    .object({
-      ...configArg,
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description: "TailorDB namespace name (uses first namespace in config if not specified)",
-      }),
-      port: arg(z.coerce.number().int().min(0).max(65535).default(0), {
-        description: "Local server port (0 selects a free port)",
-      }),
-      open: arg(z.boolean().default(false), {
-        description: "Open the ERD viewer in the default browser",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...configArg,
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "TailorDB namespace name (uses first namespace in config if not specified)",
+    }),
+    port: arg(z.coerce.number().int().min(0).max(65535).default(0), {
+      description: "Local server port (0 selects a free port)",
+    }),
+    open: arg(z.boolean().default(false), {
+      description: "Open the ERD viewer in the default browser",
+    }),
+  }),
   run: async (args) => {
     initErdCommand();
 

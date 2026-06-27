@@ -47,16 +47,14 @@ export async function updateFolder(options: UpdateFolderOptions): Promise<Folder
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update a folder's name.",
-  args: z
-    .object({
-      ...organizationArgs,
-      ...folderArgs,
-      name: arg(z.string(), {
-        alias: "n",
-        description: "New folder name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    ...folderArgs,
+    name: arg(z.string(), {
+      alias: "n",
+      description: "New folder name",
+    }),
+  }),
   run: async (args) => {
     await assertWritable();
     const folder = await updateFolder({

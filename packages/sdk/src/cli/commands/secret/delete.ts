@@ -13,13 +13,11 @@ import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed"
 export const deleteSecretCommand = defineAppCommand({
   name: "delete",
   description: "Delete a secret in a vault.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...secretIdentifyArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...secretIdentifyArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({

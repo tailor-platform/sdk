@@ -8,14 +8,12 @@ import ml from "#/utils/multiline";
 export const switchCommand = defineAppCommand({
   name: "switch",
   description: "Set current user.",
-  args: z
-    .object({
-      user: arg(z.string(), {
-        positional: true,
-        description: "User email",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    user: arg(z.string(), {
+      positional: true,
+      description: "User email",
+    }),
+  }),
   run: async (args) => {
     const config = await readPlatformConfig();
 

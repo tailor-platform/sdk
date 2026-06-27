@@ -332,16 +332,14 @@ Stack traces stay accurate even after later redeploys, because the trace is reso
       desc: "Get execution details as JSON",
     },
   ],
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...pagedLogArgs,
-      "execution-id": arg(z.string().optional(), {
-        positional: true,
-        description: "Execution ID (if provided, shows details with logs)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...pagedLogArgs,
+    "execution-id": arg(z.string().optional(), {
+      positional: true,
+      description: "Execution ID (if provided, shows details with logs)",
+    }),
+  }),
   run: async (args) => {
     const accessToken = await loadAccessToken({
       profile: args.profile,

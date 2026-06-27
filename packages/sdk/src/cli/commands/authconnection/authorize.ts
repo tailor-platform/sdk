@@ -38,27 +38,21 @@ function randomState() {
 export const authorizeAuthConnectionCommand = defineAppCommand({
   name: "authorize",
   description: "Authorize an auth connection via OAuth2 flow.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...connectionNameArgs,
-      scopes: z
-        .string()
-        .optional()
-        .default(defaultScopes)
-        .describe("OAuth2 scopes to request (comma-separated)"),
-      port: z.coerce
-        .number()
-        .optional()
-        .default(defaultPort)
-        .describe("Local callback server port"),
-      "no-browser": z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe("Don't open browser automatically"),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...connectionNameArgs,
+    scopes: z
+      .string()
+      .optional()
+      .default(defaultScopes)
+      .describe("OAuth2 scopes to request (comma-separated)"),
+    port: z.coerce.number().optional().default(defaultPort).describe("Local callback server port"),
+    "no-browser": z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Don't open browser automatically"),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({

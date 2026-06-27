@@ -136,19 +136,17 @@ function resolveTargetNamespace(
 export const scriptCommand = defineAppCommand({
   name: "script",
   description: "Add a migration script (migrate.ts) template to an existing migration directory.",
-  args: z
-    .object({
-      ...configArg,
-      number: arg(z.string(), {
-        positional: true,
-        description: "Migration number to add a script to (e.g., 0001 or 1)",
-      }),
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description: "Target TailorDB namespace (required if multiple namespaces exist)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...configArg,
+    number: arg(z.string(), {
+      positional: true,
+      description: "Migration number to add a script to (e.g., 0001 or 1)",
+    }),
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "Target TailorDB namespace (required if multiple namespaces exist)",
+    }),
+  }),
   run: async (args) => {
     await script({
       configPath: args.config,

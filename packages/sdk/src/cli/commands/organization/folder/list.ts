@@ -54,15 +54,13 @@ export async function listFolders(options: ListFoldersOptions): Promise<FolderLi
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List folders in an organization.",
-  args: z
-    .object({
-      ...organizationArgs,
-      "parent-folder-id": arg(z.string().optional(), {
-        description: "Parent folder ID to list children of",
-      }),
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    "parent-folder-id": arg(z.string().optional(), {
+      description: "Parent folder ID to list children of",
+    }),
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const folders = await listFolders({
       organizationId: args["organization-id"],

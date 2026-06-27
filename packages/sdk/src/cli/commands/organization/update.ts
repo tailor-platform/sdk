@@ -47,15 +47,13 @@ export async function updateOrganization(
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update an organization's name.",
-  args: z
-    .object({
-      ...organizationArgs,
-      name: arg(z.string(), {
-        alias: "n",
-        description: "New organization name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    name: arg(z.string(), {
+      alias: "n",
+      description: "New organization name",
+    }),
+  }),
   run: async (args) => {
     await assertWritable();
     const organization = await updateOrganization({

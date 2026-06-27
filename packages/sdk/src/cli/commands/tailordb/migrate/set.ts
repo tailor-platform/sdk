@@ -154,20 +154,18 @@ async function set(options: SetOptions): Promise<void> {
 export const setCommand = defineAppCommand({
   name: "set",
   description: "Set migration checkpoint to a specific number.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      ...confirmationArgs,
-      number: arg(z.string(), {
-        positional: true,
-        description: "Migration number to set (e.g., 0001 or 1)",
-      }),
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description: "Target TailorDB namespace (required if multiple namespaces exist)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    ...confirmationArgs,
+    number: arg(z.string(), {
+      positional: true,
+      description: "Migration number to set (e.g., 0001 or 1)",
+    }),
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "Target TailorDB namespace (required if multiple namespaces exist)",
+    }),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     await set({

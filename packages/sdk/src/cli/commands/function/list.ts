@@ -77,12 +77,10 @@ export async function listFunctionRegistries(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List function registries in a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const registries = await listFunctionRegistries({

@@ -354,37 +354,35 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
 export const executionsCommand = defineAppCommand({
   name: "executions",
   description: "List or get workflow executions.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...pagedLogArgs,
-      "execution-id": arg(z.string().optional(), {
-        positional: true,
-        description: "Execution ID (if provided, shows details)",
-      }),
-      "workflow-name": arg(
-        z
-          .string()
-          .regex(
-            /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
-            "Must be 3-63 lowercase alphanumeric characters or hyphens, starting and ending with alphanumeric",
-          )
-          .optional(),
-        {
-          alias: "n",
-          description: "Filter by workflow name (list mode only)",
-        },
-      ),
-      status: arg(z.string().optional(), {
-        alias: "s",
-        description: "Filter by status (list mode only)",
-      }),
-      ...waitArgs,
-      logs: arg(z.boolean().default(false), {
-        description: "Display job execution logs (detail mode only)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...pagedLogArgs,
+    "execution-id": arg(z.string().optional(), {
+      positional: true,
+      description: "Execution ID (if provided, shows details)",
+    }),
+    "workflow-name": arg(
+      z
+        .string()
+        .regex(
+          /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
+          "Must be 3-63 lowercase alphanumeric characters or hyphens, starting and ending with alphanumeric",
+        )
+        .optional(),
+      {
+        alias: "n",
+        description: "Filter by workflow name (list mode only)",
+      },
+    ),
+    status: arg(z.string().optional(), {
+      alias: "s",
+      description: "Filter by status (list mode only)",
+    }),
+    ...waitArgs,
+    logs: arg(z.boolean().default(false), {
+      description: "Display job execution logs (detail mode only)",
+    }),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode || args.json;
     if (args.executionId) {

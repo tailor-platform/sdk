@@ -6,8 +6,8 @@
     "challenge": "tsx src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint --type-aware .",
-    "lint:fix": "oxlint --type-aware . --fix"
+    "lint": "oxlint --config ../.oxlintrc.json --type-aware .",
+    "lint:fix": "oxlint --config ../.oxlintrc.json --type-aware . --fix"
   },
   "devDependencies": {
     "@types/node": "24.13.2",
