@@ -660,6 +660,8 @@ describe("runCodemods", () => {
         'const client = new tailor.idp.Client({ namespace: "default" });',
         "const C = tailor.idp.Client;",
         'await tailor.secretmanager.getSecret("vault", "key");',
+        "const { getSecret } = tailor.secretmanager;",
+        "const getInvoker = tailor.context.getInvoker;",
       ].join("\\n");
       const seedSource = [
         `const code = \`${embeddedCode}\`;`,
@@ -683,6 +685,7 @@ describe("runCodemods", () => {
                 sourceStringSuspiciousPatterns: [
                   "new tailor.idp.Client",
                   /[=(:,[]\s*tailor\.idp\.Client\b/,
+                  /(?:(?:[=(:,{]|\[)\s*|\b(?:return|await)\s+)tailor\.(?:context|idp|secretmanager)(?:\.[A-Za-z_$][\w$]*)?\b/,
                   /\btailor\.(?:idp|secretmanager)\.[A-Za-z_$][\w$]*\s*\(/,
                 ],
                 prompt: "Review embedded runtime global usage by hand.",
