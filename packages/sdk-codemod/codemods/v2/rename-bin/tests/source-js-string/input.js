@@ -2,6 +2,8 @@ const script = "tailor-sdk deploy";
 const spawned = spawn("tailor-sdk", ["deploy"]);
 const argSpawned = spawn("tailor-sdk", ["--arg", "tailor-sdk deploy", "deploy"]);
 const inlineArgSpawned = spawn("tailor-sdk", ["--arg=tailor-sdk deploy", "deploy"]);
+const templateArgSpawned = spawn("tailor-sdk", ["--arg", `tailor-sdk ${cmd}`, "deploy"]);
+const inlineTemplateArgSpawned = spawn("tailor-sdk", [`--arg=tailor-sdk ${cmd}`, "deploy"]);
 const shellSpawned = spawn("sh", ["-c", "tailor-sdk deploy"]);
 const npxSpawned = spawn("npx", ["tailor-sdk", "login"]);
 const npxOptionSpawned = spawn("npx", ["--yes", "tailor-sdk@latest", "login"]);
