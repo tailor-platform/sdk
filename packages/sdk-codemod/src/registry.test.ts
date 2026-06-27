@@ -63,8 +63,8 @@ describe("getApplicableCodemods", () => {
     );
 
     expect(renameBin?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
-    expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(2);
-    expect(renameBin?.sourceTextLegacyPatterns).toHaveLength(2);
+    expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(3);
+    expect(renameBin?.sourceTextLegacyPatterns).toHaveLength(3);
     const sourceStringPatterns = renameBin?.sourceStringLegacyPatterns as RegExp[];
     const matchesSourceStringPattern = (value: string) =>
       sourceStringPatterns.some((pattern) => pattern.test(value));
@@ -72,6 +72,7 @@ describe("getApplicableCodemods", () => {
     expect(matchesSourceStringPattern("tailor-sdk apply")).toBe(true);
     expect(matchesSourceStringPattern('sh -c "tailor-sdk apply"')).toBe(true);
     expect(matchesSourceStringPattern('bash -lc "tailor-sdk crash-report list"')).toBe(true);
+    expect(matchesSourceStringPattern('Run "tailor-sdk crash-report list" manually')).toBe(true);
     expect(matchesSourceStringPattern("tailor-sdk.cmd crash-report list")).toBe(true);
     expect(matchesSourceStringPattern("tailor --profile tailor-sdk deploy")).toBe(false);
     expect(matchesSourceStringPattern("tailor --name   tailor-sdk deploy")).toBe(false);

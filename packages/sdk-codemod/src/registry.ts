@@ -86,6 +86,13 @@ const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
     `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
   ].join(""),
 );
+const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
+  [
+    "[\"']",
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
+    "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
+  ].join(""),
+);
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -621,10 +628,12 @@ export const allCodemods: CodemodPackage[] = [
     sourceStringLegacyPatterns: [
       RENAME_BIN_SOURCE_LEGACY_PATTERN,
       RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN,
     ],
     sourceTextLegacyPatterns: [
       RENAME_BIN_SOURCE_LEGACY_PATTERN,
       RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN,
     ],
     examples: [
       {
