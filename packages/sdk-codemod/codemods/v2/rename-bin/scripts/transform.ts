@@ -169,7 +169,7 @@ function renameBinary(value: string): string {
 
 function sourceLang(filePath: string): Lang {
   const ext = path.extname(filePath).toLowerCase();
-  return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
+  return ext === ".tsx" || ext === ".jsx" || ext === ".js" ? Lang.Tsx : Lang.TypeScript;
 }
 
 function isTokenSequenceNode(node: SgNode): boolean {

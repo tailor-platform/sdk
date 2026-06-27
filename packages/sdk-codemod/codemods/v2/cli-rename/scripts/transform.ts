@@ -703,7 +703,7 @@ function replaceCliRenamesInCommand(command: string): string {
 
 function sourceLang(filePath: string): Lang {
   const ext = path.extname(filePath).toLowerCase();
-  return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
+  return ext === ".tsx" || ext === ".jsx" || ext === ".js" ? Lang.Tsx : Lang.TypeScript;
 }
 
 function sourceStringToken(node: SgNode, source: string): SourceStringToken | undefined {
