@@ -216,8 +216,7 @@ export const loginCommand = defineAppCommand({
       if (!profileEntry) {
         throw new Error(`Profile "${args.profile}" not found`);
       }
-      const fromProfile = platformConfigFromProfile(profileEntry);
-      platformConfig = Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
+      platformConfig = platformConfigFromProfile(profileEntry);
       profileUser = profileEntry.user;
     }
     const updateCurrentUser = shouldUpdateCurrentUser(args.profile, platformConfig);

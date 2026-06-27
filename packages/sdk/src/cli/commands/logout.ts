@@ -32,12 +32,10 @@ export const logoutCommand = defineAppCommand({
     if (profile && !profileEntry) {
       throw new Error(`Profile "${profile}" not found`);
     }
-    const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-    const platformConfig =
-      fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
+    const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
     const currentUser = profileEntry ? profileEntry.user : pfConfig.current_user;
     const deletesDefaultToken = isDefaultPlatform(platformConfig);
-    const lookupOptions = { allowLegacyUserKey: profile !== undefined };
+    const lookupOptions = profile ? { allowLegacyUserKey: true } : undefined;
     if (!currentUser) {
       logger.info("You are not logged in.");
       return;

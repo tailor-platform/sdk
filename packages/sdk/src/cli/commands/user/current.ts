@@ -19,9 +19,7 @@ export const currentCommand = defineAppCommand({
     if (profile && !profileEntry) {
       throw new Error(`Profile "${profile}" not found`);
     }
-    const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-    const platformConfig =
-      fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
+    const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
     const currentUser = profile ? (profileEntry?.user ?? null) : config.current_user;
     const jsonOutput = logger.jsonMode;
 

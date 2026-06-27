@@ -2,7 +2,12 @@ import { arg } from "politty";
 import { z } from "zod";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import {
+  fetchLatestToken,
+  platformConfigFromProfile,
+  readPlatformConfig,
+  writePlatformConfig,
+} from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import type { ProfileInfo } from "./types";
 
@@ -97,6 +102,8 @@ export const updateCommand = defineAppCommand({
     };
     const finalPlatformConfig =
       Object.keys(finalPlatformConfigInput).length > 0 ? finalPlatformConfigInput : undefined;
+    const tokenLookupPlatformConfig =
+      args["platform-url"] === "" ? platformConfigFromProfile(profile) : finalPlatformConfig;
 
     if (
       (args["machine-user"] !== undefined || args["machine-user-override"] !== undefined) &&
@@ -121,7 +128,7 @@ export const updateCommand = defineAppCommand({
       args["platform-url"] !== undefined
     ) {
       // Check if user exists
-      const token = await fetchLatestToken(config, newUser, finalPlatformConfig);
+      const token = await fetchLatestToken(config, newUser, tokenLookupPlatformConfig);
 
       // Check if workspace exists
       const client = await initOperatorClient(token, finalPlatformConfig);

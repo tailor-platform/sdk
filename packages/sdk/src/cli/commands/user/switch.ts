@@ -28,11 +28,9 @@ export const switchCommand = defineAppCommand({
     if (activeProfileName && !activeProfileEntry) {
       throw new Error(`Profile "${activeProfileName}" not found`);
     }
-    const fromProfile = activeProfileEntry
+    const platformConfig = activeProfileEntry
       ? platformConfigFromProfile(activeProfileEntry)
       : undefined;
-    const platformConfig =
-      fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
 
     if (args.user.includes("|")) {
       throw new Error(

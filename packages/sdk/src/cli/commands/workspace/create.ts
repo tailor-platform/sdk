@@ -165,11 +165,9 @@ export const createCommand = defineAppCommand({
 
       const activeProfileName = process.env.TAILOR_PLATFORM_PROFILE;
       const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
-      const fromProfile = activeProfileEntry
+      const platformConfig = activeProfileEntry
         ? platformConfigFromProfile(activeProfileEntry)
         : undefined;
-      const platformConfig =
-        fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
       const profileUser = args["profile-user"] || activeProfileEntry?.user || config.current_user;
       if (!profileUser) {
         throw new Error(

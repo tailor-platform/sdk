@@ -135,12 +135,13 @@ type ProfilePlatformSettings = {
  */
 export function platformConfigFromProfile(
   profile: ProfilePlatformSettings | undefined,
-): PlatformClientConfig {
-  return {
+): PlatformClientConfig | undefined {
+  const config = {
     ...(profile?.platform_url ? { platformUrl: profile.platform_url } : {}),
     ...(profile?.oauth2_client_id ? { oauth2ClientId: profile.oauth2_client_id } : {}),
     ...(profile?.console_url ? { consoleUrl: profile.console_url } : {}),
   };
+  return Object.keys(config).length > 0 ? config : undefined;
 }
 
 function platformUserKey(user: string, config?: PlatformClientConfig): string {
@@ -152,9 +153,8 @@ function platformUserKey(user: string, config?: PlatformClientConfig): string {
 }
 
 function canUseLegacyUserKey(platformUrl: string): boolean {
-  if (process.env.TAILOR_PLATFORM_URL === undefined) return false;
   try {
-    return normalizeBaseUrl(process.env.TAILOR_PLATFORM_URL) === platformUrl;
+    return getPlatformBaseUrl() === platformUrl;
   } catch {
     return false;
   }
@@ -611,9 +611,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
     `);
   }
   const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-  const platformConfig =
-    fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
-  return await fetchLatestToken(pfConfig, user, platformConfig);
+  return await fetchLatestToken(pfConfig, user, fromProfile);
 }
 
 /**
@@ -645,8 +643,7 @@ export async function loadPlatformClientConfig(
     }
     throw new Error(`Profile "${profile}" not found`);
   }
-  const platformConfig = platformConfigFromProfile(profileEntry);
-  return Object.keys(platformConfig).length > 0 ? platformConfig : undefined;
+  return platformConfigFromProfile(profileEntry);
 }
 
 /**

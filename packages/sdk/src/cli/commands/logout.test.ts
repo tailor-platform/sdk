@@ -223,4 +223,37 @@ describe("logout --profile", () => {
     vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
     await expect(loadAccessToken()).resolves.toBe("default-access-token");
   });
+
+  test("falls back to an env-platform legacy token when logging out without a profile", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          access_token: "legacy-access-token",
+          refresh_token: "legacy-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(revokeMock).toHaveBeenCalledWith(
+      {
+        accessToken: "legacy-access-token",
+        refreshToken: "legacy-refresh-token",
+        expiresAt: Date.parse(futureDate),
+      },
+      "refresh_token",
+    );
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["u@example.com"]).toBeUndefined();
+  });
 });

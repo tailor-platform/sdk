@@ -13,7 +13,8 @@ export interface ApiCallResult {
 }
 
 function hasEnvAccessToken(): boolean {
-  return process.env.TAILOR_PLATFORM_TOKEN !== undefined || process.env.TAILOR_TOKEN !== undefined;
+  const envToken = process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+  return Boolean(envToken);
 }
 
 /**

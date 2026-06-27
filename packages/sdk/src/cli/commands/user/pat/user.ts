@@ -22,9 +22,7 @@ export async function createPatOperatorClient() {
   if (activeProfile && !profileEntry) {
     throw new Error(`Profile "${activeProfile}" not found`);
   }
-  const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-  const platformConfig =
-    fromProfile && Object.keys(fromProfile).length > 0 ? fromProfile : undefined;
+  const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
   const user = resolvePatUser(config);
 
   if (!user) {

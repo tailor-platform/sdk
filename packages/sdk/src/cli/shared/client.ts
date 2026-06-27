@@ -31,6 +31,14 @@ export type PlatformClientConfig = {
 
 const tokenPlatformConfigs = new Map<string, PlatformClientConfig>();
 
+function getEnvPlatformUrl(): string | undefined {
+  return process.env.TAILOR_PLATFORM_URL ?? process.env.PLATFORM_URL;
+}
+
+function getEnvOAuth2ClientId(): string | undefined {
+  return process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID ?? process.env.PLATFORM_OAUTH2_CLIENT_ID;
+}
+
 export function normalizeBaseUrl(value: string): string {
   const url = new URL(value);
   url.hash = "";
@@ -39,16 +47,13 @@ export function normalizeBaseUrl(value: string): string {
 }
 
 export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
+  const platformUrl = config.platformUrl ?? getEnvPlatformUrl();
+  const oauth2ClientId = config.oauth2ClientId ?? getEnvOAuth2ClientId();
+  const consoleUrl = config.consoleUrl ?? process.env.TAILOR_PLATFORM_CONSOLE_URL;
   const effective = {
-    ...((config.platformUrl ?? process.env.TAILOR_PLATFORM_URL)
-      ? { platformUrl: config.platformUrl ?? process.env.TAILOR_PLATFORM_URL }
-      : {}),
-    ...((config.oauth2ClientId ?? process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID)
-      ? { oauth2ClientId: config.oauth2ClientId ?? process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID }
-      : {}),
-    ...((config.consoleUrl ?? process.env.TAILOR_PLATFORM_CONSOLE_URL)
-      ? { consoleUrl: config.consoleUrl ?? process.env.TAILOR_PLATFORM_CONSOLE_URL }
-      : {}),
+    ...(platformUrl ? { platformUrl } : {}),
+    ...(oauth2ClientId ? { oauth2ClientId } : {}),
+    ...(consoleUrl ? { consoleUrl } : {}),
   };
   return Object.keys(effective).length > 0 ? effective : undefined;
 }
@@ -67,9 +72,7 @@ function getPlatformConfigForToken(accessToken: string): PlatformClientConfig | 
 }
 
 export function getPlatformBaseUrl(config: PlatformClientConfig = {}) {
-  return normalizeBaseUrl(
-    config.platformUrl ?? process.env.TAILOR_PLATFORM_URL ?? defaultPlatformBaseUrl,
-  );
+  return normalizeBaseUrl(config.platformUrl ?? getEnvPlatformUrl() ?? defaultPlatformBaseUrl);
 }
 
 export function isDefaultPlatform(config?: PlatformClientConfig): boolean {
@@ -77,9 +80,7 @@ export function isDefaultPlatform(config?: PlatformClientConfig): boolean {
 }
 
 export function getOAuth2ClientId(config: PlatformClientConfig = {}) {
-  return (
-    config.oauth2ClientId ?? process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID ?? defaultOAuth2ClientId
-  );
+  return config.oauth2ClientId ?? getEnvOAuth2ClientId() ?? defaultOAuth2ClientId;
 }
 
 function inferConsoleBaseUrl(platformBaseUrl: string) {
@@ -93,7 +94,10 @@ function inferConsoleBaseUrl(platformBaseUrl: string) {
 
 export function getConsoleBaseUrl(config: PlatformClientConfig = {}) {
   if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
-  if (config.platformUrl) return inferConsoleBaseUrl(config.platformUrl);
+  if (config.platformUrl) {
+    const inferredUrl = inferConsoleBaseUrl(config.platformUrl);
+    if (inferredUrl !== defaultConsoleBaseUrl) return inferredUrl;
+  }
   if (process.env.TAILOR_PLATFORM_CONSOLE_URL)
     return normalizeBaseUrl(process.env.TAILOR_PLATFORM_CONSOLE_URL);
   return inferConsoleBaseUrl(getPlatformBaseUrl(config));

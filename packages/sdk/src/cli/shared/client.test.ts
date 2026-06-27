@@ -11,6 +11,9 @@ import {
   fetchPaged,
   formatRequestParams,
   getConsoleBaseUrl,
+  getEffectivePlatformConfig,
+  getOAuth2ClientId,
+  getPlatformBaseUrl,
   initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
@@ -80,6 +83,46 @@ describe("getConsoleBaseUrl", () => {
     expect(getConsoleBaseUrl({ platformUrl: "https://api.dev.tailor.tech" })).toBe(
       "https://console.dev.tailor.tech",
     );
+  });
+
+  test("uses env console URL when profile platform URL cannot infer a custom Console URL", () => {
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
+
+    expect(getConsoleBaseUrl({ platformUrl: "https://platform.dev.tailor.tech" })).toBe(
+      "https://console.other.tailor.tech",
+    );
+  });
+});
+
+describe("platform environment variables", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("uses legacy platform env vars when renamed vars are absent", () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+
+    expect(getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
+    expect(getOAuth2ClientId()).toBe("legacy-client");
+    expect(getEffectivePlatformConfig()).toEqual({
+      platformUrl: "https://api.legacy.tailor.tech",
+      oauth2ClientId: "legacy-client",
+    });
+  });
+
+  test("prefers renamed platform env vars over legacy env vars", () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
+
+    expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
+    expect(getOAuth2ClientId()).toBe("dev-client");
+    expect(getEffectivePlatformConfig()).toEqual({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+    });
   });
 });
 

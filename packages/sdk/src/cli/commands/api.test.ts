@@ -66,6 +66,19 @@ describe("api command body auto-injection", () => {
       expect(url).toBe("https://api.tailor.tech/tailor.v1.OperatorService/Ping");
       expect((options.headers as Record<string, string>).Authorization).toBe("Bearer env-token");
     });
+
+    test("does not suppress profile config errors for empty env access tokens", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", "");
+      vi.mocked(loadAccessToken).mockResolvedValue("profile-token");
+      vi.mocked(loadPlatformClientConfig).mockRejectedValue(
+        new Error('Profile "missing" not found'),
+      );
+
+      await expect(apiCall({ profile: "missing", endpoint: "Ping" })).rejects.toThrow(
+        'Profile "missing" not found',
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("workspaceId injection", () => {

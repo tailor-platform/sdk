@@ -293,6 +293,37 @@ describe("profile update --platform", () => {
     expect(config.profiles.myprofile?.console_url).toBeUndefined();
   });
 
+  test("uses the existing platform URL for token lookup when clearing only platform-url", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+
+    await runCommand(updateCommand, ["myprofile", "--platform-url", ""]);
+
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "u@example.com", {
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+    expect(vi.mocked(initOperatorClient)).toHaveBeenCalledWith("mock-token", {
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
+
   test("rejects invalid platform URLs before writing config", async () => {
     const result = await runCommand(updateCommand, ["myprofile", "--platform-url", "not-a-url"]);
 

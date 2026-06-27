@@ -9,6 +9,7 @@ import {
   loadConfigPath,
   loadMachineUserName,
   loadWorkspaceId,
+  platformConfigFromProfile,
   readPlatformConfig,
   saveUserTokens,
   writePlatformConfig,
@@ -903,6 +904,26 @@ describe("loadConsoleBaseUrl", () => {
     await expect(loadConsoleBaseUrl({ allowMissingProfile: true })).resolves.toBe(
       "https://console.tailor.tech",
     );
+  });
+});
+
+describe("platformConfigFromProfile", () => {
+  test("returns undefined when the profile has no platform settings", () => {
+    expect(platformConfigFromProfile({})).toBeUndefined();
+  });
+
+  test("returns the profile platform settings that are set", () => {
+    expect(
+      platformConfigFromProfile({
+        platform_url: "https://api.dev.tailor.tech",
+        oauth2_client_id: "dev-client",
+        console_url: "https://console.dev.tailor.tech",
+      }),
+    ).toEqual({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
   });
 });
 
