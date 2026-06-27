@@ -630,6 +630,64 @@ describe("runCodemods", () => {
       expect(result.warnings[0]).toContain("rule: test/rename-bin");
     });
 
+    test("warns for source comment and JSX rename-bin residuals", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "commands.tsx"),
+        ["// tailor-sdk apply", "const docs = <code>tailor-sdk crash-report list</code>;"].join(
+          "\n",
+        ),
+        "utf-8",
+      );
+      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.tsx"], [], {
+              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("commands.tsx: contains");
+      expect(result.warnings[0]).toContain("rule: test/rename-bin");
+    });
+
+    test("warns for quoted shell rename-bin residuals", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "commands.ts"),
+        "const command = 'sh -c \"tailor-sdk apply\"';",
+        "utf-8",
+      );
+      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("commands.ts: contains");
+      expect(result.warnings[0]).toContain("rule: test/rename-bin");
+    });
+
     test("warns for dynamic template rename-bin residuals", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
       tmpDir = dir;
