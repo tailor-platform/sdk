@@ -36,17 +36,6 @@ const GLOBAL_VALUE_ARGS = new Set([
   "-c",
   "-w",
 ]);
-const CLI_VALUE_ARGS = [
-  "--env-file-if-exists",
-  "--env-file",
-  "--arg",
-  "--query",
-  "--file",
-  "-e",
-  "-a",
-  "-q",
-  "-f",
-] as const;
 const COMMAND_VALUE_ARGS = [
   "--env-file-if-exists",
   "--env-file",
@@ -64,7 +53,7 @@ const COMMAND_VALUE_ARGS = [
   "-q",
   "-f",
 ] as const;
-const CLI_VALUE_ARG_SET = new Set<string>(CLI_VALUE_ARGS);
+const CLI_VALUE_ARG_SET = new Set<string>(COMMAND_VALUE_ARGS);
 const PACKAGE_RUNNER_VALUE_ARGS = new Set([
   "--cache",
   "--userconfig",
@@ -109,6 +98,11 @@ interface CliTemplateState {
   afterTailorBinary: boolean;
   commandMayBeNext: boolean;
   skipNextValue: boolean;
+}
+
+interface CliTemplateEditResult {
+  edits: Array<[number, number, string]>;
+  protectedRanges: TextRange[];
 }
 
 const TEMPLATE_SUBSTITUTION_PLACEHOLDER = "\u{E000}";
@@ -1166,16 +1160,23 @@ function advanceCliTemplateState(state: CliTemplateState, value: string): void {
   }
 }
 
-function collectCliTemplateEdits(node: SgNode, source: string): Array<[number, number, string]> {
-  if (node.kind() !== "template_string") return [];
+function collectCliTemplateEdits(node: SgNode, source: string): CliTemplateEditResult {
+  if (node.kind() !== "template_string") return { edits: [], protectedRanges: [] };
 
   const edits: Array<[number, number, string]> = [];
+  const protectedRanges: TextRange[] = [];
   const state: CliTemplateState = {
     afterTailorBinary: false,
     commandMayBeNext: false,
     skipNextValue: false,
   };
   let skipNextPackageRunnerValue = false;
+  const protectTemplateSubstitutions = (token: TemplateToken): void => {
+    for (const substitution of token.substitutions) {
+      const range = substitution.range();
+      protectedRanges.push({ start: range.start.index, end: range.end.index });
+    }
+  };
 
   const tokens = collectTemplateTokens(node, source);
   for (const [index, token] of tokens.entries()) {
@@ -1215,6 +1216,7 @@ function collectCliTemplateEdits(node: SgNode, source: string): Array<[number, n
     }
 
     if (state.skipNextValue) {
+      protectTemplateSubstitutions(token);
       state.skipNextValue = false;
       continue;
     }
@@ -1311,7 +1313,7 @@ function collectCliTemplateEdits(node: SgNode, source: string): Array<[number, n
     }
   }
 
-  return edits;
+  return { edits, protectedRanges };
 }
 
 function isLikelyTemplateCommandToken(
@@ -1341,11 +1343,12 @@ function collectCliTemplateSourceEdits(
   root: SgNode,
   source: string,
   protectedRanges: TextRange[] = [],
-): Array<[number, number, string]> {
+): CliTemplateEditResult {
   const edits: Array<[number, number, string]> = [];
+  const templateProtectedRanges = [...protectedRanges];
   const isProtected = (node: SgNode): boolean => {
     const range = node.range();
-    return protectedRanges.some(
+    return templateProtectedRanges.some(
       (protectedRange) =>
         protectedRange.start <= range.start.index && range.end.index <= protectedRange.end,
     );
@@ -1354,14 +1357,16 @@ function collectCliTemplateSourceEdits(
   const visit = (node: SgNode): void => {
     if (isProtected(node)) return;
     if (node.kind() === "template_string") {
-      edits.push(...collectCliTemplateEdits(node, source));
+      const result = collectCliTemplateEdits(node, source);
+      edits.push(...result.edits);
+      templateProtectedRanges.push(...result.protectedRanges);
     }
     for (const child of node.children()) {
       visit(child);
     }
   };
   visit(root);
-  return edits;
+  return { edits, protectedRanges: templateProtectedRanges };
 }
 
 function collectSourceLiteralCliCommandEdits(
@@ -1597,11 +1602,13 @@ function replaceTokenizedSourceCliCommands(source: string, filePath: string): st
 
   let updated = source;
   const tokenized = collectTokenizedSourceEdits(root, source);
+  const template = collectCliTemplateSourceEdits(root, source, tokenized.protectedRanges);
+  const protectedRanges = [...tokenized.protectedRanges, ...template.protectedRanges];
   const editByRange = new Map<string, [number, number, string]>();
   for (const edit of [
     ...tokenized.edits,
-    ...collectCliTemplateSourceEdits(root, source, tokenized.protectedRanges),
-    ...collectSourceLiteralCliCommandEdits(root, source, tokenized.protectedRanges),
+    ...template.edits,
+    ...collectSourceLiteralCliCommandEdits(root, source, protectedRanges),
   ]) {
     editByRange.set(`${edit[0]}:${edit[1]}`, edit);
   }
