@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
 
+// strip unknown keys
 export const TailorDBTriggerSchema = z.object({
   kind: z.literal("tailordb").describe("TailorDB record event trigger"),
   events: z
@@ -19,12 +20,14 @@ export const TailorDBTriggerSchema = z.object({
   condition: functionSchema.optional().describe("Condition function to filter events"),
 });
 
+// strip unknown keys
 export const ResolverExecutedTriggerSchema = z.object({
   kind: z.literal("resolverExecuted"),
   resolverName: z.string().describe("Name of the resolver to trigger on"),
   condition: functionSchema.optional().describe("Condition function to filter events"),
 });
 
+// strip unknown keys
 export const ScheduleTriggerSchema = z.object({
   kind: z.literal("schedule"),
   cron: z.string().describe("CRON expression for the schedule"),
@@ -35,16 +38,19 @@ export const ScheduleTriggerSchema = z.object({
     .describe("Timezone for the CRON schedule (default: UTC)"),
 });
 
+// strip unknown keys
 export const IncomingWebhookTriggerResponseSchema = z.object({
   body: functionSchema.optional().describe("Function returning the response body"),
   statusCode: z.number().int().optional().describe("HTTP status code for the response"),
 });
 
+// strip unknown keys
 export const IncomingWebhookTriggerSchema = z.object({
   kind: z.literal("incomingWebhook"),
   response: IncomingWebhookTriggerResponseSchema.optional().describe("Response configuration"),
 });
 
+// strip unknown keys
 export const IdpUserTriggerSchema = z.object({
   kind: z.literal("idpUser").describe("IdP user event trigger"),
   events: z
@@ -60,6 +66,7 @@ export const IdpUserTriggerSchema = z.object({
     ),
 });
 
+// strip unknown keys
 export const AuthAccessTokenTriggerSchema = z.object({
   kind: z.literal("authAccessToken").describe("Auth access token event trigger"),
   events: z
@@ -84,30 +91,30 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
   AuthAccessTokenTriggerSchema,
 ]);
 
-export const FunctionOperationSchema = z
-  .object({
-    kind: z.enum(["function", "jobFunction"]),
-    body: functionSchema.describe("Function implementation"),
-    invoker: AuthInvokerSchema.optional().describe("Invoker for the function execution"),
-  })
-  .strict();
+export const FunctionOperationSchema = z.strictObject({
+  kind: z.enum(["function", "jobFunction"]),
+  body: functionSchema.describe("Function implementation"),
+  invoker: AuthInvokerSchema.optional().describe("Invoker for the function execution"),
+});
 
-export const GqlOperationSchema = z
-  .object({
-    kind: z.literal("graphql"),
-    appName: z.string().optional().describe("Target application name for the GraphQL query"),
-    query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
-    variables: functionSchema.optional().describe("Function to compute GraphQL variables"),
-    invoker: AuthInvokerSchema.optional().describe("Invoker for the GraphQL execution"),
-  })
-  .strict();
+export const GqlOperationSchema = z.strictObject({
+  kind: z.literal("graphql"),
+  appName: z.string().optional().describe("Target application name for the GraphQL query"),
+  query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
+  variables: functionSchema.optional().describe("Function to compute GraphQL variables"),
+  invoker: AuthInvokerSchema.optional().describe("Invoker for the GraphQL execution"),
+});
 
+// strip unknown keys
 export const WebhookOperationSchema = z.object({
   kind: z.literal("webhook"),
   url: functionSchema.describe("Function returning the webhook URL"),
   requestBody: functionSchema.optional().describe("Function to compute the request body"),
   headers: z
-    .record(z.string(), z.union([z.string(), z.object({ vault: z.string(), key: z.string() })]))
+    .record(
+      z.string(),
+      z.union([z.string(), z.strictObject({ vault: z.string(), key: z.string() })]),
+    )
     .optional()
     .describe("HTTP headers for the webhook request"),
 });
@@ -127,17 +134,15 @@ export const WorkflowOperationSchema = z.preprocess(
     const { workflow, ...rest } = val as { workflow: { name: string } };
     return { ...rest, workflowName: workflow.name };
   },
-  z
-    .object({
-      kind: z.literal("workflow"),
-      workflowName: z.string().describe("Name of the workflow to execute"),
-      args: z
-        .union([z.record(z.string(), z.unknown()), functionSchema])
-        .optional()
-        .describe("Arguments to pass to the workflow"),
-      invoker: AuthInvokerSchema.optional().describe("Invoker for the workflow execution"),
-    })
-    .strict(),
+  z.strictObject({
+    kind: z.literal("workflow"),
+    workflowName: z.string().describe("Name of the workflow to execute"),
+    args: z
+      .union([z.record(z.string(), z.unknown()), functionSchema])
+      .optional()
+      .describe("Arguments to pass to the workflow"),
+    invoker: AuthInvokerSchema.optional().describe("Invoker for the workflow execution"),
+  }),
 );
 
 const OperationSchema = z.union([
@@ -147,6 +152,7 @@ const OperationSchema = z.union([
   WorkflowOperationSchema,
 ]);
 
+// strip unknown keys
 export const ExecutorSchema = z.object({
   name: z.string().describe("Executor name"),
   description: z.string().optional().describe("Executor description"),

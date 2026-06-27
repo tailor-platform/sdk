@@ -3,6 +3,7 @@ import { AuthConnectionConfigSchema } from "#/parser/service/auth-connection/ind
 import { TailorFieldSchema } from "#/parser/service/field/schema";
 import type { ValueOperand } from "#/configure/services/auth/types";
 
+// strip unknown keys
 export const AuthInvokerObjectSchema = z.object({
   namespace: z.string().describe("Auth namespace"),
   machineUserName: z.string().describe("Machine user name for authentication"),
@@ -13,11 +14,13 @@ export const AuthInvokerSchema = z.union([
   AuthInvokerObjectSchema,
 ]);
 
+// strip unknown keys
 const secretValueSchema = z.object({
   vaultName: z.string().describe("Vault name containing the secret"),
   secretKey: z.string().describe("Key of the secret in the vault"),
 });
 
+// strip unknown keys
 export const OIDCSchema = z.object({
   name: z.string().describe("Identity provider name"),
   kind: z.literal("OIDC"),
@@ -28,6 +31,7 @@ export const OIDCSchema = z.object({
   usernameClaim: z.string().optional().describe("JWT claim to use as username"),
 });
 
+// strip unknown keys
 export const SAMLSchema = z
   .object({
     name: z.string().describe("Identity provider name"),
@@ -52,6 +56,7 @@ export const SAMLSchema = z
     return hasMetadata !== hasRaw;
   }, "Provide either metadataURL or rawMetadata");
 
+// strip unknown keys
 export const IDTokenSchema = z.object({
   name: z.string().describe("Identity provider name"),
   kind: z.literal("IDToken"),
@@ -61,6 +66,7 @@ export const IDTokenSchema = z.object({
   usernameClaim: z.string().optional().describe("JWT claim to use as username"),
 });
 
+// strip unknown keys
 export const BuiltinIdPSchema = z.object({
   name: z.string().describe("Identity provider name"),
   kind: z.literal("BuiltInIdP"),
@@ -79,6 +85,7 @@ export const OAuth2ClientGrantTypeSchema = z
   .union([z.literal("authorization_code"), z.literal("refresh_token")])
   .describe("OAuth2 grant type");
 
+// strip unknown keys
 export const OAuth2ClientSchema = z
   .object({
     description: z.string().optional().describe("Client description"),
@@ -126,6 +133,7 @@ export const OAuth2ClientSchema = z
     path: ["requireDpop"],
   });
 
+// strip unknown keys
 export const SCIMAuthorizationSchema = z.object({
   type: z.union([z.literal("oauth2"), z.literal("bearer")]).describe("SCIM authorization type"),
   bearerSecret: secretValueSchema
@@ -143,6 +151,7 @@ export const SCIMAttributeTypeSchema = z
   ])
   .describe("SCIM attribute data type");
 
+// strip unknown keys
 export const SCIMAttributeSchema = z.object({
   type: SCIMAttributeTypeSchema.describe("Attribute data type"),
   name: z.string().describe("Attribute name"),
@@ -163,16 +172,19 @@ export const SCIMAttributeSchema = z.object({
   },
 });
 
+// strip unknown keys
 const SCIMSchemaSchema = z.object({
   name: z.string().describe("SCIM schema name"),
   attributes: z.array(SCIMAttributeSchema).describe("Schema attributes"),
 });
 
+// strip unknown keys
 export const SCIMAttributeMappingSchema = z.object({
   tailorDBField: z.string().describe("TailorDB field name to map to"),
   scimPath: z.string().describe("SCIM attribute path"),
 });
 
+// strip unknown keys
 export const SCIMResourceSchema = z.object({
   name: z.string().describe("SCIM resource name"),
   tailorDBNamespace: z.string().describe("TailorDB namespace for the resource"),
@@ -181,21 +193,25 @@ export const SCIMResourceSchema = z.object({
   attributeMapping: z.array(SCIMAttributeMappingSchema).describe("Attribute mapping configuration"),
 });
 
+// strip unknown keys
 export const SCIMSchema = z.object({
   machineUserName: z.string().describe("Machine user name for SCIM operations"),
   authorization: SCIMAuthorizationSchema.describe("SCIM authorization configuration"),
   resources: z.array(SCIMResourceSchema).describe("SCIM resource definitions"),
 });
 
+// strip unknown keys
 export const TenantProviderSchema = z.object({
   namespace: z.string().describe("TailorDB namespace for the tenant type"),
   type: z.string().describe("TailorDB type name for tenants"),
   signatureField: z.string().describe("Field used as the tenant signature"),
 });
 
+// strip unknown keys
 const UserProfileSchema = z.object({
   namespace: z.string().optional().describe("TailorDB namespace where the user type is defined"),
   // FIXME: improve TailorDBInstance schema validation
+  // strip unknown keys
   type: z.object({
     name: z.string(),
     fields: z.any(),
@@ -221,18 +237,22 @@ const ValueOperandSchema: z.ZodType<ValueOperand> = z.union([
   z.array(z.boolean()),
 ]);
 
+// strip unknown keys
 const MachineUserSchema = z.object({
   attributes: z.record(z.string(), ValueOperandSchema).optional(),
   attributeList: z.array(z.uuid()).optional(),
 });
 
+// strip unknown keys
 const BeforeLoginHookSchema = z.object({
   handler: z.function(),
   invoker: z.string(),
 });
 
+// strip unknown keys
 const AuthConfigBaseSchema = z.object({
   name: z.string().describe("Auth service name"),
+  // strip unknown keys
   hooks: z
     .object({
       beforeLogin: BeforeLoginHookSchema.optional().describe("Before login auth hook"),

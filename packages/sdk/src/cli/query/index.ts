@@ -41,6 +41,7 @@ import type { Application } from "@tailor-platform/tailor-proto/application_reso
 export type { QueryEngine } from "./types";
 
 const queryEngineSchema = z.enum(queryEngines);
+// strip unknown keys
 const queryBaseOptionsSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
@@ -746,7 +747,7 @@ export const queryCommand = defineAppCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
   args: z
-    .object({
+    .strictObject({
       ...deploymentArgs,
       engine: arg(queryEngineSchema, {
         description: "Query engine (sql or gql)",
@@ -797,8 +798,7 @@ export const queryCommand = defineAppCommand({
           message: "Pass only one of --edit, -q/--query, or -f/--file.",
         });
       }
-    })
-    .strict(),
+    }),
   run: async (args) => {
     const mode = await resolveQueryCommandInput({
       query: args.query,

@@ -11,15 +11,13 @@ import { statusLabels } from "./status";
 export const domainListCommand = defineAppCommand({
   name: "list",
   description: "List custom domains for a static website.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      name: arg(z.string(), {
-        positional: true,
-        description: "Static website name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    name: arg(z.string(), {
+      positional: true,
+      description: "Static website name",
+    }),
+  }),
   run: async (args) => {
     const accessToken = await loadAccessToken({
       profile: args.profile,

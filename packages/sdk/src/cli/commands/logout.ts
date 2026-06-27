@@ -12,7 +12,7 @@ import { logger } from "#/cli/shared/logger";
 export const logoutCommand = defineAppCommand({
   name: "logout",
   description: "Logout from Tailor Platform.",
-  args: z.object({}).strict(),
+  args: z.strictObject({}),
   run: async () => {
     const pfConfig = await readPlatformConfig();
     const currentUser = pfConfig.current_user;

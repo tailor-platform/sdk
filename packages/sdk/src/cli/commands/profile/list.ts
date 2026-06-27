@@ -9,7 +9,7 @@ import type { ProfileInfo } from "./types";
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all profiles.",
-  args: z.object({}).strict(),
+  args: z.strictObject({}),
   run: async () => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;

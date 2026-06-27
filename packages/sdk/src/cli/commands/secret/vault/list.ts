@@ -63,12 +63,10 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all Secret Manager vaults in the workspace.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const vaults = await vaultList({
       workspaceId: args["workspace-id"],

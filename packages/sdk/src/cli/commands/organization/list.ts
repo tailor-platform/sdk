@@ -35,14 +35,12 @@ export async function listOrganizations(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List organizations you belong to.",
-  args: z
-    .object({
-      limit: arg(positiveIntArg.optional(), {
-        alias: "l",
-        description: "Maximum number of organizations to list",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    limit: arg(positiveIntArg.optional(), {
+      alias: "l",
+      description: "Maximum number of organizations to list",
+    }),
+  }),
   run: async (args) => {
     const organizations = await listOrganizations({ limit: args.limit });
     logger.out(organizations);

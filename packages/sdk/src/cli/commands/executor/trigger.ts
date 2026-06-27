@@ -184,41 +184,39 @@ The \`--logs\` option displays logs from the downstream execution when available
     { cmd: "my-executor -W", desc: "Trigger and wait for completion" },
     { cmd: "my-executor -W -l", desc: "Trigger, wait, and show logs" },
   ],
-  args: z
-    .object({
-      ...workspaceArgs,
-      "executor-name": arg(z.string(), {
-        positional: true,
-        description: "Executor name",
-      }),
-      data: arg(jsonDataArg.optional(), {
-        alias: "d",
-        description: "Request body (JSON string)",
-      }),
-      header: arg(headerArg.array().optional(), {
-        alias: "H",
-        overrideBuiltinAlias: true,
-        description: "Request header (format: 'Key: Value', can be specified multiple times)",
-      }),
-      wait: arg(z.boolean().default(false), {
-        alias: "W",
-        description:
-          "Wait for job completion and downstream execution (workflow/function) if applicable",
-      }),
-      interval: arg(durationArg.default("3s"), {
-        alias: "i",
-        description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
-      }),
-      timeout: arg(durationArg.default("5m"), {
-        alias: "t",
-        description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
-      }),
-      logs: arg(z.boolean().default(false), {
-        alias: "l",
-        description: "Display function execution logs after completion (requires --wait)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    "executor-name": arg(z.string(), {
+      positional: true,
+      description: "Executor name",
+    }),
+    data: arg(jsonDataArg.optional(), {
+      alias: "d",
+      description: "Request body (JSON string)",
+    }),
+    header: arg(headerArg.array().optional(), {
+      alias: "H",
+      overrideBuiltinAlias: true,
+      description: "Request header (format: 'Key: Value', can be specified multiple times)",
+    }),
+    wait: arg(z.boolean().default(false), {
+      alias: "W",
+      description:
+        "Wait for job completion and downstream execution (workflow/function) if applicable",
+    }),
+    interval: arg(durationArg.default("3s"), {
+      alias: "i",
+      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
+    }),
+    timeout: arg(durationArg.default("5m"), {
+      alias: "t",
+      description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
+    }),
+    logs: arg(z.boolean().default(false), {
+      alias: "l",
+      description: "Display function execution logs after completion (requires --wait)",
+    }),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode || args.json;
     await assertWritable({ profile: args.profile });

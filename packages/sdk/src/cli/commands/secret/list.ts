@@ -67,13 +67,11 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
 export const listSecretCommand = defineAppCommand({
   name: "list",
   description: "List all secrets in a vault.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...vaultArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...vaultArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     try {
       const secrets = await secretList({

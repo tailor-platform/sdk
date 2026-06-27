@@ -48,12 +48,10 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all workflows in the workspace.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const workflows = await listWorkflows({

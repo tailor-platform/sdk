@@ -9,6 +9,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
+// strip unknown keys
 const removeUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
@@ -54,15 +55,13 @@ export async function removeUser(options: RemoveUserOptions): Promise<void> {
 export const removeCommand = defineAppCommand({
   name: "remove",
   description: "Remove a user from a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-      email: arg(z.email(), {
-        description: "Email address of the user to remove",
-      }),
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    email: arg(z.email(), {
+      description: "Email address of the user to remove",
+    }),
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     if (!args.yes) {

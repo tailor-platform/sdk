@@ -9,6 +9,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { stringToRole, validRoles } from "./transform";
 
+// strip unknown keys
 const inviteUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
@@ -57,18 +58,16 @@ export async function inviteUser(options: InviteUserOptions): Promise<void> {
 export const inviteCommand = defineAppCommand({
   name: "invite",
   description: "Invite a user to a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-      email: arg(z.email(), {
-        description: "Email address of the user to invite",
-      }),
-      role: arg(z.enum(validRoles), {
-        description: `Role to assign (${validRoles.join(", ")})`,
-        alias: "r",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    email: arg(z.email(), {
+      description: "Email address of the user to invite",
+    }),
+    role: arg(z.enum(validRoles), {
+      description: `Role to assign (${validRoles.join(", ")})`,
+      alias: "r",
+    }),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     await inviteUser({

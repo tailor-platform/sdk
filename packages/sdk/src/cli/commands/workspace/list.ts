@@ -43,11 +43,9 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all Tailor Platform workspaces.",
-  args: z
-    .object({
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const workspaces = await listWorkspaces({
       order: args.order,

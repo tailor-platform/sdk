@@ -12,6 +12,7 @@ import {
   type WorkspaceDetails,
 } from "./transform";
 
+// strip unknown keys
 const getWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
@@ -60,11 +61,9 @@ export async function getWorkspace(options: GetWorkspaceOptions): Promise<Worksp
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Show detailed information about a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+  }),
   run: async (args) => {
     const workspace = await getWorkspace({
       workspaceId: args["workspace-id"],

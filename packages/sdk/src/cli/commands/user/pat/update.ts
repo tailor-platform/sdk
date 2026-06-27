@@ -10,18 +10,16 @@ import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update a personal access token (delete and recreate).",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        positional: true,
-        description: "Token name",
-      }),
-      write: arg(z.boolean().default(false), {
-        alias: "W",
-        description: "Grant write permission (if not specified, keeps read-only)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      positional: true,
+      description: "Token name",
+    }),
+    write: arg(z.boolean().default(false), {
+      alias: "W",
+      description: "Grant write permission (if not specified, keeps read-only)",
+    }),
+  }),
   run: async (args) => {
     await assertWritable();
     const config = await readPlatformConfig();

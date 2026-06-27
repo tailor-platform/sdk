@@ -114,6 +114,7 @@ describe("CLI Documentation", () => {
       command: mainCommand,
       templates,
       targetCommands,
+      // strip unknown keys
       globalArgs: z.object(commonArgs),
       formatter: mdFormatter,
     });
