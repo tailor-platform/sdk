@@ -93,12 +93,13 @@ const SOURCE_PKG_RUNNER_RE = new RegExp(
   `\\b(${PACKAGE_RUNNER_COMMAND}${SOURCE_RUNNER_OPTION_GAP})\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
   "g",
 );
-const SOURCE_NPX_PACKAGE_FLAG_VALUE_RE = new RegExp(
-  `\\b(npx(?:(?!\\s+(?:-p|--package)(?:=|\\s+))\\s+${SOURCE_ARG_VALUE})*\\s+(?:-p|--package)(?:=|\\s+))tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
+const SOURCE_RUNNER_OPTION_NO_PACKAGE_FLAG_GAP = `(?:\\s+(?!(?:-p|--package)(?:=|\\s|$))(?:-\\w+|--\\w[\\w-]*)(?:=${SOURCE_ARG_VALUE})?(?:\\s+(?!tailor-sdk(?![\\w-])|-)${SOURCE_ARG_VALUE})?)*`;
+const SOURCE_PACKAGE_FLAG_VALUE_RE = new RegExp(
+  `\\b(${PACKAGE_RUNNER_COMMAND}${SOURCE_RUNNER_OPTION_NO_PACKAGE_FLAG_GAP}\\s+(?:-p|--package)(?:=|\\s+))tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
   "g",
 );
-const SOURCE_NPX_PACKAGE_FLAG_BINARY_RE = new RegExp(
-  `\\b(npx(?:(?!\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})\\s+${SOURCE_ARG_VALUE})*\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`,
+const SOURCE_PACKAGE_FLAG_BINARY_RE = new RegExp(
+  `\\b(${PACKAGE_RUNNER_COMMAND}(?:(?!\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})\\s+${SOURCE_ARG_VALUE})*\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`,
   "g",
 );
 const SOURCE_TAILOR_SDK_RE = new RegExp(
@@ -205,6 +206,33 @@ function sourceTokens(value: string): string[] | null {
   return value.slice(lastEnd).trim() === "" ? tokens : null;
 }
 
+function activeQuoteStart(source: string, start: number, offset: number): number | null {
+  let quote: { delimiter: string; escaped: boolean; start: number } | null = null;
+  for (let index = start; index < offset; index += 1) {
+    const char = source[index];
+    if (quote != null) {
+      if (quote.escaped) {
+        if (char === "\\" && source[index + 1] === quote.delimiter) {
+          quote = null;
+          index += 1;
+        }
+      } else if (char === "\\") {
+        index += 1;
+      } else if (char === quote.delimiter) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "\\" && (source[index + 1] === '"' || source[index + 1] === "'")) {
+      quote = { delimiter: source[index + 1]!, escaped: true, start: index };
+      index += 1;
+    } else if (char === '"' || char === "'") {
+      quote = { delimiter: char, escaped: false, start: index };
+    }
+  }
+  return quote?.start ?? null;
+}
+
 function skipsRunnerOptionValue(token: string): boolean {
   return RUNNER_OPTION_VALUE_FLAGS.has(token.split("=", 1)[0]!) && !token.includes("=");
 }
@@ -251,7 +279,13 @@ function isAfterOtherPackageRunner(source: string, offset: number): boolean {
   );
   const segment = source.slice(segmentStart + 1, offset).trim();
   const tokens = sourceTokens(segment);
-  if (tokens == null) return false;
+  if (tokens == null) {
+    const quoteStart = activeQuoteStart(source, segmentStart + 1, offset);
+    if (quoteStart == null) return false;
+    const prefixTokens = sourceTokens(source.slice(segmentStart + 1, quoteStart).trim());
+    const packageToken = prefixTokens == null ? null : firstRunnerPackageToken(prefixTokens);
+    return packageToken != null && !TAILOR_SDK_TOKEN_RE.test(packageToken);
+  }
   const packageToken = firstRunnerPackageToken(tokens);
   return packageToken != null && !TAILOR_SDK_TOKEN_RE.test(packageToken);
 }
@@ -281,7 +315,7 @@ function isAfterTemplatePlaceholder(source: string, offset: number): boolean {
 function renameSourceCommandText(value: string): string {
   const protectedValue = protectSourceCliValueReferences(value);
   const withPackageFlagValues = protectedValue.source.replace(
-    SOURCE_NPX_PACKAGE_FLAG_VALUE_RE,
+    SOURCE_PACKAGE_FLAG_VALUE_RE,
     (_match, prefix: string, version?: string) =>
       version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}@tailor-platform/sdk`,
   );
@@ -295,7 +329,7 @@ function renameSourceCommandText(value: string): string {
     },
   );
   const withPackageFlagBinaries = withPackageRunners.replace(
-    SOURCE_NPX_PACKAGE_FLAG_BINARY_RE,
+    SOURCE_PACKAGE_FLAG_BINARY_RE,
     (match: string, prefix: string, version?: string) => {
       if (!/\s(?:-p|--package)(?:=|\s)/.test(prefix)) return match;
       if (/(?:^|\s)(?:-p|--package)\s+$/.test(prefix)) return match;

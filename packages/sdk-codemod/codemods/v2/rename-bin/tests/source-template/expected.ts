@@ -40,6 +40,11 @@ const npxPackageFlagDynamic = `npx -p @tailor-platform/sdk tailor ${subcommand}`
 const npxPackageEqualsDynamic = `npx --package=@tailor-platform/sdk tailor ${subcommand}`;
 const npxRegistryPackageFlag = "npx --registry https://registry.npmjs.org -p @tailor-platform/sdk tailor login";
 const npxProfileValue = "npx @tailor-platform/sdk -p tailor-sdk login";
+const pnpmDlxPackageFlag = "pnpm dlx --package @tailor-platform/sdk tailor login";
+const pnpmDlxPackageFlagEquals = "pnpm dlx --package=@tailor-platform/sdk tailor login";
+const yarnDlxPackageFlag = "yarn dlx --package @tailor-platform/sdk tailor login";
+const npxOtherPackageQuoted = "npx foo \"tailor-sdk login\"";
+const npxOtherPackageSingleQuoted = "npx foo 'tailor-sdk login'";
 const shellWrapped = "sh -c \"tailor deploy\"";
 const escapedArg = "tailor --arg \"tailor-sdk deploy\" deploy";
 const packageName = "tailor-sdk";
