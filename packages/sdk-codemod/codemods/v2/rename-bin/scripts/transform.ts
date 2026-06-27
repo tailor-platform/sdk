@@ -606,16 +606,15 @@ function pushSourceStringEdit(
   const end = range.end.index - 1;
   const text = source.slice(start, end);
   const packageFlagReplacement = sourcePackageFlagReplacement(node, source);
-  const replacement =
-    packageFlagReplacement != null
+  const replacement = isCliValueArgument(node, source)
+    ? text
+    : packageFlagReplacement != null
       ? packageFlagReplacement.replacement
       : TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
         ? renamePackageName(text)
-        : isCliValueArgument(node, source)
-          ? text
-          : TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
-            ? renameBinary(text)
-            : renameSourceCommandText(text);
+        : TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
+          ? renameBinary(text)
+          : renameSourceCommandText(text);
   if (replacement !== text) {
     edits.push([start, end, replacement]);
   }
