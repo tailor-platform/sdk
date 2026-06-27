@@ -515,6 +515,35 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("keeps source string residual checks inside each literal", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "commands.ts"),
+        [
+          'const packageName = "tailor-sdk";',
+          'const command = "deploy";',
+          'spawn("tailor", ["--arg", "tailor-sdk deploy", "deploy"]);',
+        ].join("\n"),
+        "utf-8",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: [/tailor-sdk(?=\s+deploy)/],
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual([]);
+    });
+
     test("flags files matching a suspicious pattern for LLM review", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-test-"));
       tmpDir = dir;
