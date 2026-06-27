@@ -127,6 +127,7 @@ const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync
 const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
 const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
+const SOURCE_NPM_EXEC_PACKAGE_RUNNERS = new Set(["npm"]);
 const PACKAGE_MANAGER_OPTION_VALUE_FLAGS = new Set([
   "--registry",
   "--cache",
@@ -336,6 +337,19 @@ function packageRunnerPackageStartTokenIndex(tokens: readonly string[]): number 
   const executable = tokens[0];
   if (executable === "npx" || executable === "bunx") {
     return 1;
+  } else if (executable === "npm") {
+    let index = 1;
+    for (; index < tokens.length; index += 1) {
+      const token = tokens[index]!;
+      if (token === "exec") {
+        return index + 1;
+      }
+      if (token.startsWith("-")) {
+        if (skipsRunnerOptionValue(token)) index += 1;
+        continue;
+      }
+      return null;
+    }
   } else if (executable === "pnpm" || executable === "yarn") {
     let index = 1;
     for (; index < tokens.length; index += 1) {
@@ -568,7 +582,33 @@ function isTemplateSubstitutionCliValue(text: string, offset: number): boolean {
 }
 
 function needsCliRenameMigration(value: string): boolean {
-  return value.includes("tailor-sdk") && CLI_RENAME_LEGACY_RE.test(value);
+  if (!value.includes("tailor-sdk")) return false;
+  const tokens = sourceTokens(value);
+  if (tokens == null) return CLI_RENAME_LEGACY_RE.test(value);
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (!TAILOR_SDK_TOKEN_RE.test(tokens[index]!)) continue;
+    if (tokensAfterCliBinaryNeedRename(tokens, index + 1)) return true;
+  }
+  return false;
+}
+
+function tokensAfterCliBinaryNeedRename(tokens: readonly string[], start: number): boolean {
+  let commandSeen = false;
+  for (let index = start; index < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    if (token === "--machineuser" || token.startsWith("--machineuser=")) return true;
+    if (token.startsWith("-")) {
+      if (TAILOR_CLI_VALUE_FLAGS.has(token.split("=", 1)[0]!) && !token.includes("=")) {
+        index += 1;
+      }
+      continue;
+    }
+    if (!commandSeen) {
+      if (token === "apply" || token === "crash-report") return true;
+      commandSeen = true;
+    }
+  }
+  return false;
 }
 
 function renameSourceCommandText(value: string): string {
@@ -737,6 +777,13 @@ function packageRunnerPackageStartIndex(
   source: string,
 ): number | null {
   if (SOURCE_PACKAGE_RUNNERS.has(executable)) return 0;
+  if (SOURCE_NPM_EXEC_PACKAGE_RUNNERS.has(executable)) {
+    const execIndex = firstNonOptionIndex(elements, 0, source);
+    if (execIndex == null || sourceStringContent(elements[execIndex]!, source) !== "exec") {
+      return null;
+    }
+    return execIndex + 1;
+  }
   if (!SOURCE_DLX_PACKAGE_RUNNERS.has(executable)) return null;
   const dlxIndex = firstNonOptionIndex(elements, 0, source);
   if (dlxIndex == null || sourceStringContent(elements[dlxIndex]!, source) !== "dlx") {
@@ -875,6 +922,11 @@ function isPackageRunnerArrayArgument(node: SgNode, source: string): boolean {
   if (executable == null) return false;
 
   if (executable === "bunx" || executable === "npx") return true;
+  if (executable === "npm") {
+    const elements = sourceArrayElements(parent);
+    const execIndex = firstNonOptionIndex(elements, 0, source);
+    return execIndex != null && sourceStringContent(elements[execIndex]!, source) === "exec";
+  }
   if (executable !== "pnpm" && executable !== "yarn") return false;
 
   const elements = sourceArrayElements(parent);

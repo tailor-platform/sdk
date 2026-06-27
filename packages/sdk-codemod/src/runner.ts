@@ -197,13 +197,13 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
       if (value != null) fragments.push(value);
     }
     if (node.kind() === "string") {
-      if (isSourceValueArgument(node, content)) return;
+      if (isSourceTailorSdkValueArgument(node, content)) return;
       const value = sourceStringNodeContent(node, content);
       if (value != null) fragments.push(value);
       return;
     }
     if (node.kind() === "string_fragment") {
-      if (isSourceValueArgument(node, content)) return;
+      if (isSourceTailorSdkValueArgument(node, content)) return;
       fragments.push(node.text());
       return;
     }
@@ -238,6 +238,14 @@ function sourceArrayCommandValues(node: SgNode, source: string): string[] {
     if (value != null) values.push(value);
   }
   return values;
+}
+
+function isSourceTailorSdkValueArgument(fragment: SgNode, source: string): boolean {
+  const text =
+    fragment.kind() === "string_fragment"
+      ? fragment.text()
+      : sourceStringNodeContent(fragment, source);
+  return text != null && text.includes("tailor-sdk") && isSourceValueArgument(fragment, source);
 }
 
 function isSyntaxOnlyNode(node: SgNode): boolean {
