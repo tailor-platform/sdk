@@ -183,24 +183,25 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
     return null;
   }
 
+  const sourceStringVariables = collectSourceStringVariables(root, content);
   const fragments: string[] = [];
   const visit = (node: SgNode): void => {
     if (node.kind() === "arguments") {
-      const value = sourceArgumentsCommandContent(node, content);
+      const value = sourceArgumentsCommandContent(node, content, sourceStringVariables);
       if (value != null) fragments.push(value);
     }
     if (node.kind() === "array") {
-      const value = sourceArrayCommandContent(node, content);
+      const value = sourceArrayCommandContent(node, content, sourceStringVariables);
       if (value != null) fragments.push(value);
     }
     if (node.kind() === "string") {
-      if (isSourceTailorSdkValueArgument(node, content)) return;
+      if (isSourceTailorSdkValueArgument(node, content, sourceStringVariables)) return;
       const value = sourceStringNodeContent(node, content);
       if (value != null) fragments.push(value);
       return;
     }
     if (node.kind() === "string_fragment") {
-      if (isSourceTailorSdkValueArgument(node, content)) return;
+      if (isSourceTailorSdkValueArgument(node, content, sourceStringVariables)) return;
       fragments.push(node.text());
       return;
     }
@@ -210,6 +211,37 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   };
   visit(root);
   return fragments.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function collectSourceStringVariables(root: SgNode, source: string): ReadonlyMap<string, string> {
+  const values = new Map<string, string>();
+  const visit = (node: SgNode): void => {
+    if (node.kind() === "variable_declarator" && isConstVariableDeclarator(node)) {
+      const children = node.children();
+      const identifier = children.find((child) => child.kind() === "identifier");
+      const initializer = children.findLast(
+        (child) => sourceStringNodeContent(child, source) != null,
+      );
+      if (identifier != null && initializer != null) {
+        const value = sourceStringNodeContent(initializer, source);
+        if (value != null) values.set(identifier.text(), value);
+      }
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return values;
+}
+
+function isConstVariableDeclarator(node: SgNode): boolean {
+  return (
+    node
+      .parent()
+      ?.children()
+      .some((child) => child.kind() === "const") ?? false
+  );
 }
 
 function sourceTextContentForResidualMatching(relative: string, content: string): string | null {
@@ -237,37 +269,58 @@ function sourceTextContentForResidualMatching(relative: string, content: string)
   return fragments.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
-function sourceArgumentsCommandContent(node: SgNode, source: string): string | null {
+function sourceArgumentsCommandContent(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): string | null {
   const args = sourceArrayElements(node);
-  const executable = args[0] == null ? null : sourceStringNodeContent(args[0]!, source);
+  const executable =
+    args[0] == null ? null : sourceStringLikeNodeContent(args[0]!, source, sourceStringVariables);
   const argv = args[1];
   if (executable == null || argv?.kind() !== "array") return null;
 
-  const values = sourceArrayCommandValues(argv, source);
+  const values = sourceArrayCommandValues(argv, source, sourceStringVariables);
   return values.length === 0 ? null : [executable, ...values].join(" ");
 }
 
-function sourceArrayCommandContent(node: SgNode, source: string): string | null {
-  const values = sourceArrayCommandValues(node, source);
+function sourceArrayCommandContent(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): string | null {
+  const values = sourceArrayCommandValues(node, source, sourceStringVariables);
   return values.length < 2 ? null : values.join(" ");
 }
 
-function sourceArrayCommandValues(node: SgNode, source: string): string[] {
+function sourceArrayCommandValues(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): string[] {
   const values: string[] = [];
   for (const element of sourceArrayElements(node)) {
-    if (isSourceValueArgument(element, source)) continue;
-    const value = sourceStringNodeContent(element, source);
+    if (isSourceValueArgument(element, source, sourceStringVariables)) continue;
+    const value = sourceStringLikeNodeContent(element, source, sourceStringVariables);
     if (value != null) values.push(value);
   }
   return values;
 }
 
-function isSourceTailorSdkValueArgument(fragment: SgNode, source: string): boolean {
+function isSourceTailorSdkValueArgument(
+  fragment: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   const text =
     fragment.kind() === "string_fragment"
       ? fragment.text()
-      : sourceStringNodeContent(fragment, source);
-  return text != null && text.includes("tailor-sdk") && isSourceValueArgument(fragment, source);
+      : sourceStringLikeNodeContent(fragment, source, sourceStringVariables);
+  return (
+    text != null &&
+    text.includes("tailor-sdk") &&
+    isSourceValueArgument(fragment, source, sourceStringVariables)
+  );
 }
 
 function isSyntaxOnlyNode(node: SgNode): boolean {
@@ -291,6 +344,16 @@ function nodeRangeKey(node: SgNode): string {
   return `${range.start.index}:${range.end.index}`;
 }
 
+function sourceStringLikeNodeContent(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): string | null {
+  const directValue = sourceStringNodeContent(node, source);
+  if (directValue != null) return directValue;
+  return node.kind() === "identifier" ? (sourceStringVariables.get(node.text()) ?? null) : null;
+}
+
 function sourceStringNodeContent(node: SgNode, source: string): string | null {
   const kind = node.kind();
   if (kind !== "string" && kind !== "template_string") return null;
@@ -304,7 +367,11 @@ function sourceStringNodeContent(node: SgNode, source: string): string | null {
   return source.slice(range.start.index + 1, range.end.index - 1);
 }
 
-function isSourceValueArgument(fragment: SgNode, source: string): boolean {
+function isSourceValueArgument(
+  fragment: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   const stringNode = fragment.kind() === "string_fragment" ? fragment.parent() : fragment;
   if (stringNode == null) return false;
   const parent = stringNode.parent();
@@ -313,9 +380,9 @@ function isSourceValueArgument(fragment: SgNode, source: string): boolean {
   const elements = sourceArrayElements(parent);
   const index = elements.findIndex((element) => nodeRangeKey(element) === nodeRangeKey(stringNode));
   if (index <= 0) return false;
-  if (!isTailorCliArgumentArray(parent, index, source)) return false;
+  if (!isTailorCliArgumentArray(parent, index, source, sourceStringVariables)) return false;
 
-  const previous = sourceStringNodeContent(elements[index - 1]!, source);
+  const previous = sourceStringLikeNodeContent(elements[index - 1]!, source, sourceStringVariables);
   return (
     previous != null &&
     SOURCE_VALUE_FLAGS.has(previous.split("=", 1)[0]!) &&
@@ -323,17 +390,25 @@ function isSourceValueArgument(fragment: SgNode, source: string): boolean {
   );
 }
 
-function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
+function isTailorCliArgumentArray(
+  arrayNode: SgNode,
+  index: number,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   const argumentsNode = arrayNode.parent();
   if (argumentsNode?.kind() === "arguments") {
     const callArgs = sourceArrayElements(argumentsNode);
-    const executable = callArgs[0] == null ? null : sourceStringNodeContent(callArgs[0]!, source);
+    const executable =
+      callArgs[0] == null
+        ? null
+        : sourceStringLikeNodeContent(callArgs[0]!, source, sourceStringVariables);
     if (executable != null && SOURCE_CLI_BINARY_RE.test(executable)) return true;
   }
 
   const elements = sourceArrayElements(arrayNode);
   return elements.slice(0, index).some((element) => {
-    const value = sourceStringNodeContent(element, source);
+    const value = sourceStringLikeNodeContent(element, source, sourceStringVariables);
     return value != null && SOURCE_CLI_BINARY_RE.test(value);
   });
 }
