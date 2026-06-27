@@ -55,11 +55,12 @@ describe("getApplicableCodemods", () => {
     );
   });
 
-  test("flags CommonJS TypeScript files for runtime globals review", () => {
+  test("flags source files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
-    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts}");
+    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
     expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
+    expect(codemod?.sourceStringSuspiciousPatterns).toContain("new tailor.idp.Client");
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 

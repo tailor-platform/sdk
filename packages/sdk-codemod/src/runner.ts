@@ -138,6 +138,7 @@ interface LoadedTransform {
   legacyPatterns: CodemodPatternGroup[];
   sourceStringLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
+  sourceStringSuspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
 }
 
@@ -312,6 +313,7 @@ export async function runCodemods(
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
+      sourceStringSuspiciousPatterns: codemod.sourceStringSuspiciousPatterns ?? [],
       prompt: codemod.prompt,
     });
   }
@@ -364,8 +366,19 @@ export async function runCodemods(
     );
 
     for (const lt of matchedTransforms) {
-      if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
+      if (
+        !lt.prompt ||
+        (lt.suspiciousPatterns.length === 0 && lt.sourceStringSuspiciousPatterns.length === 0)
+      ) {
+        continue;
+      }
+      const matchesSource =
+        lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null) ||
+        (sourceStringContent != null &&
+          lt.sourceStringSuspiciousPatterns.some(
+            (p) => matchResidualPattern(sourceStringContent, p) !== null,
+          ));
+      if (matchesSource) {
         const files = suspiciousByCodemod.get(lt.id) ?? [];
         files.push(relative);
         suspiciousByCodemod.set(lt.id, files);
@@ -376,7 +389,7 @@ export async function runCodemods(
   const llmReviews: LlmReview[] = [];
   for (const lt of loaded) {
     if (!lt.prompt) continue;
-    if (lt.suspiciousPatterns.length > 0) {
+    if (lt.suspiciousPatterns.length > 0 || lt.sourceStringSuspiciousPatterns.length > 0) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);
       // Sort for deterministic output regardless of filesystem traversal order.

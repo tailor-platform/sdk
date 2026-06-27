@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { runCodemods } from "./runner";
 import type { CodemodPackage } from "./types";
 
+type TestCodemodExtra = Pick<
+  CodemodPackage,
+  "sourceStringLegacyPatterns" | "suspiciousPatterns" | "sourceStringSuspiciousPatterns" | "prompt"
+>;
+
 /**
  * Create a temporary directory with a test file for codemod testing.
  * @param fileName - Name of the test file
@@ -26,7 +31,7 @@ function makeCodemod(
   scriptPath?: string,
   filePatterns?: string[],
   legacyPatterns?: Array<string | string[]>,
-  extra?: Pick<CodemodPackage, "sourceStringLegacyPatterns" | "suspiciousPatterns" | "prompt">,
+  extra?: TestCodemodExtra,
 ): CodemodPackage {
   return {
     id,
@@ -644,6 +649,52 @@ describe("runCodemods", () => {
       );
 
       expect(result.llmReviews).toEqual([]);
+    });
+
+    test("flags source strings matching source-string suspicious patterns for LLM review", async () => {
+      const dir = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), "runner-llm-source-string-test-"),
+      );
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "seed.mjs"),
+        [
+          'const code = `const client = new tailor.idp.Client({ namespace: "default" });`;',
+          'const note = "tailor.idp.Client is mentioned in prose";',
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "prose.mjs"),
+        'const note = "tailor.idp.Client is mentioned in prose";\n',
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod(
+              "test/llm-source-string",
+              partialTransformPath,
+              ["**/*.{ts,js,mjs,cjs}"],
+              undefined,
+              {
+                sourceStringSuspiciousPatterns: ["new tailor.idp.Client"],
+                prompt: "Review embedded runtime global usage by hand.",
+              },
+            ),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/llm-source-string",
+          prompt: "Review embedded runtime global usage by hand.",
+          files: ["seed.mjs"],
+        },
+      ]);
     });
 
     test("keeps LLM review patterns inside template substitutions", async () => {
