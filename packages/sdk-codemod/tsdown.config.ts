@@ -34,6 +34,8 @@ export default defineConfig([
         "codemods/v2/tailordb-namespace/scripts/transform.ts",
       "v2/execute-script-arg/scripts/transform":
         "codemods/v2/execute-script-arg/scripts/transform.ts",
+      "v2/tailor-output-ignore-dir/scripts/transform":
+        "codemods/v2/tailor-output-ignore-dir/scripts/transform.ts",
       "v2/rename-bin/scripts/transform": "codemods/v2/rename-bin/scripts/transform.ts",
       "v2/wait-point-rename/scripts/transform":
         "codemods/v2/wait-point-rename/scripts/transform.ts",
