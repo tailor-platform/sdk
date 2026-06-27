@@ -1809,6 +1809,27 @@ function isSdkFieldMemberCall(
     : false;
 }
 
+function collectSdkFieldRootNames(root: SgNode): Set<string> {
+  const sdkFieldRootNames = new Set<string>();
+  const sdkImports = root.findAll({
+    rule: {
+      kind: "import_statement",
+      has: { kind: "string", regex: "^[\"']@tailor-platform/sdk(/test)?[\"']$" },
+    },
+  });
+  for (const importStmt of sdkImports) {
+    for (const namespaceName of iterateNamespaceImportLocalNames(importStmt)) {
+      sdkFieldRootNames.add(namespaceName);
+    }
+    for (const { importedName, localName } of iterateImportSpecs(importStmt)) {
+      if (importedName === "t" || importedName === "db") {
+        sdkFieldRootNames.add(localName);
+      }
+    }
+  }
+  return sdkFieldRootNames;
+}
+
 interface LocalCallbackBinding {
   name: string;
   fn: SgNode;
@@ -2258,8 +2279,10 @@ function nodeContainsArgumentPrincipalOptionalAccess(
   node: SgNode,
   principalBindings: ReviewPrincipalBinding[],
   contextBindings: ReviewPrincipalBinding[],
+  safePrincipalRanges: Array<[number, number]>,
   root: SgNode,
 ): boolean {
+  if (isInsideAnyRange(node.range().start.index, safePrincipalRanges)) return false;
   if (isFunctionNode(node)) return false;
   if (isDirectPrincipalExpression(node, principalBindings, contextBindings, root)) return true;
   if (isPrincipalOptionalMemberExpression(node, principalBindings, contextBindings, root))
@@ -2267,7 +2290,13 @@ function nodeContainsArgumentPrincipalOptionalAccess(
   return node
     .children()
     .some((child) =>
-      nodeContainsArgumentPrincipalOptionalAccess(child, principalBindings, contextBindings, root),
+      nodeContainsArgumentPrincipalOptionalAccess(
+        child,
+        principalBindings,
+        contextBindings,
+        safePrincipalRanges,
+        root,
+      ),
     );
 }
 
@@ -2282,18 +2311,61 @@ function reviewCallName(call: SgNode): string {
   return "a call";
 }
 
+function collectParseInvokerValueRanges(call: SgNode): Array<[number, number]> {
+  const args = call.field("arguments");
+  const objectArg = args?.children().find((child) => child.kind() === "object");
+  if (!objectArg) return [];
+
+  const ranges: Array<[number, number]> = [];
+  for (const child of objectArg.children()) {
+    if (child.kind() === "shorthand_property_identifier" && child.text() === "invoker") {
+      const range = child.range();
+      ranges.push([range.start.index, range.end.index]);
+      continue;
+    }
+
+    if (child.kind() !== "pair") continue;
+    const key = child.field("key");
+    if (key?.text() !== "invoker") continue;
+    const value = child.field("value");
+    if (!value) continue;
+    const range = value.range();
+    ranges.push([range.start.index, range.end.index]);
+  }
+  return ranges;
+}
+
+function collectSafeNullablePrincipalArgumentRanges(
+  call: SgNode,
+  sdkFieldRootNames: Set<string>,
+  sdkFieldLocalBindings: SdkFieldLocalBinding[],
+  root: SgNode,
+): Array<[number, number]> {
+  if (findMemberCallName(call) !== "parse") return [];
+  if (!isSdkFieldMemberCall(call, sdkFieldRootNames, sdkFieldLocalBindings, root)) return [];
+  return collectParseInvokerValueRanges(call);
+}
+
 function collectNullableCallerReviewFindings(
   root: SgNode,
   source: string,
   file: string,
   principalBindings: ReviewPrincipalBinding[],
   contextBindings: ReviewPrincipalBinding[],
+  sdkFieldRootNames: Set<string>,
+  sdkFieldLocalBindings: SdkFieldLocalBinding[],
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {
   const calls = root.findAll({ rule: { kind: "call_expression" } });
   for (const call of calls) {
     const args = call.field("arguments");
+    const safePrincipalRanges = collectSafeNullablePrincipalArgumentRanges(
+      call,
+      sdkFieldRootNames,
+      sdkFieldLocalBindings,
+      root,
+    );
     const nullableArg = args
       ?.children()
       .find((child) =>
@@ -2301,6 +2373,7 @@ function collectNullableCallerReviewFindings(
           child,
           principalBindings,
           contextBindings,
+          safePrincipalRanges,
           root,
         ),
       );
@@ -2731,12 +2804,16 @@ export function reviewFindings(
   const seen = new Set<string>();
   const contextBindings = collectResolverContextBindings(root);
   const principalBindings = collectResolverPrincipalBindings(root, contextBindings);
+  const sdkFieldRootNames = collectSdkFieldRootNames(root);
+  const sdkFieldLocalBindings = collectSdkFieldLocalBindings(root, sdkFieldRootNames);
   collectNullableCallerReviewFindings(
     root,
     source,
     relativePath,
     principalBindings,
     contextBindings,
+    sdkFieldRootNames,
+    sdkFieldLocalBindings,
     findings,
     seen,
   );
@@ -2875,10 +2952,7 @@ export default function transform(source: string): string | null {
   // does not actually bring `createResolver` in) are not.
   const createResolverLocalNames = new Set<string>();
   const createExecutorLocalNames = new Set<string>();
-  const sdkFieldRootNames = new Set<string>();
-  for (const namespaceName of sdkNamespaceNames) {
-    sdkFieldRootNames.add(namespaceName);
-  }
+  const sdkFieldRootNames = collectSdkFieldRootNames(tree);
   for (const importStmt of sdkImports) {
     for (const { importedName, localName } of iterateImportSpecs(importStmt)) {
       if (importedName === "createResolver") {
@@ -2886,9 +2960,6 @@ export default function transform(source: string): string | null {
       }
       if (importedName === "createExecutor") {
         createExecutorLocalNames.add(localName);
-      }
-      if (importedName === "t" || importedName === "db") {
-        sdkFieldRootNames.add(localName);
       }
     }
   }

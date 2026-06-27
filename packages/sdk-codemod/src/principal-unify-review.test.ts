@@ -366,6 +366,28 @@ describe("principal-unify review findings", () => {
     expect(result.llmReviews.flatMap((review) => review.findings ?? [])).toEqual([]);
   });
 
+  test("does not report SDK field parse invoker arguments", async () => {
+    await writeProjectFile(
+      "resolvers/parse-invoker.ts",
+      [
+        'import { createResolver, t } from "@tailor-platform/sdk";',
+        "",
+        "const nameField = t.string();",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async ({ input, user }) => {",
+        "    return nameField.parse({ value: input.name, user });",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews.flatMap((review) => review.findings ?? [])).toEqual([]);
+  });
+
   test("does not report matching alias names outside the resolver scope", async () => {
     await writeProjectFile(
       "resolvers/scoped-alias.ts",
