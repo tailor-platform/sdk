@@ -2,13 +2,18 @@ import { parse, Lang } from "@ast-grep/napi";
 import * as path from "pathe";
 import type { SgNode } from "@ast-grep/napi";
 
+const SOURCE_ARG_VALUE = `(?:[^\\s'"\`;|&]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
+const PACKAGE_RUNNER_COMMAND = `(?:npx|bunx|(?:pnpm|yarn)(?:\\s+(?:-\\w+|--\\w[\\w-]*(?:=${SOURCE_ARG_VALUE})?))*\\s+dlx)`;
+
 // Package-runner forms (`npx`, `pnpm dlx`, `yarn dlx`, `bunx`) resolve npm package
 // names, so `tailor-sdk@...` must become `@tailor-platform/sdk@...` — rewriting
 // to `tailor@...` would download the unrelated CSS Sprites Generator instead.
 // Optional flags (e.g. `-y`, `--yes`) between the runner and the package name are
 // captured as part of the runner group so the replacement preserves them.
-const PKG_RUNNER_RE =
-  /\b((?:npx|pnpm\s+dlx|yarn\s+dlx|bunx)(?:\s+(?:-\w+|--\w[\w-]*))*)\s+tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
+const PKG_RUNNER_RE = new RegExp(
+  `\\b(${PACKAGE_RUNNER_COMMAND}(?:\\s+(?:-\\w+|--\\w[\\w-]*))*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?`,
+  "g",
+);
 
 // Match the `tailor-sdk` binary, optionally with a version pin (`@latest`,
 // `@2.0.0`, etc.). Lookbehind excludes `.tailor-sdk` (preceded by `.`) and
@@ -16,7 +21,6 @@ const PKG_RUNNER_RE =
 // (e.g. `tailor-sdk-skills`) to avoid partial-match rewrites.
 const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
-const SOURCE_ARG_VALUE = `(?:[^\\s'"\`;|&]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
 const TAILOR_CLI_COMMANDS = [
   "api",
   "apply",
@@ -79,9 +83,9 @@ const SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD = "\\s+(?:--help|-h|--version|-v)\\b"
 const SOURCE_DIRECT_INVOCATION_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b|${SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD})`;
 const SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD = `(?:${SOURCE_DIRECT_INVOCATION_LOOKAHEAD}|\\s*$)`;
 const SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD = `(?:${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD}|\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`;
-const SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD = `(?=\\s+${TAILOR_CLI_VALUE_FLAG}\\s*$)`;
+const SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD = `(?=\\s+${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+)\\s*$)`;
 const SOURCE_PKG_RUNNER_RE = new RegExp(
-  `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:(?!\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})\\s+${SOURCE_ARG_VALUE})*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
+  `\\b(${PACKAGE_RUNNER_COMMAND}(?:(?!\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})\\s+${SOURCE_ARG_VALUE})*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
   "g",
 );
 const SOURCE_NPX_PACKAGE_FLAG_VALUE_RE = new RegExp(
@@ -110,7 +114,10 @@ const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
 const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
 const SOURCE_PACKAGE_FLAG_RE = /^(?:-p|--package)(?:=.*)?$/;
-const NPX_PACKAGE_FLAG_CONTEXT_RE = /(?:^|[;&|]\s*)npx(?:\s+(?:-\w+|--\w[\w-]*))*\s*$/;
+const NPX_OPTION_WITH_VALUE = "(?:--registry|--cache|--userconfig|--prefix)";
+const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
+  `(?:^|[;&|]\\s*)npx(?:\\s+(?:${NPX_OPTION_WITH_VALUE}\\s+${SOURCE_ARG_VALUE}|-\\w+|--\\w[\\w-]*(?:=${SOURCE_ARG_VALUE})?))*\\s*$`,
+);
 const SOURCE_ESCAPED_QUOTED_VALUE_RE = /\\"(?:\\\\.|[^"\\])*\\"|\\'(?:\\\\.|[^'\\])*\\'/g;
 
 function renameBinary(value: string): string {

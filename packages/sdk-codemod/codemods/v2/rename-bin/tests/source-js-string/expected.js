@@ -13,6 +13,8 @@ const npxPackageFlagDynamicSpawned = spawn("npx", ["-p", "@tailor-platform/sdk",
 const npxPackageEqualsDynamicSpawned = spawn("npx", ["--package=@tailor-platform/sdk", "tailor", subcommand]);
 const pnpmDlxSpawned = spawn("pnpm", ["dlx", "@tailor-platform/sdk", "login"]);
 const pnpmDlxDynamicSpawned = spawn("pnpm", ["dlx", "@tailor-platform/sdk"]);
+const pnpmDlxOptionSpawned = spawn("pnpm", ["--silent", "dlx", "@tailor-platform/sdk", "login"]);
+const yarnDlxOptionSpawned = spawn("yarn", ["--quiet", "dlx", "@tailor-platform/sdk", "login"]);
 const pnpmBinarySpawned = spawn("pnpm", ["tailor-sdk", "deploy"]);
 const pnpmExecSpawned = spawn("pnpm", ["exec", "tailor", "deploy"]);
 const pnpmExecHelpSpawned = spawn("pnpm", ["exec", "tailor", "--help"]);
