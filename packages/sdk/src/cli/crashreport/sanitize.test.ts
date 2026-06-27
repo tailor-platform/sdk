@@ -131,48 +131,48 @@ describe("sanitizeMessage", () => {
 
 describe("sanitizeArgv", () => {
   test("keeps command and subcommand names", () => {
-    const argv = ["node", "tailor-sdk", "apply"];
+    const argv = ["node", "tailor", "apply"];
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor-sdk", "apply"]);
+    expect(result).toEqual(["node", "tailor", "apply"]);
   });
 
   test("redacts value after any long flag (space format)", () => {
-    const argv = ["node", "tailor-sdk", "show", "--workspace-id", "some-uuid"];
+    const argv = ["node", "tailor", "show", "--workspace-id", "some-uuid"];
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor-sdk", "show", "--workspace-id", "<redacted>"]);
+    expect(result).toEqual(["node", "tailor", "show", "--workspace-id", "<redacted>"]);
   });
 
   test("redacts value after any short flag (space format)", () => {
-    const argv = ["node", "tailor-sdk", "show", "-w", "some-uuid"];
+    const argv = ["node", "tailor", "show", "-w", "some-uuid"];
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor-sdk", "show", "-w", "<redacted>"]);
+    expect(result).toEqual(["node", "tailor", "show", "-w", "<redacted>"]);
   });
 
   test("redacts --flag=value (equals format)", () => {
-    const argv = ["node", "tailor-sdk", "show", "--workspace-id=some-uuid"];
+    const argv = ["node", "tailor", "show", "--workspace-id=some-uuid"];
     const result = sanitizeArgv(argv);
     expect(result).toContain("--workspace-id=<redacted>");
     expect(result).not.toContain("some-uuid");
   });
 
   test("redacts value after any flag regardless of flag name", () => {
-    const argv = ["node", "tailor-sdk", "apply", "--region", "asia-northeast"];
+    const argv = ["node", "tailor", "apply", "--region", "asia-northeast"];
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor-sdk", "apply", "--region", "<redacted>"]);
+    expect(result).toEqual(["node", "tailor", "apply", "--region", "<redacted>"]);
   });
 
   test("treats consecutive flags correctly (no value between them)", () => {
-    const argv = ["node", "tailor-sdk", "apply", "--verbose", "--yes"];
+    const argv = ["node", "tailor", "apply", "--verbose", "--yes"];
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor-sdk", "apply", "--verbose", "--yes"]);
+    expect(result).toEqual(["node", "tailor", "apply", "--verbose", "--yes"]);
   });
 
   test("redacts value after boolean flag followed by valued flag", () => {
-    const argv = ["node", "tailor-sdk", "apply", "--verbose", "--workspace-id", "secret"];
+    const argv = ["node", "tailor", "apply", "--verbose", "--workspace-id", "secret"];
     const result = sanitizeArgv(argv);
     expect(result).toEqual([
       "node",
-      "tailor-sdk",
+      "tailor",
       "apply",
       "--verbose",
       "--workspace-id",
@@ -181,21 +181,21 @@ describe("sanitizeArgv", () => {
   });
 
   test("redacts absolute path positional arguments", () => {
-    const argv = ["node", "tailor-sdk", "/home/user/project/tailor.config.ts"];
+    const argv = ["node", "tailor", "/home/user/project/tailor.config.ts"];
     const result = sanitizeArgv(argv);
     expect(result).toContain("<path>");
     expect(result).not.toContain("/home/user/");
   });
 
   test("redacts Windows-style absolute path positional arguments", () => {
-    const argv = ["node", "tailor-sdk", "C:\\Users\\admin\\project\\tailor.config.ts"];
+    const argv = ["node", "tailor", "C:\\Users\\admin\\project\\tailor.config.ts"];
     const result = sanitizeArgv(argv);
     expect(result).toContain("<path>");
     expect(result).not.toContain("C:\\Users\\admin");
   });
 
   test("redacts email address positional arguments", () => {
-    const argv = ["node", "tailor-sdk", "user", "switch", "user@example.com"];
+    const argv = ["node", "tailor", "user", "switch", "user@example.com"];
     const result = sanitizeArgv(argv);
     expect(result).toContain("<email>");
     expect(result).not.toContain("user@example.com");

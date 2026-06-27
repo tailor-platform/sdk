@@ -8,12 +8,12 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "pathe";
-import { logger, styles } from "@/cli/shared/logger";
+import { logger, styles } from "#/cli/shared/logger";
 import {
   getPluginImportBaseDirs,
   resolveRelativePluginImportPath,
-} from "@/cli/shared/plugin-import";
-import { isPluginExecutorWithFile } from "@/plugin/guards";
+} from "#/cli/shared/plugin-import";
+import { isPluginExecutorWithFile } from "#/plugin/guards";
 import {
   type PluginGeneratedExecutorLegacy,
   type PluginGeneratedExecutorWithFile,
@@ -21,14 +21,14 @@ import {
   type PluginOperationConfig,
   type PluginInjectMap,
   type PluginExecutorContext,
-} from "@/plugin/types";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+} from "#/plugin/types";
+import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 import type {
   PluginExecutorInfoExtended,
   PluginTypeGenerationResult,
   SourceTypeInfo,
-} from "@/plugin/manager";
+} from "#/plugin/manager";
 
 /**
  * Information needed for type import resolution.
@@ -46,7 +46,7 @@ interface TypeImportInfo {
  * Generate TypeScript files for plugin-generated executors.
  * These files will be processed by the standard executor bundler.
  * @param executors - Array of plugin executor information
- * @param outputDir - Base output directory (e.g., .tailor-sdk)
+ * @param outputDir - Base output directory (e.g., .tailor)
  * @param typeGenerationResult - Result from plugin type generation (for import resolution)
  * @param sourceTypeInfoMap - Map of source type names to their source info
  * @param configPath - Path to tailor.config.ts (used for resolving plugin import paths)
@@ -88,7 +88,7 @@ export function generatePluginExecutorFiles(
 /**
  * Generate a single executor file.
  * @param info - Plugin executor metadata and definition
- * @param outputDir - Base output directory (e.g., .tailor-sdk)
+ * @param outputDir - Base output directory (e.g., .tailor)
  * @param typeGenerationResult - Result from plugin type generation
  * @param sourceTypeInfoMap - Map of source type names to their source info
  * @param baseDirs - Base directories for resolving plugin import paths

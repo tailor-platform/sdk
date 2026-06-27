@@ -1,8 +1,8 @@
 import { describe, expectTypeOf, expect, test } from "vitest";
-import { db } from "@/configure/services/tailordb/schema";
-import { t } from "@/configure/types/type";
+import { db } from "#/configure/services/tailordb/schema";
+import { t } from "#/configure/types/type";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
-import type { AuthServiceInput } from "@/configure/services/auth/types";
+import type { AuthServiceInput } from "#/configure/services/auth/types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
@@ -15,7 +15,7 @@ const userType = db.type("User", {
   externalId: db.uuid(),
 });
 
-type AttributeMap = {
+type Attributes = {
   role: true;
   isActive: true;
   tags: true;
@@ -24,7 +24,7 @@ type AttributeMap = {
 
 type AttributeList = ["externalId"];
 
-type AuthInput = AuthServiceInput<typeof userType, AttributeMap, AttributeList, "admin">;
+type AuthInput = AuthServiceInput<typeof userType, Attributes, AttributeList, "admin">;
 
 type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
 type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
@@ -76,7 +76,7 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     type SchemaAttributeList = SchemaMachineUser["attributeList"];
 
     type FunctionMachineUser = MachineUserConfig;
-    type FunctionAttributeKeys = keyof AttributeMap;
+    type FunctionAttributeKeys = keyof Attributes;
     type FunctionAttributeValues = FunctionMachineUser["attributes"][FunctionAttributeKeys];
     type FunctionAttributeList = FunctionMachineUser["attributeList"];
 

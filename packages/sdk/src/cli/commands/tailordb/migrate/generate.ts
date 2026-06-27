@@ -11,14 +11,14 @@ import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { configArg, confirmationArgs } from "@/cli/shared/args";
-import { logBetaWarning } from "@/cli/shared/beta";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
-import { logger, styles } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { PluginManager } from "@/plugin/manager";
+import { configArg, confirmationArgs } from "#/cli/shared/args";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
+import { logger, styles } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
   formatMigrationDiff,
@@ -139,7 +139,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   }
 
   // Load application and all types
-  const { defineApplication } = await import("@/cli/services/application");
+  const { defineApplication } = await import("#/cli/services/application");
   const application = defineApplication({ config, pluginManager });
 
   // Process each namespace
@@ -303,7 +303,7 @@ async function generateDiffFromSnapshot(
     }
     logger.newline();
     logger.log("A migration script was generated for breaking changes.");
-    logger.log("Please review and edit the script before running 'tailor-sdk deploy'.");
+    logger.log("Please review and edit the script before running 'tailor deploy'.");
 
     const editor = getConfiguredEditorCommand();
     if (!editor) {
@@ -330,7 +330,7 @@ async function generateDiffFromSnapshot(
       `Data loss is possible for this migration but no script was generated. To add a custom migrate.ts, run:`,
     );
     logger.log(
-      `  ${styles.bold(`tailor-sdk tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
+      `  ${styles.bold(`tailor tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
     );
   }
 }

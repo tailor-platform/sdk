@@ -1,13 +1,13 @@
 import { ScalarType } from "@bufbuild/protobuf";
 import { arg } from "politty";
 import { z } from "zod";
-import { configArg, workspaceArgs } from "@/cli/shared/args";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertWritable } from "@/cli/shared/readonly-guard";
-import { assertDefined } from "@/utils/assert";
+import { configArg, workspaceArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { assertDefined } from "#/utils/assert";
 import { apiCall } from "./api-call";
 import { inspectCommand } from "./inspect";
 import { listCommand } from "./list";
@@ -18,7 +18,7 @@ import {
   listMethodChoices,
   resolveLeafField,
 } from "./proto-reflect";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { DescField } from "@bufbuild/protobuf";
 
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api-call";
@@ -182,7 +182,7 @@ const fieldArg = z.string().transform((val, ctx): ParsedField => {
 export const apiCommand = defineAppCommand({
   name: "api",
   description: "Call Tailor Platform API endpoints directly.",
-  notes: `Use \`tailor-sdk api list\` to enumerate invocable methods and \`tailor-sdk api inspect <endpoint>\` to print an endpoint's input message tree (combine with \`--json\` for machine-readable output).
+  notes: `Use \`tailor api list\` to enumerate invocable methods and \`tailor api inspect <endpoint>\` to print an endpoint's input message tree (combine with \`--json\` for machine-readable output).
 
 The request body is inferred from the target endpoint's request schema, and commonly required fields are auto-injected so they can be omitted from \`--body\`:
 

@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { AppConfigSchema } from "@/parser/app-config/schema";
-import { PluginConfigSchema } from "@/parser/plugin-config";
+import { AppConfigSchema } from "#/parser/app-config/schema";
+import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
 import { installCliTailordbStub } from "./mock";
-import type { AppConfig } from "@/configure/config/types";
-import type { Plugin } from "@/plugin/types";
+import type { AppConfig } from "#/configure/config/types";
+import type { Plugin } from "#/plugin/types";
 
 /**
  * Loaded configuration with resolved path

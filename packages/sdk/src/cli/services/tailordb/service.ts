@@ -1,26 +1,26 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
-import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { logger, styles } from "@/cli/shared/logger";
-import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
-import { stripTailorDBTypeBuilderHelpers } from "@/parser/service/tailordb/builder-helpers";
-import { findOmittedPermitRules } from "@/parser/service/tailordb/permission";
-import { assertDefined } from "@/utils/assert";
-import { isSdkBranded } from "@/utils/brand";
+import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { logger, styles } from "#/cli/shared/logger";
+import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
+import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
+import { findOmittedPermitRules } from "#/parser/service/tailordb/permission";
+import { assertDefined } from "#/utils/assert";
+import { isSdkBranded } from "#/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import { formatTailorDBTypeSourceInfo } from "./type-name-validation";
 import type {
   TypeSourceInfo,
   TypeSourceInfoEntry,
   TailorDBType,
-} from "@/parser/service/tailordb/types";
-import type { PluginManager } from "@/plugin/manager";
-import type { PluginAttachment } from "@/plugin/types";
+} from "#/parser/service/tailordb/types";
+import type { PluginManager } from "#/plugin/manager";
+import type { PluginAttachment } from "#/plugin/types";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,
-} from "@/types/tailordb.generated";
+} from "#/types/tailordb.generated";
 
 export type TailorDBService = {
   readonly namespace: string;

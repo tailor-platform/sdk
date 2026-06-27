@@ -1,11 +1,11 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs } from "@/cli/shared/args";
-import { fetchMachineUserToken, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
+import { deploymentArgs } from "#/cli/shared/args";
+import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 
 export interface GetMachineUserTokenOptions {
   name?: string;
@@ -32,7 +32,7 @@ export async function getMachineUserToken(
   const name = await loadMachineUserName({ machineUser: options.name, profile: options.profile });
   if (!name) {
     throw new Error(
-      "Machine user is required. Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+      "Machine user is required. Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
     );
   }
 

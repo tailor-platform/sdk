@@ -1,14 +1,7 @@
 // CLI API exports for programmatic usage
-import { isNativeTypeScriptRuntime } from "./shared/runtime";
+import { registerTsHook } from "./shared/register-ts-hook";
 
-// Register tsx to handle TypeScript files when using CLI API programmatically.
-// Bun and Deno handle TypeScript natively, so registration is skipped.
-// tsx's own register() picks `module.registerHooks` on Node ≥ 24.11.1 / 25.1 / 26
-// (avoiding the DEP0205 deprecation) and falls back to `module.register` on older runtimes.
-if (!isNativeTypeScriptRuntime()) {
-  const { register } = await import("tsx/esm/api");
-  register();
-}
+await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
 export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
@@ -17,19 +10,19 @@ export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { generateUserTypes } from "./shared/type-generator";
-export type { GeneratorResult, PluginAttachment } from "@/plugin/types";
-export type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
-export type { Resolver } from "@/types/resolver.generated";
-export type { Executor } from "@/types/executor.generated";
+export type { GeneratorResult, PluginAttachment } from "#/plugin/types";
+export type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
+export type { Resolver } from "#/types/resolver.generated";
+export type { Executor } from "#/types/executor.generated";
 
 /** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
-export { kyselyTypePlugin } from "@/plugin/builtin/kysely-type";
+export { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/enum-constants' instead */
-export { enumConstantsPlugin } from "@/plugin/builtin/enum-constants";
+export { enumConstantsPlugin } from "#/plugin/builtin/enum-constants/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/file-utils' instead */
-export { fileUtilsPlugin } from "@/plugin/builtin/file-utils";
+export { fileUtilsPlugin } from "#/plugin/builtin/file-utils/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
-export { seedPlugin } from "@/plugin/builtin/seed";
+export { seedPlugin } from "#/plugin/builtin/seed/index";
 
 export { show, type ShowOptions, type ApplicationInfo } from "./commands/show";
 export { remove, type RemoveOptions } from "./commands/remove";
@@ -90,7 +83,10 @@ export {
   type ListWorkflowExecutionsTypedOptions,
   type GetWorkflowExecutionOptions,
   type GetWorkflowExecutionResult,
+  type WorkflowExecutionWaitInfo,
 } from "./commands/workflow/executions";
+export { waitWorkflowExecution, type WorkflowWaitOutput } from "./commands/workflow/wait";
+export type { WaitWorkflowExecutionOptions, WorkflowWaitResult } from "./commands/workflow/waiter";
 export {
   resumeWorkflow,
   type ResumeWorkflowOptions,
@@ -111,6 +107,7 @@ export {
 export {
   listExecutorJobs,
   getExecutorJob,
+  getExecutorWaitFailureMessage,
   watchExecutorJob,
   type ListExecutorJobsOptions,
   type ListExecutorJobsTypedOptions,
@@ -214,4 +211,4 @@ export {
   type ExecutionWaitResult,
 } from "./shared/script-executor";
 export { initOperatorClient, type OperatorClient } from "./shared/client";
-export type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+export type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";

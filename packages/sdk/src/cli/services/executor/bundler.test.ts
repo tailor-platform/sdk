@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
-import { tempCwd } from "@/cli/shared/test-helpers/temp-cwd";
+import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { bundleExecutors } from "./bundler";
 
 describe("bundleExecutors", () => {

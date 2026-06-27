@@ -7,7 +7,7 @@
   "env": {
     "builtin": true
   },
-  "ignorePatterns": [".tailor-sdk/", "tailor.d.ts"],
+  "ignorePatterns": [".tailor/", "tailor.d.ts"],
   "rules": {
     "no-case-declarations": "error",
     "no-empty": "error",

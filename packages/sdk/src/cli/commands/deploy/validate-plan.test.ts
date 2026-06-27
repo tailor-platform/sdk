@@ -1,4 +1,4 @@
-import { AuthConnection_Type } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { AuthConnection_Type } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test } from "vitest";
 import { createChangeSet } from "./change-set";
 import { validatePlan, type ValidatePlanInput } from "./validate-plan";
@@ -404,6 +404,24 @@ describe("validatePlan", () => {
         namespaceName: "my-idp",
         client: { name: "my-client" },
       },
+    } as never);
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+  });
+
+  test("(l3) IdP service with allowedReturnOrigins :url placeholder passes", async () => {
+    const input = emptyInput();
+    input.idp.changeSet.service.creates.push({
+      name: "my-idp",
+      request: {
+        workspaceId: WS_ID,
+        namespaceName: "my-idp",
+        userAuthPolicy: {
+          enableMfa: true,
+          allowedReturnOrigins: ["my-frontend:url"],
+        },
+      },
+      metaRequest: { trn: "", labels: {} },
     } as never);
 
     await expect(validatePlan(input)).resolves.toBeUndefined();

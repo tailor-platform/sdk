@@ -8,8 +8,8 @@ import {
   saveSecretsState,
 } from "./secrets-state";
 
-vi.mock("@/cli/shared/dist-dir", () => ({
-  getDistDir: () => "/tmp/tailor-sdk-test-secrets-state",
+vi.mock("#/cli/shared/dist-dir", () => ({
+  getDistDir: () => "/tmp/tailor-test-secrets-state",
 }));
 
 describe("secrets-state", () => {

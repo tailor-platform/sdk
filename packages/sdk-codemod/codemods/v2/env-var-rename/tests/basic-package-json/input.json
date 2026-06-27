@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "deploy": "TAILOR_PLATFORM_SDK_BUILD_ONLY=true tailor-sdk deploy",
+    "generate": "TAILOR_ENABLE_INLINE_SOURCEMAP=false TAILOR_SDK_OUTPUT_DIR=.tailor-sdk tailor-sdk generate"
+  },
+  "config": {
+    "TAILOR_SDK_VERSION": "workspace:*",
+    "PLATFORM_URL": "https://api.tailor.test"
+  }
+}

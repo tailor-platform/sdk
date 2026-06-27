@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { ResourceAttributesConfig, TelemetryExport } from "./telemetryrouter_resource_pb";
+import type { OTLPExporter, ResourceAttributesConfig } from "./telemetryrouter_resource_pb";
 import type { PageDirection } from "./resource_pb";
 
 /**
@@ -13,83 +13,83 @@ import type { PageDirection } from "./resource_pb";
 export declare const file_tailor_v1_telemetryrouter: GenFile;
 
 /**
- * @generated from message tailor.v1.CreateTelemetryExportRequest
+ * @generated from message tailor.v1.CreateOTLPExporterRequest
  */
-export declare type CreateTelemetryExportRequest = Message<"tailor.v1.CreateTelemetryExportRequest"> & {
+export declare type CreateOTLPExporterRequest = Message<"tailor.v1.CreateOTLPExporterRequest"> & {
   /**
    * @generated from field: string workspace_id = 1;
    */
   workspaceId: string;
 
   /**
-   * @generated from field: tailor.v1.TelemetryExport telemetry_export = 2;
+   * @generated from field: tailor.v1.OTLPExporter otlp_exporter = 2;
    */
-  telemetryExport?: TelemetryExport;
+  otlpExporter?: OTLPExporter;
 };
 
 /**
- * Describes the message tailor.v1.CreateTelemetryExportRequest.
- * Use `create(CreateTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.CreateOTLPExporterRequest.
+ * Use `create(CreateOTLPExporterRequestSchema)` to create a new message.
  */
-export declare const CreateTelemetryExportRequestSchema: GenMessage<CreateTelemetryExportRequest>;
+export declare const CreateOTLPExporterRequestSchema: GenMessage<CreateOTLPExporterRequest>;
 
 /**
- * @generated from message tailor.v1.CreateTelemetryExportResponse
+ * @generated from message tailor.v1.CreateOTLPExporterResponse
  */
-export declare type CreateTelemetryExportResponse = Message<"tailor.v1.CreateTelemetryExportResponse"> & {
+export declare type CreateOTLPExporterResponse = Message<"tailor.v1.CreateOTLPExporterResponse"> & {
   /**
-   * @generated from field: tailor.v1.TelemetryExport telemetry_export = 1;
+   * @generated from field: tailor.v1.OTLPExporter otlp_exporter = 1;
    */
-  telemetryExport?: TelemetryExport;
+  otlpExporter?: OTLPExporter;
 };
 
 /**
- * Describes the message tailor.v1.CreateTelemetryExportResponse.
- * Use `create(CreateTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.CreateOTLPExporterResponse.
+ * Use `create(CreateOTLPExporterResponseSchema)` to create a new message.
  */
-export declare const CreateTelemetryExportResponseSchema: GenMessage<CreateTelemetryExportResponse>;
+export declare const CreateOTLPExporterResponseSchema: GenMessage<CreateOTLPExporterResponse>;
 
 /**
- * @generated from message tailor.v1.UpdateTelemetryExportRequest
+ * @generated from message tailor.v1.UpdateOTLPExporterRequest
  */
-export declare type UpdateTelemetryExportRequest = Message<"tailor.v1.UpdateTelemetryExportRequest"> & {
+export declare type UpdateOTLPExporterRequest = Message<"tailor.v1.UpdateOTLPExporterRequest"> & {
   /**
    * @generated from field: string workspace_id = 1;
    */
   workspaceId: string;
 
   /**
-   * @generated from field: tailor.v1.TelemetryExport telemetry_export = 2;
+   * @generated from field: tailor.v1.OTLPExporter otlp_exporter = 2;
    */
-  telemetryExport?: TelemetryExport;
+  otlpExporter?: OTLPExporter;
 };
 
 /**
- * Describes the message tailor.v1.UpdateTelemetryExportRequest.
- * Use `create(UpdateTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.UpdateOTLPExporterRequest.
+ * Use `create(UpdateOTLPExporterRequestSchema)` to create a new message.
  */
-export declare const UpdateTelemetryExportRequestSchema: GenMessage<UpdateTelemetryExportRequest>;
+export declare const UpdateOTLPExporterRequestSchema: GenMessage<UpdateOTLPExporterRequest>;
 
 /**
- * @generated from message tailor.v1.UpdateTelemetryExportResponse
+ * @generated from message tailor.v1.UpdateOTLPExporterResponse
  */
-export declare type UpdateTelemetryExportResponse = Message<"tailor.v1.UpdateTelemetryExportResponse"> & {
+export declare type UpdateOTLPExporterResponse = Message<"tailor.v1.UpdateOTLPExporterResponse"> & {
   /**
-   * @generated from field: tailor.v1.TelemetryExport telemetry_export = 1;
+   * @generated from field: tailor.v1.OTLPExporter otlp_exporter = 1;
    */
-  telemetryExport?: TelemetryExport;
+  otlpExporter?: OTLPExporter;
 };
 
 /**
- * Describes the message tailor.v1.UpdateTelemetryExportResponse.
- * Use `create(UpdateTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.UpdateOTLPExporterResponse.
+ * Use `create(UpdateOTLPExporterResponseSchema)` to create a new message.
  */
-export declare const UpdateTelemetryExportResponseSchema: GenMessage<UpdateTelemetryExportResponse>;
+export declare const UpdateOTLPExporterResponseSchema: GenMessage<UpdateOTLPExporterResponse>;
 
 /**
- * @generated from message tailor.v1.GetTelemetryExportRequest
+ * @generated from message tailor.v1.GetOTLPExporterRequest
  */
-export declare type GetTelemetryExportRequest = Message<"tailor.v1.GetTelemetryExportRequest"> & {
+export declare type GetOTLPExporterRequest = Message<"tailor.v1.GetOTLPExporterRequest"> & {
   /**
    * @generated from field: string workspace_id = 1;
    */
@@ -102,31 +102,31 @@ export declare type GetTelemetryExportRequest = Message<"tailor.v1.GetTelemetryE
 };
 
 /**
- * Describes the message tailor.v1.GetTelemetryExportRequest.
- * Use `create(GetTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.GetOTLPExporterRequest.
+ * Use `create(GetOTLPExporterRequestSchema)` to create a new message.
  */
-export declare const GetTelemetryExportRequestSchema: GenMessage<GetTelemetryExportRequest>;
+export declare const GetOTLPExporterRequestSchema: GenMessage<GetOTLPExporterRequest>;
 
 /**
- * @generated from message tailor.v1.GetTelemetryExportResponse
+ * @generated from message tailor.v1.GetOTLPExporterResponse
  */
-export declare type GetTelemetryExportResponse = Message<"tailor.v1.GetTelemetryExportResponse"> & {
+export declare type GetOTLPExporterResponse = Message<"tailor.v1.GetOTLPExporterResponse"> & {
   /**
-   * @generated from field: tailor.v1.TelemetryExport telemetry_export = 1;
+   * @generated from field: tailor.v1.OTLPExporter otlp_exporter = 1;
    */
-  telemetryExport?: TelemetryExport;
+  otlpExporter?: OTLPExporter;
 };
 
 /**
- * Describes the message tailor.v1.GetTelemetryExportResponse.
- * Use `create(GetTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.GetOTLPExporterResponse.
+ * Use `create(GetOTLPExporterResponseSchema)` to create a new message.
  */
-export declare const GetTelemetryExportResponseSchema: GenMessage<GetTelemetryExportResponse>;
+export declare const GetOTLPExporterResponseSchema: GenMessage<GetOTLPExporterResponse>;
 
 /**
- * @generated from message tailor.v1.ListTelemetryExportsRequest
+ * @generated from message tailor.v1.ListOTLPExportersRequest
  */
-export declare type ListTelemetryExportsRequest = Message<"tailor.v1.ListTelemetryExportsRequest"> & {
+export declare type ListOTLPExportersRequest = Message<"tailor.v1.ListOTLPExportersRequest"> & {
   /**
    * @generated from field: string workspace_id = 1;
    */
@@ -149,19 +149,19 @@ export declare type ListTelemetryExportsRequest = Message<"tailor.v1.ListTelemet
 };
 
 /**
- * Describes the message tailor.v1.ListTelemetryExportsRequest.
- * Use `create(ListTelemetryExportsRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.ListOTLPExportersRequest.
+ * Use `create(ListOTLPExportersRequestSchema)` to create a new message.
  */
-export declare const ListTelemetryExportsRequestSchema: GenMessage<ListTelemetryExportsRequest>;
+export declare const ListOTLPExportersRequestSchema: GenMessage<ListOTLPExportersRequest>;
 
 /**
- * @generated from message tailor.v1.ListTelemetryExportsResponse
+ * @generated from message tailor.v1.ListOTLPExportersResponse
  */
-export declare type ListTelemetryExportsResponse = Message<"tailor.v1.ListTelemetryExportsResponse"> & {
+export declare type ListOTLPExportersResponse = Message<"tailor.v1.ListOTLPExportersResponse"> & {
   /**
-   * @generated from field: repeated tailor.v1.TelemetryExport telemetry_exports = 1;
+   * @generated from field: repeated tailor.v1.OTLPExporter otlp_exporters = 1;
    */
-  telemetryExports: TelemetryExport[];
+  otlpExporters: OTLPExporter[];
 
   /**
    * @generated from field: string next_page_token = 2;
@@ -175,15 +175,15 @@ export declare type ListTelemetryExportsResponse = Message<"tailor.v1.ListTeleme
 };
 
 /**
- * Describes the message tailor.v1.ListTelemetryExportsResponse.
- * Use `create(ListTelemetryExportsResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.ListOTLPExportersResponse.
+ * Use `create(ListOTLPExportersResponseSchema)` to create a new message.
  */
-export declare const ListTelemetryExportsResponseSchema: GenMessage<ListTelemetryExportsResponse>;
+export declare const ListOTLPExportersResponseSchema: GenMessage<ListOTLPExportersResponse>;
 
 /**
- * @generated from message tailor.v1.DeleteTelemetryExportRequest
+ * @generated from message tailor.v1.DeleteOTLPExporterRequest
  */
-export declare type DeleteTelemetryExportRequest = Message<"tailor.v1.DeleteTelemetryExportRequest"> & {
+export declare type DeleteOTLPExporterRequest = Message<"tailor.v1.DeleteOTLPExporterRequest"> & {
   /**
    * @generated from field: string workspace_id = 1;
    */
@@ -196,27 +196,27 @@ export declare type DeleteTelemetryExportRequest = Message<"tailor.v1.DeleteTele
 };
 
 /**
- * Describes the message tailor.v1.DeleteTelemetryExportRequest.
- * Use `create(DeleteTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.DeleteOTLPExporterRequest.
+ * Use `create(DeleteOTLPExporterRequestSchema)` to create a new message.
  */
-export declare const DeleteTelemetryExportRequestSchema: GenMessage<DeleteTelemetryExportRequest>;
+export declare const DeleteOTLPExporterRequestSchema: GenMessage<DeleteOTLPExporterRequest>;
 
 /**
- * @generated from message tailor.v1.DeleteTelemetryExportResponse
+ * @generated from message tailor.v1.DeleteOTLPExporterResponse
  */
-export declare type DeleteTelemetryExportResponse = Message<"tailor.v1.DeleteTelemetryExportResponse"> & {
+export declare type DeleteOTLPExporterResponse = Message<"tailor.v1.DeleteOTLPExporterResponse"> & {
 };
 
 /**
- * Describes the message tailor.v1.DeleteTelemetryExportResponse.
- * Use `create(DeleteTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.DeleteOTLPExporterResponse.
+ * Use `create(DeleteOTLPExporterResponseSchema)` to create a new message.
  */
-export declare const DeleteTelemetryExportResponseSchema: GenMessage<DeleteTelemetryExportResponse>;
+export declare const DeleteOTLPExporterResponseSchema: GenMessage<DeleteOTLPExporterResponse>;
 
 /**
- * @generated from message tailor.v1.TestTelemetryExportRequest
+ * @generated from message tailor.v1.TestOTLPExporterRequest
  */
-export declare type TestTelemetryExportRequest = Message<"tailor.v1.TestTelemetryExportRequest"> & {
+export declare type TestOTLPExporterRequest = Message<"tailor.v1.TestOTLPExporterRequest"> & {
   /**
    * @generated from field: string workspace_id = 1;
    */
@@ -229,15 +229,15 @@ export declare type TestTelemetryExportRequest = Message<"tailor.v1.TestTelemetr
 };
 
 /**
- * Describes the message tailor.v1.TestTelemetryExportRequest.
- * Use `create(TestTelemetryExportRequestSchema)` to create a new message.
+ * Describes the message tailor.v1.TestOTLPExporterRequest.
+ * Use `create(TestOTLPExporterRequestSchema)` to create a new message.
  */
-export declare const TestTelemetryExportRequestSchema: GenMessage<TestTelemetryExportRequest>;
+export declare const TestOTLPExporterRequestSchema: GenMessage<TestOTLPExporterRequest>;
 
 /**
- * @generated from message tailor.v1.TestTelemetryExportResponse
+ * @generated from message tailor.v1.TestOTLPExporterResponse
  */
-export declare type TestTelemetryExportResponse = Message<"tailor.v1.TestTelemetryExportResponse"> & {
+export declare type TestOTLPExporterResponse = Message<"tailor.v1.TestOTLPExporterResponse"> & {
   /**
    * @generated from field: bool success = 1;
    */
@@ -250,10 +250,10 @@ export declare type TestTelemetryExportResponse = Message<"tailor.v1.TestTelemet
 };
 
 /**
- * Describes the message tailor.v1.TestTelemetryExportResponse.
- * Use `create(TestTelemetryExportResponseSchema)` to create a new message.
+ * Describes the message tailor.v1.TestOTLPExporterResponse.
+ * Use `create(TestOTLPExporterResponseSchema)` to create a new message.
  */
-export declare const TestTelemetryExportResponseSchema: GenMessage<TestTelemetryExportResponse>;
+export declare const TestOTLPExporterResponseSchema: GenMessage<TestOTLPExporterResponse>;
 
 /**
  * @generated from message tailor.v1.CreateResourceAttributesConfigRequest

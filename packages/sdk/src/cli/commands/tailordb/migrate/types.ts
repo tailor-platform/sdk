@@ -3,7 +3,7 @@
  */
 
 import { Code, ConnectError } from "@connectrpc/connect";
-import { logger } from "@/cli/shared/logger";
+import { logger } from "#/cli/shared/logger";
 import { formatMigrationNumber } from "./migration-number";
 import type { MigrationDiff } from "./diff-calculator";
 

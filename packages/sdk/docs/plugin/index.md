@@ -6,7 +6,7 @@ Plugins extend TailorDB types by automatically generating additional types, exec
 
 ## Overview
 
-When you run `tailor-sdk generate`, the SDK:
+When you run `tailor generate`, the SDK:
 
 1. Loads all TailorDB types with plugin attachments
 2. Passes each type to the attached plugins
@@ -102,18 +102,18 @@ Plugins can generate:
 - **Field Extensions**: Additional fields added to the source type
 - **Output Files**: TypeScript code and other files via generation-time hooks
 
-Generated files are placed under `.tailor-sdk/<plugin-id>/` (the plugin ID is sanitized,
+Generated files are placed under `.tailor/<plugin-id>/` (the plugin ID is sanitized,
 e.g. `@example/soft-delete` → `example-soft-delete`), such as:
 
-- `.tailor-sdk/example-soft-delete/types`
-- `.tailor-sdk/example-soft-delete/executors`
+- `.tailor/example-soft-delete/types`
+- `.tailor/example-soft-delete/executors`
 
 ## Plugin Lifecycle
 
-Plugins have 5 hooks across two lifecycle phases. Each hook fires at a specific point in the `tailor-sdk generate` pipeline:
+Plugins have 5 hooks across two lifecycle phases. Each hook fires at a specific point in the `tailor generate` pipeline:
 
 ```
-tailor-sdk generate
+tailor generate
 │
 ├─ Load TailorDB types
 │   ├─ onTypeLoaded        ← per type with .plugin() attached

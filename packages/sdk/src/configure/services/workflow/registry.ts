@@ -1,4 +1,4 @@
-import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
+import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.

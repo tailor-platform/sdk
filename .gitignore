@@ -32,7 +32,7 @@ coverage/
 !.vscode/extensions.json
 
 # Tailor Platform SDK
-**/.tailor-sdk/**
+**/.tailor/**
 tailor.d.ts
 !packages/create-sdk/templates/*/tailor.d.ts
 
@@ -46,7 +46,7 @@ tailor.d.ts
 .claude/skills/*
 !.claude/skills/llm-challenge
 !.claude/skills/docs-check
-!.claude/skills/tailor-sdk
+!.claude/skills/tailor
 !.claude/skills/e2e-setup
 AGENTS.local.md
 CLAUDE.local.md

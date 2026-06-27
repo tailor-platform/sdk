@@ -1,9 +1,9 @@
-import { IdPLang, IdPPermissionPermit } from "@tailor-proto/tailor/v1/idp_resource_pb";
+import { IdPLang, IdPPermissionPermit } from "@tailor-platform/tailor-proto/idp_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { planIdP } from "./idp";
+import type { Application } from "#/cli/services/application";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
-import type { Application } from "@/cli/services/application";
-import type { OperatorClient } from "@/cli/shared/client";
 
 vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
@@ -49,10 +49,10 @@ function createMockApplication(opts?: {
   const serviceOpts = opts?.idpServices ?? [{}];
   return {
     name: appName,
+    staticWebsiteServices: [],
     idpServices: serviceOpts.map((service) => {
       const result: Record<string, unknown> = {
         name: service.name ?? "idp-a",
-        authorization: "loggedIn",
         lang: "ja",
         userAuthPolicy: {
           useNonEmailIdentifier: false,
@@ -92,7 +92,6 @@ function createMockApplication(opts?: {
 function createMockClient(opts?: {
   services?: Array<{
     name: string;
-    authorization: string;
     lang: IdPLang;
     publishUserEvents: boolean;
     userAuthPolicy?: Record<string, unknown>;
@@ -109,7 +108,7 @@ function createMockClient(opts?: {
     listIdPServices: vi.fn().mockResolvedValue({
       idpServices: services.map((service) => ({
         namespace: { name: service.name },
-        authorization: service.authorization,
+        authorization: "",
         lang: service.lang,
         publishUserEvents: service.publishUserEvents,
         userAuthPolicy: service.userAuthPolicy,
@@ -150,7 +149,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -195,7 +193,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -243,7 +240,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "true==true",
           lang: IdPLang.EN,
           publishUserEvents: false,
           label: appName,
@@ -265,7 +261,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -308,7 +303,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -352,7 +346,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -392,6 +385,7 @@ describe("planIdP", () => {
       update: [{ conditions: [], permit: true }],
       delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       sendPasswordResetEmail: [{ conditions: [], permit: true }],
+      unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     };
 
     const result = await planIdP(context);
@@ -405,7 +399,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -436,6 +429,7 @@ describe("planIdP", () => {
             update: [],
             delete: [],
             sendPasswordResetEmail: [],
+            unenrollMfa: [],
           },
           label: appName,
         },
@@ -453,58 +447,7 @@ describe("planIdP", () => {
       update: [],
       delete: [],
       sendPasswordResetEmail: [],
-    };
-
-    const result = await planIdP(context);
-
-    expect(result.changeSet.service.unchanged).toHaveLength(1);
-    expect(result.changeSet.service.updates).toHaveLength(0);
-  });
-
-  test("marks idp service unchanged when authorization is omitted and remote is empty string", async () => {
-    const app = createMockApplication();
-    // oxlint-disable-next-line no-explicit-any
-    delete (app.idpServices[0] as any).authorization;
-
-    const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          authorization: "",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
-          label: appName,
-        },
-      ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
-    });
-
-    const context = {
-      ...createContext(client),
-      application: app,
+      unenrollMfa: [],
     };
 
     const result = await planIdP(context);
@@ -518,7 +461,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           userAuthPolicy: {
@@ -548,6 +490,7 @@ describe("planIdP", () => {
             update: [],
             delete: [],
             sendPasswordResetEmail: [],
+            unenrollMfa: [],
           },
           label: appName,
         },
@@ -568,7 +511,6 @@ describe("planIdP", () => {
       services: [
         {
           name: "idp-a",
-          authorization: "user != null && size(user.id) > 0",
           lang: IdPLang.JA,
           publishUserEvents: true,
           label: appName,

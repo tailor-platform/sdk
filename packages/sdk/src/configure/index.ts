@@ -1,5 +1,5 @@
-import { t as _t } from "@/configure/types";
-import type * as helperTypes from "@/types/helpers";
+import { t as _t } from "#/configure/types/index";
+import type * as helperTypes from "#/types/helpers";
 
 type TailorOutput<T> = helperTypes.output<T>;
 
@@ -15,19 +15,19 @@ export namespace t {
   export type infer<T> = TailorOutput<T>;
 }
 
-export { type TailorField } from "@/configure/types/type";
+export { type TailorField } from "#/configure/types/type";
 export {
   type TailorPrincipal,
-  type AttributeMap,
+  type Attributes,
   type AttributeList,
   type Env,
-} from "@/runtime/types";
-export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
-export { type IdpNameRegistry, type IdpName } from "@/configure/types/idp-name";
+} from "#/runtime/types";
+export { type MachineUserNameRegistry, type MachineUserName } from "#/configure/types/machine-user";
+export { type IdpNameRegistry, type IdpName } from "#/configure/types/idp-name";
 
-export * from "@/configure/services";
+export * from "#/configure/services/index";
 
-export { defineConfig, definePlugins } from "@/configure/config";
+export { defineConfig, definePlugins } from "#/configure/config/index";
 
 // Plugin types for custom plugin development
 export type {
@@ -46,7 +46,7 @@ export type {
   PluginExecutorContext,
   PluginExecutorContextBase,
   TailorDBTypeForPlugin,
-} from "@/plugin/types";
+} from "#/plugin/types";
 
 // Generation-time hook context types for plugin development
 export type {
@@ -56,4 +56,4 @@ export type {
   TailorDBNamespaceData,
   ResolverNamespaceData,
   GeneratorResult,
-} from "@/plugin/types";
+} from "#/plugin/types";

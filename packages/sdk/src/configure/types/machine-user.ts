@@ -1,1 +1,1 @@
-export type { MachineUserName, MachineUserNameRegistry } from "@/configure/services/auth/types";
+export type { MachineUserName, MachineUserNameRegistry } from "#/configure/services/auth/types";

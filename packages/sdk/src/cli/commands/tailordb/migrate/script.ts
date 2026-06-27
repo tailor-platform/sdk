@@ -12,13 +12,13 @@ import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { configArg } from "@/cli/shared/args";
-import { logBetaWarning } from "@/cli/shared/beta";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
-import { logger, styles } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { configArg } from "#/cli/shared/args";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
+import { logger, styles } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { writeDbTypesFile } from "./db-types-generator";
 import { parseMigrationNumberArg } from "./migration-number";
@@ -100,7 +100,7 @@ async function script(options: ScriptOptions): Promise<void> {
 
   logger.newline();
   logger.log("Edit the script to implement your data migration logic.");
-  logger.log("It will be executed by 'tailor-sdk deploy' between Pre and Post phases.");
+  logger.log("It will be executed by 'tailor deploy' between Pre and Post phases.");
 
   const editor = getConfiguredEditorCommand();
   if (!editor) return;

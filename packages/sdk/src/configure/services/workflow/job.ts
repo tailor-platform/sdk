@@ -1,8 +1,8 @@
-import { brandValue } from "@/utils/brand";
+import { brandValue } from "#/utils/brand";
 import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
 import { withWorkflowTestInvoker } from "./test-env-key";
-import type { TailorEnv, TailorPrincipal } from "@/runtime/types";
-import type { JsonCompatible } from "@/types/helpers";
+import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
+import type { JsonCompatible } from "#/types/helpers";
 
 /**
  * Context object passed as the second argument to workflow job body functions.
@@ -54,8 +54,6 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
-export { WORKFLOW_TEST_ENV_KEY } from "./test-env-key";
-
 interface CreateWorkflowJobConfig<Name extends string, I, O> {
   readonly name: Name;
   readonly body: JobBody<I, O>;
@@ -98,17 +96,17 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> {
   const userBody = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
-  const body = process.env.TAILOR_PLATFORM_BUNDLE
+  const body = process.env.__TAILOR_PLATFORM_BUNDLE
     ? userBody
     : (input: I, context: WorkflowJobContext): O | Promise<O> =>
         withWorkflowTestInvoker(context.invoker, () => userBody(input, context));
 
   // Test-only local runner registry; the platform bundle sets the flag so it is DCE'd.
-  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
+  if (!process.env.__TAILOR_PLATFORM_BUNDLE) {
     registerJob(config.name, body as RegisteredJobBody);
   }
 
-  const trigger = process.env.TAILOR_PLATFORM_BUNDLE
+  const trigger = process.env.__TAILOR_PLATFORM_BUNDLE
     ? () => {
         throw new Error(
           "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",

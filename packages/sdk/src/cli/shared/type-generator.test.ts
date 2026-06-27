@@ -1,13 +1,13 @@
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { defineAuth } from "@/configure/services/auth";
-import { t } from "@/configure/types/type";
+import { defineAuth } from "#/configure/services/auth/index";
+import { t } from "#/configure/types/type";
 import {
   extractAttributesFromConfig,
   generateTypeDefinition,
   resolveTypeDefinitionPath,
 } from "./type-generator";
-import type { AttributeListConfig, AttributeMapConfig } from "./type-generator";
+import type { AttributeListConfig, AttributesConfig } from "./type-generator";
 
 describe("generateTypeDefinition", () => {
   test("should generate tuple type in __tuple property", () => {
@@ -19,12 +19,12 @@ describe("generateTypeDefinition", () => {
   });
 
   test("should generate interface AttributeList for declaration merging", () => {
-    const attributeMap: AttributeMapConfig = {
+    const attributes: AttributesConfig = {
       role: '"MANAGER" | "STAFF"',
     };
     const attributeList: AttributeListConfig = [];
 
-    const result = generateTypeDefinition(attributeMap, attributeList);
+    const result = generateTypeDefinition(attributes, attributeList);
 
     // Should use interface instead of type for AttributeList
     expect(result).toContain("interface AttributeList");
@@ -32,23 +32,23 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("__tuple?: []");
   });
 
-  test("should generate AttributeMap interface", () => {
-    const attributeMap: AttributeMapConfig = {
+  test("should generate Attributes interface", () => {
+    const attributes: AttributesConfig = {
       role: '"MANAGER" | "STAFF"',
       isActive: "boolean",
     };
 
-    const result = generateTypeDefinition(attributeMap, undefined);
+    const result = generateTypeDefinition(attributes, undefined);
 
-    expect(result).toContain("interface AttributeMap");
+    expect(result).toContain("interface Attributes");
     expect(result).toContain('role: "MANAGER" | "STAFF"');
     expect(result).toContain("isActive: boolean");
   });
 
-  test("should generate empty AttributeMap when no attributes", () => {
+  test("should generate empty Attributes when no attributes", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
-    expect(result).toContain("interface AttributeMap {}");
+    expect(result).toContain("interface Attributes {}");
     expect(result).toContain("interface AttributeList");
     expect(result).toContain("__tuple?: []");
   });
@@ -123,17 +123,17 @@ describe("generateTypeDefinition", () => {
 });
 
 describe("resolveTypeDefinitionPath", () => {
-  const originalEnv = process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+  const originalEnv = process.env.TAILOR_DTS_PATH;
 
   beforeEach(() => {
-    delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+    delete process.env.TAILOR_DTS_PATH;
   });
 
   afterEach(() => {
     if (originalEnv !== undefined) {
-      process.env.TAILOR_PLATFORM_SDK_DTS_PATH = originalEnv;
+      process.env.TAILOR_DTS_PATH = originalEnv;
     } else {
-      delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+      delete process.env.TAILOR_DTS_PATH;
     }
   });
 
@@ -142,21 +142,21 @@ describe("resolveTypeDefinitionPath", () => {
     expect(result).toBe(path.resolve("/project", "tailor.d.ts"));
   });
 
-  test("should use TAILOR_PLATFORM_SDK_DTS_PATH when set to an absolute path", () => {
-    process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "/custom/output/types.d.ts";
+  test("should use TAILOR_DTS_PATH when set to an absolute path", () => {
+    process.env.TAILOR_DTS_PATH = "/custom/output/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe("/custom/output/types.d.ts");
   });
 
-  test("should resolve TAILOR_PLATFORM_SDK_DTS_PATH relative to cwd when relative", () => {
-    process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "custom/types.d.ts";
+  test("should resolve TAILOR_DTS_PATH relative to cwd when relative", () => {
+    process.env.TAILOR_DTS_PATH = "custom/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe(path.resolve("custom/types.d.ts"));
   });
 });
 
 describe("extractAttributesFromConfig + generateTypeDefinition", () => {
-  test("renders machineUserAttributes into AttributeMap", () => {
+  test("renders machineUserAttributes into Attributes", () => {
     const config = {
       name: "test-app",
       auth: defineAuth("auth", {
@@ -177,8 +177,8 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
       }),
     };
 
-    const { attributeMap } = extractAttributesFromConfig(config);
-    const content = generateTypeDefinition(attributeMap, undefined);
+    const { attributes } = extractAttributesFromConfig(config);
+    const content = generateTypeDefinition(attributes, undefined);
 
     expect(content).toContain('role: "ADMIN" | "WORKER";');
     expect(content).toContain("isActive: boolean;");
@@ -199,10 +199,10 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
       }),
     };
 
-    const { attributeMap, machineUserNames } = extractAttributesFromConfig(config);
+    const { attributes, machineUserNames } = extractAttributesFromConfig(config);
     expect(machineUserNames).toEqual(["admin", "worker"]);
 
-    const content = generateTypeDefinition(attributeMap, undefined, undefined, machineUserNames);
+    const content = generateTypeDefinition(attributes, undefined, undefined, machineUserNames);
     expect(content).toContain("interface MachineUserNameRegistry");
     expect(content).toContain("admin: true;");
     expect(content).toContain("worker: true;");

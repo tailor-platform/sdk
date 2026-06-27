@@ -75,7 +75,7 @@ describe("loadConfigPath", () => {
   beforeEach(() => {
     vi.resetModules();
     process.env = { ...originalEnv };
-    delete process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+    delete process.env.TAILOR_CONFIG_PATH;
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-test-"));
     vi.spyOn(process, "cwd").mockReturnValue(tempDir);
   });
@@ -92,7 +92,7 @@ describe("loadConfigPath", () => {
   });
 
   test("returns env config path when set", () => {
-    process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH = "/env/path/config.ts";
+    process.env.TAILOR_CONFIG_PATH = "/env/path/config.ts";
     const result = loadConfigPath();
     expect(result).toBe("/env/path/config.ts");
   });
@@ -527,13 +527,6 @@ describe("loadAccessToken", () => {
       expect(result).toBe(validToken);
     });
 
-    test("TAILOR_PLATFORM_TOKEN takes precedence over TAILOR_TOKEN", async () => {
-      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
-      vi.stubEnv("TAILOR_TOKEN", otherToken);
-      const result = await loadAccessToken();
-      expect(result).toBe(validToken);
-    });
-
     test("TAILOR_PLATFORM_TOKEN takes precedence over profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       writePlatformConfig({
@@ -557,15 +550,12 @@ describe("loadAccessToken", () => {
     });
   });
 
-  describe("env.TAILOR_TOKEN (deprecated)", () => {
-    test("returns token from TAILOR_TOKEN when TAILOR_PLATFORM_TOKEN not set", async () => {
+  describe("env.TAILOR_TOKEN", () => {
+    test("ignores the removed TAILOR_TOKEN fallback", async () => {
       vi.stubEnv("TAILOR_TOKEN", validToken);
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const result = await loadAccessToken();
-      expect(result).toBe(validToken);
-      expect(warnSpy).toHaveBeenCalledWith(
-        "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
-      );
+      await expect(loadAccessToken()).rejects.toThrow(/Tailor Platform token not found/);
+      expect(warnSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -1,11 +1,11 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, expect, test, expectTypeOf } from "vitest";
-import { platformSerialize } from "@/utils/test/platform-serialize";
+import { platformSerialize } from "#/utils/test/platform-serialize";
 import { createWorkflowJob, type WorkflowJob } from "./job";
 import { getRegisteredJob } from "./registry";
 import { buildJobContext } from "./test-env-key";
 import { createWorkflow } from "./workflow";
-import type { TailorPrincipal } from "@/runtime/types";
+import type { TailorPrincipal } from "#/runtime/types";
 
 async function withRegisteredJobRuntime<T>(run: () => Promise<T>): Promise<T> {
   const root = globalThis as {

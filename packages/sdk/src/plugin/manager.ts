@@ -1,10 +1,10 @@
-import { db, type TailorAnyDBType } from "@/configure/services/tailordb";
-import { hasGenerationHooks, getPluginGenerationDependencies } from "@/plugin/guards";
-import { assertDefined } from "@/utils/assert";
+import { db, type TailorAnyDBType } from "#/configure/services/tailordb/index";
+import { hasGenerationHooks, getPluginGenerationDependencies } from "#/plugin/guards";
+import { assertDefined } from "#/utils/assert";
 import type {
   TailorTypePermission,
   TailorTypeGqlPermission,
-} from "@/configure/services/tailordb/permission";
+} from "#/configure/services/tailordb/permission";
 import type {
   DependencyKind,
   Plugin,
@@ -14,8 +14,8 @@ import type {
   PluginNamespaceProcessContext,
   PluginOutput,
   TypePluginOutput,
-} from "@/plugin/types";
-import type { TailorDBTypeRaw } from "@/types/tailordb.generated";
+} from "#/plugin/types";
+import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
 
 /**
  * Context for processing a single plugin attachment on a raw TailorDBType
@@ -563,7 +563,7 @@ export interface PluginTypeGenerationResult {
  * Parameters for generating plugin files
  */
 export interface GeneratePluginFilesParams {
-  /** Base output directory (e.g., .tailor-sdk/plugin) */
+  /** Base output directory (e.g., .tailor/plugin) */
   outputDir: string;
   /** Map of source type names to their source info */
   sourceTypeInfoMap: Map<string, SourceTypeInfo>;

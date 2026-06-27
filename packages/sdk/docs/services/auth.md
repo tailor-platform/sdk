@@ -182,7 +182,7 @@ export const auth = defineAuth("my-auth", {
 To update types in `tailor.d.ts`, run:
 
 ```bash
-tailor-sdk generate
+tailor generate
 ```
 
 ## Machine Users
@@ -264,7 +264,7 @@ Machine users are useful for:
 Get a machine user token using the CLI:
 
 ```bash
-tailor-sdk machineuser token <name>
+tailor machineuser token <name>
 ```
 
 ### Specifying a machine user invoker
@@ -308,7 +308,7 @@ export default createResolver({
 });
 ```
 
-Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `apply`) after defining new machine users to refresh it.
+Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `apply`) after defining new machine users to refresh it.
 
 ## OAuth 2.0 Clients
 
@@ -348,7 +348,7 @@ oauth2Clients: {
 Get OAuth2 client credentials using the CLI:
 
 ```bash
-tailor-sdk oauth2client get <name>
+tailor oauth2client get <name>
 ```
 
 ## Identity Provider
@@ -369,12 +369,12 @@ For the official Tailor Platform documentation, see [AuthConnection Guide](https
 
 > [!WARNING]
 > **Managing connections through `tailor.config.ts` is unreliable for shared and CI deploys.**
-> A deploy revokes and recreates the connection — discarding the token obtained via `authconnection authorize` — whenever it cannot confirm the secret is unchanged. That check relies on a hash stored locally in `.tailor-sdk/secrets-state.json`, which is gitignored and therefore not shared across machines. So a deploy from CI, a clean checkout, another developer's machine, or after deleting `.tailor-sdk/` recreates the connection and drops its token. Only repeated deploys from the same machine that still holds that state keep the token.
+> A deploy revokes and recreates the connection — discarding the token obtained via `authconnection authorize` — whenever it cannot confirm the secret is unchanged. That check relies on a hash stored locally in `.tailor/secrets-state.json`, which is gitignored and therefore not shared across machines. So a deploy from CI, a clean checkout, another developer's machine, or after deleting `.tailor/` recreates the connection and drops its token. Only repeated deploys from the same machine that still holds that state keep the token.
 >
 > Because of this, prefer to **create the connection and its token from the Console**. You can jump to the connections page with:
 >
 > ```bash
-> tailor-sdk authconnection open
+> tailor authconnection open
 > ```
 >
 > The `connections` field in `defineAuth()` and the `authconnection authorize` flow are documented below for reference.
@@ -409,10 +409,10 @@ export const auth = defineAuth("my-auth", {
 });
 ```
 
-After `tailor-sdk deploy`, authorize the connection:
+After `tailor deploy`, authorize the connection:
 
 ```bash
-tailor-sdk authconnection authorize --name google-connection \
+tailor authconnection authorize --name google-connection \
   --scopes "openid,profile,email"
 ```
 
@@ -432,10 +432,10 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 
 ### Change Detection
 
-The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
+The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor/` directory forces all connections to be re-sent.
 
 > [!WARNING]
-> The secret hash lives in `.tailor-sdk/secrets-state.json`, which is gitignored and not shared across machines or CI. When that state is missing — a clean checkout, CI, another machine, or after deleting `.tailor-sdk/` — a deploy cannot confirm the secret is unchanged, so it revokes and recreates the connection and discards the token stored by `authconnection authorize`. For shared and CI workflows, manage the connection and create its token from the Console (`tailor-sdk authconnection open`) instead.
+> The secret hash lives in `.tailor/secrets-state.json`, which is gitignored and not shared across machines or CI. When that state is missing — a clean checkout, CI, another machine, or after deleting `.tailor/` — a deploy cannot confirm the secret is unchanged, so it revokes and recreates the connection and discards the token stored by `authconnection authorize`. For shared and CI workflows, manage the connection and create its token from the Console (`tailor authconnection open`) instead.
 
 ### `auth.getConnectionToken()`
 
@@ -463,19 +463,19 @@ Auth connections can also be managed via the CLI:
 
 ```bash
 # Open the connections page in the Console (recommended for creating connections/tokens)
-tailor-sdk authconnection open
+tailor authconnection open
 
 # Authorize (opens browser for OAuth2 flow)
-tailor-sdk authconnection authorize --name google-connection
+tailor authconnection authorize --name google-connection
 
 # List all connections
-tailor-sdk authconnection list
+tailor authconnection list
 
 # Revoke a connection
-tailor-sdk authconnection revoke --name google-connection
+tailor authconnection revoke --name google-connection
 ```
 
-Connection creation is handled by `tailor-sdk deploy` via the config, but recreation on deploy can drop the authorized token (see the warning at the top of this section) — for shared and CI workflows, create connections and tokens from the Console (`tailor-sdk authconnection open`) instead.
+Connection creation is handled by `tailor deploy` via the config, but recreation on deploy can drop the authorized token (see the warning at the top of this section) — for shared and CI workflows, create connections and tokens from the Console (`tailor authconnection open`) instead.
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 
@@ -538,21 +538,21 @@ Manage Auth resources using the CLI:
 
 ```bash
 # Auth connections
-tailor-sdk authconnection authorize --name <name>
-tailor-sdk authconnection list
-tailor-sdk authconnection revoke --name <name>
+tailor authconnection authorize --name <name>
+tailor authconnection list
+tailor authconnection revoke --name <name>
 
 # List machine users
-tailor-sdk machineuser list
+tailor machineuser list
 
 # Get machine user token
-tailor-sdk machineuser token <name>
+tailor machineuser token <name>
 
 # List OAuth2 clients
-tailor-sdk oauth2client list
+tailor oauth2client list
 
 # Get OAuth2 client credentials
-tailor-sdk oauth2client get <name>
+tailor oauth2client get <name>
 ```
 
 See [Auth Resource Commands](../cli/auth.md) for full documentation.

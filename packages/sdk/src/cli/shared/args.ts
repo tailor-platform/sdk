@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#/utils/assert";
 import { logger } from "./logger";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -201,8 +201,8 @@ export const workspaceArgs = {
 export const configArg = {
   config: arg(z.string().default("tailor.config.ts"), {
     alias: "c",
-    description: "Path to SDK config file",
-    env: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+    description: "Path to Tailor config file",
+    env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;

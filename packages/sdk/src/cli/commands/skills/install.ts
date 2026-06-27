@@ -2,8 +2,8 @@ import { dirname, resolve } from "pathe";
 import { resolvePackageJSON } from "pkg-types";
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { runSkillsInstaller } from "@/cli/shared/skills-installer";
+import { defineAppCommand } from "#/cli/shared/command";
+import { runSkillsInstaller } from "#/cli/shared/skills-installer";
 
 // Resolve the SDK package root at runtime so the skills directory is found
 // regardless of how the file is bundled (tsdown inlines non-entry modules).
@@ -19,7 +19,7 @@ const DEFAULT_AGENT = "claude-code";
 
 export const installCommand = defineAppCommand({
   name: "install",
-  description: "Install the tailor-sdk agent skill from the installed SDK package.",
+  description: "Install the tailor agent skill from the installed SDK package.",
   args: z
     .object({
       agent: arg(z.string().default(DEFAULT_AGENT), {

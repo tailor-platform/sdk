@@ -22,7 +22,7 @@ import { convertFieldConfigToProto } from "./snapshot-manifest";
 import type { DiffChange, FieldDiffChange } from "./diff-calculator";
 import type { PendingMigration } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 /**
  * Diff change kinds that require pre-migration schema adjustments.

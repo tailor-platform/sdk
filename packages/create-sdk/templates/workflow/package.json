@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "tailor-sdk generate",
-    "deploy": "tailor-sdk deploy",
+    "generate": "tailor generate",
+    "deploy": "tailor deploy",
     "test": "vitest --project unit",
     "test:unit": "vitest --project unit",
     "test:e2e": "vitest --project e2e",
@@ -17,12 +17,12 @@
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.2",
-    "graphql": "16.14.2",
+    "graphql": "17.0.1",
     "graphql-request": "7.4.0",
-    "oxfmt": "0.54.0",
-    "oxlint": "1.69.0",
+    "oxfmt": "0.55.0",
+    "oxlint": "1.70.0",
     "oxlint-tsgolint": "0.23.0",
     "typescript": "6.0.3",
-    "vitest": "4.1.8"
+    "vitest": "4.1.9"
   }
 }

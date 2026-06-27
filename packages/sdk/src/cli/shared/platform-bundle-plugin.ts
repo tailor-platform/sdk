@@ -1,9 +1,9 @@
 import type * as rolldown from "rolldown";
 
-// Match the exact `process.env.TAILOR_PLATFORM_BUNDLE` member-expression: the
+// Match the exact `process.env.__TAILOR_PLATFORM_BUNDLE` member-expression: the
 // leading lookbehind rejects a longer owner (`foo.process.env…`) or identifier,
 // the trailing `\b` rejects a longer key (`…_BUNDLE_MODE`).
-const GATE = /(?<![\w$.])process\.env\.TAILOR_PLATFORM_BUNDLE\b/g;
+const GATE = /(?<![\w$.])process\.env\.__TAILOR_PLATFORM_BUNDLE\b/g;
 
 // Fold the gate to `true` so the minifier DCEs the test-only workflow
 // registry/serialize runner. Apply in every bundler that builds runnable
@@ -13,7 +13,7 @@ const GATE = /(?<![\w$.])process\.env\.TAILOR_PLATFORM_BUNDLE\b/g;
 export const platformBundleDefinePlugin: rolldown.Plugin = {
   name: "tailor-platform-bundle-define",
   transform(code) {
-    if (!code.includes("process.env.TAILOR_PLATFORM_BUNDLE")) return null;
+    if (!code.includes("process.env.__TAILOR_PLATFORM_BUNDLE")) return null;
     return { code: code.replace(GATE, "true") };
   },
 };

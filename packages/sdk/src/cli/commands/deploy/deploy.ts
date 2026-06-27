@@ -2,20 +2,20 @@ import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
-import { hashFile } from "@/cli/cache/hasher";
-import { createCacheManager } from "@/cli/cache/manager";
-import { loadApplication, type Application } from "@/cli/services/application";
-import { assertUniqueTailorDBTypeNamesWithExternal } from "@/cli/services/tailordb/type-name-validation";
-import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { logger, styles } from "@/cli/shared/logger";
-import { readPackageJson } from "@/cli/shared/package-json";
-import { parseBoolean } from "@/cli/shared/parse-boolean";
-import { generateUserTypes } from "@/cli/shared/type-generator";
-import { withSpan } from "@/cli/telemetry";
-import { PluginManager } from "@/plugin/manager";
+import { hashFile } from "#/cli/cache/hasher";
+import { createCacheManager } from "#/cli/cache/manager";
+import { loadApplication, type Application } from "#/cli/services/application";
+import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
+import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "#/cli/shared/context";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { logger, styles } from "#/cli/shared/logger";
+import { readPackageJson } from "#/cli/shared/package-json";
+import { parseBoolean } from "#/cli/shared/parse-boolean";
+import { generateUserTypes } from "#/cli/shared/type-generator";
+import { withSpan } from "#/cli/telemetry/index";
+import { PluginManager } from "#/plugin/manager";
 import { applyAIGateway, planAIGateway } from "./aigateway";
 import { applyApplication, planApplication } from "./application";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
@@ -394,7 +394,7 @@ export async function deploy(options?: DeployOptions) {
     } = await withSpan("build", async () => {
       const dryRun = options?.dryRun ?? false;
       const buildOnly =
-        options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
+        options?.buildOnly ?? parseBoolean(process.env.TAILOR_DEPLOY_BUILD_ONLY) === true;
 
       const { config, plugins } = await withSpan("build.loadConfig", async () => {
         const foundPath = loadConfigPath(options?.configPath);
@@ -482,7 +482,7 @@ export async function deploy(options?: DeployOptions) {
     }
 
     // Note: the normal apply path intentionally skips writing bundle files to
-    // .tailor-sdk/. Bundles are kept in memory and uploaded directly to the
+    // .tailor/. Bundles are kept in memory and uploaded directly to the
     // function registry. To test a function locally, use `function test-run`
     // with a .ts source file instead of a pre-bundled .js file.
 

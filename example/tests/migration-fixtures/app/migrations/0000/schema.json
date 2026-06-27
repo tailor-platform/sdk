@@ -1,0 +1,382 @@
+{
+  "version": 1,
+  "namespace": "migrationdb",
+  "createdAt": "2026-06-24T04:43:34.470Z",
+  "types": {
+    "SalesOrder": {
+      "name": "SalesOrder",
+      "pluralForm": "SalesOrders",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "customerID": {
+          "type": "uuid",
+          "required": true
+        },
+        "status": {
+          "type": "string",
+          "required": false
+        },
+        "totalPrice": {
+          "type": "integer",
+          "required": false
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            }
+          }
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": true,
+          "description": "Record update timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            },
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            }
+          }
+        }
+      },
+      "settings": {},
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          }
+        ]
+      }
+    },
+    "Supplier": {
+      "name": "Supplier",
+      "pluralForm": "Suppliers",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": false
+        },
+        "country": {
+          "type": "string",
+          "required": false
+        },
+        "phone": {
+          "type": "string",
+          "required": true
+        },
+        "state": {
+          "type": "enum",
+          "required": true,
+          "allowedValues": [
+            {
+              "value": "Alabama"
+            },
+            {
+              "value": "Alaska"
+            }
+          ]
+        },
+        "city": {
+          "type": "string",
+          "required": true
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            }
+          }
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": true,
+          "description": "Record update timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            },
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            }
+          }
+        }
+      },
+      "settings": {},
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          }
+        ]
+      }
+    },
+    "User": {
+      "name": "User",
+      "pluralForm": "Users",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": true
+        },
+        "email": {
+          "type": "string",
+          "required": true
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            }
+          }
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": true,
+          "description": "Record update timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            },
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            }
+          }
+        }
+      },
+      "settings": {},
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
 import { type ExecutorListInfo, toExecutorListInfo } from "./transform";
 
 export interface ListExecutorsOptions {
@@ -81,7 +81,7 @@ export const listCommand = defineAppCommand({
     if (!jsonOutput) {
       const hasWebhook = executors.some((e) => e.triggerType === "webhook");
       if (hasWebhook) {
-        logger.info("To see webhook URLs, run: tailor-sdk executor webhook list");
+        logger.info("To see webhook URLs, run: tailor executor webhook list");
       }
     }
   },

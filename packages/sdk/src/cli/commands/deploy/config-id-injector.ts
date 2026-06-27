@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import { isCI } from "std-env";
-import { logger } from "@/cli/shared/logger";
-import { parseBoolean } from "@/cli/shared/parse-boolean";
-import { assertDefined } from "@/utils/assert";
+import { logger } from "#/cli/shared/logger";
+import { parseBoolean } from "#/cli/shared/parse-boolean";
+import { assertDefined } from "#/utils/assert";
 import type { CallExpression, ObjectExpression, ObjectProperty } from "@oxc-project/types";
 
 export interface EnsureConfigIdResult {
@@ -169,7 +169,7 @@ async function assertConfigIdInCI(configPath: string): Promise<void> {
     throw new Error(
       `tailor.config.ts is missing an 'id'. CI does not auto-generate one ` +
         `(each run would be treated as a separate app and break resource ownership). ` +
-        `Run 'tailor-sdk setup github' or 'tailor-sdk deploy' locally and commit the injected id.`,
+        `Run 'tailor setup' or 'tailor deploy' locally and commit the injected id.`,
     );
   }
   // Keep CI and local behavior aligned: ensureConfigId() enforces the same
@@ -190,7 +190,7 @@ async function assertConfigIdInCI(configPath: string): Promise<void> {
  * ownership. CI dry-runs (plan) perform the same check read-only, so a
  * forgotten id fails at PR time instead of at deploy. Ephemeral pipelines that
  * intentionally deploy a fresh app per run (such as e2e harnesses) can opt
- * back into injection with `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true`.
+ * back into injection with `TAILOR_CI_ALLOW_ID_INJECTION=true`.
  * Local dry-run and build-only flows skip both injection and the check (no
  * on-disk side effects are expected, and build-only never talks to the
  * platform).
@@ -207,8 +207,7 @@ export async function ensureConfigIdForDeploy(obj: {
   const { configPath, dryRun, buildOnly } = obj;
   if (buildOnly) return;
 
-  const allowCIInjection =
-    parseBoolean(process.env.TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION) === true;
+  const allowCIInjection = parseBoolean(process.env.TAILOR_CI_ALLOW_ID_INJECTION) === true;
   const strictCI = isCI && !allowCIInjection;
 
   if (dryRun) {

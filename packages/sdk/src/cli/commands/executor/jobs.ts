@@ -4,14 +4,14 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import {
   ExecutorJobStatus,
   ExecutorTargetType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import {
   Condition_Operator,
   ConditionSchema,
   FilterSchema,
   PageDirection,
-} from "@tailor-proto/tailor/v1/resource_pb";
+} from "@tailor-platform/tailor-proto/resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -22,22 +22,23 @@ import {
   parseDuration,
   toPageDirection,
   workspaceArgs,
-} from "@/cli/shared/args";
-import { fetchAll, fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { formatKeyValueTable } from "@/cli/shared/format";
-import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
-import { logger, styles } from "@/cli/shared/logger";
-import { spinner } from "@/cli/shared/spinner";
+} from "#/cli/shared/args";
+import { fetchAll, fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { formatKeyValueTable } from "#/cli/shared/format";
+import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
+import { logger, styles } from "#/cli/shared/logger";
+import { spinner } from "#/cli/shared/spinner";
+import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {
+  classifyExecutorJobStatus,
   colorizeExecutorJobStatus,
   colorizeFunctionExecutionStatus,
   executorTargetTypeToString,
   isFunctionExecutionTerminalStatus,
-  isExecutorJobTerminalStatus,
   parseExecutorJobStatus,
 } from "./status";
 import {
@@ -76,7 +77,9 @@ export type WatchExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> 
   workspaceId?: string;
   profile?: string;
   interval?: number;
+  timeout?: number;
   logs?: boolean;
+  showProgress?: boolean;
 };
 
 /**
@@ -111,7 +114,9 @@ export interface WatchExecutorJobOptions {
   workspaceId?: string;
   profile?: string;
   interval?: number;
+  timeout?: number;
   logs?: boolean;
+  showProgress?: boolean;
 }
 
 export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
@@ -127,6 +132,10 @@ export interface WorkflowJobLog {
 export interface WatchExecutorJobResult {
   job: ExecutorJobDetailInfo;
   targetType: string;
+  elapsedMs: number;
+  attempts: number;
+  timedOut: boolean;
+  lastError: string | null;
   workflowExecutionId?: string;
   workflowStatus?: string;
   workflowJobLogs?: WorkflowJobLog[];
@@ -137,6 +146,17 @@ export interface WatchExecutorJobResult {
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString("en-US", { hour12: false });
+}
+
+function createUnknownExecutorJob(executorName: string, jobId: string): ExecutorJobDetailInfo {
+  return {
+    id: jobId,
+    executorName,
+    status: "UNKNOWN",
+    scheduledAt: "N/A",
+    createdAt: "N/A",
+    updatedAt: "N/A",
+  };
 }
 
 /**
@@ -306,7 +326,48 @@ export async function watchExecutorJob<E extends ExecutorLike>(
   });
 
   const interval = options.interval ?? 3000;
-  const sp = spinner().start("Waiting for executor job to complete...");
+  const timeout = options.timeout;
+  const showProgress = options.showProgress ?? !logger.jsonMode;
+  const startedAt = Date.now();
+  const sp = showProgress ? spinner().start("Waiting for executor job to complete...") : null;
+
+  let attempts = 0;
+  let lastError: string | null = null;
+
+  type WatchExecutorJobResultBase = Omit<
+    WatchExecutorJobResult,
+    "elapsedMs" | "attempts" | "timedOut" | "lastError"
+  >;
+
+  const remainingTimeout = (): number | undefined => {
+    if (timeout === undefined) {
+      return undefined;
+    }
+    return timeout - (Date.now() - startedAt);
+  };
+
+  const withWaitMetadata = (
+    result: WatchExecutorJobResultBase,
+    timedOut: boolean,
+  ): WatchExecutorJobResult => ({
+    ...result,
+    elapsedMs: Date.now() - startedAt,
+    attempts,
+    timedOut,
+    lastError,
+  });
+
+  const timeoutResult = (
+    targetType: string,
+    job: Awaited<ReturnType<typeof client.getExecutorJob>>["job"],
+  ): WatchExecutorJobResult =>
+    withWaitMetadata(
+      {
+        job: job ? toExecutorJobInfo(job) : createUnknownExecutorJob(executorName, options.jobId),
+        targetType,
+      },
+      true,
+    );
 
   try {
     // Get executor details to determine target type
@@ -327,47 +388,75 @@ export async function watchExecutorJob<E extends ExecutorLike>(
     // loop exits when the executor job reaches a terminal status
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (true) {
-      const response = await client.getExecutorJob({
-        workspaceId,
-        executorName,
-        jobId: options.jobId,
-      });
-
-      job = response.job;
-      if (!job) {
-        throw new Error(`Job '${options.jobId}' not found.`);
+      const remainingMs = remainingTimeout();
+      if (remainingMs !== undefined && remainingMs <= 0) {
+        sp?.fail("Executor job wait timed out.");
+        return timeoutResult(targetTypeStr, job);
       }
 
-      if (isExecutorJobTerminalStatus(job.status)) {
-        break;
+      try {
+        attempts += 1;
+        const response = await client.getExecutorJob({
+          workspaceId,
+          executorName,
+          jobId: options.jobId,
+        });
+
+        job = response.job;
+        if (!job) {
+          throw new Error(`Job '${options.jobId}' not found.`);
+        }
+        lastError = null;
+
+        if (classifyExecutorJobStatus(job.status) !== "transient") {
+          break;
+        }
+      } catch (error) {
+        if (!isRetryableWaitError(error)) {
+          throw error;
+        }
+        lastError = formatWaitError(error);
+        if (sp) {
+          sp.text = `Retrying executor job poll... (${formatTime(new Date())})`;
+        }
       }
 
-      sp.text = `Waiting for executor job... (${formatTime(new Date())})`;
-      await setTimeout(interval);
+      const nextRemainingMs = remainingTimeout();
+      if (nextRemainingMs !== undefined && nextRemainingMs <= 0) {
+        sp?.fail("Executor job wait timed out.");
+        return timeoutResult(targetTypeStr, job);
+      }
+
+      if (sp) {
+        sp.text = `Waiting for executor job... (${formatTime(new Date())})`;
+      }
+      await setTimeout(
+        nextRemainingMs === undefined ? interval : Math.min(interval, nextRemainingMs),
+      );
     }
 
     const jobInfo = toExecutorJobInfo(job);
     const coloredStatus = colorizeExecutorJobStatus(jobInfo.status);
 
     if (job.status === ExecutorJobStatus.SUCCESS) {
-      sp.succeed(`Executor job completed: ${coloredStatus}`);
+      sp?.succeed(`Executor job completed: ${coloredStatus}`);
     } else {
-      sp.fail(`Executor job completed: ${coloredStatus}`);
+      sp?.fail(`Executor job completed: ${coloredStatus}`);
     }
 
     // Get attempts to find operationReference
-    const attempts = await fetchAll(async (pageToken, maxPageSize) => {
-      const { attempts, nextPageToken } = await client.listExecutorJobAttempts({
+    const attemptRecords = await fetchAll(async (pageToken, maxPageSize) => {
+      const { attempts: jobAttempts, nextPageToken } = await client.listExecutorJobAttempts({
         workspaceId,
         jobId: options.jobId,
         pageToken,
         pageSize: maxPageSize,
         pageDirection: PageDirection.DESC,
       });
-      return [attempts, nextPageToken];
+      return [jobAttempts, nextPageToken];
     });
 
-    const attemptInfos = attempts.map(toExecutorJobAttemptInfo);
+    const attemptInfos = attemptRecords.map(toExecutorJobAttemptInfo);
     const jobDetail: ExecutorJobDetailInfo = {
       ...jobInfo,
       attempts: attemptInfos,
@@ -381,55 +470,82 @@ export async function watchExecutorJob<E extends ExecutorLike>(
       switch (targetType) {
         case ExecutorTargetType.WORKFLOW: {
           // Wait for workflow execution with progress display
-          sp.stop();
+          sp?.stop();
 
           try {
+            const workflowTimeout = remainingTimeout();
+            if (workflowTimeout !== undefined && workflowTimeout <= 0) {
+              return withWaitMetadata(
+                {
+                  job: jobDetail,
+                  targetType: targetTypeStr,
+                  workflowExecutionId: operationReference,
+                },
+                true,
+              );
+            }
+
             // Use waitForExecution with progress display (same as workflow start)
             const executionResult = await waitForExecution({
               client,
               workspaceId,
               executionId: operationReference,
               interval,
-              showProgress: true,
+              timeout: workflowTimeout,
+              showProgress,
               trackJobs: true,
             });
+            attempts += executionResult.attempts;
+            lastError = executionResult.lastError;
 
             // Fetch logs if requested
             let workflowJobLogs: WorkflowJobLog[] | undefined;
             if (options.logs) {
-              const { execution: execWithLogs } = await getWorkflowExecution({
-                executionId: operationReference,
-                workspaceId: options.workspaceId,
-                profile: options.profile,
-                logs: true,
-              });
-              if (execWithLogs.jobDetails) {
-                workflowJobLogs = execWithLogs.jobDetails
-                  .filter((job) => job.logs || job.result)
-                  .map((job) => ({
-                    jobName: job.stackedJobName || job.id,
-                    logs: job.logs,
-                    result: job.result,
-                  }));
+              try {
+                const { execution: execWithLogs } = await getWorkflowExecution({
+                  executionId: operationReference,
+                  workspaceId: options.workspaceId,
+                  profile: options.profile,
+                  logs: true,
+                });
+                if (execWithLogs.jobDetails) {
+                  workflowJobLogs = execWithLogs.jobDetails
+                    .filter((job) => job.logs || job.result)
+                    .map((job) => ({
+                      jobName: job.stackedJobName || job.id,
+                      logs: job.logs,
+                      result: job.result,
+                    }));
+                }
+              } catch (error) {
+                logger.warn(
+                  `Could not fetch workflow execution logs: ${error instanceof Error ? error.message : error}`,
+                );
               }
             }
 
-            return {
-              job: jobDetail,
-              targetType: targetTypeStr,
-              workflowExecutionId: operationReference,
-              workflowStatus: executionResult.status,
-              workflowJobLogs,
-            };
+            return withWaitMetadata(
+              {
+                job: jobDetail,
+                targetType: targetTypeStr,
+                workflowExecutionId: operationReference,
+                workflowStatus: executionResult.status,
+                workflowJobLogs,
+              },
+              executionResult.timedOut,
+            );
           } catch (error) {
             logger.warn(
               `Could not track workflow execution: ${error instanceof Error ? error.message : error}`,
             );
-            return {
-              job: jobDetail,
-              targetType: targetTypeStr,
-              workflowExecutionId: operationReference,
-            };
+            return withWaitMetadata(
+              {
+                job: jobDetail,
+                targetType: targetTypeStr,
+                workflowExecutionId: operationReference,
+              },
+              false,
+            );
           }
         }
 
@@ -437,50 +553,103 @@ export async function watchExecutorJob<E extends ExecutorLike>(
         case ExecutorTargetType.JOB_FUNCTION:
           {
             // Wait for function execution
-            sp.start(`Waiting for function execution ${operationReference}...`);
+            sp?.start(`Waiting for function execution ${operationReference}...`);
 
             try {
-              // loop exits when the function execution reaches a terminal status
+              let functionStatus: string | undefined;
               // oxlint-disable-next-line typescript/no-unnecessary-condition
               while (true) {
-                const { execution } = await client.getFunctionExecution({
-                  workspaceId,
-                  executionId: operationReference,
-                });
-
-                if (!execution) {
-                  throw new Error(`Function execution '${operationReference}' not found.`);
+                const functionTimeout = remainingTimeout();
+                if (functionTimeout !== undefined && functionTimeout <= 0) {
+                  sp?.fail("Function execution wait timed out.");
+                  return withWaitMetadata(
+                    {
+                      job: jobDetail,
+                      targetType: targetTypeStr,
+                      functionExecutionId: operationReference,
+                      functionStatus,
+                    },
+                    true,
+                  );
                 }
 
-                if (isFunctionExecutionTerminalStatus(execution.status)) {
-                  const statusStr = functionExecutionStatusToString(execution.status);
-                  const coloredFnStatus = colorizeFunctionExecutionStatus(statusStr);
-                  if (execution.status === FunctionExecution_Status.SUCCESS) {
-                    sp.succeed(`Function execution completed: ${coloredFnStatus}`);
-                  } else {
-                    sp.fail(`Function execution completed: ${coloredFnStatus}`);
+                try {
+                  attempts += 1;
+                  const { execution } = await client.getFunctionExecution({
+                    workspaceId,
+                    executionId: operationReference,
+                  });
+
+                  if (!execution) {
+                    throw new Error(`Function execution '${operationReference}' not found.`);
                   }
-                  return {
-                    job: jobDetail,
-                    targetType: targetTypeStr,
-                    functionExecutionId: operationReference,
-                    functionStatus: statusStr,
-                    functionLogs: options.logs ? execution.logs || undefined : undefined,
-                  };
+
+                  lastError = null;
+                  functionStatus = functionExecutionStatusToString(execution.status);
+
+                  if (isFunctionExecutionTerminalStatus(execution.status)) {
+                    const coloredFnStatus = colorizeFunctionExecutionStatus(functionStatus);
+                    if (execution.status === FunctionExecution_Status.SUCCESS) {
+                      sp?.succeed(`Function execution completed: ${coloredFnStatus}`);
+                    } else {
+                      sp?.fail(`Function execution completed: ${coloredFnStatus}`);
+                    }
+                    return withWaitMetadata(
+                      {
+                        job: jobDetail,
+                        targetType: targetTypeStr,
+                        functionExecutionId: operationReference,
+                        functionStatus,
+                        functionLogs: options.logs ? execution.logs || undefined : undefined,
+                      },
+                      false,
+                    );
+                  }
+                } catch (error) {
+                  if (!isRetryableWaitError(error)) {
+                    throw error;
+                  }
+                  lastError = formatWaitError(error);
+                  if (sp) {
+                    sp.text = `Retrying function execution poll... (${formatTime(new Date())})`;
+                  }
                 }
 
-                sp.text = `Waiting for function execution... (${formatTime(new Date())})`;
-                await setTimeout(interval);
+                const nextFunctionTimeout = remainingTimeout();
+                if (nextFunctionTimeout !== undefined && nextFunctionTimeout <= 0) {
+                  sp?.fail("Function execution wait timed out.");
+                  return withWaitMetadata(
+                    {
+                      job: jobDetail,
+                      targetType: targetTypeStr,
+                      functionExecutionId: operationReference,
+                      functionStatus,
+                    },
+                    true,
+                  );
+                }
+
+                if (sp) {
+                  sp.text = `Waiting for function execution... (${formatTime(new Date())})`;
+                }
+                await setTimeout(
+                  nextFunctionTimeout === undefined
+                    ? interval
+                    : Math.min(interval, nextFunctionTimeout),
+                );
               }
             } catch (error) {
-              sp.warn(
+              sp?.warn(
                 `Could not track function execution: ${error instanceof Error ? error.message : error}`,
               );
-              return {
-                job: jobDetail,
-                targetType: targetTypeStr,
-                functionExecutionId: operationReference,
-              };
+              return withWaitMetadata(
+                {
+                  job: jobDetail,
+                  targetType: targetTypeStr,
+                  functionExecutionId: operationReference,
+                },
+                false,
+              );
             }
           }
           break;
@@ -490,10 +659,31 @@ export async function watchExecutorJob<E extends ExecutorLike>(
       }
     }
 
-    return { job: jobDetail, targetType: targetTypeStr };
+    return withWaitMetadata({ job: jobDetail, targetType: targetTypeStr }, false);
   } finally {
-    sp.stop();
+    sp?.stop();
   }
+}
+
+/**
+ * Build a user-facing failure message for an executor job wait result.
+ * @param result - Executor job wait result
+ * @returns Failure message, or undefined when the wait succeeded
+ */
+export function getExecutorWaitFailureMessage(result: WatchExecutorJobResult): string | undefined {
+  if (result.timedOut) {
+    return `Timed out waiting for executor job '${result.job.id}'. Last status: ${result.job.status}.`;
+  }
+  if (result.job.status === "FAILED" || result.job.status === "CANCELED") {
+    return `Executor job '${result.job.id}' completed with status ${result.job.status}.`;
+  }
+  if (result.workflowStatus === "FAILED") {
+    return `Workflow execution '${result.workflowExecutionId}' failed.`;
+  }
+  if (result.functionStatus === "FAILED") {
+    return `Function execution '${result.functionExecutionId}' failed.`;
+  }
+  return undefined;
 }
 
 function printJobWithAttempts(job: ExecutorJobDetailInfo): void {
@@ -577,6 +767,10 @@ export const jobsCommand = defineAppCommand({
         alias: "i",
         description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
       }),
+      timeout: arg(durationArg.default("5m"), {
+        alias: "t",
+        description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
+      }),
       ...pagedLogArgs,
       limit: arg(nonNegativeIntArg.default(50), {
         description: "Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)",
@@ -588,6 +782,7 @@ export const jobsCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    const jsonOutput = logger.jsonMode || args.json;
     if (args.jobId) {
       if (args.wait) {
         const result = await watchExecutorJob({
@@ -596,11 +791,13 @@ export const jobsCommand = defineAppCommand({
           workspaceId: args["workspace-id"],
           profile: args.profile,
           interval: parseDuration(args.interval),
+          timeout: parseDuration(args.timeout),
           logs: args.logs,
+          showProgress: !jsonOutput,
         });
 
         // Print result
-        if (!args.json) {
+        if (!jsonOutput) {
           logger.log(styles.bold(`Target Type: ${result.targetType}\n`));
           printJobWithAttempts(result.job);
           if (result.workflowExecutionId) {
@@ -649,6 +846,10 @@ export const jobsCommand = defineAppCommand({
         } else {
           logger.out(result);
         }
+        const failureMessage = getExecutorWaitFailureMessage(result);
+        if (failureMessage) {
+          throw new Error(failureMessage);
+        }
         return;
       }
 
@@ -659,7 +860,7 @@ export const jobsCommand = defineAppCommand({
         workspaceId: args["workspace-id"],
         profile: args.profile,
       });
-      if (args.attempts && !args.json) {
+      if (args.attempts && !jsonOutput) {
         printJobWithAttempts(job);
       } else {
         logger.out(job);
