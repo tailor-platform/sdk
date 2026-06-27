@@ -522,6 +522,17 @@ function matchResidualPattern(content: string, pattern: CodemodPatternGroup): st
     : null;
 }
 
+function matchResidualPatternFragment(
+  content: string,
+  pattern: CodemodPatternGroup,
+): string | null {
+  for (const fragment of content.split(SOURCE_STRING_FRAGMENT_SEPARATOR)) {
+    const label = matchResidualPattern(fragment, pattern);
+    if (label != null) return label;
+  }
+  return null;
+}
+
 function legacyPatternWarnings(
   relative: string,
   content: string,
@@ -537,13 +548,13 @@ function legacyPatternWarnings(
     );
     if (sourceStringContent != null) {
       for (const pattern of lt.sourceStringLegacyPatterns) {
-        const label = matchResidualPattern(sourceStringContent, pattern);
+        const label = matchResidualPatternFragment(sourceStringContent, pattern);
         if (label != null) found.add(label);
       }
     }
     if (sourceTextContent != null) {
       for (const pattern of lt.sourceTextLegacyPatterns) {
-        const label = matchResidualPattern(sourceTextContent, pattern);
+        const label = matchResidualPatternFragment(sourceTextContent, pattern);
         if (label != null) found.add(label);
       }
     }

@@ -1289,8 +1289,9 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
   const args = sourceArrayElements(parent);
   if (args[0] == null || nodeRangeKey(args[0]) !== nodeRangeKey(node)) return false;
   const argv = args[1];
+  if (argv == null) return true;
   return (
-    argv?.kind() !== "array" || !arrayHasCliRenameLegacyArgs(sourceArrayElements(argv), 0, source)
+    argv.kind() === "array" && !arrayHasCliRenameLegacyArgs(sourceArrayElements(argv), 0, source)
   );
 }
 
