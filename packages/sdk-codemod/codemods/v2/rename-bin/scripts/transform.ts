@@ -194,6 +194,21 @@ function isTailorPackageValue(value: string): boolean {
   );
 }
 
+function sourcePathBasename(value: string): string {
+  return value.split(/[\\/]/).at(-1) ?? value;
+}
+
+function isTailorSdkBinaryTokenValue(value: string): boolean {
+  return TAILOR_SDK_TOKEN_RE.test(sourcePathBasename(value));
+}
+
+function isTailorCliTokenValue(value: string): boolean {
+  const basename = sourcePathBasename(value);
+  return (
+    TAILOR_CLI_TOKEN_RE.test(value) || basename === "tailor" || TAILOR_SDK_TOKEN_RE.test(basename)
+  );
+}
+
 function replaceSourceSpans(
   value: string,
   replacements: Map<number, string>,
@@ -484,9 +499,8 @@ function isAfterPackageRunnerPrefix(source: string, offset: number): boolean {
   );
   const tokens = sourceTokens(source.slice(segmentStart + 1, offset).trim());
   const executable = tokens?.[0];
-  return (
-    executable === "npx" || executable === "bunx" || executable === "pnpm" || executable === "yarn"
-  );
+  if (executable === "npx" || executable === "bunx") return true;
+  return (executable === "pnpm" || executable === "yarn") && tokens?.includes("dlx") === true;
 }
 
 function isPackageFlagValueInPackageRunner(source: string, offset: number): boolean {
@@ -559,7 +573,7 @@ function isAfterTailorCliToken(source: string, offset: number): boolean {
   );
   const segment = source.slice(segmentStart + 1, offset).trim();
   const tokens = sourceTokens(segment);
-  return tokens != null && tokens.some((token) => TAILOR_CLI_TOKEN_RE.test(token));
+  return tokens != null && tokens.some((token) => isTailorCliTokenValue(token));
 }
 
 function isAfterTemplatePlaceholder(source: string, offset: number): boolean {
@@ -578,7 +592,7 @@ function isTemplateSubstitutionCliValue(text: string, offset: number): boolean {
   if (tokens == null || tokens.length === 0) return false;
   const previous = tokens.at(-1)!;
   if (!isTailorCliValueFlag(previous)) return false;
-  return tokens.slice(0, -1).some((token) => TAILOR_CLI_TOKEN_RE.test(token));
+  return tokens.slice(0, -1).some((token) => isTailorCliTokenValue(token));
 }
 
 function needsCliRenameMigration(value: string): boolean {
@@ -586,10 +600,35 @@ function needsCliRenameMigration(value: string): boolean {
   const tokens = sourceTokens(value);
   if (tokens == null) return CLI_RENAME_LEGACY_RE.test(value);
   for (let index = 0; index < tokens.length; index += 1) {
-    if (!TAILOR_SDK_TOKEN_RE.test(tokens[index]!)) continue;
+    const token = tokens[index]!;
+    if (isTailorCliValueToken(tokens, index)) continue;
+    if (token !== value && token.includes("tailor-sdk") && needsCliRenameMigration(token)) {
+      return true;
+    }
+    if (!isTailorSdkBinaryTokenValue(token)) continue;
     if (tokensAfterCliBinaryNeedRename(tokens, index + 1)) return true;
   }
   return false;
+}
+
+function isTailorCliValueToken(tokens: readonly string[], index: number): boolean {
+  const token = tokens[index]!;
+  const flag = token.split("=", 1)[0]!;
+  if (
+    token.includes("=") &&
+    TAILOR_CLI_VALUE_FLAGS.has(flag) &&
+    tokens.slice(0, index).some((value) => isTailorCliTokenValue(value))
+  ) {
+    return true;
+  }
+
+  const previous = tokens[index - 1];
+  return (
+    previous != null &&
+    TAILOR_CLI_VALUE_FLAGS.has(previous.split("=", 1)[0]!) &&
+    !previous.includes("=") &&
+    tokens.slice(0, index - 1).some((value) => isTailorCliTokenValue(value))
+  );
 }
 
 function tokensAfterCliBinaryNeedRename(tokens: readonly string[], start: number): boolean {
@@ -1060,12 +1099,15 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
 
 function arrayHasCliRenameLegacyArgs(elements: SgNode[], start: number, source: string): boolean {
   for (let index = start; index < elements.length; index += 1) {
-    const value = sourceStringContent(elements[index]!, source);
+    const value =
+      sourceStringContent(elements[index]!, source) ??
+      sourceStringRawContent(elements[index]!, source);
     if (value == null) continue;
     if (TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!) && !value.includes("=")) {
       index += 1;
       continue;
     }
+    if (CLI_RENAME_LEGACY_RE.test(value)) return true;
     if (value === "apply" || value === "crash-report") return true;
     if (value === "--machineuser" || value.startsWith("--machineuser=")) return true;
   }
@@ -1077,13 +1119,13 @@ function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: stri
   if (argumentsNode?.kind() === "arguments") {
     const callArgs = sourceArrayElements(argumentsNode);
     const executable = callArgs[0] == null ? null : sourceStringContent(callArgs[0]!, source);
-    if (executable != null && TAILOR_CLI_TOKEN_RE.test(executable)) return true;
+    if (executable != null && isTailorCliTokenValue(executable)) return true;
   }
 
   const elements = sourceArrayElements(arrayNode);
   return elements.slice(0, index).some((element) => {
     const value = sourceStringContent(element, source);
-    return value != null && TAILOR_CLI_TOKEN_RE.test(value);
+    return value != null && isTailorCliTokenValue(value);
   });
 }
 
@@ -1156,6 +1198,24 @@ function templateSubstitutionPlaceholder(
   }
 }
 
+function templateSubstitutionsNeedCliRenameMigration(
+  text: string,
+  substitutions: ReadonlyArray<{ placeholder: string; text: string }>,
+): boolean {
+  let restored = text;
+  for (const substitution of substitutions) {
+    restored = restored.replaceAll(
+      substitution.placeholder,
+      templateSubstitutionMigrationText(substitution.text),
+    );
+  }
+  return needsCliRenameMigration(restored);
+}
+
+function templateSubstitutionMigrationText(value: string): string {
+  return value.startsWith("${") && value.endsWith("}") ? value.slice(2, -1).trim() : value;
+}
+
 function pushTemplateStringEdit(
   edits: Array<[number, number, string]>,
   source: string,
@@ -1191,7 +1251,9 @@ function pushTemplateStringEdit(
     text = `${text.slice(0, childStart)}${placeholder}${text.slice(childEnd)}`;
   }
 
-  let replacement = renameSourceCommandText(text);
+  let replacement = templateSubstitutionsNeedCliRenameMigration(text, substitutions)
+    ? text
+    : renameSourceCommandText(text);
   for (const substitution of substitutions) {
     replacement = replacement.replaceAll(substitution.placeholder, substitution.text);
   }
