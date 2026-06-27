@@ -74,6 +74,19 @@ describe("getApplicableCodemods", () => {
           pattern instanceof RegExp && pattern.test("await tailor.secretmanager.getSecret();"),
       ),
     ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("const { getSecret } = tailor.secretmanager;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp &&
+          pattern.test("const getInvoker = tailor.context.getInvoker;"),
+      ),
+    ).toBe(true);
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 

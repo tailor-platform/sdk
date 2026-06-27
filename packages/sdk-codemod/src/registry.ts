@@ -457,6 +457,7 @@ export const allCodemods: CodemodPackage[] = [
     sourceStringSuspiciousPatterns: [
       "new tailor.idp.Client",
       /[=(:,[]\s*tailor\.idp\.Client\b/,
+      /(?:(?:[=(:,{]|\[)\s*|\b(?:return|await)\s+)tailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?\b/,
       /\btailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
       "tailor[",
       /\btailordb\.file\.[A-Za-z_$][\w$]*\s*\(/,
