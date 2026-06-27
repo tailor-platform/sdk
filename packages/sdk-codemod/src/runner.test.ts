@@ -663,12 +663,25 @@ describe("runCodemods", () => {
         "const { getSecret } = tailor.secretmanager;",
         "const getInvoker = tailor.context.getInvoker;",
         "const { upload } = tailordb.file;",
+        "const e: TailorErrors = err;",
+        "type R = Promise<tailordb.QueryResult<User>>;",
+      ].join("\\n");
+      const typeOnlyEmbeddedCode = [
+        "type U = Promise<tailor.idp.User>;",
+        "type Ctor = typeof tailordb.Client;",
+        "return tailordb.Client;",
+        "foo(tailordb.Client);",
+        "type F = () => tailordb.QueryResult<User>;",
       ].join("\\n");
       const seedSource = [
         `const code = \`${embeddedCode}\`;`,
         'const note = "tailor.idp.Client is mentioned in prose";',
       ].join("\n");
       await fs.promises.writeFile(path.join(dir, "seed.mjs"), seedSource);
+      await fs.promises.writeFile(
+        path.join(dir, "types.mjs"),
+        `const code = \`${typeOnlyEmbeddedCode}\`;`,
+      );
       await fs.promises.writeFile(
         path.join(dir, "prose.mjs"),
         ['const separator = "=";', 'const note = "tailor.idp.Client is mentioned in prose";'].join(
@@ -688,9 +701,12 @@ describe("runCodemods", () => {
                 sourceStringSuspiciousPatterns: [
                   "new tailor.idp.Client",
                   /[=(:,[]\s*tailor\.idp\.Client\b/,
-                  /(?:(?:[=(:,{]|\[)\s*|\b(?:return|await)\s+)tailor\.(?:context|idp|secretmanager)(?:\.[A-Za-z_$][\w$]*)?\b/,
+                  /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailor\.(?:context|idp|secretmanager)(?:\.[A-Za-z_$][\w$]*)?\b/,
                   /\btailor\.(?:idp|secretmanager)\.[A-Za-z_$][\w$]*\s*\(/,
                   /(?:(?:[=(:,{]|\[)\s*|\b(?:return|await)\s+)tailordb\.file\b/,
+                  /(?:\bnew\s+|(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.(?:Client|QueryResult)\b/,
+                  /<\s*tailordb\.(?:QueryResult)\b/,
+                  /(?:[:=<]\s*|\bas\s+)Tailor(?:Errors)\b/,
                 ],
                 prompt: "Review embedded runtime global usage by hand.",
               },
@@ -702,13 +718,15 @@ describe("runCodemods", () => {
         true,
       );
 
-      expect(result.llmReviews).toEqual([
-        {
-          codemodId: "test/llm-source-string",
-          prompt: "Review embedded runtime global usage by hand.",
-          files: ["seed.mjs"],
-        },
-      ]);
+      expect(result.llmReviews).toHaveLength(1);
+      expect(result.llmReviews[0]).toMatchObject({
+        codemodId: "test/llm-source-string",
+        prompt: "Review embedded runtime global usage by hand.",
+      });
+      expect(result.llmReviews[0]?.files).toEqual(
+        expect.arrayContaining(["seed.mjs", "types.mjs"]),
+      );
+      expect(result.llmReviews[0]?.files).toHaveLength(2);
     });
 
     test("keeps LLM review patterns inside template substitutions", async () => {
