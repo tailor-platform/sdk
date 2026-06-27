@@ -2193,7 +2193,7 @@ interface ReviewPrincipalBinding {
   shadowRoot?: SgNode;
 }
 
-function resolvesToReviewPrincipalBinding(
+function resolvesToReviewBinding(
   node: SgNode,
   bindings: ReviewPrincipalBinding[],
   root: SgNode,
@@ -2209,9 +2209,29 @@ function resolvesToReviewPrincipalBinding(
   });
 }
 
+function resolvesToReviewPrincipalBinding(
+  node: SgNode,
+  bindings: ReviewPrincipalBinding[],
+  root: SgNode,
+): boolean {
+  return resolvesToReviewBinding(node, bindings, root);
+}
+
+function isReviewContextCallerMemberExpression(
+  node: SgNode,
+  contextBindings: ReviewPrincipalBinding[],
+  root: SgNode,
+): boolean {
+  if (node.kind() !== "member_expression") return false;
+  if (node.field("property")?.text() !== "caller") return false;
+  const object = node.field("object");
+  return object ? resolvesToReviewBinding(object, contextBindings, root) : false;
+}
+
 function isPrincipalOptionalMemberExpression(
   node: SgNode,
   principalBindings: ReviewPrincipalBinding[],
+  contextBindings: ReviewPrincipalBinding[],
   root: SgNode,
 ): boolean {
   if (node.kind() !== "member_expression") return false;
@@ -2221,32 +2241,34 @@ function isPrincipalOptionalMemberExpression(
   if (object.kind() === "identifier") {
     return resolvesToReviewPrincipalBinding(object, principalBindings, root);
   }
-  if (object.kind() !== "member_expression") return false;
-  return object.field("property")?.text() === "caller";
+  return isReviewContextCallerMemberExpression(object, contextBindings, root);
 }
 
 function isDirectPrincipalExpression(
   node: SgNode,
   principalBindings: ReviewPrincipalBinding[],
+  contextBindings: ReviewPrincipalBinding[],
   root: SgNode,
 ): boolean {
   if (resolvesToReviewPrincipalBinding(node, principalBindings, root)) return true;
-  if (node.kind() !== "member_expression") return false;
-  if (node.children().some((child) => child.kind() === "optional_chain")) return false;
-  return node.field("property")?.text() === "caller";
+  return isReviewContextCallerMemberExpression(node, contextBindings, root);
 }
 
 function nodeContainsArgumentPrincipalOptionalAccess(
   node: SgNode,
   principalBindings: ReviewPrincipalBinding[],
+  contextBindings: ReviewPrincipalBinding[],
   root: SgNode,
 ): boolean {
   if (isFunctionNode(node)) return false;
-  if (isDirectPrincipalExpression(node, principalBindings, root)) return true;
-  if (isPrincipalOptionalMemberExpression(node, principalBindings, root)) return true;
+  if (isDirectPrincipalExpression(node, principalBindings, contextBindings, root)) return true;
+  if (isPrincipalOptionalMemberExpression(node, principalBindings, contextBindings, root))
+    return true;
   return node
     .children()
-    .some((child) => nodeContainsArgumentPrincipalOptionalAccess(child, principalBindings, root));
+    .some((child) =>
+      nodeContainsArgumentPrincipalOptionalAccess(child, principalBindings, contextBindings, root),
+    );
 }
 
 function reviewCallName(call: SgNode): string {
@@ -2265,6 +2287,7 @@ function collectNullableCallerReviewFindings(
   source: string,
   file: string,
   principalBindings: ReviewPrincipalBinding[],
+  contextBindings: ReviewPrincipalBinding[],
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {
@@ -2273,7 +2296,14 @@ function collectNullableCallerReviewFindings(
     const args = call.field("arguments");
     const nullableArg = args
       ?.children()
-      .find((child) => nodeContainsArgumentPrincipalOptionalAccess(child, principalBindings, root));
+      .find((child) =>
+        nodeContainsArgumentPrincipalOptionalAccess(
+          child,
+          principalBindings,
+          contextBindings,
+          root,
+        ),
+      );
     if (!nullableArg) continue;
 
     const memberName = findMemberCallName(call);
@@ -2486,6 +2516,51 @@ function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
   return bodies;
 }
 
+function collectResolverContextBindings(root: SgNode): ReviewPrincipalBinding[] {
+  const bindings: ReviewPrincipalBinding[] = [];
+  const rootRange = root.range();
+  const rootScope: [number, number] = [rootRange.start.index, rootRange.end.index];
+
+  for (const arrow of collectResolverBodyArrows(root)) {
+    const param = getFirstFunctionParam(arrow);
+    const pattern = param ? getFunctionParamPattern(param) : null;
+    const body = arrow.field("body");
+    if (!pattern || pattern.kind() !== "identifier" || !body) continue;
+
+    const bodyRange = body.range();
+    bindings.push({
+      name: pattern.text(),
+      bindingStart: pattern.range().start.index,
+      scope: [bodyRange.start.index, bodyRange.end.index],
+      shadowRoot: body,
+    });
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+    for (const decl of declarators) {
+      const name = decl.field("name");
+      const value = decl.field("value");
+      if (!name || name.kind() !== "identifier" || !value) continue;
+
+      const bindingStart = name.range().start.index;
+      if (bindings.some((binding) => binding.bindingStart === bindingStart)) continue;
+      if (!resolvesToReviewBinding(value, bindings, root)) continue;
+
+      bindings.push({
+        name: name.text(),
+        bindingStart,
+        scope: enclosingScopeRange(decl) ?? rootScope,
+      });
+      changed = true;
+    }
+  }
+
+  return bindings;
+}
+
 function collectCallerPatternBindings(
   pattern: SgNode,
   scope: [number, number],
@@ -2524,7 +2599,10 @@ function collectCallerPatternBindings(
   }
 }
 
-function collectResolverPrincipalBindings(root: SgNode): ReviewPrincipalBinding[] {
+function collectResolverPrincipalBindings(
+  root: SgNode,
+  contextBindings: ReviewPrincipalBinding[],
+): ReviewPrincipalBinding[] {
   const bindings: ReviewPrincipalBinding[] = [];
   for (const arrow of collectResolverBodyArrows(root)) {
     const param = getFirstFunctionParam(arrow);
@@ -2540,23 +2618,33 @@ function collectResolverPrincipalBindings(root: SgNode): ReviewPrincipalBinding[
     }
 
     if (pattern.kind() !== "identifier") continue;
-    const contextName = pattern.text();
-    const shadowRanges = collectCtxShadowRanges(body, contextName, arrow);
-    const contextDestructures = body.findAll({
-      rule: {
-        kind: "variable_declarator",
-        has: {
-          field: "value",
-          kind: "identifier",
-          regex: `^${escapeRegex(contextName)}$`,
-        },
-      },
-    });
-    for (const decl of contextDestructures) {
-      if (isInsideAnyRange(decl.range().start.index, shadowRanges)) continue;
+
+    const declarators = body.findAll({ rule: { kind: "variable_declarator" } });
+    for (const decl of declarators) {
       const name = decl.field("name");
-      if (name)
+      const value = decl.field("value");
+      if (!name || !value) continue;
+
+      if (resolvesToReviewBinding(value, contextBindings, root)) {
         collectCallerPatternBindings(name, enclosingScopeRange(decl) ?? bodyScope, bindings);
+        continue;
+      }
+
+      if (name.kind() !== "identifier") continue;
+      const bindingStart = name.range().start.index;
+      if (bindings.some((binding) => binding.bindingStart === bindingStart)) continue;
+      if (
+        !isReviewContextCallerMemberExpression(value, contextBindings, root) &&
+        !resolvesToReviewPrincipalBinding(value, bindings, root)
+      ) {
+        continue;
+      }
+
+      bindings.push({
+        name: name.text(),
+        bindingStart,
+        scope: enclosingScopeRange(decl) ?? bodyScope,
+      });
     }
   }
   return bindings;
@@ -2641,12 +2729,14 @@ export function reviewFindings(
 
   const findings: LlmReviewFinding[] = [];
   const seen = new Set<string>();
-  const principalBindings = collectResolverPrincipalBindings(root);
+  const contextBindings = collectResolverContextBindings(root);
+  const principalBindings = collectResolverPrincipalBindings(root, contextBindings);
   collectNullableCallerReviewFindings(
     root,
     source,
     relativePath,
     principalBindings,
+    contextBindings,
     findings,
     seen,
   );

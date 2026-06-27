@@ -307,6 +307,65 @@ describe("principal-unify review findings", () => {
     ]);
   });
 
+  test("reports aliases assigned from nullable caller values", async () => {
+    await writeProjectFile(
+      "resolvers/assigned-alias.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "declare function publishAudit(userId: string): Promise<void>;",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async (context) => {",
+        "    const user = context.user;",
+        "    await publishAudit(user.id);",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/assigned-alias.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/assigned-alias.ts",
+            line: 8,
+            message: expect.stringContaining("non-null argument"),
+            excerpt: expect.stringContaining("publishAudit(user.id)"),
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("does not report unrelated caller properties as nullable principals", async () => {
+    await writeProjectFile(
+      "resolvers/domain-caller.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "declare function publishAudit(userId: string): Promise<void>;",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async ({ user }) => {",
+        "    const event = { caller: { id: user.id } };",
+        "    await publishAudit(event.caller.id);",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews.flatMap((review) => review.findings ?? [])).toEqual([]);
+  });
+
   test("does not report matching alias names outside the resolver scope", async () => {
     await writeProjectFile(
       "resolvers/scoped-alias.ts",
