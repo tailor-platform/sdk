@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const AuthConnectionOAuth2ConfigSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+export const AuthConnectionOAuth2ConfigSchema = z.object({
   providerUrl: z.string().describe("OAuth2 provider URL"),
   issuerUrl: z.string().describe("OAuth2 issuer URL"),
   clientId: z.string().describe("OAuth2 client ID"),
@@ -9,7 +10,8 @@ export const AuthConnectionOAuth2ConfigSchema = /* strip unknown keys */ z.objec
   tokenUrl: z.string().optional().describe("OAuth2 token endpoint override"),
 });
 
-export const AuthConnectionConfigSchema = /* strip unknown keys */ z
+// strip unknown keys
+export const AuthConnectionConfigSchema = z
   .object({
     type: z.literal("oauth2").describe("Connection type"),
   })

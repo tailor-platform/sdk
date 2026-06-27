@@ -15,7 +15,8 @@ const main = async () => {
   const cmd = defineCommand({
     name: packageJson.name ?? "create-sdk",
     description: packageJson.description,
-    args: /* strip unknown keys */ z.object({
+    // strip unknown keys
+    args: z.object({
       name: arg(z.string().optional(), {
         positional: true,
         description: "Project name",

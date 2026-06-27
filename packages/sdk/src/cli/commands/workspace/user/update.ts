@@ -9,7 +9,8 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { stringToRole, validRoles } from "./transform";
 
-const updateUserOptionsSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const updateUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   email: z.string().email({ message: "email must be a valid email address" }),

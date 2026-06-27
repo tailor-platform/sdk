@@ -8,7 +8,8 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { appInfo, type AppInfo } from "./transform";
 
-const listAppsOptionsSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const listAppsOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   order: orderArg.optional(),

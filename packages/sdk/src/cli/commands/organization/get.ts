@@ -8,7 +8,8 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
-const getOrganizationOptionsSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const getOrganizationOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
 });
 

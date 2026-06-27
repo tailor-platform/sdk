@@ -10,7 +10,8 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { resolveWorkspaceFolderName, workspaceDisplayName } from "./transform";
 
-const deleteWorkspaceOptionsSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const deleteWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
 });
 

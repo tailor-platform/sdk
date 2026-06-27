@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const StaticWebsiteSchema = /* strip unknown keys */ z
+// strip unknown keys
+export const StaticWebsiteSchema = z
   .object({
     name: z.string().describe("Static website name"),
     description: z.string().optional().describe("Static website description"),

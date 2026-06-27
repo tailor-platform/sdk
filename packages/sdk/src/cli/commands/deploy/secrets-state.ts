@@ -4,7 +4,8 @@ import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
 
-const SecretsStateSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const SecretsStateSchema = z.object({
   vaults: z.record(z.string(), z.record(z.string(), z.string())),
   connections: z.record(z.string(), z.string()).optional(),
 });

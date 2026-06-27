@@ -1,11 +1,13 @@
 import { z } from "zod";
 
-const cacheOutputFileSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const cacheOutputFileSchema = z.object({
   outputPath: z.string(),
   contentHash: z.string(),
 });
 
-const cacheEntrySchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const cacheEntrySchema = z.object({
   kind: z.literal("bundle"),
   inputHash: z.string(),
   dependencyPaths: z.array(z.string()),
@@ -13,7 +15,8 @@ const cacheEntrySchema = /* strip unknown keys */ z.object({
   createdAt: z.string(),
 });
 
-const cacheManifestSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const cacheManifestSchema = z.object({
   version: z.literal(1),
   sdkVersion: z.string(),
   lockfileHash: z.string().optional(),

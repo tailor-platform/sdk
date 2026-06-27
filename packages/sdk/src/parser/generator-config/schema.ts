@@ -7,15 +7,18 @@ export type DependencyKind = z.infer<typeof DependencyKindSchema>;
 // Literal-based schemas for each generator
 const KyselyTypeConfigSchema = z.tuple([
   z.literal("@tailor-platform/kysely-type"),
-  /* strip unknown keys */ z.object({ distPath: z.string() }),
+  // strip unknown keys
+  z.object({ distPath: z.string() }),
 ]);
 
 const SeedConfigSchema = z.tuple([
   z.literal("@tailor-platform/seed"),
-  /* strip unknown keys */ z.object({
+  // strip unknown keys
+  z.object({
     distPath: z.string(),
     machineUserName: z.string().optional(),
-    disableIdpUserSync: /* strip unknown keys */ z
+    // strip unknown keys
+    disableIdpUserSync: z
       .object({
         userToIdp: z.boolean().optional(),
         idpToUser: z.boolean().optional(),
@@ -26,16 +29,19 @@ const SeedConfigSchema = z.tuple([
 
 const EnumConstantsConfigSchema = z.tuple([
   z.literal("@tailor-platform/enum-constants"),
-  /* strip unknown keys */ z.object({ distPath: z.string() }),
+  // strip unknown keys
+  z.object({ distPath: z.string() }),
 ]);
 
 const FileUtilsConfigSchema = z.tuple([
   z.literal("@tailor-platform/file-utils"),
-  /* strip unknown keys */ z.object({ distPath: z.string() }),
+  // strip unknown keys
+  z.object({ distPath: z.string() }),
 ]);
 
 // Custom generator schema with dependencies
-export const CodeGeneratorSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+export const CodeGeneratorSchema = z.object({
   id: z.string(),
   description: z.string(),
   dependencies: z.array(DependencyKindSchema),

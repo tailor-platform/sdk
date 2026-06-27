@@ -9,7 +9,8 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { appHealthInfo, type AppHealthInfo } from "./transform";
 
-const healthOptionsSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const healthOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   name: z.string().min(1, { message: "name is required" }),

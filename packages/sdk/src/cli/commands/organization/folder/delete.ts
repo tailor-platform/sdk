@@ -8,7 +8,8 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
-const deleteFolderOptionsSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const deleteFolderOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
 });

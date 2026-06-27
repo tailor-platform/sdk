@@ -27,27 +27,13 @@ function isZObjectCall(node) {
   );
 }
 
-function commentMentionsObjectPolicy(comment) {
-  return OBJECT_POLICY_COMMENT_PATTERN.test(comment.value);
-}
-
 function hasObjectPolicyComment(sourceCode, node) {
-  const commentsBefore = sourceCode.getCommentsBefore(node);
-  const hasLeadingPolicyComment = commentsBefore.some(
-    (comment) =>
-      comment.loc.end.line >= node.loc.start.line - 1 && commentMentionsObjectPolicy(comment),
+  const previousLine = sourceCode.getText().split(/\r?\n/)[node.loc.start.line - 2] ?? "";
+  const trimmedPreviousLine = previousLine.trimStart();
+  return (
+    (trimmedPreviousLine.startsWith("//") || trimmedPreviousLine.startsWith("/*")) &&
+    OBJECT_POLICY_COMMENT_PATTERN.test(trimmedPreviousLine)
   );
-
-  if (hasLeadingPolicyComment) {
-    return true;
-  }
-
-  return sourceCode
-    .getCommentsAfter(node)
-    .some(
-      (comment) =>
-        comment.loc.start.line === node.loc.end.line && commentMentionsObjectPolicy(comment),
-    );
 }
 
 module.exports = {
@@ -64,7 +50,7 @@ module.exports = {
         schema: [],
         messages: {
           missingObjectPolicyComment:
-            'Add a comment containing "strip" or "catchall" for z.object(), or use z.strictObject() / z.looseObject().',
+            'Add a previous-line comment containing "strip" or "catchall" for z.object(), or use z.strictObject() / z.looseObject().',
         },
       },
       create(context) {

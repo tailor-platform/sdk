@@ -20,7 +20,8 @@ import {
   deleteKeyringTokens,
 } from "./token-store";
 
-const pfProfileSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const pfProfileSchema = z.object({
   user: z.string(),
   workspace_id: z.string(),
   readonly: z.boolean().optional(),
@@ -28,18 +29,21 @@ const pfProfileSchema = /* strip unknown keys */ z.object({
   machine_user_override: z.enum(["allow", "deny"]).optional(),
 });
 
-const pfUserSchemaV1 = /* strip unknown keys */ z.object({
+// strip unknown keys
+const pfUserSchemaV1 = z.object({
   access_token: z.string(),
   refresh_token: z.string().optional(),
   token_expires_at: z.string(),
 });
 
-const pfUserKeyringSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const pfUserKeyringSchema = z.object({
   storage: z.literal("keyring"),
   token_expires_at: z.string(),
 });
 
-const pfUserFileSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const pfUserFileSchema = z.object({
   storage: z.literal("file"),
   token_expires_at: z.string(),
   access_token: z.string(),
@@ -50,7 +54,8 @@ const pfUserSchemaV2 = z.discriminatedUnion("storage", [pfUserKeyringSchema, pfU
 
 type PfUserV2 = z.output<typeof pfUserSchemaV2>;
 
-const pfConfigSchemaV1 = /* strip unknown keys */ z.object({
+// strip unknown keys
+const pfConfigSchemaV1 = z.object({
   version: z.literal(1),
   users: z.partialRecord(z.string(), pfUserSchemaV1),
   profiles: z.partialRecord(z.string(), pfProfileSchema),
@@ -68,7 +73,8 @@ const semverSchema = z.templateLiteral([
   z.number().int(),
 ]);
 
-const pfConfigSchemaV2 = /* strip unknown keys */ z.object({
+// strip unknown keys
+const pfConfigSchemaV2 = z.object({
   version: z.literal(LATEST_CONFIG_VERSION),
   min_sdk_version: semverSchema,
   latest_version: z.number().int().optional(),
@@ -250,7 +256,8 @@ export function writePlatformConfig(config: PfConfig | PfConfigV1) {
   writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
-const tcContextConfigSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const tcContextConfigSchema = z.object({
   username: z.string().optional(),
   controlplaneaccesstoken: z.string().optional(),
   controlplanerefreshtoken: z.string().optional(),
@@ -258,9 +265,11 @@ const tcContextConfigSchema = /* strip unknown keys */ z.object({
   workspaceid: z.string().optional(),
 });
 
-const tcConfigSchema = /* catchall unknown keys */ z
+// catchall unknown keys
+const tcConfigSchema = z
   .object({
-    global: /* strip unknown keys */ z
+    // strip unknown keys
+    global: z
       .object({
         context: z.string().optional(),
       })

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
 
-export const WorkflowJobSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+export const WorkflowJobSchema = z.object({
   name: z.string().describe("Job name (must be unique across the project)"),
   trigger: functionSchema.describe("Trigger function that initiates the job"),
   body: functionSchema.describe("Job implementation function"),
@@ -31,7 +32,8 @@ const durationSchema = (maxSeconds: number) =>
     message: `Duration must be at most ${maxSeconds} seconds`,
   });
 
-export const RetryPolicySchema = /* strip unknown keys */ z
+// strip unknown keys
+export const RetryPolicySchema = z
   .object({
     maxRetries: z.number().int().min(1).max(10).describe("Maximum number of retries (1-10)"),
     initialBackoff: durationSchema(3600).describe(
@@ -51,7 +53,8 @@ export const RetryPolicySchema = /* strip unknown keys */ z
     path: ["initialBackoff"],
   });
 
-export const ConcurrencyPolicySchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+export const ConcurrencyPolicySchema = z.object({
   maxConcurrentExecutions: z
     .number()
     .int()
@@ -60,7 +63,8 @@ export const ConcurrencyPolicySchema = /* strip unknown keys */ z.object({
     .describe("Maximum number of concurrent executions (1-1000)"),
 });
 
-export const WorkflowSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+export const WorkflowSchema = z.object({
   name: z.string().describe("Workflow name"),
   mainJob: WorkflowJobSchema.describe("Main job that starts the workflow"),
   retryPolicy: RetryPolicySchema.optional().describe("Retry policy for the workflow"),

@@ -41,7 +41,8 @@ import type { Application } from "@tailor-platform/tailor-proto/application_reso
 export type { QueryEngine } from "./types";
 
 const queryEngineSchema = z.enum(queryEngines);
-const queryBaseOptionsSchema = /* strip unknown keys */ z.object({
+// strip unknown keys
+const queryBaseOptionsSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
   configPath: z.string().optional(),
