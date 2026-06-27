@@ -21,6 +21,14 @@ function duplicateAliasTwo() {
   const duplicateLegacyArg = "apply";
   return spawn("tailor-sdk", [duplicateLegacyArg]);
 }
+function conflictingAliasLegacy() {
+  const scopedArg = "apply";
+  return spawn("tailor-sdk", [scopedArg]);
+}
+function conflictingAliasDeploy() {
+  const scopedArg = "deploy";
+  return spawn("tailor", [scopedArg]);
+}
 const cliRenameCommandSpawned = spawn("tailor-sdk", ["crash-report", "list"]);
 const cliRenameFlagSpawned = spawn("tailor-sdk", ["login", "--machineuser"]);
 const cliRenameFlagAliasSpawned = spawn("tailor-sdk", ["login", legacyMachineUserArg]);
