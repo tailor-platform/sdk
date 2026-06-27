@@ -30,7 +30,7 @@ function isTypeOnlyImport(stmt: SgNode): boolean {
 }
 
 function importSource(stmt: SgNode): string | null {
-  const source = stmt.children().find((child) => child.kind() === "string");
+  const source = stmt.find({ rule: { kind: "string" } });
   return stringValue(source ?? null);
 }
 
@@ -53,6 +53,14 @@ function importSpecNames(
 function importBindings(importStmt: SgNode): ImportBinding[] {
   const source = importSource(importStmt);
   if (!source) return [];
+
+  const requireClause = importStmt
+    .children()
+    .find((child) => child.kind() === "import_require_clause");
+  if (requireClause) {
+    const local = requireClause.children().find((child) => child.kind() === "identifier");
+    return local ? [{ localName: local.text(), source, typeOnly: false }] : [];
+  }
 
   const typeOnly = isTypeOnlyImport(importStmt);
   const clause = importStmt.children().find((child) => child.kind() === "import_clause");
@@ -145,6 +153,7 @@ function localDeclarationNames(root: SgNode): Set<string> {
 function findImportStatements(root: SgNode): SgNode[] {
   return root
     .findAll({ rule: { kind: "import_statement" } })
+    .filter((stmt) => stmt.parent()?.kind() === "program")
     .toSorted((a, b) => a.range().start.index - b.range().start.index);
 }
 
