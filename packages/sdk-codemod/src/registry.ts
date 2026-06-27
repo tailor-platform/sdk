@@ -13,6 +13,9 @@ const RENAME_BIN_SOURCE_VALUE_FLAGS = [
   "--arg",
   "--query",
   "--file",
+  "--name",
+  "--namespace",
+  "--dir",
   "-e",
   "-p",
   "-c",
@@ -20,6 +23,7 @@ const RENAME_BIN_SOURCE_VALUE_FLAGS = [
   "-a",
   "-q",
   "-f",
+  "-n",
 ];
 const RENAME_BIN_SOURCE_COMMANDS = [
   "api",
