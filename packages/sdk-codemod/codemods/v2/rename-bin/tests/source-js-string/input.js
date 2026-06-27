@@ -1,4 +1,5 @@
 const script = "tailor-sdk deploy";
+const proseApply = "Run tailor-sdk deploy to apply changes";
 const spawned = spawn("tailor-sdk", ["deploy"]);
 const argSpawned = spawn("tailor-sdk", ["--arg", "tailor-sdk deploy", "deploy"]);
 const inlineArgSpawned = spawn("tailor-sdk", ["--arg=tailor-sdk deploy", "deploy"]);
@@ -48,6 +49,9 @@ const pnpmBinarySpawned = spawn("pnpm", ["tailor-sdk", "deploy"]);
 const pnpmExecSpawned = spawn("pnpm", ["exec", "tailor-sdk", "deploy"]);
 const pnpmExecDynamicSpawned = spawn("pnpm", ["exec", "tailor-sdk", subcommand]);
 const pnpmExecHelpSpawned = spawn("pnpm", ["exec", "tailor-sdk", "--help"]);
+const npmExecSpawned = spawn("npm", ["exec", "tailor-sdk", "login"]);
+const npmExecPackageFlagSpawned = spawn("npm", ["exec", "--package", "tailor-sdk", "tailor-sdk", "login"]);
+const npmExecPackageEqualsSpawned = spawn("npm", ["exec", "--package=tailor-sdk", "tailor-sdk", "login"]);
 const pathQualifiedSpawned = spawn("./node_modules/.bin/tailor-sdk", ["deploy"]);
 const arrayCommand = ["tailor-sdk", "--profile", "dev", "deploy"];
 const npxArgs = ["tailor-sdk", "login"];

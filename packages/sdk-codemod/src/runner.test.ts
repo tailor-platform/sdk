@@ -743,6 +743,33 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("keeps non-rename-bin source string residual checks in Tailor option values", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "env.ts"),
+        'spawn("tailor", ["--arg", "LOG_LEVEL=debug", "deploy"]);',
+        "utf-8",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: ["LOG_LEVEL"],
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual([
+        "env.ts: contains LOG_LEVEL but was not migrated automatically (rule: test/env). Manual migration may be needed.",
+      ]);
+    });
+
     test("flags files matching a suspicious pattern for LLM review", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-test-"));
       tmpDir = dir;
