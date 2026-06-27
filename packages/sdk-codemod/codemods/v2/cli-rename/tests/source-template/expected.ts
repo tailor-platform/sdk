@@ -28,6 +28,8 @@ const workspaceCommand = "tailor-sdk -w workspace-1 crashreport";
 const chainedShellCommand = "cd app && tailor-sdk crashreport --machine-user";
 const envShellCommand = "env FOO=bar tailor-sdk crashreport --machine-user";
 const assignmentShellCommand = "TAILOR=1 tailor-sdk crashreport --machine-user";
+const envDynamicCommandTemplate = `env FOO=bar tailor-sdk ${showReports ? "crashreport" : "login"} --machine-user`;
+const assignmentDynamicCommandTemplate = `TAILOR=1 tailor-sdk ${showReports ? "crashreport" : "login"} --machine-user`;
 const unknownInlineValue = "tailor-sdk login --name=--machineuser";
 const argTemplatePayload = `tailor-sdk function test-run --arg=${payload ? "--machineuser" : ""}`;
 const dynamicArgTemplatePayload = `tailor-sdk function test-run ${includeArg ? "--arg" : ""} ${payload ? "--machineuser" : ""} --machine-user`;

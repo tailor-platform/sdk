@@ -25,6 +25,8 @@ const inlineValueFlagRunner = ["npx", "--registry=https://npm.example/tailor-sdk
 const inlinePackageFlagRunner = ["npx", "--package=tailor-sdk", "tailor-sdk", "login"];
 const dynamicInlinePackageFlagRunner = ["npx", `--package=${useLocal ? "tailor-sdk" : pkg}`, "tailor-sdk", "login"];
 const dynamicSeparatePackageFlagRunner = ["npx", useLocal ? "--package" : "", useLocal ? "tailor-sdk" : pkg, "tailor-sdk", "login"];
+const dynamicPackageOptionCommandRunner = ["npx", "--package", "tailor-sdk", "tailor-sdk", cmd];
+const dynamicInlinePackageOptionCommandRunner = ["npx", `--package=${pkg}`, "tailor-sdk", cmd];
 const templateConditionalRunner = `npx ${useLatest ? "tailor-sdk@latest" : "tailor-sdk"} login`;
 const templateDynamicInlineValueFlagRunner = `npx ${useRegistry ? "--registry=https://npm.example" : "-y"} tailor-sdk login`;
 const pnpmOptionRunner = spawn("pnpm", ["--dir", ".", "dlx", "tailor-sdk", "login"]);
@@ -44,11 +46,18 @@ const conditionalRunner = ["npx", useLatest ? "tailor-sdk@latest" : "tailor-sdk"
 const binaryArgs = ["tailor-sdk", "login"];
 const profileArgValue = ["tailor-sdk", "--profile", "tailor-sdk", "deploy"];
 const shortProfileArgValue = ["tailor-sdk", "-p", "tailor-sdk", "deploy"];
+const profileCommandPayload = ["tailor-sdk", "--profile", "tailor-sdk deploy", "deploy"];
+const argCommandPayload = ["tailor-sdk", "function", "test-run", "--arg", "{\"cmd\":\"tailor-sdk deploy\"}"];
+const argCommandPayloadExpression = ["tailor-sdk", "function", "test-run", "--arg", cond ? "tailor-sdk deploy" : "{}"];
+const argCommandPayloadTemplate = ["tailor-sdk", "function", "test-run", "--arg", `tailor-sdk deploy`];
 const dynamicBinaryArgs = ["tailor-sdk", cmd];
 const spreadBinaryArgs = ["tailor-sdk", ...args];
+const wrappedCommandArgs = ["tailor-sdk", "login" as const];
+const parenthesizedCommandArgs = ["tailor-sdk", ("deploy")];
 const commandArgPackageName = ["tailor-sdk", "login", "tailor-sdk"];
 const packageManagerNames = ["pnpm", "tailor-sdk"];
 const unrelatedNpxValues = ["npx", "create-tailor-sdk", "tailor-sdk-skills", "tailor-sdk"];
 const packageNames = ["tailor-sdk", "react"];
 const packageTuple = [["tailor-sdk", version]];
+const packageTupleValue = ["tailor-sdk", version];
 const outputDir = ".tailor-sdk";

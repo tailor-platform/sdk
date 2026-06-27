@@ -91,12 +91,21 @@ const TAILOR_CLI_SEPARATE_VALUE_FLAGS = new Set([
   "-q",
   "-f",
 ]);
+const SOURCE_STRING_WRAPPER_NODE_KINDS = new Set([
+  "as_expression",
+  "non_null_expression",
+  "parenthesized_expression",
+  "satisfies_expression",
+  "type_assertion",
+]);
 const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)$/;
 
 type RunnerState =
   | "none"
   | "await-dlx"
   | "await-dlx-flag-value"
+  | "await-executable"
+  | "await-executable-flag-value"
   | "await-package"
   | "await-package-option-value"
   | "await-flag-value";
@@ -431,8 +440,28 @@ function isTailorCliCommandToken(value: string): boolean {
   return token.startsWith("-") || TAILOR_CLI_COMMANDS.has(token);
 }
 
-function isTailorCliSeparateValueFlag(value: string | undefined): boolean {
-  return value != null && TAILOR_CLI_SEPARATE_VALUE_FLAGS.has(value);
+function tailorCliValueFlagName(value: string | undefined): string | undefined {
+  if (value == null) return undefined;
+  return Array.from(TAILOR_CLI_SEPARATE_VALUE_FLAGS).find(
+    (flag) => value === flag || value.startsWith(`${flag}=`),
+  );
+}
+
+function isOpenTailorCliValueFlag(value: string | undefined): boolean {
+  const flag = tailorCliValueFlagName(value);
+  return flag != null && (value === flag || value === `${flag}=`);
+}
+
+function hasInlineTailorCliValue(value: string | undefined): boolean {
+  const flag = tailorCliValueFlagName(value);
+  return (
+    flag != null && value != null && value.startsWith(`${flag}=`) && value.length > flag.length + 1
+  );
+}
+
+function isLikelyDynamicTailorArgvRemainder(node: SgNode): boolean {
+  if (node.kind() === "spread_element") return true;
+  return /\b(?:argv|args?|cmd|command|subcommand)\b/i.test(node.text());
 }
 
 function collectPackageRunnerTokenRanges(value: string): TextRange[] {
@@ -486,12 +515,34 @@ function collectTailorCommandTokenRanges(value: string): TextRange[] {
 
 function collectDynamicTemplateTailorCommandRanges(value: string): TextRange[] {
   const ranges: TextRange[] = [];
-  const pattern = /(^|[;&|\n])(\s*)tailor-sdk(@[^\s'"`;|&)]+)?(?=\s|$)/gu;
-  for (;;) {
-    const match = pattern.exec(value);
-    if (!match) break;
-    const start = match.index + match[1]!.length + match[2]!.length;
-    ranges.push({ start, end: start + "tailor-sdk".length + (match[3]?.length ?? 0) });
+  const commandBoundary = String.raw`(?:^|[;&|\n])\s*`;
+  const shellPrefix = String.raw`(?:(?:env\s+)?(?:[A-Za-z_]\w*=${SHELL_ARG_VALUE}\s+)*)`;
+  const tailorToken = "tailor-sdk(?:@[^\\s'\"`;|&)]+)?";
+  const patterns = [
+    new RegExp(`${commandBoundary}${shellPrefix}${tailorToken}(?=\\s|$)`, "gu"),
+    new RegExp(
+      `${commandBoundary}${shellPrefix}(?:pnpm|yarn)(?:\\s+${RUNNER_OPTION})*\\s+exec(?:\\s+${RUNNER_OPTION})*\\s+${tailorToken}(?=\\s|$)`,
+      "gu",
+    ),
+    new RegExp(
+      `${commandBoundary}${shellPrefix}(?:pnpm|yarn)(?:\\s+${RUNNER_OPTION})*\\s+${tailorToken}(?=\\s|$)`,
+      "gu",
+    ),
+    new RegExp(
+      `${commandBoundary}${shellPrefix}(?:npx|bunx)(?:\\s+${RUNNER_OPTION})*\\s+(?:--package|-p)(?:=${SHELL_ARG_VALUE}|\\s+${SHELL_ARG_VALUE})(?:\\s+${RUNNER_OPTION})*\\s+${tailorToken}(?=\\s|$)`,
+      "gu",
+    ),
+  ];
+  for (const pattern of patterns) {
+    for (;;) {
+      const match = pattern.exec(value);
+      if (!match) break;
+      const tokenStartInMatch = match[0].lastIndexOf("tailor-sdk");
+      if (tokenStartInMatch === -1) continue;
+      const version = /^tailor-sdk(@[^\s'"`;|&)]+)?/.exec(match[0].slice(tokenStartInMatch))?.[1];
+      const start = match.index + tokenStartInMatch;
+      ranges.push({ start, end: start + "tailor-sdk".length + (version?.length ?? 0) });
+    }
   }
   return ranges;
 }
@@ -645,6 +696,11 @@ function collectTokenizedRunnerEdits(
     node: SgNode,
   ): RunnerState | null => {
     const dynamicState = dynamicRunnerOptionState(node);
+    if (runnerState === "await-executable") {
+      if (dynamicState === "await-flag-value") return "await-executable-flag-value";
+      if (dynamicState === "await-package") return "await-executable";
+      return dynamicState;
+    }
     if (runnerState !== "await-dlx") return dynamicState;
     if (dynamicState === "await-flag-value") return "await-dlx-flag-value";
     if (dynamicState === "await-package") return "await-dlx";
@@ -654,7 +710,23 @@ function collectTokenizedRunnerEdits(
   const advanceRunnerState = (runnerState: RunnerState, value: string): RunnerState => {
     if (runnerState === "await-flag-value") return "await-package";
     if (runnerState === "await-dlx-flag-value") return "await-dlx";
-    if (runnerState === "await-package-option-value") return "none";
+    if (runnerState === "await-executable-flag-value") return "await-executable";
+    if (runnerState === "await-package-option-value") return "await-executable";
+
+    if (runnerState === "await-executable") {
+      if (isRunnerSeparatePackageFlag(value)) return "await-package-option-value";
+      if (isRunnerPackageFlag(value)) {
+        return isRunnerOpenPackageFlag(value) ? "await-package-option-value" : "await-executable";
+      }
+      if (isRunnerSeparateValueFlag(value)) return "await-executable-flag-value";
+      if (isRunnerValueFlag(value)) {
+        return value.includes("=") && !value.endsWith("=")
+          ? "await-executable"
+          : "await-executable-flag-value";
+      }
+      if (isRunnerFlag(value)) return "await-executable";
+      return "none";
+    }
 
     if (runnerState === "await-dlx") {
       if (value === "dlx") return "await-package";
@@ -669,7 +741,7 @@ function collectTokenizedRunnerEdits(
     if (runnerState === "await-package") {
       if (isRunnerSeparatePackageFlag(value)) return "await-package-option-value";
       if (isRunnerPackageFlag(value)) {
-        return value.endsWith("=") ? "await-package-option-value" : "none";
+        return isRunnerOpenPackageFlag(value) ? "await-package-option-value" : "await-executable";
       }
       if (isRunnerSeparateValueFlag(value)) return "await-flag-value";
       if (isRunnerValueFlag(value)) {
@@ -706,7 +778,7 @@ function collectTokenizedRunnerEdits(
       } else {
         collectTemplatePackageExpressionEdits(token);
       }
-      return "none";
+      return "await-executable";
     }
     if (nextState === "await-package") {
       if (value !== undefined) {
@@ -714,7 +786,7 @@ function collectTokenizedRunnerEdits(
           for (const segment of token.segments) {
             edits.push(...rewriteRunnerPackageOptionValue(segment));
           }
-          return value.endsWith("=") ? "await-package-option-value" : "none";
+          return isRunnerOpenPackageFlag(value) ? "await-package-option-value" : "await-executable";
         }
         if (isRunnerFlag(value) || isRunnerValueFlag(value)) {
           if (isRunnerValueFlag(value) && value.includes("=")) {
@@ -731,7 +803,9 @@ function collectTokenizedRunnerEdits(
 
       if (isRunnerPackageFlag(token.value)) {
         collectTemplatePackageExpressionEdits(token);
-        return token.value.endsWith("=") ? "await-package-option-value" : "none";
+        return isRunnerOpenPackageFlag(token.value)
+          ? "await-package-option-value"
+          : "await-executable";
       }
       if (isRunnerValueFlag(token.value)) {
         protectTemplateToken(token);
@@ -743,9 +817,51 @@ function collectTokenizedRunnerEdits(
         return "await-package";
       }
       const changed = collectTemplatePackageExpressionEdits(token);
-      return changed
-        ? "none"
-        : (dynamicRunnerOptionState(token.substitutions[0]!, source) ?? "none");
+      return changed ? "none" : (dynamicRunnerOptionState(token.substitutions[0]!) ?? "none");
+    }
+
+    if (nextState === "await-executable") {
+      if (value !== undefined) {
+        if (isRunnerPackageFlag(value)) {
+          for (const segment of token.segments) {
+            edits.push(...rewriteRunnerPackageOptionValue(segment));
+          }
+          return isRunnerOpenPackageFlag(value) ? "await-package-option-value" : "await-executable";
+        }
+        if (isRunnerValueFlag(value)) {
+          if (value.includes("=")) {
+            protectTemplateToken(token);
+          }
+          return value.includes("=") && !value.endsWith("=")
+            ? "await-executable"
+            : "await-executable-flag-value";
+        }
+        if (isRunnerFlag(value)) return "await-executable";
+        if (TAILOR_SDK_TOKEN.test(value)) {
+          pushTemplateTokenReplacement(token, "tailor");
+        }
+        return "none";
+      }
+
+      if (isRunnerPackageFlag(token.value)) {
+        collectTemplatePackageExpressionEdits(token);
+        return isRunnerOpenPackageFlag(token.value)
+          ? "await-package-option-value"
+          : "await-executable";
+      }
+      if (isRunnerValueFlag(token.value)) {
+        protectTemplateToken(token);
+        return token.value.includes("=") && !token.value.endsWith("=")
+          ? "await-executable"
+          : "await-executable-flag-value";
+      }
+      if (isRunnerFlag(token.value)) return "await-executable";
+      return dynamicRunnerOptionStateFor("await-executable", token.substitutions[0]!) ?? "none";
+    }
+
+    if (nextState === "await-executable-flag-value") {
+      protectTemplateToken(token);
+      return "await-executable";
     }
 
     if (nextState === "await-dlx" && value === undefined) {
@@ -770,6 +886,8 @@ function collectTokenizedRunnerEdits(
         runnerState === "await-package" ||
         runnerState === "await-package-option-value" ||
         runnerState === "await-flag-value" ||
+        runnerState === "await-executable" ||
+        runnerState === "await-executable-flag-value" ||
         runnerState === "await-dlx" ||
         runnerState === "await-dlx-flag-value"
       ) {
@@ -839,13 +957,58 @@ function collectTokenizedRunnerEdits(
             continue;
           }
 
+          if (runnerState === "await-executable-flag-value") {
+            protectToken(token);
+            runnerState = "await-executable";
+            continue;
+          }
+
           if (runnerState === "await-package-option-value") {
             const replacement = rewriteRunnerPackageValue(token.value);
             if (replacement) {
               edits.push([token.start, token.end, replacement]);
             }
-            runnerState = "none";
+            runnerState = "await-executable";
             previousTokenValue = undefined;
+            continue;
+          }
+
+          if (runnerState === "await-executable") {
+            if (isRunnerSeparatePackageFlag(token.value)) {
+              runnerState = "await-package-option-value";
+              continue;
+            }
+            if (isRunnerPackageFlag(token.value)) {
+              edits.push(...rewriteRunnerPackageOptionValue(token));
+              runnerState = isRunnerOpenPackageFlag(token.value)
+                ? "await-package-option-value"
+                : "await-executable";
+              continue;
+            }
+            if (isRunnerSeparateValueFlag(previous)) {
+              protectToken(token);
+              continue;
+            }
+            if (isRunnerSeparateValueFlag(token.value)) {
+              runnerState = "await-executable-flag-value";
+              continue;
+            }
+            if (isRunnerValueFlag(token.value)) {
+              if (token.value.includes("=")) {
+                protectToken(token);
+              }
+              runnerState = token.value.includes("=")
+                ? "await-executable"
+                : "await-executable-flag-value";
+              continue;
+            }
+            if (isRunnerFlag(token.value)) continue;
+            if (TAILOR_SDK_TOKEN.test(token.value)) {
+              edits.push([token.start, token.end, "tailor"]);
+            } else if (isPathLikeRunnerFlagValue(token.value)) {
+              protectToken(token);
+            }
+            runnerState = "none";
             continue;
           }
 
@@ -876,7 +1039,9 @@ function collectTokenizedRunnerEdits(
             }
             if (isRunnerPackageFlag(token.value)) {
               edits.push(...rewriteRunnerPackageOptionValue(token));
-              runnerState = token.value.endsWith("=") ? "await-package-option-value" : "none";
+              runnerState = isRunnerOpenPackageFlag(token.value)
+                ? "await-package-option-value"
+                : "await-executable";
               continue;
             }
             if (isRunnerSeparateValueFlag(previous)) {
@@ -945,7 +1110,14 @@ function collectTokenizedRunnerEdits(
 
         if (runnerState === "await-package-option-value") {
           collectPackageExpressionEdits(child);
-          runnerState = "none";
+          runnerState = "await-executable";
+          previousTokenValue = undefined;
+          continue;
+        }
+
+        if (runnerState === "await-executable-flag-value") {
+          protectTailorSdkStrings(child);
+          runnerState = "await-executable";
           previousTokenValue = undefined;
           continue;
         }
@@ -964,6 +1136,16 @@ function collectTokenizedRunnerEdits(
         }
 
         if (runnerState === "await-package" && isProtectedRunnerValuePlaceholder(child)) {
+          continue;
+        }
+
+        if (runnerState === "await-executable") {
+          visit(
+            child,
+            isTokenSequenceNode(child) || child.kind() === "template_string" ? runnerState : "none",
+          );
+          runnerState = "none";
+          previousTokenValue = undefined;
           continue;
         }
 
@@ -1056,8 +1238,37 @@ function protectStandaloneTailorSdkSourceStrings(
   }
 
   const ranges: Array<[number, number, string]> = [];
+  const isSourceStringWrapperNode = (node: SgNode): boolean => {
+    return SOURCE_STRING_WRAPPER_NODE_KINDS.has(node.kind());
+  };
+  const sourceStringExpressionToken = (
+    node: SgNode,
+    visited = new Set<string>(),
+  ): SourceStringToken | undefined => {
+    const direct = sourceStringToken(node, source);
+    if (direct) return direct;
+    if (!isSourceStringWrapperNode(node)) return undefined;
+    const key = nodeRangeKey(node);
+    if (visited.has(key)) return undefined;
+    visited.add(key);
+    for (const child of node.children()) {
+      const token = sourceStringExpressionToken(child, visited);
+      if (token) return token;
+    }
+    return undefined;
+  };
+  const arrayElementForSourceString = (node: SgNode): SgNode | undefined => {
+    let element = node;
+    let parent = element.parent();
+    while (parent && isSourceStringWrapperNode(parent)) {
+      element = parent;
+      parent = element.parent();
+    }
+    return parent?.kind() === "array" ? element : undefined;
+  };
   const isSingleElementArrayToken = (node: SgNode): boolean => {
-    const parent = node.parent();
+    const element = arrayElementForSourceString(node) ?? node;
+    const parent = element.parent();
     if (parent?.kind() !== "array") return false;
     return parent.children().filter((child: SgNode) => !isSyntaxOnlyNode(child)).length === 1;
   };
@@ -1066,7 +1277,7 @@ function protectStandaloneTailorSdkSourceStrings(
   };
   const arrayElementTokens = (node: SgNode): SourceStringToken[] => {
     return arrayElementNodes(node)
-      .map((child: SgNode) => sourceStringToken(child, source))
+      .map((child: SgNode) => sourceStringExpressionToken(child))
       .filter((token): token is SourceStringToken => token != null);
   };
   const hasTailorCommandTokenPair = (tokens: SourceStringToken[]): boolean => {
@@ -1090,7 +1301,32 @@ function protectStandaloneTailorSdkSourceStrings(
       }
       if (runnerState === "await-package-option-value") {
         if (runnerPackageReplacement(token.value)) return true;
+        runnerState = "await-executable";
+        continue;
+      }
+      if (runnerState === "await-executable") {
+        if (isRunnerSeparatePackageFlag(token.value)) {
+          runnerState = "await-package-option-value";
+          continue;
+        }
+        if (isRunnerPackageFlag(token.value)) {
+          if (rewriteRunnerPackageOptionValue(token).length > 0) return true;
+          runnerState = isRunnerOpenPackageFlag(token.value)
+            ? "await-package-option-value"
+            : "await-executable";
+          continue;
+        }
+        if (isRunnerSeparateValueFlag(token.value)) {
+          runnerState = "await-executable-flag-value";
+          continue;
+        }
+        if (isRunnerValueFlag(token.value) || isRunnerFlag(token.value)) continue;
+        if (TAILOR_SDK_TOKEN.test(token.value)) return true;
         runnerState = "none";
+        continue;
+      }
+      if (runnerState === "await-executable-flag-value") {
+        runnerState = "await-executable";
         continue;
       }
       if (runnerState === "await-dlx") {
@@ -1113,7 +1349,9 @@ function protectStandaloneTailorSdkSourceStrings(
         }
         if (isRunnerPackageFlag(token.value)) {
           if (rewriteRunnerPackageOptionValue(token).length > 0) return true;
-          runnerState = token.value.endsWith("=") ? "await-package-option-value" : "none";
+          runnerState = isRunnerOpenPackageFlag(token.value)
+            ? "await-package-option-value"
+            : "await-executable";
           continue;
         }
         if (isRunnerSeparateValueFlag(token.value)) {
@@ -1156,23 +1394,27 @@ function protectStandaloneTailorSdkSourceStrings(
     if (!first || !TAILOR_SDK_TOKEN.test(first.value)) return false;
     if (node.parent()?.kind() === "array") return false;
     const firstElementIndex = arrayElementNodes(node).findIndex((child) => {
-      const token = sourceStringToken(child, source);
+      const token = sourceStringExpressionToken(child);
       return token?.start === first.start && token.end === first.end;
     });
     if (firstElementIndex === -1) return false;
     return arrayElementNodes(node)
       .slice(firstElementIndex + 1)
-      .some((child) => sourceStringToken(child, source) == null);
+      .some(
+        (child) =>
+          sourceStringToken(child, source) == null && isLikelyDynamicTailorArgvRemainder(child),
+      );
   };
   const isRewriteableTailorArgvToken = (node: SgNode, token: SourceStringToken): boolean => {
-    const parent = node.parent();
-    if (parent?.kind() !== "array") return false;
+    const element = arrayElementForSourceString(node);
+    const parent = element?.parent();
+    if (!element || parent?.kind() !== "array") return false;
     const tokens = arrayElementTokens(parent);
     const tokenIndex = tokens.findIndex(
       (candidate) => candidate.start === token.start && candidate.end === token.end,
     );
     if (tokenIndex === -1 || !TAILOR_SDK_TOKEN.test(token.value)) return false;
-    if (isTailorCliSeparateValueFlag(tokens[tokenIndex - 1]?.value)) return false;
+    if (isOpenTailorCliValueFlag(tokens[tokenIndex - 1]?.value)) return false;
     const next = tokens[tokenIndex + 1];
     if (next != null && isTailorCliCommandToken(next.value)) return true;
     if (tokenIndex === 0 && hasDynamicTailorArgvRemainder(parent, tokens)) return true;
@@ -1193,7 +1435,8 @@ function protectStandaloneTailorSdkSourceStrings(
     );
   };
   const isProtectedArrayDataToken = (node: SgNode): boolean => {
-    const parent = node.parent();
+    const element = arrayElementForSourceString(node) ?? node;
+    const parent = element.parent();
     return parent?.kind() === "array" && !isLikelyTailorArgvArray(parent);
   };
   const sourceStringFragmentTokens = (node: SgNode): SourceStringToken[] => {
@@ -1217,8 +1460,57 @@ function protectStandaloneTailorSdkSourceStrings(
       source.slice(range.start.index, range.end.index),
     ]);
   };
+  const visitTokenSequence = (node: SgNode): void => {
+    let afterTailorBinary = false;
+    let skipNextTailorValue = false;
+
+    for (const child of node.children()) {
+      if (isSyntaxOnlyNode(child)) {
+        visit(child);
+        continue;
+      }
+
+      if (skipNextTailorValue) {
+        if (child.text().includes("tailor-sdk")) {
+          protectNodeText(child);
+        }
+        skipNextTailorValue = false;
+        continue;
+      }
+
+      const token = sourceStringExpressionToken(child);
+      if (token && !afterTailorBinary) {
+        if (isRewriteableTailorArgvToken(child, token)) {
+          afterTailorBinary = true;
+        }
+        visit(child);
+        continue;
+      }
+
+      if (token && afterTailorBinary) {
+        if (hasInlineTailorCliValue(token.value)) {
+          if (token.value.includes("tailor-sdk")) {
+            ranges.push([token.start, token.end, token.value]);
+          }
+          visit(child);
+          continue;
+        }
+        if (isOpenTailorCliValueFlag(token.value)) {
+          skipNextTailorValue = true;
+          visit(child);
+          continue;
+        }
+      }
+
+      visit(child);
+    }
+  };
   const visit = (node: SgNode): void => {
     const kind = node.kind();
+    if (isTokenSequenceNode(node)) {
+      visitTokenSequence(node);
+      return;
+    }
     if (kind === "regex" && node.text().includes("tailor-sdk")) {
       protectNodeText(node);
       return;
@@ -1268,13 +1560,15 @@ function protectStandaloneTailorSdkSourceStrings(
     const token = sourceStringToken(node, source);
     if (token) {
       const parent = node.parent();
+      const arrayElement = arrayElementForSourceString(node);
+      const arrayParent = arrayElement?.parent();
       if (
         token.value.includes("tailor-sdk") &&
         (parent == null ||
-          !isTokenSequenceNode(parent) ||
+          (!isTokenSequenceNode(parent) && arrayParent?.kind() !== "array") ||
           isSingleElementArrayToken(node) ||
           isProtectedArrayDataToken(node) ||
-          (parent.kind() === "array" && !isRewriteableTailorArgvToken(node, token)))
+          (arrayParent?.kind() === "array" && !isRewriteableTailorArgvToken(node, token)))
       ) {
         ranges.push(...collectNonCommandTailorSdkRanges(token.value, token.start));
       }
