@@ -81,7 +81,7 @@ const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
 );
 const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
   [
-    "(?:^|[\\s;&|])(?:sh|bash|zsh)\\s+-\\w*c\\w*\\s+\\\\?[\"']",
+    "(?:^|[\\s;&|\\x00])(?:sh|bash|zsh)\\s+-\\w*c\\w*\\s+\\\\?[\"']",
     RENAME_BIN_SOURCE_COMMAND_TOKEN,
     `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
   ].join(""),
