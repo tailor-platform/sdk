@@ -1,3 +1,4 @@
+import { buildViewerHtml } from "./viewer";
 import type {
   TailorDbErdColumn,
   TailorDbErdIndex,
@@ -39,9 +40,19 @@ export interface BuildErdSchemaDiffOptions {
   head: TailorDbErdSchema;
 }
 
+export interface BuildErdDiffViewerSchemaOptions {
+  base: TailorDbErdSchema;
+  head: TailorDbErdSchema;
+}
+
 export interface CreateEmptyErdSchemaOptions {
   namespace: string;
   revision: string;
+}
+
+export interface RenderErdDiffHtmlOptions {
+  schema: TailorDbErdSchema;
+  diff: ErdSchemaDiff;
 }
 
 function stableValue(value: unknown): unknown {
@@ -290,19 +301,6 @@ function summarize(changes: readonly ErdDiffChange[]): ErdDiffSummary {
   };
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function schemaDataJson(value: unknown): string {
-  return JSON.stringify(value).replaceAll("<", "\\u003c");
-}
-
 export function extractEmbeddedErdSchema(html: string): TailorDbErdSchema {
   const match = SCHEMA_BLOCK_PATTERN.exec(html);
   if (!match?.[1]) {
@@ -355,71 +353,73 @@ export function buildErdSchemaDiff(options: BuildErdSchemaDiffOptions): ErdSchem
   };
 }
 
-export function renderErdDiffHtml(diff: ErdSchemaDiff): string {
-  const rows = diff.changes.length
-    ? diff.changes
-        .map(
-          (change) => `<tr class="${change.action}">
-            <td>${escapeHtml(change.action)}</td>
-            <td>${escapeHtml(change.entity)}</td>
-            <td><code>${escapeHtml(change.path)}</code></td>
-            <td>${escapeHtml(change.detail)}</td>
-          </tr>`,
-        )
-        .join("\n")
-    : '<tr><td colspan="4">No ERD schema changes.</td></tr>';
+function mergeNamedByHead<T extends { name: string }>(
+  baseItems: readonly T[],
+  headItems: readonly T[],
+): T[] {
+  const headByName = mapByName(headItems);
+  const removedItems = baseItems
+    .filter((item) => !headByName.has(item.name))
+    .toSorted((a, b) => a.name.localeCompare(b.name));
+  return [...headItems, ...removedItems];
+}
 
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>TailorDB ERD diff - ${escapeHtml(diff.namespace)}</title>
-    <style>
-      :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      body { margin: 0; background: #f7f8fb; color: #172033; }
-      main { max-width: 1120px; margin: 0 auto; padding: 32px 20px 48px; }
-      h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.2; }
-      .meta { margin: 0 0 24px; color: #5a6475; }
-      .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
-      .summary div { border: 1px solid #d9dee8; border-radius: 8px; background: #fff; padding: 16px; }
-      .summary span { display: block; color: #5a6475; font-size: 13px; }
-      .summary strong { display: block; font-size: 26px; margin-top: 6px; }
-      table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9dee8; border-radius: 8px; overflow: hidden; }
-      th, td { padding: 10px 12px; border-bottom: 1px solid #e6e9f0; text-align: left; vertical-align: top; }
-      th { background: #eef2f7; color: #384256; font-size: 13px; }
-      tr:last-child td { border-bottom: 0; }
-      code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 13px; }
-      tr.added td:first-child { color: #116329; font-weight: 600; }
-      tr.changed td:first-child { color: #8a4b08; font-weight: 600; }
-      tr.removed td:first-child { color: #a40e26; font-weight: 600; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>TailorDB ERD diff - ${escapeHtml(diff.namespace)}</h1>
-      <p class="meta">Base revision <code>${escapeHtml(diff.baseRevision)}</code> -> head revision <code>${escapeHtml(diff.headRevision)}</code></p>
-      <section class="summary" aria-label="ERD diff summary">
-        <div><span>Added</span><strong>${diff.summary.added}</strong></div>
-        <div><span>Changed</span><strong>${diff.summary.changed}</strong></div>
-        <div><span>Removed</span><strong>${diff.summary.removed}</strong></div>
-      </section>
-      <table>
-        <thead>
-          <tr>
-            <th>Action</th>
-            <th>Entity</th>
-            <th>Path</th>
-            <th>Detail</th>
-          </tr>
-        </thead>
-        <tbody>
-${rows}
-        </tbody>
-      </table>
-    </main>
-    <script type="application/json" id="erd-diff">${schemaDataJson(diff)}</script>
-  </body>
-</html>
-`;
+function mergeDiffViewerTable(
+  baseTable: TailorDbErdTable,
+  headTable: TailorDbErdTable,
+): TailorDbErdTable {
+  return {
+    ...headTable,
+    columns: mergeNamedByHead(baseTable.columns, headTable.columns),
+    indexes: mergeNamedByHead(baseTable.indexes, headTable.indexes),
+  };
+}
+
+function mergeDiffViewerTables(
+  baseTables: readonly TailorDbErdTable[],
+  headTables: readonly TailorDbErdTable[],
+): TailorDbErdTable[] {
+  const baseByName = mapByName(baseTables);
+  const headByName = mapByName(headTables);
+  const merged = headTables.map((headTable) => {
+    const baseTable = baseByName.get(headTable.name);
+    return baseTable ? mergeDiffViewerTable(baseTable, headTable) : headTable;
+  });
+  const removedTables = baseTables
+    .filter((table) => !headByName.has(table.name))
+    .toSorted((a, b) => a.name.localeCompare(b.name));
+  return [...merged, ...removedTables];
+}
+
+/**
+ * Build the schema rendered by the diff viewer. The ordinary ERD viewer only
+ * knows how to draw objects present in its schema, so the diff schema keeps
+ * base-only tables, columns, indexes, and relations visible for removal
+ * highlighting while preferring head-side metadata for unchanged objects.
+ * @param options - Base and head schemas to merge for diff rendering.
+ * @returns A TailorDB ERD schema suitable for the visual diff viewer.
+ */
+export function buildErdDiffViewerSchema(
+  options: BuildErdDiffViewerSchemaOptions,
+): TailorDbErdSchema {
+  const { base, head } = options;
+  if (base.namespace !== head.namespace) {
+    throw new Error(
+      `Cannot diff ERD schemas from different namespaces: ${base.namespace}, ${head.namespace}`,
+    );
+  }
+
+  return {
+    ...head,
+    tables: mergeDiffViewerTables(base.tables, head.tables),
+    relations: mergeNamedByHead(base.relations, head.relations),
+  };
+}
+
+export function renderErdDiffHtml(options: RenderErdDiffHtmlOptions): string {
+  return buildViewerHtml({
+    schema: options.schema,
+    diff: options.diff,
+    title: `TailorDB ERD diff - ${options.diff.namespace}`,
+  });
 }

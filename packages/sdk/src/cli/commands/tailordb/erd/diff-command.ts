@@ -5,6 +5,7 @@ import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import {
+  buildErdDiffViewerSchema,
   buildErdSchemaDiff,
   createEmptyErdSchema,
   extractEmbeddedErdSchema,
@@ -71,12 +72,12 @@ export function writeErdDiff(options: WriteErdDiffOptions): WriteErdDiffResult {
   }
 
   const namespace = resolveNamespace({ namespace: options.namespace, base, head });
-  const diff = buildErdSchemaDiff({
-    base: base ?? createEmptyErdSchema({ namespace, revision: "missing-base" }),
-    head: head ?? createEmptyErdSchema({ namespace, revision: "missing-head" }),
-  });
+  const baseSchema = base ?? createEmptyErdSchema({ namespace, revision: "missing-base" });
+  const headSchema = head ?? createEmptyErdSchema({ namespace, revision: "missing-head" });
+  const diff = buildErdSchemaDiff({ base: baseSchema, head: headSchema });
+  const viewerSchema = buildErdDiffViewerSchema({ base: baseSchema, head: headSchema });
 
-  writeFile(options.outputHtml, renderErdDiffHtml(diff));
+  writeFile(options.outputHtml, renderErdDiffHtml({ schema: viewerSchema, diff }));
   if (options.outputJson) {
     writeFile(options.outputJson, `${JSON.stringify(diff, null, 2)}\n`);
   }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   buildErdSchemaDiff,
+  buildErdDiffViewerSchema,
   createEmptyErdSchema,
   extractEmbeddedErdSchema,
   renderErdDiffHtml,
@@ -255,7 +256,61 @@ describe("buildErdSchemaDiff", () => {
 });
 
 describe("ERD diff rendering", () => {
-  test("renders a self-contained HTML summary", () => {
+  test("keeps removed tables and columns visible for diff highlighting", () => {
+    const base = schema({
+      tables: [
+        table("Order"),
+        table("User", {
+          columns: [
+            {
+              name: "id",
+              type: "uuid",
+              required: true,
+              array: false,
+              primaryKey: true,
+              unique: true,
+            },
+            {
+              name: "legacyCode",
+              type: "string",
+              required: false,
+              array: false,
+            },
+          ],
+        }),
+      ],
+    });
+    const head = schema({
+      tables: [
+        table("Invoice"),
+        table("User", {
+          columns: [
+            {
+              name: "id",
+              type: "uuid",
+              required: true,
+              array: false,
+              primaryKey: true,
+              unique: true,
+            },
+          ],
+        }),
+      ],
+    });
+
+    const viewerSchema = buildErdDiffViewerSchema({ base, head });
+
+    expect(viewerSchema.tables.map((item) => item.name).toSorted()).toEqual([
+      "Invoice",
+      "Order",
+      "User",
+    ]);
+    expect(viewerSchema.tables.find((item) => item.name === "User")?.columns).toContainEqual(
+      expect.objectContaining({ name: "legacyCode" }),
+    );
+  });
+
+  test("renders the existing ERD viewer with embedded diff metadata", () => {
     const diff = buildErdSchemaDiff({
       base: schema(),
       head: schema({
@@ -263,11 +318,20 @@ describe("ERD diff rendering", () => {
         tables: [table("Account"), table("User")],
       }),
     });
+    const viewerSchema = buildErdDiffViewerSchema({
+      base: schema(),
+      head: schema({
+        revision: "head-revision",
+        tables: [table("Account"), table("User")],
+      }),
+    });
 
-    const html = renderErdDiffHtml(diff);
+    const html = renderErdDiffHtml({ schema: viewerSchema, diff });
     expect(html).toContain("<title>TailorDB ERD diff - tailordb</title>");
-    expect(html).toContain("Account");
+    expect(html).toContain('id="erd-schema"');
     expect(html).toContain('<script type="application/json" id="erd-diff">');
+    expect(html).toContain("function renderNodes()");
+    expect(html).not.toContain("<table>");
     expect(html).not.toContain("</script><img");
   });
 });
