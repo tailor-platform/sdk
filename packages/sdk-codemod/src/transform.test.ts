@@ -107,6 +107,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/execute-script-arg")).resolves.toBeUndefined();
   });
 
+  test("v2/tailor-output-ignore-dir transforms correctly", async () => {
+    await expect(runFixtureCases("v2/tailor-output-ignore-dir")).resolves.toBeUndefined();
+  });
+
   test("v2/rename-bin transforms correctly", async () => {
     await expect(runFixtureCases("v2/rename-bin")).resolves.toBeUndefined();
   });
