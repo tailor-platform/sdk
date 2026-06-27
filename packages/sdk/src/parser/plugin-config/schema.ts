@@ -3,7 +3,7 @@ import { functionSchema } from "#/parser/service/common";
 import type { Plugin } from "#/plugin/types";
 
 // Custom plugin schema (object form)
-// Using passthrough() to preserve additional properties on Plugin instances
+// Using looseObject() to preserve additional properties on Plugin instances
 export const PluginConfigSchema = z
   .looseObject({
     id: z.string(),
