@@ -26,6 +26,7 @@ const inlinePackageFlagRunner = ["npx", "--package=tailor-sdk", "tailor-sdk", "l
 const dynamicInlinePackageFlagRunner = ["npx", `--package=${useLocal ? "tailor-sdk" : pkg}`, "tailor-sdk", "login"];
 const dynamicSeparatePackageFlagRunner = ["npx", useLocal ? "--package" : "", useLocal ? "tailor-sdk" : pkg, "tailor-sdk", "login"];
 const dynamicPackageOptionCommandRunner = ["npx", "--package", "tailor-sdk", "tailor-sdk", cmd];
+const packageOptionArgPayloadRunner = ["npx", "--package", "tailor-sdk", "tailor-sdk", "function", "test-run", "--arg", cond ? "tailor-sdk deploy" : "{}"];
 const dynamicInlinePackageOptionCommandRunner = ["npx", `--package=${pkg}`, "tailor-sdk", cmd];
 const templateConditionalRunner = `npx ${useLatest ? "tailor-sdk@latest" : "tailor-sdk"} login`;
 const templateDynamicInlineValueFlagRunner = `npx ${useRegistry ? "--registry=https://npm.example" : "-y"} tailor-sdk login`;
