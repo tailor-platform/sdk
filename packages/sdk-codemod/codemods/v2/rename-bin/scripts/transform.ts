@@ -1186,7 +1186,10 @@ function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
     return isSplitPackageFlagValue(elements, index, source, start, executable);
   }
 
-  return firstTailorPackageIndex(elements, start, source, executable) === index;
+  return (
+    firstTailorPackageIndex(elements, start, source, executable) === index &&
+    !arrayHasCliRenameLegacyArgs(elements, index + 1, source)
+  );
 }
 
 function isPackageRunnerCommandBinaryArgument(node: SgNode, source: string): boolean {
@@ -1290,6 +1293,7 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
   if (args[0] == null || nodeRangeKey(args[0]) !== nodeRangeKey(node)) return false;
   const argv = args[1];
   if (argv == null) return true;
+  if (argv.kind() === "object") return true;
   return (
     argv.kind() === "array" && !arrayHasCliRenameLegacyArgs(sourceArrayElements(argv), 0, source)
   );
