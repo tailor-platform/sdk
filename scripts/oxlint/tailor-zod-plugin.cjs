@@ -1,6 +1,6 @@
 "use strict";
 
-const STRIP_COMMENT_PATTERN = /\bstrip\b/i;
+const OBJECT_POLICY_COMMENT_PATTERN = /\b(catchall|strip)\b/i;
 
 function getPropertyName(property) {
   if (property == null) {
@@ -27,24 +27,26 @@ function isZObjectCall(node) {
   );
 }
 
-function commentMentionsStrip(comment) {
-  return STRIP_COMMENT_PATTERN.test(comment.value);
+function commentMentionsObjectPolicy(comment) {
+  return OBJECT_POLICY_COMMENT_PATTERN.test(comment.value);
 }
 
-function hasStripComment(sourceCode, node) {
+function hasObjectPolicyComment(sourceCode, node) {
   const commentsBefore = sourceCode.getCommentsBefore(node);
-  const hasLeadingStripComment = commentsBefore.some(
-    (comment) => comment.loc.end.line >= node.loc.start.line - 1 && commentMentionsStrip(comment),
+  const hasLeadingPolicyComment = commentsBefore.some(
+    (comment) =>
+      comment.loc.end.line >= node.loc.start.line - 1 && commentMentionsObjectPolicy(comment),
   );
 
-  if (hasLeadingStripComment) {
+  if (hasLeadingPolicyComment) {
     return true;
   }
 
   return sourceCode
     .getCommentsAfter(node)
     .some(
-      (comment) => comment.loc.start.line === node.loc.end.line && commentMentionsStrip(comment),
+      (comment) =>
+        comment.loc.start.line === node.loc.end.line && commentMentionsObjectPolicy(comment),
     );
 }
 
@@ -53,16 +55,16 @@ module.exports = {
     name: "tailor-zod",
   },
   rules: {
-    "require-strip-comment-for-object": {
+    "require-object-policy-comment": {
       meta: {
         type: "problem",
         docs: {
-          description: "Require a strip-policy comment for z.object().",
+          description: "Require an unknown-key policy comment for z.object().",
         },
         schema: [],
         messages: {
-          missingStripComment:
-            'Add a comment containing "strip" for z.object(), or use z.strictObject() / z.looseObject().',
+          missingObjectPolicyComment:
+            'Add a comment containing "strip" or "catchall" for z.object(), or use z.strictObject() / z.looseObject().',
         },
       },
       create(context) {
@@ -70,10 +72,10 @@ module.exports = {
 
         return {
           CallExpression(node) {
-            if (isZObjectCall(node) && !hasStripComment(sourceCode, node)) {
+            if (isZObjectCall(node) && !hasObjectPolicyComment(sourceCode, node)) {
               context.report({
                 node,
-                messageId: "missingStripComment",
+                messageId: "missingObjectPolicyComment",
               });
             }
           },

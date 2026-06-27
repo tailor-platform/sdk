@@ -258,7 +258,7 @@ const tcContextConfigSchema = /* strip unknown keys */ z.object({
   workspaceid: z.string().optional(),
 });
 
-const tcConfigSchema = /* strip unknown keys */ z
+const tcConfigSchema = /* catchall unknown keys */ z
   .object({
     global: /* strip unknown keys */ z
       .object({
