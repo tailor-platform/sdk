@@ -95,7 +95,7 @@ const TAILOR_CLI_COMMAND_VALUE_FLAGS = new Set(["--value", "-v"]);
 const SOURCE_ESCAPED_QUOTED_VALUE = String.raw`\\"(?:\\\\.|[^"\\])*\\"|\\'(?:\\\\.|[^'\\])*\\'`;
 const SOURCE_CLI_ARG_VALUE = `(?:${SOURCE_ESCAPED_QUOTED_VALUE}|${SOURCE_ARG_VALUE})`;
 const SOURCE_COMMAND_GAP = `(?:\\s+--?[\\w-]+(?:=${SOURCE_CLI_ARG_VALUE})?(?:\\s+${SOURCE_CLI_ARG_VALUE})?)*`;
-const SOURCE_RUNNER_OPTION_GAP = `(?:\\s+(?:-\\w+|--\\w[\\w-]*)(?:=${SOURCE_ARG_VALUE})?(?:\\s+(?!tailor-sdk(?![\\w-])|-)${SOURCE_ARG_VALUE})?)*`;
+const SOURCE_RUNNER_OPTION_GAP = `(?:\\s+${PACKAGE_RUNNER_OPTION})*`;
 const SOURCE_OPTION_VALUE_REFERENCE_RE = new RegExp(
   `((?:--[\\w-]+|-\\w)(?:=|\\s+))(${SOURCE_CLI_ARG_VALUE})`,
   "g",
@@ -799,8 +799,10 @@ function collectSourceStringVariables(root: SgNode, source: string): ReadonlyMap
     if (node.kind() === "variable_declarator" && isConstVariableDeclarator(node)) {
       const children = node.children();
       const identifier = children.find((child) => child.kind() === "identifier");
-      const initializer = children.findLast((child) => sourceStringContent(child, source) != null);
-      const value = initializer == null ? null : sourceStringContent(initializer, source);
+      const initializer = children.findLast(
+        (child) => sourceConstInitializerContent(child, source) != null,
+      );
+      const value = initializer == null ? null : sourceConstInitializerContent(initializer, source);
       if (identifier != null && value != null) {
         rememberSourceStringVariable(values, ambiguous, identifier.text(), value);
       }
@@ -811,6 +813,23 @@ function collectSourceStringVariables(root: SgNode, source: string): ReadonlyMap
   };
   visit(root);
   return values;
+}
+
+function sourceConstInitializerContent(node: SgNode, source: string): string | null {
+  const directValue = sourceStringContent(node, source);
+  if (directValue != null) return directValue;
+  if (
+    node.kind() !== "as_expression" &&
+    node.kind() !== "satisfies_expression" &&
+    node.kind() !== "parenthesized_expression"
+  ) {
+    return null;
+  }
+  for (const child of node.children()) {
+    const childValue = sourceConstInitializerContent(child, source);
+    if (childValue != null) return childValue;
+  }
+  return null;
 }
 
 function isConstVariableDeclarator(node: SgNode): boolean {
@@ -829,7 +848,9 @@ function rememberSourceStringVariable(
   value: string,
 ): void {
   if (ambiguous.has(name)) return;
-  if (values.has(name)) {
+  const existingValue = values.get(name);
+  if (existingValue != null) {
+    if (existingValue === value) return;
     values.delete(name);
     ambiguous.add(name);
     return;
@@ -1331,24 +1352,31 @@ function templateSubstitutionPlaceholder(
 function templateSubstitutionsNeedCliRenameMigration(
   text: string,
   substitutions: ReadonlyArray<{ placeholder: string; text: string }>,
+  sourceStringVariables: ReadonlyMap<string, string>,
 ): boolean {
   let restored = text;
   for (const substitution of substitutions) {
     restored = restored.replaceAll(substitution.placeholder, () =>
-      templateSubstitutionMigrationText(substitution.text),
+      templateSubstitutionMigrationText(substitution.text, sourceStringVariables),
     );
   }
   return needsCliRenameMigration(restored);
 }
 
-function templateSubstitutionMigrationText(value: string): string {
-  return value.startsWith("${") && value.endsWith("}") ? value.slice(2, -1).trim() : value;
+function templateSubstitutionMigrationText(
+  value: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): string {
+  if (!value.startsWith("${") || !value.endsWith("}")) return value;
+  const expression = value.slice(2, -1).trim();
+  return sourceStringVariables.get(expression) ?? expression;
 }
 
 function pushTemplateStringEdit(
   edits: Array<[number, number, string]>,
   source: string,
   node: SgNode,
+  sourceStringVariables: ReadonlyMap<string, string>,
 ): void {
   const range = node.range();
   const start = range.start.index + 1;
@@ -1380,7 +1408,11 @@ function pushTemplateStringEdit(
     text = `${text.slice(0, childStart)}${placeholder}${text.slice(childEnd)}`;
   }
 
-  let replacement = templateSubstitutionsNeedCliRenameMigration(text, substitutions)
+  let replacement = templateSubstitutionsNeedCliRenameMigration(
+    text,
+    substitutions,
+    sourceStringVariables,
+  )
     ? text
     : renameSourceCommandText(text);
   for (const substitution of substitutions) {
@@ -1433,7 +1465,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
         return;
       }
       if (isCliValueArgument(node, source)) return;
-      pushTemplateStringEdit(edits, source, node);
+      pushTemplateStringEdit(edits, source, node, sourceStringVariables);
       return;
     }
 

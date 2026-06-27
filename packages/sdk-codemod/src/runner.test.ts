@@ -750,7 +750,10 @@ describe("runCodemods", () => {
       tmpDir = dir;
       await fs.promises.writeFile(
         path.join(dir, "commands.ts"),
-        "const command = 'bash -lc \"tailor-sdk crash-report list\"';",
+        [
+          'const note = "unrelated";',
+          "const command = 'bash -lc \"tailor-sdk crash-report list\"';",
+        ].join("\n"),
         "utf-8",
       );
       const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");

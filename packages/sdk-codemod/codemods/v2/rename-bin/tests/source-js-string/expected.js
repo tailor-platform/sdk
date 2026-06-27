@@ -10,14 +10,24 @@ const directNameValueSpawned = spawn("tailor", ["tailordb", "migration", "genera
 const shellSpawned = spawn("sh", ["-c", "tailor deploy"]);
 const legacyApplyArg = "apply";
 const legacyMachineUserArg = "--machineuser";
+const legacyTemplateArg = "apply";
 const applySpawned = spawn("tailor-sdk", ["apply"]);
 const applyAliasSpawned = spawn("tailor-sdk", [legacyApplyArg]);
+function duplicateAliasOne() {
+  const duplicateLegacyArg = "apply";
+  return spawn("tailor-sdk", [duplicateLegacyArg]);
+}
+function duplicateAliasTwo() {
+  const duplicateLegacyArg = "apply";
+  return spawn("tailor-sdk", [duplicateLegacyArg]);
+}
 const cliRenameCommandSpawned = spawn("tailor-sdk", ["crash-report", "list"]);
 const cliRenameFlagSpawned = spawn("tailor-sdk", ["login", "--machineuser"]);
 const cliRenameFlagAliasSpawned = spawn("tailor-sdk", ["login", legacyMachineUserArg]);
 const secretValueApplySpawned = spawn("tailor", ["secret", "create", "--value", "apply"]);
 const secretShortValueApplySpawned = spawn("tailor", ["secret", "create", "-v", "apply"]);
 const dynamicCliRenameCommandSpawned = spawn("tailor-sdk", [`${"apply"}`]);
+const dynamicCliRenameAliasCommand = `tailor-sdk ${legacyTemplateArg}`;
 const npxSpawned = spawn("npx", ["@tailor-platform/sdk", "login"]);
 const npxOptionSpawned = spawn("npx", ["--yes", "@tailor-platform/sdk@latest", "login"]);
 const npxProfileSpawned = spawn("npx", ["@tailor-platform/sdk", "--profile", "dev", "login"]);
