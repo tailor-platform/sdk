@@ -679,6 +679,10 @@ describe("runCodemods", () => {
       ].join("\n");
       await fs.promises.writeFile(path.join(dir, "seed.mjs"), seedSource);
       await fs.promises.writeFile(
+        path.join(dir, "escaped.mjs"),
+        'const code = "const C =\\n tailor.idp.Client;";',
+      );
+      await fs.promises.writeFile(
         path.join(dir, "types.mjs"),
         `const code = \`${typeOnlyEmbeddedCode}\`;`,
       );
@@ -724,9 +728,9 @@ describe("runCodemods", () => {
         prompt: "Review embedded runtime global usage by hand.",
       });
       expect(result.llmReviews[0]?.files).toEqual(
-        expect.arrayContaining(["seed.mjs", "types.mjs"]),
+        expect.arrayContaining(["escaped.mjs", "seed.mjs", "types.mjs"]),
       );
-      expect(result.llmReviews[0]?.files).toHaveLength(2);
+      expect(result.llmReviews[0]?.files).toHaveLength(3);
     });
 
     test("keeps LLM review patterns inside template substitutions", async () => {
