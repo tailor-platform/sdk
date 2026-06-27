@@ -1862,7 +1862,6 @@ function convertRemoteFieldsToSnapshot(
 
     // TODO: Add nested field conversion when remote API supports it
 
-    normalizeSnapshotField(config);
     fields[fieldName] = config;
   }
 
