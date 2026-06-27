@@ -51,6 +51,23 @@ const CLI_VALUE_ARGS = [
   "-q",
   "-f",
 ] as const;
+const COMMAND_VALUE_ARGS = [
+  "--env-file-if-exists",
+  "--env-file",
+  "--profile",
+  "--config",
+  "--workspace-id",
+  "--arg",
+  "--query",
+  "--file",
+  "-e",
+  "-p",
+  "-c",
+  "-w",
+  "-a",
+  "-q",
+  "-f",
+] as const;
 const CLI_VALUE_ARG_SET = new Set<string>(CLI_VALUE_ARGS);
 const PACKAGE_RUNNER_VALUE_ARGS = new Set([
   "--cache",
@@ -482,7 +499,7 @@ function findOptionRename(command: string, index: number): readonly [string, str
 }
 
 function findCliValueArg(command: string, index: number): string | undefined {
-  return CLI_VALUE_ARGS.find(
+  return COMMAND_VALUE_ARGS.find(
     (arg) =>
       command.startsWith(arg, index) &&
       isOptionBoundaryChar(command[index - 1]) &&

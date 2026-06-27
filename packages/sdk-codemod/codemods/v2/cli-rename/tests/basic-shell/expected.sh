@@ -13,4 +13,5 @@ tailor-sdk query --query "select 1 | 2" --machine-user ci
 tailor-sdk workflow start approval --arg '{"ok":true}' \
   --machine-user ci
 tailor-sdk --json crashreport list
+tailor-sdk --profile --machineuser crashreport --machine-user ci
 TOKEN=$(tailor-sdk query --machine-user ci) other-cli --machineuser=ci

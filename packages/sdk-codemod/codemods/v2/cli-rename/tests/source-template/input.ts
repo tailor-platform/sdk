@@ -24,6 +24,7 @@ const envFileCommandSubstitutionPath = "tailor-sdk --env-file=$(pwd)/--machineus
 const argPayload = "tailor-sdk function test-run --arg=--machineuser";
 const argCommandSubstitutionPayload = "tailor-sdk function test-run --arg=$(printf --machineuser) --machineuser";
 const profileCommand = "tailor-sdk --profile prod crash-report --machineuser";
+const profileMachineUserValue = "tailor-sdk --profile --machineuser crash-report --machineuser";
 const workspaceCommand = "tailor-sdk -w workspace-1 crash-report";
 const chainedShellCommand = "cd app && tailor-sdk crash-report --machineuser";
 const envShellCommand = "env FOO=bar tailor-sdk crash-report --machineuser";
