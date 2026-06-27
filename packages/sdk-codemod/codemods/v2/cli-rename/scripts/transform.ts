@@ -12,6 +12,9 @@ const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
 const TAILOR_BINARY = `(?<![\\w-])tailor-sdk(?:@[^\\s'"\`]+)?(?![\\w-])`;
 const TAILOR_BINARY_PATTERN = new RegExp(TAILOR_BINARY, "g");
 const TAILOR_BINARY_START_PATTERN = new RegExp(`^${TAILOR_BINARY}`);
+const PACKAGE_RUNNER_OPTION_VALUE_PREFIX_PATTERN = new RegExp(
+  `(?:^|[;&|\n\`])\\s*(?:env\\s+)?(?:[A-Za-z_]\\w*=${ARG_VALUE}\\s+)*(?:npx|bunx|pnpm|yarn)(?:\\s+${ARG_VALUE})*\\s+(?:--package|-p|--cache|--userconfig|--registry|--prefix|--dir|--filter|--cwd|-C)(?:=|\\s+)(?:["'])?$`,
+);
 const SHELL_ASSIGNMENT_PREFIX_PATTERN = new RegExp(
   `^(?:env\\s+)?(?:[A-Za-z_]\\w*=${ARG_VALUE}\\s+)+${TAILOR_BINARY}(?=\\s|$)`,
 );
@@ -969,6 +972,10 @@ function replaceSourceCommandString(value: string): string {
   return replaceAll(value);
 }
 
+function isPackageRunnerOptionValueReference(source: string, start: number): boolean {
+  return PACKAGE_RUNNER_OPTION_VALUE_PREFIX_PATTERN.test(source.slice(0, start));
+}
+
 function isTokenSequenceNode(node: SgNode): boolean {
   return node.kind() === "array" || isCliArgumentsNode(node);
 }
@@ -1642,6 +1649,11 @@ function replaceOptionsInTailorCommands(
 
     const start = match.index;
     if (start < cursor) continue;
+
+    if (isPackageRunnerOptionValueReference(source, start)) {
+      TAILOR_BINARY_PATTERN.lastIndex = start + match[0].length;
+      continue;
+    }
 
     if (
       requireDelimitedContext &&
