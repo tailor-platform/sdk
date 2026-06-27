@@ -68,8 +68,15 @@ export interface CodemodPackage {
    */
   suspiciousPatterns?: CodemodPatternGroup[];
   /**
+   * Patterns to detect only inside string/template fragments of source files
+   * for LLM-assisted review. Use this when source strings normally remain
+   * masked for `suspiciousPatterns`, but embedded code snippets may still need
+   * manual migration. Has no effect unless `prompt` is also set.
+   */
+  sourceStringSuspiciousPatterns?: CodemodPatternGroup[];
+  /**
    * Prompt that instructs an LLM how to finish the migration for files matched
-   * by `suspiciousPatterns`.
+   * by `suspiciousPatterns` or `sourceStringSuspiciousPatterns`.
    */
   prompt?: string;
   /** Before/after examples shown in the generated migration doc. */
