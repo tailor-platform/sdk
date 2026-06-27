@@ -1,0 +1,126 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
+import { afterEach, describe, expect, test } from "vitest";
+import { allCodemods } from "./registry";
+import { runCodemods } from "./runner";
+
+const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
+
+const principalUnify = allCodemods.find((codemod) => codemod.id === "v2/principal-unify");
+
+if (!principalUnify?.scriptPath) {
+  throw new Error("v2/principal-unify codemod is not registered with a script");
+}
+
+const principalUnifyEntry = {
+  codemod: principalUnify,
+  scriptPath: path.join(CODEMODS_DIR, principalUnify.scriptPath.replace(/\.js$/, ".ts")),
+};
+
+describe("principal-unify review findings", () => {
+  let tmpDir: string | undefined;
+
+  afterEach(async () => {
+    if (tmpDir) {
+      await fs.promises.rm(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  async function writeProjectFile(relative: string, source: string): Promise<void> {
+    tmpDir ??= await fs.promises.mkdtemp(path.join(os.tmpdir(), "principal-review-test-"));
+    const file = path.join(tmpDir, relative);
+    await fs.promises.mkdir(path.dirname(file), { recursive: true });
+    await fs.promises.writeFile(file, source, "utf-8");
+  }
+
+  test("reports nullable caller values passed to non-null-looking calls", async () => {
+    await writeProjectFile(
+      "resolvers/order.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "declare const db: any;",
+        "declare function publishAudit(userId: string): Promise<void>;",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async (context) => {",
+        '    await db.selectFrom("orders").where("createdBy", "=", context.user.id).execute();',
+        "    await publishAudit(context.user.id);",
+        "    const maybeId = context.user.id;",
+        "    return maybeId;",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/order.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/order.ts",
+            line: 8,
+            message: expect.stringContaining("Kysely predicate"),
+            excerpt: expect.stringContaining("context.caller?.id"),
+          }),
+          expect.objectContaining({
+            file: "resolvers/order.ts",
+            line: 9,
+            message: expect.stringContaining("non-null argument"),
+            excerpt: expect.stringContaining("publishAudit(context.caller?.id)"),
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports context.user helper adapters called with resolver contexts", async () => {
+    await writeProjectFile(
+      "resolvers/customer.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "function createContext(context: any) {",
+        "  return {",
+        "    userId: context.user.id,",
+        "    userType: context.user.type,",
+        "  };",
+        "}",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async (context) => createContext(context),",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/customer.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/customer.ts",
+            line: 3,
+            message: expect.stringContaining("createContext"),
+            excerpt: expect.stringContaining("function createContext"),
+          }),
+          expect.objectContaining({
+            file: "resolvers/customer.ts",
+            line: 11,
+            message: expect.stringContaining("createContext"),
+            excerpt: expect.stringContaining("createContext(context)"),
+          }),
+        ],
+      }),
+    ]);
+  });
+});

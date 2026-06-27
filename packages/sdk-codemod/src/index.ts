@@ -54,8 +54,18 @@ function printLlmReview(review: LlmReview): void {
       ? "the codemod cannot safely migrate these automatically"
       : "review the project for this manual change";
   process.stderr.write(`\n🤖 LLM-assisted review suggested (${review.codemodId}) — ${scope}:\n`);
+  const findingsByFile = new Map<string, NonNullable<LlmReview["findings"]>>();
+  for (const finding of review.findings ?? []) {
+    const findings = findingsByFile.get(finding.file) ?? [];
+    findings.push(finding);
+    findingsByFile.set(finding.file, findings);
+  }
   for (const file of review.files) {
     process.stderr.write(`  - ${file}\n`);
+    for (const finding of findingsByFile.get(file) ?? []) {
+      process.stderr.write(`    - line ${finding.line}: ${finding.message}\n`);
+      process.stderr.write(`      ${finding.excerpt}\n`);
+    }
   }
   process.stderr.write(`\nPrompt for an LLM:\n${review.prompt.trim()}\n`);
 }
@@ -70,8 +80,9 @@ const main = defineCommand({
 - \`filesModified\`: files a codemod changed
 - \`warnings\`: files that may still need manual migration
 - \`llmReviews\`: changes the codemods could not fully migrate on their own. Each
-  entry has the affected \`files\` and a \`prompt\` — hand the prompt and files to
-  an LLM (or follow it yourself) to finish those cases.
+  entry has the affected \`files\`, optional file-local \`findings\`, and a
+  \`prompt\` — hand the prompt and files to an LLM (or follow it yourself) to
+  finish those cases.
 
 Progress, warnings, and the LLM-review prompts are also printed to \`stderr\` in
 human-readable form, so \`stdout\` stays pure JSON for piping.`,

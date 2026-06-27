@@ -1,4 +1,5 @@
 import { parse, Lang } from "@ast-grep/napi";
+import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const TYPE_RENAME_MAP: Record<string, string> = {
@@ -2160,6 +2161,303 @@ function transformParseArgsObject(
       edits.push(child.replace("invoker: user"));
     }
   }
+}
+
+const KYSELY_PREDICATE_METHODS = new Set(["where", "having", "on"]);
+
+function excerptForLine(source: string, line: number): string {
+  const excerpt = (source.split(/\r?\n/)[line - 1] ?? "").trim();
+  return excerpt.length > 160 ? `${excerpt.slice(0, 157)}...` : excerpt;
+}
+
+function addReviewFinding(
+  findings: LlmReviewFinding[],
+  seen: Set<string>,
+  source: string,
+  file: string,
+  node: SgNode,
+  message: string,
+): void {
+  const line = node.range().start.line + 1;
+  const excerpt = excerptForLine(source, line);
+  const key = `${file}:${line}:${message}:${excerpt}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  findings.push({ file, line, message, excerpt });
+}
+
+function isCallerOptionalMemberExpression(node: SgNode): boolean {
+  if (node.kind() !== "member_expression") return false;
+  if (!node.children().some((child) => child.kind() === "optional_chain")) return false;
+  const object = node.field("object");
+  if (!object) return false;
+  if (object.kind() === "identifier") return object.text() === "caller";
+  if (object.kind() !== "member_expression") return false;
+  return object.field("property")?.text() === "caller";
+}
+
+function nodeContainsArgumentCallerOptionalAccess(node: SgNode): boolean {
+  if (isFunctionNode(node)) return false;
+  if (isCallerOptionalMemberExpression(node)) return true;
+  return node.children().some((child) => nodeContainsArgumentCallerOptionalAccess(child));
+}
+
+function reviewCallName(call: SgNode): string {
+  const fn = call.field("function");
+  if (!fn) return "a call";
+  if (fn.kind() === "identifier") return `${fn.text()}()`;
+  if (fn.kind() === "member_expression") {
+    const property = fn.field("property");
+    if (property) return `${property.text()}()`;
+  }
+  return "a call";
+}
+
+function collectNullableCallerReviewFindings(
+  root: SgNode,
+  source: string,
+  file: string,
+  findings: LlmReviewFinding[],
+  seen: Set<string>,
+): void {
+  const calls = root.findAll({ rule: { kind: "call_expression" } });
+  for (const call of calls) {
+    const args = call.field("arguments");
+    const nullableArg = args
+      ?.children()
+      .find((child) => nodeContainsArgumentCallerOptionalAccess(child));
+    if (!nullableArg) continue;
+
+    const memberName = findMemberCallName(call);
+    if (memberName && KYSELY_PREDICATE_METHODS.has(memberName)) {
+      addReviewFinding(
+        findings,
+        seen,
+        source,
+        file,
+        nullableArg,
+        "Nullable caller value is used as a Kysely predicate value.",
+      );
+      continue;
+    }
+
+    addReviewFinding(
+      findings,
+      seen,
+      source,
+      file,
+      nullableArg,
+      `Nullable caller value is passed as a non-null argument to ${reviewCallName(call)}.`,
+    );
+  }
+}
+
+function functionIdentifierParamName(fn: SgNode): string | null {
+  const param = getFirstFunctionParam(fn);
+  const pattern = param ? getFunctionParamPattern(param) : null;
+  return pattern?.kind() === "identifier" ? pattern.text() : null;
+}
+
+function functionReadsContextUser(fn: SgNode, contextName: string): boolean {
+  const body = fn.field("body");
+  if (!body) return false;
+  const shadowRanges = collectCtxShadowRanges(body, contextName, fn);
+  const userProperties = body.findAll({
+    rule: { kind: "property_identifier", regex: "^user$" },
+  });
+  for (const propId of userProperties) {
+    const parent = propId.parent();
+    if (!parent || parent.kind() !== "member_expression") continue;
+    const object = parent.field("object");
+    if (!object || object.kind() !== "identifier" || object.text() !== contextName) continue;
+    if (isInsideAnyRange(object.range().start.index, shadowRanges)) continue;
+    return true;
+  }
+  return false;
+}
+
+type ContextUserHelperBinding = LocalCallbackBinding & { contextName: string };
+
+function collectContextUserHelperBindings(root: SgNode): ContextUserHelperBinding[] {
+  return collectLocalCallbackBindings(root).flatMap((binding) => {
+    const contextName = functionIdentifierParamName(binding.fn);
+    if (!contextName || !functionReadsContextUser(binding.fn, contextName)) return [];
+    return [{ ...binding, contextName }];
+  });
+}
+
+function resolveContextUserHelperBinding(
+  node: SgNode,
+  bindings: ContextUserHelperBinding[],
+  root: SgNode,
+): ContextUserHelperBinding | null {
+  if (node.kind() !== "identifier") return null;
+  const pos = node.range().start.index;
+  return (
+    bindings.find(
+      (binding) =>
+        binding.name === node.text() &&
+        rangeContains(binding.scope, pos) &&
+        !isShadowedLocalReference(root, binding.name, pos, binding.bindingStart),
+    ) ?? null
+  );
+}
+
+interface ResolverContextBody {
+  arrow: SgNode;
+  body: SgNode;
+  contextName: string;
+}
+
+function addResolverContextBody(arrow: SgNode, bodies: ResolverContextBody[]): void {
+  const paramName = functionIdentifierParamName(arrow);
+  const body = arrow.field("body");
+  if (!paramName || !body) return;
+  bodies.push({ arrow, body, contextName: paramName });
+}
+
+function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
+  const sdkImports = root.findAll({
+    rule: {
+      kind: "import_statement",
+      has: { kind: "string", regex: "^[\"']@tailor-platform/sdk(/test)?[\"']$" },
+    },
+  });
+  const createResolverLocalNames = new Set<string>();
+  const sdkNamespaceNames = new Set<string>();
+  for (const importStmt of sdkImports) {
+    for (const namespaceName of iterateNamespaceImportLocalNames(importStmt)) {
+      sdkNamespaceNames.add(namespaceName);
+    }
+    for (const { importedName, localName } of iterateImportSpecs(importStmt)) {
+      if (importedName === "createResolver") createResolverLocalNames.add(localName);
+    }
+  }
+
+  const bodies: ResolverContextBody[] = [];
+  for (const localName of createResolverLocalNames) {
+    const shadowRanges = collectAllShadowRanges(root, localName);
+    const calls = root.findAll({
+      rule: {
+        kind: "call_expression",
+        has: {
+          field: "function",
+          kind: "identifier",
+          regex: `^${escapeRegex(localName)}$`,
+        },
+      },
+    });
+    for (const call of calls) {
+      const callee = call.field("function");
+      if (!callee || isInsideAnyRange(callee.range().start.index, shadowRanges)) continue;
+      const arrow = findResolverBodyArrow(call);
+      if (arrow) addResolverContextBody(arrow, bodies);
+    }
+  }
+
+  for (const namespaceName of sdkNamespaceNames) {
+    const shadowRanges = collectAllShadowRanges(root, namespaceName);
+    const calls = root.findAll({
+      rule: {
+        kind: "call_expression",
+        has: {
+          field: "function",
+          kind: "member_expression",
+          has: {
+            field: "property",
+            kind: "property_identifier",
+            regex: "^createResolver$",
+          },
+        },
+      },
+    });
+    for (const call of calls) {
+      const callee = call.field("function");
+      const object = callee?.field("object");
+      if (!object || object.kind() !== "identifier" || object.text() !== namespaceName) continue;
+      if (isInsideAnyRange(object.range().start.index, shadowRanges)) continue;
+      const arrow = findResolverBodyArrow(call);
+      if (arrow) addResolverContextBody(arrow, bodies);
+    }
+  }
+  return bodies;
+}
+
+function firstIdentifierArgument(call: SgNode): SgNode | null {
+  const args = call.field("arguments");
+  if (!args) return null;
+  for (const child of args.children()) {
+    if (child.kind() === "(" || child.kind() === ")" || child.kind() === ",") continue;
+    return child.kind() === "identifier" ? child : null;
+  }
+  return null;
+}
+
+function collectContextUserHelperReviewFindings(
+  root: SgNode,
+  source: string,
+  file: string,
+  findings: LlmReviewFinding[],
+  seen: Set<string>,
+): void {
+  const helperBindings = collectContextUserHelperBindings(root);
+  if (helperBindings.length === 0) return;
+
+  const reportedDefinitions = new Set<number>();
+  for (const { arrow, body, contextName } of collectResolverContextBodies(root)) {
+    const shadowRanges = collectCtxShadowRanges(body, contextName, arrow);
+    const calls = body.findAll({ rule: { kind: "call_expression" } });
+    for (const call of calls) {
+      if (isInsideAnyRange(call.range().start.index, shadowRanges)) continue;
+      const arg = firstIdentifierArgument(call);
+      if (!arg || arg.text() !== contextName) continue;
+      const callee = call.field("function");
+      if (!callee) continue;
+      const helper = resolveContextUserHelperBinding(callee, helperBindings, root);
+      if (!helper) continue;
+
+      if (!reportedDefinitions.has(helper.bindingStart)) {
+        reportedDefinitions.add(helper.bindingStart);
+        addReviewFinding(
+          findings,
+          seen,
+          source,
+          file,
+          helper.fn,
+          `Helper adapter ${helper.name} reads ${helper.contextName}.user and needs v2 caller/invoker semantics.`,
+        );
+      }
+      addReviewFinding(
+        findings,
+        seen,
+        source,
+        file,
+        call,
+        `${helper.name}(${contextName}) passes an SDK resolver context into a helper that reads ${helper.contextName}.user.`,
+      );
+    }
+  }
+}
+
+export function reviewFindings(
+  source: string,
+  _filePath: string,
+  relativePath: string,
+): LlmReviewFinding[] {
+  if (!source.includes("caller?.") && !source.includes(".user")) return [];
+
+  let root: SgNode;
+  try {
+    root = parse(Lang.TypeScript, source).root();
+  } catch {
+    return [];
+  }
+
+  const findings: LlmReviewFinding[] = [];
+  const seen = new Set<string>();
+  collectNullableCallerReviewFindings(root, source, relativePath, findings, seen);
+  collectContextUserHelperReviewFindings(root, source, relativePath, findings, seen);
+  return findings;
 }
 
 /**
