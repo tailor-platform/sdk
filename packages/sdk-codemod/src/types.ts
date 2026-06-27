@@ -68,12 +68,6 @@ export interface CodemodPackage {
    */
   suspiciousPatterns?: CodemodPatternGroup[];
   /**
-   * Optional script-level detector for file-local review findings. A codemod
-   * transform module may export this when pattern matching is too broad for
-   * actionable review output.
-   */
-  reviewFindings?: ReviewFindingsFn;
-  /**
    * Prompt that instructs an LLM how to finish the migration for files matched
    * by `suspiciousPatterns`.
    */

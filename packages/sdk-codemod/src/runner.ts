@@ -334,7 +334,7 @@ export async function runCodemods(
     loaded.push({
       id: codemod.id,
       transform: loadedModule?.transform,
-      reviewFindings: loadedModule?.reviewFindings ?? codemod.reviewFindings,
+      reviewFindings: loadedModule?.reviewFindings,
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
