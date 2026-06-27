@@ -1367,28 +1367,40 @@ function arrayHasCliRenameLegacyArgs(
   return false;
 }
 
-function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
+function isTailorCliArgumentArray(
+  arrayNode: SgNode,
+  index: number,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   const argumentsNode = arrayNode.parent();
   if (argumentsNode?.kind() === "arguments") {
     const callArgs = sourceArrayElements(argumentsNode);
-    const executable = callArgs[0] == null ? null : sourceStringContent(callArgs[0]!, source);
+    const executable =
+      callArgs[0] == null
+        ? null
+        : sourceStaticStringContent(callArgs[0]!, source, sourceStringVariables);
     if (executable != null && isTailorCliTokenValue(executable)) return true;
   }
 
   const elements = sourceArrayElements(arrayNode);
   return elements.slice(0, index).some((element) => {
-    const value = sourceStringContent(element, source);
+    const value = sourceStaticStringContent(element, source, sourceStringVariables);
     return value != null && isTailorCliTokenValue(value);
   });
 }
 
-function isCliValueArgument(node: SgNode, source: string): boolean {
+function isCliValueArgument(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array") return false;
   const elements = sourceArrayElements(parent);
   const index = nodeIndex(elements, node);
   if (index < 0) return false;
-  if (!isTailorCliArgumentArray(parent, index, source)) return false;
+  if (!isTailorCliArgumentArray(parent, index, source, sourceStringVariables)) return false;
   const text = sourceStringContent(node, source) ?? sourceStringRawContent(node, source);
   if (
     text != null &&
@@ -1399,7 +1411,11 @@ function isCliValueArgument(node: SgNode, source: string): boolean {
     return true;
   }
   if (index === 0) return false;
-  const previousValue = sourceStringContent(elements[index - 1]!, source);
+  const previousValue = sourceStaticStringContent(
+    elements[index - 1]!,
+    source,
+    sourceStringVariables,
+  );
   return (
     text != null &&
     text.includes("tailor-sdk") &&
@@ -1428,7 +1444,7 @@ function pushSourceStringEdit(
         : (TAILOR_SDK_TOKEN_RE.test(text) || TAILOR_SDK_PATH_RE.test(text)) &&
             isCliBinaryArgument(node, source, sourceStringVariables)
           ? renameBinary(text)
-          : isCliValueArgument(node, source)
+          : isCliValueArgument(node, source, sourceStringVariables)
             ? text
             : renameSourceCommandText(text);
   if (replacement !== text) {
@@ -1452,15 +1468,29 @@ function templateSubstitutionPlaceholder(
   }
 }
 
-function templateSubstitutionsNeedCliRenameMigration(
+function restoreTemplateMigrationText(
   text: string,
   substitutions: ReadonlyArray<{ placeholder: string; migrationText: string }>,
-): boolean {
+): string {
   let restored = text;
   for (const substitution of substitutions) {
     restored = restored.replaceAll(substitution.placeholder, () => substitution.migrationText);
   }
-  return needsCliRenameMigration(restored);
+  return restored;
+}
+
+function hasSourceTailorSdkReference(value: string): boolean {
+  TAILOR_SDK_RE.lastIndex = 0;
+  const matches = TAILOR_SDK_RE.test(value);
+  TAILOR_SDK_RE.lastIndex = 0;
+  return matches;
+}
+
+function hasOnlyProtectedSourceCliValueLegacyToken(value: string): boolean {
+  const protectedValue = protectSourceCliValueReferences(value);
+  return (
+    protectedValue.protectedValues.length > 0 && !hasSourceTailorSdkReference(protectedValue.source)
+  );
 }
 
 function templateSubstitutionMigrationText(
@@ -1522,9 +1552,12 @@ function pushTemplateStringEdit(
     text = `${text.slice(0, childStart)}${placeholder}${text.slice(childEnd)}`;
   }
 
-  let replacement = templateSubstitutionsNeedCliRenameMigration(text, substitutions)
-    ? text
-    : renameSourceCommandText(text);
+  const migrationText = restoreTemplateMigrationText(text, substitutions);
+  if (hasOnlyProtectedSourceCliValueLegacyToken(migrationText)) {
+    return;
+  }
+
+  let replacement = needsCliRenameMigration(migrationText) ? text : renameSourceCommandText(text);
   for (const substitution of substitutions) {
     replacement = replacement.replaceAll(substitution.placeholder, () => substitution.text);
   }
@@ -1574,7 +1607,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
         pushSourceStringEdit(edits, source, node, sourceStringVariables);
         return;
       }
-      if (isCliValueArgument(node, source)) return;
+      if (isCliValueArgument(node, source, sourceStringVariables)) return;
       pushTemplateStringEdit(edits, source, node, sourceStringVariables);
       return;
     }
