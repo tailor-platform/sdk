@@ -77,6 +77,10 @@ describe("getApplicableCodemods", () => {
     expect(matchesSourceStringPattern("tailor --profile tailor-sdk deploy")).toBe(false);
     expect(matchesSourceStringPattern("tailor --name   tailor-sdk deploy")).toBe(false);
     expect(matchesSourceStringPattern('tailor --arg "tailor-sdk deploy" deploy')).toBe(false);
+    expect(matchesSourceStringPattern('tailor --arg "tailor-sdk apply" deploy')).toBe(false);
+    expect(matchesSourceStringPattern("tailor --name 'tailor-sdk crash-report list' deploy")).toBe(
+      false,
+    );
     const matches = picomatch(renameBin?.filePatterns ?? [], { dot: true });
     expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
     expect(matches("tailor.d.ts")).toBe(true);
