@@ -49,6 +49,7 @@ const TAILOR_CLI_COMMANDS = [
   "workflow",
   "workspace",
 ] as const;
+const TAILOR_CLI_STANDALONE_FLAGS = new Set(["--help", "-h", "--version", "-v"]);
 const TAILOR_CLI_COMMAND_PATTERN = `(?:${TAILOR_CLI_COMMANDS.join("|")})`;
 const TAILOR_CLI_VALUE_FLAG =
   "(?:--env-file-if-exists|--env-file|--profile|--config|--workspace-id|--arg|--query|--file|-e|-p|-c|-w|-a|-q|-f)";
@@ -270,6 +271,7 @@ function hasTailorCommandAfter(elements: SgNode[], start: number, source: string
   for (let index = start; index < elements.length; index += 1) {
     const value = sourceStringContent(elements[index]!, source);
     if (value == null) return false;
+    if (TAILOR_CLI_STANDALONE_FLAGS.has(value)) return true;
     if (TAILOR_CLI_COMMANDS.includes(value as (typeof TAILOR_CLI_COMMANDS)[number])) return true;
     if (value.startsWith("-")) {
       if (isTailorCliValueFlag(value) && !value.includes("=")) {
@@ -287,6 +289,31 @@ function hasNpxPackageFlag(elements: SgNode[], source: string): boolean {
     const value = sourceStringContent(element, source);
     return value != null && SOURCE_PACKAGE_FLAG_RE.test(value);
   });
+}
+
+function isNpxSplitPackageFlagValue(elements: SgNode[], index: number, source: string): boolean {
+  const previous = elements[index - 1];
+  if (previous == null) return false;
+  const previousValue = sourceStringContent(previous, source);
+  return previousValue === "-p" || previousValue === "--package";
+}
+
+function sourcePackageFlagReplacement(
+  node: SgNode,
+  source: string,
+): { text: string; replacement: string } | null {
+  const text = sourceStringContent(node, source);
+  if (text == null) return null;
+  const match = /^(?<prefix>-p=|--package=)tailor-sdk(?<version>@[^\s'"`;|&)]+)?$/.exec(text);
+  if (match?.groups == null) return null;
+  const parent = node.parent();
+  if (parent?.kind() !== "array" || !isPackageRunnerArrayArgument(node, source)) return null;
+  return {
+    text,
+    replacement: `${match.groups.prefix}${renamePackageName(
+      `tailor-sdk${match.groups.version ?? ""}`,
+    )}`,
+  };
 }
 
 function firstTailorPackageIndex(elements: SgNode[], start: number, source: string): number | null {
@@ -336,9 +363,12 @@ function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
   if (executable == null) return false;
 
   const elements = sourceArrayElements(parent);
-  if (hasNpxPackageFlag(elements, source)) return false;
   const index = nodeIndex(elements, node);
   if (index < 0) return false;
+
+  if (hasNpxPackageFlag(elements, source)) {
+    return isNpxSplitPackageFlagValue(elements, index, source);
+  }
 
   if (SOURCE_PACKAGE_RUNNERS.has(executable)) {
     return firstTailorPackageIndex(elements, 0, source) === index;
@@ -353,6 +383,22 @@ function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
   }
 
   return false;
+}
+
+function isPackageRunnerCommandBinaryArgument(node: SgNode, source: string): boolean {
+  const parent = node.parent();
+  if (parent?.kind() !== "array" || !isPackageRunnerArrayArgument(node, source)) return false;
+
+  const elements = sourceArrayElements(parent);
+  const index = nodeIndex(elements, node);
+  if (index < 0 || !hasNpxPackageFlag(elements, source)) return false;
+
+  const text = sourceStringContent(node, source);
+  return (
+    text != null &&
+    TAILOR_SDK_TOKEN_RE.test(text) &&
+    hasTailorCommandAfter(elements, index + 1, source)
+  );
 }
 
 function isPackageManagerExecBinaryArgument(node: SgNode, source: string): boolean {
@@ -384,6 +430,7 @@ function isPackageManagerExecBinaryArgument(node: SgNode, source: string): boole
 function isCliBinaryArgument(node: SgNode, source: string): boolean {
   const parent = node.parent();
   if (parent?.kind() === "array") {
+    if (isPackageRunnerCommandBinaryArgument(node, source)) return true;
     if (isPackageRunnerArrayArgument(node, source)) return false;
     return isPackageManagerExecBinaryArgument(node, source);
   }
@@ -392,6 +439,18 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
   if (!CLI_ARGUMENT_CALLEE_RE.test(callExpressionCalleeText(parent) ?? "")) return false;
   const args = sourceArrayElements(parent);
   return args[0] != null && nodeRangeKey(args[0]) === nodeRangeKey(node);
+}
+
+function isCliValueArgument(node: SgNode, source: string): boolean {
+  const parent = node.parent();
+  if (parent?.kind() !== "array") return false;
+  const elements = sourceArrayElements(parent);
+  const index = nodeIndex(elements, node);
+  if (index <= 0) return false;
+  const previousValue = sourceStringContent(elements[index - 1]!, source);
+  return (
+    previousValue != null && isTailorCliValueFlag(previousValue) && !previousValue.includes("=")
+  );
 }
 
 function pushSourceStringEdit(
@@ -403,12 +462,17 @@ function pushSourceStringEdit(
   const start = range.start.index + 1;
   const end = range.end.index - 1;
   const text = source.slice(start, end);
+  const packageFlagReplacement = sourcePackageFlagReplacement(node, source);
   const replacement =
-    TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
-      ? renamePackageName(text)
-      : TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
-        ? renameBinary(text)
-        : renameSourceCommandText(text);
+    packageFlagReplacement != null
+      ? packageFlagReplacement.replacement
+      : TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
+        ? renamePackageName(text)
+        : isCliValueArgument(node, source)
+          ? text
+          : TAILOR_SDK_TOKEN_RE.test(text) && isCliBinaryArgument(node, source)
+            ? renameBinary(text)
+            : renameSourceCommandText(text);
   if (replacement !== text) {
     edits.push([start, end, replacement]);
   }
