@@ -80,6 +80,7 @@ const npxOtherPackageQuoted = "npx foo \"tailor-sdk login\"";
 const npxOtherPackageSingleQuoted = "npx foo 'tailor-sdk login'";
 const shellWrapped = "sh -c \"tailor-sdk deploy\"";
 const escapedArg = "tailor-sdk --arg \"tailor-sdk deploy\" deploy";
+const dollarArg = "tailor-sdk --arg \"$& tailor-sdk deploy\" deploy";
 const packageName = "tailor-sdk";
 const packageMessage = "package tailor-sdk is installed";
 const mixedPackageAndCommand = "Install tailor-sdk before running tailor-sdk deploy";
