@@ -620,6 +620,10 @@ export const allCodemods: CodemodPackage[] = [
       RENAME_BIN_SOURCE_LEGACY_PATTERN,
       RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
     ],
+    sourceTextLegacyPatterns: [
+      RENAME_BIN_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
+    ],
     examples: [
       {
         lang: "sh",

@@ -1103,8 +1103,8 @@ function arrayHasCliRenameLegacyArgs(elements: SgNode[], start: number, source: 
       sourceStringContent(elements[index]!, source) ??
       sourceStringRawContent(elements[index]!, source);
     if (value == null) continue;
-    if (TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!) && !value.includes("=")) {
-      index += 1;
+    if (TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!)) {
+      if (!value.includes("=")) index += 1;
       continue;
     }
     if (CLI_RENAME_LEGACY_RE.test(value)) return true;

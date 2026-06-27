@@ -64,6 +64,7 @@ describe("getApplicableCodemods", () => {
 
     expect(renameBin?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
     expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(2);
+    expect(renameBin?.sourceTextLegacyPatterns).toHaveLength(2);
     const sourceStringPatterns = renameBin?.sourceStringLegacyPatterns as RegExp[];
     const matchesSourceStringPattern = (value: string) =>
       sourceStringPatterns.some((pattern) => pattern.test(value));
