@@ -124,6 +124,46 @@ describe("principal-unify review findings", () => {
     ]);
   });
 
+  test("reports helper adapters that destructure context.user", async () => {
+    await writeProjectFile(
+      "resolvers/destructured-helper.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "function createContext(context: any) {",
+        "  const { user } = context;",
+        "  return { userId: user.id };",
+        "}",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async (context) => createContext(context),",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/destructured-helper.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/destructured-helper.ts",
+            line: 3,
+            message: expect.stringContaining("createContext"),
+          }),
+          expect.objectContaining({
+            file: "resolvers/destructured-helper.ts",
+            line: 9,
+            message: expect.stringContaining("createContext"),
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("keeps file-level suspicious-pattern fallback without precise findings", async () => {
     await writeProjectFile(
       "resolvers/context-type.ts",
@@ -179,5 +219,29 @@ describe("principal-unify review findings", () => {
         ],
       }),
     ]);
+  });
+
+  test("does not report matching alias names outside the resolver scope", async () => {
+    await writeProjectFile(
+      "resolvers/scoped-alias.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "declare function publishAudit(userId: string | undefined): Promise<void>;",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async ({ user: currentUser }) => currentUser.id,",
+        "});",
+        "",
+        "async function audit(currentUser?: { id: string }) {",
+        "  await publishAudit(currentUser?.id);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
   });
 });
