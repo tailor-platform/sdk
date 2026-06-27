@@ -63,6 +63,7 @@ describe("getApplicableCodemods", () => {
     );
 
     expect(renameBin?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
+    expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(1);
     const matches = picomatch(renameBin?.filePatterns ?? [], { dot: true });
     expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
     expect(matches("tailor.d.ts")).toBe(true);
