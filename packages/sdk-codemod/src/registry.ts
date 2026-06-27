@@ -73,7 +73,7 @@ const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
     "(?<!\\\\[\"'])",
     RENAME_BIN_SOURCE_VALUE_GUARDS,
     "tailor-sdk(?![\\w-])(?:@[^\\s'\"`;|&)]+)?",
-    `(?=\\s+(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})\\b)`,
+    `(?=\\s*(?:$|(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})\\b))`,
   ].join(""),
 );
 

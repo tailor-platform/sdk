@@ -70,6 +70,9 @@ const SOURCE_VALUE_FLAGS = new Set([
   "--arg",
   "--query",
   "--file",
+  "--name",
+  "--namespace",
+  "--dir",
   "-e",
   "-p",
   "-c",
@@ -77,6 +80,7 @@ const SOURCE_VALUE_FLAGS = new Set([
   "-a",
   "-q",
   "-f",
+  "-n",
 ]);
 const SOURCE_CLI_BINARY_RE =
   /^(?:tailor|tailor-sdk(?:@[^\s'"`;|&)]+)?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;

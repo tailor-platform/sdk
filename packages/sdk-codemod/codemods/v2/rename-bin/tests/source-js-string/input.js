@@ -22,6 +22,7 @@ const npxOtherPackageSpawned = spawn("npx", ["foo", "tailor-sdk", "login"]);
 const npxOtherPackageFlagSpawned = spawn("npx", ["foo", "-p", "tailor-sdk", "tailor-sdk", "login"]);
 const npxOtherPackageEqualsSpawned = spawn("npx", ["foo", "--package=tailor-sdk", "tailor-sdk", "login"]);
 const npxOtherPackageSplitSpawned = spawn("npx", ["foo", "--package", "tailor-sdk", "tailor-sdk", "login"]);
+const npxToolValueSpawned = spawn("npx", ["-p", "some-tool", "tool", "--name", "tailor-sdk", "deploy"]);
 const npxPackageFlagSpawned = spawn("npx", ["-p", "tailor-sdk", "tailor-sdk", "login"]);
 const npxMultiPackageFlagSpawned = spawn("npx", ["-p", "tailor-sdk", "-p", "dotenv-cli", "tailor-sdk", "login"]);
 const npxMultiPackageFlagSecondSpawned = spawn("npx", ["-p", "dotenv-cli", "-p", "tailor-sdk", "tailor-sdk", "login"]);
