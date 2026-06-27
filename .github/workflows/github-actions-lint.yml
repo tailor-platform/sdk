@@ -40,7 +40,9 @@ jobs:
         uses: ./.github/actions/install-aqua
 
       - name: Run actionlint
-        run: actionlint -color
+        run: >-
+          actionlint -color
+          -ignore 'step must run script with "run" section or run action with "uses" section'
 
       - name: Run ghalint workflows
         run: ghalint run

@@ -36,46 +36,48 @@ jobs:
       - name: Build packages
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
-      - name: Run lint
-        run: pnpm -r run lint
+      - parallel:
+          - name: Run lint
+            run: pnpm -r run lint
 
-      - name: Run Vitest lint
-        run: pnpm run lint:vitest
+          - name: Run Vitest lint
+            run: pnpm run lint:vitest
 
-      # Ensure no executable files are present
-      # refs: https://github.com/changesets/action/issues/523
-      # Skip symlinks: `-x` follows symlinks to directories and reports them as executable.
-      - name: Check for executable files
-        run: |
-          executable_files=$(git ls-files | while read -r file; do [ ! -L "$file" ] && [ -x "$file" ] && echo "$file"; done || true)
-          if [ -n "$executable_files" ]; then
-            echo "Error: Found executable files (changesets/action does not support executable files):"
-            echo "$executable_files"
-            exit 1
-          fi
+          # Ensure no executable files are present
+          # refs: https://github.com/changesets/action/issues/523
+          # Skip symlinks: `-x` follows symlinks to directories and reports them as executable.
+          - name: Check for executable files
+            run: |
+              executable_files=$(git ls-files | while read -r file; do [ ! -L "$file" ] && [ -x "$file" ] && echo "$file"; done || true)
+              if [ -n "$executable_files" ]; then
+                echo "Error: Found executable files (changesets/action does not support executable files):"
+                echo "$executable_files"
+                exit 1
+              fi
 
-      - name: Check format
-        run: pnpm format:check
+          - name: Check format
+            run: pnpm format:check
 
       - name: Generate code
         run: pnpm -r run generate
 
-      - name: Check type by tsgo
-        run: pnpm -r run typecheck:go
+      - parallel:
+          - name: Check type by tsgo
+            run: pnpm -r run typecheck:go
+
+          - name: Check unused code (knip)
+            run: pnpm -r run knip
+
+          - name: Check package exports (publint)
+            run: pnpm -r run publint
+
+          # zod must not leak into user-facing entry points (operates on dist/,
+          # already built by install-deps).
+          - name: Check zod isolation
+            run: pnpm -r run check:zod-isolation
+
+          - name: Check import cycles
+            run: pnpm -r run check:import-cycles
 
       - name: Check type
         run: pnpm -r run typecheck
-
-      - name: Check unused code (knip)
-        run: pnpm -r run knip
-
-      - name: Check package exports (publint)
-        run: pnpm -r run publint
-
-      # zod must not leak into user-facing entry points (operates on dist/,
-      # already built by install-deps).
-      - name: Check zod isolation
-        run: pnpm -r run check:zod-isolation
-
-      - name: Check import cycles
-        run: pnpm -r run check:import-cycles
