@@ -656,13 +656,16 @@ describe("runCodemods", () => {
         path.join(os.tmpdir(), "runner-llm-source-string-test-"),
       );
       tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "seed.mjs"),
-        [
-          'const code = `const client = new tailor.idp.Client({ namespace: "default" });`;',
-          'const note = "tailor.idp.Client is mentioned in prose";',
-        ].join("\n"),
-      );
+      const embeddedCode = [
+        'const client = new tailor.idp.Client({ namespace: "default" });',
+        "const C = tailor.idp.Client;",
+        'await tailor.secretmanager.getSecret("vault", "key");',
+      ].join("\\n");
+      const seedSource = [
+        `const code = \`${embeddedCode}\`;`,
+        'const note = "tailor.idp.Client is mentioned in prose";',
+      ].join("\n");
+      await fs.promises.writeFile(path.join(dir, "seed.mjs"), seedSource);
       await fs.promises.writeFile(
         path.join(dir, "prose.mjs"),
         'const note = "tailor.idp.Client is mentioned in prose";\n',
@@ -677,7 +680,11 @@ describe("runCodemods", () => {
               ["**/*.{ts,js,mjs,cjs}"],
               undefined,
               {
-                sourceStringSuspiciousPatterns: ["new tailor.idp.Client"],
+                sourceStringSuspiciousPatterns: [
+                  "new tailor.idp.Client",
+                  /[=(:,[]\s*tailor\.idp\.Client\b/,
+                  /\btailor\.(?:idp|secretmanager)\.[A-Za-z_$][\w$]*\s*\(/,
+                ],
                 prompt: "Review embedded runtime global usage by hand.",
               },
             ),

@@ -60,7 +60,20 @@ describe("getApplicableCodemods", () => {
 
     expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
     expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
+    expect(codemod?.suspiciousPatterns).toContain("tailor.secretmanager");
+    expect(codemod?.suspiciousPatterns).toContain("tailor.authconnection");
     expect(codemod?.sourceStringSuspiciousPatterns).toContain("new tailor.idp.Client");
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const C = tailor.idp.Client;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("await tailor.secretmanager.getSecret();"),
+      ),
+    ).toBe(true);
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 
