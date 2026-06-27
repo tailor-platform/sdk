@@ -184,6 +184,14 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
 
   const fragments: string[] = [];
   const visit = (node: SgNode): void => {
+    if (node.kind() === "arguments") {
+      const value = sourceArgumentsCommandContent(node, content);
+      if (value != null) fragments.push(value);
+    }
+    if (node.kind() === "array") {
+      const value = sourceArrayCommandContent(node, content);
+      if (value != null) fragments.push(value);
+    }
     if (node.kind() === "string") {
       if (isSourceValueArgument(node, content)) return;
       const value = sourceStringNodeContent(node, content);
@@ -201,6 +209,31 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   };
   visit(root);
   return fragments.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function sourceArgumentsCommandContent(node: SgNode, source: string): string | null {
+  const args = sourceArrayElements(node);
+  const executable = args[0] == null ? null : sourceStringNodeContent(args[0]!, source);
+  const argv = args[1];
+  if (executable == null || argv?.kind() !== "array") return null;
+
+  const values = sourceArrayCommandValues(argv, source);
+  return values.length === 0 ? null : [executable, ...values].join(" ");
+}
+
+function sourceArrayCommandContent(node: SgNode, source: string): string | null {
+  const values = sourceArrayCommandValues(node, source);
+  return values.length < 2 ? null : values.join(" ");
+}
+
+function sourceArrayCommandValues(node: SgNode, source: string): string[] {
+  const values: string[] = [];
+  for (const element of sourceArrayElements(node)) {
+    if (isSourceValueArgument(element, source)) continue;
+    const value = sourceStringNodeContent(element, source);
+    if (value != null) values.push(value);
+  }
+  return values;
 }
 
 function isSyntaxOnlyNode(node: SgNode): boolean {
