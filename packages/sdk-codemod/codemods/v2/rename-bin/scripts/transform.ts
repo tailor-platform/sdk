@@ -91,6 +91,7 @@ const TAILOR_CLI_VALUE_FLAGS = new Set([
   "-f",
   "-n",
 ]);
+const TAILOR_CLI_COMMAND_VALUE_FLAGS = new Set(["--value", "-v"]);
 const SOURCE_ESCAPED_QUOTED_VALUE = String.raw`\\"(?:\\\\.|[^"\\])*\\"|\\'(?:\\\\.|[^'\\])*\\'`;
 const SOURCE_CLI_ARG_VALUE = `(?:${SOURCE_ESCAPED_QUOTED_VALUE}|${SOURCE_ARG_VALUE})`;
 const SOURCE_COMMAND_GAP = `(?:\\s+--?[\\w-]+(?:=${SOURCE_CLI_ARG_VALUE})?(?:\\s+${SOURCE_CLI_ARG_VALUE})?)*`;
@@ -107,6 +108,7 @@ const SOURCE_DIRECT_INVOCATION_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR
 const SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD = `(?:${SOURCE_DIRECT_INVOCATION_LOOKAHEAD}|${SOURCE_TEMPLATE_DYNAMIC_ARGS}|\\s*$)`;
 const SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD = `(?:${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD}|\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`;
 const SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD = `(?=\\s+${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+)\\s*$)`;
+const SOURCE_TAILOR_SDK_COMMAND = `tailor-sdk(?:(\\.(?:cmd|ps1|exe))|(@[^\\s'"\`;|&)]+))?(?![\\w-])`;
 const SOURCE_PKG_RUNNER_RE = new RegExp(
   `\\b(${PACKAGE_RUNNER_COMMAND}${SOURCE_RUNNER_OPTION_GAP})\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
   "g",
@@ -122,15 +124,15 @@ const SOURCE_PACKAGE_FLAG_BINARY_RE = new RegExp(
   "g",
 );
 const SOURCE_TAILOR_SDK_RE = new RegExp(
-  `(?<![.\\w-])tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`,
+  `(?<![.\\w-])${SOURCE_TAILOR_SDK_COMMAND}(?=${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`,
   "g",
 );
 const SOURCE_DYNAMIC_TAILOR_SDK_RE = new RegExp(
-  `(^\\s*|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_TEMPLATE_DYNAMIC_ARGS}|\\s+$)`,
+  `(^\\s*|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)${SOURCE_TAILOR_SDK_COMMAND}(?=${SOURCE_TEMPLATE_DYNAMIC_ARGS}|\\s+$)`,
   "g",
 );
 const SOURCE_DYNAMIC_OPTION_TAILOR_SDK_RE = new RegExp(
-  `(^\\s*|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?${SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD}`,
+  `(^\\s*|[;&|]\\s*|\\b(?:pnpm|npm|yarn)(?:\\s+exec)?\\s+)${SOURCE_TAILOR_SDK_COMMAND}${SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD}`,
   "g",
 );
 const TAILOR_SDK_TOKEN_RE = /^tailor-sdk(@[^\s'"`;|&)]+)?$/;
@@ -700,21 +702,36 @@ function renameSourceCommandText(value: string): string {
   );
   const withCommands = withPackageFlagBinaries.replace(
     SOURCE_TAILOR_SDK_RE,
-    (match: string, version: string | undefined, offset: number, source: string) => {
+    (
+      match: string,
+      shim: string | undefined,
+      version: string | undefined,
+      offset: number,
+      source: string,
+    ) => {
       if (isAfterOtherPackageRunner(source, offset)) return match;
       if (isAfterTemplatePlaceholder(source, offset)) return match;
+      if (shim != null) return `tailor${shim}`;
       return version ? `@tailor-platform/sdk${version}` : "tailor";
     },
   );
   const withDynamicCommands = withCommands.replace(
     SOURCE_DYNAMIC_TAILOR_SDK_RE,
-    (_match, prefix: string, version?: string) =>
-      version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}tailor`,
+    (_match, prefix: string, shim?: string, version?: string) =>
+      shim != null
+        ? `${prefix}tailor${shim}`
+        : version
+          ? `${prefix}@tailor-platform/sdk${version}`
+          : `${prefix}tailor`,
   );
   const updated = withDynamicCommands.replace(
     SOURCE_DYNAMIC_OPTION_TAILOR_SDK_RE,
-    (_match, prefix: string, version?: string) =>
-      version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}tailor`,
+    (_match, prefix: string, shim?: string, version?: string) =>
+      shim != null
+        ? `${prefix}tailor${shim}`
+        : version
+          ? `${prefix}@tailor-platform/sdk${version}`
+          : `${prefix}tailor`,
   );
   return restoreSourceCliValueReferences(updated, protectedValue.protectedValues);
 }
@@ -1094,18 +1111,26 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
 }
 
 function arrayHasCliRenameLegacyArgs(elements: SgNode[], start: number, source: string): boolean {
+  let commandSeen = false;
   for (let index = start; index < elements.length; index += 1) {
     const value =
       sourceStringContent(elements[index]!, source) ??
       sourceStringRawContent(elements[index]!, source);
     if (value == null) continue;
-    if (TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!)) {
+    if (value === "--machineuser" || value.startsWith("--machineuser=")) return true;
+    if (
+      TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!) ||
+      (commandSeen && TAILOR_CLI_COMMAND_VALUE_FLAGS.has(value.split("=", 1)[0]!))
+    ) {
       if (!value.includes("=")) index += 1;
       continue;
     }
-    if (CLI_RENAME_LEGACY_RE.test(value)) return true;
-    if (value === "apply" || value === "crash-report") return true;
-    if (value === "--machineuser" || value.startsWith("--machineuser=")) return true;
+    if (value.startsWith("-")) continue;
+    if (!commandSeen) {
+      if (CLI_RENAME_LEGACY_RE.test(value)) return true;
+      if (value === "apply" || value === "crash-report") return true;
+      commandSeen = true;
+    }
   }
   return false;
 }
