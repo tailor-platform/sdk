@@ -3,7 +3,7 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
-const ARGUMENT_PUNCTUATION = new Set(["(", ")", ","]);
+const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
 
 interface ImportBinding {
   localName: string;
@@ -156,6 +156,17 @@ function localDeclarationNames(root: SgNode): Set<string> {
     if (binding) names.add(binding.text());
   }
 
+  for (const loop of root.findAll({ rule: { kind: "for_in_statement" } })) {
+    const children = loop.children();
+    const keywordIndex = children.findIndex(
+      (child) => child.kind() === "in" || child.kind() === "of",
+    );
+    if (keywordIndex === -1) continue;
+    for (const child of children.slice(0, keywordIndex)) {
+      collectBindingNames(child, names);
+    }
+  }
+
   return names;
 }
 
@@ -208,19 +219,30 @@ function runtimeNamedValueImport(imports: SgNode[]): SgNode | null {
   );
 }
 
-function importInsertionIndex(imports: SgNode[], source: string): number {
+function isDirectiveStatement(node: SgNode): boolean {
+  return node.kind() === "expression_statement" && node.children()[0]?.kind() === "string";
+}
+
+function importInsertionIndex(root: SgNode, imports: SgNode[], source: string): number {
   const lastImport = imports.at(-1);
   if (lastImport) return lastImport.range().end.index;
 
+  let pos = 0;
   if (source.startsWith("#!")) {
     const newlineIndex = source.indexOf("\n");
-    return newlineIndex === -1 ? source.length : newlineIndex + 1;
+    pos = newlineIndex === -1 ? source.length : newlineIndex + 1;
   }
 
-  return 0;
+  for (const child of root.children()) {
+    if (child.range().start.index < pos) continue;
+    if (!isDirectiveStatement(child)) break;
+    pos = child.range().end.index;
+  }
+
+  return pos;
 }
 
-function buildAddRuntimeImportEdit(source: string, imports: SgNode[]): Edit {
+function buildAddRuntimeImportEdit(root: SgNode, source: string, imports: SgNode[]): Edit {
   const existingRuntimeImport = runtimeNamedValueImport(imports);
   const namedImports = existingRuntimeImport ? namedImportsNode(existingRuntimeImport) : null;
   if (namedImports) {
@@ -230,7 +252,7 @@ function buildAddRuntimeImportEdit(source: string, imports: SgNode[]): Edit {
     return namedImports.replace(`{ ${[...specTexts, "idp"].join(", ")} }`);
   }
 
-  const pos = importInsertionIndex(imports, source);
+  const pos = importInsertionIndex(root, imports, source);
   const insertedText =
     pos === 0 || (pos > 0 && source[pos - 1] === "\n")
       ? `import { idp } from "${RUNTIME_MODULE}";\n\n`
@@ -239,7 +261,7 @@ function buildAddRuntimeImportEdit(source: string, imports: SgNode[]): Edit {
 }
 
 function argumentExpressions(args: SgNode): SgNode[] {
-  return args.children().filter((child) => !ARGUMENT_PUNCTUATION.has(child.kind()));
+  return args.children().filter((child) => !NON_ARGUMENT_KINDS.has(child.kind()));
 }
 
 function hasConstructorArguments(newExpression: SgNode): boolean {
@@ -281,7 +303,7 @@ export default function transform(source: string, filePath: string): string | nu
 
   if (!existingIdpLocal) {
     if (filePath.endsWith(".cts")) return null;
-    edits.push(buildAddRuntimeImportEdit(source, imports));
+    edits.push(buildAddRuntimeImportEdit(root, source, imports));
   }
 
   const result = root.commitEdits(edits);
