@@ -212,6 +212,7 @@ export {
   getMigrationDirPath,
   getMigrationFilePath,
   type SchemaSnapshot,
+  type NormalizedSchemaSnapshot,
   type TailorDBSnapshotType,
   type SnapshotFieldConfig,
   type MigrationInfo,

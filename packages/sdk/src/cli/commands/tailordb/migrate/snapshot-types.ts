@@ -236,10 +236,10 @@ export interface SchemaSnapshot {
 declare const normalizedSchemaSnapshotBrand: unique symbol;
 
 /**
- * Schema snapshot after canonical normalization has been applied.
+ * Schema snapshot normalized to a canonical form for consistent comparison.
  *
- * Use this at internal comparison boundaries that require defaults and legacy
- * compatibility fixes to be materialized before reading snapshot contents.
+ * Returned by snapshot creation and loading functions so drift detection stays
+ * stable when local definitions omit defaults that the platform materializes.
  */
 export type NormalizedSchemaSnapshot = SchemaSnapshot & {
   readonly [normalizedSchemaSnapshotBrand]: true;
