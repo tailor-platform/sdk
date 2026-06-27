@@ -38,6 +38,7 @@ const npxPackageFlagDynamic = `npx -p @tailor-platform/sdk tailor ${subcommand}`
 const npxPackageEqualsDynamic = `npx --package=@tailor-platform/sdk tailor ${subcommand}`;
 const npxRegistryPackageFlag = "npx --registry https://registry.npmjs.org -p @tailor-platform/sdk tailor login";
 const npxProfileValue = "npx @tailor-platform/sdk -p tailor-sdk login";
+const shellWrapped = "sh -c \"tailor deploy\"";
 const escapedArg = "tailor --arg \"tailor-sdk deploy\" deploy";
 const packageName = "tailor-sdk";
 const packageMessage = "package tailor-sdk is installed";

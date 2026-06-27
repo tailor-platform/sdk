@@ -73,10 +73,12 @@ const TAILOR_CLI_VALUE_FLAGS = new Set([
   "-q",
   "-f",
 ]);
-const SOURCE_COMMAND_GAP = `(?:\\s+--?[\\w-]+(?:=${SOURCE_ARG_VALUE})?(?:\\s+${SOURCE_ARG_VALUE})?)*`;
+const SOURCE_ESCAPED_QUOTED_VALUE = String.raw`\\"(?:\\\\.|[^"\\])*\\"|\\'(?:\\\\.|[^'\\])*\\'`;
+const SOURCE_CLI_ARG_VALUE = `(?:${SOURCE_ESCAPED_QUOTED_VALUE}|${SOURCE_ARG_VALUE})`;
+const SOURCE_COMMAND_GAP = `(?:\\s+--?[\\w-]+(?:=${SOURCE_CLI_ARG_VALUE})?(?:\\s+${SOURCE_CLI_ARG_VALUE})?)*`;
 const SOURCE_RUNNER_OPTION_GAP = `(?:\\s+(?:-\\w+|--\\w[\\w-]*)(?:=${SOURCE_ARG_VALUE})?(?:\\s+(?!tailor-sdk(?![\\w-])|-)${SOURCE_ARG_VALUE})?)*`;
 const SOURCE_CLI_VALUE_REFERENCE_RE = new RegExp(
-  `(${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+))(${SOURCE_ARG_VALUE})`,
+  `(${TAILOR_CLI_VALUE_FLAG}(?:=|\\s+))(${SOURCE_CLI_ARG_VALUE})`,
   "g",
 );
 const SOURCE_TEMPLATE_EXPR_PLACEHOLDER = "__TAILOR_SDK_TEMPLATE_EXPR_\\d+__";
@@ -123,7 +125,6 @@ const NPX_OPTION_WITH_VALUE = "(?:--registry|--cache|--userconfig|--prefix)";
 const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
   `(?:^|[;&|]\\s*)npx(?:\\s+(?:${NPX_OPTION_WITH_VALUE}\\s+${SOURCE_ARG_VALUE}|-\\w+|--\\w[\\w-]*(?:=${SOURCE_ARG_VALUE})?))*\\s*$`,
 );
-const SOURCE_ESCAPED_QUOTED_VALUE_RE = /\\"(?:\\\\.|[^"\\])*\\"|\\'(?:\\\\.|[^'\\])*\\'/g;
 const SOURCE_TOKEN_RE = new RegExp(SOURCE_ARG_VALUE, "g");
 const RUNNER_OPTION_VALUE_FLAGS = new Set([
   "--registry",
@@ -157,16 +158,11 @@ function protectSourceCliValueReferences(value: string): {
   protectedValues: string[];
 } {
   const protectedValues: string[] = [];
-  const withEscapedQuotedValues = value.replace(SOURCE_ESCAPED_QUOTED_VALUE_RE, (match) => {
-    if (!match.includes("tailor-sdk")) return match;
-    const placeholder = `__TAILOR_SDK_SOURCE_VALUE_${protectedValues.length}__`;
-    protectedValues.push(match);
-    return placeholder;
-  });
-  const source = withEscapedQuotedValues.replace(
+  const source = value.replace(
     SOURCE_CLI_VALUE_REFERENCE_RE,
     (match: string, prefix: string, arg: string, offset: number) => {
       if (!arg.includes("tailor-sdk")) return match;
+      if (!isAfterTailorCliToken(value, offset)) return match;
       if (prefix.startsWith("-p") && NPX_PACKAGE_FLAG_CONTEXT_RE.test(value.slice(0, offset))) {
         return match;
       }
@@ -247,6 +243,17 @@ function isAfterOtherPackageRunner(source: string, offset: number): boolean {
   if (tokens == null) return false;
   const packageToken = firstRunnerPackageToken(tokens);
   return packageToken != null && !TAILOR_SDK_TOKEN_RE.test(packageToken);
+}
+
+function isAfterTailorCliToken(source: string, offset: number): boolean {
+  const segmentStart = Math.max(
+    source.lastIndexOf(";", offset - 1),
+    source.lastIndexOf("&", offset - 1),
+    source.lastIndexOf("|", offset - 1),
+  );
+  const segment = source.slice(segmentStart + 1, offset).trim();
+  const tokens = sourceTokens(segment);
+  return tokens != null && tokens.some((token) => TAILOR_CLI_TOKEN_RE.test(token));
 }
 
 function renameSourceCommandText(value: string): string {
@@ -373,11 +380,9 @@ function isTailorCliValueFlag(value: string): boolean {
   return TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!);
 }
 
-function hasNpxPackageFlag(elements: SgNode[], source: string): boolean {
-  const firstPackageIndex = firstTailorPackageIndex(elements, 0, source);
-  if (firstPackageIndex == null) return false;
-  return elements.some((element, index) => {
-    if (index >= firstPackageIndex) return false;
+function hasNpxPackageFlagBefore(elements: SgNode[], index: number, source: string): boolean {
+  return elements.some((element, currentIndex) => {
+    if (currentIndex >= index) return false;
     const value = sourceStringContent(element, source);
     return value != null && SOURCE_PACKAGE_FLAG_RE.test(value);
   });
@@ -463,7 +468,7 @@ function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
   const index = nodeIndex(elements, node);
   if (index < 0) return false;
 
-  if (hasNpxPackageFlag(elements, source)) {
+  if (hasNpxPackageFlagBefore(elements, index, source)) {
     return isNpxSplitPackageFlagValue(elements, index, source);
   }
 
@@ -488,7 +493,7 @@ function isPackageRunnerCommandBinaryArgument(node: SgNode, source: string): boo
 
   const elements = sourceArrayElements(parent);
   const index = nodeIndex(elements, node);
-  if (index < 0 || !hasNpxPackageFlag(elements, source)) return false;
+  if (index < 0 || !hasNpxPackageFlagBefore(elements, index, source)) return false;
 
   const text = sourceStringContent(node, source);
   return (
