@@ -1,8 +1,11 @@
 const siteName = "portal";
 const setup = `pnpm tailor staticwebsite deploy --name ${siteName}`;
 const deploy = "tailor deploy";
+const envFileDeploy = "tailor --env-file .env deploy";
+const profileValue = "tailor --profile tailor-sdk deploy";
 const generated = "Run tailor generate after changes";
-const dynamicCommand = `tailor-sdk ${subcommand}`;
+const dynamicCommand = `tailor ${subcommand}`;
+const dynamicPnpmCommand = `pnpm tailor ${subcommand}`;
 const latest = "npx @tailor-platform/sdk@latest login";
 const packageName = "tailor-sdk";
 const packageMessage = "package tailor-sdk is installed";

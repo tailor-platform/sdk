@@ -58,6 +58,7 @@ const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Se
   "string",
   "regex",
   "string_fragment",
+  "jsx_text",
 ]);
 
 function shouldSkipDirectory(name: string): boolean {

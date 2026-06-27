@@ -395,6 +395,28 @@ describe("runCodemods", () => {
       expect(result.warnings).toEqual([]);
     });
 
+    test("ignores JSX text for legacy warnings", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "docs.tsx"),
+        "export const docs = <p>package tailor-sdk is installed</p>;",
+        "utf-8",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/rename-bin", undefined, ["**/*.tsx"], ["tailor-sdk"]),
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual([]);
+    });
+
     test("keeps legacy warnings for source identifiers", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
       tmpDir = dir;

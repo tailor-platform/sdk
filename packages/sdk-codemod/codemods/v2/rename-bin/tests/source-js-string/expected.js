@@ -1,4 +1,5 @@
 const script = "tailor deploy";
+const spawned = spawn("tailor", ["deploy"]);
 const docs = (
   <>
     <p>package tailor-sdk is installed</p>
