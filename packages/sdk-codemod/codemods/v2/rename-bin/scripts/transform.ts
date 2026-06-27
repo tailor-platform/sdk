@@ -3,7 +3,21 @@ import * as path from "pathe";
 import type { SgNode } from "@ast-grep/napi";
 
 const SOURCE_ARG_VALUE = `(?:[^\\s'"\`;|&]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
-const PACKAGE_RUNNER_COMMAND = `(?:npx|bunx|(?:pnpm|yarn)(?:\\s+(?:-\\w+|--\\w[\\w-]*)(?:=${SOURCE_ARG_VALUE})?(?:\\s+(?!dlx\\b|-)${SOURCE_ARG_VALUE})?)*\\s+dlx)`;
+const RUNNER_OPTION_VALUE_FLAG_LIST = [
+  "--registry",
+  "--cache",
+  "--userconfig",
+  "--prefix",
+  "--filter",
+  "-F",
+  "--dir",
+  "-C",
+  "--cwd",
+] as const;
+const RUNNER_OPTION_VALUE_FLAG_PATTERN = `(?:${RUNNER_OPTION_VALUE_FLAG_LIST.join("|")})`;
+const PACKAGE_RUNNER_BOOLEAN_OPTION = `(?!(?:${RUNNER_OPTION_VALUE_FLAG_PATTERN})(?:=|\\s|$))(?:-\\w+|--\\w[\\w-]*)(?:=${SOURCE_ARG_VALUE})?`;
+const PACKAGE_RUNNER_OPTION = `(?:${RUNNER_OPTION_VALUE_FLAG_PATTERN}(?:=${SOURCE_ARG_VALUE}|\\s+${SOURCE_ARG_VALUE})|${PACKAGE_RUNNER_BOOLEAN_OPTION})`;
+const PACKAGE_RUNNER_COMMAND = `(?:npx|bunx|(?:pnpm|yarn)(?:\\s+${PACKAGE_RUNNER_OPTION})*\\s+dlx)`;
 
 // Package-runner forms (`npx`, `pnpm dlx`, `yarn dlx`, `bunx`) resolve npm package
 // names, so `tailor-sdk@...` must become `@tailor-platform/sdk@...` — rewriting
@@ -128,17 +142,7 @@ const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
 const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
 const SOURCE_NPM_EXEC_PACKAGE_RUNNERS = new Set(["npm"]);
-const PACKAGE_MANAGER_OPTION_VALUE_FLAGS = new Set([
-  "--registry",
-  "--cache",
-  "--userconfig",
-  "--prefix",
-  "--filter",
-  "-F",
-  "--dir",
-  "-C",
-  "--cwd",
-]);
+const PACKAGE_MANAGER_OPTION_VALUE_FLAGS = new Set(RUNNER_OPTION_VALUE_FLAG_LIST);
 const SOURCE_PACKAGE_FLAG_RE = /^(?:-p|--package)(?:=.*)?$/;
 const NPX_OPTION_WITH_VALUE = "(?:--registry|--cache|--userconfig|--prefix)";
 const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
@@ -147,17 +151,7 @@ const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
 const SOURCE_TOKEN_RE = new RegExp(SOURCE_CLI_ARG_VALUE, "g");
 const CLI_RENAME_LEGACY_RE = /(?<![\w-])(?:apply|crash-report|--machineuser)(?![\w-])/;
 const TAILOR_PLATFORM_SDK_TOKEN_RE = /^@tailor-platform\/sdk(@[^\s'"`;|&)]+)?$/;
-const RUNNER_OPTION_VALUE_FLAGS = new Set([
-  "--registry",
-  "--cache",
-  "--userconfig",
-  "--prefix",
-  "--filter",
-  "-F",
-  "--dir",
-  "-C",
-  "--cwd",
-]);
+const RUNNER_OPTION_VALUE_FLAGS = new Set(RUNNER_OPTION_VALUE_FLAG_LIST);
 
 function renameBinary(value: string): string {
   const withRunners = value.replace(PKG_RUNNER_RE, (_, runner: string, version?: string) =>

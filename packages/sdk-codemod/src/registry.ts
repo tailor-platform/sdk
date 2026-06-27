@@ -64,7 +64,7 @@ function escapeRegExp(value: string): string {
 
 const RENAME_BIN_SOURCE_VALUE_GUARDS = RENAME_BIN_SOURCE_VALUE_FLAGS.flatMap((flag) => {
   const escaped = escapeRegExp(flag);
-  return [`(?<!${escaped} )`, `(?<!${escaped}=)`];
+  return [`(?<!${escaped}\\s+)`, `(?<!${escaped}=)`];
 }).join("");
 const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})`;
 const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
@@ -79,7 +79,7 @@ const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
 );
 const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
   [
-    "(?:^|[\\s;&|])(?:sh|bash|zsh)\\s+-c\\s+\\\\?[\"']",
+    "(?:^|[\\s;&|])(?:sh|bash|zsh)\\s+-\\w*c\\w*\\s+\\\\?[\"']",
     "tailor-sdk(?![\\w-])(?:@[^\\s'\"`;|&)]+)?",
     `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
   ].join(""),
