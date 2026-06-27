@@ -8,9 +8,7 @@ const RUNNER_OPTION_VALUE_FLAG_LIST = [
   "--cache",
   "--userconfig",
   "--prefix",
-  "--workspace",
   "--filter",
-  "-w",
   "-F",
   "--dir",
   "-C",
@@ -148,7 +146,7 @@ const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
 const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
 const SOURCE_NPM_EXEC_PACKAGE_RUNNERS = new Set(["npm"]);
-const PACKAGE_MANAGER_OPTION_VALUE_FLAGS = new Set(RUNNER_OPTION_VALUE_FLAG_LIST);
+const NPM_OPTION_VALUE_FLAGS = new Set(["--workspace", "-w"]);
 const SOURCE_PACKAGE_FLAG_RE = /^(?:-p|--package)(?:=.*)?$/;
 const NPX_OPTION_WITH_VALUE = "(?:--registry|--cache|--userconfig|--prefix)";
 const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
@@ -342,8 +340,13 @@ function activeQuoteStart(source: string, start: number, offset: number): number
   return quote?.start ?? null;
 }
 
-function skipsRunnerOptionValue(token: string): boolean {
-  return RUNNER_OPTION_VALUE_FLAGS.has(token.split("=", 1)[0]!) && !token.includes("=");
+function skipsRunnerOptionValue(token: string, executable?: string): boolean {
+  const flag = token.split("=", 1)[0]!;
+  return (
+    (RUNNER_OPTION_VALUE_FLAGS.has(flag) ||
+      (executable === "npm" && NPM_OPTION_VALUE_FLAGS.has(flag))) &&
+    !token.includes("=")
+  );
 }
 
 function isPotentialValueFlag(value: string): boolean {
@@ -363,7 +366,7 @@ function packageRunnerPackageStartTokenIndex(tokens: readonly string[]): number 
         return index + 1;
       }
       if (token.startsWith("-")) {
-        if (skipsRunnerOptionValue(token)) index += 1;
+        if (skipsRunnerOptionValue(token, executable)) index += 1;
         continue;
       }
       return null;
@@ -376,7 +379,7 @@ function packageRunnerPackageStartTokenIndex(tokens: readonly string[]): number 
         return index + 1;
       }
       if (token.startsWith("-")) {
-        if (skipsRunnerOptionValue(token)) index += 1;
+        if (skipsRunnerOptionValue(token, executable)) index += 1;
         continue;
       }
       return null;
@@ -427,7 +430,7 @@ function renameSourcePackageRunnerTokens(value: string): string {
     }
 
     if (token.startsWith("-")) {
-      if (skipsRunnerOptionValue(token)) index += 1;
+      if (skipsRunnerOptionValue(token, tokens[0])) index += 1;
       continue;
     }
 
@@ -458,7 +461,7 @@ function hasPositionalPackageBeforeSourcePackageFlag(
       continue;
     }
     if (token.startsWith("-")) {
-      if (skipsRunnerOptionValue(token)) index += 1;
+      if (skipsRunnerOptionValue(token, tokens[0])) index += 1;
       continue;
     }
     return true;
@@ -477,7 +480,7 @@ function firstRunnerPackageToken(tokens: string[]): string | null {
         : (tokens[index + 1] ?? null);
     }
     if (token.startsWith("-")) {
-      if (skipsRunnerOptionValue(token)) index += 1;
+      if (skipsRunnerOptionValue(token, tokens[0])) index += 1;
       continue;
     }
     return token;
@@ -546,7 +549,7 @@ function sourcePackageFlagsAllowBinaryRewrite(source: string): boolean {
       continue;
     }
     if (token.startsWith("-")) {
-      if (skipsRunnerOptionValue(token)) index += 1;
+      if (skipsRunnerOptionValue(token, tokens[0])) index += 1;
       continue;
     }
     return false;
@@ -789,6 +792,62 @@ function sourceStringRawContent(node: SgNode, source: string): string | null {
   return source.slice(range.start.index + 1, range.end.index - 1);
 }
 
+function collectSourceStringVariables(root: SgNode, source: string): ReadonlyMap<string, string> {
+  const values = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  const visit = (node: SgNode): void => {
+    if (node.kind() === "variable_declarator" && isConstVariableDeclarator(node)) {
+      const children = node.children();
+      const identifier = children.find((child) => child.kind() === "identifier");
+      const initializer = children.findLast((child) => sourceStringContent(child, source) != null);
+      const value = initializer == null ? null : sourceStringContent(initializer, source);
+      if (identifier != null && value != null) {
+        rememberSourceStringVariable(values, ambiguous, identifier.text(), value);
+      }
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return values;
+}
+
+function isConstVariableDeclarator(node: SgNode): boolean {
+  return (
+    node
+      .parent()
+      ?.children()
+      .some((child) => child.kind() === "const") ?? false
+  );
+}
+
+function rememberSourceStringVariable(
+  values: Map<string, string>,
+  ambiguous: Set<string>,
+  name: string,
+  value: string,
+): void {
+  if (ambiguous.has(name)) return;
+  if (values.has(name)) {
+    values.delete(name);
+    ambiguous.add(name);
+    return;
+  }
+  values.set(name, value);
+}
+
+function sourceStaticStringContent(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): string | null {
+  return (
+    sourceStringContent(node, source) ??
+    (node.kind() === "identifier" ? (sourceStringVariables.get(node.text()) ?? null) : null)
+  );
+}
+
 function isSyntaxOnlyNode(node: SgNode): boolean {
   const kind = node.kind();
   return (
@@ -817,12 +876,17 @@ function callExpressionCalleeText(argumentsNode: SgNode): string | null {
   return callee?.text() ?? null;
 }
 
-function firstNonOptionIndex(elements: SgNode[], start: number, source: string): number | null {
+function firstNonOptionIndex(
+  elements: SgNode[],
+  start: number,
+  source: string,
+  executable: string,
+): number | null {
   for (let index = start; index < elements.length; index += 1) {
     const value = sourceStringContent(elements[index]!, source);
     if (value == null) return null;
     if (!value.startsWith("-")) return index;
-    if (PACKAGE_MANAGER_OPTION_VALUE_FLAGS.has(value.split("=", 1)[0]!) && !value.includes("=")) {
+    if (skipsRunnerOptionValue(value, executable)) {
       index += 1;
     }
   }
@@ -840,14 +904,14 @@ function packageRunnerPackageStartIndex(
 ): number | null {
   if (SOURCE_PACKAGE_RUNNERS.has(executable)) return 0;
   if (SOURCE_NPM_EXEC_PACKAGE_RUNNERS.has(executable)) {
-    const execIndex = firstNonOptionIndex(elements, 0, source);
+    const execIndex = firstNonOptionIndex(elements, 0, source, executable);
     if (execIndex == null || sourceStringContent(elements[execIndex]!, source) !== "exec") {
       return null;
     }
     return execIndex + 1;
   }
   if (!SOURCE_DLX_PACKAGE_RUNNERS.has(executable)) return null;
-  const dlxIndex = firstNonOptionIndex(elements, 0, source);
+  const dlxIndex = firstNonOptionIndex(elements, 0, source, executable);
   if (dlxIndex == null || sourceStringContent(elements[dlxIndex]!, source) !== "dlx") {
     return null;
   }
@@ -859,13 +923,14 @@ function hasPackageFlagBeforeArrayPackage(
   index: number,
   source: string,
   start: number,
+  executable: string,
 ): boolean {
   for (let currentIndex = start; currentIndex < index; currentIndex += 1) {
     const value = sourceStringContent(elements[currentIndex]!, source);
     if (value == null) return false;
     if (SOURCE_PACKAGE_FLAG_RE.test(value)) return true;
     if (value.startsWith("-")) {
-      if (skipsRunnerOptionValue(value)) currentIndex += 1;
+      if (skipsRunnerOptionValue(value, executable)) currentIndex += 1;
       continue;
     }
     return false;
@@ -884,6 +949,7 @@ function hasTailorPackageFlagBeforeArrayCommand(
   index: number,
   source: string,
   start: number,
+  executable: string,
 ): boolean {
   for (let currentIndex = start; currentIndex < index; currentIndex += 1) {
     const value = sourceStringContent(elements[currentIndex]!, source);
@@ -899,7 +965,7 @@ function hasTailorPackageFlagBeforeArrayCommand(
       continue;
     }
     if (value.startsWith("-")) {
-      if (skipsRunnerOptionValue(value)) currentIndex += 1;
+      if (skipsRunnerOptionValue(value, executable)) currentIndex += 1;
       continue;
     }
     return false;
@@ -912,13 +978,14 @@ function isSplitPackageFlagValue(
   index: number,
   source: string,
   start: number,
+  executable: string,
 ): boolean {
   const previous = elements[index - 1];
   if (previous == null) return false;
   const previousValue = sourceStringContent(previous, source);
   return (
     (previousValue === "-p" || previousValue === "--package") &&
-    hasPackageFlagBeforeArrayPackage(elements, index, source, start)
+    hasPackageFlagBeforeArrayPackage(elements, index, source, start, executable)
   );
 }
 
@@ -943,7 +1010,9 @@ function sourcePackageFlagReplacement(
   const index = nodeIndex(elements, node);
   const start = packageRunnerPackageStartIndex(executable, elements, source);
   if (index < 0 || start == null) return null;
-  if (!hasPackageFlagBeforeArrayPackage(elements, index + 1, source, start)) return null;
+  if (!hasPackageFlagBeforeArrayPackage(elements, index + 1, source, start, executable)) {
+    return null;
+  }
   return {
     text,
     replacement: `${match.groups.prefix}${renamePackageName(
@@ -952,12 +1021,17 @@ function sourcePackageFlagReplacement(
   };
 }
 
-function firstTailorPackageIndex(elements: SgNode[], start: number, source: string): number | null {
+function firstTailorPackageIndex(
+  elements: SgNode[],
+  start: number,
+  source: string,
+  executable: string,
+): number | null {
   for (let index = start; index < elements.length; index += 1) {
     const value = sourceStringContent(elements[index]!, source);
     if (value == null) return null;
     if (value.startsWith("-")) {
-      if (skipsRunnerOptionValue(value)) index += 1;
+      if (skipsRunnerOptionValue(value, executable)) index += 1;
       continue;
     }
     if (TAILOR_SDK_TOKEN_RE.test(value)) {
@@ -986,13 +1060,13 @@ function isPackageRunnerArrayArgument(node: SgNode, source: string): boolean {
   if (executable === "bunx" || executable === "npx") return true;
   if (executable === "npm") {
     const elements = sourceArrayElements(parent);
-    const execIndex = firstNonOptionIndex(elements, 0, source);
+    const execIndex = firstNonOptionIndex(elements, 0, source, executable);
     return execIndex != null && sourceStringContent(elements[execIndex]!, source) === "exec";
   }
   if (executable !== "pnpm" && executable !== "yarn") return false;
 
   const elements = sourceArrayElements(parent);
-  const dlxIndex = firstNonOptionIndex(elements, 0, source);
+  const dlxIndex = firstNonOptionIndex(elements, 0, source, executable);
   return dlxIndex != null && sourceStringContent(elements[dlxIndex]!, source) === "dlx";
 }
 
@@ -1014,14 +1088,18 @@ function isPackageRunnerPackageArgument(node: SgNode, source: string): boolean {
   const start = packageRunnerPackageStartIndex(executable, elements, source);
   if (start == null) return false;
 
-  if (hasPackageFlagBeforeArrayPackage(elements, index, source, start)) {
-    return isSplitPackageFlagValue(elements, index, source, start);
+  if (hasPackageFlagBeforeArrayPackage(elements, index, source, start, executable)) {
+    return isSplitPackageFlagValue(elements, index, source, start, executable);
   }
 
-  return firstTailorPackageIndex(elements, start, source) === index;
+  return firstTailorPackageIndex(elements, start, source, executable) === index;
 }
 
-function isPackageRunnerCommandBinaryArgument(node: SgNode, source: string): boolean {
+function isPackageRunnerCommandBinaryArgument(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array" || !isPackageRunnerArrayArgument(node, source)) return false;
 
@@ -1037,18 +1115,23 @@ function isPackageRunnerCommandBinaryArgument(node: SgNode, source: string): boo
   const executable = sourceStringContent(executableNode, source);
   if (executable == null) return false;
   const start = packageRunnerPackageStartIndex(executable, elements, source);
-  if (start == null || !hasTailorPackageFlagBeforeArrayCommand(elements, index, source, start)) {
+  if (
+    start == null ||
+    !hasTailorPackageFlagBeforeArrayCommand(elements, index, source, start, executable)
+  ) {
     return false;
   }
-  if (arrayHasCliRenameLegacyArgs(elements, index + 1, source)) return false;
-  const commandIndex = packageRunnerCommandIndex(elements, start, source);
+  if (arrayHasCliRenameLegacyArgs(elements, index + 1, source, sourceStringVariables)) {
+    return false;
+  }
+  const commandIndex = packageRunnerCommandIndex(elements, start, source, executable);
   if (commandIndex !== index) return false;
 
   const text = sourceStringContent(node, source);
   return (
     text != null &&
     TAILOR_SDK_TOKEN_RE.test(text) &&
-    !isSplitPackageFlagValue(elements, index, source, start)
+    !isSplitPackageFlagValue(elements, index, source, start, executable)
   );
 }
 
@@ -1056,6 +1139,7 @@ function packageRunnerCommandIndex(
   elements: SgNode[],
   start: number,
   source: string,
+  executable: string,
 ): number | null {
   for (let index = start; index < elements.length; index += 1) {
     const value = sourceStringContent(elements[index]!, source);
@@ -1065,7 +1149,7 @@ function packageRunnerCommandIndex(
       continue;
     }
     if (value.startsWith("-")) {
-      if (skipsRunnerOptionValue(value)) index += 1;
+      if (skipsRunnerOptionValue(value, executable)) index += 1;
       continue;
     }
     return index;
@@ -1073,7 +1157,11 @@ function packageRunnerCommandIndex(
   return null;
 }
 
-function isPackageManagerExecBinaryArgument(node: SgNode, source: string): boolean {
+function isPackageManagerExecBinaryArgument(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   const parent = node.parent();
   if (parent?.kind() !== "array") return false;
 
@@ -1092,22 +1180,26 @@ function isPackageManagerExecBinaryArgument(node: SgNode, source: string): boole
   const index = nodeIndex(elements, node);
   if (index < 0) return false;
 
-  const execIndex = firstNonOptionIndex(elements, 0, source);
+  const execIndex = firstNonOptionIndex(elements, 0, source, executable);
   if (execIndex == null || sourceStringContent(elements[execIndex]!, source) !== "exec") {
     return false;
   }
   return (
-    firstNonOptionIndex(elements, execIndex + 1, source) === index &&
-    !arrayHasCliRenameLegacyArgs(elements, index + 1, source)
+    firstNonOptionIndex(elements, execIndex + 1, source, executable) === index &&
+    !arrayHasCliRenameLegacyArgs(elements, index + 1, source, sourceStringVariables)
   );
 }
 
-function isCliBinaryArgument(node: SgNode, source: string): boolean {
+function isCliBinaryArgument(
+  node: SgNode,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   const parent = node.parent();
   if (parent?.kind() === "array") {
-    if (isPackageRunnerCommandBinaryArgument(node, source)) return true;
+    if (isPackageRunnerCommandBinaryArgument(node, source, sourceStringVariables)) return true;
     if (isPackageRunnerArrayArgument(node, source)) return false;
-    return isPackageManagerExecBinaryArgument(node, source);
+    return isPackageManagerExecBinaryArgument(node, source, sourceStringVariables);
   }
 
   if (parent?.kind() !== "arguments") return false;
@@ -1116,15 +1208,21 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
   if (args[0] == null || nodeRangeKey(args[0]) !== nodeRangeKey(node)) return false;
   const argv = args[1];
   return (
-    argv?.kind() !== "array" || !arrayHasCliRenameLegacyArgs(sourceArrayElements(argv), 0, source)
+    argv?.kind() !== "array" ||
+    !arrayHasCliRenameLegacyArgs(sourceArrayElements(argv), 0, source, sourceStringVariables)
   );
 }
 
-function arrayHasCliRenameLegacyArgs(elements: SgNode[], start: number, source: string): boolean {
+function arrayHasCliRenameLegacyArgs(
+  elements: SgNode[],
+  start: number,
+  source: string,
+  sourceStringVariables: ReadonlyMap<string, string>,
+): boolean {
   let commandSeen = false;
   for (let index = start; index < elements.length; index += 1) {
     const value =
-      sourceStringContent(elements[index]!, source) ??
+      sourceStaticStringContent(elements[index]!, source, sourceStringVariables) ??
       sourceStringRawContent(elements[index]!, source);
     if (value == null) continue;
     if (value === "--machineuser" || value.startsWith("--machineuser=")) return true;
@@ -1191,6 +1289,7 @@ function pushSourceStringEdit(
   edits: Array<[number, number, string]>,
   source: string,
   node: SgNode,
+  sourceStringVariables: ReadonlyMap<string, string>,
 ): void {
   const range = node.range();
   const start = range.start.index + 1;
@@ -1203,7 +1302,7 @@ function pushSourceStringEdit(
       : TAILOR_SDK_TOKEN_RE.test(text) && isPackageRunnerPackageArgument(node, source)
         ? renamePackageName(text)
         : (TAILOR_SDK_TOKEN_RE.test(text) || TAILOR_SDK_PATH_RE.test(text)) &&
-            isCliBinaryArgument(node, source)
+            isCliBinaryArgument(node, source, sourceStringVariables)
           ? renameBinary(text)
           : isCliValueArgument(node, source)
             ? text
@@ -1309,6 +1408,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
     return null;
   }
 
+  const sourceStringVariables = collectSourceStringVariables(root, source);
   const edits: Array<[number, number, string]> = [];
   const visit = (node: SgNode): void => {
     const kind = node.kind();
@@ -1320,7 +1420,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
     }
 
     if (kind === "string") {
-      pushSourceStringEdit(edits, source, node);
+      pushSourceStringEdit(edits, source, node, sourceStringVariables);
       return;
     }
 
@@ -1329,7 +1429,7 @@ function transformSourceFile(source: string, filePath: string): string | null {
         .children()
         .some((child: SgNode) => child.kind() === "template_substitution");
       if (!hasSubstitution) {
-        pushSourceStringEdit(edits, source, node);
+        pushSourceStringEdit(edits, source, node, sourceStringVariables);
         return;
       }
       if (isCliValueArgument(node, source)) return;

@@ -48,6 +48,7 @@ const dynamicBunxCommand = `bunx @tailor-platform/sdk ${subcommand}`;
 const dynamicDlxCommand = `pnpm dlx @tailor-platform/sdk ${subcommand}`;
 const pnpmDlxWithOption = "pnpm --silent dlx @tailor-platform/sdk login";
 const pnpmDlxWithOptionValue = "pnpm --filter app dlx @tailor-platform/sdk login";
+const pnpmWorkspaceRootDlx = "pnpm -w dlx @tailor-platform/sdk login";
 const pnpmFilterNamedDlxCommand = "pnpm --filter dlx tailor deploy";
 const pnpmDlxAfterFilterNamedDlx = "pnpm --filter dlx dlx @tailor-platform/sdk login";
 const dynamicPnpmDlxWithOptionValue = `pnpm --filter ${app} dlx @tailor-platform/sdk login`;
