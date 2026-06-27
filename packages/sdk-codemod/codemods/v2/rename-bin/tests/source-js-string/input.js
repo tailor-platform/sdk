@@ -53,6 +53,14 @@ const pnpmExecSpawned = spawn("pnpm", ["exec", "tailor-sdk", "deploy"]);
 const pnpmExecDynamicSpawned = spawn("pnpm", ["exec", "tailor-sdk", subcommand]);
 const pnpmExecHelpSpawned = spawn("pnpm", ["exec", "tailor-sdk", "--help"]);
 const npmExecSpawned = spawn("npm", ["exec", "tailor-sdk", "login"]);
+const npmExecWorkspaceSpawned = spawn("npm", ["-w", "app", "exec", "tailor-sdk", "login"]);
+const npmExecLongWorkspaceSpawned = spawn("npm", [
+  "--workspace",
+  "app",
+  "exec",
+  "tailor-sdk",
+  "login",
+]);
 const npmExecPackageFlagSpawned = spawn("npm", ["exec", "--package", "tailor-sdk", "tailor-sdk", "login"]);
 const npmExecPackageEqualsSpawned = spawn("npm", ["exec", "--package=tailor-sdk", "tailor-sdk", "login"]);
 const pathQualifiedSpawned = spawn("./node_modules/.bin/tailor-sdk", ["deploy"]);
