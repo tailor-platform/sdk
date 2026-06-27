@@ -110,10 +110,45 @@ Before applying changes, `deploy` shows a preview of the planned resource change
 After the detailed list, a summary line is printed:
 
 ```text
-Plan: 5 to create, 3 to update, 1 to delete, 25 unchanged
+Plan: 5 to create, 3 to update, 1 to delete
 ```
 
-Use `--dry-run` to preview the plan without applying anything.
+Use `--dry-run` to preview the plan without applying anything. In dry-run mode the plan is written to **stdout**, so it can be captured in CI without `2>&1`:
+
+```bash
+tailor-sdk deploy --dry-run > plan.txt
+```
+
+In apply mode, the plan is printed to stderr so it does not interfere with piped output.
+
+**JSON Output:**
+
+Pass the global `--json` / `-j` flag to get machine-readable output.
+
+**Dry-run** (`--dry-run --json`): writes a JSON object to stdout:
+
+```json
+{
+  "summary": { "create": 2, "update": 1, "delete": 0, "replace": 0 },
+  "changes": [{ "action": "create", "name": "Order", "labels": ["type"], "namespace": "tailordb" }],
+  "warnings": [
+    { "type": "unmanaged", "resourceType": "tailorDB", "name": "LegacyType" },
+    { "type": "skippedSecret", "resourceType": "secret", "name": "DB_PASSWORD" }
+  ],
+  "conflicts": [{ "resourceType": "tailorDB", "name": "User", "currentOwner": "other-app" }]
+}
+```
+
+- `summary` — counts of each change type.
+- `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`.
+- `warnings` — resources not in config (`type: "unmanaged"`) or secrets with missing values (`type: "skippedSecret"`). Unmanaged resources require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
+- `conflicts` — resources owned by another application that conflict with the current config. Require confirmation in apply mode; apply is cancelled if declined.
+
+**Apply** (`--json`): writes a JSON object to stdout:
+
+```json
+{ "summary": { "create": 1, "update": 2, "delete": 0, "replace": 0 }, "status": "applied" }
+```
 
 ## remove
 
