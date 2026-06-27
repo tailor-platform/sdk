@@ -7,8 +7,9 @@ const inlineTemplateArgSpawned = spawn("tailor", [`--arg=tailor-sdk ${cmd}`, "de
 const nameValueSpawned = spawn("tailor", ["tailordb", "migration", "generate", "--name", "tailor-sdk deploy"]);
 const directNameValueSpawned = spawn("tailor", ["tailordb", "migration", "generate", "--name", "tailor-sdk deploy"]);
 const shellSpawned = spawn("sh", ["-c", "tailor deploy"]);
-const cliRenameCommandSpawned = spawn("tailor", ["crash-report", "list"]);
-const cliRenameFlagSpawned = spawn("tailor", ["login", "--machineuser"]);
+const applySpawned = spawn("tailor-sdk", ["apply"]);
+const cliRenameCommandSpawned = spawn("tailor-sdk", ["crash-report", "list"]);
+const cliRenameFlagSpawned = spawn("tailor-sdk", ["login", "--machineuser"]);
 const npxSpawned = spawn("npx", ["@tailor-platform/sdk", "login"]);
 const npxOptionSpawned = spawn("npx", ["--yes", "@tailor-platform/sdk@latest", "login"]);
 const npxProfileSpawned = spawn("npx", ["@tailor-platform/sdk", "--profile", "dev", "login"]);
@@ -32,7 +33,8 @@ const npxPackageEqualsSpawned = spawn("npx", ["--package=@tailor-platform/sdk", 
 const npxPackageFlagDynamicSpawned = spawn("npx", ["-p", "@tailor-platform/sdk", "tailor", subcommand]);
 const npxPackageEqualsDynamicSpawned = spawn("npx", ["--package=@tailor-platform/sdk", "tailor", subcommand]);
 const npxPackageMigratedSpawned = spawn("npx", ["--package", "@tailor-platform/sdk", "tailor", "login"]);
-const npxPackageDynamicSpawned = spawn("npx", ["-p", pkg, "tailor", "login"]);
+const npxPackageDynamicSpawned = spawn("npx", ["-p", pkg, "tailor-sdk", "login"]);
+const npxOtherPackageCommandSpawned = spawn("npx", ["-p", "dotenv-cli", "tailor-sdk", "login"]);
 const pnpmDlxSpawned = spawn("pnpm", ["dlx", "@tailor-platform/sdk", "login"]);
 const pnpmDlxDynamicSpawned = spawn("pnpm", ["dlx", "@tailor-platform/sdk"]);
 const pnpmDlxOtherPackageSpawned = spawn("pnpm", ["dlx", "foo", "tailor-sdk", "login"]);

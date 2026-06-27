@@ -144,7 +144,7 @@ const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
   `(?:^|[;&|]\\s*)npx(?:\\s+(?:${NPX_OPTION_WITH_VALUE}\\s+${SOURCE_ARG_VALUE}|-\\w+|--\\w[\\w-]*(?:=${SOURCE_ARG_VALUE})?))*\\s*$`,
 );
 const SOURCE_TOKEN_RE = new RegExp(SOURCE_CLI_ARG_VALUE, "g");
-const CLI_RENAME_LEGACY_RE = /(?<![\w-])(?:crash-report|--machineuser)(?![\w-])/;
+const CLI_RENAME_LEGACY_RE = /(?<![\w-])(?:apply|crash-report|--machineuser)(?![\w-])/;
 const TAILOR_PLATFORM_SDK_TOKEN_RE = /^@tailor-platform\/sdk(@[^\s'"`;|&)]+)?$/;
 const RUNNER_OPTION_VALUE_FLAGS = new Set([
   "--registry",
@@ -764,6 +764,40 @@ function hasPackageFlagBeforeArrayPackage(
   return false;
 }
 
+function isKnownTailorPackageValue(value: string | null): boolean {
+  return (
+    value != null && (TAILOR_SDK_TOKEN_RE.test(value) || TAILOR_PLATFORM_SDK_TOKEN_RE.test(value))
+  );
+}
+
+function hasTailorPackageFlagBeforeArrayCommand(
+  elements: SgNode[],
+  index: number,
+  source: string,
+  start: number,
+): boolean {
+  for (let currentIndex = start; currentIndex < index; currentIndex += 1) {
+    const value = sourceStringContent(elements[currentIndex]!, source);
+    if (value == null) return false;
+    if (SOURCE_PACKAGE_FLAG_RE.test(value)) {
+      if (value.includes("=")) {
+        if (isKnownTailorPackageValue(value.slice(value.indexOf("=") + 1))) return true;
+      } else {
+        const nextValue = sourceStringContent(elements[currentIndex + 1]!, source);
+        if (isKnownTailorPackageValue(nextValue)) return true;
+        currentIndex += 1;
+      }
+      continue;
+    }
+    if (value.startsWith("-")) {
+      if (skipsRunnerOptionValue(value)) currentIndex += 1;
+      continue;
+    }
+    return false;
+  }
+  return false;
+}
+
 function isSplitPackageFlagValue(
   elements: SgNode[],
   index: number,
@@ -889,9 +923,10 @@ function isPackageRunnerCommandBinaryArgument(node: SgNode, source: string): boo
   const executable = sourceStringContent(executableNode, source);
   if (executable == null) return false;
   const start = packageRunnerPackageStartIndex(executable, elements, source);
-  if (start == null || !hasPackageFlagBeforeArrayPackage(elements, index, source, start)) {
+  if (start == null || !hasTailorPackageFlagBeforeArrayCommand(elements, index, source, start)) {
     return false;
   }
+  if (arrayHasCliRenameLegacyArgs(elements, index + 1, source)) return false;
   const commandIndex = packageRunnerCommandIndex(elements, start, source);
   if (commandIndex !== index) return false;
 
@@ -947,7 +982,10 @@ function isPackageManagerExecBinaryArgument(node: SgNode, source: string): boole
   if (execIndex == null || sourceStringContent(elements[execIndex]!, source) !== "exec") {
     return false;
   }
-  return firstNonOptionIndex(elements, execIndex + 1, source) === index;
+  return (
+    firstNonOptionIndex(elements, execIndex + 1, source) === index &&
+    !arrayHasCliRenameLegacyArgs(elements, index + 1, source)
+  );
 }
 
 function isCliBinaryArgument(node: SgNode, source: string): boolean {
@@ -961,7 +999,25 @@ function isCliBinaryArgument(node: SgNode, source: string): boolean {
   if (parent?.kind() !== "arguments") return false;
   if (!CLI_ARGUMENT_CALLEE_RE.test(callExpressionCalleeText(parent) ?? "")) return false;
   const args = sourceArrayElements(parent);
-  return args[0] != null && nodeRangeKey(args[0]) === nodeRangeKey(node);
+  if (args[0] == null || nodeRangeKey(args[0]) !== nodeRangeKey(node)) return false;
+  const argv = args[1];
+  return (
+    argv?.kind() !== "array" || !arrayHasCliRenameLegacyArgs(sourceArrayElements(argv), 0, source)
+  );
+}
+
+function arrayHasCliRenameLegacyArgs(elements: SgNode[], start: number, source: string): boolean {
+  for (let index = start; index < elements.length; index += 1) {
+    const value = sourceStringContent(elements[index]!, source);
+    if (value == null) continue;
+    if (TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!) && !value.includes("=")) {
+      index += 1;
+      continue;
+    }
+    if (value === "apply" || value === "crash-report") return true;
+    if (value === "--machineuser" || value.startsWith("--machineuser=")) return true;
+  }
+  return false;
 }
 
 function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
