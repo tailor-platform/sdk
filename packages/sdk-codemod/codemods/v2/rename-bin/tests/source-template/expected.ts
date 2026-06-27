@@ -34,6 +34,8 @@ const dynamicPnpmDlxWithOptionValue = `pnpm --filter ${app} dlx @tailor-platform
 const yarnDlxWithOption = "yarn --quiet dlx @tailor-platform/sdk login";
 const nestedCommand = `run ${"tailor deploy"}`;
 const nestedTailorCommand = `tailor deploy ${"tailor login"}`;
+const nestedArgValue = `tailor --arg ${"tailor-sdk deploy"} deploy`;
+const nestedInlineArgValue = `tailor --arg=${"tailor-sdk deploy"} deploy`;
 const npxPackageFlag = "npx -p @tailor-platform/sdk tailor login";
 const npxPackageSplitOnly = "npx --package @tailor-platform/sdk";
 const npxPackageSplitHelp = "npx -p @tailor-platform/sdk --help";

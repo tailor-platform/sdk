@@ -338,6 +338,14 @@ function isAfterTemplatePlaceholder(source: string, offset: number): boolean {
   return tokens != null && tokens.some((token) => SOURCE_TEMPLATE_EXPR_PLACEHOLDER_RE.test(token));
 }
 
+function isTemplateSubstitutionCliValue(text: string, offset: number): boolean {
+  const tokens = sourceTokens(text.slice(0, offset).trimEnd());
+  if (tokens == null || tokens.length === 0) return false;
+  const previous = tokens.at(-1)!;
+  if (!isTailorCliValueFlag(previous)) return false;
+  return tokens.slice(0, -1).some((token) => TAILOR_CLI_TOKEN_RE.test(token));
+}
+
 function renameSourceCommandText(value: string): string {
   const protectedValue = protectSourceCliValueReferences(value);
   const withPackageFlagValues = protectedValue.source.replace(
@@ -779,9 +787,11 @@ function pushTemplateStringEdit(
     );
     substitutions.push({
       placeholder,
-      text: transformTemplateSubstitutionText(
-        source.slice(childRange.start.index, childRange.end.index),
-      ),
+      text: isTemplateSubstitutionCliValue(text, childStart)
+        ? source.slice(childRange.start.index, childRange.end.index)
+        : transformTemplateSubstitutionText(
+            source.slice(childRange.start.index, childRange.end.index),
+          ),
     });
     text = `${text.slice(0, childStart)}${placeholder}${text.slice(childEnd)}`;
   }
