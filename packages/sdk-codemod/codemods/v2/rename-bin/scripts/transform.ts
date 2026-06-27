@@ -77,14 +77,19 @@ const SOURCE_CLI_VALUE_REFERENCE_RE = new RegExp(
 );
 const SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD = "\\s+(?:--help|-h|--version|-v)\\b";
 const SOURCE_DIRECT_INVOCATION_LOOKAHEAD = `(?:${SOURCE_COMMAND_GAP}\\s+${TAILOR_CLI_COMMAND_PATTERN}\\b|${SOURCE_CLI_STANDALONE_FLAG_LOOKAHEAD})`;
-const SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD = `(?:${SOURCE_DIRECT_INVOCATION_LOOKAHEAD}|\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`;
+const SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD = `(?:${SOURCE_DIRECT_INVOCATION_LOOKAHEAD}|\\s*$)`;
+const SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD = `(?:${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD}|\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`;
 const SOURCE_DYNAMIC_OPTION_VALUE_LOOKAHEAD = `(?=\\s+${TAILOR_CLI_VALUE_FLAG}\\s*$)`;
 const SOURCE_PKG_RUNNER_RE = new RegExp(
   `\\b((?:npx|pnpm\\s+dlx|yarn\\s+dlx|bunx)(?:(?!\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})\\s+${SOURCE_ARG_VALUE})*)\\s+tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_INVOCATION_LOOKAHEAD})`,
   "g",
 );
 const SOURCE_NPX_PACKAGE_FLAG_VALUE_RE = new RegExp(
-  `\\b(npx(?:(?!\\s+(?:-p|--package)(?:=|\\s+))\\s+${SOURCE_ARG_VALUE})*\\s+(?:-p|--package)(?:=|\\s+))tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_DIRECT_INVOCATION_LOOKAHEAD})`,
+  `\\b(npx(?:(?!\\s+(?:-p|--package)(?:=|\\s+))\\s+${SOURCE_ARG_VALUE})*\\s+(?:-p|--package)(?:=|\\s+))tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`,
+  "g",
+);
+const SOURCE_NPX_PACKAGE_FLAG_BINARY_RE = new RegExp(
+  `\\b(npx(?:(?!\\s+tailor-sdk(?![\\w-])(?:@[^\\s'"\`;|&)]+)?${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})\\s+${SOURCE_ARG_VALUE})*\\s+)tailor-sdk(?![\\w-])(@[^\\s'"\`;|&)]+)?(?=${SOURCE_PKG_RUNNER_COMMAND_LOOKAHEAD})`,
   "g",
 );
 const SOURCE_TAILOR_SDK_RE = new RegExp(
@@ -173,7 +178,12 @@ function renameSourceCommandText(value: string): string {
         : `${runner} @tailor-platform/sdk`;
     },
   );
-  const withCommands = withPackageRunners.replace(
+  const withPackageFlagBinaries = withPackageRunners.replace(
+    SOURCE_NPX_PACKAGE_FLAG_BINARY_RE,
+    (_match, prefix: string, version?: string) =>
+      version ? `${prefix}@tailor-platform/sdk${version}` : `${prefix}tailor`,
+  );
+  const withCommands = withPackageFlagBinaries.replace(
     SOURCE_TAILOR_SDK_RE,
     (_match, version?: string) => (version ? `@tailor-platform/sdk${version}` : "tailor"),
   );
@@ -285,7 +295,10 @@ function hasTailorCommandAfter(elements: SgNode[], start: number, source: string
 }
 
 function hasNpxPackageFlag(elements: SgNode[], source: string): boolean {
-  return elements.some((element) => {
+  const firstPackageIndex = firstTailorPackageIndex(elements, 0, source);
+  if (firstPackageIndex == null) return false;
+  return elements.some((element, index) => {
+    if (index >= firstPackageIndex) return false;
     const value = sourceStringContent(element, source);
     return value != null && SOURCE_PACKAGE_FLAG_RE.test(value);
   });
@@ -320,7 +333,7 @@ function firstTailorPackageIndex(elements: SgNode[], start: number, source: stri
   for (let index = start; index < elements.length; index += 1) {
     const value = sourceStringContent(elements[index]!, source);
     if (value == null) return null;
-    if (TAILOR_SDK_TOKEN_RE.test(value) && hasTailorCommandAfter(elements, index + 1, source)) {
+    if (TAILOR_SDK_TOKEN_RE.test(value)) {
       return index;
     }
   }
@@ -397,7 +410,7 @@ function isPackageRunnerCommandBinaryArgument(node: SgNode, source: string): boo
   return (
     text != null &&
     TAILOR_SDK_TOKEN_RE.test(text) &&
-    hasTailorCommandAfter(elements, index + 1, source)
+    !isNpxSplitPackageFlagValue(elements, index, source)
   );
 }
 
