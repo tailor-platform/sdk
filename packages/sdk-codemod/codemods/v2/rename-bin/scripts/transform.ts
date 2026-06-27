@@ -119,7 +119,17 @@ const CLI_ARGUMENT_CALLEE_RE = /(?:^|\.)(?:spawn|spawnSync|execFile|execFileSync
 const SOURCE_EXEC_PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
 const SOURCE_PACKAGE_RUNNERS = new Set(["bunx", "npx"]);
 const SOURCE_DLX_PACKAGE_RUNNERS = new Set(["pnpm", "yarn"]);
-const PACKAGE_MANAGER_OPTION_VALUE_FLAGS = new Set(["--filter", "-F", "--dir", "-C", "--cwd"]);
+const PACKAGE_MANAGER_OPTION_VALUE_FLAGS = new Set([
+  "--registry",
+  "--cache",
+  "--userconfig",
+  "--prefix",
+  "--filter",
+  "-F",
+  "--dir",
+  "-C",
+  "--cwd",
+]);
 const SOURCE_PACKAGE_FLAG_RE = /^(?:-p|--package)(?:=.*)?$/;
 const NPX_OPTION_WITH_VALUE = "(?:--registry|--cache|--userconfig|--prefix)";
 const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
@@ -256,6 +266,17 @@ function isAfterTailorCliToken(source: string, offset: number): boolean {
   return tokens != null && tokens.some((token) => TAILOR_CLI_TOKEN_RE.test(token));
 }
 
+function isAfterTemplatePlaceholder(source: string, offset: number): boolean {
+  const segmentStart = Math.max(
+    source.lastIndexOf(";", offset - 1),
+    source.lastIndexOf("&", offset - 1),
+    source.lastIndexOf("|", offset - 1),
+  );
+  const segment = source.slice(segmentStart + 1, offset).trim();
+  const tokens = sourceTokens(segment);
+  return tokens != null && tokens.some((token) => /^__TAILOR_SDK_TEMPLATE_EXPR_\d+__$/.test(token));
+}
+
 function renameSourceCommandText(value: string): string {
   const protectedValue = protectSourceCliValueReferences(value);
   const withPackageFlagValues = protectedValue.source.replace(
@@ -284,6 +305,7 @@ function renameSourceCommandText(value: string): string {
     SOURCE_TAILOR_SDK_RE,
     (match: string, version: string | undefined, offset: number, source: string) => {
       if (isAfterOtherPackageRunner(source, offset)) return match;
+      if (isAfterTemplatePlaceholder(source, offset)) return match;
       return version ? `@tailor-platform/sdk${version}` : "tailor";
     },
   );
@@ -563,8 +585,11 @@ function isCliValueArgument(node: SgNode, source: string): boolean {
   if (parent?.kind() !== "array") return false;
   const elements = sourceArrayElements(parent);
   const index = nodeIndex(elements, node);
-  if (index <= 0) return false;
+  if (index < 0) return false;
   if (!isTailorCliArgumentArray(parent, index, source)) return false;
+  const text = sourceStringContent(node, source);
+  if (text != null && isTailorCliValueFlag(text) && text.includes("=")) return true;
+  if (index === 0) return false;
   const previousValue = sourceStringContent(elements[index - 1]!, source);
   return (
     previousValue != null && isTailorCliValueFlag(previousValue) && !previousValue.includes("=")
