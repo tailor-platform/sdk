@@ -9,6 +9,7 @@ const dynamicPnpmCommand = `pnpm tailor ${subcommand}`;
 const indentedDynamicCommand = `
   tailor ${subcommand}`;
 const latest = "npx @tailor-platform/sdk@latest login";
+const npxPackageFlag = "npx -p @tailor-platform/sdk tailor login";
 const packageName = "tailor-sdk";
 const packageMessage = "package tailor-sdk is installed";
 const mixedPackageAndCommand = "Install tailor-sdk before running tailor deploy";
