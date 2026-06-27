@@ -9,7 +9,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
-const restoreWorkspaceOptionsSchema = z.object({
+const restoreWorkspaceOptionsSchema = /* strip unknown keys */ z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
 });
 

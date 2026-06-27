@@ -1,14 +1,9 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.agent/**", "**/.tailor-sdk/**"],
-  "jsPlugins": ["eslint-plugin-zod"],
+  "jsPlugins": ["eslint-plugin-zod", "./scripts/oxlint/tailor-zod-plugin.cjs"],
   "rules": {
-    "zod/consistent-object-schema-type": [
-      "error",
-      {
-        "allow": ["object", "strictObject", "looseObject"]
-      }
-    ],
+    "tailor-zod/require-strip-comment-for-object": "error",
     "typescript/no-duplicate-type-constituents": "off",
     "typescript/no-redundant-type-constituents": "off",
     "zod/prefer-loose-object": "error",

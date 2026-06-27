@@ -41,7 +41,7 @@ function normalizeIdPGqlOperations(
 export const IdPGqlOperationsSchema = z
   .union([
     z.literal("query"),
-    z.object({
+    /* strip unknown keys */ z.object({
       create: z.boolean().optional().describe("Enable _createUser mutation (default: true)"),
       update: z.boolean().optional().describe("Enable _updateUser mutation (default: true)"),
       delete: z.boolean().optional().describe("Enable _deleteUser mutation (default: true)"),
@@ -73,7 +73,7 @@ export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
 const allowedReturnOriginPattern =
   /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url)$/;
 
-export const IdPUserAuthPolicySchema = z
+export const IdPUserAuthPolicySchema = /* strip unknown keys */ z
   .object({
     useNonEmailIdentifier: z
       .boolean()
@@ -239,7 +239,7 @@ const emailFieldSchema = z
   .max(200, "must be 200 characters or less")
   .regex(/^[^\r\n]*$/, "must not contain newline characters");
 
-export const IdPEmailConfigSchema = z
+export const IdPEmailConfigSchema = /* strip unknown keys */ z
   .object({
     fromName: emailFieldSchema.optional().describe("Default sender display name for emails"),
     passwordResetSubject: emailFieldSchema
@@ -253,10 +253,10 @@ const IdPPermissionOperandSchema = z.union([
   z.boolean(),
   z.array(z.string()).readonly(),
   z.array(z.boolean()).readonly(),
-  z.object({ user: z.string() }),
-  z.object({ idpUser: z.enum(["id", "name", "disabled"]) }),
-  z.object({ oldIdpUser: z.enum(["id", "name", "disabled"]) }),
-  z.object({ newIdpUser: z.enum(["id", "name", "disabled"]) }),
+  /* strip unknown keys */ z.object({ user: z.string() }),
+  /* strip unknown keys */ z.object({ idpUser: z.enum(["id", "name", "disabled"]) }),
+  /* strip unknown keys */ z.object({ oldIdpUser: z.enum(["id", "name", "disabled"]) }),
+  /* strip unknown keys */ z.object({ newIdpUser: z.enum(["id", "name", "disabled"]) }),
 ]);
 
 const IdPPermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
@@ -267,7 +267,7 @@ const IdPPermissionConditionSchema = z
 
 const IdPActionPermissionSchema = z.union([
   // Object format: { conditions, description?, permit? }
-  z.object({
+  /* strip unknown keys */ z.object({
     conditions: z.union([
       IdPPermissionConditionSchema,
       z.array(IdPPermissionConditionSchema).readonly(),
@@ -301,7 +301,7 @@ const IdPActionPermissionSchema = z.union([
     .readonly(),
 ]);
 
-export const IdPPermissionSchema = z
+export const IdPPermissionSchema = /* strip unknown keys */ z
   .object({
     create: z.array(IdPActionPermissionSchema).readonly(),
     read: z.array(IdPActionPermissionSchema).readonly(),
@@ -312,11 +312,15 @@ export const IdPPermissionSchema = z
   })
   .describe("Per-operation permission policies for IdP users");
 
-export const IdPSchema = z
+export const IdPSchema = /* strip unknown keys */ z
   .object({
     name: z.string().describe("IdP service name"),
     authorization: z
-      .union([z.literal("insecure"), z.literal("loggedIn"), z.object({ cel: z.string() })])
+      .union([
+        z.literal("insecure"),
+        z.literal("loggedIn"),
+        /* strip unknown keys */ z.object({ cel: z.string() }),
+      ])
       .optional()
       .describe("Authorization mode for IdP API access"),
     clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),

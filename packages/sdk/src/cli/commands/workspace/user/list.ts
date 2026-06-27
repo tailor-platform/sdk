@@ -7,7 +7,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { userInfo, type UserInfo } from "./transform";
 
-const listUsersOptionsSchema = z.object({
+const listUsersOptionsSchema = /* strip unknown keys */ z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   order: orderArg.optional(),

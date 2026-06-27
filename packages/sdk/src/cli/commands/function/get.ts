@@ -10,7 +10,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
-const getFunctionRegistryOptionsSchema = z.object({
+const getFunctionRegistryOptionsSchema = /* strip unknown keys */ z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   name: z.string().min(1, { message: "name is required" }),

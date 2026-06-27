@@ -7,7 +7,7 @@ export const QueryTypeSchema = z
   .union([z.literal("query"), z.literal("mutation")])
   .describe("GraphQL operation type");
 
-export const ResolverSchema = z.object({
+export const ResolverSchema = /* strip unknown keys */ z.object({
   operation: QueryTypeSchema.describe("GraphQL operation type (query or mutation)"),
   name: z.string().describe("Resolver name"),
   description: z.string().optional().describe("Resolver description"),

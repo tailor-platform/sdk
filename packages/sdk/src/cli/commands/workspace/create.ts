@@ -19,7 +19,7 @@ import type { ProfileInfo } from "../profile";
  * - name: 3-63 chars, lowercase alphanumeric and hyphens, cannot start/end with hyphen
  * - organizationId, folderId: optional UUIDs
  */
-const createWorkspaceOptionsSchema = z.object({
+const createWorkspaceOptionsSchema = /* strip unknown keys */ z.object({
   name: z
     .string()
     .min(3, "Name must be at least 3 characters")

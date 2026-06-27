@@ -508,7 +508,7 @@ export async function fetchUserInfo(accessToken: string) {
   }
 
   const rawJson = await resp.json();
-  const schema = z.object({
+  const schema = /* strip unknown keys */ z.object({
     email: z.string(),
   });
   return schema.parse(rawJson);
@@ -625,7 +625,7 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
   }
   const rawJson = await resp.json();
 
-  const schema = z.object({
+  const schema = /* strip unknown keys */ z.object({
     token_type: z.string(),
     access_token: z.string(),
     expires_in: z.number(),

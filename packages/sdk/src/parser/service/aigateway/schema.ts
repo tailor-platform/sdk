@@ -3,7 +3,7 @@ import { z } from "zod";
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 const AUTH_NAMESPACE_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
-export const AIGatewaySchema = z
+export const AIGatewaySchema = /* strip unknown keys */ z
   .object({
     name: z
       .string()

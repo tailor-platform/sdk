@@ -9,7 +9,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
-const removeUserOptionsSchema = z.object({
+const removeUserOptionsSchema = /* strip unknown keys */ z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   email: z.string().email({ message: "email must be a valid email address" }),
