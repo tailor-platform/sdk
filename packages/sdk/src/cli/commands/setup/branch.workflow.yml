@@ -317,14 +317,34 @@ jobs:
           }
 
           tailor_sdk_bin="$(
-            cd "$GITHUB_WORKSPACE/$APP_DIR" || exit 1
             run_head_node - <<'NODE'
           const path = require("node:path");
           const { createRequire } = require("node:module");
-          const requireFromApp = createRequire(path.join(process.cwd(), "package.json"));
-          process.stdout.write(
-            path.join(path.dirname(requireFromApp.resolve("@tailor-platform/sdk/cli")), "index.mjs"),
-          );
+          const appDir = process.env.APP_DIR || ".";
+          const githubWorkspace = process.env.GITHUB_WORKSPACE;
+          if (!githubWorkspace) {
+            throw new Error("GITHUB_WORKSPACE is required.");
+          }
+
+          let lastError;
+          for (const manifestPath of [
+            path.join(githubWorkspace, appDir, "package.json"),
+            path.join(githubWorkspace, "package.json"),
+          ]) {
+            try {
+              const requireFromManifest = createRequire(manifestPath);
+              process.stdout.write(
+                path.join(
+                  path.dirname(requireFromManifest.resolve("@tailor-platform/sdk/cli")),
+                  "index.mjs",
+                ),
+              );
+              process.exit(0);
+            } catch (error) {
+              lastError = error;
+            }
+          }
+          throw lastError || new Error("Failed to resolve @tailor-platform/sdk/cli.");
           NODE
           )"
 
@@ -337,7 +357,7 @@ jobs:
             }
 
             (
-              cd "$GITHUB_WORKSPACE/$APP_DIR" || exit 1
+              cd "$GITHUB_WORKSPACE" || exit 1
               case "__PACKAGE_MANAGER__" in
                 pnpm) run_head_cli_env pnpm exec node "$head_cli_runner" "$@" ;;
                 npm) run_head_cli_env node "$head_cli_runner" "$@" ;;
@@ -447,10 +467,7 @@ jobs:
           if [ "$base_missing" = "false" ]; then
             diff_args+=(--base-html "$base_html")
           fi
-          (
-            cd "$GITHUB_WORKSPACE/$APP_DIR" || exit 1
-            run_tailor_sdk tailordb erd diff "${diff_args[@]}"
-          )
+          run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
       - id: tailor-upload-erd-viewer
         if: steps.tailor-build-erd-preview.outputs.head-missing != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

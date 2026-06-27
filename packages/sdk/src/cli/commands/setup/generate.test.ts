@@ -185,7 +185,7 @@ describe("renderBranchWorkflow", () => {
     );
     expect(content).toContain(".tailor-erd-base/.github/tailor-sdk.lock");
     expect(content).toContain("run_tailor_sdk tailordb erd export");
-    expect(content).toContain("run_tailor_sdk tailordb erd diff");
+    expect(content).toContain('run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff');
     expect(content).toContain("const namespacePattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;");
     expect(content).toContain("Invalid ERD namespace in");
     expect(content).toContain("id: tailor-detect-base-package-manager");
@@ -206,6 +206,8 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("BASE_PACKAGE_MANAGER:");
     expect(content).toContain("tailor_sdk_bin");
     expect(content).toContain("run_head_node - <<'NODE'");
+    expect(content).toContain('path.join(githubWorkspace, appDir, "package.json")');
+    expect(content).toContain('path.join(githubWorkspace, "package.json")');
     expect(content).toContain(
       'run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
@@ -302,7 +304,7 @@ describe("renderBranchWorkflow", () => {
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
     expect(buildStep).toContain("run_head_tailor_sdk_bin() {");
-    expect(buildStep).toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"');
+    expect(buildStep).toContain('cd "$GITHUB_WORKSPACE"');
     expect(buildStep).toContain('local command_cwd="$1"');
     expect(buildStep).toContain("process.chdir(commandCwd);");
     expect(buildStep).toContain('case "pnpm" in');
@@ -342,7 +344,7 @@ describe("renderBranchWorkflow", () => {
     expect(buildStep).not.toContain('.tailor-erd-base/$APP_DIR" tailordb erd export');
   });
 
-  test("fails ERD preview script when the head app directory cannot be entered", () => {
+  test("does not enter the head app directory before missing-head handling", () => {
     const { content } = renderBranchWorkflow({
       ...branchBase,
       erdPreview: { namespaces: ["tailordb"] },
@@ -353,7 +355,12 @@ describe("renderBranchWorkflow", () => {
 
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    expect(buildStep.match(/cd "\$GITHUB_WORKSPACE\/\$APP_DIR" \|\| exit 1/g)).toHaveLength(4);
+    const beforeHeadConfig = buildStep.slice(
+      0,
+      buildStep.indexOf('head_config="$GITHUB_WORKSPACE'),
+    );
+    expect(beforeHeadConfig).not.toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"');
+    expect(buildStep.match(/cd "\$GITHUB_WORKSPACE\/\$APP_DIR" \|\| exit 1/g)).toHaveLength(1);
     expect(buildStep).not.toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_head_node');
     expect(buildStep).not.toContain(
       'cd "$GITHUB_WORKSPACE/$APP_DIR"\n              case "__PACKAGE_MANAGER__"',
@@ -364,6 +371,7 @@ describe("renderBranchWorkflow", () => {
     expect(buildStep).not.toContain(
       'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_sdk tailordb erd diff',
     );
+    expect(buildStep).toContain('run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff');
   });
 
   test("treats missing ERD preview configs as empty diff sides", () => {
