@@ -67,20 +67,22 @@ const RENAME_BIN_SOURCE_VALUE_GUARDS = RENAME_BIN_SOURCE_VALUE_FLAGS.flatMap((fl
   return [`(?<!${escaped}\\s+)`, `(?<!${escaped}=)`];
 }).join("");
 const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})`;
+const RENAME_BIN_SOURCE_COMMAND_TOKEN =
+  "tailor-sdk(?:(?:\\.(?:cmd|ps1|exe))|(?:@[^\\s'\"`;|&)]+))?(?![\\w-])";
 const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
   [
     "(?<![.\\w-])",
     "(?<![\"'])",
     "(?<!\\\\[\"'])",
     RENAME_BIN_SOURCE_VALUE_GUARDS,
-    "tailor-sdk(?![\\w-])(?:@[^\\s'\"`;|&)]+)?",
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
     `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
   ].join(""),
 );
 const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
   [
     "(?:^|[\\s;&|])(?:sh|bash|zsh)\\s+-\\w*c\\w*\\s+\\\\?[\"']",
-    "tailor-sdk(?![\\w-])(?:@[^\\s'\"`;|&)]+)?",
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
     `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
   ].join(""),
 );
