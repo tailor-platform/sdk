@@ -572,6 +572,60 @@ describe("runCodemods", () => {
       expect(result.warnings).toEqual([]);
     });
 
+    test("keeps split Tailor option values out of rename-bin residual warnings", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "commands.ts"),
+        'spawn("tailor", ["tailordb", "migration", "generate", "--name", "tailor-sdk deploy"]);',
+        "utf-8",
+      );
+      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual([]);
+    });
+
+    test("warns for dynamic template rename-bin residuals", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "commands.ts"),
+        "const command = `${runner} tailor-sdk ${subcommand}`;",
+        "utf-8",
+      );
+      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("commands.ts: contains");
+      expect(result.warnings[0]).toContain("rule: test/rename-bin");
+    });
+
     test("keeps source string residual checks in non-Tailor option values", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
       tmpDir = dir;
