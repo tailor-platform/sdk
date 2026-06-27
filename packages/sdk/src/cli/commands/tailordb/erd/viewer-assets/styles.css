@@ -306,6 +306,27 @@ button:hover {
   color: var(--diff-removed);
 }
 
+.diff-detail {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.detail-row.is-diff-added .diff-detail {
+  color: var(--diff-added);
+}
+
+.detail-row.is-diff-changed .diff-detail {
+  color: var(--diff-changed);
+}
+
+.detail-row.is-diff-removed .diff-detail {
+  color: var(--diff-removed);
+}
+
 .table-list-row.is-diff-added .table-select {
   background: linear-gradient(90deg, var(--diff-added-bg), transparent);
   color: var(--text);

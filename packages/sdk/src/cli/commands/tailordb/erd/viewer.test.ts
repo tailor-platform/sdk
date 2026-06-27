@@ -100,6 +100,8 @@ describe("buildViewerHtml", () => {
 
     expect(html).toContain('<script type="application/json" id="erd-schema">');
     expect(html).toContain('<script type="application/json" id="erd-diff">');
+    expect(html).toContain("function diffDetail(");
+    expect(html).toContain("diff-detail");
     expect(html.match(/<\/script>/g)).toHaveLength(3);
   });
 });

@@ -106,8 +106,8 @@ function diffKey(entity, path) {
   return `${entity}:${path}`;
 }
 
-function diffAction(entity, path) {
-  return diffIndex.get(diffKey(entity, path))?.action;
+function diffChange(entity, path) {
+  return diffIndex.get(diffKey(entity, path));
 }
 
 function setTableDiffAction(tableName, action) {
@@ -157,25 +157,39 @@ function diffClass(action) {
   return action ? `is-diff-${action}` : "";
 }
 
-function diffBadge(action) {
+function diffBadge(action, detail) {
   if (!action) return "";
-  return `<span class="diff-badge diff-badge-${action}" title="${DIFF_LABELS[action]}">${DIFF_MARKS[action]}</span>`;
+  const title = detail ? `${DIFF_LABELS[action]}: ${detail}` : DIFF_LABELS[action];
+  return `<span class="diff-badge diff-badge-${action}" title="${escapeHtml(title)}">${DIFF_MARKS[action]}</span>`;
+}
+
+function diffDetail(change) {
+  if (!change?.detail) return "";
+  return `<span class="diff-detail">${escapeHtml(change.detail)}</span>`;
+}
+
+function tableDiffChange(tableName) {
+  return diffChange("table", tableName);
 }
 
 function tableDiffAction(tableName) {
   return tableDiffIndex.get(tableName);
 }
 
-function columnDiffAction(tableName, columnName) {
-  return diffAction("column", `${tableName}.${columnName}`);
+function columnDiffChange(tableName, columnName) {
+  return diffChange("column", `${tableName}.${columnName}`);
 }
 
-function indexDiffAction(tableName, indexName) {
-  return diffAction("index", `${tableName}.${indexName}`);
+function indexDiffChange(tableName, indexName) {
+  return diffChange("index", `${tableName}.${indexName}`);
+}
+
+function relationDiffChange(relation) {
+  return diffChange("relation", relation.name);
 }
 
 function relationDiffAction(relation) {
-  return diffAction("relation", relation.name);
+  return relationDiffChange(relation)?.action;
 }
 
 function showModeOption(value) {
@@ -431,6 +445,7 @@ function renderTableList() {
     .map((table) => {
       const hidden = isTableHidden(table.name);
       const visibilityLabel = hidden ? "Show" : "Hide";
+      const change = tableDiffChange(table.name);
       const action = tableDiffAction(table.name);
       return `
           <div class="table-list-row ${hidden ? "is-hidden" : ""} ${diffClass(action)}">
@@ -443,7 +458,7 @@ function renderTableList() {
               <span class="table-list-icon" aria-hidden="true"></span>
               <span class="table-list-label">
                 <span class="table-list-name">${escapeHtml(table.name)}</span>
-                ${diffBadge(action)}
+                ${diffBadge(action, change?.detail)}
               </span>
             </button>
             <button
@@ -481,12 +496,13 @@ function tableFieldRows(table) {
     <div class="table-fields">
       ${columns
         .map((column) => {
-          const action = columnDiffAction(table.name, column.name);
+          const change = columnDiffChange(table.name, column.name);
+          const action = change?.action;
           return `
             <div class="table-field ${isKeyColumn(column) ? "is-key" : ""} ${diffClass(action)}">
               <span class="field-name">
                 <span class="field-name-text">${escapeHtml(column.name)}</span>
-                ${diffBadge(action)}
+                ${diffBadge(action, change?.detail)}
               </span>
               <span class="field-type">${escapeHtml(column.type)}${column.array ? "[]" : ""}</span>
             </div>
@@ -504,6 +520,7 @@ function renderNodes() {
       const node = layout.nodes.get(table.name);
       const related = isTableRelatedToSelection(table.name);
       const muted = !matchesSearch(table) || !related;
+      const change = tableDiffChange(table.name);
       const action = tableDiffAction(table.name);
       return `
         <button
@@ -518,7 +535,7 @@ function renderNodes() {
             <span class="table-icon" aria-hidden="true"></span>
             <div class="table-name-wrap">
               <div class="table-name">${escapeHtml(table.name)}</div>
-              ${diffBadge(action)}
+              ${diffBadge(action, change?.detail)}
             </div>
           </div>
           ${tableFieldRows(table)}
@@ -747,12 +764,16 @@ function relationRows(table, direction) {
             direction === "out"
               ? `${relation.sourceColumns.join(", ")} -> ${relation.targetTable}.${relation.targetColumns.join(", ")}`
               : `${relation.sourceTable}.${relation.sourceColumns.join(", ")} -> ${relation.targetColumns.join(", ")}`;
-          const action = relationDiffAction(relation);
+          const change = relationDiffChange(relation);
+          const action = change?.action;
           return `<div class="detail-row ${diffClass(action)}">
-            <span class="detail-name">
-              <strong>${escapeHtml(label)}</strong>
-              ${diffBadge(action)}
-            </span>
+            <div>
+              <span class="detail-name">
+                <strong>${escapeHtml(label)}</strong>
+                ${diffBadge(action, change?.detail)}
+              </span>
+              ${diffDetail(change)}
+            </div>
             <code>${escapeHtml(relation.kind)}</code>
           </div>`;
         })
@@ -787,6 +808,7 @@ function renderDetails() {
     return;
   }
 
+  const tableChange = tableDiffChange(table.name);
   const tableAction = tableDiffAction(table.name);
   elements.details.hidden = false;
   elements.main.classList.remove("is-details-collapsed");
@@ -797,10 +819,11 @@ function renderDetails() {
           <span class="table-icon" aria-hidden="true"></span>
           <span class="detail-name">
             <span>${escapeHtml(table.name)}</span>
-            ${diffBadge(tableAction)}
+            ${diffBadge(tableAction, tableChange?.detail)}
           </span>
         </h2>
         <p>${escapeHtml(table.description || table.pluralForm)}</p>
+        ${diffDetail(tableChange)}
       </section>
       <section class="details-section">
         <h3>Outgoing Relations</h3>
@@ -815,14 +838,16 @@ function renderDetails() {
         <div class="detail-list">
           ${table.columns
             .map((column) => {
-              const action = columnDiffAction(table.name, column.name);
+              const change = columnDiffChange(table.name, column.name);
+              const action = change?.action;
               return `
                 <div class="detail-row ${diffClass(action)}">
                   <div>
                     <span class="detail-name">
                       <strong>${escapeHtml(column.name)}</strong>
-                      ${diffBadge(action)}
+                      ${diffBadge(action, change?.detail)}
                     </span>
+                    ${diffDetail(change)}
                     ${column.description ? `<p>${escapeHtml(column.description)}</p>` : ""}
                     ${columnPills(column)}
                   </div>
@@ -840,13 +865,17 @@ function renderDetails() {
               <div class="detail-list">
                 ${table.indexes
                   .map((index) => {
-                    const action = indexDiffAction(table.name, index.name);
+                    const change = indexDiffChange(table.name, index.name);
+                    const action = change?.action;
                     return `
                       <div class="detail-row ${diffClass(action)}">
-                        <span class="detail-name">
-                          <strong>${escapeHtml(index.name)}</strong>
-                          ${diffBadge(action)}
-                        </span>
+                        <div>
+                          <span class="detail-name">
+                            <strong>${escapeHtml(index.name)}</strong>
+                            ${diffBadge(action, change?.detail)}
+                          </span>
+                          ${diffDetail(change)}
+                        </div>
                         <code>${escapeHtml(index.fields.join(", "))}${index.unique ? " unique" : ""}</code>
                       </div>
                     `;
