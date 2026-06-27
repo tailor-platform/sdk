@@ -2349,12 +2349,22 @@ function functionReadsContextUser(fn: SgNode, contextName: string): boolean {
   return false;
 }
 
+function functionContextUserSourceName(fn: SgNode): string | null {
+  const param = getFirstFunctionParam(fn);
+  const pattern = param ? getFunctionParamPattern(param) : null;
+  if (!pattern) return null;
+  if (pattern.kind() === "identifier") {
+    return functionReadsContextUser(fn, pattern.text()) ? pattern.text() : null;
+  }
+  return objectPatternHasTopLevelProperty(pattern, "user") ? "context" : null;
+}
+
 type ContextUserHelperBinding = LocalCallbackBinding & { contextName: string };
 
 function collectContextUserHelperBindings(root: SgNode): ContextUserHelperBinding[] {
   return collectLocalCallbackBindings(root).flatMap((binding) => {
-    const contextName = functionIdentifierParamName(binding.fn);
-    if (!contextName || !functionReadsContextUser(binding.fn, contextName)) return [];
+    const contextName = functionContextUserSourceName(binding.fn);
+    if (!contextName) return [];
     return [{ ...binding, contextName }];
   });
 }
