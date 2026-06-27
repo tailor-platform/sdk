@@ -214,14 +214,11 @@ function sourceStringToken(node: SgNode, source: string): SourceStringToken | un
     return undefined;
   }
 
-  const fragments = node.children().filter((child: SgNode) => child.kind() === "string_fragment");
-  if (fragments.length !== 1) return undefined;
-
-  const range = fragments[0]!.range();
+  const range = node.range();
   return {
-    value: source.slice(range.start.index, range.end.index),
-    start: range.start.index,
-    end: range.end.index,
+    value: source.slice(range.start.index + 1, range.end.index - 1),
+    start: range.start.index + 1,
+    end: range.end.index - 1,
   };
 }
 
