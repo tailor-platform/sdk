@@ -662,6 +662,7 @@ describe("runCodemods", () => {
         'await tailor.secretmanager.getSecret("vault", "key");',
         "const { getSecret } = tailor.secretmanager;",
         "const getInvoker = tailor.context.getInvoker;",
+        "const { upload } = tailordb.file;",
       ].join("\\n");
       const seedSource = [
         `const code = \`${embeddedCode}\`;`,
@@ -670,7 +671,9 @@ describe("runCodemods", () => {
       await fs.promises.writeFile(path.join(dir, "seed.mjs"), seedSource);
       await fs.promises.writeFile(
         path.join(dir, "prose.mjs"),
-        'const note = "tailor.idp.Client is mentioned in prose";\n',
+        ['const separator = "=";', 'const note = "tailor.idp.Client is mentioned in prose";'].join(
+          "\n",
+        ),
       );
 
       const result = await runCodemods(
@@ -687,6 +690,7 @@ describe("runCodemods", () => {
                   /[=(:,[]\s*tailor\.idp\.Client\b/,
                   /(?:(?:[=(:,{]|\[)\s*|\b(?:return|await)\s+)tailor\.(?:context|idp|secretmanager)(?:\.[A-Za-z_$][\w$]*)?\b/,
                   /\btailor\.(?:idp|secretmanager)\.[A-Za-z_$][\w$]*\s*\(/,
+                  /(?:(?:[=(:,{]|\[)\s*|\b(?:return|await)\s+)tailordb\.file\b/,
                 ],
                 prompt: "Review embedded runtime global usage by hand.",
               },
