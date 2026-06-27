@@ -205,7 +205,7 @@ type DBFieldSerialMethod<Defined extends DefinedDBFieldMetadata, Output> =
           ? Defined extends { type: "integer" | "string"; array: false }
             ? DBFieldSerialFn<Defined, Output>
             : TypeLevelError<"serial can only be set on non-array integer or string fields">
-          : Output extends null
+          : null extends Output
             ? TypeLevelError<"serial can only be set on non-array integer or string fields">
             : Defined extends { type: "integer" | "string"; array: false }
               ? DBFieldSerialFn<Defined, Output>

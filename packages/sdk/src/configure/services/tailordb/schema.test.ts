@@ -8,10 +8,6 @@ import type { TailorUser } from "#/runtime/types";
 import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
 
-type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-type Expect<T extends true> = T;
-type TypeEquals<T, Message extends string> = Equal<T, TypeLevelError<Message>>;
-
 describe("TailorDBField basic field type tests", () => {
   test("string field outputs string type correctly", () => {
     const _stringType = db.type("Test", {
@@ -385,18 +381,18 @@ describe("TailorDBField modifier chain tests", () => {
 describe("TailorDBField type error message tests", () => {
   test("invalid field modifiers expose type-level error messages", () => {
     const dbField = db.string();
-    type _TypeName = Expect<
-      TypeEquals<typeof dbField.typeName, "typeName cannot be used on TailorDB fields">
-    >;
+    expectTypeOf(dbField.typeName).toEqualTypeOf<
+      TypeLevelError<"typeName cannot be used on TailorDB fields">
+    >();
 
     const erasedDBField: TailorAnyDBField = db.string();
     // @ts-expect-error typeName cannot be used on TailorDB fields
     erasedDBField.typeName("InvalidTypeName");
 
     const described = db.string().description("Name");
-    type _Description = Expect<
-      TypeEquals<typeof described.description, ".description() has already been set">
-    >;
+    expectTypeOf(described.description).toEqualTypeOf<
+      TypeLevelError<".description() has already been set">
+    >();
 
     const _userType = db.type("User", {
       name: db.string(),
@@ -405,76 +401,65 @@ describe("TailorDBField type error message tests", () => {
       type: "oneToOne",
       toward: { type: _userType },
     });
-    type _RelationDuplicate = Expect<
-      TypeEquals<typeof related.relation, ".relation() has already been set">
-    >;
+    expectTypeOf(related.relation).toEqualTypeOf<
+      TypeLevelError<".relation() has already been set">
+    >();
 
     const indexed = db.string().index();
-    type _IndexDuplicate = Expect<
-      TypeEquals<typeof indexed.index, ".index() has already been set">
-    >;
+    expectTypeOf(indexed.index).toEqualTypeOf<TypeLevelError<".index() has already been set">>();
 
     const arrayString = db.string({ array: true });
-    type _IndexArray = Expect<
-      TypeEquals<typeof arrayString.index, "index cannot be set on array fields">
-    >;
+    expectTypeOf(arrayString.index).toEqualTypeOf<
+      TypeLevelError<"index cannot be set on array fields">
+    >();
 
     const unique = db.string().unique();
-    type _UniqueDuplicate = Expect<
-      TypeEquals<typeof unique.unique, ".unique() has already been set">
-    >;
+    expectTypeOf(unique.unique).toEqualTypeOf<TypeLevelError<".unique() has already been set">>();
 
     const uniqueArray = db.string({ array: true });
-    type _UniqueArray = Expect<
-      TypeEquals<typeof uniqueArray.unique, "unique cannot be set on array fields">
-    >;
+    expectTypeOf(uniqueArray.unique).toEqualTypeOf<
+      TypeLevelError<"unique cannot be set on array fields">
+    >();
 
     const vector = db.string().vector();
-    type _VectorDuplicate = Expect<
-      TypeEquals<typeof vector.vector, ".vector() has already been set">
-    >;
+    expectTypeOf(vector.vector).toEqualTypeOf<TypeLevelError<".vector() has already been set">>();
 
     const nonString = db.int();
-    type _Vector = Expect<
-      TypeEquals<typeof nonString.vector, "vector can only be set on non-array string fields">
-    >;
+    expectTypeOf(nonString.vector).toEqualTypeOf<
+      TypeLevelError<"vector can only be set on non-array string fields">
+    >();
 
     const hooked = db.string().hooks({ create: () => "created" });
-    type _HooksDuplicate = Expect<TypeEquals<typeof hooked.hooks, ".hooks() has already been set">>;
-    type _SerialAfterHooks = Expect<
-      TypeEquals<typeof hooked.serial, "serial cannot be set after hooks">
-    >;
+    expectTypeOf(hooked.hooks).toEqualTypeOf<TypeLevelError<".hooks() has already been set">>();
+    expectTypeOf(hooked.serial).toEqualTypeOf<TypeLevelError<"serial cannot be set after hooks">>();
 
     const emptyHooked = db.string().hooks({});
-    type _EmptyHooksDuplicate = Expect<
-      TypeEquals<typeof emptyHooked.hooks, ".hooks() has already been set">
-    >;
+    expectTypeOf(emptyHooked.hooks).toEqualTypeOf<
+      TypeLevelError<".hooks() has already been set">
+    >();
 
     const nested = db.object({ name: db.string() });
-    type _Hooks = Expect<
-      TypeEquals<typeof nested.hooks, "hooks cannot be set on nested type fields">
-    >;
+    expectTypeOf(nested.hooks).toEqualTypeOf<
+      TypeLevelError<"hooks cannot be set on nested type fields">
+    >();
 
     const validated = db.string().validate(() => true);
-    type _ValidateDuplicate = Expect<
-      TypeEquals<typeof validated.validate, ".validate() has already been set">
-    >;
+    expectTypeOf(validated.validate).toEqualTypeOf<
+      TypeLevelError<".validate() has already been set">
+    >();
 
     const serial = db.string().serial({ start: 0 });
-    type _SerialDuplicate = Expect<
-      TypeEquals<typeof serial.serial, ".serial() has already been set">
-    >;
-    type _HooksAfterSerial = Expect<
-      TypeEquals<typeof serial.hooks, "hooks cannot be set after serial">
-    >;
+    expectTypeOf(serial.serial).toEqualTypeOf<TypeLevelError<".serial() has already been set">>();
+    expectTypeOf(serial.hooks).toEqualTypeOf<TypeLevelError<"hooks cannot be set after serial">>();
 
     const nonSerial = db.bool();
-    type _SerialUnsupported = Expect<
-      TypeEquals<
-        typeof nonSerial.serial,
-        "serial can only be set on non-array integer or string fields"
-      >
-    >;
+    expectTypeOf(nonSerial.serial).toEqualTypeOf<
+      TypeLevelError<"serial can only be set on non-array integer or string fields">
+    >();
+
+    expectTypeOf(db.string({ optional: true }).serial).toEqualTypeOf<
+      TypeLevelError<"serial can only be set on non-array integer or string fields">
+    >();
   });
 });
 
