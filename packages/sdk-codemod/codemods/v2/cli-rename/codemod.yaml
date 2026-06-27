@@ -1,6 +1,6 @@
 name: "@tailor-platform/cli-rename"
 version: "1.0.0"
-description: "Apply v2 CLI naming conventions in scripts, source files, CI workflows, and documentation"
+description: "Apply v2 CLI naming conventions: single-word command names and kebab-case option names"
 engine: jssg
 language: text
 since: "1.0.0"

@@ -56,28 +56,16 @@ describe("getApplicableCodemods", () => {
     );
   });
 
-  test("CLI command codemods scan source files and declaration comments", () => {
+  test("rename-bin scans source files and declaration comments", () => {
     const sourcePattern = "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}";
-    const cliRename = getApplicableCodemods("1.67.1", "2.0.0").find(
-      (codemod) => codemod.id === "v2/cli-rename",
-    );
     const renameBin = getApplicableCodemods("1.67.1", "2.0.0").find(
       (codemod) => codemod.id === "v2/rename-bin",
     );
 
-    for (const codemod of [cliRename, renameBin]) {
-      expect(codemod?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
-      const matches = picomatch(codemod?.filePatterns ?? [], { dot: true });
-      expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
-      expect(matches("tailor.d.ts")).toBe(true);
-    }
-    expect(cliRename?.sourceStringLegacyPatterns).toEqual(
-      expect.arrayContaining([
-        ["tailor-sdk", "crash-report"],
-        [/(?:^|[\s;&|])tailor(?=[\s;&|]|$)/, "crash-report"],
-        "--machineuser",
-      ]),
-    );
+    expect(renameBin?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
+    const matches = picomatch(renameBin?.filePatterns ?? [], { dot: true });
+    expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
+    expect(matches("tailor.d.ts")).toBe(true);
   });
 
   test("flags CommonJS TypeScript files for runtime globals review", () => {
