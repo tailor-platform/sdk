@@ -2225,12 +2225,24 @@ function isPrincipalOptionalMemberExpression(
   return object.field("property")?.text() === "caller";
 }
 
+function isDirectPrincipalExpression(
+  node: SgNode,
+  principalBindings: ReviewPrincipalBinding[],
+  root: SgNode,
+): boolean {
+  if (resolvesToReviewPrincipalBinding(node, principalBindings, root)) return true;
+  if (node.kind() !== "member_expression") return false;
+  if (node.children().some((child) => child.kind() === "optional_chain")) return false;
+  return node.field("property")?.text() === "caller";
+}
+
 function nodeContainsArgumentPrincipalOptionalAccess(
   node: SgNode,
   principalBindings: ReviewPrincipalBinding[],
   root: SgNode,
 ): boolean {
   if (isFunctionNode(node)) return false;
+  if (isDirectPrincipalExpression(node, principalBindings, root)) return true;
   if (isPrincipalOptionalMemberExpression(node, principalBindings, root)) return true;
   return node
     .children()
@@ -2611,7 +2623,14 @@ export function reviewFindings(
   _filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!source.includes("?.") && !source.includes(".user") && !source.includes("user")) return [];
+  if (
+    !source.includes("?.") &&
+    !source.includes(".user") &&
+    !source.includes("user") &&
+    !source.includes("caller")
+  ) {
+    return [];
+  }
 
   let root: SgNode;
   try {
