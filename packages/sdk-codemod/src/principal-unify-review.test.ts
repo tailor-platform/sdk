@@ -260,6 +260,53 @@ describe("principal-unify review findings", () => {
     ]);
   });
 
+  test("reports nullable caller objects passed directly to non-null-looking calls", async () => {
+    await writeProjectFile(
+      "resolvers/direct-caller.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "declare function publishAudit(user: { id: string }): Promise<void>;",
+        "",
+        "export const contextResolver = createResolver({",
+        "  body: async (context) => {",
+        "    await publishAudit(context.user);",
+        "  },",
+        "});",
+        "",
+        "export const destructuredResolver = createResolver({",
+        "  body: async ({ user }) => {",
+        "    await publishAudit(user);",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/direct-caller.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/direct-caller.ts",
+            line: 7,
+            message: expect.stringContaining("non-null argument"),
+            excerpt: expect.stringContaining("publishAudit(context.caller)"),
+          }),
+          expect.objectContaining({
+            file: "resolvers/direct-caller.ts",
+            line: 13,
+            message: expect.stringContaining("non-null argument"),
+            excerpt: expect.stringContaining("publishAudit(caller)"),
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("does not report matching alias names outside the resolver scope", async () => {
     await writeProjectFile(
       "resolvers/scoped-alias.ts",
