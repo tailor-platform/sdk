@@ -164,6 +164,45 @@ describe("principal-unify review findings", () => {
     ]);
   });
 
+  test("reports helper adapters with destructured context parameters", async () => {
+    await writeProjectFile(
+      "resolvers/destructured-param-helper.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "function createContext({ user }: any) {",
+        "  return { userId: user.id };",
+        "}",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async (context) => createContext(context),",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/destructured-param-helper.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/destructured-param-helper.ts",
+            line: 3,
+            message: expect.stringContaining("createContext"),
+          }),
+          expect.objectContaining({
+            file: "resolvers/destructured-param-helper.ts",
+            line: 8,
+            message: expect.stringContaining("createContext"),
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("keeps file-level suspicious-pattern fallback without precise findings", async () => {
     await writeProjectFile(
       "resolvers/context-type.ts",
