@@ -12,8 +12,10 @@ const dynamicProfileCommand = `tailor --profile ${profile} deploy`;
 const indentedDynamicCommand = `
   tailor ${subcommand}`;
 const latest = "npx @tailor-platform/sdk@latest login";
-const npxPackageFlag = "npx -p tailor-sdk tailor-sdk login";
-const npxPackageFlagEquals = "npx --package=tailor-sdk tailor-sdk login";
+const latestWithRunnerOption = "npx --yes @tailor-platform/sdk@latest login";
+const npxPackageFlag = "npx -p @tailor-platform/sdk tailor login";
+const npxPackageFlagEquals = "npx --package=@tailor-platform/sdk tailor login";
+const escapedArg = "tailor --arg \"tailor-sdk deploy\" deploy";
 const packageName = "tailor-sdk";
 const packageMessage = "package tailor-sdk is installed";
 const mixedPackageAndCommand = "Install tailor-sdk before running tailor deploy";
