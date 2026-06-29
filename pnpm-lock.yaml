@@ -574,8 +574,8 @@ importers:
         specifier: 4.1.9
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@24.13.2)(@vitest/coverage-v8@4.1.9)(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       zinfer:
-        specifier: 0.2.2
-        version: 0.2.2(typescript@6.0.3)(zod@4.4.3)
+        specifier: 0.2.3
+        version: 0.2.3(typescript@6.0.3)(zod@4.4.3)
 
   packages/sdk-codemod:
     dependencies:
@@ -3734,8 +3734,8 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
-  zinfer@0.2.2:
-    resolution: {integrity: sha512-6tiTnstjPU9e6q8fIOAAqed8vBsc9Ah/oLuClgGZn5a0Z64TPkJs16VSx3OKfjFJgC4qtNlUXNrY2F3WSI0UUQ==}
+  zinfer@0.2.3:
+    resolution: {integrity: sha512-BcAk5ZPmzUTpZKFZ52noVwEbdNVpLIIkNu/LdAXBXZRGWsO+9Ok/T9xSKlmDgyAPZcJcNOm7tuEqj/IfGcEFBQ==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
@@ -6345,7 +6345,7 @@ snapshots:
 
   yoctocolors@2.1.2: {}
 
-  zinfer@0.2.2(typescript@6.0.3)(zod@4.4.3):
+  zinfer@0.2.3(typescript@6.0.3)(zod@4.4.3):
     dependencies:
       commander: 15.0.0
       glob: 13.0.6
