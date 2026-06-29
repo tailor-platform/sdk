@@ -626,28 +626,57 @@ function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boo
     return false;
   }
 
-  const target = parse(toVersion);
-  const boundary = parse(codemod.until);
-  const prereleaseBoundary = parse(codemod.prereleaseUntil);
+  const target = parse(toVersion)!;
+  const boundary = parse(codemod.until)!;
 
   return (
-    target !== null &&
-    boundary !== null &&
-    prereleaseBoundary !== null &&
     target.prerelease.length > 0 &&
-    boundary.prerelease.length === 0 &&
-    prereleaseBoundary.prerelease.length > 0 &&
     target.major === boundary.major &&
     target.minor === boundary.minor &&
-    target.patch === boundary.patch &&
-    prereleaseBoundary.major === boundary.major &&
-    prereleaseBoundary.minor === boundary.minor &&
-    prereleaseBoundary.patch === boundary.patch
+    target.patch === boundary.patch
   );
 }
 
 function effectiveCodemodBoundary(codemod: CodemodPackage): string {
   return codemod.prereleaseUntil ?? codemod.until;
+}
+
+function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
+  for (const codemod of codemods) {
+    const boundary = parse(codemod.until);
+    if (boundary === null) {
+      throw new Error(
+        `Codemod ${codemod.id} until must be a valid semver version: ${codemod.until}`,
+      );
+    }
+    if (boundary.prerelease.length > 0) {
+      throw new Error(`Codemod ${codemod.id} until must be a stable version: ${codemod.until}`);
+    }
+    if (codemod.prereleaseUntil === undefined) {
+      continue;
+    }
+
+    const prereleaseBoundary = parse(codemod.prereleaseUntil);
+    if (prereleaseBoundary === null) {
+      throw new Error(
+        `Codemod ${codemod.id} prereleaseUntil must be a valid semver version: ${codemod.prereleaseUntil}`,
+      );
+    }
+    if (prereleaseBoundary.prerelease.length === 0) {
+      throw new Error(
+        `Codemod ${codemod.id} prereleaseUntil must be a prerelease version: ${codemod.prereleaseUntil}`,
+      );
+    }
+    if (
+      prereleaseBoundary.major !== boundary.major ||
+      prereleaseBoundary.minor !== boundary.minor ||
+      prereleaseBoundary.patch !== boundary.patch
+    ) {
+      throw new Error(
+        `Codemod ${codemod.id} prereleaseUntil must target the same version as until: ${codemod.prereleaseUntil}`,
+      );
+    }
+  }
 }
 
 /**
@@ -665,6 +694,7 @@ export function getApplicableCodemods(fromVersion: string, toVersion: string): C
   if (!valid(toVersion)) {
     throw new Error(`Invalid toVersion: ${toVersion}`);
   }
+  assertCodemodBoundaries(allCodemods);
 
   return allCodemods.filter(
     (codemod) =>
