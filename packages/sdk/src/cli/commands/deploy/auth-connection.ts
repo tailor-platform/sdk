@@ -26,19 +26,6 @@ import type {
 import type { AuthConnection } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
-// TODO: Replace with generated types once tailor-proto is updated.
-type UpdateAuthConnectionRequest = {
-  workspaceId: string;
-  connection: NonNullable<MessageInitShape<typeof CreateAuthConnectionRequestSchema>["connection"]>;
-  updateMask?: { paths: string[] };
-};
-type UpdateAuthConnectionResponse = {
-  connection?: { status?: AuthConnection_Status };
-};
-type OperatorClientWithUpdate = OperatorClient & {
-  updateAuthConnection: (req: UpdateAuthConnectionRequest) => Promise<UpdateAuthConnectionResponse>;
-};
-
 type CreateConnection = {
   name: string;
   request: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
@@ -316,8 +303,7 @@ export async function applyAuthConnections(
     );
 
     for (const replace of changeSet.replaces) {
-      // TODO: Remove cast when UpdateAuthConnectionRequestSchema is generated in tailor-proto.
-      const resp = await (client as OperatorClientWithUpdate).updateAuthConnection({
+      const resp = await client.updateAuthConnection({
         workspaceId: replace.createRequest.workspaceId ?? "",
         connection: replace.createRequest.connection ?? {},
         updateMask: replace.updateMask,

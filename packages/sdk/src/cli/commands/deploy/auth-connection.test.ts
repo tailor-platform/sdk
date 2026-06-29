@@ -291,7 +291,6 @@ describe("applyAuthConnections", () => {
 
     await applyAuthConnections(client, result, "create-update");
 
-    // TODO: Remove cast when UpdateAuthConnectionRequestSchema is generated in tailor-proto.
     const updateFn = (client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> })
       .updateAuthConnection;
     expect(updateFn).toHaveBeenCalledWith(
