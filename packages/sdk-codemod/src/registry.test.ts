@@ -135,6 +135,7 @@ describe("getApplicableCodemods", () => {
   test("flags source files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
+    expect(codemod?.scriptPath).toBe("v2/runtime-globals-opt-in/scripts/transform.js");
     expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
     expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
     expect(codemod?.suspiciousPatterns).toContain("tailor.secretmanager");
@@ -215,7 +216,7 @@ describe("getApplicableCodemods", () => {
   test("leads runtime globals migration with the typed wrappers", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
-    expect(codemod?.prompt).toContain('import { idp } from "@tailor-platform/sdk/runtime"');
+    expect(codemod?.prompt).toContain("new idp.Client(...)");
     expect(codemod?.examples?.[0]?.after).toContain(
       'import { idp } from "@tailor-platform/sdk/runtime"',
     );

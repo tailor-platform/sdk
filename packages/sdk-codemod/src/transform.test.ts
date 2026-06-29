@@ -107,6 +107,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/tailordb-namespace")).resolves.toBeUndefined();
   });
 
+  test("v2/runtime-globals-opt-in transforms correctly", async () => {
+    await expect(runFixtureCases("v2/runtime-globals-opt-in")).resolves.toBeUndefined();
+  });
+
   test("v2/execute-script-arg transforms correctly", async () => {
     await expect(runFixtureCases("v2/execute-script-arg")).resolves.toBeUndefined();
   });
