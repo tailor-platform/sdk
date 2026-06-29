@@ -145,7 +145,43 @@ button:hover {
 
 .toolbar-actions {
   display: flex;
+  align-items: center;
+  gap: 10px;
   justify-content: flex-end;
+}
+
+.view-mode-control {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  min-width: 152px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+  background: #171a19;
+}
+
+.view-mode-control[hidden] {
+  display: none;
+}
+
+.view-mode-button {
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.view-mode-button:hover {
+  background: #252a28;
+  color: var(--text);
+}
+
+.view-mode-button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
 }
 
 .primary-action {
@@ -944,6 +980,15 @@ button:hover {
     grid-template-columns: 1fr auto;
     gap: 10px;
     padding: 8px;
+  }
+
+  .toolbar-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .view-mode-control {
+    flex: 1 1 auto;
   }
 
   .toolbar-search {

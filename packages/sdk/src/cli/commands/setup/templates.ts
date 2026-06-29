@@ -172,6 +172,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-erd-preview/tailor-detect-base-package-manager",
       "tailor-erd-preview/tailor-setup-base-pnpm",
       "tailor-erd-preview/tailor-setup-base-node",
+      "tailor-erd-preview/tailor-setup-base-yarn",
       "tailor-erd-preview/tailor-setup-base-bun",
       "tailor-erd-preview/tailor-install-base",
       "tailor-erd-preview/tailor-restore-head-setup",

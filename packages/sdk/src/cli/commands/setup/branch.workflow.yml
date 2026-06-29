@@ -98,6 +98,7 @@ jobs:
           const workspaceName = process.env.WORKSPACE_NAME;
           const output = process.env.GITHUB_OUTPUT;
           const dirPattern = /^[A-Za-z0-9._/-]+$/;
+          const namespacePattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
           function lockTarget(file) {
             try {
@@ -113,10 +114,17 @@ jobs:
             }
           }
 
-          function namespacesFromTarget(target) {
-            return target?.inputs?.erdPreview === true && Array.isArray(target.inputs?.erdNamespaces)
-              ? target.inputs.erdNamespaces
-              : [];
+          function namespacesFromTarget(target, label) {
+            const namespaces =
+              target?.inputs?.erdPreview === true && Array.isArray(target.inputs?.erdNamespaces)
+                ? target.inputs.erdNamespaces
+                : [];
+            for (const namespace of namespaces) {
+              if (typeof namespace !== "string" || !namespacePattern.test(namespace)) {
+                throw new Error(`Invalid ERD namespace in ${label}: ${String(namespace)}`);
+              }
+            }
+            return namespaces;
           }
 
           function normalizeDir(value, label) {
@@ -139,8 +147,8 @@ jobs:
           const baseAppDir = normalizeDir(baseTarget?.inputs?.dir, "base setup lock");
           const namespaces = [
             ...new Set([
-              ...namespacesFromTarget(headTarget),
-              ...namespacesFromTarget(baseTarget),
+              ...namespacesFromTarget(headTarget, "head setup lock"),
+              ...namespacesFromTarget(baseTarget, "base setup lock"),
             ]),
           ].sort((a, b) => a.localeCompare(b));
 
@@ -228,9 +236,7 @@ jobs:
           }
 
           process.stdout.write(
-            pnpmVersion(readManifest("package.json")) ??
-              pnpmVersion(readManifest("../package.json")) ??
-              fallback,
+            pnpmVersion(readManifest("package.json")) ?? fallback,
           );
           NODE
           )"
@@ -248,6 +254,13 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .tailor-erd-base/package.json
+      - id: tailor-setup-base-yarn
+        if: steps.tailor-detect-base-package-manager.outputs['package-manager'] == 'yarn'
+        shell: bash
+        working-directory: .tailor-erd-base
+        run: |
+          set -euo pipefail
+          corepack enable
       - id: tailor-setup-base-bun
         if: steps.tailor-detect-base-package-manager.outputs['package-manager'] == 'bun'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -261,7 +274,13 @@ jobs:
           case "$BASE_PACKAGE_MANAGER" in
             pnpm) pnpm install --frozen-lockfile ;;
             npm) npm ci ;;
-            yarn) yarn install --frozen-lockfile ;;
+            yarn)
+              if grep -q '^__metadata:' yarn.lock; then
+                yarn install --immutable
+              else
+                yarn install --frozen-lockfile
+              fi
+              ;;
             bun) bun install --frozen-lockfile ;;
             *)
               echo "::error::Unsupported base package-manager '$BASE_PACKAGE_MANAGER' (expected pnpm, npm, yarn, or bun)"
@@ -309,14 +328,34 @@ jobs:
           }
 
           tailor_sdk_bin="$(
-            cd "$GITHUB_WORKSPACE/$APP_DIR" || exit 1
             run_head_node - <<'NODE'
           const path = require("node:path");
           const { createRequire } = require("node:module");
-          const requireFromApp = createRequire(path.join(process.cwd(), "package.json"));
-          process.stdout.write(
-            path.join(path.dirname(requireFromApp.resolve("@tailor-platform/sdk/cli")), "index.mjs"),
-          );
+          const appDir = process.env.APP_DIR || ".";
+          const githubWorkspace = process.env.GITHUB_WORKSPACE;
+          if (!githubWorkspace) {
+            throw new Error("GITHUB_WORKSPACE is required.");
+          }
+
+          let lastError;
+          for (const manifestPath of [
+            path.join(githubWorkspace, appDir, "package.json"),
+            path.join(githubWorkspace, "package.json"),
+          ]) {
+            try {
+              const requireFromManifest = createRequire(manifestPath);
+              process.stdout.write(
+                path.join(
+                  path.dirname(requireFromManifest.resolve("@tailor-platform/sdk/cli")),
+                  "index.mjs",
+                ),
+              );
+              process.exit(0);
+            } catch (error) {
+              lastError = error;
+            }
+          }
+          throw lastError || new Error("Failed to resolve @tailor-platform/sdk/cli.");
           NODE
           )"
 
@@ -329,7 +368,7 @@ jobs:
             }
 
             (
-              cd "$GITHUB_WORKSPACE/$APP_DIR" || exit 1
+              cd "$GITHUB_WORKSPACE" || exit 1
               case "__PACKAGE_MANAGER__" in
                 pnpm) run_head_cli_env pnpm exec node "$head_cli_runner" "$@" ;;
                 npm) run_head_cli_env node "$head_cli_runner" "$@" ;;
@@ -337,6 +376,29 @@ jobs:
                 bun) run_head_cli_env bun "$head_cli_runner" "$@" ;;
                 *)
                   echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
+                  exit 1
+                  ;;
+              esac
+            )
+          }
+
+          run_base_tailor_sdk_bin() {
+            local command_cwd="$1"
+            shift
+
+            run_head_cli_env() {
+              env TAILOR_SDK_BIN="$tailor_sdk_bin" TAILOR_SDK_CWD="$command_cwd" "$@"
+            }
+
+            (
+              cd "$command_cwd" || exit 1
+              case "$BASE_PACKAGE_MANAGER" in
+                pnpm) run_head_cli_env pnpm exec node "$head_cli_runner" "$@" ;;
+                npm) run_head_cli_env node "$head_cli_runner" "$@" ;;
+                yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;
+                bun) run_head_cli_env bun "$head_cli_runner" "$@" ;;
+                *)
+                  echo "::error::Unsupported base package-manager '$BASE_PACKAGE_MANAGER' (expected pnpm, npm, yarn, or bun)"
                   exit 1
                   ;;
               esac
@@ -400,7 +462,7 @@ jobs:
             base_missing="true"
           elif ! (
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
-              run_head_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
+              run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
             if grep -q 'not found in local config.db' "$base_log"; then
               cat "$base_log"
@@ -439,10 +501,7 @@ jobs:
           if [ "$base_missing" = "false" ]; then
             diff_args+=(--base-html "$base_html")
           fi
-          (
-            cd "$GITHUB_WORKSPACE/$APP_DIR" || exit 1
-            run_tailor_sdk tailordb erd diff "${diff_args[@]}"
-          )
+          run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
       - id: tailor-upload-erd-viewer
         if: steps.tailor-build-erd-preview.outputs.head-missing != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

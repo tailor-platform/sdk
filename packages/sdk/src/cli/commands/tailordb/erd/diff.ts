@@ -52,6 +52,7 @@ export interface CreateEmptyErdSchemaOptions {
 
 export interface RenderErdDiffHtmlOptions {
   schema: TailorDbErdSchema;
+  currentSchema: TailorDbErdSchema;
   diff: ErdSchemaDiff;
 }
 
@@ -419,6 +420,7 @@ export function buildErdDiffViewerSchema(
 export function renderErdDiffHtml(options: RenderErdDiffHtmlOptions): string {
   return buildViewerHtml({
     schema: options.schema,
+    currentSchema: options.currentSchema,
     diff: options.diff,
     title: `TailorDB ERD diff - ${options.diff.namespace}`,
   });

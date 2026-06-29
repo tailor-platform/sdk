@@ -73,11 +73,11 @@ tailor-sdk setup -n my-app-stg --erd-preview
 ```
 
 The generated workflow builds a self-contained ERD viewer HTML file and a
-visual ERD diff viewer HTML file for each owned TailorDB namespace in
+visual ERD diff HTML file for each owned TailorDB namespace in
 `tailor.config.ts`. The diff compares the pull request merge result with the
-base branch, highlights added, changed, and removed tables, columns, indexes,
-and relations in the ERD viewer, uploads the HTML files as unarchived Actions
-artifacts, and upserts a PR comment with artifact links.
+base branch, can switch between the current schema and highlighted diff, uploads
+the HTML files as unarchived Actions artifacts, and upserts a PR comment with
+artifact links.
 
 ERD preview does not use Tailor Platform credentials. Fork pull requests still
 build artifacts, but the comment step is skipped because fork tokens cannot

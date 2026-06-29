@@ -66,6 +66,7 @@ describe("writeErdDiff", () => {
     const output = fs.readFileSync(outputHtml, "utf8");
     expect(output).toContain("TailorDB ERD diff - tailordb");
     expect(output).toContain('id="erd-schema"');
+    expect(output).toContain('id="erd-current-schema"');
     expect(output).toContain('id="erd-diff"');
     expect(output).toContain("function renderNodes()");
     expect(JSON.parse(fs.readFileSync(outputJson, "utf8"))).toMatchObject({

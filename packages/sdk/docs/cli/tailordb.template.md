@@ -89,7 +89,7 @@ Note: Migration scripts are automatically executed during `tailor-sdk deploy`. S
 
 - ERD commands build from the local TailorDB schema, including plugin-generated TailorDB types.
 - `tailordb erd export` writes a self-contained `index.html` viewer to `<output>/<namespace>/dist`.
-- `tailordb erd diff` compares exported self-contained viewer HTML files and writes a visual ERD diff viewer with added, changed, and removed objects highlighted.
+- `tailordb erd diff` compares exported self-contained viewer HTML files and writes a visual ERD viewer that can switch between the current schema and the highlighted diff.
 - `tailordb erd serve` watches the config file and TailorDB type files, then reloads the browser viewer when the rebuilt `index.html` reports a new embedded schema revision.
 - `tailordb erd deploy` still requires `erdSite` in `tailor.config.ts` because it uploads the generated viewer to a configured Static Website.
 
