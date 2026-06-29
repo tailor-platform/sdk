@@ -1879,7 +1879,7 @@ function convertRemoteTypeToSnapshot(remoteType: ProtoTailorDBType): TailorDBSna
     snapshotType.description = remoteType.schema.description;
   }
 
-  return normalizeSnapshotType(snapshotType);
+  return snapshotType;
 }
 
 /**

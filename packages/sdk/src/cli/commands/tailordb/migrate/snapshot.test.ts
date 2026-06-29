@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, expectTypeOf, test, beforeEach, afterAll } from "vitest";
+import { describe, expect, expectTypeOf, test, beforeEach, afterAll, vi } from "vitest";
 import {
   createSnapshotFromLocalTypes,
   loadSnapshot,
@@ -2097,6 +2097,30 @@ describe("snapshot", () => {
       expect(snapshot.namespace).toBe(namespace);
       expect(snapshot.types.Order?.pluralForm).toBe("Orders");
       expect(snapshot.types.Order?.fields.amount?.scale).toBe(6);
+    });
+
+    test("normalizes remote snapshots once at the schema level", () => {
+      const remoteTypes = [
+        createMockRemoteType("Order", {
+          amount: { type: "decimal", required: true },
+        }),
+      ];
+
+      const values = Object.values;
+      const normalizedFieldRecords: unknown[] = [];
+      const valuesSpy = vi.spyOn(Object, "values").mockImplementation((value) => {
+        if (Object.hasOwn(value, "amount")) {
+          normalizedFieldRecords.push(value);
+        }
+        return values(value);
+      });
+      try {
+        createSnapshotFromRemoteTypes(remoteTypes, namespace);
+      } finally {
+        valuesSpy.mockRestore();
+      }
+
+      expect(normalizedFieldRecords).toHaveLength(1);
     });
 
     test("keeps remote type names that match Object prototype keys", () => {
