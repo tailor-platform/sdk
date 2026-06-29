@@ -257,9 +257,13 @@ function renameQuotedKey(node: SgNode): string {
   return `${quote}invoker${quote}`;
 }
 
+export interface AuthInvokerTransformOptions {
+  renameOptionKeys?: boolean;
+}
+
 /**
  * Replace `auth.invoker("name")` calls with the bare `"name"` string literal
- * and rename `authInvoker:` option keys to `invoker:`.
+ * and optionally rename `authInvoker:` option keys to `invoker:`.
  * If no other `auth` references remain after the rewrite, drop the `auth`
  * specifier (or the entire import line when `auth` was its sole specifier).
  *
@@ -268,23 +272,31 @@ function renameQuotedKey(node: SgNode): string {
  * would otherwise pull config-layer modules into runtime bundles.
  * @param source - File contents
  * @param filePath - Absolute path to the file (kept for the runner signature)
+ * @param options - Transform behavior flags
  * @returns Transformed source or null when nothing matched.
  */
-export default function transform(source: string, _filePath: string): string | null {
+export function transformAuthInvoker(
+  source: string,
+  _filePath: string,
+  options: AuthInvokerTransformOptions = {},
+): string | null {
   if (!quickFilter(source)) return null;
 
+  const renameOptionKeys = options.renameOptionKeys ?? true;
   const lang = source.includes("</") || source.includes("/>") ? Lang.Tsx : Lang.TypeScript;
   const root = parse(lang, source).root();
 
   const calls = findInvokerCalls(root).filter((c) => isSupportedInvokerValueCall(c.callNode));
   const edits: Edit[] = calls.map((c) => c.callNode.replace(c.argText));
-  edits.push(...findAuthInvokerPropertyKeys(root).map((node) => node.replace("invoker")));
-  edits.push(
-    ...findQuotedAuthInvokerPropertyKeys(root).map((node) => node.replace(renameQuotedKey(node))),
-  );
-  edits.push(
-    ...findAuthInvokerShorthands(root).map((node) => node.replace("invoker: authInvoker")),
-  );
+  if (renameOptionKeys) {
+    edits.push(...findAuthInvokerPropertyKeys(root).map((node) => node.replace("invoker")));
+    edits.push(
+      ...findQuotedAuthInvokerPropertyKeys(root).map((node) => node.replace(renameQuotedKey(node))),
+    );
+    edits.push(
+      ...findAuthInvokerShorthands(root).map((node) => node.replace("invoker: authInvoker")),
+    );
+  }
 
   if (
     calls.length > 0 &&
@@ -306,4 +318,8 @@ export default function transform(source: string, _filePath: string): string | n
   result = result.replace(/^[\t ]*\n+/, "").replace(/\n{3,}/g, "\n\n");
 
   return result === source ? null : result;
+}
+
+export default function transform(source: string, filePath: string): string | null {
+  return transformAuthInvoker(source, filePath);
 }

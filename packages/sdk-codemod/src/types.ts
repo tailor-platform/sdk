@@ -28,6 +28,8 @@ export interface CodemodPackage {
   since: string;
   /** Target version this codemod upgrades to (semver, exclusive upper bound) */
   until: string;
+  /** Earliest prerelease target that should apply this codemod before `until` is stable. */
+  prereleaseUntil?: string;
   /**
    * Path to the jssg transform script relative to the codemods root. Omit for a
    * codemod-less ("manual") migration that ships only guidance — `prompt`,
@@ -72,6 +74,8 @@ export interface CodemodPackage {
    * by `suspiciousPatterns`.
    */
   prompt?: string;
+  /** Codemod ids whose LLM review prompt supersedes this prompt when both are selected. */
+  reviewSupersededBy?: string[];
   /** Before/after examples shown in the generated migration doc. */
   examples?: CodemodExample[];
   /**
