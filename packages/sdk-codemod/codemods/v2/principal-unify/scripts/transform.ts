@@ -2272,9 +2272,23 @@ function nodeContainsArgumentPrincipalOptionalAccess(
   principalBindings: ReviewPrincipalBinding[],
   contextBindings: ReviewPrincipalBinding[],
   safePrincipalRanges: Array<[number, number]>,
+  sdkFieldRootNames: Set<string>,
+  sdkFieldLocalBindings: SdkFieldLocalBinding[],
   root: SgNode,
 ): boolean {
-  if (isInsideAnyRange(node.range().start.index, safePrincipalRanges)) return false;
+  const nodeSafePrincipalRanges =
+    node.kind() === "call_expression"
+      ? [
+          ...safePrincipalRanges,
+          ...collectSafeNullablePrincipalArgumentRanges(
+            node,
+            sdkFieldRootNames,
+            sdkFieldLocalBindings,
+            root,
+          ),
+        ]
+      : safePrincipalRanges;
+  if (isInsideAnyRange(node.range().start.index, nodeSafePrincipalRanges)) return false;
   if (isFunctionNode(node)) return false;
   if (isDirectPrincipalExpression(node, principalBindings, contextBindings, root)) return true;
   if (isPrincipalOptionalMemberExpression(node, principalBindings, contextBindings, root))
@@ -2286,7 +2300,9 @@ function nodeContainsArgumentPrincipalOptionalAccess(
         child,
         principalBindings,
         contextBindings,
-        safePrincipalRanges,
+        nodeSafePrincipalRanges,
+        sdkFieldRootNames,
+        sdkFieldLocalBindings,
         root,
       ),
     );
@@ -2366,6 +2382,8 @@ function collectNullableCallerReviewFindings(
           principalBindings,
           contextBindings,
           safePrincipalRanges,
+          sdkFieldRootNames,
+          sdkFieldLocalBindings,
           root,
         ),
       );
@@ -2401,24 +2419,32 @@ function functionIdentifierParamName(fn: SgNode): string | null {
   return pattern?.kind() === "identifier" ? pattern.text() : null;
 }
 
-function objectPatternHasTopLevelProperty(pattern: SgNode, propertyName: string): boolean {
-  if (pattern.kind() !== "object_pattern") return false;
+function objectPatternTopLevelPropertyBindingName(
+  pattern: SgNode,
+  propertyName: string,
+): string | null {
+  if (pattern.kind() !== "object_pattern") return null;
   for (const child of pattern.children()) {
     const kind = child.kind();
     if (kind === "shorthand_property_identifier_pattern" && child.text() === propertyName) {
-      return true;
+      return child.text();
     }
     if (kind === "pair_pattern" && child.field("key")?.text() === propertyName) {
-      return true;
+      const value = child.field("value");
+      return value?.kind() === "identifier" ? value.text() : propertyName;
     }
     if (kind === "object_assignment_pattern") {
       const inner = child
         .children()
         .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
-      if (inner?.text() === propertyName) return true;
+      if (inner?.text() === propertyName) return inner.text();
     }
   }
-  return false;
+  return null;
+}
+
+function objectPatternHasTopLevelProperty(pattern: SgNode, propertyName: string): boolean {
+  return objectPatternTopLevelPropertyBindingName(pattern, propertyName) !== null;
 }
 
 function functionReadsContextUser(fn: SgNode, contextName: string): boolean {
@@ -2456,23 +2482,23 @@ function functionReadsContextUser(fn: SgNode, contextName: string): boolean {
   return false;
 }
 
-function functionContextUserSourceName(fn: SgNode): string | null {
+function functionContextUserReadExpression(fn: SgNode): string | null {
   const param = getFirstFunctionParam(fn);
   const pattern = param ? getFunctionParamPattern(param) : null;
   if (!pattern) return null;
   if (pattern.kind() === "identifier") {
-    return functionReadsContextUser(fn, pattern.text()) ? pattern.text() : null;
+    return functionReadsContextUser(fn, pattern.text()) ? `${pattern.text()}.user` : null;
   }
-  return objectPatternHasTopLevelProperty(pattern, "user") ? "context" : null;
+  return objectPatternTopLevelPropertyBindingName(pattern, "user");
 }
 
-type ContextUserHelperBinding = LocalCallbackBinding & { contextName: string };
+type ContextUserHelperBinding = LocalCallbackBinding & { contextUserExpression: string };
 
 function collectContextUserHelperBindings(root: SgNode): ContextUserHelperBinding[] {
   return collectLocalCallbackBindings(root).flatMap((binding) => {
-    const contextName = functionContextUserSourceName(binding.fn);
-    if (!contextName) return [];
-    return [{ ...binding, contextName }];
+    const contextUserExpression = functionContextUserReadExpression(binding.fn);
+    if (!contextUserExpression) return [];
+    return [{ ...binding, contextUserExpression }];
   });
 }
 
@@ -2761,7 +2787,7 @@ function collectContextUserHelperReviewFindings(
           source,
           file,
           helper.fn,
-          `Helper adapter ${helper.name} reads ${helper.contextName}.user and needs v2 caller/invoker semantics.`,
+          `Helper adapter ${helper.name} reads ${helper.contextUserExpression} and needs v2 caller/invoker semantics.`,
         );
       }
       addReviewFinding(
@@ -2770,7 +2796,7 @@ function collectContextUserHelperReviewFindings(
         source,
         file,
         call,
-        `${helper.name}(${contextName}) passes an SDK resolver context into a helper that reads ${helper.contextName}.user.`,
+        `${helper.name}(${contextName}) passes an SDK resolver context into a helper that reads ${helper.contextUserExpression}.`,
       );
     }
   }
