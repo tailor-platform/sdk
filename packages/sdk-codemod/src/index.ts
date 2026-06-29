@@ -60,9 +60,12 @@ function printLlmReview(review: LlmReview): void {
   process.stderr.write(`\n🤖 LLM-assisted review suggested (${review.codemodId}) — ${scope}:\n`);
   const findingsByFile = new Map<string, NonNullable<LlmReview["findings"]>>();
   for (const finding of review.findings ?? []) {
-    const findings = findingsByFile.get(finding.file) ?? [];
+    let findings = findingsByFile.get(finding.file);
+    if (!findings) {
+      findings = [];
+      findingsByFile.set(finding.file, findings);
+    }
     findings.push(finding);
-    findingsByFile.set(finding.file, findings);
   }
   for (const file of review.files) {
     process.stderr.write(`  - ${file}\n`);
