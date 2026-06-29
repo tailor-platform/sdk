@@ -77,7 +77,10 @@ export function writeErdDiff(options: WriteErdDiffOptions): WriteErdDiffResult {
   const diff = buildErdSchemaDiff({ base: baseSchema, head: headSchema });
   const viewerSchema = buildErdDiffViewerSchema({ base: baseSchema, head: headSchema });
 
-  writeFile(options.outputHtml, renderErdDiffHtml({ schema: viewerSchema, diff }));
+  writeFile(
+    options.outputHtml,
+    renderErdDiffHtml({ schema: viewerSchema, currentSchema: headSchema, diff }),
+  );
   if (options.outputJson) {
     writeFile(options.outputJson, `${JSON.stringify(diff, null, 2)}\n`);
   }

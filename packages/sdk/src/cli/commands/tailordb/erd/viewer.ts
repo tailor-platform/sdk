@@ -14,6 +14,7 @@ export interface WriteViewerDistOptions {
 
 export interface BuildViewerHtmlOptions {
   schema: TailorDbErdSchema;
+  currentSchema?: TailorDbErdSchema;
   diff?: unknown;
   title?: string;
 }
@@ -70,12 +71,18 @@ export function buildViewerHtml(options: BuildViewerHtmlOptions): string {
     throw new Error("ERD viewer index.html is missing expected asset references for inlining.");
   }
 
-  // Embed the schema as JSON data (not executable JS) so it is both consumed by
+  // Embed schemas as JSON data (not executable JS) so they are both consumed by
   // the viewer and trivially extractable by external tooling. Escape "<" so a
   // value like "</script>" cannot terminate the data
   // <script> element early; JSON.parse restores the original characters.
   const schemaJson = JSON.stringify(options.schema).replaceAll("<", "\\u003c");
   const embedScript = `<script type="application/json" id="erd-schema">${schemaJson}</script>`;
+  const currentSchemaScript =
+    options.currentSchema === undefined
+      ? ""
+      : `\n    <script type="application/json" id="erd-current-schema">${JSON.stringify(
+          options.currentSchema,
+        ).replaceAll("<", "\\u003c")}</script>`;
   const diffScript =
     options.diff === undefined
       ? ""
@@ -93,7 +100,7 @@ export function buildViewerHtml(options: BuildViewerHtmlOptions): string {
       `<title>${escapeHtml(options.title ?? "TailorDB ERD")}</title>`,
     )
     .replace(STYLES_LINK, `<style>\n${css}\n</style>`)
-    .replace(APP_SCRIPT, `${embedScript}${diffScript}\n    ${inlineScript}`);
+    .replace(APP_SCRIPT, `${embedScript}${currentSchemaScript}${diffScript}\n    ${inlineScript}`);
 }
 
 /**

@@ -13,6 +13,7 @@ const FIT_PADDING = 80;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.2;
 const DEFAULT_SHOW_MODE = "TABLE_NAME";
+const DEFAULT_VIEW_MODE = "diff";
 const SHOW_MODE_OPTIONS = [
   { value: "ALL_FIELDS", label: "All Fields" },
   { value: "TABLE_NAME", label: "Table Name" },
@@ -40,10 +41,16 @@ const elements = {
   fitView: document.getElementById("fit-view"),
   showMode: document.getElementById("show-mode"),
   showModeMenu: document.getElementById("show-mode-menu"),
+  viewModeControl: document.getElementById("view-mode-control"),
+  viewModeCurrent: document.getElementById("view-mode-current"),
+  viewModeDiff: document.getElementById("view-mode-diff"),
   copyLink: document.getElementById("copy-link"),
 };
 
 let schema;
+let diffViewSchema;
+let currentViewSchema;
+let diffMetadata;
 let erdDiff;
 let layout;
 let selectedTable;
@@ -57,6 +64,7 @@ let activeCardDrag;
 let activeCanvasPan;
 let activeViewportAnimation;
 let suppressNextCanvasClick = false;
+let viewMode = DEFAULT_VIEW_MODE;
 const manualNodePositions = new Map();
 const hiddenTableNames = new Set();
 let diffIndex = new Map();
@@ -215,6 +223,10 @@ function readHashState() {
   if (showModeOption(nextShowMode)) {
     showMode = nextShowMode;
   }
+  const nextViewMode = params.get("view");
+  if (nextViewMode === "current" || nextViewMode === "diff") {
+    viewMode = nextViewMode;
+  }
   hiddenTableNames.clear();
   for (const tableName of (params.get("hidden") || "").split(",")) {
     if (tableName) hiddenTableNames.add(tableName);
@@ -233,6 +245,9 @@ function writeHashState() {
   if (showMode !== DEFAULT_SHOW_MODE) params.set("show", showMode);
   if (hiddenTableNames.size > 0) {
     params.set("hidden", [...hiddenTableNames].toSorted((a, b) => a.localeCompare(b)).join(","));
+  }
+  if (canSwitchViewMode() && viewMode !== DEFAULT_VIEW_MODE) {
+    params.set("view", viewMode);
   }
   params.set("z", viewport.z.toFixed(3));
   try {
@@ -266,6 +281,10 @@ function embeddedSchema() {
 
 function embeddedDiff() {
   return embeddedJson("erd-diff");
+}
+
+function embeddedCurrentSchema() {
+  return embeddedJson("erd-current-schema");
 }
 
 // Re-fetch the served HTML and extract its embedded schema. Used by watch mode
@@ -937,6 +956,43 @@ function renderShowModeControls() {
   });
 }
 
+function canSwitchViewMode() {
+  return Boolean(diffViewSchema && currentViewSchema && diffMetadata);
+}
+
+function renderViewModeControls() {
+  const enabled = canSwitchViewMode();
+  elements.viewModeControl.hidden = !enabled;
+  if (!enabled) return;
+
+  elements.viewModeCurrent.setAttribute("aria-pressed", String(viewMode === "current"));
+  elements.viewModeDiff.setAttribute("aria-pressed", String(viewMode === "diff"));
+}
+
+function activateViewMode(nextViewMode) {
+  if (nextViewMode === "current" && canSwitchViewMode()) {
+    viewMode = "current";
+    schema = currentViewSchema;
+    setDiff(undefined);
+    return;
+  }
+
+  viewMode = DEFAULT_VIEW_MODE;
+  schema = diffViewSchema;
+  setDiff(diffMetadata);
+}
+
+function setViewMode(nextViewMode) {
+  if (!canSwitchViewMode() || nextViewMode === viewMode) return;
+
+  activateViewMode(nextViewMode);
+  if (selectedTable && !tableByName(selectedTable)) {
+    selectedTable = undefined;
+  }
+  clearSelectionIfHidden();
+  renderAll({ center: false });
+}
+
 function setShowModeMenuOpen(open) {
   elements.showMode.setAttribute("aria-expanded", String(open));
   elements.showModeMenu.hidden = !open;
@@ -1109,6 +1165,7 @@ function renderAll(options = {}) {
   renderHeader();
   renderTableList();
   renderShowModeControls();
+  renderViewModeControls();
   renderEdges();
   renderNodes();
   renderDetails();
@@ -1248,6 +1305,8 @@ function wireInteractions() {
   elements.showMode.addEventListener("click", () => {
     setShowModeMenuOpen(elements.showModeMenu.hidden);
   });
+  elements.viewModeCurrent.addEventListener("click", () => setViewMode("current"));
+  elements.viewModeDiff.addEventListener("click", () => setViewMode("diff"));
   elements.copyLink.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(location.href);
@@ -1323,6 +1382,10 @@ function startPolling() {
       const nextSchema = await fetchServedSchema();
       if (nextSchema.revision !== schema.revision) {
         schema = nextSchema;
+        diffViewSchema = nextSchema;
+        currentViewSchema = undefined;
+        diffMetadata = undefined;
+        setDiff(undefined);
         if (selectedTable && !tableByName(selectedTable)) {
           selectedTable = undefined;
         }
@@ -1340,8 +1403,10 @@ async function main() {
   readHashState();
   wireInteractions();
   try {
-    schema = embeddedSchema() ?? (await fetchServedSchema());
-    setDiff(embeddedDiff());
+    diffViewSchema = embeddedSchema() ?? (await fetchServedSchema());
+    currentViewSchema = embeddedCurrentSchema();
+    diffMetadata = embeddedDiff();
+    activateViewMode(viewMode);
     if (selectedTable && !tableByName(selectedTable)) {
       selectedTable = undefined;
     }

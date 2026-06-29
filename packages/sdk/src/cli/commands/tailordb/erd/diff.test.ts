@@ -43,6 +43,15 @@ function schema(overrides: Partial<TailorDbErdSchema> = {}): TailorDbErdSchema {
   };
 }
 
+function extractJsonBlock<T>(html: string, id: string): T {
+  const pattern = new RegExp(`<script type="application/json" id="${id}">([\\s\\S]*?)</script>`);
+  const match = pattern.exec(html);
+  if (!match?.[1]) {
+    throw new Error(`JSON block not found: ${id}`);
+  }
+  return JSON.parse(match[1]) as T;
+}
+
 describe("extractEmbeddedErdSchema", () => {
   test("parses the viewer schema data block", () => {
     const embedded = schema({ namespace: "</script><img>" });
@@ -311,25 +320,29 @@ describe("ERD diff rendering", () => {
   });
 
   test("renders the existing ERD viewer with embedded diff metadata", () => {
+    const head = schema({
+      revision: "head-revision",
+      tables: [table("Account"), table("User")],
+    });
     const diff = buildErdSchemaDiff({
       base: schema(),
-      head: schema({
-        revision: "head-revision",
-        tables: [table("Account"), table("User")],
-      }),
+      head,
     });
     const viewerSchema = buildErdDiffViewerSchema({
       base: schema(),
-      head: schema({
-        revision: "head-revision",
-        tables: [table("Account"), table("User")],
-      }),
+      head,
     });
-
-    const html = renderErdDiffHtml({ schema: viewerSchema, diff });
+    const html = renderErdDiffHtml({ schema: viewerSchema, currentSchema: head, diff });
     expect(html).toContain("<title>TailorDB ERD diff - tailordb</title>");
     expect(html).toContain('id="erd-schema"');
+    expect(html).toContain('id="erd-current-schema"');
     expect(html).toContain('<script type="application/json" id="erd-diff">');
+    expect(html).toContain('id="view-mode-control"');
+    expect(
+      extractJsonBlock<TailorDbErdSchema>(html, "erd-current-schema").tables.map(
+        (item) => item.name,
+      ),
+    ).toEqual(["Account", "User"]);
     expect(html).toContain("function renderNodes()");
     expect(html).not.toContain("<table>");
     expect(html).not.toContain("</script><img");
