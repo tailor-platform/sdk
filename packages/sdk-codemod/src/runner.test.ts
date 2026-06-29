@@ -26,7 +26,10 @@ function makeCodemod(
   scriptPath?: string,
   filePatterns?: string[],
   legacyPatterns?: Array<string | string[]>,
-  extra?: Pick<CodemodPackage, "sourceStringLegacyPatterns" | "suspiciousPatterns" | "prompt">,
+  extra?: Pick<
+    CodemodPackage,
+    "sourceStringLegacyPatterns" | "suspiciousPatterns" | "prompt" | "reviewSupersededBy"
+  >,
 ): CodemodPackage {
   return {
     id,
@@ -517,6 +520,43 @@ describe("runCodemods", () => {
         {
           codemodId: "test/llm",
           prompt: "Rewrite remaining executeScript usages by hand.",
+          files: ["a.ts"],
+        },
+      ]);
+    });
+
+    test("suppresses LLM review when a superseding codemod is selected", async () => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-superseded-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "a.ts"),
+        "createResolver({ authInvoker: auth.invoker(machineUserName) });\n",
+      );
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/helper", undefined, ["**/*.ts"], undefined, {
+              suspiciousPatterns: ["auth.invoker"],
+              prompt: "Keep authInvoker and unwrap auth.invoker.",
+              reviewSupersededBy: ["test/rename"],
+            }),
+          },
+          {
+            codemod: makeCodemod("test/rename", undefined, ["**/*.ts"], undefined, {
+              suspiciousPatterns: ["auth.invoker"],
+              prompt: "Rename authInvoker to invoker and unwrap auth.invoker.",
+            }),
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/rename",
+          prompt: "Rename authInvoker to invoker and unwrap auth.invoker.",
           files: ["a.ts"],
         },
       ]);
