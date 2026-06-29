@@ -2230,14 +2230,6 @@ function resolvesToReviewBinding(
   });
 }
 
-function resolvesToReviewPrincipalBinding(
-  node: SgNode,
-  bindings: ReviewPrincipalBinding[],
-  root: SgNode,
-): boolean {
-  return resolvesToReviewBinding(node, bindings, root);
-}
-
 function isReviewContextCallerMemberExpression(
   node: SgNode,
   contextBindings: ReviewPrincipalBinding[],
@@ -2260,7 +2252,7 @@ function isPrincipalOptionalMemberExpression(
   const object = node.field("object");
   if (!object) return false;
   if (object.kind() === "identifier") {
-    return resolvesToReviewPrincipalBinding(object, principalBindings, root);
+    return resolvesToReviewBinding(object, principalBindings, root);
   }
   return isReviewContextCallerMemberExpression(object, contextBindings, root);
 }
@@ -2271,7 +2263,7 @@ function isDirectPrincipalExpression(
   contextBindings: ReviewPrincipalBinding[],
   root: SgNode,
 ): boolean {
-  if (resolvesToReviewPrincipalBinding(node, principalBindings, root)) return true;
+  if (resolvesToReviewBinding(node, principalBindings, root)) return true;
   return isReviewContextCallerMemberExpression(node, contextBindings, root);
 }
 
@@ -2581,20 +2573,23 @@ function collectResolverBodyArrows(root: SgNode): SgNode[] {
   return arrows;
 }
 
-function collectResolverContextBodies(root: SgNode): ResolverContextBody[] {
+function collectResolverContextBodies(resolverBodyArrows: SgNode[]): ResolverContextBody[] {
   const bodies: ResolverContextBody[] = [];
-  for (const arrow of collectResolverBodyArrows(root)) {
+  for (const arrow of resolverBodyArrows) {
     addResolverContextBody(arrow, bodies);
   }
   return bodies;
 }
 
-function collectResolverContextBindings(root: SgNode): ReviewPrincipalBinding[] {
+function collectResolverContextBindings(
+  root: SgNode,
+  resolverBodyArrows: SgNode[],
+): ReviewPrincipalBinding[] {
   const bindings: ReviewPrincipalBinding[] = [];
   const rootRange = root.range();
   const rootScope: [number, number] = [rootRange.start.index, rootRange.end.index];
 
-  for (const arrow of collectResolverBodyArrows(root)) {
+  for (const arrow of resolverBodyArrows) {
     const param = getFirstFunctionParam(arrow);
     const pattern = param ? getFunctionParamPattern(param) : null;
     const body = arrow.field("body");
@@ -2675,9 +2670,10 @@ function collectCallerPatternBindings(
 function collectResolverPrincipalBindings(
   root: SgNode,
   contextBindings: ReviewPrincipalBinding[],
+  resolverBodyArrows: SgNode[],
 ): ReviewPrincipalBinding[] {
   const bindings: ReviewPrincipalBinding[] = [];
-  for (const arrow of collectResolverBodyArrows(root)) {
+  for (const arrow of resolverBodyArrows) {
     const param = getFirstFunctionParam(arrow);
     const pattern = param ? getFunctionParamPattern(param) : null;
     const body = arrow.field("body");
@@ -2708,7 +2704,7 @@ function collectResolverPrincipalBindings(
       if (bindings.some((binding) => binding.bindingStart === bindingStart)) continue;
       if (
         !isReviewContextCallerMemberExpression(value, contextBindings, root) &&
-        !resolvesToReviewPrincipalBinding(value, bindings, root)
+        !resolvesToReviewBinding(value, bindings, root)
       ) {
         continue;
       }
@@ -2737,6 +2733,7 @@ function collectContextUserHelperReviewFindings(
   root: SgNode,
   source: string,
   file: string,
+  resolverBodyArrows: SgNode[],
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {
@@ -2744,7 +2741,7 @@ function collectContextUserHelperReviewFindings(
   if (helperBindings.length === 0) return;
 
   const reportedDefinitions = new Set<number>();
-  for (const { arrow, body, contextName } of collectResolverContextBodies(root)) {
+  for (const { arrow, body, contextName } of collectResolverContextBodies(resolverBodyArrows)) {
     const shadowRanges = collectCtxShadowRanges(body, contextName, arrow);
     const calls = body.findAll({ rule: { kind: "call_expression" } });
     for (const call of calls) {
@@ -2784,12 +2781,7 @@ export function reviewFindings(
   _filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (
-    !source.includes("?.") &&
-    !source.includes(".user") &&
-    !source.includes("user") &&
-    !source.includes("caller")
-  ) {
+  if (!source.includes("?.") && !source.includes("user") && !source.includes("caller")) {
     return [];
   }
 
@@ -2802,8 +2794,13 @@ export function reviewFindings(
 
   const findings: LlmReviewFinding[] = [];
   const seen = new Set<string>();
-  const contextBindings = collectResolverContextBindings(root);
-  const principalBindings = collectResolverPrincipalBindings(root, contextBindings);
+  const resolverBodyArrows = collectResolverBodyArrows(root);
+  const contextBindings = collectResolverContextBindings(root, resolverBodyArrows);
+  const principalBindings = collectResolverPrincipalBindings(
+    root,
+    contextBindings,
+    resolverBodyArrows,
+  );
   const sdkFieldRootNames = collectSdkFieldRootNames(root);
   const sdkFieldLocalBindings = collectSdkFieldLocalBindings(root, sdkFieldRootNames);
   collectNullableCallerReviewFindings(
@@ -2817,7 +2814,14 @@ export function reviewFindings(
     findings,
     seen,
   );
-  collectContextUserHelperReviewFindings(root, source, relativePath, findings, seen);
+  collectContextUserHelperReviewFindings(
+    root,
+    source,
+    relativePath,
+    resolverBodyArrows,
+    findings,
+    seen,
+  );
   return findings;
 }
 

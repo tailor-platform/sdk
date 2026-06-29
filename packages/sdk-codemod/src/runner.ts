@@ -395,21 +395,30 @@ export async function runCodemods(
       if (lt.reviewFindings) {
         const findings = await lt.reviewFindings(current, absolute, relative);
         if (findings.length > 0) {
-          const files = suspiciousByCodemod.get(lt.id) ?? new Set<string>();
+          let files = suspiciousByCodemod.get(lt.id);
+          if (!files) {
+            files = new Set<string>();
+            suspiciousByCodemod.set(lt.id, files);
+          }
           for (const finding of findings) {
             files.add(finding.file);
           }
-          suspiciousByCodemod.set(lt.id, files);
-          const existing = findingsByCodemod.get(lt.id) ?? [];
+          let existing = findingsByCodemod.get(lt.id);
+          if (!existing) {
+            existing = [];
+            findingsByCodemod.set(lt.id, existing);
+          }
           existing.push(...findings);
-          findingsByCodemod.set(lt.id, existing);
         }
       }
       if (lt.suspiciousPatterns.length === 0) continue;
       if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
-        const files = suspiciousByCodemod.get(lt.id) ?? new Set<string>();
+        let files = suspiciousByCodemod.get(lt.id);
+        if (!files) {
+          files = new Set<string>();
+          suspiciousByCodemod.set(lt.id, files);
+        }
         files.add(relative);
-        suspiciousByCodemod.set(lt.id, files);
       }
     }
   }
