@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { stripResolverBuilderHelpers } from "#/parser/service/resolver/builder-helpers";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { isSdkBranded } from "#/utils/brand";
 import type { ResolverServiceConfig } from "#/configure/config/types";
@@ -29,7 +30,7 @@ export function createResolverService(
   const loadResolverForFile = async (resolverFile: string): Promise<Resolver | undefined> => {
     try {
       const resolverModule = await import(pathToFileURL(resolverFile).href);
-      const result = ResolverSchema.safeParse(resolverModule.default);
+      const result = ResolverSchema.safeParse(stripResolverBuilderHelpers(resolverModule.default));
       if (result.success) {
         const relativePath = path.relative(process.cwd(), resolverFile);
         logger.log(
