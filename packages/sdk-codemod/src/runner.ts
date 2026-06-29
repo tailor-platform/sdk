@@ -5,7 +5,14 @@ import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage, CodemodPattern, CodemodPatternGroup, LlmReview } from "./types";
+import type {
+  CodemodPackage,
+  CodemodPattern,
+  CodemodPatternGroup,
+  LlmReview,
+  LlmReviewFinding,
+  ReviewFindingsFn,
+} from "./types";
 import type { SgNode } from "@ast-grep/napi";
 
 /**
@@ -53,6 +60,7 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const SOURCE_STRING_FRAGMENT_SEPARATOR = "\0";
 const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
   "comment",
   "string",
@@ -119,14 +127,22 @@ function printDiff(filePath: string, before: string, after: string): void {
  * Load a transform module from a TypeScript file path.
  * Expects the module to have a default export that is a TransformFn.
  * @param scriptPath - Absolute path to the transform script
- * @returns The transform function
+ * @returns The transform function and optional review detector
  */
-async function loadTransform(scriptPath: string): Promise<TransformFn> {
+async function loadTransformModule(
+  scriptPath: string,
+): Promise<{ transform: TransformFn; reviewFindings?: ReviewFindingsFn }> {
   const mod = await import(url.pathToFileURL(scriptPath).href);
   if (typeof mod.default !== "function") {
     throw new Error(`Transform at ${scriptPath} does not have a default export function`);
   }
-  return mod.default as TransformFn;
+  return {
+    transform: mod.default as TransformFn,
+    reviewFindings:
+      typeof mod.reviewFindings === "function"
+        ? (mod.reviewFindings as ReviewFindingsFn)
+        : undefined,
+  };
 }
 
 /** A loaded transform with its file matcher. */
@@ -134,10 +150,12 @@ interface LoadedTransform {
   id: string;
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
+  reviewFindings?: ReviewFindingsFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: CodemodPatternGroup[];
   sourceStringLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
+  sourceStringSuspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
   reviewSupersededBy: string[];
 }
@@ -145,6 +163,32 @@ interface LoadedTransform {
 function contentForResidualMatching(relative: string, content: string): string {
   const ext = path.extname(relative).toLowerCase();
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
+}
+
+function sourceStringFragmentGapForResidualMatching(gap: string): string {
+  return /^(?:\\(?:[nrtvf]|\r\n|\r|\n)|\s)+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
+}
+
+function sourceStringNodeContentForResidualMatching(node: SgNode, content: string): string | null {
+  const parts: string[] = [];
+  let previousFragmentEnd: number | null = null;
+
+  for (const child of node.children()) {
+    if (child.kind() !== "string_fragment") continue;
+
+    const range = child.range();
+    if (previousFragmentEnd != null && range.start.index > previousFragmentEnd) {
+      parts.push(
+        sourceStringFragmentGapForResidualMatching(
+          content.slice(previousFragmentEnd, range.start.index),
+        ),
+      );
+    }
+    parts.push(child.text());
+    previousFragmentEnd = range.end.index;
+  }
+
+  return parts.length === 0 ? null : parts.join("");
 }
 
 function sourceStringContentForResidualMatching(relative: string, content: string): string | null {
@@ -158,18 +202,20 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
     return null;
   }
 
-  const fragments: string[] = [];
+  const sourceStrings: string[] = [];
   const visit = (node: SgNode): void => {
-    if (node.kind() === "string_fragment") {
-      fragments.push(node.text());
-      return;
+    const kind = node.kind();
+    if (kind === "string" || kind === "template_string") {
+      const sourceString = sourceStringNodeContentForResidualMatching(node, content);
+      if (sourceString != null) sourceStrings.push(sourceString);
     }
     for (const child of node.children()) {
+      if (child.kind() === "string_fragment") continue;
       visit(child);
     }
   };
   visit(root);
-  return fragments.join("\n");
+  return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
 function sourceLang(relative: string): Lang {
@@ -286,6 +332,15 @@ function legacyPatternWarnings(
   });
 }
 
+function compareReviewFindings(a: LlmReviewFinding, b: LlmReviewFinding): number {
+  return (
+    a.file.localeCompare(b.file) ||
+    a.line - b.line ||
+    a.message.localeCompare(b.message) ||
+    a.excerpt.localeCompare(b.excerpt)
+  );
+}
+
 /**
  * Run multiple codemods on a project directory using in-memory chaining.
  * Each file is processed through all transforms whose filePatterns match it.
@@ -306,13 +361,16 @@ export async function runCodemods(
   const loaded: LoadedTransform[] = [];
   for (const { codemod, scriptPath } of codemods) {
     const patterns = codemod.filePatterns ?? DEFAULT_FILE_PATTERNS;
+    const loadedModule = scriptPath ? await loadTransformModule(scriptPath) : undefined;
     loaded.push({
       id: codemod.id,
-      transform: scriptPath ? await loadTransform(scriptPath) : undefined,
+      transform: loadedModule?.transform,
+      reviewFindings: loadedModule?.reviewFindings,
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
+      sourceStringSuspiciousPatterns: codemod.sourceStringSuspiciousPatterns ?? [],
       prompt: codemod.prompt,
       reviewSupersededBy: codemod.reviewSupersededBy ?? [],
     });
@@ -322,8 +380,8 @@ export async function runCodemods(
   const warnings: string[] = [];
   const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
-  // codemod id -> files flagged for LLM-assisted review
-  const suspiciousByCodemod = new Map<string, string[]>();
+  const suspiciousByCodemod = new Map<string, Set<string>>();
+  const findingsByCodemod = new Map<string, LlmReviewFinding[]>();
 
   for await (const relative of walkFiles(targetPath)) {
     const absolute = path.resolve(targetPath, relative);
@@ -366,11 +424,38 @@ export async function runCodemods(
     );
 
     for (const lt of matchedTransforms) {
-      if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
-        const files = suspiciousByCodemod.get(lt.id) ?? [];
-        files.push(relative);
-        suspiciousByCodemod.set(lt.id, files);
+      if (!lt.prompt) continue;
+      const filesForReview = (): Set<string> => {
+        let files = suspiciousByCodemod.get(lt.id);
+        if (!files) {
+          files = new Set<string>();
+          suspiciousByCodemod.set(lt.id, files);
+        }
+        return files;
+      };
+      if (lt.reviewFindings) {
+        const findings = await lt.reviewFindings(current, absolute, relative);
+        if (findings.length > 0) {
+          const files = filesForReview();
+          for (const finding of findings) {
+            files.add(finding.file);
+          }
+          let existing = findingsByCodemod.get(lt.id);
+          if (!existing) {
+            existing = [];
+            findingsByCodemod.set(lt.id, existing);
+          }
+          existing.push(...findings);
+        }
+      }
+      const matchesSource =
+        lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null) ||
+        (sourceStringContent != null &&
+          lt.sourceStringSuspiciousPatterns.some(
+            (p) => matchResidualPattern(sourceStringContent, p) !== null,
+          ));
+      if (matchesSource) {
+        filesForReview().add(relative);
       }
     }
   }
@@ -380,11 +465,23 @@ export async function runCodemods(
   for (const lt of loaded) {
     if (!lt.prompt) continue;
     if (lt.reviewSupersededBy.some((id) => loadedIds.has(id))) continue;
-    if (lt.suspiciousPatterns.length > 0) {
+    if (
+      lt.suspiciousPatterns.length > 0 ||
+      lt.sourceStringSuspiciousPatterns.length > 0 ||
+      lt.reviewFindings
+    ) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);
       // Sort for deterministic output regardless of filesystem traversal order.
-      if (files) llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
+      if (files) {
+        const findings = findingsByCodemod.get(lt.id)?.toSorted(compareReviewFindings);
+        llmReviews.push({
+          codemodId: lt.id,
+          prompt: lt.prompt,
+          files: Array.from(files).toSorted(),
+          ...(findings && findings.length > 0 ? { findings } : {}),
+        });
+      }
     } else if (lt.legacyPatterns.length === 0) {
       // Codemod-less manual change with no pattern to scope by: surface as
       // project-wide guidance (legacyPattern-only entries warn instead).
