@@ -205,6 +205,47 @@ describe("principal-unify review findings", () => {
     ]);
   });
 
+  test("reports helper adapters with aliased destructured context parameters", async () => {
+    await writeProjectFile(
+      "resolvers/aliased-destructured-param-helper.ts",
+      [
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "",
+        "function createContext({ user: currentUser }: any) {",
+        "  return { userId: currentUser.id };",
+        "}",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async (context) => createContext(context),",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/principal-unify",
+        files: ["resolvers/aliased-destructured-param-helper.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/aliased-destructured-param-helper.ts",
+            line: 3,
+            message:
+              "Helper adapter createContext reads currentUser and needs v2 caller/invoker semantics.",
+          }),
+          expect.objectContaining({
+            file: "resolvers/aliased-destructured-param-helper.ts",
+            line: 8,
+            message:
+              "createContext(context) passes an SDK resolver context into a helper that reads currentUser.",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("keeps file-level suspicious-pattern fallback without precise findings", async () => {
     await writeProjectFile(
       "resolvers/context-type.ts",
