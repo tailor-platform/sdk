@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions@92f2995e449838d4930e0a5afc0967764d343a96 # v1.4.0
         with:
           target-branch: "__BRANCH__"
   # __TAG_GUARD_JOB_END__
@@ -45,16 +45,16 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions@92f2995e449838d4930e0a5afc0967764d343a96 # v1.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions@92f2995e449838d4930e0a5afc0967764d343a96 # v1.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       - id: tailor-plan
-        uses: tailor-platform/actions/plan@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions@92f2995e449838d4930e0a5afc0967764d343a96 # v1.4.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -78,11 +78,11 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions@92f2995e449838d4930e0a5afc0967764d343a96 # v1.4.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions@92f2995e449838d4930e0a5afc0967764d343a96 # v1.4.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
