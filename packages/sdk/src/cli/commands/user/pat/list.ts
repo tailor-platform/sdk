@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { paginationArgs, toPageDirection } from "#/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
+import { createPatOperatorClient } from "./user";
 
 export const listCommand = defineAppCommand({
   name: "list",
@@ -13,17 +13,7 @@ export const listCommand = defineAppCommand({
   args: z.object({ ...paginationArgs() }).strict(),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
-    const config = await readPlatformConfig();
-
-    if (!config.current_user) {
-      throw new Error(ml`
-        No user logged in.
-        Please login first using 'tailor-sdk login' command.
-      `);
-    }
-
-    const token = await fetchLatestToken(config, config.current_user);
-    const client = await initOperatorClient(token);
+    const client = await createPatOperatorClient();
 
     const pageDirection = toPageDirection(args.order);
     const pats = await fetchPaged(

@@ -176,4 +176,37 @@ describe("profile list", () => {
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toMatchObject({ machineUser: "bot", machineUserOverride: "allow" });
   });
+
+  test("includes platform settings in JSON output when profile has them", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      name: "dev",
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
 });
