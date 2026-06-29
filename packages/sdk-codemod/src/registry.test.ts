@@ -8,8 +8,85 @@ describe("getApplicableCodemods", () => {
     expect(codemods[0]!.id).toBe("v2/define-generators-to-plugins");
   });
 
+  test("returns all v2 codemods when upgrading to the stable boundary", () => {
+    expect(getApplicableCodemods("1.67.1", "2.0.0").map((codemod) => codemod.id)).toEqual(
+      allCodemods.map((codemod) => codemod.id),
+    );
+  });
+
+  test("returns codemods when upgrading to a prerelease at their version boundary", () => {
+    const prereleaseCodemods = getApplicableCodemods("1.67.1", "2.0.0-next.2");
+    const prereleaseIds = prereleaseCodemods.map((codemod) => codemod.id);
+
+    expect(prereleaseIds).toEqual(
+      allCodemods
+        .filter(
+          (codemod) =>
+            codemod.prereleaseUntil === "2.0.0-next.1" ||
+            codemod.prereleaseUntil === "2.0.0-next.2",
+        )
+        .map((codemod) => codemod.id),
+    );
+    expect(prereleaseIds).not.toContain("v2/auth-attributes-rename");
+    expect(prereleaseIds).not.toContain("v2/env-var-rename");
+    expect(prereleaseIds).not.toContain("v2/rename-bin");
+    expect(prereleaseIds).not.toContain("v2/node-minimum-22-15-0");
+  });
+
   test("returns empty when both versions are before the codemod boundary", () => {
     expect(getApplicableCodemods("1.0.0", "1.5.0")).toEqual([]);
+  });
+
+  test("uses each codemod's prerelease boundary", () => {
+    const ids = getApplicableCodemods("1.67.1", "2.0.0-next.1").map((codemod) => codemod.id);
+    const authInvokerCallUnwrap = getApplicableCodemods("1.67.1", "2.0.0-next.1").find(
+      (codemod) => codemod.id === "v2/auth-invoker-call-unwrap",
+    );
+
+    expect(ids).toContain("v2/test-run-arg-input");
+    expect(ids).toContain("v2/auth-invoker-call-unwrap");
+    expect(authInvokerCallUnwrap?.suspiciousPatterns).toEqual(["auth.invoker"]);
+    expect(authInvokerCallUnwrap?.reviewSupersededBy).toEqual(["v2/auth-invoker-unwrap"]);
+    expect(ids).not.toContain("v2/execute-script-arg");
+    expect(ids).not.toContain("v2/principal-unify");
+  });
+
+  test("throws when a prerelease boundary is not a prerelease version", () => {
+    allCodemods.push({
+      id: "v2/invalid-prerelease-boundary",
+      name: "Invalid prerelease boundary",
+      description: "Invalid prerelease boundary",
+      since: "1.0.0",
+      until: "2.0.0",
+      prereleaseUntil: "2.0.0",
+    });
+
+    try {
+      expect(() => getApplicableCodemods("1.0.0", "2.0.0-next.1")).toThrow(
+        "Codemod v2/invalid-prerelease-boundary prereleaseUntil must be a prerelease version: 2.0.0",
+      );
+    } finally {
+      allCodemods.pop();
+    }
+  });
+
+  test("returns empty when the source prerelease already reached the codemod boundary", () => {
+    expect(getApplicableCodemods("2.0.0-next.2", "2.0.0-next.2")).toEqual([]);
+  });
+
+  test("runs stable-only codemods when upgrading from a prerelease to stable", () => {
+    const ids = getApplicableCodemods("2.0.0-next.2", "2.0.0").map((codemod) => codemod.id);
+
+    expect(ids).toContain("v2/auth-attributes-rename");
+    expect(ids).toContain("v2/env-var-rename");
+    expect(ids).toContain("v2/rename-bin");
+    expect(ids).toContain("v2/node-minimum-22-15-0");
+    expect(ids).not.toContain("v2/principal-unify");
+    expect(ids).not.toContain("v2/auth-invoker-unwrap");
+  });
+
+  test("returns empty when the target prerelease is before the codemod boundary", () => {
+    expect(getApplicableCodemods("1.67.1", "1.99.0-next.1")).toEqual([]);
   });
 
   test("returns empty when both versions are after the codemod boundary", () => {
