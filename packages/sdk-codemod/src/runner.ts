@@ -5,7 +5,14 @@ import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage, CodemodPattern, CodemodPatternGroup, LlmReview } from "./types";
+import type {
+  CodemodPackage,
+  CodemodPattern,
+  CodemodPatternGroup,
+  LlmReview,
+  LlmReviewFinding,
+  ReviewFindingsFn,
+} from "./types";
 import type { SgNode } from "@ast-grep/napi";
 
 /**
@@ -119,14 +126,22 @@ function printDiff(filePath: string, before: string, after: string): void {
  * Load a transform module from a TypeScript file path.
  * Expects the module to have a default export that is a TransformFn.
  * @param scriptPath - Absolute path to the transform script
- * @returns The transform function
+ * @returns The transform function and optional review detector
  */
-async function loadTransform(scriptPath: string): Promise<TransformFn> {
+async function loadTransformModule(
+  scriptPath: string,
+): Promise<{ transform: TransformFn; reviewFindings?: ReviewFindingsFn }> {
   const mod = await import(url.pathToFileURL(scriptPath).href);
   if (typeof mod.default !== "function") {
     throw new Error(`Transform at ${scriptPath} does not have a default export function`);
   }
-  return mod.default as TransformFn;
+  return {
+    transform: mod.default as TransformFn,
+    reviewFindings:
+      typeof mod.reviewFindings === "function"
+        ? (mod.reviewFindings as ReviewFindingsFn)
+        : undefined,
+  };
 }
 
 /** A loaded transform with its file matcher. */
@@ -134,6 +149,7 @@ interface LoadedTransform {
   id: string;
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
+  reviewFindings?: ReviewFindingsFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: CodemodPatternGroup[];
   sourceStringLegacyPatterns: CodemodPatternGroup[];
@@ -286,6 +302,15 @@ function legacyPatternWarnings(
   });
 }
 
+function compareReviewFindings(a: LlmReviewFinding, b: LlmReviewFinding): number {
+  return (
+    a.file.localeCompare(b.file) ||
+    a.line - b.line ||
+    a.message.localeCompare(b.message) ||
+    a.excerpt.localeCompare(b.excerpt)
+  );
+}
+
 /**
  * Run multiple codemods on a project directory using in-memory chaining.
  * Each file is processed through all transforms whose filePatterns match it.
@@ -306,9 +331,11 @@ export async function runCodemods(
   const loaded: LoadedTransform[] = [];
   for (const { codemod, scriptPath } of codemods) {
     const patterns = codemod.filePatterns ?? DEFAULT_FILE_PATTERNS;
+    const loadedModule = scriptPath ? await loadTransformModule(scriptPath) : undefined;
     loaded.push({
       id: codemod.id,
-      transform: scriptPath ? await loadTransform(scriptPath) : undefined,
+      transform: loadedModule?.transform,
+      reviewFindings: loadedModule?.reviewFindings,
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
@@ -322,8 +349,8 @@ export async function runCodemods(
   const warnings: string[] = [];
   const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
-  // codemod id -> files flagged for LLM-assisted review
-  const suspiciousByCodemod = new Map<string, string[]>();
+  const suspiciousByCodemod = new Map<string, Set<string>>();
+  const findingsByCodemod = new Map<string, LlmReviewFinding[]>();
 
   for await (const relative of walkFiles(targetPath)) {
     const absolute = path.resolve(targetPath, relative);
@@ -366,11 +393,34 @@ export async function runCodemods(
     );
 
     for (const lt of matchedTransforms) {
-      if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
+      if (!lt.prompt) continue;
+      if (lt.reviewFindings) {
+        const findings = await lt.reviewFindings(current, absolute, relative);
+        if (findings.length > 0) {
+          let files = suspiciousByCodemod.get(lt.id);
+          if (!files) {
+            files = new Set<string>();
+            suspiciousByCodemod.set(lt.id, files);
+          }
+          for (const finding of findings) {
+            files.add(finding.file);
+          }
+          let existing = findingsByCodemod.get(lt.id);
+          if (!existing) {
+            existing = [];
+            findingsByCodemod.set(lt.id, existing);
+          }
+          existing.push(...findings);
+        }
+      }
+      if (lt.suspiciousPatterns.length === 0) continue;
       if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
-        const files = suspiciousByCodemod.get(lt.id) ?? [];
-        files.push(relative);
-        suspiciousByCodemod.set(lt.id, files);
+        let files = suspiciousByCodemod.get(lt.id);
+        if (!files) {
+          files = new Set<string>();
+          suspiciousByCodemod.set(lt.id, files);
+        }
+        files.add(relative);
       }
     }
   }
@@ -380,11 +430,19 @@ export async function runCodemods(
   for (const lt of loaded) {
     if (!lt.prompt) continue;
     if (lt.reviewSupersededBy.some((id) => loadedIds.has(id))) continue;
-    if (lt.suspiciousPatterns.length > 0) {
+    if (lt.suspiciousPatterns.length > 0 || lt.reviewFindings) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);
       // Sort for deterministic output regardless of filesystem traversal order.
-      if (files) llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
+      if (files) {
+        const findings = findingsByCodemod.get(lt.id)?.toSorted(compareReviewFindings);
+        llmReviews.push({
+          codemodId: lt.id,
+          prompt: lt.prompt,
+          files: Array.from(files).toSorted(),
+          ...(findings && findings.length > 0 ? { findings } : {}),
+        });
+      }
     } else if (lt.legacyPatterns.length === 0) {
       // Codemod-less manual change with no pattern to scope by: surface as
       // project-wide guidance (legacyPattern-only entries warn instead).
