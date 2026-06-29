@@ -23,7 +23,7 @@ tailor-sdk setup [options] [command]
 | `--tag-pattern <TAG_PATTERN>`       | -     | Tag glob to match (requires --tag; defaults to v\*)                                                                                               | No       | -          |
 | `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)                                                                      | No       | -          |
 | `--no-plan`                         | -     | Disable the plan job for a branch target (cannot be combined with --tag)                                                                          | No       | `false`    |
-| `--erd-preview`                     | -     | Add PR ERD viewer and diff preview artifacts for TailorDB namespaces                                                                              | No       | `false`    |
+| `--erd-preview`                     | -     | Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces                                                                    | No       | `false`    |
 | `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                                                                                               | No       | `"."`      |
 | `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                                                                                     | No       | `false`    |
 

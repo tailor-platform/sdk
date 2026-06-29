@@ -408,13 +408,12 @@ jobs:
           head_output="$RUNNER_TEMP/tailor-erd/head"
           base_output="$RUNNER_TEMP/tailor-erd/base"
           preview_output="$RUNNER_TEMP/tailor-erd/preview"
-          diff_output="$RUNNER_TEMP/tailor-erd/diff"
           dts_output="$RUNNER_TEMP/tailor-erd/dts"
           head_cli_runner="$RUNNER_TEMP/tailor-erd/run-head-tailor-sdk.mjs"
           head_log="$RUNNER_TEMP/tailor-erd/head-$NAMESPACE.log"
           base_log="$RUNNER_TEMP/tailor-erd/base-$NAMESPACE.log"
-          rm -rf "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
-          mkdir -p "$head_output" "$base_output" "$preview_output" "$diff_output" "$dts_output"
+          rm -rf "$head_output" "$base_output" "$preview_output" "$dts_output"
+          mkdir -p "$head_output" "$base_output" "$preview_output" "$dts_output"
           cat > "$head_cli_runner" <<'NODE'
           import { pathToFileURL } from "node:url";
 
@@ -433,7 +432,7 @@ jobs:
           base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"
           head_html="$head_output/$NAMESPACE/dist/index.html"
           base_html="$base_output/$NAMESPACE/dist/index.html"
-          diff_html="$diff_output/$NAMESPACE-diff.html"
+          preview_html="$preview_output/$NAMESPACE-viewer.html"
 
           head_missing="false"
           if [ ! -f "$head_config" ]; then
@@ -489,12 +488,7 @@ jobs:
             exit 1
           fi
 
-          if [ "$head_missing" = "false" ]; then
-            cp "$head_html" "$preview_output/$NAMESPACE-viewer.html"
-          fi
-          echo "head-missing=$head_missing" >> "$GITHUB_OUTPUT"
-
-          diff_args=(--namespace "$NAMESPACE" --output "$diff_html")
+          diff_args=(--namespace "$NAMESPACE" --output "$preview_html")
           if [ "$head_missing" = "false" ]; then
             diff_args+=(--head-html "$head_html")
           fi
@@ -503,19 +497,10 @@ jobs:
           fi
           run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
       - id: tailor-upload-erd-viewer
-        if: steps.tailor-build-erd-preview.outputs.head-missing != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.namespace }}-viewer.html
           path: ${{ runner.temp }}/tailor-erd/preview/${{ matrix.namespace }}-viewer.html
-          if-no-files-found: error
-          archive: false
-          retention-days: 7
-      - id: tailor-upload-erd-diff
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ matrix.namespace }}-diff.html
-          path: ${{ runner.temp }}/tailor-erd/diff/${{ matrix.namespace }}-diff.html
           if-no-files-found: error
           archive: false
           retention-days: 7
@@ -551,22 +536,18 @@ jobs:
           fi
 
           body="$MARKER"$'\n'"### TailorDB ERD preview (__WORKSPACE_NAME__)"$'\n\n'
-          body+="Self-contained HTML artifacts for this pull request. Diff previews compare this pull request with base branch \`$BASE_REF\`."$'\n'
+          body+="Self-contained ERD viewer HTML artifacts for this pull request. Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`."$'\n'
 
           while IFS=$'\t' read -r name id; do
             [ -z "$name" ] && continue
-            if [[ "$name" == *-viewer.html ]]; then
-              ns=${name%-viewer.html}
-              label="$ns viewer"
-            elif [[ "$name" == *-diff.html ]]; then
-              ns=${name%-diff.html}
-              label="$ns diff"
-            else
+            if [[ "$name" != *-viewer.html ]]; then
               continue
             fi
+            ns=${name%-viewer.html}
+            label="$ns viewer"
             body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
           done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select((.name | endswith("-viewer.html")) or (.name | endswith("-diff.html"))) | [.name, (.id|tostring)] | @tsv' | sort)
+            --jq '.artifacts[] | select(.name | endswith("-viewer.html")) | [.name, (.id|tostring)] | @tsv' | sort)
 
           existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
             --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')

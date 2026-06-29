@@ -49,7 +49,8 @@ export const setupCommand = defineAppCommand({
         description: "Disable the plan job for a branch target (cannot be combined with --tag)",
       }),
       "erd-preview": arg(z.boolean().default(false), {
-        description: "Add PR ERD viewer and diff preview artifacts for TailorDB namespaces",
+        description:
+          "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
       }),
       dir: arg(z.string().min(1).default("."), {
         alias: "d",

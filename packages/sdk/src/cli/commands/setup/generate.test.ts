@@ -214,15 +214,15 @@ describe("renderBranchWorkflow", () => {
     );
     expect(content).toContain('yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;');
     expect(content).toContain('head_missing="false"');
-    expect(content).toContain('echo "head-missing=$head_missing" >> "$GITHUB_OUTPUT"');
     expect(content).toContain("grep -q 'not found in local config.db'");
-    expect(content).toContain('diff_args=(--namespace "$NAMESPACE" --output "$diff_html")');
-    expect(content).toContain("if: steps.tailor-build-erd-preview.outputs.head-missing != 'true'");
+    expect(content).toContain('diff_args=(--namespace "$NAMESPACE" --output "$preview_html")');
     expect(content).toContain("name: ${{ matrix.namespace }}-viewer.html");
-    expect(content).toContain("name: ${{ matrix.namespace }}-diff.html");
+    expect(content).not.toContain("name: ${{ matrix.namespace }}-diff.html");
     expect(content).toContain("HEAD_SHA: ${{ github.event.pull_request.head.sha }}");
     expect(content).toContain('current_head=$(gh api "repos/$REPO/pulls/$PR_NUMBER"');
     expect(content).toContain("archive: false");
+    expect(content).toContain('select(.name | endswith("-viewer.html"))');
+    expect(content).not.toContain('endswith("-diff.html")');
     expect(content).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(generatedIds).toEqual(
       expect.arrayContaining([
@@ -242,7 +242,6 @@ describe("renderBranchWorkflow", () => {
         "tailor-erd-preview/tailor-restore-head-setup",
         "tailor-erd-preview/tailor-build-erd-preview",
         "tailor-erd-preview/tailor-upload-erd-viewer",
-        "tailor-erd-preview/tailor-upload-erd-diff",
         "tailor-erd-preview-comment",
         "tailor-erd-preview-comment/tailor-comment-erd-preview",
       ]),

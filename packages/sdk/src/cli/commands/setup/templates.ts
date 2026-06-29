@@ -178,7 +178,6 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-erd-preview/tailor-restore-head-setup",
       "tailor-erd-preview/tailor-build-erd-preview",
       "tailor-erd-preview/tailor-upload-erd-viewer",
-      "tailor-erd-preview/tailor-upload-erd-diff",
       "tailor-erd-preview-comment",
       "tailor-erd-preview-comment/tailor-comment-erd-preview",
     );

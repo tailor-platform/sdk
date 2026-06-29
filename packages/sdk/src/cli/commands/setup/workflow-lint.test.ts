@@ -106,8 +106,9 @@ describe("repository ERD preview workflow", () => {
     const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
 
     expect(content).toContain("name: ${{ matrix.namespace }}.html");
-    expect(content).toContain("name: ${{ matrix.namespace }}-diff.html");
+    expect(content).not.toContain("name: ${{ matrix.namespace }}-diff.html");
     expect(content).toContain('select(.name | endswith(".html"))');
+    expect(content).toContain("can switch between the current schema and a diff");
     expect(content).not.toContain("name: erd-viewer-preview-${{ matrix.namespace }}");
     expect(content).not.toContain("name: erd-viewer-diff-${{ matrix.namespace }}");
   });
