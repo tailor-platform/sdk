@@ -40,6 +40,32 @@ export default {
       expect(result.type).toBe("resolver");
       expect(result.name).toBe("my-resolver");
     });
+
+    test("detects a branded resolver with runtime helper keys", async () => {
+      const filePath = path.join(testDir, "resolver-with-helper.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+const resolver = {
+  operation: "query",
+  name: "my-resolver",
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+  trigger: () => {},
+};
+
+Object.defineProperty(resolver, Symbol.for("tailor-platform/sdk"), {
+  value: "resolver",
+});
+
+export default resolver;
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.type).toBe("resolver");
+      expect(result.name).toBe("my-resolver");
+    });
   });
 
   describe("executor detection", () => {

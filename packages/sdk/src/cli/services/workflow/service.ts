@@ -14,7 +14,12 @@ export interface CollectedJob {
 }
 
 function stripRuntimeTrigger(workflow: unknown): unknown {
-  if (workflow === null || typeof workflow !== "object" || !("trigger" in workflow)) {
+  if (
+    !isSdkBranded(workflow, "workflow") ||
+    workflow === null ||
+    typeof workflow !== "object" ||
+    !("trigger" in workflow)
+  ) {
     return workflow;
   }
   const { trigger: _trigger, ...rest } = workflow as Record<string, unknown>;
