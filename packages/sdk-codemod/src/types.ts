@@ -1,3 +1,5 @@
+import type { RunnerMetadata } from "./runner-metadata";
+
 /** A before/after code pair shown in the generated migration doc. */
 export interface CodemodExample {
   /** Code as written before the migration. */
@@ -100,6 +102,7 @@ export interface LlmReview {
  * JSON output written to stdout by the sdk-codemod CLI.
  */
 export interface RunOutput {
+  runner: RunnerMetadata;
   codemodsApplied: number;
   codemodsSkipped: number;
   filesModified: string[];
