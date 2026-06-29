@@ -60,6 +60,7 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const SOURCE_STRING_FRAGMENT_SEPARATOR = "\0";
 const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
   "comment",
   "string",
@@ -154,6 +155,7 @@ interface LoadedTransform {
   legacyPatterns: CodemodPatternGroup[];
   sourceStringLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
+  sourceStringSuspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
   reviewSupersededBy: string[];
 }
@@ -161,6 +163,32 @@ interface LoadedTransform {
 function contentForResidualMatching(relative: string, content: string): string {
   const ext = path.extname(relative).toLowerCase();
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
+}
+
+function sourceStringFragmentGapForResidualMatching(gap: string): string {
+  return /^(?:\\(?:[nrtvf]|\r\n|\r|\n)|\s)+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
+}
+
+function sourceStringNodeContentForResidualMatching(node: SgNode, content: string): string | null {
+  const parts: string[] = [];
+  let previousFragmentEnd: number | null = null;
+
+  for (const child of node.children()) {
+    if (child.kind() !== "string_fragment") continue;
+
+    const range = child.range();
+    if (previousFragmentEnd != null && range.start.index > previousFragmentEnd) {
+      parts.push(
+        sourceStringFragmentGapForResidualMatching(
+          content.slice(previousFragmentEnd, range.start.index),
+        ),
+      );
+    }
+    parts.push(child.text());
+    previousFragmentEnd = range.end.index;
+  }
+
+  return parts.length === 0 ? null : parts.join("");
 }
 
 function sourceStringContentForResidualMatching(relative: string, content: string): string | null {
@@ -174,18 +202,20 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
     return null;
   }
 
-  const fragments: string[] = [];
+  const sourceStrings: string[] = [];
   const visit = (node: SgNode): void => {
-    if (node.kind() === "string_fragment") {
-      fragments.push(node.text());
-      return;
+    const kind = node.kind();
+    if (kind === "string" || kind === "template_string") {
+      const sourceString = sourceStringNodeContentForResidualMatching(node, content);
+      if (sourceString != null) sourceStrings.push(sourceString);
     }
     for (const child of node.children()) {
+      if (child.kind() === "string_fragment") continue;
       visit(child);
     }
   };
   visit(root);
-  return fragments.join("\n");
+  return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
 function sourceLang(relative: string): Lang {
@@ -340,6 +370,7 @@ export async function runCodemods(
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
+      sourceStringSuspiciousPatterns: codemod.sourceStringSuspiciousPatterns ?? [],
       prompt: codemod.prompt,
       reviewSupersededBy: codemod.reviewSupersededBy ?? [],
     });
@@ -394,14 +425,18 @@ export async function runCodemods(
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt) continue;
+      const filesForReview = (): Set<string> => {
+        let files = suspiciousByCodemod.get(lt.id);
+        if (!files) {
+          files = new Set<string>();
+          suspiciousByCodemod.set(lt.id, files);
+        }
+        return files;
+      };
       if (lt.reviewFindings) {
         const findings = await lt.reviewFindings(current, absolute, relative);
         if (findings.length > 0) {
-          let files = suspiciousByCodemod.get(lt.id);
-          if (!files) {
-            files = new Set<string>();
-            suspiciousByCodemod.set(lt.id, files);
-          }
+          const files = filesForReview();
           for (const finding of findings) {
             files.add(finding.file);
           }
@@ -413,14 +448,14 @@ export async function runCodemods(
           existing.push(...findings);
         }
       }
-      if (lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
-        let files = suspiciousByCodemod.get(lt.id);
-        if (!files) {
-          files = new Set<string>();
-          suspiciousByCodemod.set(lt.id, files);
-        }
-        files.add(relative);
+      const matchesSource =
+        lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null) ||
+        (sourceStringContent != null &&
+          lt.sourceStringSuspiciousPatterns.some(
+            (p) => matchResidualPattern(sourceStringContent, p) !== null,
+          ));
+      if (matchesSource) {
+        filesForReview().add(relative);
       }
     }
   }
@@ -430,7 +465,11 @@ export async function runCodemods(
   for (const lt of loaded) {
     if (!lt.prompt) continue;
     if (lt.reviewSupersededBy.some((id) => loadedIds.has(id))) continue;
-    if (lt.suspiciousPatterns.length > 0 || lt.reviewFindings) {
+    if (
+      lt.suspiciousPatterns.length > 0 ||
+      lt.sourceStringSuspiciousPatterns.length > 0 ||
+      lt.reviewFindings
+    ) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);
       // Sort for deterministic output regardless of filesystem traversal order.
