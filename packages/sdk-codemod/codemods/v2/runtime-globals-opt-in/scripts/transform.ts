@@ -205,8 +205,18 @@ function runtimeIdpLocalName(imports: SgNode[]): string | null {
   return null;
 }
 
-function hasCollision(imports: SgNode[], localNames: Set<string>, idpLocal: string): boolean {
-  if (localNames.has("tailor") || localNames.has("idp") || localNames.has(idpLocal)) return true;
+function hasCollision(
+  imports: SgNode[],
+  localNames: Set<string>,
+  idpLocal: string,
+  injectingNewIdpName: boolean,
+): boolean {
+  if (
+    localNames.has("tailor") ||
+    (injectingNewIdpName && localNames.has("idp")) ||
+    localNames.has(idpLocal)
+  )
+    return true;
 
   for (const importStmt of imports) {
     for (const binding of importBindings(importStmt)) {
@@ -312,7 +322,9 @@ export default function transform(source: string, filePath: string): string | nu
   const imports = findImportStatements(root);
   const existingIdpLocal = runtimeIdpLocalName(imports);
   const idpLocal = existingIdpLocal ?? "idp";
-  if (hasCollision(imports, localDeclarationNames(root), idpLocal)) return null;
+  if (hasCollision(imports, localDeclarationNames(root), idpLocal, existingIdpLocal === null)) {
+    return null;
+  }
 
   const edits: Edit[] = constructors.map((constructor) =>
     constructor.replace(`${idpLocal}.Client`),
