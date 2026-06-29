@@ -163,11 +163,83 @@ describe("getApplicableCodemods", () => {
     expect(matches("tailor.d.ts")).toBe(true);
   });
 
-  test("flags CommonJS TypeScript files for runtime globals review", () => {
+  test("flags source files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
-    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts}");
+    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
     expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
+    expect(codemod?.suspiciousPatterns).toContain("tailor.secretmanager");
+    expect(codemod?.suspiciousPatterns).toContain("tailor.authconnection");
+    expect(codemod?.sourceStringSuspiciousPatterns).toContain("new tailor.idp.Client");
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const C = tailor.idp.Client;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("await tailor.secretmanager.getSecret();"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("const { getSecret } = tailor.secretmanager;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp &&
+          pattern.test("const getInvoker = tailor.context.getInvoker;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const { upload } = tailordb.file;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const e: TailorErrors = err;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("type U = Promise<tailor.idp.User>;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("type Ctor = typeof tailordb.Client;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("return tailordb.Client;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("foo(tailordb.Client);"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("type F = () => tailordb.QueryResult<User>;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp &&
+          pattern.test("type R = Promise<tailordb.QueryResult<User>>;"),
+      ),
+    ).toBe(true);
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 
