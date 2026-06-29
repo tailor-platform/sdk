@@ -8,9 +8,13 @@ import { z } from "zod";
 import { automationLevel } from "./migration-doc";
 import { allCodemods, getApplicableCodemods, resolveCodemodScript } from "./registry";
 import { runCodemods } from "./runner";
+import { createRunnerMetadata } from "./runner-metadata";
 import type { LlmReview, RunOutput } from "./types";
 
-const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta.url)) + "/..");
+const packageRoot = path.dirname(fileURLToPath(import.meta.url)) + "/..";
+const packageJson = await readPackageJSON(packageRoot);
+const packageName = packageJson.name ?? "sdk-codemod";
+const packageVersion = packageJson.version ?? "0.0.0";
 
 /** One rule in the `list` command output. */
 interface RuleSummary {
@@ -61,7 +65,7 @@ function printLlmReview(review: LlmReview): void {
 }
 
 const main = defineCommand({
-  name: packageJson.name ?? "sdk-codemod",
+  name: packageName,
   description: packageJson.description ?? "Codemod runner for Tailor Platform SDK upgrades",
   subCommands: { list: listCommand },
   notes: `Applies the codemods matching the \`--from\`/\`--to\` version range to the
@@ -72,6 +76,8 @@ const main = defineCommand({
 - \`llmReviews\`: changes the codemods could not fully migrate on their own. Each
   entry has the affected \`files\` and a \`prompt\` — hand the prompt and files to
   an LLM (or follow it yourself) to finish those cases.
+- \`runner\`: exact codemod runner identity. Local source builds include the
+  repository commit and the build command used to produce \`dist/index.js\`.
 
 Progress, warnings, and the LLM-review prompts are also printed to \`stderr\` in
 human-readable form, so \`stdout\` stays pure JSON for piping.`,
@@ -105,10 +111,16 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
   run: async (args) => {
     const targetPath = path.resolve(args.target);
     const dryRun = args["dry-run"];
+    const runner = createRunnerMetadata({
+      packageName,
+      packageVersion,
+      packageRoot,
+    });
 
     const codemods = getApplicableCodemods(args.from, args.to);
 
     const output: RunOutput = {
+      runner,
       codemodsApplied: 0,
       codemodsSkipped: 0,
       filesModified: [],
@@ -165,4 +177,4 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
   },
 });
 
-void runMain(main, { version: packageJson.version });
+void runMain(main, { version: packageVersion });
