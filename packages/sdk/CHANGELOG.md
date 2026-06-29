@@ -1,5 +1,35 @@
 # @tailor-platform/sdk
 
+## 1.70.0
+### Minor Changes
+
+
+
+- [#1547](https://github.com/tailor-platform/sdk/pull/1547) [`7bb4dd6`](https://github.com/tailor-platform/sdk/commit/7bb4dd68a2492e5b8d5051730cdf35ba4f442134) Thanks [@toiroakr](https://github.com/toiroakr)! - Route `deploy --dry-run` plan diff output to stdout so CI pipelines can capture it cleanly without `2>&1`. Add `--json` / `-j` support to `deploy`: dry-run outputs `{ summary, changes, warnings, conflicts }` and apply outputs `{ summary, status: "applied" }` to stdout for machine-readable consumption. The `warnings` array includes unmanaged resources and skipped secrets; the `conflicts` array lists owner conflicts.
+
+
+
+- [#1579](https://github.com/tailor-platform/sdk/pull/1579) [`7522a06`](https://github.com/tailor-platform/sdk/commit/7522a06abd4b5cabbc5b7ef2e00464db65fb894d) Thanks [@dqn](https://github.com/dqn)! - Add `tailor-sdk setup --erd-preview` and `tailordb erd diff` for PR ERD viewer artifacts with current/diff previews.
+
+
+
+- [#1575](https://github.com/tailor-platform/sdk/pull/1575) [`9857f3a`](https://github.com/tailor-platform/sdk/commit/9857f3a00dd9d8c1cd12c95a0517da1fe4c864a9) Thanks [@dqn](https://github.com/dqn)! - Add profile-level Platform connection settings so CLI profiles can switch the Platform API URL, OAuth2 login client, and Console URL together.
+
+
+
+- [#1566](https://github.com/tailor-platform/sdk/pull/1566) [`acd85bf`](https://github.com/tailor-platform/sdk/commit/acd85bfa9e5f2b3f752f09351572a465d8624f43) Thanks [@dqn](https://github.com/dqn)! - Support `TypedDocumentNode` queries in HTTP adapters and infer `output` response data from them.
+
+
+### Patch Changes
+
+
+
+- [#1560](https://github.com/tailor-platform/sdk/pull/1560) [`1899633`](https://github.com/tailor-platform/sdk/commit/1899633a726955d6e13443545bd8bfa6b16fb5ed) Thanks [@dragon3](https://github.com/dragon3)! - Update AI Gateway documentation to present supported models without naming backend providers
+
+
+
+- [#1574](https://github.com/tailor-platform/sdk/pull/1574) [`0e2759d`](https://github.com/tailor-platform/sdk/commit/0e2759d41f89c6bc670149932f860f208b6b7d0b) Thanks [@dqn](https://github.com/dqn)! - Improve builder API type errors so invalid field modifier calls show actionable messages.
+
 ## 1.69.0
 ### Minor Changes
 
