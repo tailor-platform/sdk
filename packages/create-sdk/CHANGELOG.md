@@ -1,5 +1,14 @@
 # @tailor-platform/create-sdk
 
+## 1.70.0
+
+## 1.69.0
+### Patch Changes
+
+
+
+- [#1533](https://github.com/tailor-platform/sdk/pull/1533) [`e3bc2ce`](https://github.com/tailor-platform/sdk/commit/e3bc2ce65ab30ee53e5de0eb48ca6c24049fcd1b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.9.2
+
 ## 1.68.0
 
 ## 1.67.1

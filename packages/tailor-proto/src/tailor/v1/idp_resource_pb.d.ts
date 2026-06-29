@@ -257,6 +257,20 @@ export declare type IdPDisableGqlOperations = Message<"tailor.v1.IdPDisableGqlOp
    * @generated from field: bool send_password_reset_email = 5;
    */
   sendPasswordResetEmail: boolean;
+
+  /**
+   * request_mfa_settings_url disables the _requestMfaSettingsUrl GraphQL query.
+   *
+   * @generated from field: bool request_mfa_settings_url = 6;
+   */
+  requestMfaSettingsUrl: boolean;
+
+  /**
+   * unenroll_mfa disables the _unenrollMfa GraphQL mutation.
+   *
+   * @generated from field: bool unenroll_mfa = 7;
+   */
+  unenrollMfa: boolean;
 };
 
 /**

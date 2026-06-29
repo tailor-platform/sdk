@@ -309,6 +309,8 @@ function normalizeComparableDisableGqlOperations(
     delete: value?.delete ?? false,
     read: value?.read ?? false,
     sendPasswordResetEmail: value?.sendPasswordResetEmail ?? false,
+    requestMfaSettingsUrl: value?.requestMfaSettingsUrl ?? false,
+    unenrollMfa: value?.unenrollMfa ?? false,
   };
 }
 
@@ -722,6 +724,8 @@ function convertGqlOperationsToDisable(
     delete: gqlOperations.delete === false,
     read: gqlOperations.read === false,
     sendPasswordResetEmail: gqlOperations.sendPasswordResetEmail === false,
+    requestMfaSettingsUrl: gqlOperations.requestMfaSettingsUrl === false,
+    unenrollMfa: gqlOperations.unenrollMfa === false,
   };
 }
 

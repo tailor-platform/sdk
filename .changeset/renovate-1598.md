@@ -3,4 +3,4 @@
 "@tailor-platform/sdk-codemod": patch
 ---
 
-fix(deps): update dependency semver to v7.8.5
+fix(deps): update dependency politty to v0.10.1

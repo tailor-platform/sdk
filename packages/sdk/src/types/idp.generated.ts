@@ -12,6 +12,8 @@ export type IdPGqlOperationsInput =
       delete?: boolean | undefined;
       read?: boolean | undefined;
       sendPasswordResetEmail?: boolean | undefined;
+      requestMfaSettingsUrl?: boolean | undefined;
+      unenrollMfa?: boolean | undefined;
     };
 
 export type IdPGqlOperations = {
@@ -20,6 +22,8 @@ export type IdPGqlOperations = {
   delete?: boolean | undefined;
   read?: boolean | undefined;
   sendPasswordResetEmail?: boolean | undefined;
+  requestMfaSettingsUrl?: boolean | undefined;
+  unenrollMfa?: boolean | undefined;
 };
 
 /**
@@ -1369,6 +1373,8 @@ export type IdPInput = {
         delete?: boolean | undefined;
         read?: boolean | undefined;
         sendPasswordResetEmail?: boolean | undefined;
+        requestMfaSettingsUrl?: boolean | undefined;
+        unenrollMfa?: boolean | undefined;
       }
     | undefined;
   /** Namespace-level email configuration defaults */
@@ -2671,6 +2677,8 @@ export type IdP = {
         delete?: boolean | undefined;
         read?: boolean | undefined;
         sendPasswordResetEmail?: boolean | undefined;
+        requestMfaSettingsUrl?: boolean | undefined;
+        unenrollMfa?: boolean | undefined;
       }
     | undefined;
   /** Namespace-level email configuration defaults */

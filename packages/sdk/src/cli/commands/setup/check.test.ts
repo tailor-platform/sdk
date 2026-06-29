@@ -32,6 +32,7 @@ const cleanState = (overrides: Partial<TargetState> = {}): TargetState => ({
   configExists: true,
   defaultBranch: "main",
   templateVersion: TEMPLATE_VERSION,
+  erdNamespaces: ["tailordb"],
   ...overrides,
 });
 
@@ -116,6 +117,34 @@ describe("findTargetDrift", () => {
     expect(findings.map((f) => f.rule)).toEqual(["default-branch"]);
   });
 
+  test("reports ERD namespace drift when preview namespaces changed", () => {
+    const findings = findTargetDrift(
+      baseTarget({
+        inputs: {
+          ...baseTarget().inputs,
+          erdPreview: true,
+          erdNamespaces: ["tailordb"],
+        },
+      }),
+      cleanState({ erdNamespaces: ["tailordb", "analyticsdb"] }),
+    );
+    expect(findings.map((f) => f.rule)).toEqual(["erd-namespaces"]);
+  });
+
+  test("does not report ERD namespace drift when the config is missing", () => {
+    const findings = findTargetDrift(
+      baseTarget({
+        inputs: {
+          ...baseTarget().inputs,
+          erdPreview: true,
+          erdNamespaces: ["tailordb"],
+        },
+      }),
+      cleanState({ configExists: false, erdNamespaces: null }),
+    );
+    expect(findings.map((f) => f.rule)).toEqual(["config-dir"]);
+  });
+
   test("accumulates multiple findings", () => {
     const findings = findTargetDrift(
       baseTarget({ templateVersion: TEMPLATE_VERSION - 1 }),
@@ -176,6 +205,7 @@ describe("checkGitHub (integration)", () => {
     tag: false,
     tagPattern: "v*",
     plan: true,
+    erdPreview: false,
     dir: ".",
     force: false,
     outputDir: testDir,
@@ -205,7 +235,7 @@ describe("checkGitHub (integration)", () => {
 
   test("passes for a freshly generated target", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app" }));
-    expect(() => check()).not.toThrow();
+    await expect(check()).resolves.toBeUndefined();
   });
 
   test("passes after --force regeneration following a hand edit", async () => {
@@ -213,35 +243,35 @@ describe("checkGitHub (integration)", () => {
     fs.appendFileSync(wfPath(), "\n# hand edit\n");
     // --force should overwrite edits and update the lock's contentHash
     await setupGitHub(setupOptions({ workspaceName: "my-app", force: true }));
-    expect(() => check()).not.toThrow();
+    await expect(check()).resolves.toBeUndefined();
   });
 
-  test("errors when no lock exists", () => {
-    expect(() => check()).toThrow(/No managed workflows/);
+  test("errors when no lock exists", async () => {
+    await expect(checkGitHub({ outputDir: testDir })).rejects.toThrow(/No managed workflows/);
   });
 
   test("detects a hand-edited workflow file", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app" }));
     fs.appendFileSync(wfPath(), "\n# hand edit\n");
-    expect(() => check()).toThrow(/drift/);
+    await expect(check()).rejects.toThrow(/drift/);
   });
 
   test("detects a default-branch change for auto-detected branch", async () => {
     await setupGitHub(
       setupOptions({ workspaceName: "my-app", branch: undefined, gitRunner: () => "origin/main" }),
     );
-    expect(() => check(() => "origin/develop")).toThrow(/drift/);
+    await expect(check(() => "origin/develop")).rejects.toThrow(/drift/);
   });
 
   test("skips default-branch drift when branch was explicitly set", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app", branch: "staging" }));
-    expect(() => check()).not.toThrow();
+    await expect(check()).resolves.toBeUndefined();
   });
 
   test("detects a missing config under the recorded dir", async () => {
     await setupGitHub(setupOptions({ workspaceName: "my-app" }));
     fs.rmSync(path.join(testDir, "tailor.config.ts"));
-    expect(() => check()).toThrow(/drift/);
+    await expect(check()).rejects.toThrow(/drift/);
   });
 
   test("throws when WORKSPACE_ID is unset and a plan target exists (local mode)", async () => {
@@ -249,9 +279,9 @@ describe("checkGitHub (integration)", () => {
     const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     try {
-      expect(() =>
+      await expect(
         checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", ci: false }),
-      ).toThrow(/TAILOR_PLATFORM_WORKSPACE_ID/);
+      ).rejects.toThrow(/TAILOR_PLATFORM_WORKSPACE_ID/);
     } finally {
       if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
     }
@@ -262,12 +292,30 @@ describe("checkGitHub (integration)", () => {
     const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     try {
-      expect(() =>
+      await expect(
         checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", ci: true }),
-      ).not.toThrow();
+      ).resolves.toBeUndefined();
     } finally {
       if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
     }
+  });
+
+  test("detects ERD preview namespace drift", async () => {
+    await setupGitHub(
+      setupOptions({
+        workspaceName: "my-app",
+        erdPreview: true,
+        loadErdNamespaces: async () => ["tailordb"],
+      }),
+    );
+    await expect(
+      checkGitHub({
+        outputDir: testDir,
+        ci: true,
+        gitRunner: () => "origin/main",
+        loadErdNamespaces: async () => ["tailordb", "analyticsdb"],
+      }),
+    ).rejects.toThrow(/drift/);
   });
 
   const lockTarget = (file: string): LockTarget => ({
@@ -282,21 +330,22 @@ describe("checkGitHub (integration)", () => {
       dir: ".",
       packageManager: "pnpm",
       plan: true,
+      erdPreview: false,
     },
     generatedIds: [],
     ejectedIds: [],
     contentHash: "sha256:abc",
   });
 
-  test("reports drift instead of reading outside the repo on a traversing lock path", () => {
+  test("reports drift instead of reading outside the repo on a traversing lock path", async () => {
     writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget("../escape.yml")] });
-    expect(() => check()).toThrow(/drift/);
+    await expect(check()).rejects.toThrow(/drift/);
   });
 
-  test("does not crash when the recorded file path is a directory", () => {
+  test("does not crash when the recorded file path is a directory", async () => {
     const file = ".github/workflows/tailor-my-app.yml";
     writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget(file)] });
     fs.mkdirSync(path.join(testDir, file), { recursive: true });
-    expect(() => check()).toThrow(/drift/);
+    await expect(check()).rejects.toThrow(/drift/);
   });
 });

@@ -41,7 +41,7 @@ vi.mock("../change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -843,7 +843,7 @@ describe("applyTailorDB phase separation", () => {
           ],
           title: "TailorDB Services",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         type: {
           creates: [],
@@ -860,7 +860,7 @@ describe("applyTailorDB phase separation", () => {
           ],
           title: "TailorDB Types",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         gqlPermission: {
           creates: [],
@@ -877,7 +877,7 @@ describe("applyTailorDB phase separation", () => {
           ],
           title: "TailorDB GQL Permissions",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],
@@ -1069,7 +1069,7 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
           deletes: [],
           title: "TailorDB Services",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
         type: {
           creates: [],
@@ -1077,7 +1077,7 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
           deletes: [],
           title: "TailorDB Types",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
         gqlPermission: {
           creates: [],
@@ -1085,7 +1085,7 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
           deletes: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],
@@ -1214,7 +1214,7 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
           deletes: [],
           title: "TailorDB Services",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
         type: {
           creates: [],
@@ -1222,7 +1222,7 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
           deletes: [],
           title: "TailorDB Types",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
         gqlPermission: {
           creates: [],
@@ -1230,7 +1230,7 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
           deletes: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],

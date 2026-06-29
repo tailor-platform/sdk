@@ -35,7 +35,7 @@ vi.mock("./change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -817,7 +817,7 @@ describe("applyPipeline phase separation", () => {
           ],
           title: "Pipeline Services",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         resolver: {
           creates: [],
@@ -834,7 +834,7 @@ describe("applyPipeline phase separation", () => {
           ],
           title: "Pipeline Resolvers",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],

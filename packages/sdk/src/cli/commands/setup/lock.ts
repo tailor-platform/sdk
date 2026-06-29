@@ -23,6 +23,8 @@ export type LockInputs = {
   region?: string;
   /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
   actionDirs?: string[];
+  erdPreview?: boolean;
+  erdNamespaces?: string[];
 };
 
 export type LockTarget = {

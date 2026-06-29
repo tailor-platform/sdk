@@ -69,7 +69,7 @@ describe("applySecretManager phase separation", () => {
         replaces: [],
         title: "Secret Manager vaults",
         isEmpty: () => false,
-        print: () => {},
+        lines: () => [],
       },
       secretChangeSet: {
         creates: [
@@ -101,7 +101,7 @@ describe("applySecretManager phase separation", () => {
         replaces: [],
         title: "Secret Manager secrets",
         isEmpty: () => false,
-        print: () => {},
+        lines: () => [],
       },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
   }
@@ -176,7 +176,7 @@ describe("applySecretManager phase separation", () => {
         replaces: [],
         title: "Secret Manager vaults",
         isEmpty: () => true,
-        print: () => {},
+        lines: () => [],
       },
       secretChangeSet: {
         creates: [],
@@ -185,7 +185,7 @@ describe("applySecretManager phase separation", () => {
         replaces: [],
         title: "Secret Manager secrets",
         isEmpty: () => true,
-        print: () => {},
+        lines: () => [],
       },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 

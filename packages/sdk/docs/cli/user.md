@@ -14,6 +14,10 @@ tailor-sdk login [options]
 
 **Options**
 
+| Option                | Alias | Description                                                         | Required | Default | Env                       |
+| --------------------- | ----- | ------------------------------------------------------------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile whose platform settings should be used for login. | No       | -       | `TAILOR_PLATFORM_PROFILE` |
+
 > One of the following option groups is required:
 
 **User Login:**
@@ -37,8 +41,14 @@ Logout from Tailor Platform.
 **Usage**
 
 ```
-tailor-sdk logout
+tailor-sdk logout [options]
 ```
+
+**Options**
+
+| Option                | Alias | Description                                                          | Required | Default | Env                       |
+| --------------------- | ----- | -------------------------------------------------------------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile whose platform settings should be used for logout. | No       | -       | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

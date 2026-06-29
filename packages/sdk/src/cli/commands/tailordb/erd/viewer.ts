@@ -14,6 +14,17 @@ export interface WriteViewerDistOptions {
 
 export interface BuildViewerHtmlOptions {
   schema: TailorDbErdSchema;
+  currentSchema?: TailorDbErdSchema;
+  diff?: unknown;
+  title?: string;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function assetDirCandidates(): string[] {
@@ -45,8 +56,8 @@ export function resolveViewerAssetsDir(): string {
  * are inlined as separately extractable blocks: a `<style>` element, a
  * `<script type="module">`, and a `<script type="application/json"
  * id="erd-schema">` data block. This renders without any sibling asset files
- * and lets external tooling (e.g. a future ERD diff) pull out the schema via
- * `JSON.parse`.
+ * and lets external tooling (including the ERD diff command) pull out the
+ * schema via `JSON.parse`.
  * @param options - Viewer build options.
  * @returns The self-contained HTML document.
  */
@@ -60,20 +71,36 @@ export function buildViewerHtml(options: BuildViewerHtmlOptions): string {
     throw new Error("ERD viewer index.html is missing expected asset references for inlining.");
   }
 
-  // Embed the schema as JSON data (not executable JS) so it is both consumed by
-  // the viewer and trivially extractable by external tooling (e.g. a future ERD
-  // diff). Escape "<" so a value like "</script>" cannot terminate the data
+  // Embed schemas as JSON data (not executable JS) so they are both consumed by
+  // the viewer and trivially extractable by external tooling. Escape "<" so a
+  // value like "</script>" cannot terminate the data
   // <script> element early; JSON.parse restores the original characters.
   const schemaJson = JSON.stringify(options.schema).replaceAll("<", "\\u003c");
   const embedScript = `<script type="application/json" id="erd-schema">${schemaJson}</script>`;
+  const currentSchemaScript =
+    options.currentSchema === undefined
+      ? ""
+      : `\n    <script type="application/json" id="erd-current-schema">${JSON.stringify(
+          options.currentSchema,
+        ).replaceAll("<", "\\u003c")}</script>`;
+  const diffScript =
+    options.diff === undefined
+      ? ""
+      : `\n    <script type="application/json" id="erd-diff">${JSON.stringify(
+          options.diff,
+        ).replaceAll("<", "\\u003c")}</script>`;
   // Escape any "</script" in the inlined module so it cannot terminate the
   // <script> element early. "<\/script" is equivalent JS (\/ === /).
   const safeAppJs = appJs.replace(/<\/script/gi, "<\\/script");
   const inlineScript = `<script type="module">\n${safeAppJs}\n</script>`;
 
   return html
+    .replace(
+      "<title>TailorDB ERD</title>",
+      `<title>${escapeHtml(options.title ?? "TailorDB ERD")}</title>`,
+    )
     .replace(STYLES_LINK, `<style>\n${css}\n</style>`)
-    .replace(APP_SCRIPT, `${embedScript}\n    ${inlineScript}`);
+    .replace(APP_SCRIPT, `${embedScript}${currentSchemaScript}${diffScript}\n    ${inlineScript}`);
 }
 
 /**

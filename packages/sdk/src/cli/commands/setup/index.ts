@@ -17,8 +17,8 @@ const checkCommand = defineAppCommand({
       }),
     })
     .strict(),
-  run: (args) => {
-    checkGitHub({ outputDir: process.cwd(), ci: args.ci });
+  run: async (args) => {
+    await checkGitHub({ outputDir: process.cwd(), ci: args.ci });
   },
 });
 
@@ -95,6 +95,10 @@ export const setupCommand = defineAppCommand({
       "no-plan": arg(z.boolean().default(false), {
         description: "Disable the plan job for a branch target (cannot be combined with --tag)",
       }),
+      "erd-preview": arg(z.boolean().default(false), {
+        description:
+          "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
+      }),
       dir: arg(z.string().min(1).default("."), {
         alias: "d",
         description: "App directory (for monorepo setups)",
@@ -148,6 +152,7 @@ export const setupCommand = defineAppCommand({
       tagPattern: args["tag-pattern"] ?? "v*",
       environment: args.environment,
       plan: !args["no-plan"],
+      erdPreview: args["erd-preview"],
       dir: args.dir,
       action: args.action,
       preview: args.preview,
