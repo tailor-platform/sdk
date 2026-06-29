@@ -63,14 +63,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-diff" "$RUNNER_TEMP/erd-dts"
+          mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-dts"
 
           head_output="$RUNNER_TEMP/erd-head"
           base_output="$RUNNER_TEMP/erd-base"
-          diff_output="$RUNNER_TEMP/erd-diff"
           head_html="$head_output/$NAMESPACE/dist/index.html"
           base_html="$base_output/$NAMESPACE/dist/index.html"
-          diff_html="$diff_output/$NAMESPACE-diff.html"
+          preview_html="$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
           head_log="$RUNNER_TEMP/erd-head-$NAMESPACE.log"
           base_log="$RUNNER_TEMP/erd-base-$NAMESPACE.log"
 
@@ -115,7 +114,7 @@ jobs:
             exit 1
           fi
 
-          diff_args=(--namespace "$NAMESPACE" --output "$diff_html")
+          diff_args=(--namespace "$NAMESPACE" --output "$preview_html")
           if [ "$head_missing" = "false" ]; then
             diff_args+=(--head-html "$head_html")
           fi
@@ -125,32 +124,15 @@ jobs:
 
           pnpm exec tailor-sdk tailordb erd diff "${diff_args[@]}"
 
-          # Rename to "<namespace>.html" / "<namespace>-diff.html" so the
-          # artifacts REST API stays identifiable per namespace.
-          if [ "$head_missing" = "false" ]; then
-            cp "$head_html" "$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
-          fi
-          echo "head-missing=$head_missing" >> "$GITHUB_OUTPUT"
-
       # archive: false (upload-artifact v7+) keeps the file unzipped so the HTML
       # can be viewed directly in the browser from the run's artifact list. Only
       # a single file may be uploaded per artifact when archive is false.
       # https://github.blog/changelog/2026-02-26-github-actions-now-supports-uploading-and-downloading-non-zipped-artifacts/
       - name: Upload ERD viewer preview
-        if: steps.build-erd.outputs.head-missing != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.namespace }}.html
           path: ${{ runner.temp }}/erd-preview/${{ matrix.namespace }}.html
-          if-no-files-found: error
-          archive: false
-          retention-days: 7
-
-      - name: Upload ERD diff preview
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ matrix.namespace }}-diff.html
-          path: ${{ runner.temp }}/erd-diff/${{ matrix.namespace }}-diff.html
           if-no-files-found: error
           archive: false
           retention-days: 7
@@ -180,21 +162,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Build the comment body from this run's ERD preview artifacts. The
-          # artifacts REST API reports a non-zipped artifact's name as the file
-          # basename, so match on "<namespace>.html" and "<namespace>-diff.html".
+          # Build the comment body from this run's ERD preview artifacts.
           body="$MARKER"$'\n'"### 🗺️ ERD viewer preview"$'\n\n'
-          body+="Self-contained HTML built for this run. Diff previews compare this PR with base branch \`$BASE_REF\`:"$'\n'
+          body+="Self-contained ERD viewer HTML built for this run. Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`:"$'\n'
 
           while IFS=$'\t' read -r name id; do
             [ -z "$name" ] && continue
-            if [[ "$name" == *-diff.html ]]; then
-              ns=${name%-diff.html}
-              label="$ns diff"
-            else
-              ns=${name%.html}
-              label="$ns viewer"
-            fi
+            ns=${name%.html}
+            label="$ns viewer"
             body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
           done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
             --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv' | sort)
