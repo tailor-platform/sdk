@@ -51,6 +51,25 @@ describe("getApplicableCodemods", () => {
     expect(ids).not.toContain("v2/principal-unify");
   });
 
+  test("throws when a prerelease boundary is not a prerelease version", () => {
+    allCodemods.push({
+      id: "v2/invalid-prerelease-boundary",
+      name: "Invalid prerelease boundary",
+      description: "Invalid prerelease boundary",
+      since: "1.0.0",
+      until: "2.0.0",
+      prereleaseUntil: "2.0.0",
+    });
+
+    try {
+      expect(() => getApplicableCodemods("1.0.0", "2.0.0-next.1")).toThrow(
+        "Codemod v2/invalid-prerelease-boundary prereleaseUntil must be a prerelease version: 2.0.0",
+      );
+    } finally {
+      allCodemods.pop();
+    }
+  });
+
   test("returns empty when the source prerelease already reached the codemod boundary", () => {
     expect(getApplicableCodemods("2.0.0-next.2", "2.0.0-next.2")).toEqual([]);
   });
