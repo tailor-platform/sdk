@@ -1,0 +1,7 @@
+name: "@tailor-platform/tailor-output-ignore-dir"
+version: "1.0.0"
+description: "Rename exact ignore-file entries for the generated output directory from .tailor-sdk to .tailor"
+engine: jssg
+language: text
+since: "1.0.0"
+until: "2.0.0"

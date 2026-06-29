@@ -79,7 +79,7 @@ function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
 }
 
 /**
- * The type produced by `define<Payload, Result>()` / `defineWaitPoint<Payload, Result>(key)`.
+ * The type produced by `define<Payload, Result>()` / `createWaitPoint<Payload, Result>(key)`.
  * Resolves to `WaitPointInstance<Payload, Result>` when both types are JsonValue-compatible,
  * or to a template-literal error string that surfaces at the call site.
  */
@@ -100,7 +100,7 @@ type WaitPointDef<Payload, Result> = [null] extends [Payload]
           : "ERROR: Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
 
 /**
- * The `define` function passed to the `defineWaitPoints` builder callback.
+ * The `define` function passed to the `createWaitPoints` builder callback.
  * Returns an actual WaitPointInstance (not a phantom marker) so that the
  * builder's return type can flow through as-is, preserving JSDoc comments
  * on each property for IDE autocompletion.
@@ -112,7 +112,7 @@ type WaitPointDef<Payload, Result> = [null] extends [Payload]
 type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointDef<Payload, Result>;
 
 /**
- * Define a single typed wait point with an explicit key.
+ * Create a single typed wait point with an explicit key.
  *
  * `Payload` and `Result` must be JsonValue-compatible.
  * Functions and objects with a `toJSON` method are rejected at the type level;
@@ -120,19 +120,19 @@ type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointDef<Payl
  * @param key - The wait point key used to match wait and resolve calls
  * @returns A WaitPointInstance with typed `.wait()` and `.resolve()` methods
  * @example
- * export const approval = defineWaitPoint<{ message: string }, { approved: boolean }>("approval");
+ * export const approval = createWaitPoint<{ message: string }, { approved: boolean }>("approval");
  *
  * await approval.wait({ message: "Please approve" });
  */
 /* @__NO_SIDE_EFFECTS__ */
-export function defineWaitPoint<Payload = undefined, Result = undefined>(
+export function createWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointDef<Payload, Result> {
   return createWaitPointInstance(key).instance as unknown as WaitPointDef<Payload, Result>;
 }
 
 /**
- * Define a group of typed wait points for human-in-the-loop workflows.
+ * Create a group of typed wait points for human-in-the-loop workflows.
  * Property names become the wait point keys.
  *
  * The return type is the same as the builder's return type, so JSDoc on each
@@ -144,7 +144,7 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
  * @param builder - Callback that receives a `define` factory and returns an object of wait points
  * @returns The same object returned by the builder (with correct keys set on each instance)
  * @example
- * export const waitPoints = defineWaitPoints(define => ({
+ * export const waitPoints = createWaitPoints(define => ({
  *   // Preceding JSDoc on this property is shown in IDE autocompletion
  *   approval: define<{ message: string }, { approved: boolean }>(),
  * }));
@@ -156,7 +156,7 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
  */
 /* @__NO_SIDE_EFFECTS__ */
 // oxlint-disable-next-line no-explicit-any
-export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
+export function createWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
   builder: (define: DefineFn) => T,
 ): T {
   const setters = new Map<InternalWaitPointInstance, (key: string) => void>();
