@@ -191,12 +191,14 @@ describe("principal-unify review findings", () => {
           expect.objectContaining({
             file: "resolvers/destructured-param-helper.ts",
             line: 3,
-            message: expect.stringContaining("createContext"),
+            message:
+              "Helper adapter createContext reads user and needs v2 caller/invoker semantics.",
           }),
           expect.objectContaining({
             file: "resolvers/destructured-param-helper.ts",
             line: 8,
-            message: expect.stringContaining("createContext"),
+            message:
+              "createContext(context) passes an SDK resolver context into a helper that reads user.",
           }),
         ],
       }),
@@ -377,6 +379,29 @@ describe("principal-unify review findings", () => {
         "export const resolver = createResolver({",
         "  body: async ({ input, user }) => {",
         "    return nameField.parse({ value: input.name, user });",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([principalUnifyEntry], tmpDir!, false);
+
+    expect(result.llmReviews.flatMap((review) => review.findings ?? [])).toEqual([]);
+  });
+
+  test("does not report nested SDK field parse invoker arguments", async () => {
+    await writeProjectFile(
+      "resolvers/nested-parse-invoker.ts",
+      [
+        'import { createResolver, t } from "@tailor-platform/sdk";',
+        "",
+        "const nameField = t.string();",
+        "declare function wrap(value: unknown): unknown;",
+        "",
+        "export const resolver = createResolver({",
+        "  body: async ({ input, user }) => {",
+        "    return wrap(nameField.parse({ value: input.name, invoker: user.id }));",
         "  },",
         "});",
         "",
