@@ -616,7 +616,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/rename-bin",
     name: "tailor-sdk binary → tailor",
     description:
-      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Update `.gitignore` entries manually (the codemod skips paths preceded by a dot).",
+      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Exact ignore-file entries for `.tailor-sdk/` are handled by the generated-output ignore codemod.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/rename-bin/scripts/transform.js",
@@ -634,6 +634,39 @@ export const allCodemods: CodemodPackage[] = [
       "the binary name — leave `.tailor-sdk` directory paths and `create-tailor-sdk`",
       "package references unchanged.",
     ].join("\n"),
+  },
+  {
+    id: "v2/tailor-output-ignore-dir",
+    name: ".tailor-sdk ignore entries → .tailor",
+    description:
+      "Rewrite exact ignore-file entries for the v1 generated output directory from `.tailor-sdk` to the v2 `.tailor` directory. Other `.tailor-sdk` paths and prose are left unchanged.",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/tailor-output-ignore-dir/scripts/transform.js",
+    filePatterns: [
+      "**/.gitignore",
+      "**/.npmignore",
+      "**/.dockerignore",
+      "**/gitignore",
+      "**/npmignore",
+      "**/dockerignore",
+      "**/_gitignore",
+      "**/_npmignore",
+      "**/_dockerignore",
+      "**/__dot__gitignore",
+      "**/__dot__npmignore",
+      "**/__dot__dockerignore",
+      "**/*.gitignore",
+      "**/*.npmignore",
+      "**/*.dockerignore",
+    ],
+    examples: [
+      {
+        lang: "gitignore",
+        before: ".tailor-sdk/",
+        after: ".tailor/",
+      },
+    ],
   },
   {
     id: "v2/node-minimum-22-15-0",
