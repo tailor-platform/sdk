@@ -3,7 +3,7 @@ import { AppConfigSchema } from "./app-config/schema";
 import { PluginConfigSchema } from "./plugin-config/schema";
 import { AIGatewaySchema } from "./service/aigateway/schema";
 import { AuthConnectionConfigSchema } from "./service/auth-connection/schema";
-import { AuthConfigSchema } from "./service/auth/schema";
+import { AuthConfigSchema, SCIMAttributeSchema } from "./service/auth/schema";
 import { ExecutorSchema } from "./service/executor/schema";
 import { TailorFieldSchema } from "./service/field/schema";
 import { IdPSchema } from "./service/idp/schema";
@@ -57,6 +57,11 @@ const strictSchemaCases: StrictSchemaCase[] = [
     name: "auth config",
     schema: AuthConfigSchema,
     value: { name: "my-auth" },
+  },
+  {
+    name: "SCIM attribute",
+    schema: SCIMAttributeSchema,
+    value: { type: "string", name: "userName" },
   },
   {
     name: "executor",

@@ -153,7 +153,7 @@ export const SCIMAttributeTypeSchema = z
   ])
   .describe("SCIM attribute data type");
 
-export const SCIMAttributeSchema = z.object({
+export const SCIMAttributeSchema = z.strictObject({
   type: SCIMAttributeTypeSchema.describe("Attribute data type"),
   name: z.string().describe("Attribute name"),
   description: z.string().optional().describe("Attribute description"),
