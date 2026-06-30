@@ -431,7 +431,7 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 
 ### Change Detection
 
-The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last deploy are updated in-place. Deleting the `.tailor-sdk/` directory causes the SDK to treat all connections as changed.
+The SDK uses hash-based change detection for the `clientSecret` field. Connections are updated in-place only when the secret or a non-secret field has changed since the last deploy. Deleting the `.tailor-sdk/` directory resets the change-detection state: connections with a non-empty `clientSecret` will be updated on the next deploy to re-send the secret, while connections with an empty `clientSecret` (CI scenario) are only updated if a non-secret field has changed.
 
 > [!NOTE]
 > The secret hash lives in `.tailor-sdk/secrets-state.json`, which is gitignored and not shared across machines or CI. When the state is missing, the SDK cannot confirm whether `clientSecret` is unchanged — but it still updates the connection in-place, preserving the token. If `clientSecret` is absent or empty (typical in CI where you do not want to store the secret), the SDK skips the secret field on update and leaves the existing secret on the platform unchanged.
