@@ -831,6 +831,24 @@ describe("setupTarget (integration)", () => {
     expect(content).toContain("tailor:preview");
     expect(content).toContain("labeled");
   });
+
+  test("enables migration-drift-check step and lock flag when loadHasMigrations returns true", async () => {
+    await setupTarget(
+      baseOptions({ workspaceName: "my-app", loadHasMigrations: async () => true }),
+    );
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    expect(wf).toContain("tailor-migration-drift-check");
+    const lock = readLock(testDir);
+    expect(lock?.targets[0]).toMatchObject({ inputs: { migrationDriftCheck: true } });
+  });
+
+  test("enables seed-validate step and lock flag when loadHasSeeds returns true", async () => {
+    await setupTarget(baseOptions({ workspaceName: "my-app", loadHasSeeds: async () => true }));
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    expect(wf).toContain("tailor-seed-validate");
+    const lock = readLock(testDir);
+    expect(lock?.targets[0]).toMatchObject({ inputs: { seedValidate: true } });
+  });
 });
 
 describe("setupCoordinate", () => {

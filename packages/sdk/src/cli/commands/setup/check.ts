@@ -322,11 +322,12 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   for (const target of lock.targets) {
     const absFile = resolveWithinRoot(outputDir, target.file);
     const currentHash = absFile === null ? null : readHash(absFile);
-    const configAbs = resolveWithinRoot(
-      outputDir,
-      path.join(target.inputs.dir, "tailor.config.ts"),
-    );
-    const configExists = configAbs !== null && exists(configAbs);
+    // Coordinator targets are config-less; skip the probe so config-dir drift is never emitted.
+    const configAbs =
+      target.kind === "coordinate"
+        ? null
+        : resolveWithinRoot(outputDir, path.join(target.inputs.dir, "tailor.config.ts"));
+    const configExists = target.kind === "coordinate" || (configAbs !== null && exists(configAbs));
     const erdNamespaces =
       target.kind === "branch" && target.inputs.erdPreview && configAbs !== null && configExists
         ? await loadErdNamespaces(configAbs)
