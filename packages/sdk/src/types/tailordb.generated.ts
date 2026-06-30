@@ -1064,6 +1064,7 @@ export type TailorDBTypeRaw = {
             }
           | undefined;
         scale?: number | undefined | undefined;
+        default?: unknown;
       };
       rawRelation?:
         | {
