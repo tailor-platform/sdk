@@ -302,9 +302,13 @@ export async function applyAuthConnections(
     );
 
     for (const replace of changeSet.replaces) {
+      const { workspaceId, connection } = replace.createRequest;
+      if (!workspaceId || !connection) {
+        throw new Error(`updateAuthConnection: missing required fields for "${replace.name}"`);
+      }
       const resp = await client.updateAuthConnection({
-        workspaceId: replace.createRequest.workspaceId ?? "",
-        connection: replace.createRequest.connection ?? {},
+        workspaceId,
+        connection,
         updateMask: replace.updateMask,
       });
       if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
