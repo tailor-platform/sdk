@@ -60,7 +60,7 @@ jobs:
       # __PER_APP_PLAN_STEPS__
 
   tailor-deploy:
-    needs: tailor-plan
+    # __DEPLOY_NEEDS__
     # __DEPLOY_IF__
     # __DEPLOY_ENVIRONMENT__
     runs-on: ubuntu-latest
