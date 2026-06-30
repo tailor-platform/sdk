@@ -507,7 +507,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       `  uses: ./.github/actions/tailor-${app.name}`,
       `  with:`,
       `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
-      `    workspace-name: ${app.name}`,
+      `    name: ${app.name}`,
       `    working-directory: ${app.dir}`,
       `    package-manager: ${packageManager}`,
       `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,

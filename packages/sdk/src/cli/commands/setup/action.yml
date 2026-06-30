@@ -8,10 +8,9 @@ inputs:
   workspace-id:
     description: Tailor Platform workspace id
     required: true
-  workspace-name:
+  name:
     description: Workspace name (used in Slack notifications)
-    required: false
-    default: __WORKSPACE_NAME__
+    required: true
   working-directory:
     description: App directory relative to the repository root
     required: false
@@ -66,7 +65,7 @@ runs:
       with:
         provider: slack
         status: failure
-        workspace-name: ${{ inputs.workspace-name }}
+        workspace-name: ${{ inputs.name }}
         slack-token: ${{ inputs.slack-token }}
         slack-channel-id: ${{ inputs.slack-channel-id }}
         user-mapping: ${{ inputs.user-mapping }}
