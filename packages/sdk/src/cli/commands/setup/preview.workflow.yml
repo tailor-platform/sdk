@@ -4,7 +4,14 @@ name: Tailor Preview (__WORKSPACE_NAME__)
 on:
   pull_request:
     branches: ["__BRANCH__"]
+    # __REQUIRE_PREVIEW_LABEL_START__
     types: [labeled, synchronize, reopened, closed]
+    # __REQUIRE_PREVIEW_LABEL_END__
+    # __ALL_PR_TRIGGER_START__
+    types: [opened, synchronize, reopened, closed]
+    # To deploy only for PRs that carry the `tailor:preview` label instead of all PRs,
+    # re-run: tailor-sdk setup --require-preview-label
+    # __ALL_PR_TRIGGER_END__
     # __PATHS__
 
 permissions:
@@ -13,10 +20,17 @@ permissions:
 
 jobs:
   tailor-preview-deploy:
+    # __REQUIRE_PREVIEW_LABEL_START__
     if: >-
       contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&
       github.event.action != 'closed' &&
       !github.event.pull_request.draft
+    # __REQUIRE_PREVIEW_LABEL_END__
+    # __ALL_PR_TRIGGER_START__
+    if: >-
+      github.event.action != 'closed' &&
+      !github.event.pull_request.draft
+    # __ALL_PR_TRIGGER_END__
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: __ENVIRONMENT__
@@ -65,9 +79,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   tailor-preview-cleanup:
+    # __REQUIRE_PREVIEW_LABEL_START__
     if: >-
       github.event.action == 'closed' &&
       contains(github.event.pull_request.labels.*.name, 'tailor:preview')
+    # __REQUIRE_PREVIEW_LABEL_END__
+    # __ALL_PR_TRIGGER_START__
+    if: github.event.action == 'closed'
+    # __ALL_PR_TRIGGER_END__
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: __ENVIRONMENT__
