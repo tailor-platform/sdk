@@ -21,6 +21,11 @@ export type LockInputs = {
   plan: boolean;
   /** For `preview` kind: workspace region used when creating the preview workspace. */
   region?: string;
+  /**
+   * For `preview` kind: when true, the preview workflow deploys only for PRs labeled
+   * `tailor:preview`. False (default) means all PRs trigger a preview deploy.
+   */
+  requirePreviewLabel?: boolean;
   /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
   actionDirs?: string[];
   erdPreview?: boolean;
