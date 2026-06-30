@@ -11,6 +11,7 @@ inputs:
   workspace-name:
     description: Workspace name (used in Slack notifications)
     required: false
+    default: __WORKSPACE_NAME__
   working-directory:
     description: App directory relative to the repository root
     required: false
@@ -21,9 +22,6 @@ inputs:
   platform-client-secret:
     description: Machine-user client secret
     required: true
-  github-token:
-    description: GitHub token
-    required: false
   slack-token:
     description: Slack bot token
     required: false

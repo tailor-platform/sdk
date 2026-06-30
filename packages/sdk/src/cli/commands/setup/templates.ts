@@ -512,7 +512,6 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       `    package-manager: ${packageManager}`,
       `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
       `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
-      `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
       `    slack-token: \${{ secrets.TAILOR_SLACK_BOT_TOKEN }}`,
       `    slack-channel-id: \${{ vars.TAILOR_SLACK_CHANNEL_ID }}`,
       `    # editable: api-url:`,
