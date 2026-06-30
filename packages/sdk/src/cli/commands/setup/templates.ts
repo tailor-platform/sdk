@@ -436,6 +436,9 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
   }
 
   if (isTag) {
+    // Tag coordinator: deploy runs after plan (plan checks tag reachability).
+    // When plan is skipped via workflow_dispatch dry-run, deploy is also skipped.
+    out = line(out, "DEPLOY_NEEDS", "needs: tailor-plan");
     out = line(
       out,
       "DEPLOY_IF",
@@ -443,6 +446,9 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     );
     out = line(out, "DEPLOY_ENVIRONMENT", `environment: ${environment}`);
   } else {
+    // Branch coordinator: plan (PR) and deploy (push) are independent jobs —
+    // no needs relationship, so deploy is not skipped when plan is skipped on push.
+    out = line(out, "DEPLOY_NEEDS", undefined);
     out = line(
       out,
       "DEPLOY_IF",
