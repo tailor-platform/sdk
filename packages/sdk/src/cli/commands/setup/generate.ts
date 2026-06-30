@@ -4,6 +4,7 @@ import { ensureConfigId } from "#/cli/commands/deploy/config-id-injector";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { getNamespacesWithMigrations } from "../tailordb/migrate/config";
 import { logger, styles } from "#/cli/shared/logger";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
@@ -56,6 +57,8 @@ export type SetupGitHubOptions = {
   loadConfigName?: (configPath: string) => Promise<string | undefined>;
   /** Injectable TailorDB namespace loader, for testing. Defaults to loading the config. */
   loadErdNamespaces?: (configPath: string) => Promise<string[]>;
+  /** Injectable migration config detector, for testing. Defaults to loading the config. */
+  loadHasMigrations?: (configPath: string) => Promise<boolean>;
 };
 
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
@@ -66,6 +69,11 @@ async function defaultLoadConfigName(configPath: string): Promise<string | undef
 async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
   const { config } = await loadConfig(configPath);
   return extractOwnedNamespaces(config);
+}
+
+async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
+  const { config } = await loadConfig(configPath);
+  return getNamespacesWithMigrations(config, path.dirname(configPath)).length > 0;
 }
 
 // Kept in sync with the `workspace create` schema (cli/commands/workspace/create.ts).
@@ -266,6 +274,8 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   let branchAutoDetected = false;
   let render: RenderResult;
   let erdNamespaces: string[] = [];
+  const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
+  const hasMigrations = await loadHasMigrations(configPath);
   if (options.erdPreview) {
     const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
     erdNamespaces = await loadErdNamespaces(configPath);
@@ -289,6 +299,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       packageManager,
       plan: options.plan,
       erdPreview: options.erdPreview ? { namespaces: erdNamespaces } : null,
+      migrationDriftCheck: hasMigrations,
     });
   } else if (kind === "tag") {
     branch = options.branch ?? null;
@@ -302,6 +313,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       workingDirectory,
       environment,
       packageManager,
+      migrationDriftCheck: hasMigrations,
     });
   } else {
     // preview
