@@ -232,8 +232,8 @@ describe("planAuthConnections", () => {
     expect(changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
     const [replace] = changeSet.replaces;
     expect(replace).toBeDefined();
-    expect(replace!.updateMask.paths).toContain("oauth2.provider_url");
-    expect(replace!.updateMask.paths).not.toContain("oauth2.client_secret");
+    expect(replace!.updateRequest.updateMask?.paths).toContain("oauth2.provider_url");
+    expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
   });
 });
 

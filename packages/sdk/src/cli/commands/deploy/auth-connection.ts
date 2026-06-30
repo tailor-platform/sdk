@@ -22,6 +22,7 @@ import type { ApplyPhase } from "./phase";
 import type {
   CreateAuthConnectionRequestSchema,
   DeleteAuthConnectionRequestSchema,
+  UpdateAuthConnectionRequestSchema,
 } from "@tailor-platform/tailor-proto/auth_pb";
 import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
@@ -39,8 +40,7 @@ type UpdateConnection = {
 
 type MaskedUpdateConnection = {
   name: string;
-  updateRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  updateMask: { paths: string[] };
+  updateRequest: MessageInitShape<typeof UpdateAuthConnectionRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
@@ -201,8 +201,10 @@ export async function planAuthConnections(
       if (updateMask.paths.length > 0) {
         changeSet.replaces.push({
           name,
-          updateRequest: buildConnectionRequest(workspaceId, name, config),
-          updateMask,
+          updateRequest: {
+            ...buildConnectionRequest(workspaceId, name, config),
+            updateMask,
+          } as MessageInitShape<typeof UpdateAuthConnectionRequestSchema>,
           metaRequest,
         });
       } else if (!existing.label) {
@@ -272,11 +274,7 @@ export async function applyAuthConnections(
     );
 
     for (const replace of changeSet.replaces) {
-      const resp = await client.updateAuthConnection({
-        workspaceId: replace.updateRequest.workspaceId,
-        connection: replace.updateRequest.connection,
-        updateMask: replace.updateMask,
-      });
+      const resp = await client.updateAuthConnection(replace.updateRequest);
       if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
         logger.warn(
           `Connection "${replace.name}" requires re-authorization. Authorize with:\n` +
