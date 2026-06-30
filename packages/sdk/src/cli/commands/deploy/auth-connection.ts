@@ -39,7 +39,7 @@ type UpdateConnection = {
 
 type MaskedUpdateConnection = {
   name: string;
-  createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
+  updateRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
   updateMask: { paths: string[] };
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -99,7 +99,7 @@ function buildUpdateMask(
   if (v.clientId !== desired.clientId) paths.push("oauth2.client_id");
   if (v.authUrl !== (desired.authUrl ?? "")) paths.push("oauth2.auth_url");
   if (v.tokenUrl !== (desired.tokenUrl ?? "")) paths.push("oauth2.token_url");
-  if (secretChanged && !!desired.clientSecret) paths.push("oauth2.client_secret");
+  if (secretChanged && desired.clientSecret) paths.push("oauth2.client_secret");
   return { paths };
 }
 
@@ -201,7 +201,7 @@ export async function planAuthConnections(
       if (updateMask.paths.length > 0) {
         changeSet.replaces.push({
           name,
-          createRequest: buildConnectionRequest(workspaceId, name, config),
+          updateRequest: buildConnectionRequest(workspaceId, name, config),
           updateMask,
           metaRequest,
         });
@@ -272,13 +272,9 @@ export async function applyAuthConnections(
     );
 
     for (const replace of changeSet.replaces) {
-      const { workspaceId, connection } = replace.createRequest;
-      if (!workspaceId || !connection) {
-        throw new Error(`updateAuthConnection: missing required fields for "${replace.name}"`);
-      }
       const resp = await client.updateAuthConnection({
-        workspaceId,
-        connection,
+        workspaceId: replace.updateRequest.workspaceId,
+        connection: replace.updateRequest.connection,
         updateMask: replace.updateMask,
       });
       if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
@@ -310,7 +306,7 @@ export async function applyAuthConnections(
       }
     }
     for (const replace of changeSet.replaces) {
-      const conn = replace.createRequest.connection;
+      const conn = replace.updateRequest.connection;
       if (conn?.config?.case === "oauth2") {
         state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
       }

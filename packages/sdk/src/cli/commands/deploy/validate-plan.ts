@@ -7,6 +7,7 @@ import {
 } from "@tailor-platform/tailor-proto/application_pb";
 import {
   CreateAuthConnectionRequestSchema,
+  UpdateAuthConnectionRequestSchema,
   CreateAuthHookRequestSchema,
   CreateAuthIDPConfigRequestSchema,
   CreateAuthMachineUserRequestSchema,
@@ -99,14 +100,15 @@ type ViolationEntry = {
 
 type HasRequest = { name: string; request: unknown };
 type HasCreateRequest = { name: string; createRequest: unknown };
+type HasUpdateRequest = { name: string; updateRequest: unknown };
 
 type ValidateItemsParams<Desc extends DescMessage> = {
   validator: Validator;
   schema: Desc;
   kind: string;
   action: "create" | "update" | "replace";
-  items: ReadonlyArray<HasRequest | HasCreateRequest>;
-  requestKey: "request" | "createRequest";
+  items: ReadonlyArray<HasRequest | HasCreateRequest | HasUpdateRequest>;
+  requestKey: "request" | "createRequest" | "updateRequest";
   violations: ViolationEntry[];
 };
 
@@ -205,6 +207,22 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
       action: "replace",
       items,
       requestKey: "createRequest",
+      violations,
+    });
+  }
+
+  function inPlaceReplaces<Desc extends DescMessage>(
+    schema: Desc,
+    kind: string,
+    items: ReadonlyArray<HasUpdateRequest>,
+  ): void {
+    validateItems({
+      validator,
+      schema,
+      kind,
+      action: "replace",
+      items,
+      requestKey: "updateRequest",
       violations,
     });
   }
@@ -549,10 +567,10 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "Auth connection",
     auth.changeSet.connection.creates as HasRequest[],
   );
-  replaces(
-    CreateAuthConnectionRequestSchema,
+  inPlaceReplaces(
+    UpdateAuthConnectionRequestSchema,
     "Auth connection",
-    auth.changeSet.connection.replaces as HasCreateRequest[],
+    auth.changeSet.connection.replaces as HasUpdateRequest[],
   );
 
   if (violations.length === 0) {
