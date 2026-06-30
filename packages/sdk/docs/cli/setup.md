@@ -63,7 +63,6 @@ tailor-sdk setup branch [options]
 | `--name <NAME>`               | `-n`  | Name (defaults to the config 'name')                                           | No       | -       |
 | `--branch <BRANCH>`           | -     | Deploy trigger branch (defaults to the detected default branch)                | No       | -       |
 | `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)   | No       | -       |
-| `--no-plan`                   | -     | Disable the plan job (deploy-only mode)                                        | No       | `false` |
 | `--erd-preview`               | -     | Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces | No       | `false` |
 | `--dir <DIR>`                 | `-d`  | App directory (for monorepo setups)                                            | No       | `"."`   |
 | `--force`                     | -     | Discard hand edits / take over unmanaged files and regenerate                  | No       | `false` |
@@ -103,7 +102,7 @@ tailor-sdk setup coordinate [options]
 | Option                        | Alias | Description                                                                             | Required | Default |
 | ----------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | ------- |
 | `--name <NAME>`               | `-n`  | Coordinator name (used in the generated workflow file name and job names)               | Yes      | -       |
-| `--action <ACTION>`           | -     | Composite action to include (can be specified multiple times). tailor- prefix optional. | No       | `[]`    |
+| `--action <ACTION>`           | -     | Composite action to include (can be specified multiple times). tailor- prefix optional. | Yes      | -       |
 | `--branch <BRANCH>`           | -     | Branch target: deploy trigger branch (defaults to the detected default branch)          | No       | -       |
 | `--tag`                       | -     | Generate a tag target coordinator                                                       | No       | `false` |
 | `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs                                             | No       | -       |

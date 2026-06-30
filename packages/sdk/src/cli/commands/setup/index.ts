@@ -31,7 +31,7 @@ const coordinateCommand = defineAppCommand({
         alias: "n",
         description: "Coordinator name (used in the generated workflow file name and job names)",
       }),
-      action: arg(z.array(z.string()).default([]), {
+      action: arg(z.array(z.string().min(1)).min(1), {
         description:
           "Composite action to include (can be specified multiple times). tailor- prefix optional.",
       }),
