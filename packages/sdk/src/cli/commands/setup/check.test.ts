@@ -18,7 +18,6 @@ const baseTarget = (overrides: Partial<LockTarget> = {}): LockTarget => ({
     environment: "my-app",
     dir: ".",
     packageManager: "pnpm",
-    plan: true,
   },
   generatedIds: [],
   ejectedIds: [],
@@ -154,6 +153,24 @@ describe("findTargetDrift", () => {
       ["default-branch", "hand-edit", "template-version"].toSorted(),
     );
   });
+
+  test("reports migration-drift when migrations were added", () => {
+    const findings = findTargetDrift(
+      baseTarget({ inputs: { ...baseTarget().inputs, migrationDriftCheck: false } }),
+      cleanState({ hasMigrations: true }),
+    );
+    expect(findings.map((f) => f.rule)).toEqual(["migration-drift"]);
+    expect(findings[0]?.message).toMatch(/plan job/);
+  });
+
+  test("reports seed-validate when seed plugin was added", () => {
+    const findings = findTargetDrift(
+      baseTarget({ inputs: { ...baseTarget().inputs, seedValidate: false } }),
+      cleanState({ hasSeeds: true }),
+    );
+    expect(findings.map((f) => f.rule)).toEqual(["seed-validate"]);
+    expect(findings[0]?.message).toMatch(/plan job/);
+  });
 });
 
 describe("resolveWithinRoot", () => {
@@ -203,7 +220,6 @@ describe("checkGitHub (integration)", () => {
 
   const setupOptions = (overrides: Partial<BranchSetupOptions> = {}): BranchSetupOptions => ({
     kind: "branch",
-    plan: true,
     erdPreview: false,
     dir: ".",
     force: false,
@@ -273,7 +289,7 @@ describe("checkGitHub (integration)", () => {
     await expect(check()).rejects.toThrow(/drift/);
   });
 
-  test("throws when WORKSPACE_ID is unset and a plan target exists (local mode)", async () => {
+  test("throws when WORKSPACE_ID is unset and a deploying target exists (local mode)", async () => {
     await setupTarget(setupOptions({ workspaceName: "my-app" }));
     const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
@@ -328,7 +344,6 @@ describe("checkGitHub (integration)", () => {
       environment: "my-app",
       dir: ".",
       packageManager: "pnpm",
-      plan: true,
       erdPreview: false,
     },
     generatedIds: [],

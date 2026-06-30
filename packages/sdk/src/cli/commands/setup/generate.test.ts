@@ -26,7 +26,6 @@ const branchBase: RenderBranchParams = {
   branch: "main",
   environment: "my-app",
   packageManager: "pnpm",
-  plan: true,
   erdPreview: null,
 };
 
@@ -424,20 +423,6 @@ describe("renderBranchWorkflow", () => {
     expect(content).not.toContain("tailor-sdk generate");
   });
 
-  test("--no-plan drops the plan job, pull_request trigger, and dry-run input", () => {
-    const { content, generatedIds } = renderBranchWorkflow({ ...branchBase, plan: false });
-    expect(content).not.toMatch(NO_MARKER);
-    expect(content).not.toContain("tailor-platform/actions/plan@");
-    expect(content).not.toContain("pull_request:");
-    expect(content).not.toContain("dry-run:");
-    expect(content).not.toContain("inputs:");
-    const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
-    expect(Object.keys(parsed.jobs)).toEqual(["tailor-deploy"]);
-    // deploy runs unconditionally (no `if`)
-    expect(content).not.toContain("github.event_name == 'push'");
-    expect(generatedIds).not.toContain("tailor-plan");
-  });
-
   test("includes paths + working-directory only when dir != '.'", () => {
     const plain = renderBranchWorkflow(branchBase).content;
     expect(plain).not.toContain("paths:");
@@ -605,7 +590,6 @@ describe("setupTarget (integration)", () => {
 
   const baseOptions = (overrides: Partial<BranchSetupOptions> = {}): BranchSetupOptions => ({
     kind: "branch",
-    plan: true,
     erdPreview: false,
     dir: ".",
     force: false,
@@ -723,12 +707,6 @@ describe("setupTarget (integration)", () => {
     await expect(setupTarget(baseOptions({ workspaceName: "Bad_Name" }))).rejects.toThrow(
       /Invalid workspace name/,
     );
-  });
-
-  test("rejects ERD preview for a branch target without plan", async () => {
-    await expect(
-      setupTarget(baseOptions({ workspaceName: "my-app", erdPreview: true, plan: false })),
-    ).rejects.toThrow(/--erd-preview/);
   });
 
   test("rejects a branch name with YAML-unsafe characters", async () => {

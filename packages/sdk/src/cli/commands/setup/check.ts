@@ -285,9 +285,11 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   }
 
   // In local (non-CI) mode, check that TAILOR_PLATFORM_WORKSPACE_ID is set for
-  // targets that use it. In CI the plan action handles this at runtime.
+  // all deploying targets (branch, tag, preview, action). Coordinator targets
+  // don't reference it directly; they invoke per-app action targets that do.
+  // In CI the plan/deploy actions handle this at runtime.
   if (!options.ci) {
-    const needsWorkspaceId = lock.targets.some((t) => t.inputs.plan !== false);
+    const needsWorkspaceId = lock.targets.some((t) => t.kind !== "coordinate");
     if (needsWorkspaceId && !process.env["TAILOR_PLATFORM_WORKSPACE_ID"]) {
       throw new Error(
         "TAILOR_PLATFORM_WORKSPACE_ID is not set. " +

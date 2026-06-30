@@ -56,7 +56,6 @@ type CommonSetupOptions = {
 export type BranchSetupOptions = CommonSetupOptions & {
   kind: "branch";
   branch?: string;
-  plan: boolean;
   erdPreview: boolean;
 };
 
@@ -322,9 +321,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const loadHasStaticWebsites = options.loadHasStaticWebsites ?? defaultLoadHasStaticWebsites;
 
   if (kind === "branch") {
-    if (options.erdPreview && !options.plan) {
-      throw new Error("--erd-preview requires a branch target with plan enabled.");
-    }
     if (options.erdPreview) {
       const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
       erdNamespaces = await loadErdNamespaces(configPath);
@@ -346,7 +342,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       workingDirectory,
       environment,
       packageManager,
-      plan: options.plan,
       erdPreview: options.erdPreview ? { namespaces: erdNamespaces } : null,
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
@@ -402,7 +397,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     environment,
     dir,
     packageManager,
-    plan: kind === "branch" ? options.plan : kind === "action" || kind === "preview" ? false : true,
     region: kind === "preview" ? options.region : undefined,
     requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
@@ -740,7 +734,6 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       environment,
       dir: ".",
       packageManager,
-      plan: true,
       actionDirs: apps.map((a) => a.dir),
     },
     generatedIds: render.generatedIds,

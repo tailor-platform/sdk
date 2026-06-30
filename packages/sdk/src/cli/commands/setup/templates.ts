@@ -30,7 +30,6 @@ export type RenderBranchParams = {
   /** GitHub Environment for the plan/deploy jobs; defaults to the workspace name. */
   environment: string;
   packageManager: PackageManager;
-  plan: boolean;
   /** Include the seed-validate step in the plan job (default: false). */
   seedValidate?: boolean;
   /** Include the migration-drift-check step in the plan job (default: false). */
@@ -169,36 +168,29 @@ function applyCommon(
 
 /**
  * Render the branch-target deploy workflow.
- *
- * When `plan` is false the plan job, the pull_request trigger, and the
- * workflow_dispatch dry-run input are all removed (a plan-less workflow has no
- * meaningful dry-run), and the deploy job runs unconditionally.
  * @param params - Workspace and rendering configuration
  * @returns Rendered YAML and the list of managed job/step ids
  */
 export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
-  const { branch, plan } = params;
+  const { branch } = params;
   const seedValidate = params.seedValidate ?? false;
   const migrationDriftCheck = params.migrationDriftCheck ?? false;
-  const erdPreview = plan ? params.erdPreview : null;
+  const erdPreview = params.erdPreview;
 
   let out = branchTemplate;
-  out = block(out, "PLAN_JOB", plan);
+  out = block(out, "PLAN_JOB", true);
   out = block(out, "ERD_PREVIEW_JOB", erdPreview !== null);
   out = block(out, "ERD_PREVIEW_COMMENT_JOB", erdPreview !== null);
-  out = block(out, "PULL_REQUEST", plan);
-  out = block(out, "DISPATCH_INPUTS", plan);
+  out = block(out, "PULL_REQUEST", true);
+  out = block(out, "DISPATCH_INPUTS", true);
   out = block(out, "SEED_VALIDATE", seedValidate);
   out = block(out, "MIGRATION_DRIFT_CHECK", migrationDriftCheck);
   // SEED_DATA is dropped from the default rendering; users add their own step.
   out = block(out, "SEED_DATA", false);
-  // With no plan there is no PR/dry-run path, so the deploy job always runs.
   out = line(
     out,
     "DEPLOY_IF",
-    plan
-      ? `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs['dry-run'])`
-      : undefined,
+    `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs['dry-run'])`,
   );
   out = line(
     out,
@@ -208,24 +200,21 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
 
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
 
-  const generatedIds: string[] = [];
-  if (plan) {
-    generatedIds.push(
-      "tailor-plan",
-      "tailor-plan/tailor-checkout",
-      "tailor-plan/tailor-setup",
-      "tailor-plan/tailor-install",
-      "tailor-plan/tailor-generate-check",
-    );
-    if (seedValidate) {
-      generatedIds.push("tailor-plan/tailor-seed-validate");
-    }
-    generatedIds.push("tailor-plan/tailor-drift-check");
-    if (migrationDriftCheck) {
-      generatedIds.push("tailor-plan/tailor-migration-drift-check");
-    }
-    generatedIds.push("tailor-plan/tailor-plan");
+  const generatedIds: string[] = [
+    "tailor-plan",
+    "tailor-plan/tailor-checkout",
+    "tailor-plan/tailor-setup",
+    "tailor-plan/tailor-install",
+    "tailor-plan/tailor-generate-check",
+  ];
+  if (seedValidate) {
+    generatedIds.push("tailor-plan/tailor-seed-validate");
   }
+  generatedIds.push("tailor-plan/tailor-drift-check");
+  if (migrationDriftCheck) {
+    generatedIds.push("tailor-plan/tailor-migration-drift-check");
+  }
+  generatedIds.push("tailor-plan/tailor-plan");
   if (erdPreview) {
     generatedIds.push(
       "tailor-erd-preview-matrix",

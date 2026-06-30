@@ -113,9 +113,6 @@ const branchCommand = defineAppCommand({
       environment: arg(z.string().min(1).optional(), {
         description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
       }),
-      "no-plan": arg(z.boolean().default(false), {
-        description: "Disable the plan job (deploy-only mode)",
-      }),
       "erd-preview": arg(z.boolean().default(false), {
         description:
           "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
@@ -135,7 +132,6 @@ const branchCommand = defineAppCommand({
       workspaceName: args.name,
       branch: args.branch,
       environment: args.environment,
-      plan: !args["no-plan"],
       erdPreview: args["erd-preview"],
       dir: args.dir,
       force: args.force,

@@ -18,7 +18,6 @@ export type LockInputs = {
   environment: string;
   dir: string;
   packageManager: string;
-  plan: boolean;
   /** For `preview` kind: workspace region used when creating the preview workspace. */
   region?: string;
   /**

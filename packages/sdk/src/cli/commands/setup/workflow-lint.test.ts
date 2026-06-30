@@ -124,88 +124,68 @@ describe("repository ERD preview workflow", () => {
 // ---------------------------------------------------------------------------
 
 describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWorkflow", () => {
-  // All four package managers, plan=true, no optional fields
+  // All four package managers, no optional fields
   for (const pm of ALL_PM) {
-    test(`branch / ${pm} / plan=true / minimal`, () => {
+    test(`branch / ${pm} / minimal`, () => {
       const { content } = renderBranchWorkflow({
         ...COMMON,
         branch: "main",
         packageManager: pm,
-        plan: true,
         erdPreview: null,
       });
-      const { ok, output } = writeAndLint(`branch-${pm}-plan`, content);
-      expect(ok, `actionlint errors for branch/${pm}/plan=true:\n${output}`).toBe(true);
-    });
-  }
-
-  // plan=false (drops plan job, pull_request trigger, dispatch inputs)
-  for (const pm of ALL_PM) {
-    test(`branch / ${pm} / plan=false / minimal`, () => {
-      const { content } = renderBranchWorkflow({
-        ...COMMON,
-        branch: "main",
-        packageManager: pm,
-        plan: false,
-        erdPreview: null,
-      });
-      const { ok, output } = writeAndLint(`branch-${pm}-noplan`, content);
-      expect(ok, `actionlint errors for branch/${pm}/plan=false:\n${output}`).toBe(true);
+      const { ok, output } = writeAndLint(`branch-${pm}`, content);
+      expect(ok, `actionlint errors for branch/${pm}:\n${output}`).toBe(true);
     });
   }
 
   // workingDirectory: present
-  test("branch / pnpm / plan=true / with workingDirectory", () => {
+  test("branch / pnpm / with workingDirectory", () => {
     const { content } = renderBranchWorkflow({
       ...COMMON,
       branch: "main",
       packageManager: "pnpm",
-      plan: true,
       erdPreview: null,
       workingDirectory: "apps/backend",
     });
-    const { ok, output } = writeAndLint("branch-pnpm-plan-dir", content);
+    const { ok, output } = writeAndLint("branch-pnpm-dir", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
   // explicit environment
-  test("branch / pnpm / plan=true / with explicit environment", () => {
+  test("branch / pnpm / with explicit environment", () => {
     const { content } = renderBranchWorkflow({
       ...COMMON,
       branch: "main",
       packageManager: "pnpm",
-      plan: true,
       erdPreview: null,
       environment: "production",
     });
-    const { ok, output } = writeAndLint("branch-pnpm-plan-env", content);
+    const { ok, output } = writeAndLint("branch-pnpm-env", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
-  test("branch / pnpm / plan=true / with ERD preview", () => {
+  test("branch / pnpm / with ERD preview", () => {
     const { content } = renderBranchWorkflow({
       ...COMMON,
       branch: "main",
       packageManager: "pnpm",
-      plan: true,
       erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
     });
-    const { ok, output } = writeAndLint("branch-pnpm-plan-erd-preview", content);
+    const { ok, output } = writeAndLint("branch-pnpm-erd-preview", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
-  // plan=false + workingDirectory + environment
-  test("branch / npm / plan=false / with workingDirectory + environment", () => {
+  // workingDirectory + environment
+  test("branch / npm / with workingDirectory + environment", () => {
     const { content } = renderBranchWorkflow({
       ...COMMON,
       branch: "develop",
       packageManager: "npm",
-      plan: false,
       erdPreview: null,
       workingDirectory: "apps/api",
       environment: "staging",
     });
-    const { ok, output } = writeAndLint("branch-npm-noplan-dir-env", content);
+    const { ok, output } = writeAndLint("branch-npm-dir-env", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 });
