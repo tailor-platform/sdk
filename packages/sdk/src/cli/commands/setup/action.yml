@@ -23,7 +23,7 @@ inputs:
     required: true
   github-token:
     description: GitHub token
-    required: true
+    required: false
   slack-token:
     description: Slack bot token
     required: false

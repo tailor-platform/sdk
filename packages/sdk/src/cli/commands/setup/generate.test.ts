@@ -813,6 +813,46 @@ describe("setupTarget (integration)", () => {
       ".github/workflows/tailor-my-app.yml",
     ]);
   });
+
+  test("preview: generates a -preview.yml workflow and records kind in lock", async () => {
+    await setupTarget({
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+    });
+    const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+    expect(fs.existsSync(wf)).toBe(true);
+    const content = fs.readFileSync(wf, "utf-8");
+    expect(() => parseYAML(content)).not.toThrow();
+    expect(content).not.toMatch(NO_MARKER);
+    const lock = readLock(testDir);
+    expect(lock?.targets[0]).toMatchObject({ kind: "preview", workspaceName: "my-app" });
+  });
+
+  test("preview: require-preview-label variant adds label filter to trigger", async () => {
+    await setupTarget({
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      requirePreviewLabel: true,
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+    });
+    const content = fs.readFileSync(
+      path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
+      "utf-8",
+    );
+    expect(content).toContain("tailor:preview");
+    expect(content).toContain("labeled");
+  });
 });
 
 describe("setupCoordinate", () => {
