@@ -1,11 +1,9 @@
 import open from "open";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-
-const consoleBaseUrl = "https://console.tailor.tech";
+import { workspaceArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConsoleBaseUrl, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 
 export const openAuthConnectionCommand = defineAppCommand({
   name: "open",
@@ -17,6 +15,10 @@ export const openAuthConnectionCommand = defineAppCommand({
       profile: args.profile,
     });
     const consolePath = `/workspaces/${workspaceId}/settings/connections`;
+    const consoleBaseUrl = await loadConsoleBaseUrl({
+      profile: args.profile,
+      ...(args["workspace-id"] !== undefined ? { allowMissingProfile: true } : {}),
+    });
     const consoleUrl = new URL(consolePath, consoleBaseUrl).toString();
     const jsonOutput = logger.jsonMode;
 

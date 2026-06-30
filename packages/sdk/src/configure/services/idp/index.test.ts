@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { defineIdp } from "./index";
+import { defineIdp, unsafeAllowAllIdPPermission } from "./index";
 
 describe("defineIdp", () => {
   test("should infer literal types for clients", () => {
     const idp = defineIdp("my-idp", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1", "client-2"] as const,
     });
 
@@ -18,7 +18,7 @@ describe("defineIdp", () => {
 
   test("should work with single client", () => {
     const idp = defineIdp("my-idp", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["only-client"] as const,
     });
 
@@ -26,43 +26,31 @@ describe("defineIdp", () => {
     expect(provider.clientName).toBe("only-client");
   });
 
-  test("should preserve authorization config", () => {
-    const idp1 = defineIdp("idp-1", {
-      authorization: "insecure",
+  test("should preserve permission config", () => {
+    const idp = defineIdp("idp-with-permission", {
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
     });
-    expect(idp1.authorization).toBe("insecure");
-
-    const idp2 = defineIdp("idp-2", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-    });
-    expect(idp2.authorization).toBe("loggedIn");
-
-    const idp3 = defineIdp("idp-3", {
-      authorization: { cel: 'user.id == "test"' },
-      clients: ["client-1"] as const,
-    });
-    expect(idp3.authorization).toEqual({ cel: 'user.id == "test"' });
+    expect(idp.permission).toEqual(unsafeAllowAllIdPPermission);
   });
 
   test("should preserve lang config", () => {
     const idpEn = defineIdp("idp-en", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       lang: "en",
     });
     expect(idpEn.lang).toBe("en");
 
     const idpJa = defineIdp("idp-ja", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       lang: "ja",
     });
     expect(idpJa.lang).toBe("ja");
 
     const idpNoLang = defineIdp("idp-no-lang", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
     });
     expect(idpNoLang.lang).toBeUndefined();
@@ -70,7 +58,7 @@ describe("defineIdp", () => {
 
   test("should preserve userAuthPolicy config", () => {
     const idpWithPolicy = defineIdp("idp-with-policy", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         useNonEmailIdentifier: true,
@@ -81,7 +69,7 @@ describe("defineIdp", () => {
     expect(idpWithPolicy.userAuthPolicy?.allowSelfPasswordReset).toBe(true);
 
     const idpWithPartialPolicy = defineIdp("idp-with-partial-policy", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         allowSelfPasswordReset: false,
@@ -91,7 +79,7 @@ describe("defineIdp", () => {
     expect(idpWithPartialPolicy.userAuthPolicy?.allowSelfPasswordReset).toBe(false);
 
     const idpNoPolicy = defineIdp("idp-no-policy", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
     });
     expect(idpNoPolicy.userAuthPolicy).toBeUndefined();
@@ -99,7 +87,7 @@ describe("defineIdp", () => {
 
   test("should preserve userAuthPolicy password policy fields", () => {
     const idpWithPasswordPolicy = defineIdp("idp-with-password-policy", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         passwordRequireUppercase: true,
@@ -118,7 +106,7 @@ describe("defineIdp", () => {
     expect(idpWithPasswordPolicy.userAuthPolicy?.passwordMaxLength).toBe(128);
 
     const idpWithPartialPasswordPolicy = defineIdp("idp-with-partial-password-policy", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         passwordRequireUppercase: true,
@@ -132,7 +120,7 @@ describe("defineIdp", () => {
 
   test("should preserve userAuthPolicy allowedEmailDomains", () => {
     const idpWithAllowedEmailDomains = defineIdp("idp-with-allowed-email-domains", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         allowedEmailDomains: ["example.com", "corp.example.com"],
@@ -144,7 +132,7 @@ describe("defineIdp", () => {
     ]);
 
     const idpWithEmptyAllowedEmailDomains = defineIdp("idp-with-empty-allowed-email-domains", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         allowedEmailDomains: [],
@@ -153,7 +141,7 @@ describe("defineIdp", () => {
     expect(idpWithEmptyAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toEqual([]);
 
     const idpNoAllowedEmailDomains = defineIdp("idp-no-allowed-email-domains", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {},
     });
@@ -162,7 +150,7 @@ describe("defineIdp", () => {
 
   test("should preserve userAuthPolicy allowGoogleOauth", () => {
     const idpWithAllowGoogleOauth = defineIdp("idp-with-allow-google-oauth", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         allowGoogleOauth: true,
@@ -171,7 +159,7 @@ describe("defineIdp", () => {
     expect(idpWithAllowGoogleOauth.userAuthPolicy?.allowGoogleOauth).toBe(true);
 
     const idpWithAllowGoogleOauthFalse = defineIdp("idp-with-allow-google-oauth-false", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         allowGoogleOauth: false,
@@ -180,7 +168,7 @@ describe("defineIdp", () => {
     expect(idpWithAllowGoogleOauthFalse.userAuthPolicy?.allowGoogleOauth).toBe(false);
 
     const idpNoAllowGoogleOauth = defineIdp("idp-no-allow-google-oauth", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {},
     });
@@ -189,7 +177,7 @@ describe("defineIdp", () => {
 
   test("should preserve userAuthPolicy allowMicrosoftOauth", () => {
     const idpWithAllowMicrosoftOauth = defineIdp("idp-with-allow-microsoft-oauth", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         allowMicrosoftOauth: true,
@@ -198,7 +186,7 @@ describe("defineIdp", () => {
     expect(idpWithAllowMicrosoftOauth.userAuthPolicy?.allowMicrosoftOauth).toBe(true);
 
     const idpWithAllowMicrosoftOauthFalse = defineIdp("idp-with-allow-microsoft-oauth-false", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         allowMicrosoftOauth: false,
@@ -207,7 +195,7 @@ describe("defineIdp", () => {
     expect(idpWithAllowMicrosoftOauthFalse.userAuthPolicy?.allowMicrosoftOauth).toBe(false);
 
     const idpNoAllowMicrosoftOauth = defineIdp("idp-no-allow-microsoft-oauth", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {},
     });
@@ -216,7 +204,7 @@ describe("defineIdp", () => {
 
   test("should preserve userAuthPolicy disablePasswordAuth", () => {
     const idpWithDisablePasswordAuth = defineIdp("idp-with-disable-password-auth", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         disablePasswordAuth: true,
@@ -227,7 +215,7 @@ describe("defineIdp", () => {
     expect(idpWithDisablePasswordAuth.userAuthPolicy?.disablePasswordAuth).toBe(true);
 
     const idpWithDisablePasswordAuthFalse = defineIdp("idp-with-disable-password-auth-false", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {
         disablePasswordAuth: false,
@@ -236,7 +224,7 @@ describe("defineIdp", () => {
     expect(idpWithDisablePasswordAuthFalse.userAuthPolicy?.disablePasswordAuth).toBe(false);
 
     const idpNoDisablePasswordAuth = defineIdp("idp-no-disable-password-auth", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       userAuthPolicy: {},
     });
@@ -247,7 +235,7 @@ describe("defineIdp", () => {
     // Valid ranges
     expect(() =>
       defineIdp("idp-valid-min", {
-        authorization: "loggedIn",
+        permission: unsafeAllowAllIdPPermission,
         clients: ["client-1"] as const,
         userAuthPolicy: {
           passwordMinLength: 6,
@@ -257,7 +245,7 @@ describe("defineIdp", () => {
 
     expect(() =>
       defineIdp("idp-valid-max", {
-        authorization: "loggedIn",
+        permission: unsafeAllowAllIdPPermission,
         clients: ["client-1"] as const,
         userAuthPolicy: {
           passwordMaxLength: 4096,
@@ -267,7 +255,7 @@ describe("defineIdp", () => {
 
     expect(() =>
       defineIdp("idp-valid-length-consistency", {
-        authorization: "loggedIn",
+        permission: unsafeAllowAllIdPPermission,
         clients: ["client-1"] as const,
         userAuthPolicy: {
           passwordMinLength: 10,
@@ -283,21 +271,21 @@ describe("defineIdp", () => {
 
   test("should preserve publishUserEvents config", () => {
     const idpWithPublishUserEvents = defineIdp("idp-with-publish-user-events", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       publishUserEvents: true,
     });
     expect(idpWithPublishUserEvents.publishUserEvents).toBe(true);
 
     const idpWithPublishUserEventsFalse = defineIdp("idp-with-publish-user-events-false", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       publishUserEvents: false,
     });
     expect(idpWithPublishUserEventsFalse.publishUserEvents).toBe(false);
 
     const idpNoPublishUserEvents = defineIdp("idp-no-publish-user-events", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
     });
     expect(idpNoPublishUserEvents.publishUserEvents).toBeUndefined();
@@ -305,7 +293,7 @@ describe("defineIdp", () => {
 
   test("should preserve gqlOperations config", () => {
     const idpWithGqlOperations = defineIdp("idp-with-gql-operations", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       gqlOperations: {
         create: false,
@@ -324,7 +312,7 @@ describe("defineIdp", () => {
     });
 
     const idpWithPartialGqlOperations = defineIdp("idp-with-partial-gql-operations", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       gqlOperations: {
         create: false,
@@ -337,7 +325,7 @@ describe("defineIdp", () => {
     });
 
     const idpNoGqlOperations = defineIdp("idp-no-gql-operations", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
     });
     expect(idpNoGqlOperations.gqlOperations).toBeUndefined();
@@ -345,7 +333,7 @@ describe("defineIdp", () => {
 
   test("gqlOperations: 'query' stores alias as raw value", () => {
     const idpWithQueryAlias = defineIdp("idp-with-query-alias", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       gqlOperations: "query",
     });
@@ -356,7 +344,7 @@ describe("defineIdp", () => {
 
   test("should preserve emailConfig", () => {
     const idpWithEmailConfig = defineIdp("idp-with-email-config", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       emailConfig: {
         fromName: "My App",
@@ -369,7 +357,7 @@ describe("defineIdp", () => {
     });
 
     const idpWithPartialEmailConfig = defineIdp("idp-with-partial-email-config", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       emailConfig: {
         fromName: "My App",
@@ -380,15 +368,45 @@ describe("defineIdp", () => {
     });
 
     const idpNoEmailConfig = defineIdp("idp-no-email-config", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
     });
     expect(idpNoEmailConfig.emailConfig).toBeUndefined();
   });
 
+  test("should preserve userAuthPolicy MFA fields", () => {
+    const idpWithMfa = defineIdp("idp-with-mfa", {
+      permission: unsafeAllowAllIdPPermission,
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        enableMfa: true,
+        requireMfa: true,
+        allowedReturnOrigins: ["https://app.example.com", "http://localhost:3000"],
+        mfaIssuer: "My App",
+      },
+    });
+    expect(idpWithMfa.userAuthPolicy?.enableMfa).toBe(true);
+    expect(idpWithMfa.userAuthPolicy?.requireMfa).toBe(true);
+    expect(idpWithMfa.userAuthPolicy?.allowedReturnOrigins).toEqual([
+      "https://app.example.com",
+      "http://localhost:3000",
+    ]);
+    expect(idpWithMfa.userAuthPolicy?.mfaIssuer).toBe("My App");
+
+    const idpNoMfa = defineIdp("idp-no-mfa", {
+      permission: unsafeAllowAllIdPPermission,
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoMfa.userAuthPolicy?.enableMfa).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.requireMfa).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.allowedReturnOrigins).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.mfaIssuer).toBeUndefined();
+  });
+
   test("gqlOperations: 'query' works with other config options", () => {
     const idpWithQueryAndOtherOptions = defineIdp("idp-with-query-and-options", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1"] as const,
       lang: "en",
       publishUserEvents: true,

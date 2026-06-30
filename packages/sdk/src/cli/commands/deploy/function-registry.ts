@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
+import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import {
   buildMetaRequest,
@@ -11,17 +11,17 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
+import type { Application } from "#/cli/services/application";
+import type { CollectedJob } from "#/cli/services/workflow/service";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BundledScripts, FunctionEntry } from "./function-registry-types";
 import type { ApplyPhase } from "./phase";
-import type { Application } from "@/cli/services/application";
-import type { CollectedJob } from "@/cli/services/workflow/service";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   CreateFunctionRegistryRequestSchema,
   UpdateFunctionRegistryRequestSchema,
-} from "@tailor-proto/tailor/v1/function_registry_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "@tailor-platform/tailor-proto/function_registry_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 export type { BundledScripts, FunctionEntry } from "./function-registry-types";
 

@@ -2,12 +2,12 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
-import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
-import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
-import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
-import { resetKeyringState } from "@/cli/shared/token-store";
+import { fetchAll, initOperatorClient } from "#/cli/shared/client";
+import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { resetKeyringState } from "#/cli/shared/token-store";
 import { updateCommand } from "./update";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-update-${Date.now()}-${Math.random()}`);
@@ -26,7 +26,7 @@ vi.mock("@napi-rs/keyring", () => ({
   },
 }));
 
-vi.mock("@/cli/shared/client", async (importOriginal) => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   initOperatorClient: vi.fn(),
   fetchAll: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("@/cli/shared/client", async (importOriginal) => ({
 
 // Mock fetchLatestToken without disturbing readPlatformConfig / writePlatformConfig,
 // which the run handler also uses and which we want to round-trip on disk.
-vi.mock("@/cli/shared/context", async (importOriginal) => ({
+vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
   fetchLatestToken: vi.fn(),
 }));
@@ -121,7 +121,11 @@ describe("profile update --permission", () => {
     await runCommand(updateCommand, ["rw", "--user", "new@example.com", "--permission", "read"]);
 
     expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "new@example.com");
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
+      expect.anything(),
+      "new@example.com",
+      undefined,
+    );
     expect(vi.mocked(initOperatorClient)).toHaveBeenCalledTimes(1);
 
     const config = await readPlatformConfig();
@@ -179,6 +183,156 @@ describe("profile update --machine-user", () => {
 
     const config = await readPlatformConfig();
     expect(config.profiles.myprofile?.machine_user).toBeUndefined();
+  });
+});
+
+describe("profile update --platform", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", undefined);
+    vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
+    vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkspaces: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: { user: "u@example.com", workspace_id: validUUID },
+      },
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("stores platform settings and validates the workspace against that platform", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(updateCommand, [
+      "myprofile",
+      "--platform-url",
+      "https://api.dev.tailor.tech",
+      "--oauth2-client-id",
+      "dev-client",
+      "--console-url",
+      "https://console.dev.tailor.tech",
+    ]);
+
+    const expectedPlatformConfig = {
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    };
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
+      expect.anything(),
+      "u@example.com",
+      expectedPlatformConfig,
+    );
+    expect(vi.mocked(initOperatorClient)).toHaveBeenCalledWith(
+      "mock-token",
+      expectedPlatformConfig,
+    );
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile).toMatchObject({
+      platform_url: "https://api.dev.tailor.tech",
+      oauth2_client_id: "dev-client",
+      console_url: "https://console.dev.tailor.tech",
+    });
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
+
+  test("clears platform settings when empty strings are passed", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+
+    await runCommand(updateCommand, [
+      "myprofile",
+      "--platform-url",
+      "",
+      "--oauth2-client-id",
+      "",
+      "--console-url",
+      "",
+    ]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.platform_url).toBeUndefined();
+    expect(config.profiles.myprofile?.oauth2_client_id).toBeUndefined();
+    expect(config.profiles.myprofile?.console_url).toBeUndefined();
+  });
+
+  test("uses the existing platform URL for token lookup when clearing only platform-url", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+
+    await runCommand(updateCommand, ["myprofile", "--platform-url", ""]);
+
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "u@example.com", {
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+    expect(vi.mocked(initOperatorClient)).toHaveBeenCalledWith("mock-token", {
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
+
+  test("rejects invalid platform URLs before writing config", async () => {
+    const result = await runCommand(updateCommand, ["myprofile", "--platform-url", "not-a-url"]);
+
+    expect(result.success).toBe(false);
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.platform_url).toBeUndefined();
   });
 });
 

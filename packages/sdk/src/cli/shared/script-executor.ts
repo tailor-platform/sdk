@@ -5,9 +5,9 @@
  * with polling for completion status.
  */
 
-import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 /**
  * Default polling interval for script execution status in milliseconds (1 second)

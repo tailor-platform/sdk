@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
+import { defineAppCommand } from "#/cli/shared/command";
 import { checkGitHub } from "./check";
 import { setupGitHub } from "./generate";
 
@@ -8,8 +8,8 @@ const checkCommand = defineAppCommand({
   name: "check",
   description: "Audit generated workflows for drift against the current config/repo (read-only).",
   args: z.object({}).strict(),
-  run: () => {
-    checkGitHub({ outputDir: process.cwd() });
+  run: async () => {
+    await checkGitHub({ outputDir: process.cwd() });
   },
 });
 
@@ -48,6 +48,10 @@ export const setupCommand = defineAppCommand({
       "no-plan": arg(z.boolean().default(false), {
         description: "Disable the plan job for a branch target (cannot be combined with --tag)",
       }),
+      "erd-preview": arg(z.boolean().default(false), {
+        description:
+          "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
+      }),
       dir: arg(z.string().min(1).default("."), {
         alias: "d",
         description: "App directory (for monorepo setups)",
@@ -77,6 +81,7 @@ export const setupCommand = defineAppCommand({
       tagPattern: args["tag-pattern"] ?? "v*",
       environment: args.environment,
       plan: !args["no-plan"],
+      erdPreview: args["erd-preview"],
       dir: args.dir,
       force: args.force,
       outputDir: process.cwd(),

@@ -1,11 +1,11 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { Subgraph_ServiceType } from "@tailor-proto/tailor/v1/application_resource_pb";
+import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { logger, symbols } from "@/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { diffHttpAdapterDisplay, planApplication } from "./application";
+import type { Application } from "#/cli/services/application";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
-import type { Application } from "@/cli/services/application";
-import type { OperatorClient } from "@/cli/shared/client";
 
 vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
@@ -26,19 +26,7 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-vi.mock("./change-set", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  const createChangeSet = original.createChangeSet as (title: string) => {
-    print: () => void;
-  };
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...createChangeSet(title),
-      print: () => {},
-    }),
-  };
-});
+vi.mock("./change-set", async (importOriginal) => importOriginal());
 
 const workspaceId = "test-workspace";
 const appName = "test-app";

@@ -1,20 +1,21 @@
 import { runCommand } from "politty";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { apiCommand } from "./api";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { apiCall, apiCommand } from "./api";
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
+  loadPlatformClientConfig: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/readonly-guard", () => ({
+vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 
@@ -31,10 +32,52 @@ describe("api command body auto-injection", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(loadPlatformClientConfig).mockResolvedValue(undefined);
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     fetchMock.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ result: "ok" }),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  describe("profile config precedence", () => {
+    test("uses env access tokens even when the selected profile config cannot be loaded", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", "env-token");
+      vi.mocked(loadAccessToken).mockResolvedValue("env-token");
+      vi.mocked(loadPlatformClientConfig).mockRejectedValue(
+        new Error('Profile "missing" not found'),
+      );
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ result: "ok" }),
+      });
+
+      const result = await apiCall({ profile: "missing", endpoint: "Ping" });
+
+      expect(result).toEqual({ status: 200, data: { result: "ok" } });
+      expect(loadAccessToken).toHaveBeenCalledWith({ profile: "missing" });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("https://api.tailor.tech/tailor.v1.OperatorService/Ping");
+      expect((options.headers as Record<string, string>).Authorization).toBe("Bearer env-token");
+    });
+
+    test("does not suppress profile config errors for empty env access tokens", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", "");
+      vi.mocked(loadAccessToken).mockResolvedValue("profile-token");
+      vi.mocked(loadPlatformClientConfig).mockRejectedValue(
+        new Error('Profile "missing" not found'),
+      );
+
+      await expect(apiCall({ profile: "missing", endpoint: "Ping" })).rejects.toThrow(
+        'Profile "missing" not found',
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 

@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { assertDefined } from "@/utils/assert";
+import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -11,15 +11,15 @@ import {
   type WithLabel,
 } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
+import type { Application } from "#/cli/services/application";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { Application } from "@/cli/services/application";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   CreateSecretManagerSecretRequestSchema,
   CreateSecretManagerVaultRequestSchema,
   UpdateSecretManagerSecretRequestSchema,
-} from "@tailor-proto/tailor/v1/secret_manager_pb";
+} from "@tailor-platform/tailor-proto/secret_manager_pb";
 
 type CreateVault = {
   name: string;

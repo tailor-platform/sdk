@@ -39,6 +39,7 @@ const idp = defineIdp("my-idp", {
     update: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
   },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
@@ -49,6 +50,10 @@ const idp = defineIdp("my-idp", {
     passwordRequireNumeric: true,
     passwordMinLength: 8,
     passwordMaxLength: 128,
+    enableMfa: true,
+    requireMfa: false,
+    allowedReturnOrigins: [website.url],
+    mfaIssuer: "My App",
   },
   emailConfig: {
     fromName: "My App",

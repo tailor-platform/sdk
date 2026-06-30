@@ -1,10 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { logger } from "@/cli/shared/logger";
+import { logger } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { Workflow, WorkflowJob } from "@/types/workflow.generated";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { Workflow, WorkflowJob } from "#/types/workflow.generated";
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
@@ -30,7 +30,7 @@ vi.mock("./change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -669,7 +669,7 @@ describe("planWorkflow", () => {
       expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
         workspaceId,
         pageToken: "",
-        pageSize: 1000,
+        pageSize: 100,
       });
       expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "orphaned-job" }]);
     });
@@ -703,7 +703,7 @@ describe("planWorkflow", () => {
             replaces: [],
             unchanged: [],
             isEmpty: () => false,
-            print: () => {},
+            lines: () => [],
           },
           jobFunctionDeletes: [{ workspaceId, jobFunctionName: "removed-job" }],
           conflicts: [],
@@ -772,7 +772,7 @@ describe("planWorkflow", () => {
             replaces: [],
             unchanged: [],
             isEmpty: () => false,
-            print: () => {},
+            lines: () => [],
           },
           jobFunctionDeletes: [
             { workspaceId, jobFunctionName: "job-a" },

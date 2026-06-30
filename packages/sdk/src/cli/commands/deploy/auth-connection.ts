@@ -3,10 +3,10 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import {
   AuthConnection_Status,
   AuthConnection_Type,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { type AuthService } from "@/cli/services/auth/service";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { type AuthService } from "#/cli/services/auth/service";
+import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -16,15 +16,15 @@ import {
   type WithLabel,
 } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
+import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
-import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type {
   CreateAuthConnectionRequestSchema,
   DeleteAuthConnectionRequestSchema,
-} from "@tailor-proto/tailor/v1/auth_pb";
-import type { AuthConnection } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "@tailor-platform/tailor-proto/auth_pb";
+import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 type CreateConnection = {
   name: string;

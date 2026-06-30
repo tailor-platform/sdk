@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applyAuth, type planAuth } from "./auth";
-import type { OperatorClient } from "@/cli/shared/client";
+import type { OperatorClient } from "#/cli/shared/client";
 
 describe("applyAuth phase separation", () => {
   // Helper to create mock client with spies for delete operations
@@ -53,7 +53,7 @@ describe("applyAuth phase separation", () => {
       replaces: [] as OAuth2ClientReplace[],
       title: "",
       isEmpty: () => false,
-      print: () => {},
+      lines: () => [],
     };
 
     return {

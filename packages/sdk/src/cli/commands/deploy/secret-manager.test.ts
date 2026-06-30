@@ -1,9 +1,9 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
-import type { PlanContext } from "@/cli/commands/deploy/types";
-import type { Application } from "@/cli/services/application";
-import type { OperatorClient } from "@/cli/shared/client";
+import type { PlanContext } from "#/cli/commands/deploy/types";
+import type { Application } from "#/cli/services/application";
+import type { OperatorClient } from "#/cli/shared/client";
 
 const mockLoadSecretsState = vi.fn();
 const mockSaveSecretsState = vi.fn();
@@ -19,9 +19,9 @@ vi.mock("./secrets-state", async (importOriginal) => {
   };
 });
 
-vi.mock("@/cli/shared/client", async (importOriginal) => {
+vi.mock("#/cli/shared/client", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("@/cli/shared/client");
+  const actual = (await importOriginal()) as typeof import("#/cli/shared/client");
   return {
     ...actual,
     fetchAll: async <T>(fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>) => {
@@ -69,7 +69,7 @@ describe("applySecretManager phase separation", () => {
         replaces: [],
         title: "Secret Manager vaults",
         isEmpty: () => false,
-        print: () => {},
+        lines: () => [],
       },
       secretChangeSet: {
         creates: [
@@ -101,7 +101,7 @@ describe("applySecretManager phase separation", () => {
         replaces: [],
         title: "Secret Manager secrets",
         isEmpty: () => false,
-        print: () => {},
+        lines: () => [],
       },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
   }
@@ -176,7 +176,7 @@ describe("applySecretManager phase separation", () => {
         replaces: [],
         title: "Secret Manager vaults",
         isEmpty: () => true,
-        print: () => {},
+        lines: () => [],
       },
       secretChangeSet: {
         creates: [],
@@ -185,7 +185,7 @@ describe("applySecretManager phase separation", () => {
         replaces: [],
         title: "Secret Manager secrets",
         isEmpty: () => true,
-        print: () => {},
+        lines: () => [],
       },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 

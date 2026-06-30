@@ -1,5 +1,110 @@
 # @tailor-platform/sdk
 
+## 1.70.0
+### Minor Changes
+
+
+
+- [#1547](https://github.com/tailor-platform/sdk/pull/1547) [`7bb4dd6`](https://github.com/tailor-platform/sdk/commit/7bb4dd68a2492e5b8d5051730cdf35ba4f442134) Thanks [@toiroakr](https://github.com/toiroakr)! - Route `deploy --dry-run` plan diff output to stdout so CI pipelines can capture it cleanly without `2>&1`. Add `--json` / `-j` support to `deploy`: dry-run outputs `{ summary, changes, warnings, conflicts }` and apply outputs `{ summary, status: "applied" }` to stdout for machine-readable consumption. The `warnings` array includes unmanaged resources and skipped secrets; the `conflicts` array lists owner conflicts.
+
+
+
+- [#1579](https://github.com/tailor-platform/sdk/pull/1579) [`7522a06`](https://github.com/tailor-platform/sdk/commit/7522a06abd4b5cabbc5b7ef2e00464db65fb894d) Thanks [@dqn](https://github.com/dqn)! - Add `tailor-sdk setup --erd-preview` and `tailordb erd diff` for PR ERD viewer artifacts with current/diff previews.
+
+
+
+- [#1575](https://github.com/tailor-platform/sdk/pull/1575) [`9857f3a`](https://github.com/tailor-platform/sdk/commit/9857f3a00dd9d8c1cd12c95a0517da1fe4c864a9) Thanks [@dqn](https://github.com/dqn)! - Add profile-level Platform connection settings so CLI profiles can switch the Platform API URL, OAuth2 login client, and Console URL together.
+
+
+
+- [#1566](https://github.com/tailor-platform/sdk/pull/1566) [`acd85bf`](https://github.com/tailor-platform/sdk/commit/acd85bfa9e5f2b3f752f09351572a465d8624f43) Thanks [@dqn](https://github.com/dqn)! - Support `TypedDocumentNode` queries in HTTP adapters and infer `output` response data from them.
+
+
+### Patch Changes
+
+
+
+- [#1560](https://github.com/tailor-platform/sdk/pull/1560) [`1899633`](https://github.com/tailor-platform/sdk/commit/1899633a726955d6e13443545bd8bfa6b16fb5ed) Thanks [@dragon3](https://github.com/dragon3)! - Update AI Gateway documentation to present supported models without naming backend providers
+
+
+
+- [#1574](https://github.com/tailor-platform/sdk/pull/1574) [`0e2759d`](https://github.com/tailor-platform/sdk/commit/0e2759d41f89c6bc670149932f860f208b6b7d0b) Thanks [@dqn](https://github.com/dqn)! - Improve builder API type errors so invalid field modifier calls show actionable messages.
+
+## 1.69.0
+### Minor Changes
+
+
+
+- [#1541](https://github.com/tailor-platform/sdk/pull/1541) [`ca880ef`](https://github.com/tailor-platform/sdk/commit/ca880efcc7b11b14a146d042ab4b1c582d44e780) Thanks [@k1LoW](https://github.com/k1LoW)! - Add MFA support to `defineIdp`. The `userAuthPolicy` now accepts `enableMfa`, `requireMfa`, `allowedReturnOrigins`, and `mfaIssuer` to configure TOTP-based MFA for the Built-in IdP. `permission.unenrollMfa` controls who can unenroll a user's MFA factor. Static-website `:url` placeholders are accepted in `allowedReturnOrigins` and resolved at deploy time.
+
+
+### Patch Changes
+
+
+
+- [#1552](https://github.com/tailor-platform/sdk/pull/1552) [`2dac106`](https://github.com/tailor-platform/sdk/commit/2dac106b113aef8f456fc655397363f9cc342061) Thanks [@k1LoW](https://github.com/k1LoW)! - Update IdP examples in documentation to use `permission` instead of the legacy `authorization` field
+
+
+
+- [#1561](https://github.com/tailor-platform/sdk/pull/1561) [`8706f3d`](https://github.com/tailor-platform/sdk/commit/8706f3d0803a7585dac7e767bcd92f1554f79206) Thanks [@k1LoW](https://github.com/k1LoW)! - Extend `defineIdp({ gqlOperations })` with two MFA-related operations: `requestMfaSettingsUrl` (the `_requestMfaSettingsUrl` query that issues an MFA self-service URL) and `unenrollMfa` (the `_unenrollMfa` mutation that removes a user's enrolled MFA factor). Both default to enabled. Setting `gqlOperations.unenrollMfa: false` also relaxes the `permission.unenrollMfa` requirement that would otherwise apply when `userAuthPolicy.enableMfa` is `true`. The `gqlOperations: "query"` shortcut now keeps `requestMfaSettingsUrl` enabled (it is a query) while disabling `unenrollMfa` along with the other mutations.
+
+
+
+- [#1562](https://github.com/tailor-platform/sdk/pull/1562) [`b403af3`](https://github.com/tailor-platform/sdk/commit/b403af348200b9ebffccdebc80dce543f022dbce) Thanks [@k1LoW](https://github.com/k1LoW)! - Expose Built-in IdP MFA management on the runtime `idp.Client`. The `User` records returned by `user`, `userByName`, `users`, `createUser`, and `updateUser` now include `mfaEnrolled` and `mfaFactorIds`, and `client.unenrollMfa({ userId, mfaFactorId })` removes a single enrolled factor (gated by the `unenrollMfa` IdP permission).
+
+
+
+- [#1546](https://github.com/tailor-platform/sdk/pull/1546) [`139986b`](https://github.com/tailor-platform/sdk/commit/139986b07d51cccdaf2b94b8a6b506ba10ac87e1) Thanks [@k1LoW](https://github.com/k1LoW)! - Make `defineIdp({ permission: { sendPasswordResetEmail } })` conditionally required. When `userAuthPolicy.disablePasswordAuth` is `true`, password authentication is off and the password-reset email flow can never run, so the field is now optional in that case (still required otherwise). Omitting the field when it is optional behaves as deny-all.
+
+
+
+- [#1526](https://github.com/tailor-platform/sdk/pull/1526) [`b0d1487`](https://github.com/tailor-platform/sdk/commit/b0d148734a507ed8e2dc77bc034442ec5ee3175e) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve CLI startup time for commands that do not connect to the platform. Commands such as `profile list`, `profile delete`, `login`, and `logout` now start approximately 5x faster (~1.6s instead of ~8s).
+
+
+
+- [#1507](https://github.com/tailor-platform/sdk/pull/1507) [`7701823`](https://github.com/tailor-platform/sdk/commit/7701823ceb454509f0b28e09115f36c5508ad8e4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @urql/core to v6.0.2
+
+
+
+- [#1514](https://github.com/tailor-platform/sdk/pull/1514) [`21ff9fb`](https://github.com/tailor-platform/sdk/commit/21ff9fb0193b35ccdc59ba9e804884f9a5e8640e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+
+
+- [#1516](https://github.com/tailor-platform/sdk/pull/1516) [`ec752bd`](https://github.com/tailor-platform/sdk/commit/ec752bd38f7dec817f7e3b4d2d5468e7320050e0) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.5.0 [security]
+
+
+
+- [#1525](https://github.com/tailor-platform/sdk/pull/1525) [`425a19d`](https://github.com/tailor-platform/sdk/commit/425a19dd58da6e373b739d3b3e838c2ff3d1736a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.5
+
+
+
+- [#1527](https://github.com/tailor-platform/sdk/pull/1527) [`abfc979`](https://github.com/tailor-platform/sdk/commit/abfc9797f496a81c0edb991c37e053092bf87f9e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+
+
+- [#1532](https://github.com/tailor-platform/sdk/pull/1532) [`a54f156`](https://github.com/tailor-platform/sdk/commit/a54f156ec2ed43a279aade6fd4e3eb81879659d7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.6.0
+
+
+
+- [#1533](https://github.com/tailor-platform/sdk/pull/1533) [`e3bc2ce`](https://github.com/tailor-platform/sdk/commit/e3bc2ce65ab30ee53e5de0eb48ca6c24049fcd1b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.9.2
+
+
+
+- [#1535](https://github.com/tailor-platform/sdk/pull/1535) [`a3b3387`](https://github.com/tailor-platform/sdk/commit/a3b338733081b5d9c7ab5cdb665bd96fbbc143f3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v17
+
+
+
+- [#1551](https://github.com/tailor-platform/sdk/pull/1551) [`640fc1f`](https://github.com/tailor-platform/sdk/commit/640fc1f6d669f848d0646c3a7c602fe6c5b4b125) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.48.1
+
+
+
+- [#1490](https://github.com/tailor-platform/sdk/pull/1490) [`0639734`](https://github.com/tailor-platform/sdk/commit/0639734531335df884db4b5517d5e5ff6db601c7) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor: migrate internal path aliases to Node subpath imports
+  
+  Replace the tsconfig `@/*` path alias with the `#/*` subpath import
+  (`package.json` `imports`), and resolve `@tailor-platform/tailor-proto` as a
+  regular package dependency instead of a `@tailor-proto/*` path alias. Internal
+  build/resolution change only — no public API or runtime behavior change.
+
 ## 1.68.0
 ### Minor Changes
 

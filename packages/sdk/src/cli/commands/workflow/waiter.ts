@@ -2,12 +2,12 @@ import { setTimeout } from "node:timers/promises";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
-import { spinner } from "@/cli/shared/spinner";
-import { formatWaitError, isRetryableWaitError } from "@/cli/shared/wait-error";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
+import { spinner } from "#/cli/shared/spinner";
+import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import {
   classifyWorkflowExecutionStatus,
   hasReachedWorkflowWaitTarget,
@@ -17,7 +17,7 @@ import {
   type WorkflowWaitUntil,
 } from "./status";
 import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
-import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 export const DEFAULT_WORKFLOW_WAIT_INTERVAL_MS = 3000;
 

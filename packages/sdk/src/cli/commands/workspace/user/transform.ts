@@ -1,5 +1,5 @@
-import { WorkspacePlatformUserRole } from "@tailor-proto/tailor/v1/workspace_resource_pb";
-import type { WorkspacePlatformUser } from "@tailor-proto/tailor/v1/workspace_resource_pb";
+import { WorkspacePlatformUserRole } from "@tailor-platform/tailor-proto/workspace_resource_pb";
+import type { WorkspacePlatformUser } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 export interface UserInfo {
   userId: string;

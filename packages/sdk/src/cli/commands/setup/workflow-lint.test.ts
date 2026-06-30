@@ -60,6 +60,11 @@ const COMMON = {
 };
 
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
+const REPO_ROOT = path.resolve(process.cwd(), "../..");
+const ERD_PREVIEW_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-viewer-preview.yml");
+
+// Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
+const actionlintAvailable = isActionlintAvailable();
 
 // ---------------------------------------------------------------------------
 // Utility: write + lint a workflow
@@ -71,12 +76,52 @@ function writeAndLint(name: string, content: string): LintResult {
   return runActionlint(filePath);
 }
 
+describe("repository ERD preview workflow", () => {
+  test("installs base dependencies before exporting the base schema", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+    const checkoutBase = content.indexOf("name: Checkout base branch");
+    const installBase = content.indexOf("name: Install base deps");
+    const baseExport = content.indexOf("cd .erd-base/example");
+
+    expect(checkoutBase).toBeGreaterThanOrEqual(0);
+    expect(installBase).toBeGreaterThan(checkoutBase);
+    expect(installBase).toBeLessThan(baseExport);
+    expect(content).toContain("working-directory: .erd-base");
+    expect(content).toContain("pnpm install --frozen-lockfile");
+    expect(content).toContain("pnpm --filter @tailor-platform/sdk run build");
+  });
+
+  test("renders a diff when the base namespace is missing", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain('base_missing="false"');
+    expect(content).toContain("grep -q 'not found in local config.db'");
+    expect(content).toContain("Base ERD namespace '$NAMESPACE' not found");
+    expect(content).toContain('diff_args=(--namespace "$NAMESPACE"');
+    expect(content).toContain('diff_args+=(--base-html "$base_html")');
+    expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
+  });
+
+  test("uploads artifacts with names matched by the sticky comment", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain("name: ${{ matrix.namespace }}.html");
+    expect(content).not.toContain("name: ${{ matrix.namespace }}-diff.html");
+    expect(content).toContain('select(.name | endswith(".html"))');
+    expect(content).toContain("can switch between the current schema and a diff");
+    expect(content).not.toContain("name: erd-viewer-preview-${{ matrix.namespace }}");
+    expect(content).not.toContain("name: erd-viewer-diff-${{ matrix.namespace }}");
+  });
+
+  test.skipIf(!actionlintAvailable)("passes actionlint", () => {
+    const { ok, output } = runActionlint(ERD_PREVIEW_WORKFLOW);
+    expect(ok, `actionlint errors for ${ERD_PREVIEW_WORKFLOW}:\n${output}`).toBe(true);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Tests (skipped when actionlint is not on PATH)
 // ---------------------------------------------------------------------------
-
-// Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
-const actionlintAvailable = isActionlintAvailable();
 
 describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWorkflow", () => {
   // All four package managers, plan=true, no optional fields
@@ -87,6 +132,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
         branch: "main",
         packageManager: pm,
         plan: true,
+        erdPreview: null,
       });
       const { ok, output } = writeAndLint(`branch-${pm}-plan`, content);
       expect(ok, `actionlint errors for branch/${pm}/plan=true:\n${output}`).toBe(true);
@@ -101,6 +147,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
         branch: "main",
         packageManager: pm,
         plan: false,
+        erdPreview: null,
       });
       const { ok, output } = writeAndLint(`branch-${pm}-noplan`, content);
       expect(ok, `actionlint errors for branch/${pm}/plan=false:\n${output}`).toBe(true);
@@ -114,6 +161,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       branch: "main",
       packageManager: "pnpm",
       plan: true,
+      erdPreview: null,
       workingDirectory: "apps/backend",
     });
     const { ok, output } = writeAndLint("branch-pnpm-plan-dir", content);
@@ -127,9 +175,22 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       branch: "main",
       packageManager: "pnpm",
       plan: true,
+      erdPreview: null,
       environment: "production",
     });
     const { ok, output } = writeAndLint("branch-pnpm-plan-env", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+
+  test("branch / pnpm / plan=true / with ERD preview", () => {
+    const { content } = renderBranchWorkflow({
+      ...COMMON,
+      branch: "main",
+      packageManager: "pnpm",
+      plan: true,
+      erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
+    });
+    const { ok, output } = writeAndLint("branch-pnpm-plan-erd-preview", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
@@ -140,6 +201,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
       branch: "develop",
       packageManager: "npm",
       plan: false,
+      erdPreview: null,
       workingDirectory: "apps/api",
       environment: "staging",
     });

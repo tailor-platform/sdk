@@ -1,18 +1,18 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { listFunctionRegistries } from "./list";
-import type * as ClientModule from "@/cli/shared/client";
+import type * as ClientModule from "#/cli/shared/client";
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/client", async () => {
-  const actual = await vi.importActual<typeof ClientModule>("@/cli/shared/client");
+vi.mock("#/cli/shared/client", async () => {
+  const actual = await vi.importActual<typeof ClientModule>("#/cli/shared/client");
   return {
     ...actual,
     initOperatorClient: vi.fn(),

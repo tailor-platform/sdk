@@ -1,4 +1,4 @@
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#/utils/assert";
 import { styles, symbols } from "./logger";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

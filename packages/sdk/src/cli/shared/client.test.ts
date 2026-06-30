@@ -1,17 +1,23 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
-import { reportCrash } from "@/cli/crashreport";
+import { reportCrash } from "#/cli/crashreport/index";
 import {
   concurrencyLimitInterceptor,
   createTransport,
   fetchAll,
   fetchPaged,
   formatRequestParams,
+  getConsoleBaseUrl,
+  getEffectivePlatformConfig,
+  getOAuth2ClientId,
+  getPlatformBaseUrl,
+  initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
+  rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
@@ -23,7 +29,7 @@ vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
 }));
 
-vi.mock("@/cli/crashreport", () => ({
+vi.mock("#/cli/crashreport/index", () => ({
   reportCrash: vi.fn(),
 }));
 
@@ -41,6 +47,82 @@ describe("createTransport", () => {
       interceptors: [],
     });
     expect(transport).toEqual({ type: "node-transport" });
+  });
+});
+
+describe("initOperatorClient", () => {
+  afterEach(() => {
+    rememberPlatformConfigForToken("token-a");
+    vi.clearAllMocks();
+  });
+
+  test("uses the platform config remembered for the access token", async () => {
+    rememberPlatformConfigForToken("token-a", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+
+    await initOperatorClient("token-a");
+    const connectNode = await import("@connectrpc/connect-node");
+
+    expect(connectNode.createConnectTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "https://api.dev.tailor.tech",
+      }),
+    );
+  });
+});
+
+describe("getConsoleBaseUrl", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("infers the Console URL from profile platform URL before using env console URL", () => {
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
+
+    expect(getConsoleBaseUrl({ platformUrl: "https://api.dev.tailor.tech" })).toBe(
+      "https://console.dev.tailor.tech",
+    );
+  });
+
+  test("uses env console URL when profile platform URL cannot infer a custom Console URL", () => {
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
+
+    expect(getConsoleBaseUrl({ platformUrl: "https://platform.dev.tailor.tech" })).toBe(
+      "https://console.other.tailor.tech",
+    );
+  });
+});
+
+describe("platform environment variables", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("uses legacy platform env vars when renamed vars are absent", () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+
+    expect(getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
+    expect(getOAuth2ClientId()).toBe("legacy-client");
+    expect(getEffectivePlatformConfig()).toEqual({
+      platformUrl: "https://api.legacy.tailor.tech",
+      oauth2ClientId: "legacy-client",
+    });
+  });
+
+  test("prefers renamed platform env vars over legacy env vars", () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
+
+    expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
+    expect(getOAuth2ClientId()).toBe("dev-client");
+    expect(getEffectivePlatformConfig()).toEqual({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+    });
   });
 });
 

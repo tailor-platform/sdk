@@ -1,9 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { ensureConfigId } from "@/cli/commands/deploy/config-id-injector";
-import { logBetaWarning } from "@/cli/shared/beta";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { logger, styles } from "@/cli/shared/logger";
+import { ensureConfigId } from "#/cli/commands/deploy/config-id-injector";
+import { logBetaWarning } from "#/cli/shared/beta";
+import { extractOwnedNamespaces } from "#/cli/shared/config";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { logger, styles } from "#/cli/shared/logger";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
@@ -32,6 +33,7 @@ export type SetupGitHubOptions = {
   tagPattern: string;
   environment?: string;
   plan: boolean;
+  erdPreview: boolean;
   dir: string;
   force: boolean;
   outputDir: string;
@@ -39,11 +41,18 @@ export type SetupGitHubOptions = {
   gitRunner?: GitRunner;
   /** Injectable config-name loader, for testing. Defaults to loading the config. */
   loadConfigName?: (configPath: string) => Promise<string | undefined>;
+  /** Injectable TailorDB namespace loader, for testing. Defaults to loading the config. */
+  loadErdNamespaces?: (configPath: string) => Promise<string[]>;
 };
 
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
   return config.name;
+}
+
+async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
+  const { config } = await loadConfig(configPath);
+  return extractOwnedNamespaces(config);
 }
 
 // Kept in sync with the `workspace create` schema (cli/commands/workspace/create.ts).
@@ -113,6 +122,21 @@ function validateDir(dir: string): void {
   }
 }
 
+// ERD namespaces are embedded into a GitHub Actions matrix and artifact file
+// names. Keep them to path-safe scalar values.
+const ERD_NAMESPACE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+function validateErdNamespaces(namespaces: readonly string[]): void {
+  for (const namespace of namespaces) {
+    if (!ERD_NAMESPACE_RE.test(namespace)) {
+      throw new Error(
+        `TailorDB namespace "${namespace}" cannot be used in --erd-preview. ` +
+          "Only letters, numbers, '.', '_', and '-' are supported, and the name must start with a letter or number.",
+      );
+    }
+  }
+}
+
 // `rel` is "" for the root itself, ".." or "../foo" for an escape. Guard on
 // the path segment so a sibling-prefixed name like "..foo" is not rejected.
 function escapesRoot(rel: string): boolean {
@@ -164,6 +188,7 @@ type Resolved = {
   branch: string | null;
   environment: string;
   packageManager: PackageManager;
+  erdNamespaces: string[];
   render: RenderResult;
   inputs: LockInputs;
   file: string;
@@ -182,6 +207,9 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       "--no-plan cannot be combined with --tag (tag targets always run plan before deploy). " +
         "Drop --no-plan or use a branch target.",
     );
+  }
+  if (options.erdPreview && (options.tag || !options.plan)) {
+    throw new Error("--erd-preview requires a branch target with plan enabled.");
   }
 
   // Normalize before any filesystem use and before embedding into workflow
@@ -224,6 +252,18 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   let branch: string | null = null;
   let branchAutoDetected = false;
   let render: RenderResult;
+  let erdNamespaces: string[] = [];
+  if (options.erdPreview) {
+    const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
+    erdNamespaces = await loadErdNamespaces(configPath);
+    if (erdNamespaces.length === 0) {
+      throw new Error(
+        "No TailorDB namespaces found for --erd-preview. Define owned db namespaces in tailor.config.ts.",
+      );
+    }
+    validateErdNamespaces(erdNamespaces);
+  }
+
   if (kind === "branch") {
     branchAutoDetected = options.branch === undefined;
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
@@ -235,6 +275,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       environment,
       packageManager,
       plan: options.plan,
+      erdPreview: options.erdPreview ? { namespaces: erdNamespaces } : null,
     });
   } else {
     branch = options.branch ?? null;
@@ -260,6 +301,8 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     dir,
     packageManager,
     plan: kind === "branch" ? options.plan : true,
+    erdPreview: kind === "branch" ? options.erdPreview : false,
+    erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
   };
 
   return {
@@ -268,6 +311,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     branch,
     environment,
     packageManager,
+    erdNamespaces,
     render,
     inputs,
     file,

@@ -3,14 +3,9 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./",
-    "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true,
     "incremental": true,
-    "tsBuildInfoFile": "./.tsbuildinfo",
-    "paths": {
-      "@/*": ["./src/*"],
-      "@tailor-proto/*": ["../tailor-proto/src/*"]
-    }
+    "tsBuildInfoFile": "./.tsbuildinfo"
   },
   "include": [
     "./src/**/*.ts",

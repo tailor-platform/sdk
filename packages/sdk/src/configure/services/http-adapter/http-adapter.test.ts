@@ -1,6 +1,11 @@
-import { describe, expect, test } from "vitest";
-import { SDK_BRAND, isSdkBranded } from "@/utils/brand";
-import { createHttpAdapter } from "./http-adapter";
+import { describe, expect, expectTypeOf, test } from "vitest";
+import { SDK_BRAND, isSdkBranded } from "#/utils/brand";
+import {
+  createHttpAdapter,
+  type HttpAdapterInputFn,
+  type HttpAdapterTypedDocumentNode,
+} from "./http-adapter";
+import type { TypedQueryDocumentNode } from "graphql";
 
 describe("createHttpAdapter", () => {
   test("returns a branded HTTP adapter object", () => {
@@ -59,5 +64,76 @@ describe("createHttpAdapter", () => {
     expect(typeof adapter.input.get).toBe("function");
     expect(typeof adapter.input.post).toBe("function");
     expect(typeof adapter.input.delete).toBe("function");
+  });
+
+  test("infers output data and variables from typed document nodes", () => {
+    type GetUserData = { user: { id: string; name: string } | null };
+    type GetUserVariables = { id: string };
+    const getUserDocument = {} as HttpAdapterTypedDocumentNode<GetUserData, GetUserVariables>;
+    const get: HttpAdapterInputFn<typeof getUserDocument> = (req) => ({
+      query: getUserDocument,
+      variables: { id: req.path.split("/")[2] ?? "" },
+    });
+
+    createHttpAdapter({
+      name: "typed-user",
+      pathPattern: "/users/*",
+      input: {
+        get,
+      },
+      output: (resp) => {
+        expectTypeOf(resp.data).toEqualTypeOf<GetUserData | null | undefined>();
+        expectTypeOf(resp.data?.user?.name).toEqualTypeOf<string | undefined>();
+        return { body: JSON.stringify(resp.data?.user ?? null) };
+      },
+    });
+
+    createHttpAdapter({
+      name: "typed-missing-variables",
+      pathPattern: "/users/*",
+      input: {
+        // @ts-expect-error - typed document variables require variables.id
+        get: () => ({
+          query: getUserDocument,
+        }),
+      },
+    });
+
+    createHttpAdapter({
+      name: "typed-wrong-variables",
+      pathPattern: "/users/*",
+      input: {
+        // @ts-expect-error - typed document variables require an id string
+        get: () => ({
+          query: getUserDocument,
+          variables: { slug: "alice" },
+        }),
+      },
+    });
+  });
+
+  test("unions output data from multiple typed document methods", () => {
+    type GetData = { getUser: { id: string } | null };
+    type PostData = { createUser: { id: string } };
+    const getDocument = {} as HttpAdapterTypedDocumentNode<GetData>;
+    const postDocument = {} as TypedQueryDocumentNode<PostData, { name: string }>;
+
+    createHttpAdapter({
+      name: "typed-union",
+      pathPattern: "/users/*",
+      input: {
+        get: () => ({
+          query: getDocument,
+        }),
+        post: () => ({
+          query: postDocument,
+          variables: { name: "Alice" },
+        }),
+      },
+      output: (resp) => {
+        expectTypeOf(resp.data).toEqualTypeOf<GetData | PostData | null | undefined>();
+        return { body: JSON.stringify(resp.data ?? null) };
+      },
+    });
   });
 });

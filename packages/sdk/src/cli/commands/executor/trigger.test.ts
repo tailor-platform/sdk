@@ -2,22 +2,22 @@ import {
   ExecutorJobStatus,
   ExecutorTargetType,
   ExecutorTriggerType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { runCommand } from "politty";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { triggerCommand, triggerExecutor } from "./trigger";
-import type { ExecutorJob } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import type { ExecutorJob } from "@tailor-platform/tailor-proto/executor_resource_pb";
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   fetchAll: async <T>(
     fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
   ): Promise<T[]> => {
@@ -27,7 +27,7 @@ vi.mock("@/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/readonly-guard", () => ({
+vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 

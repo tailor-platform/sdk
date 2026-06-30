@@ -3,10 +3,10 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { statusCommand } from "./status";
 
 const state = vi.hoisted(() => ({
@@ -14,16 +14,16 @@ const state = vi.hoisted(() => ({
   getMetadata: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 

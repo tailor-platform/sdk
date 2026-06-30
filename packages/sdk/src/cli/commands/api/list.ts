@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { logger } from "@/cli/shared/logger";
+import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
 import { listMethodNames } from "./proto-reflect";
 
 export const listCommand = defineAppCommand({

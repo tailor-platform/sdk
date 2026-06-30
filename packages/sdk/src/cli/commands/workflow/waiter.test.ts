@@ -2,7 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import {
   getWorkflowWaitFailureMessage,
@@ -12,7 +12,7 @@ import {
 import type {
   WorkflowExecution,
   WorkflowJobExecution,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 function workflowExecution(
   status: WorkflowExecution_Status,

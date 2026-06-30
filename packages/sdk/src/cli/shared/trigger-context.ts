@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
-import { findAllJobs, buildJobNameMap } from "@/cli/services/workflow/job-detector";
-import { transformFunctionTriggers } from "@/cli/services/workflow/trigger-transformer";
-import { findAllWorkflows, buildWorkflowNameMap } from "@/cli/services/workflow/workflow-detector";
-import { logger } from "@/cli/shared/logger";
+import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
+import { findAllJobs, buildJobNameMap } from "#/cli/services/workflow/job-detector";
+import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
+import { findAllWorkflows, buildWorkflowNameMap } from "#/cli/services/workflow/workflow-detector";
+import { logger } from "#/cli/shared/logger";
 import type { Plugin } from "rolldown";
 
 /**

@@ -1,29 +1,29 @@
 import { z } from "zod";
-import { applyAIGateway, planAIGateway } from "@/cli/commands/deploy/aigateway";
-import { applyApplication, planApplication } from "@/cli/commands/deploy/application";
-import { applyAuth, planAuth } from "@/cli/commands/deploy/auth";
-import { applyExecutor, planExecutor } from "@/cli/commands/deploy/executor";
+import { applyAIGateway, planAIGateway } from "#/cli/commands/deploy/aigateway";
+import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
+import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
+import { applyExecutor, planExecutor } from "#/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
   planFunctionRegistry,
-} from "@/cli/commands/deploy/function-registry";
-import { applyIdP, planIdP } from "@/cli/commands/deploy/idp";
-import { applyPipeline, planPipeline } from "@/cli/commands/deploy/resolver";
-import { applySecretManager, planSecretManager } from "@/cli/commands/deploy/secret-manager";
-import { applyStaticWebsite, planStaticWebsite } from "@/cli/commands/deploy/staticwebsite";
-import { applyTailorDB, planTailorDB } from "@/cli/commands/deploy/tailordb";
-import { applyWorkflow, planWorkflow } from "@/cli/commands/deploy/workflow";
-import { type Application, defineApplication } from "@/cli/services/application";
-import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
-import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { assertWritable } from "@/cli/shared/readonly-guard";
-import ml from "@/utils/multiline";
-import type { PlanContext } from "@/cli/commands/deploy/types";
+} from "#/cli/commands/deploy/function-registry";
+import { applyIdP, planIdP } from "#/cli/commands/deploy/idp";
+import { applyPipeline, planPipeline } from "#/cli/commands/deploy/resolver";
+import { applySecretManager, planSecretManager } from "#/cli/commands/deploy/secret-manager";
+import { applyStaticWebsite, planStaticWebsite } from "#/cli/commands/deploy/staticwebsite";
+import { applyTailorDB, planTailorDB } from "#/cli/commands/deploy/tailordb/index";
+import { applyWorkflow, planWorkflow } from "#/cli/commands/deploy/workflow";
+import { type Application, defineApplication } from "#/cli/services/application";
+import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
+import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import ml from "#/utils/multiline";
+import type { PlanContext } from "#/cli/commands/deploy/types";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -91,31 +91,34 @@ async function execRemove(
   const secretManager = await planSecretManager(ctx);
 
   // Print planned deletions (same order as apply dry-run)
-  functionRegistry.changeSet.print();
-  staticWebsite.changeSet.print();
-  aiGateway.changeSet.print();
-  app.print();
-  tailorDB.changeSet.service.print();
-  tailorDB.changeSet.type.print();
-  tailorDB.changeSet.gqlPermission.print();
-  pipeline.changeSet.service.print();
-  pipeline.changeSet.resolver.print();
-  executor.changeSet.print();
-  workflow.changeSet.print();
-  idp.changeSet.service.print();
-  idp.changeSet.client.print();
-  auth.changeSet.service.print();
-  auth.changeSet.idpConfig.print();
-  auth.changeSet.userProfileConfig.print();
-  auth.changeSet.tenantConfig.print();
-  auth.changeSet.machineUser.print();
-  auth.changeSet.oauth2Client.print();
-  auth.changeSet.authHook.print();
-  auth.changeSet.scim.print();
-  auth.changeSet.scimResource.print();
-  auth.changeSet.connection.print();
-  secretManager.vaultChangeSet.print();
-  secretManager.secretChangeSet.print();
+  const removeLines = [
+    ...functionRegistry.changeSet.lines(),
+    ...staticWebsite.changeSet.lines(),
+    ...aiGateway.changeSet.lines(),
+    ...app.lines(),
+    ...tailorDB.changeSet.service.lines(),
+    ...tailorDB.changeSet.type.lines(),
+    ...tailorDB.changeSet.gqlPermission.lines(),
+    ...pipeline.changeSet.service.lines(),
+    ...pipeline.changeSet.resolver.lines(),
+    ...executor.changeSet.lines(),
+    ...workflow.changeSet.lines(),
+    ...idp.changeSet.service.lines(),
+    ...idp.changeSet.client.lines(),
+    ...auth.changeSet.service.lines(),
+    ...auth.changeSet.idpConfig.lines(),
+    ...auth.changeSet.userProfileConfig.lines(),
+    ...auth.changeSet.tenantConfig.lines(),
+    ...auth.changeSet.machineUser.lines(),
+    ...auth.changeSet.oauth2Client.lines(),
+    ...auth.changeSet.authHook.lines(),
+    ...auth.changeSet.scim.lines(),
+    ...auth.changeSet.scimResource.lines(),
+    ...auth.changeSet.connection.lines(),
+    ...secretManager.vaultChangeSet.lines(),
+    ...secretManager.secretChangeSet.lines(),
+  ];
+  if (removeLines.length > 0) logger.log(removeLines.join("\n"));
 
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&
