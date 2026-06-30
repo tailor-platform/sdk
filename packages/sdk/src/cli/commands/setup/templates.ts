@@ -146,7 +146,7 @@ function applyCommon(
 export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   const { branch, plan } = params;
   const seedValidate = params.seedValidate ?? false;
-  const migrationDriftCheck = params.migrationDriftCheck ?? true;
+  const migrationDriftCheck = params.migrationDriftCheck ?? false;
   const erdPreview = plan ? params.erdPreview : null;
 
   let out = branchTemplate;
@@ -240,7 +240,7 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
   const { tagPattern, branch } = params;
   const hasGuard = branch !== undefined;
   const seedValidate = params.seedValidate ?? false;
-  const migrationDriftCheck = params.migrationDriftCheck ?? true;
+  const migrationDriftCheck = params.migrationDriftCheck ?? false;
 
   let out = tagTemplate;
   out = block(out, "TAG_GUARD_JOB", hasGuard);
