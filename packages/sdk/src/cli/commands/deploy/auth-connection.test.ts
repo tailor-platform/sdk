@@ -5,9 +5,10 @@ import type { AuthService } from "#/cli/services/auth/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 
-const { mockLoggerWarn, mockLoggerInfo } = vi.hoisted(() => ({
+const { mockLoggerWarn, mockLoggerInfo, mockSaveSecretsState } = vi.hoisted(() => ({
   mockLoggerWarn: vi.fn(),
   mockLoggerInfo: vi.fn(),
+  mockSaveSecretsState: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/logger", () => ({
@@ -25,7 +26,7 @@ vi.mock("./secrets-state", async (importOriginal) => {
   return {
     ...actual,
     loadSecretsState: (...args: unknown[]) => mockLoadSecretsState(...args),
-    saveSecretsState: vi.fn(),
+    saveSecretsState: (...args: unknown[]) => mockSaveSecretsState(...args),
     // Deterministic hash so tests can pin the "unchanged" secret state.
     hashValue: () => "fixed-hash",
   };
@@ -241,6 +242,7 @@ describe("applyAuthConnections", () => {
   beforeEach(() => {
     mockLoadSecretsState.mockReset();
     mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
+    mockSaveSecretsState.mockReset();
     mockLoggerWarn.mockReset();
     mockLoggerInfo.mockReset();
   });
@@ -302,6 +304,33 @@ describe("applyAuthConnections", () => {
     );
     expect(client.deleteAuthConnection).not.toHaveBeenCalled();
     expect(client.createAuthConnection).not.toHaveBeenCalled();
+  });
+
+  test("does not save secret hash when clientSecret is absent from update mask (CI scenario)", async () => {
+    const client = createMockClient({
+      connections: [{ name: "conn", ownerLabel: appName }],
+    });
+    const ciConfig: AuthConnectionConfig = {
+      ...oauth2DesiredConfig,
+      clientSecret: "",
+      providerUrl: "https://changed.example.com",
+    } as AuthConnectionConfig;
+
+    const result = await planAuthConnections(client, workspaceId, appName, undefined, [
+      { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
+    ]);
+    expect(result.changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
+    const [replace] = result.changeSet.replaces;
+    expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
+
+    const initialState = { vaults: {}, connections: { conn: "old-hash" } };
+    mockLoadSecretsState.mockReturnValue(initialState);
+    await applyAuthConnections(client, result, "create-update");
+
+    const savedState = mockSaveSecretsState.mock.calls[0]?.[0] as
+      | { connections: Record<string, string> }
+      | undefined;
+    expect(savedState?.connections["conn"]).toBe("old-hash");
   });
 
   test("warns user to re-authorize when the server responds UNAUTHORIZED", async () => {

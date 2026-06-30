@@ -305,7 +305,10 @@ export async function applyAuthConnections(
     }
     for (const replace of changeSet.replaces) {
       const conn = replace.updateRequest.connection;
-      if (conn?.config?.case === "oauth2") {
+      if (
+        conn?.config?.case === "oauth2" &&
+        replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret")
+      ) {
         state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
       }
     }
