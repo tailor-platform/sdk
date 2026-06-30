@@ -41,7 +41,7 @@ export default {
       expect(result.name).toBe("my-resolver");
     });
 
-    test("detects a branded resolver with runtime helper keys", async () => {
+    test("rejects a branded resolver with unknown helper keys", async () => {
       const filePath = path.join(testDir, "resolver-with-helper.mjs");
       fs.writeFileSync(
         filePath,
@@ -62,9 +62,9 @@ export default resolver;
 `,
       );
 
-      const result = await detectFunctionType({ filePath });
-      expect(result.type).toBe("resolver");
-      expect(result.name).toBe("my-resolver");
+      await expect(detectFunctionType({ filePath })).rejects.toThrow(
+        "Could not detect function type",
+      );
     });
   });
 
