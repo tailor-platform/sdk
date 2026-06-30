@@ -473,7 +473,13 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     out = line(out, "DEPLOY_ENVIRONMENT", `environment: ${environment}`);
   }
 
-  const planSteps = apps
+  const driftCheckStep = [
+    `- id: tailor-drift-check`,
+    `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # feat/setup`,
+    `  with:`,
+    `    package-manager: ${packageManager}`,
+  ].join("\n");
+  const perAppPlanSteps = apps
     .flatMap((app) => {
       const wd = app.dir !== "." ? app.dir : undefined;
       const wdLine = wd ? `\n    working-directory: ${wd}` : "";
@@ -482,10 +488,6 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
         `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # feat/setup`,
         `  with:`,
         `    package-manager: ${packageManager}${wdLine}`,
-        `- id: tailor-drift-check-${app.name}`,
-        `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # feat/setup`,
-        `  with:`,
-        `    package-manager: ${packageManager}`,
         `- id: tailor-plan-${app.name}`,
         `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
         `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # feat/setup`,
@@ -499,7 +501,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       ];
     })
     .join("\n");
-  out = line(out, "PER_APP_PLAN_STEPS", planSteps);
+  out = line(out, "PER_APP_PLAN_STEPS", `${driftCheckStep}\n${perAppPlanSteps}`);
 
   const deploySteps = apps
     .flatMap((app) => [

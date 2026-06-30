@@ -664,6 +664,13 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   const packageManager = detectPackageManager(outputDir);
   const lock = readLock(outputDir);
 
+  if (!lock) {
+    throw new Error(
+      ".github/tailor-sdk.lock not found. " +
+        "Run `tailor-sdk setup action --name <name>` for each app before running setup coordinate.",
+    );
+  }
+
   // Resolve each action name to its lock entry to get the working directory.
   const seenNames = new Set<string>();
   const apps: CoordinateApp[] = actions.map((actionName) => {
@@ -674,7 +681,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       );
     }
     seenNames.add(name);
-    const entry = lock?.targets.find((t) => t.kind === "action" && t.workspaceName === name);
+    const entry = lock.targets.find((t) => t.kind === "action" && t.workspaceName === name);
     if (!entry) {
       throw new Error(
         `Action target "${name}" not found in .github/tailor-sdk.lock. ` +
@@ -741,7 +748,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
     contentHash: hashContent(render.content),
   };
 
-  const targets = [...(lock?.targets ?? [])];
+  const targets = [...lock.targets];
   const idx = targets.findIndex(
     (t) => t.kind === newTarget.kind && t.workspaceName === newTarget.workspaceName,
   );

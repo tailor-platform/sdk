@@ -912,7 +912,12 @@ describe("setupCoordinate", () => {
     );
   });
 
+  test("errors when lock file is missing", async () => {
+    await expect(setupCoordinate(coordinateOpts())).rejects.toThrow(/tailor-sdk\.lock not found/);
+  });
+
   test("errors when an action target is not in the lock", async () => {
+    await setupTarget(actionOpts("api"));
     await expect(setupCoordinate(coordinateOpts({ actions: ["missing-app"] }))).rejects.toThrow(
       /not found in .github\/tailor-sdk\.lock/,
     );

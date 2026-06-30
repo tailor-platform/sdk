@@ -280,7 +280,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   if (!lock || lock.targets.length === 0) {
     throw new Error(
       "No managed workflows found (.github/tailor-sdk.lock is missing or empty). " +
-        "Run `tailor-sdk setup` first.",
+        "Run `tailor-sdk setup branch` (or another setup subcommand) first.",
     );
   }
 
