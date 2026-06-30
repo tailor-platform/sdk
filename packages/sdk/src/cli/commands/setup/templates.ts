@@ -60,6 +60,11 @@ export type RenderPreviewParams = {
   packageManager: PackageManager;
   /** Workspace region passed to `workspace create` on first PR push. */
   region: string;
+  /**
+   * When true, deploy preview only for PRs labeled `tailor:preview` (label-triggered mode).
+   * Default false: preview deploys on every PR (open, sync, reopen).
+   */
+  requirePreviewLabel?: boolean;
 };
 
 export type RenderResult = {
@@ -308,6 +313,7 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
  */
 export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult {
   const { branch } = params;
+  const requirePreviewLabel = params.requirePreviewLabel ?? false;
 
   let out = previewTemplate;
   out = line(
@@ -315,6 +321,9 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "PATHS",
     params.workingDirectory ? `paths: ["${params.workingDirectory}/**"]` : undefined,
   );
+
+  out = block(out, "REQUIRE_PREVIEW_LABEL", requirePreviewLabel);
+  out = block(out, "ALL_PR_TRIGGER", !requirePreviewLabel);
 
   out = applyCommon(out, params)
     .replaceAll("__BRANCH__", () => branch)
