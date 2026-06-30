@@ -832,6 +832,21 @@ describe("setupTarget (integration)", () => {
     expect(content).toContain("labeled");
   });
 
+  test("preview: rejects an invalid region", async () => {
+    await expect(
+      setupTarget({
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west ${{ evil }}",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+      }),
+    ).rejects.toThrow(/Invalid region/);
+  });
+
   test("enables migration-drift-check step and lock flag when loadHasMigrations returns true", async () => {
     await setupTarget(
       baseOptions({ workspaceName: "my-app", loadHasMigrations: async () => true }),

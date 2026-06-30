@@ -180,6 +180,17 @@ function validateEnvironment(environment: string): void {
   }
 }
 
+// `--region` is embedded into workflow YAML as a plain scalar.
+const REGION_RE = /^[A-Za-z0-9._-]+$/;
+
+function validateRegion(region: string): void {
+  if (!REGION_RE.test(region)) {
+    throw new Error(
+      `Invalid region "${region}". Only letters, numbers, ".", "_", and "-" are supported.`,
+    );
+  }
+}
+
 // `--dir` is embedded into workflow YAML (paths filters / working-directory).
 // Restrict it to POSIX path characters so it cannot break the YAML or smuggle
 // in a ${{ }} expression. Checked after backslashes are normalized to "/".
@@ -367,6 +378,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     branchAutoDetected = options.branch === undefined;
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
     validateBranch(branch);
+    validateRegion(options.region);
     render = renderPreviewWorkflow({
       workspaceName,
       branch,
