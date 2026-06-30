@@ -60,6 +60,40 @@ const coordinateCommand = defineAppCommand({
   },
 });
 
+const actionCommand = defineAppCommand({
+  name: "action",
+  description:
+    "Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).",
+  args: z
+    .object({
+      "workspace-name": arg(z.string().min(1).optional(), {
+        alias: "n",
+        description: "Workspace name (defaults to the config 'name')",
+      }),
+      dir: arg(z.string().min(1).default("."), {
+        alias: "d",
+        description: "App directory",
+      }),
+      environment: arg(z.string().min(1).optional(), {
+        description: "GitHub Environment (defaults to the workspace name)",
+      }),
+      force: arg(z.boolean().default(false), {
+        description: "Discard hand edits and regenerate",
+      }),
+    })
+    .strict(),
+  run: async (args) => {
+    await setupGitHub({
+      kind: "action",
+      workspaceName: args["workspace-name"],
+      dir: args.dir,
+      environment: args.environment,
+      force: args.force,
+      outputDir: process.cwd(),
+    });
+  },
+});
+
 const branchCommand = defineAppCommand({
   name: "branch",
   description: "Generate a branch-target deploy workflow (push to branch triggers deploy).",
@@ -202,6 +236,7 @@ export const setupCommand = defineCommand({
   name: "setup",
   description: "Generate CI deploy workflows for your project. (beta)",
   subCommands: {
+    action: actionCommand,
     branch: branchCommand,
     tag: tagCommand,
     preview: previewCommand,

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import actionTemplate from "./action.yml";
 import branchTemplate from "./branch.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
@@ -65,6 +66,11 @@ export type RenderPreviewParams = {
    * Default false: preview deploys on every PR (open, sync, reopen).
    */
   requirePreviewLabel?: boolean;
+};
+
+export type RenderActionParams = {
+  workspaceName: string;
+  workingDirectory?: string;
 };
 
 export type RenderResult = {
@@ -343,6 +349,25 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "tailor-preview-cleanup/tailor-install",
     "tailor-preview-cleanup/tailor-preview-cleanup",
   ];
+
+  return { content: out, generatedIds };
+}
+
+/**
+ * Render the per-app composite action.
+ *
+ * The action contains only the deploy step and a failure notification.
+ * Checkout, setup, and install are the caller's responsibility (coordinator workflow).
+ * @param params - Workspace and rendering configuration
+ * @returns Rendered YAML and the list of managed step ids
+ */
+export function renderActionWorkflow(params: RenderActionParams): RenderResult {
+  let out = actionTemplate;
+  out = line(out, "HEADER", HEADER);
+
+  out = out.replaceAll("__WORKSPACE_NAME__", () => params.workspaceName);
+
+  const generatedIds = ["tailor-apply", "tailor-notify"];
 
   return { content: out, generatedIds };
 }

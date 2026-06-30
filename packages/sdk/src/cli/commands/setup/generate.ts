@@ -20,6 +20,7 @@ import {
 } from "./lock";
 import {
   detectPackageManager,
+  renderActionWorkflow,
   renderBranchWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
@@ -69,7 +70,15 @@ export type PreviewSetupOptions = CommonSetupOptions & {
   requirePreviewLabel?: boolean;
 };
 
-export type SetupGitHubOptions = BranchSetupOptions | TagSetupOptions | PreviewSetupOptions;
+export type ActionSetupOptions = CommonSetupOptions & {
+  kind: "action";
+};
+
+export type SetupGitHubOptions =
+  | BranchSetupOptions
+  | TagSetupOptions
+  | PreviewSetupOptions
+  | ActionSetupOptions;
 
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
@@ -318,8 +327,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       packageManager,
       migrationDriftCheck: hasMigrations,
     });
-  } else {
-    // preview
+  } else if (kind === "preview") {
     branchAutoDetected = options.branch === undefined;
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
     validateBranch(branch);
@@ -332,20 +340,27 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       region: options.region,
       requirePreviewLabel: options.requirePreviewLabel ?? false,
     });
+  } else {
+    // action — no branch detection, no package-manager embedding (caller installs)
+    render = renderActionWorkflow({ workspaceName, workingDirectory });
   }
 
   // File name encodes the target kind so branch + tag + preview can coexist
   // under the same workspace name without colliding.
   const kindSuffix = kind === "tag" ? "-tag" : kind === "preview" ? "-preview" : "";
-  const file = `.github/workflows/tailor-${workspaceName}${kindSuffix}.yml`;
+  const file =
+    kind === "action"
+      ? `.github/actions/tailor-${workspaceName}/action.yml`
+      : `.github/workflows/tailor-${workspaceName}${kindSuffix}.yml`;
+
   const inputs: LockInputs = {
-    branch,
+    branch: kind === "action" ? null : branch,
     branchAutoDetected: kind === "branch" || kind === "preview" ? branchAutoDetected : undefined,
     tagPattern: kind === "tag" ? options.tagPattern : null,
     environment,
     dir,
     packageManager,
-    plan: kind === "branch" ? options.plan : true,
+    plan: kind === "branch" ? options.plan : kind === "action" ? false : true,
     region: kind === "preview" ? options.region : undefined,
     requirePreviewLabel:
       kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
@@ -549,8 +564,6 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
   writeLock(options.outputDir, { version: LOCK_VERSION, targets });
 
   if (decision.action === "restore") {
-    // The file was tracked in the lock but missing on disk; it is re-rendered
-    // from the current options (not reconstructed from the lock contents).
     logger.success(`Regenerated ${styles.path(resolved.file)} (was missing on disk)`);
   } else if (decision.action === "regenerate") {
     logger.success(`Regenerated ${styles.path(resolved.file)}`);
@@ -558,5 +571,17 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
     logger.success(`Generated ${styles.path(resolved.file)}`);
   }
 
-  printNextSteps({ environment: resolved.environment, idInjected });
+  if (resolved.kind === "action") {
+    logger.newline();
+    logger.info("Next steps:");
+    logger.newline();
+    logger.log(
+      `The composite action has been generated at ${styles.path(resolved.file)}.`,
+    );
+    logger.log(
+      "Use `tailor-sdk setup coordinate` to generate a coordinator workflow that orchestrates this action.",
+    );
+  } else {
+    printNextSteps({ environment: resolved.environment, idInjected });
+  }
 }

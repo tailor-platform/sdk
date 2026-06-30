@@ -1,0 +1,58 @@
+# __HEADER__
+name: __WORKSPACE_NAME__
+description: >-
+  Deploy __WORKSPACE_NAME__ to Tailor Platform.
+  Checkout and dependency installation are expected to be handled by the caller.
+
+inputs:
+  workspace-id:
+    description: Tailor Platform workspace id
+    required: true
+  workspace-name:
+    description: Workspace name (used in Slack notifications)
+    required: false
+  working-directory:
+    description: App directory relative to the repository root
+    required: false
+    default: "."
+  platform-client-id:
+    description: Machine-user client id
+    required: true
+  platform-client-secret:
+    description: Machine-user client secret
+    required: true
+  github-token:
+    description: GitHub token
+    required: true
+  slack-token:
+    description: Slack bot token
+    required: false
+  slack-channel-id:
+    description: Slack channel id
+    required: false
+
+outputs:
+  app-url:
+    description: Deployed application URL
+    value: ${{ steps.tailor-apply.outputs.app-url }}
+
+runs:
+  using: composite
+  steps:
+    - id: tailor-apply
+      uses: tailor-platform/actions/deploy@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+      with:
+        workspace-id: ${{ inputs.workspace-id }}
+        working-directory: ${{ inputs.working-directory }}
+        platform-client-id: ${{ inputs.platform-client-id }}
+        platform-client-secret: ${{ inputs.platform-client-secret }}
+    - id: tailor-notify
+      if: failure()
+      uses: tailor-platform/actions/notify@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+      with:
+        provider: slack
+        status: failure
+        workspace-name: ${{ inputs.workspace-name }}
+        slack-token: ${{ inputs.slack-token }}
+        slack-channel-id: ${{ inputs.slack-channel-id }}
+        # user-mapping: ${{ inputs.user-mapping }}
