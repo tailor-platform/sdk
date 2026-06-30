@@ -82,11 +82,8 @@ jobs:
           package-manager: __PACKAGE_MANAGER__
           label: __WORKSPACE_NAME__
           # __WORKING_DIRECTORY__
-          # PAT fallback: if a Proxy-Free Machine User (PFMU) is not available,
-          # comment out the two lines below and uncomment platform-token instead.
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
-          # platform-token: ${{ secrets.TAILOR_PLATFORM_TOKEN }}
 
   tailor-deploy:
     needs: tailor-plan
@@ -116,11 +113,8 @@ jobs:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
-          # PAT fallback: if a Proxy-Free Machine User (PFMU) is not available,
-          # comment out the two lines below and uncomment platform-token instead.
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
-          # platform-token: ${{ secrets.TAILOR_PLATFORM_TOKEN }}
       # __SEED_DATA_START__
       - id: seed-data
         if: false
