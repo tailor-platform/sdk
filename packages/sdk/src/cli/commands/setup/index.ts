@@ -250,9 +250,9 @@ export const setupCommand = defineCommand({
   subCommands: {
     action: actionCommand,
     branch: branchCommand,
-    tag: tagCommand,
-    preview: previewCommand,
     check: checkCommand,
     coordinate: coordinateCommand,
+    preview: previewCommand,
+    tag: tagCommand,
   },
 });
