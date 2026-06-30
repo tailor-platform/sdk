@@ -37,12 +37,12 @@ tailor-sdk setup action [options]
 
 **Options**
 
-| Option                              | Alias | Description                                         | Required | Default |
-| ----------------------------------- | ----- | --------------------------------------------------- | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name')      | No       | -       |
-| `--dir <DIR>`                       | `-d`  | App directory                                       | No       | `"."`   |
-| `--environment <ENVIRONMENT>`       | -     | GitHub Environment (defaults to the workspace name) | No       | -       |
-| `--force`                           | -     | Discard hand edits and regenerate                   | No       | `false` |
+| Option                        | Alias | Description                                         | Required | Default |
+| ----------------------------- | ----- | --------------------------------------------------- | -------- | ------- |
+| `--name <NAME>`               | `-n`  | Name (defaults to the config 'name')                | No       | -       |
+| `--dir <DIR>`                 | `-d`  | App directory                                       | No       | `"."`   |
+| `--environment <ENVIRONMENT>` | -     | GitHub Environment (defaults to the workspace name) | No       | -       |
+| `--force`                     | -     | Discard hand edits and regenerate                   | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -58,15 +58,15 @@ tailor-sdk setup branch [options]
 
 **Options**
 
-| Option                              | Alias | Description                                                                    | Required | Default |
-| ----------------------------------- | ----- | ------------------------------------------------------------------------------ | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name')                                 | No       | -       |
-| `--branch <BRANCH>`                 | -     | Deploy trigger branch (defaults to the detected default branch)                | No       | -       |
-| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)   | No       | -       |
-| `--no-plan`                         | -     | Disable the plan job (deploy-only mode)                                        | No       | `false` |
-| `--erd-preview`                     | -     | Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces | No       | `false` |
-| `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                            | No       | `"."`   |
-| `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                  | No       | `false` |
+| Option                        | Alias | Description                                                                    | Required | Default |
+| ----------------------------- | ----- | ------------------------------------------------------------------------------ | -------- | ------- |
+| `--name <NAME>`               | `-n`  | Name (defaults to the config 'name')                                           | No       | -       |
+| `--branch <BRANCH>`           | -     | Deploy trigger branch (defaults to the detected default branch)                | No       | -       |
+| `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)   | No       | -       |
+| `--no-plan`                   | -     | Disable the plan job (deploy-only mode)                                        | No       | `false` |
+| `--erd-preview`               | -     | Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces | No       | `false` |
+| `--dir <DIR>`                 | `-d`  | App directory (for monorepo setups)                                            | No       | `"."`   |
+| `--force`                     | -     | Discard hand edits / take over unmanaged files and regenerate                  | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -100,15 +100,15 @@ tailor-sdk setup coordinate [options]
 
 **Options**
 
-| Option                              | Alias | Description                                                                             | Required | Default |
-| ----------------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Coordinator name (used in the generated workflow file name and job names)               | Yes      | -       |
-| `--action <ACTION>`                 | -     | Composite action to include (can be specified multiple times). tailor- prefix optional. | No       | `[]`    |
-| `--branch <BRANCH>`                 | -     | Branch target: deploy trigger branch (defaults to the detected default branch)          | No       | -       |
-| `--tag`                             | -     | Generate a tag target coordinator                                                       | No       | `false` |
-| `--preview`                         | -     | Generate a preview coordinator                                                          | No       | `false` |
-| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs                                             | No       | -       |
-| `--force`                           | -     | Discard hand edits and regenerate                                                       | No       | `false` |
+| Option                        | Alias | Description                                                                             | Required | Default |
+| ----------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | ------- |
+| `--name <NAME>`               | `-n`  | Coordinator name (used in the generated workflow file name and job names)               | Yes      | -       |
+| `--action <ACTION>`           | -     | Composite action to include (can be specified multiple times). tailor- prefix optional. | No       | `[]`    |
+| `--branch <BRANCH>`           | -     | Branch target: deploy trigger branch (defaults to the detected default branch)          | No       | -       |
+| `--tag`                       | -     | Generate a tag target coordinator                                                       | No       | `false` |
+| `--preview`                   | -     | Generate a preview coordinator                                                          | No       | `false` |
+| `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs                                             | No       | -       |
+| `--force`                     | -     | Discard hand edits and regenerate                                                       | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -124,15 +124,15 @@ tailor-sdk setup preview [options]
 
 **Options**
 
-| Option                              | Alias | Description                                                               | Required | Default |
-| ----------------------------------- | ----- | ------------------------------------------------------------------------- | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name')                            | No       | -       |
-| `--branch <BRANCH>`                 | -     | Branch to filter PRs by (defaults to the detected default branch)         | No       | -       |
-| `--region <REGION>`                 | -     | Workspace region for preview workspace creation (e.g. us-west). Required. | Yes      | -       |
-| `--require-preview-label`           | -     | Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.  | No       | `false` |
-| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the preview jobs (defaults to the workspace name)  | No       | -       |
-| `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                       | No       | `"."`   |
-| `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate             | No       | `false` |
+| Option                        | Alias | Description                                                               | Required | Default |
+| ----------------------------- | ----- | ------------------------------------------------------------------------- | -------- | ------- |
+| `--name <NAME>`               | `-n`  | Name (defaults to the config 'name')                                      | No       | -       |
+| `--branch <BRANCH>`           | -     | Branch to filter PRs by (defaults to the detected default branch)         | No       | -       |
+| `--region <REGION>`           | -     | Workspace region for preview workspace creation (e.g. us-west). Required. | Yes      | -       |
+| `--require-preview-label`     | -     | Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.  | No       | `false` |
+| `--environment <ENVIRONMENT>` | -     | GitHub Environment for the preview jobs (defaults to the workspace name)  | No       | -       |
+| `--dir <DIR>`                 | `-d`  | App directory (for monorepo setups)                                       | No       | `"."`   |
+| `--force`                     | -     | Discard hand edits / take over unmanaged files and regenerate             | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -148,14 +148,14 @@ tailor-sdk setup tag [options]
 
 **Options**
 
-| Option                              | Alias | Description                                                                  | Required | Default |
-| ----------------------------------- | ----- | ---------------------------------------------------------------------------- | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name')                               | No       | -       |
-| `--tag-pattern <TAG_PATTERN>`       | -     | Tag glob to match (defaults to v\*)                                          | No       | `"v*"`  |
-| `--branch <BRANCH>`                 | -     | Tag-reachability guard branch (no guard when omitted)                        | No       | -       |
-| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name) | No       | -       |
-| `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                          | No       | `"."`   |
-| `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                | No       | `false` |
+| Option                        | Alias | Description                                                                  | Required | Default |
+| ----------------------------- | ----- | ---------------------------------------------------------------------------- | -------- | ------- |
+| `--name <NAME>`               | `-n`  | Name (defaults to the config 'name')                                         | No       | -       |
+| `--tag-pattern <TAG_PATTERN>` | -     | Tag glob to match (defaults to v\*)                                          | No       | `"v*"`  |
+| `--branch <BRANCH>`           | -     | Tag-reachability guard branch (no guard when omitted)                        | No       | -       |
+| `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name) | No       | -       |
+| `--dir <DIR>`                 | `-d`  | App directory (for monorepo setups)                                          | No       | `"."`   |
+| `--force`                     | -     | Discard hand edits / take over unmanaged files and regenerate                | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

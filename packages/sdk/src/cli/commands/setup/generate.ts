@@ -4,8 +4,8 @@ import { ensureConfigId } from "#/cli/commands/deploy/config-id-injector";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { getNamespacesWithMigrations } from "../tailordb/migrate/config";
 import { logger, styles } from "#/cli/shared/logger";
+import { getNamespacesWithMigrations } from "../tailordb/migrate/config";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
@@ -129,7 +129,7 @@ function validateWorkspaceName(name: string): void {
     throw new Error(
       `Invalid workspace name "${name}". Names must be 3-63 characters of lowercase ` +
         "letters, numbers, and hyphens, and cannot start or end with a hyphen. " +
-        "Pass a valid name with --workspace-name.",
+        "Pass a valid name with --name.",
     );
   }
 }
@@ -279,7 +279,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   if (!workspaceName) {
     throw new Error(
       "Could not determine the workspace name. " +
-        "Pass --workspace-name, or set 'name' in tailor.config.ts.",
+        "Pass --name, or set 'name' in tailor.config.ts.",
     );
   }
   validateWorkspaceName(workspaceName);
@@ -380,8 +380,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     packageManager,
     plan: kind === "branch" ? options.plan : kind === "action" ? false : true,
     region: kind === "preview" ? options.region : undefined,
-    requirePreviewLabel:
-      kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
+    requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
     erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
   };
@@ -469,7 +468,7 @@ function assertNoKindCollision(obj: {
   if (collision) {
     throw new Error(
       `A ${collision.kind} target already owns ${file}, which conflicts with this ${kind} target. ` +
-        "Pass a different name with --workspace-name to generate a separate workflow.",
+        "Pass a different name with --name to generate a separate workflow.",
     );
   }
 }
@@ -593,9 +592,7 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
     logger.newline();
     logger.info("Next steps:");
     logger.newline();
-    logger.log(
-      `The composite action has been generated at ${styles.path(resolved.file)}.`,
-    );
+    logger.log(`The composite action has been generated at ${styles.path(resolved.file)}.`);
     logger.log(
       "Use `tailor-sdk setup coordinate` to generate a coordinator workflow that orchestrates this action.",
     );
@@ -608,7 +605,7 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
  * Generate the coordinator workflow that orchestrates per-app composite actions.
  *
  * Unlike `setupGitHub`, this function does not read a Tailor config. The coordinator
- * name is required via `--workspace-name`. App working directories are resolved from
+ * name is required via `--name`. App working directories are resolved from
  * the lock file entries created by `setup action`.
  * @param options - Coordinate setup options
  */
@@ -649,9 +646,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
 
   // Resolve each action name to its lock entry to get the working directory.
   const apps: CoordinateApp[] = actions.map((actionName) => {
-    const name = actionName.startsWith("tailor-")
-      ? actionName.slice("tailor-".length)
-      : actionName;
+    const name = actionName.startsWith("tailor-") ? actionName.slice("tailor-".length) : actionName;
     const entry = lock?.targets.find((t) => t.kind === "action" && t.workspaceName === name);
     const dir = entry?.inputs.dir ?? ".";
     return { name, dir };

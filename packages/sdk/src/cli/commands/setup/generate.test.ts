@@ -2,12 +2,7 @@ import * as fs from "node:fs";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import {
-  decideAction,
-  setupGitHub,
-  type BranchSetupOptions,
-  type SetupGitHubOptions,
-} from "./generate";
+import { decideAction, setupGitHub, type BranchSetupOptions } from "./generate";
 import { detectDefaultBranch } from "./git";
 import { hashContent, readLock } from "./lock";
 import {
@@ -791,7 +786,7 @@ describe("setupGitHub (integration)", () => {
 
   test("branch and tag targets coexist under the same workspace name", async () => {
     // Branch target generates tailor-my-app.yml; tag target generates
-    // tailor-my-app-tag.yml — no filename collision, no --workspace-name workaround needed.
+    // tailor-my-app-tag.yml — no filename collision, no --name workaround needed.
     await setupGitHub(baseOptions({ workspaceName: "my-app" }));
     await expect(
       setupGitHub({

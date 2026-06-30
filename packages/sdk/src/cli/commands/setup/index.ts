@@ -28,7 +28,7 @@ const coordinateCommand = defineAppCommand({
     "Generate a coordinator workflow that orchestrates multiple --action-generated composite actions.",
   args: z
     .object({
-      "workspace-name": arg(z.string().min(1), {
+      name: arg(z.string().min(1), {
         alias: "n",
         description: "Coordinator name (used in the generated workflow file name and job names)",
       }),
@@ -61,7 +61,7 @@ const coordinateCommand = defineAppCommand({
     }
     const coordinateKind = args.tag ? "tag" : "branch";
     await setupCoordinate({
-      coordinatorName: args["workspace-name"],
+      coordinatorName: args.name,
       coordinateKind,
       actions: args.action,
       branch: args.branch,
@@ -78,9 +78,9 @@ const actionCommand = defineAppCommand({
     "Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).",
   args: z
     .object({
-      "workspace-name": arg(z.string().min(1).optional(), {
+      name: arg(z.string().min(1).optional(), {
         alias: "n",
-        description: "Workspace name (defaults to the config 'name')",
+        description: "Name (defaults to the config 'name')",
       }),
       dir: arg(z.string().min(1).default("."), {
         alias: "d",
@@ -97,7 +97,7 @@ const actionCommand = defineAppCommand({
   run: async (args) => {
     await setupGitHub({
       kind: "action",
-      workspaceName: args["workspace-name"],
+      workspaceName: args.name,
       dir: args.dir,
       environment: args.environment,
       force: args.force,
@@ -111,16 +111,15 @@ const branchCommand = defineAppCommand({
   description: "Generate a branch-target deploy workflow (push to branch triggers deploy).",
   args: z
     .object({
-      "workspace-name": arg(z.string().min(1).optional(), {
+      name: arg(z.string().min(1).optional(), {
         alias: "n",
-        description: "Workspace name (defaults to the config 'name')",
+        description: "Name (defaults to the config 'name')",
       }),
       branch: arg(z.string().min(1).optional(), {
         description: "Deploy trigger branch (defaults to the detected default branch)",
       }),
       environment: arg(z.string().min(1).optional(), {
-        description:
-          "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
+        description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
       }),
       "no-plan": arg(z.boolean().default(false), {
         description: "Disable the plan job (deploy-only mode)",
@@ -141,7 +140,7 @@ const branchCommand = defineAppCommand({
   run: async (args) => {
     await setupGitHub({
       kind: "branch",
-      workspaceName: args["workspace-name"],
+      workspaceName: args.name,
       branch: args.branch,
       environment: args.environment,
       plan: !args["no-plan"],
@@ -158,9 +157,9 @@ const tagCommand = defineAppCommand({
   description: "Generate a tag-target deploy workflow (tag push triggers deploy).",
   args: z
     .object({
-      "workspace-name": arg(z.string().min(1).optional(), {
+      name: arg(z.string().min(1).optional(), {
         alias: "n",
-        description: "Workspace name (defaults to the config 'name')",
+        description: "Name (defaults to the config 'name')",
       }),
       "tag-pattern": arg(z.string().min(1).default("v*"), {
         description: "Tag glob to match (defaults to v*)",
@@ -169,8 +168,7 @@ const tagCommand = defineAppCommand({
         description: "Tag-reachability guard branch (no guard when omitted)",
       }),
       environment: arg(z.string().min(1).optional(), {
-        description:
-          "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
+        description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
       }),
       dir: arg(z.string().min(1).default("."), {
         alias: "d",
@@ -184,7 +182,7 @@ const tagCommand = defineAppCommand({
   run: async (args) => {
     await setupGitHub({
       kind: "tag",
-      workspaceName: args["workspace-name"],
+      workspaceName: args.name,
       tagPattern: args["tag-pattern"],
       branch: args.branch,
       environment: args.environment,
@@ -197,28 +195,24 @@ const tagCommand = defineAppCommand({
 
 const previewCommand = defineAppCommand({
   name: "preview",
-  description:
-    "Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).",
+  description: "Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).",
   args: z
     .object({
-      "workspace-name": arg(z.string().min(1).optional(), {
+      name: arg(z.string().min(1).optional(), {
         alias: "n",
-        description: "Workspace name (defaults to the config 'name')",
+        description: "Name (defaults to the config 'name')",
       }),
       branch: arg(z.string().min(1).optional(), {
         description: "Branch to filter PRs by (defaults to the detected default branch)",
       }),
       region: arg(z.string().min(1), {
-        description:
-          "Workspace region for preview workspace creation (e.g. us-west). Required.",
+        description: "Workspace region for preview workspace creation (e.g. us-west). Required.",
       }),
       "require-preview-label": arg(z.boolean().default(false), {
-        description:
-          "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.",
+        description: "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.",
       }),
       environment: arg(z.string().min(1).optional(), {
-        description:
-          "GitHub Environment for the preview jobs (defaults to the workspace name)",
+        description: "GitHub Environment for the preview jobs (defaults to the workspace name)",
       }),
       dir: arg(z.string().min(1).default("."), {
         alias: "d",
@@ -232,7 +226,7 @@ const previewCommand = defineAppCommand({
   run: async (args) => {
     await setupGitHub({
       kind: "preview",
-      workspaceName: args["workspace-name"],
+      workspaceName: args.name,
       branch: args.branch,
       region: args.region,
       requirePreviewLabel: args["require-preview-label"],
