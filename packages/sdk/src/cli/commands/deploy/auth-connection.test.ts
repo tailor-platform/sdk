@@ -8,7 +8,7 @@ import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 const mockLoggerWarn = vi.fn();
 const mockLoggerInfo = vi.fn();
 
-vi.mock("@/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", () => ({
   logger: {
     warn: (...args: unknown[]) => mockLoggerWarn(...args),
     info: (...args: unknown[]) => mockLoggerInfo(...args),
