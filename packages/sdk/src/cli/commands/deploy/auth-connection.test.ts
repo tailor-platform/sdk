@@ -5,8 +5,10 @@ import type { AuthService } from "#/cli/services/auth/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 
-const mockLoggerWarn = vi.fn();
-const mockLoggerInfo = vi.fn();
+const { mockLoggerWarn, mockLoggerInfo } = vi.hoisted(() => ({
+  mockLoggerWarn: vi.fn(),
+  mockLoggerInfo: vi.fn(),
+}));
 
 vi.mock("#/cli/shared/logger", () => ({
   logger: {

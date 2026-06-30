@@ -93,17 +93,16 @@ function buildUpdateMask(
   secretChanged: boolean,
 ): { paths: string[] } {
   if (existing.config.case !== "oauth2") {
-    return {
-      paths: [
-        "type",
-        "oauth2.provider_url",
-        "oauth2.issuer_url",
-        "oauth2.client_id",
-        "oauth2.client_secret",
-        "oauth2.auth_url",
-        "oauth2.token_url",
-      ],
-    };
+    const paths = [
+      "type",
+      "oauth2.provider_url",
+      "oauth2.issuer_url",
+      "oauth2.client_id",
+      "oauth2.auth_url",
+      "oauth2.token_url",
+    ];
+    if (desired.clientSecret) paths.push("oauth2.client_secret");
+    return { paths };
   }
   const paths: string[] = [];
   const v = existing.config.value;
