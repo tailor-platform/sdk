@@ -18,33 +18,12 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 | Command                                 | Description                                                                                      |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [`setup action`](#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys). |
 | [`setup branch`](#setup-branch)         | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
-| [`setup check`](#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
-| [`setup coordinate`](#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
-| [`setup preview`](#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
 | [`setup tag`](#setup-tag)               | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
-
-### setup action
-
-Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).
-
-**Usage**
-
-```
-tailor-sdk setup action [options]
-```
-
-**Options**
-
-| Option                              | Alias | Description                                    | Required | Default |
-| ----------------------------------- | ----- | ---------------------------------------------- | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name') | No       | -       |
-| `--dir <DIR>`                       | `-d`  | App directory                                  | No       | `"."`   |
-| `--environment <ENVIRONMENT>`       | -     | GitHub Environment (defaults to the workspace name) | No  | -       |
-| `--force`                           | -     | Discard hand edits and regenerate              | No       | `false` |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+| [`setup preview`](#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
+| [`setup action`](#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys). |
+| [`setup coordinate`](#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
+| [`setup check`](#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
 
 ### setup branch
 
@@ -70,45 +49,26 @@ tailor-sdk setup branch [options]
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-### setup check
+### setup tag
 
-Audit generated workflows for drift against the current config/repo (read-only).
-
-**Usage**
-
-```
-tailor-sdk setup check [options]
-```
-
-**Options**
-
-| Option | Alias | Description                                                                                      | Required | Default |
-| ------ | ----- | ------------------------------------------------------------------------------------------------ | -------- | ------- |
-| `--ci` | -     | Run in CI mode: skip checks that are handled by the runtime (e.g. TAILOR_PLATFORM_WORKSPACE_ID). | No       | `false` |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### setup coordinate
-
-Generate a coordinator workflow that orchestrates multiple --action-generated composite actions.
+Generate a tag-target deploy workflow (tag push triggers deploy).
 
 **Usage**
 
 ```
-tailor-sdk setup coordinate [options]
+tailor-sdk setup tag [options]
 ```
 
 **Options**
 
-| Option                              | Alias | Description                                                                             | Required | Default |
-| ----------------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Coordinator name (used in the generated workflow file name and job names)               | Yes      | -       |
-| `--action <ACTION>`                 | -     | Composite action to include (can be specified multiple times). tailor- prefix optional. | No       | `[]`    |
-| `--branch <BRANCH>`                 | -     | Branch target: deploy trigger branch (defaults to the detected default branch)          | No       | -       |
-| `--tag`                             | -     | Generate a tag target coordinator                                                       | No       | `false` |
-| `--preview`                         | -     | Generate a preview coordinator                                                          | No       | `false` |
-| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs                                             | No       | -       |
-| `--force`                           | -     | Discard hand edits and regenerate                                                       | No       | `false` |
+| Option                              | Alias | Description                                                                    | Required | Default |
+| ----------------------------------- | ----- | ------------------------------------------------------------------------------ | -------- | ------- |
+| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name')                                 | No       | -       |
+| `--tag-pattern <TAG_PATTERN>`       | -     | Tag glob to match (defaults to v\*)                                            | No       | `"v*"`  |
+| `--branch <BRANCH>`                 | -     | Tag-reachability guard branch (no guard when omitted)                          | No       | -       |
+| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)   | No       | -       |
+| `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                            | No       | `"."`   |
+| `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                  | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -136,26 +96,66 @@ tailor-sdk setup preview [options]
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-### setup tag
+### setup action
 
-Generate a tag-target deploy workflow (tag push triggers deploy).
+Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).
 
 **Usage**
 
 ```
-tailor-sdk setup tag [options]
+tailor-sdk setup action [options]
 ```
 
 **Options**
 
-| Option                              | Alias | Description                                                                    | Required | Default |
-| ----------------------------------- | ----- | ------------------------------------------------------------------------------ | -------- | ------- |
-| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name')                                 | No       | -       |
-| `--tag-pattern <TAG_PATTERN>`       | -     | Tag glob to match (defaults to v\*)                                            | No       | `"v*"`  |
-| `--branch <BRANCH>`                 | -     | Tag-reachability guard branch (no guard when omitted)                          | No       | -       |
-| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)   | No       | -       |
-| `--dir <DIR>`                       | `-d`  | App directory (for monorepo setups)                                            | No       | `"."`   |
-| `--force`                           | -     | Discard hand edits / take over unmanaged files and regenerate                  | No       | `false` |
+| Option                              | Alias | Description                                    | Required | Default |
+| ----------------------------------- | ----- | ---------------------------------------------- | -------- | ------- |
+| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Workspace name (defaults to the config 'name') | No       | -       |
+| `--dir <DIR>`                       | `-d`  | App directory                                  | No       | `"."`   |
+| `--environment <ENVIRONMENT>`       | -     | GitHub Environment (defaults to the workspace name) | No  | -       |
+| `--force`                           | -     | Discard hand edits and regenerate              | No       | `false` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### setup coordinate
+
+Generate a coordinator workflow that orchestrates multiple --action-generated composite actions.
+
+**Usage**
+
+```
+tailor-sdk setup coordinate [options]
+```
+
+**Options**
+
+| Option                              | Alias | Description                                                                             | Required | Default |
+| ----------------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | ------- |
+| `--workspace-name <WORKSPACE_NAME>` | `-n`  | Coordinator name (used in the generated workflow file name and job names)               | Yes      | -       |
+| `--action <ACTION>`                 | -     | Composite action to include (can be specified multiple times). tailor- prefix optional. | No       | `[]`    |
+| `--branch <BRANCH>`                 | -     | Branch target: deploy trigger branch (defaults to the detected default branch)          | No       | -       |
+| `--tag`                             | -     | Generate a tag target coordinator                                                       | No       | `false` |
+| `--preview`                         | -     | Generate a preview coordinator                                                          | No       | `false` |
+| `--environment <ENVIRONMENT>`       | -     | GitHub Environment for the plan/deploy jobs                                             | No       | -       |
+| `--force`                           | -     | Discard hand edits and regenerate                                                       | No       | `false` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### setup check
+
+Audit generated workflows for drift against the current config/repo (read-only).
+
+**Usage**
+
+```
+tailor-sdk setup check [options]
+```
+
+**Options**
+
+| Option | Alias | Description                                                                                      | Required | Default |
+| ------ | ----- | ------------------------------------------------------------------------------------------------ | -------- | ------- |
+| `--ci` | -     | Run in CI mode: skip checks that are handled by the runtime (e.g. TAILOR_PLATFORM_WORKSPACE_ID). | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
