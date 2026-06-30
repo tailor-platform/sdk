@@ -2,7 +2,7 @@ import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import { checkGitHub } from "./check";
-import { setupCoordinate, setupGitHub } from "./generate";
+import { setupCoordinate, setupTarget } from "./generate";
 
 const checkCommand = defineAppCommand({
   name: "check",
@@ -87,7 +87,7 @@ const actionCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    await setupGitHub({
+    await setupTarget({
       kind: "action",
       workspaceName: args.name,
       dir: args.dir,
@@ -130,7 +130,7 @@ const branchCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    await setupGitHub({
+    await setupTarget({
       kind: "branch",
       workspaceName: args.name,
       branch: args.branch,
@@ -172,7 +172,7 @@ const tagCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    await setupGitHub({
+    await setupTarget({
       kind: "tag",
       workspaceName: args.name,
       tagPattern: args["tag-pattern"],
@@ -216,7 +216,7 @@ const previewCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    await setupGitHub({
+    await setupTarget({
       kind: "preview",
       workspaceName: args.name,
       branch: args.branch,

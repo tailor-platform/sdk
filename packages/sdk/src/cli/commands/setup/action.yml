@@ -33,6 +33,10 @@ inputs:
   user-mapping:
     description: JSON string mapping GitHub usernames to Slack user IDs
     required: false
+  package-manager:
+    description: Package manager used for dependency installation (pnpm, npm, yarn, bun)
+    required: false
+    default: pnpm
 
 outputs:
   app-url:
@@ -55,6 +59,7 @@ runs:
       with:
         workspace-id: ${{ inputs.workspace-id }}
         working-directory: ${{ inputs.working-directory }}
+        package-manager: ${{ inputs.package-manager }}
         platform-client-id: ${{ inputs.platform-client-id }}
         platform-client-secret: ${{ inputs.platform-client-secret }}
     - id: tailor-notify

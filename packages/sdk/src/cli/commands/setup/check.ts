@@ -22,8 +22,7 @@ export type DriftRule =
   | "erd-namespaces"
   | "migration-drift"
   | "seed-validate"
-  | "static-websites"
-  | "slack-partial";
+  | "static-websites";
 
 export type DriftFinding = {
   /** Human label for the target: `<kind> <workspaceName>`. */

@@ -82,7 +82,7 @@ export type ActionSetupOptions = CommonSetupOptions & {
   kind: "action";
 };
 
-export type SetupGitHubOptions =
+export type SetupTargetOptions =
   | BranchSetupOptions
   | TagSetupOptions
   | PreviewSetupOptions
@@ -272,7 +272,7 @@ type Resolved = {
  * @param options - Setup options
  * @returns Resolved target metadata and rendered content
  */
-async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
+async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   // Normalize before any filesystem use and before embedding into workflow
   // YAML (paths filters / working-directory): POSIX separators, collapse
   // duplicate slashes, drop a leading "./" and trailing "/" so values like
@@ -534,11 +534,10 @@ function printNextSteps(obj: { environment: string; idInjected: boolean }): void
 }
 
 /**
- * Generate the GitHub Actions workflow for a deploy target and reconcile it
- * with the lock file.
+ * Generate a deploy target workflow and reconcile it with the lock file.
  * @param options - Setup options
  */
-export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
+export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   logBetaWarning("setup");
 
   const resolved = await resolve(options);
@@ -631,7 +630,7 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
 /**
  * Generate the coordinator workflow that orchestrates per-app composite actions.
  *
- * Unlike `setupGitHub`, this function does not read a Tailor config. The coordinator
+ * Unlike `setupTarget`, this function does not read a Tailor config. The coordinator
  * name is required via `--name`. App working directories are resolved from
  * the lock file entries created by `setup action`.
  * @param options - Coordinate setup options
@@ -672,8 +671,15 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   const lock = readLock(outputDir);
 
   // Resolve each action name to its lock entry to get the working directory.
+  const seenNames = new Set<string>();
   const apps: CoordinateApp[] = actions.map((actionName) => {
     const name = actionName.startsWith("tailor-") ? actionName.slice("tailor-".length) : actionName;
+    if (seenNames.has(name)) {
+      throw new Error(
+        `Duplicate --action "${name}". Each composite action can only appear once in a coordinator.`,
+      );
+    }
+    seenNames.add(name);
     const entry = lock?.targets.find((t) => t.kind === "action" && t.workspaceName === name);
     if (!entry) {
       throw new Error(
@@ -681,6 +687,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
           `Run \`tailor-sdk setup action --name ${name}\` first.`,
       );
     }
+    validateDir(entry.inputs.dir);
     return { name, dir: entry.inputs.dir };
   });
 

@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { checkGitHub, findTargetDrift, resolveWithinRoot, type TargetState } from "./check";
-import { setupGitHub, type BranchSetupOptions } from "./generate";
+import { setupTarget, type BranchSetupOptions } from "./generate";
 import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
 
@@ -233,15 +233,15 @@ describe("checkGitHub (integration)", () => {
     checkGitHub({ outputDir: testDir, ci: true, gitRunner });
 
   test("passes for a freshly generated target", async () => {
-    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    await setupTarget(setupOptions({ workspaceName: "my-app" }));
     await expect(check()).resolves.toBeUndefined();
   });
 
   test("passes after --force regeneration following a hand edit", async () => {
-    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    await setupTarget(setupOptions({ workspaceName: "my-app" }));
     fs.appendFileSync(wfPath(), "\n# hand edit\n");
     // --force should overwrite edits and update the lock's contentHash
-    await setupGitHub(setupOptions({ workspaceName: "my-app", force: true }));
+    await setupTarget(setupOptions({ workspaceName: "my-app", force: true }));
     await expect(check()).resolves.toBeUndefined();
   });
 
@@ -250,31 +250,31 @@ describe("checkGitHub (integration)", () => {
   });
 
   test("detects a hand-edited workflow file", async () => {
-    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    await setupTarget(setupOptions({ workspaceName: "my-app" }));
     fs.appendFileSync(wfPath(), "\n# hand edit\n");
     await expect(check()).rejects.toThrow(/drift/);
   });
 
   test("detects a default-branch change for auto-detected branch", async () => {
-    await setupGitHub(
+    await setupTarget(
       setupOptions({ workspaceName: "my-app", branch: undefined, gitRunner: () => "origin/main" }),
     );
     await expect(check(() => "origin/develop")).rejects.toThrow(/drift/);
   });
 
   test("skips default-branch drift when branch was explicitly set", async () => {
-    await setupGitHub(setupOptions({ workspaceName: "my-app", branch: "staging" }));
+    await setupTarget(setupOptions({ workspaceName: "my-app", branch: "staging" }));
     await expect(check()).resolves.toBeUndefined();
   });
 
   test("detects a missing config under the recorded dir", async () => {
-    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    await setupTarget(setupOptions({ workspaceName: "my-app" }));
     fs.rmSync(path.join(testDir, "tailor.config.ts"));
     await expect(check()).rejects.toThrow(/drift/);
   });
 
   test("throws when WORKSPACE_ID is unset and a plan target exists (local mode)", async () => {
-    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    await setupTarget(setupOptions({ workspaceName: "my-app" }));
     const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     try {
@@ -287,7 +287,7 @@ describe("checkGitHub (integration)", () => {
   });
 
   test("skips WORKSPACE_ID check in CI mode", async () => {
-    await setupGitHub(setupOptions({ workspaceName: "my-app" }));
+    await setupTarget(setupOptions({ workspaceName: "my-app" }));
     const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     try {
@@ -300,7 +300,7 @@ describe("checkGitHub (integration)", () => {
   });
 
   test("detects ERD preview namespace drift", async () => {
-    await setupGitHub(
+    await setupTarget(
       setupOptions({
         workspaceName: "my-app",
         erdPreview: true,
