@@ -91,6 +91,7 @@ function buildUpdateMask(
     if (desired.clientSecret) paths.push("oauth2.client_secret");
     return { paths };
   }
+  // The SDK only creates OAUTH2 connections, so no type change is possible here.
   const paths: string[] = [];
   const v = existing.config.value;
   if (v.providerUrl !== desired.providerUrl) paths.push("oauth2.provider_url");
