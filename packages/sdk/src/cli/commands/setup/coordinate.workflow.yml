@@ -2,14 +2,13 @@
 name: Tailor Coordinator (__WORKSPACE_NAME__)
 
 on:
-  # __PUSH_BRANCHES_START__
   push:
+    # __PUSH_BRANCHES_START__
     branches: ["__BRANCH__"]
-  # __PUSH_BRANCHES_END__
-  # __PUSH_TAGS_START__
-  push:
+    # __PUSH_BRANCHES_END__
+    # __PUSH_TAGS_START__
     tags: [__TAG_PATTERN__]
-  # __PUSH_TAGS_END__
+    # __PUSH_TAGS_END__
   workflow_dispatch:
     inputs:
       dry-run:
