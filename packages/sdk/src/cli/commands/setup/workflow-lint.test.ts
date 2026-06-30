@@ -14,7 +14,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { renderBranchWorkflow, renderTagWorkflow, type PackageManager } from "./templates";
+import {
+  renderBranchWorkflow,
+  renderPreviewWorkflow,
+  renderTagWorkflow,
+  type PackageManager,
+} from "./templates";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -238,5 +243,35 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflo
     });
     const { ok, output } = writeAndLint("tag-bun-noguard-env", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+});
+
+describe.skipIf(!actionlintAvailable)("actionlint validation of renderPreviewWorkflow", () => {
+  const PREVIEW_COMMON = {
+    ...COMMON,
+    branch: "main",
+    region: "us-west",
+    packageManager: "pnpm" as PackageManager,
+  };
+
+  test("preview / pnpm / all PRs", () => {
+    const { content } = renderPreviewWorkflow({ ...PREVIEW_COMMON, requirePreviewLabel: false });
+    const { ok, output } = writeAndLint("preview-pnpm-all", content);
+    expect(ok, `actionlint errors for preview/pnpm/all-prs:\n${output}`).toBe(true);
+  });
+
+  test("preview / pnpm / label-triggered", () => {
+    const { content } = renderPreviewWorkflow({ ...PREVIEW_COMMON, requirePreviewLabel: true });
+    const { ok, output } = writeAndLint("preview-pnpm-label", content);
+    expect(ok, `actionlint errors for preview/pnpm/label-triggered:\n${output}`).toBe(true);
+  });
+
+  test("preview / pnpm / with workingDirectory", () => {
+    const { content } = renderPreviewWorkflow({
+      ...PREVIEW_COMMON,
+      workingDirectory: "apps/backend",
+    });
+    const { ok, output } = writeAndLint("preview-pnpm-dir", content);
+    expect(ok, `actionlint errors for preview/pnpm/workingDirectory:\n${output}`).toBe(true);
   });
 });

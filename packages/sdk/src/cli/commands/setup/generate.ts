@@ -736,7 +736,8 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
     templateVersion: TEMPLATE_VERSION,
     inputs: {
       branch,
-      branchAutoDetected: coordinateKind === "branch" ? branchAutoDetected : undefined,
+      branchAutoDetected:
+        coordinateKind === "branch" ? branchAutoDetected : branch !== null ? false : undefined,
       tagPattern: coordinateKind === "tag" ? tagPattern : null,
       environment,
       dir: ".",

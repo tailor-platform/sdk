@@ -540,11 +540,15 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       "tailor-tag-guard/tailor-tag-guard",
     );
   }
-  generatedIds.push("tailor-plan", "tailor-plan/tailor-checkout", "tailor-plan/tailor-setup");
+  generatedIds.push(
+    "tailor-plan",
+    "tailor-plan/tailor-checkout",
+    "tailor-plan/tailor-setup",
+    "tailor-plan/tailor-drift-check",
+  );
   for (const app of apps) {
     generatedIds.push(
       `tailor-plan/tailor-generate-check-${app.name}`,
-      `tailor-plan/tailor-drift-check-${app.name}`,
       `tailor-plan/tailor-plan-${app.name}`,
     );
   }
