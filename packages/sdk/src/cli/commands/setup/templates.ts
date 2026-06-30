@@ -348,15 +348,20 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
       : "types: [opened, synchronize, reopened, closed]",
   );
 
-  // Deploy job if condition.
+  // Deploy job if condition. Fork PRs don't have access to secrets/vars, so guard them out.
   const deployIf = requirePreviewLabel
-    ? `if: >-\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft`
-    : `if: >-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft`;
+    ? `if: >-\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`
+    : `if: >-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`;
   out = line(out, "DEPLOY_IF", deployIf);
 
   // Cleanup always runs on closed regardless of current labels: the label may have been
   // removed after a preview deploy, and the cleanup action is a no-op when no workspace exists.
-  out = line(out, "CLEANUP_IF", `if: github.event.action == 'closed'`);
+  // Fork PRs also need guarding since cleanup requires secrets/vars.
+  out = line(
+    out,
+    "CLEANUP_IF",
+    `if: >-\n  github.event.action == 'closed' &&\n  !github.event.pull_request.head.repo.fork`,
+  );
 
   out = applyCommon(out, params)
     .replaceAll("__BRANCH__", () => branch)
