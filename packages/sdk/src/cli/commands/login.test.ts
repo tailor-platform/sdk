@@ -6,7 +6,7 @@ import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
 
-const xdgTempDir = vi.hoisted(() => `/tmp/sdk-login-${Date.now()}-${Math.random()}`);
+const xdgTempDir = vi.hoisted(() => `/tmp/tailor-login-${Date.now()}-${Math.random()}`);
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
