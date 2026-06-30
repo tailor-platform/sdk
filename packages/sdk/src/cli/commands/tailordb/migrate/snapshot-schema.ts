@@ -124,6 +124,7 @@ export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.loose
   validate: z.array(snapshotValidationSchema).optional(),
   serial: snapshotSerialSchema.optional(),
   scale: z.number().optional(),
+  default: z.unknown().optional(),
   fields: z.lazy(() => snapshotRecordSchema(snapshotFieldConfigSchema)).optional(),
 }) as z.ZodType<SnapshotFieldConfig>;
 

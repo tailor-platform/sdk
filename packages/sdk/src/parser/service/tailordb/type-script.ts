@@ -3,6 +3,8 @@ const INPUT = "_input";
 // Shared operation timestamp bound once per script execution.
 const NOW = "_now";
 
+const TIME_TYPES = new Set(["datetime", "date", "time"]);
+
 type HookOperation = "create" | "update";
 
 interface ScriptRef {
@@ -20,6 +22,7 @@ export interface ScriptFieldConfig {
     update?: ScriptRef;
   };
   validate?: { script?: ScriptRef; errorMessage: string }[];
+  default?: unknown;
   fields?: Record<string, ScriptFieldConfig>;
 }
 
@@ -33,13 +36,22 @@ const key = (name: string) => JSON.stringify(name);
 const isNestedType = (config: ScriptFieldConfig): boolean =>
   config.type === "nested" && config.fields !== undefined;
 
+function serializeDefault(value: unknown, fieldType: string): string {
+  if (value === "now" && TIME_TYPES.has(fieldType)) return NOW;
+  if (value instanceof Date) return `new Date(${JSON.stringify(value.toISOString())})`;
+  return JSON.stringify(value);
+}
+
 /**
- * Build the object literal that reconstructs one record level with hook overrides applied.
- * Returns null when no field under this level has a hook for the operation.
- * @param fields - Field configs at the current level.
- * @param accessExpr - JavaScript expression for the current object level.
- * @param operation - "create" or "update".
- * @returns Object-literal source, or null when nothing under this level is hooked.
+ * Build the object literal that reconstructs one record level with hook
+ * overrides and defaults applied.  For create, defaults are appended as
+ * `?? defaultValue` after the hook expression (field hook → default).
+ * Returns null when no field under this level has a hook or default for
+ * the operation.
+ * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
+ * @param {string} accessExpr - JS expression to access the parent object
+ * @param {HookOperation} operation - Hook operation type
+ * @returns {string | null} Object literal expression or null
  */
 function buildHookObject(
   fields: Record<string, ScriptFieldConfig>,
@@ -59,8 +71,16 @@ function buildHookObject(
     }
 
     const hook = config.hooks?.[operation];
-    if (hook) {
+    const hasDefault = operation === "create" && config.default !== undefined;
+
+    if (hook && hasDefault) {
+      parts.push(
+        `${key(name)}: ((_value) => (${hook.expr}))(${access}) ?? ${serializeDefault(config.default, config.type)}`,
+      );
+    } else if (hook) {
       parts.push(`${key(name)}: ((_value) => (${hook.expr}))(${access})`);
+    } else if (hasDefault) {
+      parts.push(`${key(name)}: ${access} ?? ${serializeDefault(config.default, config.type)}`);
     }
   }
 
@@ -72,10 +92,10 @@ function buildHookObject(
  * Build validation statements for one record level.
  * Each leaf field with validators contributes a block that records the first
  * failing message keyed by its dotted field path.
- * @param fields - Field configs at the current level.
- * @param accessExpr - JavaScript expression for the current object level.
- * @param keyPrefix - Dotted path prefix for nested fields.
- * @returns One statement per leaf field that has validators.
+ * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
+ * @param {string} accessExpr - JS expression to access the parent object
+ * @param {string} keyPrefix - Dotted path prefix for error keys
+ * @returns {string[]} Array of validation statement strings
  */
 function buildValidateStatements(
   fields: Record<string, ScriptFieldConfig>,
@@ -120,12 +140,13 @@ function wrapValidate(statements: string[]): string {
 }
 
 /**
- * Aggregate every field's create/update hook and validate into type-level scripts.
- * Hooks compute a single shared timestamp (`now`) per operation, so all fields
- * touched in one create/update observe the same instant. Validators run with the
- * same rules on create and update.
- * @param fields - Field configs keyed by field name (parser or snapshot shape).
- * @returns Type-level hook/validate scripts, omitting empties.
+ * Aggregate every field's create/update hook, default, and validate into
+ * type-level scripts.  Hooks compute a single shared timestamp (`now`) per
+ * operation, so all fields touched in one create/update observe the same
+ * instant.  Defaults are applied after hooks on create only.  Validators
+ * run with the same rules on create and update.
+ * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
+ * @returns {TypeScripts} Aggregated type-level scripts
  */
 export function buildTypeScripts(fields: Record<string, ScriptFieldConfig>): TypeScripts {
   const result: TypeScripts = {};
