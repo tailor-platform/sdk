@@ -60,40 +60,24 @@ const coordinateCommand = defineAppCommand({
   },
 });
 
-export const setupCommand = defineAppCommand({
-  name: "setup",
-  description: "Generate a CI deploy workflow for your project. (beta)",
+const branchCommand = defineAppCommand({
+  name: "branch",
+  description: "Generate a branch-target deploy workflow (push to branch triggers deploy).",
   args: z
     .object({
-      provider: arg(
-        z
-          .enum(["github"], { message: "Only the 'github' provider is supported." })
-          .default("github"),
-        {
-          alias: "p",
-          description: "CI provider to generate for (only 'github' is supported)",
-        },
-      ),
       "workspace-name": arg(z.string().min(1).optional(), {
         alias: "n",
         description: "Workspace name (defaults to the config 'name')",
       }),
       branch: arg(z.string().min(1).optional(), {
-        description:
-          "Branch target: deploy trigger branch (defaults to the detected default branch). " +
-          "Tag target: tag-reachability guard branch (no guard when omitted)",
-      }),
-      tag: arg(z.boolean().default(false), {
-        description: "Generate a tag target (deploy on tag push)",
-      }),
-      "tag-pattern": arg(z.string().min(1).optional(), {
-        description: "Tag glob to match (requires --tag; defaults to v*)",
+        description: "Deploy trigger branch (defaults to the detected default branch)",
       }),
       environment: arg(z.string().min(1).optional(), {
-        description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
+        description:
+          "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
       }),
       "no-plan": arg(z.boolean().default(false), {
-        description: "Disable the plan job for a branch target (cannot be combined with --tag)",
+        description: "Disable the plan job (deploy-only mode)",
       }),
       "erd-preview": arg(z.boolean().default(false), {
         description:
@@ -103,70 +87,125 @@ export const setupCommand = defineAppCommand({
         alias: "d",
         description: "App directory (for monorepo setups)",
       }),
-      action: arg(z.string().min(1).optional(), {
-        description:
-          "Generate a per-app composite action instead of a full workflow. " +
-          "The action is written to .github/actions/tailor-<name>/action.yml.",
+      force: arg(z.boolean().default(false), {
+        description: "Discard hand edits / take over unmanaged files and regenerate",
       }),
-      preview: arg(z.boolean().default(false), {
-        description: "Generate a preview workflow (PR-triggered deploy to per-PR workspace).",
+    })
+    .strict(),
+  run: async (args) => {
+    await setupGitHub({
+      kind: "branch",
+      workspaceName: args["workspace-name"],
+      branch: args.branch,
+      environment: args.environment,
+      plan: !args["no-plan"],
+      erdPreview: args["erd-preview"],
+      dir: args.dir,
+      force: args.force,
+      outputDir: process.cwd(),
+    });
+  },
+});
+
+const tagCommand = defineAppCommand({
+  name: "tag",
+  description: "Generate a tag-target deploy workflow (tag push triggers deploy).",
+  args: z
+    .object({
+      "workspace-name": arg(z.string().min(1).optional(), {
+        alias: "n",
+        description: "Workspace name (defaults to the config 'name')",
       }),
-      region: arg(z.string().min(1).optional(), {
-        description:
-          "Workspace region for preview workspace creation (e.g. us-west). Required with --preview.",
+      "tag-pattern": arg(z.string().min(1).default("v*"), {
+        description: "Tag glob to match (defaults to v*)",
       }),
-      "require-preview-label": arg(z.boolean().default(false), {
+      branch: arg(z.string().min(1).optional(), {
+        description: "Tag-reachability guard branch (no guard when omitted)",
+      }),
+      environment: arg(z.string().min(1).optional(), {
         description:
-          "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs. Requires --preview.",
+          "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
+      }),
+      dir: arg(z.string().min(1).default("."), {
+        alias: "d",
+        description: "App directory (for monorepo setups)",
       }),
       force: arg(z.boolean().default(false), {
         description: "Discard hand edits / take over unmanaged files and regenerate",
       }),
     })
     .strict(),
-  subCommands: {
-    check: checkCommand,
-    coordinate: coordinateCommand,
-  },
   run: async (args) => {
-    if (args["tag-pattern"] !== undefined && !args.tag) {
-      throw new Error("--tag-pattern requires --tag.");
-    }
-    if (args["no-plan"] && args.tag) {
-      throw new Error("--no-plan cannot be combined with --tag.");
-    }
-    if (args.action !== undefined && args.tag) {
-      throw new Error(
-        "--action cannot be combined with --tag (use setup coordinate for multi-app tag deploys).",
-      );
-    }
-    if (args.preview && args.tag) {
-      throw new Error("--preview cannot be combined with --tag.");
-    }
-    if (args.region !== undefined && !args.preview) {
-      throw new Error("--region requires --preview.");
-    }
-    if (args["require-preview-label"] && !args.preview) {
-      throw new Error("--require-preview-label requires --preview.");
-    }
-
-    // `provider` is validated by the enum to the only value supported today;
-    // a second provider would branch here to its own generator.
     await setupGitHub({
+      kind: "tag",
       workspaceName: args["workspace-name"],
+      tagPattern: args["tag-pattern"],
       branch: args.branch,
-      tag: args.tag,
-      tagPattern: args["tag-pattern"] ?? "v*",
       environment: args.environment,
-      plan: !args["no-plan"],
-      erdPreview: args["erd-preview"],
       dir: args.dir,
-      action: args.action,
-      preview: args.preview,
-      region: args.region,
-      requirePreviewLabel: args["require-preview-label"],
       force: args.force,
       outputDir: process.cwd(),
     });
+  },
+});
+
+const previewCommand = defineAppCommand({
+  name: "preview",
+  description:
+    "Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).",
+  args: z
+    .object({
+      "workspace-name": arg(z.string().min(1).optional(), {
+        alias: "n",
+        description: "Workspace name (defaults to the config 'name')",
+      }),
+      branch: arg(z.string().min(1).optional(), {
+        description: "Branch to filter PRs by (defaults to the detected default branch)",
+      }),
+      region: arg(z.string().min(1), {
+        description:
+          "Workspace region for preview workspace creation (e.g. us-west). Required.",
+      }),
+      "require-preview-label": arg(z.boolean().default(false), {
+        description:
+          "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.",
+      }),
+      environment: arg(z.string().min(1).optional(), {
+        description:
+          "GitHub Environment for the preview jobs (defaults to the workspace name)",
+      }),
+      dir: arg(z.string().min(1).default("."), {
+        alias: "d",
+        description: "App directory (for monorepo setups)",
+      }),
+      force: arg(z.boolean().default(false), {
+        description: "Discard hand edits / take over unmanaged files and regenerate",
+      }),
+    })
+    .strict(),
+  run: async (args) => {
+    await setupGitHub({
+      kind: "preview",
+      workspaceName: args["workspace-name"],
+      branch: args.branch,
+      region: args.region,
+      requirePreviewLabel: args["require-preview-label"],
+      environment: args.environment,
+      dir: args.dir,
+      force: args.force,
+      outputDir: process.cwd(),
+    });
+  },
+});
+
+export const setupCommand = defineAppCommand({
+  name: "setup",
+  description: "Generate CI deploy workflows for your project. (beta)",
+  subCommands: {
+    branch: branchCommand,
+    tag: tagCommand,
+    preview: previewCommand,
+    check: checkCommand,
+    coordinate: coordinateCommand,
   },
 });
