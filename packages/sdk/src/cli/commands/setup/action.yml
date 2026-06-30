@@ -30,6 +30,9 @@ inputs:
   slack-channel-id:
     description: Slack channel id
     required: false
+  user-mapping:
+    description: JSON string mapping GitHub usernames to Slack user IDs
+    required: false
 
 outputs:
   app-url:
@@ -39,6 +42,14 @@ outputs:
 runs:
   using: composite
   steps:
+    # __STATIC_WEBSITE_BUILD_START__
+    - id: build-site
+      shell: bash
+      run: |
+        # Uncomment and implement to build static website assets before deployment.
+        # Example: pnpm --filter <package-name> run build:static
+        true
+    # __STATIC_WEBSITE_BUILD_END__
     - id: tailor-apply
       uses: tailor-platform/actions/deploy@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
       with:
@@ -55,4 +66,4 @@ runs:
         workspace-name: ${{ inputs.workspace-name }}
         slack-token: ${{ inputs.slack-token }}
         slack-channel-id: ${{ inputs.slack-channel-id }}
-        # user-mapping: ${{ inputs.user-mapping }}
+        user-mapping: ${{ inputs.user-mapping }}

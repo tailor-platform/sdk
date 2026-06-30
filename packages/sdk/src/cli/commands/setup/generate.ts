@@ -47,6 +47,10 @@ type CommonSetupOptions = {
   loadErdNamespaces?: (configPath: string) => Promise<string[]>;
   /** Injectable migration config detector, for testing. Defaults to loading the config. */
   loadHasMigrations?: (configPath: string) => Promise<boolean>;
+  /** Injectable seed plugin detector, for testing. Defaults to loading the config. */
+  loadHasSeeds?: (configPath: string) => Promise<boolean>;
+  /** Injectable static website detector, for testing. Defaults to loading the config. */
+  loadHasStaticWebsites?: (configPath: string) => Promise<boolean>;
 };
 
 export type BranchSetupOptions = CommonSetupOptions & {
@@ -111,6 +115,16 @@ async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
 async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
   const { config } = await loadConfig(configPath);
   return getNamespacesWithMigrations(config, path.dirname(configPath)).length > 0;
+}
+
+async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
+  const { plugins } = await loadConfig(configPath);
+  return plugins.some((p) => p.id === "@tailor-platform/seed");
+}
+
+async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean> {
+  const { config } = await loadConfig(configPath);
+  return (config.staticWebsites?.length ?? 0) > 0;
 }
 
 // Kept in sync with the `workspace create` schema (cli/commands/workspace/create.ts).
@@ -300,7 +314,12 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   let branchAutoDetected = false;
   let render: RenderResult;
   let erdNamespaces: string[] = [];
+  let hasMigrations = false;
+  let hasSeeds = false;
+  let hasStaticWebsites = false;
   const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
+  const loadHasSeeds = options.loadHasSeeds ?? defaultLoadHasSeeds;
+  const loadHasStaticWebsites = options.loadHasStaticWebsites ?? defaultLoadHasStaticWebsites;
 
   if (kind === "branch") {
     if (options.erdPreview && !options.plan) {
@@ -319,7 +338,8 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     branchAutoDetected = options.branch === undefined;
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
     validateBranch(branch);
-    const hasMigrations = await loadHasMigrations(configPath);
+    hasMigrations = await loadHasMigrations(configPath);
+    hasSeeds = await loadHasSeeds(configPath);
     render = renderBranchWorkflow({
       workspaceName,
       branch,
@@ -329,13 +349,15 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       plan: options.plan,
       erdPreview: options.erdPreview ? { namespaces: erdNamespaces } : null,
       migrationDriftCheck: hasMigrations,
+      seedValidate: hasSeeds,
     });
   } else if (kind === "tag") {
     branch = options.branch ?? null;
     if (branch !== null) {
       validateBranch(branch);
     }
-    const hasMigrations = await loadHasMigrations(configPath);
+    hasMigrations = await loadHasMigrations(configPath);
+    hasSeeds = await loadHasSeeds(configPath);
     render = renderTagWorkflow({
       workspaceName,
       tagPattern: options.tagPattern,
@@ -344,6 +366,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       environment,
       packageManager,
       migrationDriftCheck: hasMigrations,
+      seedValidate: hasSeeds,
     });
   } else if (kind === "preview") {
     branchAutoDetected = options.branch === undefined;
@@ -360,7 +383,8 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     });
   } else {
     // action — no branch detection, no package-manager embedding (caller installs)
-    render = renderActionWorkflow({ workspaceName, workingDirectory });
+    hasStaticWebsites = await loadHasStaticWebsites(configPath);
+    render = renderActionWorkflow({ workspaceName, workingDirectory, hasStaticWebsites });
   }
 
   // File name encodes the target kind so branch + tag + preview can coexist
@@ -383,6 +407,9 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
     erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
+    migrationDriftCheck: kind === "branch" || kind === "tag" ? hasMigrations : undefined,
+    seedValidate: kind === "branch" || kind === "tag" ? hasSeeds : undefined,
+    hasStaticWebsites: kind === "action" ? hasStaticWebsites : undefined,
   };
 
   return {

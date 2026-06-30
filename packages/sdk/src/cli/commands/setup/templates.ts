@@ -72,6 +72,8 @@ export type RenderPreviewParams = {
 export type RenderActionParams = {
   workspaceName: string;
   workingDirectory?: string;
+  /** Include the build-site slot (user-owned step for building static website assets). */
+  hasStaticWebsites?: boolean;
 };
 
 export type CoordinateApp = {
@@ -384,6 +386,9 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
 export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   let out = actionTemplate;
   out = line(out, "HEADER", HEADER);
+
+  // build-site is a user-owned slot; include when staticWebsites are configured.
+  out = block(out, "STATIC_WEBSITE_BUILD", params.hasStaticWebsites ?? false);
 
   out = out.replaceAll("__WORKSPACE_NAME__", () => params.workspaceName);
 

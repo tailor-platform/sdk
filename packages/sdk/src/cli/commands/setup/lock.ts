@@ -30,6 +30,12 @@ export type LockInputs = {
   actionDirs?: string[];
   erdPreview?: boolean;
   erdNamespaces?: string[];
+  /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */
+  migrationDriftCheck?: boolean;
+  /** Whether tailor-seed-validate was generated (config used seedPlugin). */
+  seedValidate?: boolean;
+  /** Whether the config had staticWebsites when setup was last run (action kind only). */
+  hasStaticWebsites?: boolean;
 };
 
 export type LockTarget = {
