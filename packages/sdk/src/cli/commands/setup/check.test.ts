@@ -116,6 +116,25 @@ describe("findTargetDrift", () => {
     expect(findings.map((f) => f.rule)).toEqual(["default-branch"]);
   });
 
+  test("reports default-branch drift for preview targets", () => {
+    const findings = findTargetDrift(
+      baseTarget({ kind: "preview", inputs: { ...baseTarget().inputs, branchAutoDetected: true } }),
+      cleanState({ defaultBranch: "develop" }),
+    );
+    expect(findings.map((f) => f.rule)).toEqual(["default-branch"]);
+  });
+
+  test("skips default-branch drift for preview when branch was explicitly set", () => {
+    const findings = findTargetDrift(
+      baseTarget({
+        kind: "preview",
+        inputs: { ...baseTarget().inputs, branch: "staging", branchAutoDetected: false },
+      }),
+      cleanState({ defaultBranch: "main" }),
+    );
+    expect(findings).toEqual([]);
+  });
+
   test("reports ERD namespace drift when preview namespaces changed", () => {
     const findings = findTargetDrift(
       baseTarget({

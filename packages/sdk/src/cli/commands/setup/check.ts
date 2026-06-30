@@ -100,7 +100,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
   }
 
   if (
-    (target.kind === "branch" || target.kind === "coordinate") &&
+    (target.kind === "branch" || target.kind === "coordinate" || target.kind === "preview") &&
     target.inputs.branchAutoDetected !== false &&
     state.defaultBranch !== null &&
     target.inputs.branch !== null &&
