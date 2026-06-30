@@ -316,12 +316,12 @@ Commands for setting up project infrastructure.
 | Command                                             | Description                                                                                      |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | [setup](./cli/setup.md#setup)                       | Generate CI deploy workflows for your project. (beta)                                            |
-| [setup branch](./cli/setup.md#setup-branch)         | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
-| [setup tag](./cli/setup.md#setup-tag)               | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
-| [setup preview](./cli/setup.md#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
 | [setup action](./cli/setup.md#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
-| [setup coordinate](./cli/setup.md#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
+| [setup branch](./cli/setup.md#setup-branch)         | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
 | [setup check](./cli/setup.md#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
+| [setup coordinate](./cli/setup.md#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
+| [setup preview](./cli/setup.md#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
+| [setup tag](./cli/setup.md#setup-tag)               | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
 
 ### [Upgrade Commands](./cli/upgrade.md)
 
@@ -347,4 +347,3 @@ Generate shell completion scripts for bash, zsh, and fish.
 | Command                                      | Description                      |
 | -------------------------------------------- | -------------------------------- |
 | [completion](./cli/completion.md#completion) | Generate shell completion script |
-
