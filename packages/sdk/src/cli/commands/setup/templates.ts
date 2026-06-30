@@ -354,11 +354,9 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     : `if: >-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft`;
   out = line(out, "DEPLOY_IF", deployIf);
 
-  // Cleanup job if condition.
-  const cleanupIf = requirePreviewLabel
-    ? `if: >-\n  github.event.action == 'closed' &&\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview')`
-    : `if: github.event.action == 'closed'`;
-  out = line(out, "CLEANUP_IF", cleanupIf);
+  // Cleanup always runs on closed regardless of current labels: the label may have been
+  // removed after a preview deploy, and the cleanup action is a no-op when no workspace exists.
+  out = line(out, "CLEANUP_IF", `if: github.event.action == 'closed'`);
 
   out = applyCommon(out, params)
     .replaceAll("__BRANCH__", () => branch)
@@ -424,6 +422,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
   let out = coordinateTemplate;
   out = line(out, "HEADER", HEADER);
 
+  out = block(out, "PULL_REQUEST", !isTag);
   out = block(out, "PUSH_BRANCHES", !isTag);
   out = block(out, "PUSH_TAGS", isTag);
   out = block(out, "TAG_GUARD_JOB", isTag && branch !== undefined);
@@ -505,6 +504,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
       `    workspace-name: ${app.name}`,
       `    working-directory: ${app.dir}`,
+      `    package-manager: ${packageManager}`,
       `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
       `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
       `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
