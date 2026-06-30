@@ -74,19 +74,6 @@ function buildConnectionRequest(
   };
 }
 
-function hashConnectionConfig(config: AuthConnectionConfig): string {
-  const serialized = JSON.stringify({
-    type: config.type,
-    providerUrl: config.providerUrl,
-    issuerUrl: config.issuerUrl,
-    clientId: config.clientId,
-    clientSecret: config.clientSecret,
-    authUrl: config.authUrl ?? "",
-    tokenUrl: config.tokenUrl ?? "",
-  });
-  return hashValue(serialized);
-}
-
 function buildUpdateMask(
   existing: AuthConnection,
   desired: AuthConnectionConfig,
@@ -205,7 +192,7 @@ export async function planAuthConnections(
         }
       }
 
-      const currentHash = hashConnectionConfig(config);
+      const currentHash = hashValue(config.clientSecret);
       const storedHash = state.connections?.[name];
       const secretChanged = currentHash !== storedHash;
       const updateMask = buildUpdateMask(existing.resource, config, secretChanged);
@@ -255,24 +242,6 @@ export async function planAuthConnections(
   }
 
   return { changeSet, conflicts, unmanaged, resourceOwners };
-}
-
-function extractOAuth2Config(
-  connection: MessageInitShape<typeof CreateAuthConnectionRequestSchema>["connection"],
-): AuthConnectionConfig | undefined {
-  if (!connection) return undefined;
-  const config = connection.config;
-  if (!config || config.case !== "oauth2") return undefined;
-  const v = config.value;
-  return {
-    type: "oauth2",
-    providerUrl: v.providerUrl ?? "",
-    issuerUrl: v.issuerUrl ?? "",
-    clientId: v.clientId ?? "",
-    clientSecret: v.clientSecret ?? "",
-    authUrl: (v.authUrl as string) || undefined,
-    tokenUrl: (v.tokenUrl as string) || undefined,
-  };
 }
 
 /**
@@ -334,15 +303,15 @@ export async function applyAuthConnections(
       state.connections = {};
     }
     for (const create of changeSet.creates) {
-      const oauth2 = extractOAuth2Config(create.request.connection);
-      if (oauth2) {
-        state.connections[create.name] = hashConnectionConfig(oauth2);
+      const conn = create.request.connection;
+      if (conn?.config?.case === "oauth2") {
+        state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
       }
     }
     for (const replace of changeSet.replaces) {
-      const oauth2 = extractOAuth2Config(replace.createRequest.connection);
-      if (oauth2) {
-        state.connections[replace.name] = hashConnectionConfig(oauth2);
+      const conn = replace.createRequest.connection;
+      if (conn?.config?.case === "oauth2") {
+        state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
       }
     }
     saveSecretsState(state);
