@@ -49,6 +49,11 @@ export type SetupGitHubOptions = {
    * Required when `preview` is true.
    */
   region?: string;
+  /**
+   * When true, the preview workflow deploys only for PRs labeled `tailor:preview`.
+   * Default false: preview deploys on every PR.
+   */
+  requirePreviewLabel?: boolean;
   force: boolean;
   outputDir: string;
   /** Injectable git runner, for testing. */
@@ -333,6 +338,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
       environment,
       packageManager,
       region: options.region,
+      requirePreviewLabel: options.requirePreviewLabel ?? false,
     });
   }
 
@@ -349,6 +355,8 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     packageManager,
     plan: kind === "branch" ? options.plan : true,
     region: kind === "preview" ? options.region : undefined,
+    requirePreviewLabel:
+      kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
     erdNamespaces: kind === "branch" && options.erdPreview ? erdNamespaces : undefined,
   };
