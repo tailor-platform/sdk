@@ -2,7 +2,12 @@ import * as fs from "node:fs";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { decideAction, setupGitHub, type SetupGitHubOptions } from "./generate";
+import {
+  decideAction,
+  setupGitHub,
+  type BranchSetupOptions,
+  type SetupGitHubOptions,
+} from "./generate";
 import { detectDefaultBranch } from "./git";
 import { hashContent, readLock } from "./lock";
 import {
@@ -597,9 +602,8 @@ describe("setupGitHub (integration)", () => {
     fs.writeFileSync(path.join(testDir, "tailor.config.ts"), body, "utf-8");
   };
 
-  const baseOptions = (overrides: Partial<SetupGitHubOptions> = {}): SetupGitHubOptions => ({
-    tag: false,
-    tagPattern: "v*",
+  const baseOptions = (overrides: Partial<BranchSetupOptions> = {}): BranchSetupOptions => ({
+    kind: "branch",
     plan: true,
     erdPreview: false,
     dir: ".",
@@ -720,18 +724,9 @@ describe("setupGitHub (integration)", () => {
     );
   });
 
-  test("rejects --no-plan with --tag", async () => {
-    await expect(
-      setupGitHub(baseOptions({ workspaceName: "my-app", tag: true, plan: false })),
-    ).rejects.toThrow(/--no-plan/);
-  });
-
-  test("rejects ERD preview for targets without a PR plan", async () => {
+  test("rejects ERD preview for a branch target without plan", async () => {
     await expect(
       setupGitHub(baseOptions({ workspaceName: "my-app", erdPreview: true, plan: false })),
-    ).rejects.toThrow(/--erd-preview/);
-    await expect(
-      setupGitHub(baseOptions({ workspaceName: "my-app", erdPreview: true, tag: true })),
     ).rejects.toThrow(/--erd-preview/);
   });
 
@@ -743,9 +738,16 @@ describe("setupGitHub (integration)", () => {
 
   test("rejects a tag pattern with YAML-unsafe characters", async () => {
     await expect(
-      setupGitHub(
-        baseOptions({ workspaceName: "my-app", tag: true, tagPattern: "v* #${{ evil }}" }),
-      ),
+      setupGitHub({
+        kind: "tag",
+        workspaceName: "my-app",
+        tagPattern: "v* #${{ evil }}",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "cfg-app",
+      }),
     ).rejects.toThrow(/Invalid tag pattern/);
   });
 
@@ -792,7 +794,16 @@ describe("setupGitHub (integration)", () => {
     // tailor-my-app-tag.yml — no filename collision, no --workspace-name workaround needed.
     await setupGitHub(baseOptions({ workspaceName: "my-app" }));
     await expect(
-      setupGitHub(baseOptions({ workspaceName: "my-app", tag: true, branch: undefined })),
+      setupGitHub({
+        kind: "tag",
+        workspaceName: "my-app",
+        tagPattern: "v*",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "cfg-app",
+      }),
     ).resolves.toBeUndefined();
     const lock = readLock(testDir);
     expect(lock?.targets).toHaveLength(2);
