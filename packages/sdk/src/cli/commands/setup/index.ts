@@ -115,6 +115,10 @@ export const setupCommand = defineAppCommand({
         description:
           "Workspace region for preview workspace creation (e.g. us-west). Required with --preview.",
       }),
+      "require-preview-label": arg(z.boolean().default(false), {
+        description:
+          "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs. Requires --preview.",
+      }),
       force: arg(z.boolean().default(false), {
         description: "Discard hand edits / take over unmanaged files and regenerate",
       }),
@@ -142,6 +146,9 @@ export const setupCommand = defineAppCommand({
     if (args.region !== undefined && !args.preview) {
       throw new Error("--region requires --preview.");
     }
+    if (args["require-preview-label"] && !args.preview) {
+      throw new Error("--require-preview-label requires --preview.");
+    }
 
     // `provider` is validated by the enum to the only value supported today;
     // a second provider would branch here to its own generator.
@@ -157,6 +164,7 @@ export const setupCommand = defineAppCommand({
       action: args.action,
       preview: args.preview,
       region: args.region,
+      requirePreviewLabel: args["require-preview-label"],
       force: args.force,
       outputDir: process.cwd(),
     });
