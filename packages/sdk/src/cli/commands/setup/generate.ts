@@ -28,32 +28,10 @@ import {
   type RenderResult,
 } from "./templates";
 
-export type SetupGitHubOptions = {
+type CommonSetupOptions = {
   workspaceName?: string;
-  branch?: string;
-  tag: boolean;
-  tagPattern: string;
-  environment?: string;
-  plan: boolean;
-  erdPreview: boolean;
   dir: string;
-  /**
-   * When set, generate a per-app composite action at
-   * `.github/actions/tailor-<action>/action.yml` instead of a full workflow.
-   */
-  action?: string;
-  /** When true, generate a preview workflow (PR-triggered deploy/cleanup). */
-  preview?: boolean;
-  /**
-   * Workspace region for preview workspace creation (e.g. `us-west`).
-   * Required when `preview` is true.
-   */
-  region?: string;
-  /**
-   * When true, the preview workflow deploys only for PRs labeled `tailor:preview`.
-   * Default false: preview deploys on every PR.
-   */
-  requirePreviewLabel?: boolean;
+  environment?: string;
   force: boolean;
   outputDir: string;
   /** Injectable git runner, for testing. */
@@ -65,6 +43,33 @@ export type SetupGitHubOptions = {
   /** Injectable migration config detector, for testing. Defaults to loading the config. */
   loadHasMigrations?: (configPath: string) => Promise<boolean>;
 };
+
+export type BranchSetupOptions = CommonSetupOptions & {
+  kind: "branch";
+  branch?: string;
+  plan: boolean;
+  erdPreview: boolean;
+};
+
+export type TagSetupOptions = CommonSetupOptions & {
+  kind: "tag";
+  tagPattern: string;
+  branch?: string;
+};
+
+export type PreviewSetupOptions = CommonSetupOptions & {
+  kind: "preview";
+  branch?: string;
+  /** Workspace region for preview workspace creation (e.g. `us-west`). */
+  region: string;
+  /**
+   * When true, the preview workflow deploys only for PRs labeled `tailor:preview`.
+   * Default false: preview deploys on every PR.
+   */
+  requirePreviewLabel?: boolean;
+};
+
+export type SetupGitHubOptions = BranchSetupOptions | TagSetupOptions | PreviewSetupOptions;
 
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
@@ -227,17 +232,6 @@ type Resolved = {
  * @returns Resolved target metadata and rendered content
  */
 async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
-  // Validate flag combinations up front.
-  if (options.tag && !options.plan) {
-    throw new Error(
-      "--no-plan cannot be combined with --tag (tag targets always run plan before deploy). " +
-        "Drop --no-plan or use a branch target.",
-    );
-  }
-  if (options.erdPreview && (options.tag || !options.plan)) {
-    throw new Error("--erd-preview requires a branch target with plan enabled.");
-  }
-
   // Normalize before any filesystem use and before embedding into workflow
   // YAML (paths filters / working-directory): POSIX separators, collapse
   // duplicate slashes, drop a leading "./" and trailing "/" so values like
@@ -263,7 +257,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   }
   validateWorkspaceName(workspaceName);
 
-  const kind: TargetKind = options.tag ? "tag" : options.preview ? "preview" : "branch";
+  const { kind } = options;
   const packageManager = detectPackageManager(options.outputDir);
   // The env-scoped TAILOR_PLATFORM_WORKSPACE_ID variable is only readable by a
   // job that declares `environment:`, so every plan/deploy job sets one. When
@@ -280,22 +274,25 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
   let render: RenderResult;
   let erdNamespaces: string[] = [];
   const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
-  const hasMigrations = await loadHasMigrations(configPath);
-  if (options.erdPreview) {
-    const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
-    erdNamespaces = await loadErdNamespaces(configPath);
-    if (erdNamespaces.length === 0) {
-      throw new Error(
-        "No TailorDB namespaces found for --erd-preview. Define owned db namespaces in tailor.config.ts.",
-      );
-    }
-    validateErdNamespaces(erdNamespaces);
-  }
 
   if (kind === "branch") {
+    if (options.erdPreview && !options.plan) {
+      throw new Error("--erd-preview requires a branch target with plan enabled.");
+    }
+    if (options.erdPreview) {
+      const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
+      erdNamespaces = await loadErdNamespaces(configPath);
+      if (erdNamespaces.length === 0) {
+        throw new Error(
+          "No TailorDB namespaces found for --erd-preview. Define owned db namespaces in tailor.config.ts.",
+        );
+      }
+      validateErdNamespaces(erdNamespaces);
+    }
     branchAutoDetected = options.branch === undefined;
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
     validateBranch(branch);
+    const hasMigrations = await loadHasMigrations(configPath);
     render = renderBranchWorkflow({
       workspaceName,
       branch,
@@ -311,6 +308,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     if (branch !== null) {
       validateBranch(branch);
     }
+    const hasMigrations = await loadHasMigrations(configPath);
     render = renderTagWorkflow({
       workspaceName,
       tagPattern: options.tagPattern,
@@ -322,12 +320,6 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     });
   } else {
     // preview
-    if (!options.region) {
-      throw new Error(
-        "--region is required for preview targets. " +
-          "Pass the workspace region (e.g. --region us-west).",
-      );
-    }
     branchAutoDetected = options.branch === undefined;
     branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
     validateBranch(branch);
@@ -490,12 +482,6 @@ function printNextSteps(obj: { environment: string; idInjected: boolean }): void
 export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
   logBetaWarning("setup");
 
-  if (options.action !== undefined) {
-    throw new Error(
-      "--action is not yet implemented. " +
-        "Use setup without --action to generate a full workflow, or check for a newer SDK version.",
-    );
-  }
   const resolved = await resolve(options);
 
   const lock = readLock(options.outputDir);
