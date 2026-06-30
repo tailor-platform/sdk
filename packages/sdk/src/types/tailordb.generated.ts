@@ -68,6 +68,8 @@ export type DBFieldMetadata = {
     | undefined;
   /** Decimal scale (number of digits after decimal point, 0-12) */
   scale?: number | undefined;
+  /** Default value for the field on create */
+  default?: unknown;
 };
 export type DBFieldMetadataInput = DBFieldMetadata;
 

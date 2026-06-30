@@ -530,6 +530,19 @@ describe("TailorDBField type error message tests", () => {
     expectTypeOf(db.string({ optional: true }).serial).toEqualTypeOf<
       TypeLevelError<"serial can only be set on non-array integer or string fields">
     >();
+
+    const defaulted = db.string().default("hello");
+    expectTypeOf(defaulted.default).toEqualTypeOf<
+      TypeLevelError<".default() has already been set">
+    >();
+
+    expectTypeOf(db.object({ x: db.string() }).default).toEqualTypeOf<
+      TypeLevelError<"default cannot be set on nested type fields">
+    >();
+
+    expectTypeOf(db.string().serial({ start: 0 }).default).toEqualTypeOf<
+      TypeLevelError<"default cannot be set on serial fields">
+    >();
   });
 });
 

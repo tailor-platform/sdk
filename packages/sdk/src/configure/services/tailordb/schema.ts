@@ -57,6 +57,7 @@ export type TailorAnyDBField = Omit<
   index: AnyBuilderMethod;
   unique: AnyBuilderMethod;
   vector: AnyBuilderMethod;
+  default: AnyBuilderMethod;
   hooks: AnyBuilderMethod;
   validate: AnyBuilderMethod;
   serial: AnyBuilderMethod;
@@ -91,6 +92,7 @@ type WithDBFieldHooks<Defined, H> = Defined & {
   };
   serial: false;
 };
+type WithDBFieldDefault<Defined> = Defined & { default: true };
 type WithDBFieldValidate<Defined> = Defined & { validate: true };
 type WithDBFieldSerial<Defined> = Defined & {
   serial: true;
@@ -247,6 +249,19 @@ type DBFieldSerialMethod<Defined extends DefinedDBFieldMetadata, Output, OutputB
             : Defined extends { type: "integer" | "string"; array: false }
               ? DBFieldSerialFn<Defined, Output, OutputBase>
               : TypeLevelError<"serial can only be set on non-array integer or string fields">;
+type DBFieldDefaultFn<Defined extends DefinedDBFieldMetadata, Output> = (
+  value: Output extends null ? NonNullable<Output> : Output,
+) => TailorDBField<WithDBFieldDefault<Defined>, Output>;
+type DBFieldDefaultMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldDefaultFn<Defined, Output>
+    : Defined extends { default: unknown }
+      ? TypeLevelError<".default() has already been set">
+      : Defined extends { type: "nested" }
+        ? TypeLevelError<"default cannot be set on nested type fields">
+        : Defined extends { serial: true }
+          ? TypeLevelError<"default cannot be set on serial fields">
+          : DBFieldDefaultFn<Defined, Output>;
 
 /**
  * Full TailorDBField interface with builder methods.
@@ -302,6 +317,15 @@ export interface TailorDBField<
    * Enable vector search on the field (string type only)
    */
   vector: DBFieldVectorMethod<Defined, Output, OutputBase>;
+
+  /**
+   * Set a default value for the field on create. When the field is required,
+   * this makes it optional in the Create input — the default fills in when
+   * no value (or a nullish hook result) is provided.
+   *
+   * For datetime/date/time fields, pass `"now"` to use the operation timestamp.
+   */
+  default: DBFieldDefaultMethod<Defined, Output>;
 
   /**
    * Add hooks for create/update operations on this field.
@@ -444,6 +468,7 @@ type TailorDBFieldRuntime<Defined extends DefinedDBFieldMetadata, Output> = Omit
   index(): object;
   unique(): object;
   vector(): object;
+  default(value: unknown): object;
   hooks(hooks: Hook<unknown, Output>): object;
   serial(config: SerialConfig): object;
   clone(options?: FieldOptions): TailorDBFieldRuntime<DefinedDBFieldMetadata, AnyBuilderMethod>;
@@ -584,6 +609,12 @@ function createTailorDBFieldRuntime<
 
     vector() {
       return cloneWith({ vector: true });
+    },
+
+    // oxlint-disable-next-line no-explicit-any
+    default(value: any) {
+      // oxlint-disable-next-line no-explicit-any
+      return cloneWith({ default: value }) as any;
     },
 
     hooks(hooks: Hook<unknown, FieldValue>) {

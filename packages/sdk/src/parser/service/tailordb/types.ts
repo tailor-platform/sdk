@@ -79,6 +79,7 @@ export interface OperatorFieldConfig {
     format?: string;
   };
   scale?: number;
+  default?: unknown;
   fields?: Record<string, OperatorFieldConfig>;
 }
 

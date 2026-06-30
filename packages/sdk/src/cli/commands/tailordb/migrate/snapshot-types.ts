@@ -65,6 +65,7 @@ export interface SnapshotFieldConfig {
   validate?: SnapshotValidation[];
   serial?: SnapshotSerial;
   scale?: number;
+  default?: unknown;
   /** Nested fields (recursive) */
   fields?: Record<string, SnapshotFieldConfig>;
 }

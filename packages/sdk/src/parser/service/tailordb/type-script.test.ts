@@ -62,6 +62,47 @@ describe("buildTypeScripts", () => {
     expect(createExpr).toContain('((_input["profile"] || {})["contact"] || {})["email"]');
   });
 
+  test("applies default as ?? fallback after hook on create only", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      status: {
+        type: "enum",
+        default: "active",
+        hooks: { create: { expr: "_value" } },
+      },
+      name: {
+        type: "string",
+        default: "unnamed",
+      },
+    };
+
+    const { typeHook } = buildTypeScripts(fields);
+    const createExpr = typeHook?.create?.expr ?? "";
+
+    // hook + default: hookResult ?? defaultValue
+    expect(createExpr).toContain('"status": ((_value) => (_value))(_input["status"]) ?? "active"');
+    // default only: input ?? defaultValue
+    expect(createExpr).toContain('"name": _input["name"] ?? "unnamed"');
+
+    // defaults are create-only — update script should not include them
+    expect(typeHook?.update).toBeUndefined();
+  });
+
+  test("uses _now for datetime/date/time defaults with 'now'", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      createdAt: { type: "datetime", default: "now" },
+      startDate: { type: "date", default: "now" },
+      startTime: { type: "time", default: "now" },
+      label: { type: "string", default: "now" },
+    };
+
+    const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
+    expect(createExpr).toContain('"createdAt": _input["createdAt"] ?? _now');
+    expect(createExpr).toContain('"startDate": _input["startDate"] ?? _now');
+    expect(createExpr).toContain('"startTime": _input["startTime"] ?? _now');
+    // "now" on a string field is just a literal string, not _now
+    expect(createExpr).toContain('"label": _input["label"] ?? "now"');
+  });
+
   test("builds a validate script keyed by dotted path with negated boolean checks", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       age: {

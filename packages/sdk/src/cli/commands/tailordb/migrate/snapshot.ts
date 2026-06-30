@@ -357,6 +357,7 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
   }
 
   if (field.config.scale !== undefined) config.scale = field.config.scale;
+  if (field.config.default !== undefined) config.default = field.config.default;
 
   if (field.config.fields && Object.keys(field.config.fields).length > 0) {
     config.fields = {};
@@ -427,6 +428,7 @@ function createSnapshotFieldConfigFromOperatorConfig(
   }
 
   if (fieldConfig.scale !== undefined) config.scale = fieldConfig.scale;
+  if (fieldConfig.default !== undefined) config.default = fieldConfig.default;
 
   // Recursive for nested fields
   if (fieldConfig.fields && Object.keys(fieldConfig.fields).length > 0) {

@@ -40,6 +40,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   serial?: SerialConfig;
   relation?: boolean;
   scale?: number;
+  default?: unknown;
 }
 
 export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
@@ -55,6 +56,7 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
   };
   serial?: boolean;
   relation?: boolean;
+  default?: boolean;
 }
 
 export type GqlOperationsConfig = GqlOperationsInput;
@@ -152,8 +154,8 @@ type HookFn<TValue, TData, TReturn> = (args: {
   now: Date;
 }) => TReturn;
 
-export type Hook<TData, TReturn> = {
-  create?: HookFn<TReturn | null, TData, TReturn>;
+export type Hook<TData, TReturn, TCreateReturn = TReturn> = {
+  create?: HookFn<TReturn | null, TData, TCreateReturn>;
   update?: HookFn<TReturn | null, TData, TReturn>;
 };
 
@@ -167,7 +169,9 @@ export type Hooks<
     ? never
     : F[K]["_defined"] extends { type: "nested" }
       ? never
-      : K]?: Hook<TData, output<F[K]>>;
+      : K]?: F[K]["_defined"] extends { default: unknown }
+    ? Hook<TData, output<F[K]>, output<F[K]> | null | undefined>
+    : Hook<TData, output<F[K]>>;
 }>;
 
 // --- Field helper types ---
