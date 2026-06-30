@@ -370,7 +370,7 @@ Auth connections enable OAuth2 authentication with external providers (Google, M
 For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
 
 > [!NOTE]
-> Deploy updates connections **in-place**, preserving the OAuth token. Changing `providerUrl`, `issuerUrl`, or `clientId` revokes the current session — the deploy will warn you to re-authorize:
+> Deploy updates connections **in-place**, preserving the OAuth token. If the connection requires re-authorization after an update, the deploy will warn you:
 >
 > ```bash
 > tailor-sdk authconnection authorize --name <connection-name>
