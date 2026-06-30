@@ -458,7 +458,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     out = line(
       out,
       "DEPLOY_IF",
-      `if: $\{{ !(github.event_name == 'workflow_dispatch' && inputs['dry-run']) }}`,
+      `if: \${{ !(github.event_name == 'workflow_dispatch' && inputs['dry-run']) }}`,
     );
     out = line(out, "DEPLOY_ENVIRONMENT", `environment: ${environment}`);
   } else {
