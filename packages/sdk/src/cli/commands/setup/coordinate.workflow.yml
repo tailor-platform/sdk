@@ -53,7 +53,7 @@ jobs:
       contents: read
       pull-requests: write
     concurrency:
-      group: tailor-plan-__WORKSPACE_NAME__-${{ github.run_id }}
+      group: tailor-plan-__WORKSPACE_NAME__-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
     steps:
       - id: tailor-checkout

@@ -470,7 +470,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       "DEPLOY_IF",
       `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs['dry-run'])`,
     );
-    out = line(out, "DEPLOY_ENVIRONMENT", undefined);
+    out = line(out, "DEPLOY_ENVIRONMENT", `environment: ${environment}`);
   }
 
   const planSteps = apps
