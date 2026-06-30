@@ -315,6 +315,28 @@ describe("checkGitHub (integration)", () => {
     }
   });
 
+  test("skips WORKSPACE_ID check when only preview targets exist (local mode)", async () => {
+    await setupTarget({
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+    });
+    const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
+    delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
+    try {
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main", ci: false }),
+      ).resolves.toBeUndefined();
+    } finally {
+      if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
+    }
+  });
+
   test("detects ERD preview namespace drift", async () => {
     await setupTarget(
       setupOptions({
