@@ -60,7 +60,7 @@ runs:
         platform-client-id: ${{ inputs.platform-client-id }}
         platform-client-secret: ${{ inputs.platform-client-secret }}
     - id: tailor-notify
-      if: failure()
+      if: failure() && inputs.slack-token != '' && inputs.slack-channel-id != ''
       uses: tailor-platform/actions/notify@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
       with:
         provider: slack

@@ -621,7 +621,7 @@ jobs:
           true
       # __SEED_DATA_END__
       - id: tailor-notify
-        if: always()
+        if: always() && vars.TAILOR_SLACK_CHANNEL_ID != ''
         uses: tailor-platform/actions/notify@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
         with:
           provider: slack
