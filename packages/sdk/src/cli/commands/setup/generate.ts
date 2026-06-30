@@ -22,9 +22,13 @@ import {
   detectPackageManager,
   renderActionWorkflow,
   renderBranchWorkflow,
+  renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
+  renderTailorSetupAction,
   TEMPLATE_VERSION,
+  type CoordinateApp,
+  type CoordinateKind,
   type PackageManager,
   type RenderResult,
 } from "./templates";
@@ -79,6 +83,20 @@ export type SetupGitHubOptions =
   | TagSetupOptions
   | PreviewSetupOptions
   | ActionSetupOptions;
+
+export type CoordinateSetupOptions = {
+  coordinatorName: string;
+  coordinateKind: CoordinateKind;
+  /** Action names (without tailor- prefix), in deploy order. */
+  actions: string[];
+  branch?: string;
+  tagPattern?: string;
+  environment?: string;
+  force: boolean;
+  outputDir: string;
+  /** Injectable git runner, for testing. */
+  gitRunner?: GitRunner;
+};
 
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
@@ -584,4 +602,152 @@ export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
   } else {
     printNextSteps({ environment: resolved.environment, idInjected });
   }
+}
+
+/**
+ * Generate the coordinator workflow that orchestrates per-app composite actions.
+ *
+ * Unlike `setupGitHub`, this function does not read a Tailor config. The coordinator
+ * name is required via `--workspace-name`. App working directories are resolved from
+ * the lock file entries created by `setup action`.
+ * @param options - Coordinate setup options
+ */
+export async function setupCoordinate(options: CoordinateSetupOptions): Promise<void> {
+  logBetaWarning("setup");
+
+  const { coordinatorName, coordinateKind, actions, force, outputDir } = options;
+  validateWorkspaceName(coordinatorName);
+
+  if (actions.length === 0) {
+    throw new Error(
+      "At least one --action is required. " +
+        "Run `tailor-sdk setup action --dir <app-dir>` for each app first.",
+    );
+  }
+
+  const environment = options.environment ?? coordinatorName;
+  validateEnvironment(environment);
+
+  let branch: string | null = null;
+  let branchAutoDetected = false;
+  if (coordinateKind === "branch") {
+    branchAutoDetected = options.branch === undefined;
+    branch = options.branch ?? detectDefaultBranch(outputDir, options.gitRunner);
+    validateBranch(branch);
+  } else if (options.branch !== undefined) {
+    validateBranch(options.branch);
+    branch = options.branch;
+  }
+
+  const tagPattern = options.tagPattern ?? "v*";
+  if (coordinateKind === "tag") {
+    validateTagPattern(tagPattern);
+  }
+
+  const packageManager = detectPackageManager(outputDir);
+  const lock = readLock(outputDir);
+
+  // Resolve each action name to its lock entry to get the working directory.
+  const apps: CoordinateApp[] = actions.map((actionName) => {
+    const name = actionName.startsWith("tailor-")
+      ? actionName.slice("tailor-".length)
+      : actionName;
+    const entry = lock?.targets.find((t) => t.kind === "action" && t.workspaceName === name);
+    const dir = entry?.inputs.dir ?? ".";
+    return { name, dir };
+  });
+
+  const render = renderCoordinateWorkflow({
+    coordinatorName,
+    kind: coordinateKind,
+    apps,
+    branch: branch ?? undefined,
+    tagPattern: coordinateKind === "tag" ? tagPattern : undefined,
+    environment,
+    packageManager,
+  });
+
+  const kindSuffix = coordinateKind === "tag" ? "-tag" : "";
+  const file = `.github/workflows/tailor-coordinate-${coordinatorName}${kindSuffix}.yml`;
+  const absFile = path.join(outputDir, file);
+
+  assertNoKindCollision({ lock, kind: "coordinate", workspaceName: coordinatorName, file });
+
+  const existing = findTarget(lock, "coordinate", coordinatorName);
+  const fileExists = fs.existsSync(absFile);
+  const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
+
+  const decision = decideAction({ existing, fileExists, currentContent, force });
+  if (decision.action === "conflict") {
+    throw new Error(`${file}: ${decision.reason}`);
+  }
+
+  fs.mkdirSync(path.dirname(absFile), { recursive: true });
+  fs.writeFileSync(absFile, render.content, "utf-8");
+
+  // Generate the local tailor-setup action (user-owned: created once, never overwritten).
+  const tailorSetupFile = ".github/actions/tailor-setup/action.yml";
+  const absTailorSetupFile = path.join(outputDir, tailorSetupFile);
+  if (!fs.existsSync(absTailorSetupFile)) {
+    fs.mkdirSync(path.dirname(absTailorSetupFile), { recursive: true });
+    fs.writeFileSync(absTailorSetupFile, renderTailorSetupAction({ packageManager }), "utf-8");
+    logger.success(`Generated ${styles.path(tailorSetupFile)}`);
+  }
+
+  const newTarget: LockTarget = {
+    kind: "coordinate",
+    workspaceName: coordinatorName,
+    file,
+    templateVersion: TEMPLATE_VERSION,
+    inputs: {
+      branch,
+      branchAutoDetected: coordinateKind === "branch" ? branchAutoDetected : undefined,
+      tagPattern: coordinateKind === "tag" ? tagPattern : null,
+      environment,
+      dir: ".",
+      packageManager,
+      plan: true,
+      actionDirs: apps.map((a) => a.dir),
+    },
+    generatedIds: render.generatedIds,
+    ejectedIds: existing?.ejectedIds ?? [],
+    contentHash: hashContent(render.content),
+  };
+
+  const targets = [...(lock?.targets ?? [])];
+  const idx = targets.findIndex(
+    (t) => t.kind === newTarget.kind && t.workspaceName === newTarget.workspaceName,
+  );
+  if (idx === -1) {
+    targets.push(newTarget);
+  } else {
+    targets[idx] = newTarget;
+  }
+  writeLock(outputDir, { version: LOCK_VERSION, targets });
+
+  if (decision.action === "restore") {
+    logger.success(`Regenerated ${styles.path(file)} (was missing on disk)`);
+  } else if (decision.action === "regenerate") {
+    logger.success(`Regenerated ${styles.path(file)}`);
+  } else {
+    logger.success(`Generated ${styles.path(file)}`);
+  }
+
+  logger.newline();
+  logger.info("Next steps:");
+  logger.newline();
+  logger.log(`1. Set the machine-user credentials as secrets on the "${environment}" environment:`);
+  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env ${environment}`);
+  logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env ${environment}`);
+  logger.newline();
+  logger.log(
+    `2. Provision each workspace and set TAILOR_PLATFORM_WORKSPACE_ID on the "${environment}" environment:`,
+  );
+  logger.log("   tailor-sdk workspace create   # one per app; copy the id");
+  logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
+  logger.newline();
+  logger.log("3. Commit the generated files:");
+  logger.log(`   - ${file}`);
+  logger.log(`   - ${tailorSetupFile}  (if newly created)`);
+  logger.log("   - .github/tailor-sdk.lock");
 }

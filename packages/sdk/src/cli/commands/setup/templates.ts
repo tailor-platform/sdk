@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import actionTemplate from "./action.yml";
 import branchTemplate from "./branch.workflow.yml";
+import coordinateTemplate from "./coordinate.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
@@ -71,6 +72,25 @@ export type RenderPreviewParams = {
 export type RenderActionParams = {
   workspaceName: string;
   workingDirectory?: string;
+};
+
+export type CoordinateApp = {
+  /** App workspace name (same as the --action argument, e.g. "ims"). */
+  name: string;
+  /** App directory relative to repo root (e.g. "apps/ims"). */
+  dir: string;
+};
+
+export type CoordinateKind = "branch" | "tag";
+
+export type RenderCoordinateParams = {
+  coordinatorName: string;
+  kind: CoordinateKind;
+  apps: CoordinateApp[];
+  branch?: string;
+  tagPattern?: string;
+  environment: string;
+  packageManager: PackageManager;
 };
 
 export type RenderResult = {
@@ -370,4 +390,170 @@ export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   const generatedIds = ["tailor-apply", "tailor-notify"];
 
   return { content: out, generatedIds };
+}
+
+const ACTIONS_SHA = "a51a94d08b867e576d850d9dd71e6d87f4e0cea0"; // feat/setup
+
+/**
+ * Render the coordinator workflow that orchestrates per-app composite actions.
+ *
+ * Generates per-app plan steps (generate-check, drift-check, plan) and per-app
+ * deploy steps (calling each app's composite action at .github/actions/tailor-<name>).
+ * Checkout, setup, and install are done once per job using the local tailor-setup action.
+ * @param params - Coordinator and app configuration
+ * @returns Rendered YAML and the list of managed job/step ids
+ */
+export function renderCoordinateWorkflow(params: RenderCoordinateParams): RenderResult {
+  const { coordinatorName, kind, apps, environment, packageManager } = params;
+  const isTag = kind === "tag";
+  const branch = params.branch;
+  const tagPattern = params.tagPattern ?? "v*";
+
+  let out = coordinateTemplate;
+  out = line(out, "HEADER", HEADER);
+
+  out = block(out, "PUSH_BRANCHES", !isTag);
+  out = block(out, "PUSH_TAGS", isTag);
+  out = block(out, "TAG_GUARD_JOB", isTag && branch !== undefined);
+
+  if (isTag && branch !== undefined) {
+    out = line(out, "PLAN_NEEDS", "needs: tailor-tag-guard");
+    out = line(
+      out,
+      "PLAN_IF",
+      `if: >-\n  github.event_name == 'workflow_dispatch' ||\n  needs.tailor-tag-guard.outputs.on-branch == 'true'`,
+    );
+  } else if (isTag) {
+    out = line(out, "PLAN_NEEDS", undefined);
+    out = line(out, "PLAN_IF", undefined);
+  } else {
+    out = line(out, "PLAN_NEEDS", undefined);
+    out = line(
+      out,
+      "PLAN_IF",
+      `if: >-\n  github.event_name == 'pull_request' ||\n  (github.event_name == 'workflow_dispatch' && inputs['dry-run'])`,
+    );
+  }
+
+  if (isTag) {
+    out = line(
+      out,
+      "DEPLOY_IF",
+      `if: $\{{ !(github.event_name == 'workflow_dispatch' && inputs['dry-run']) }}`,
+    );
+    out = line(out, "DEPLOY_ENVIRONMENT", `environment: ${environment}`);
+  } else {
+    out = line(
+      out,
+      "DEPLOY_IF",
+      `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs['dry-run'])`,
+    );
+    out = line(out, "DEPLOY_ENVIRONMENT", undefined);
+  }
+
+  const planSteps = apps
+    .flatMap((app) => {
+      const wd = app.dir !== "." ? app.dir : undefined;
+      const wdLine = wd ? `\n    working-directory: ${wd}` : "";
+      return [
+        `- id: tailor-generate-check-${app.name}`,
+        `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # feat/setup`,
+        `  with:`,
+        `    package-manager: ${packageManager}${wdLine}`,
+        `- id: tailor-drift-check-${app.name}`,
+        `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # feat/setup`,
+        `  with:`,
+        `    package-manager: ${packageManager}`,
+        `- id: tailor-plan-${app.name}`,
+        `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
+        `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # feat/setup`,
+        `  with:`,
+        `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+        `    package-manager: ${packageManager}${wdLine}`,
+        `    label: ${coordinatorName}/${app.name}`,
+        `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+        `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+        `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
+      ];
+    })
+    .join("\n");
+  out = line(out, "PER_APP_PLAN_STEPS", planSteps);
+
+  const deploySteps = apps
+    .flatMap((app) => [
+      `- id: tailor-deploy-${app.name}`,
+      `  uses: ./.github/actions/tailor-${app.name}`,
+      `  with:`,
+      `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+      `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+      `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+      `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
+      `    slack-token: \${{ secrets.TAILOR_SLACK_BOT_TOKEN }}`,
+      `    slack-channel-id: \${{ vars.TAILOR_SLACK_CHANNEL_ID }}`,
+      `    # editable: api-url:`,
+    ])
+    .join("\n");
+  out = line(out, "PER_APP_DEPLOY_STEPS", deploySteps);
+
+  // Plain placeholders last so values containing `$` are not interpreted as
+  // replacement patterns.
+  out = out.replaceAll("__WORKSPACE_NAME__", () => coordinatorName);
+  out = out.replaceAll("__ENVIRONMENT__", () => environment);
+  if (branch !== undefined) {
+    out = out.replaceAll("__BRANCH__", () => branch);
+  }
+  if (isTag) {
+    out = out.replaceAll("__TAG_PATTERN__", () => tagPattern);
+  }
+
+  const generatedIds: string[] = [];
+  if (isTag && branch !== undefined) {
+    generatedIds.push(
+      "tailor-tag-guard",
+      "tailor-tag-guard/tailor-checkout",
+      "tailor-tag-guard/tailor-tag-guard",
+    );
+  }
+  generatedIds.push("tailor-plan", "tailor-plan/tailor-checkout", "tailor-plan/tailor-setup");
+  for (const app of apps) {
+    generatedIds.push(
+      `tailor-plan/tailor-generate-check-${app.name}`,
+      `tailor-plan/tailor-drift-check-${app.name}`,
+      `tailor-plan/tailor-plan-${app.name}`,
+    );
+  }
+  generatedIds.push("tailor-deploy", "tailor-deploy/tailor-checkout", "tailor-deploy/tailor-setup");
+  for (const app of apps) {
+    generatedIds.push(`tailor-deploy/tailor-deploy-${app.name}`);
+  }
+
+  return { content: out, generatedIds };
+}
+
+/**
+ * Render the content of the user-owned .github/actions/tailor-setup/action.yml local action.
+ *
+ * This file is generated once by `setup coordinate` and never overwritten.
+ * It wraps the setup and install actions with the package manager baked in.
+ * @param params - Package manager configuration
+ * @returns File content string
+ */
+export function renderTailorSetupAction(params: { packageManager: PackageManager }): string {
+  const { packageManager } = params;
+  return [
+    `# This file is user-owned. Generated once by \`tailor-sdk setup coordinate\` and never overwritten.`,
+    `# Customize freely: add pre/post steps, change install flags, etc.`,
+    `runs:`,
+    `  using: composite`,
+    `  steps:`,
+    `    - uses: tailor-platform/actions/setup@${ACTIONS_SHA} # feat/setup`,
+    `      with:`,
+    `        package-manager: ${packageManager}`,
+    `    # Add custom steps here (e.g. private registry authentication)`,
+    `    - uses: tailor-platform/actions/install@${ACTIONS_SHA} # feat/setup`,
+    `      with:`,
+    `        package-manager: ${packageManager}`,
+    `        # editable: install-command:`,
+    ``,
+  ].join("\n");
 }

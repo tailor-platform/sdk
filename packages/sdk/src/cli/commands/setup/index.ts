@@ -3,7 +3,7 @@ import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { checkGitHub } from "./check";
-import { setupGitHub } from "./generate";
+import { setupCoordinate, setupGitHub } from "./generate";
 
 const checkCommand = defineAppCommand({
   name: "check",
@@ -54,9 +54,21 @@ const coordinateCommand = defineAppCommand({
       }),
     })
     .strict(),
-  run: async (_args) => {
-    // TODO: implement coordinate generation
-    logger.warn("setup coordinate is not yet implemented");
+  run: async (args) => {
+    if (args.preview) {
+      logger.warn("Preview coordinator is not yet implemented. Use --branch or --tag.");
+      return;
+    }
+    const coordinateKind = args.tag ? "tag" : "branch";
+    await setupCoordinate({
+      coordinatorName: args["workspace-name"],
+      coordinateKind,
+      actions: args.action,
+      branch: args.branch,
+      environment: args.environment,
+      force: args.force,
+      outputDir: process.cwd(),
+    });
   },
 });
 
