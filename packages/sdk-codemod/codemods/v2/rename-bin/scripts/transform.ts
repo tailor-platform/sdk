@@ -359,9 +359,15 @@ function activeQuoteStart(source: string, start: number, offset: number): number
     const char = source[index];
     if (quote != null) {
       if (quote.escaped) {
-        if (char === "\\" && source[index + 1] === quote.delimiter) {
-          quote = null;
-          index += 1;
+        if (char === "\\") {
+          let runEnd = index + 1;
+          while (source[runEnd] === "\\") runEnd += 1;
+          if (runEnd === index + 1 && source[runEnd] === quote.delimiter) {
+            quote = null;
+            index = runEnd;
+          } else {
+            index = runEnd - 1;
+          }
         }
       } else if (char === "\\") {
         index += 1;
