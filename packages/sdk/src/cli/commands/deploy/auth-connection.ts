@@ -37,7 +37,7 @@ type UpdateConnection = {
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
-type ReplaceConnection = {
+type MaskedUpdateConnection = {
   name: string;
   createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
   updateMask: { paths: string[] };
@@ -123,7 +123,7 @@ export async function planAuthConnections(
     CreateConnection,
     UpdateConnection,
     DeleteConnection,
-    ReplaceConnection
+    MaskedUpdateConnection
   >("Auth connections");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
