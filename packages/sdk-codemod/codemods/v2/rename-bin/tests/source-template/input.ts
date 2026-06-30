@@ -90,6 +90,7 @@ const yarnDlxPackageFlag = "yarn dlx --package tailor-sdk tailor-sdk login";
 const pnpmDlxOtherPackageFlag = "pnpm dlx foo -p tailor-sdk tailor-sdk login";
 const npxOtherPackageQuoted = "npx foo \"tailor-sdk login\"";
 const npxOtherPackageSingleQuoted = "npx foo 'tailor-sdk login'";
+const npxOtherPackageEscapedQuoteValue = "npx foo \"hello\\\"tailor-sdk login\"";
 const shellWrapped = "sh -c \"tailor-sdk deploy\"";
 const escapedArg = "tailor-sdk --arg \"tailor-sdk deploy\" deploy";
 const dollarArg = "tailor-sdk --arg \"$& tailor-sdk deploy\" deploy";
