@@ -9,7 +9,6 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { stripExecutorTriggerArgs } from "#/cli/services/executor/loader";
 import { ExecutorSchema } from "#/parser/service/executor/index";
-import { stripResolverBuilderHelpers } from "#/parser/service/resolver/builder-helpers";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
 import { assertDefined } from "#/utils/assert";
@@ -60,7 +59,7 @@ export async function detectFunctionType(
   // Priority: resolver → executor → workflow job → plain function
 
   // 1. Check resolver
-  const resolverResult = ResolverSchema.safeParse(stripResolverBuilderHelpers(module.default));
+  const resolverResult = ResolverSchema.safeParse(module.default);
   if (resolverResult.success) {
     const rawInput = module.default.input;
     let inputSchema: DetectedFunction["inputSchema"];
