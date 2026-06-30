@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
@@ -198,7 +198,7 @@ const previewCommand = defineAppCommand({
   },
 });
 
-export const setupCommand = defineAppCommand({
+export const setupCommand = defineCommand({
   name: "setup",
   description: "Generate CI deploy workflows for your project. (beta)",
   subCommands: {
