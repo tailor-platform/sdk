@@ -47,8 +47,9 @@ runs:
     - id: build-site
       shell: bash
       run: |
-        # Uncomment and implement to build static website assets before deployment.
+        # Add your static website build command here.
         # Example: pnpm --filter <package-name> run build:static
+        # After editing, run `tailor-sdk setup action --force` to update the lock hash.
         true
     # __STATIC_WEBSITE_BUILD_END__
     - id: tailor-apply
