@@ -350,8 +350,26 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     params.workingDirectory ? `paths: ["${params.workingDirectory}/**"]` : undefined,
   );
 
-  out = block(out, "REQUIRE_PREVIEW_LABEL", requirePreviewLabel);
-  out = block(out, "ALL_PR_TRIGGER", !requirePreviewLabel);
+  // PR trigger event types — single line() marker avoids duplicate YAML map keys in the template.
+  out = line(
+    out,
+    "PR_TYPES",
+    requirePreviewLabel
+      ? "types: [labeled, synchronize, reopened, closed]"
+      : "types: [opened, synchronize, reopened, closed]",
+  );
+
+  // Deploy job if condition.
+  const deployIf = requirePreviewLabel
+    ? `if: >-\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft`
+    : `if: >-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft`;
+  out = line(out, "DEPLOY_IF", deployIf);
+
+  // Cleanup job if condition.
+  const cleanupIf = requirePreviewLabel
+    ? `if: >-\n  github.event.action == 'closed' &&\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview')`
+    : `if: github.event.action == 'closed'`;
+  out = line(out, "CLEANUP_IF", cleanupIf);
 
   out = applyCommon(out, params)
     .replaceAll("__BRANCH__", () => branch)
@@ -496,6 +514,8 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       `  uses: ./.github/actions/tailor-${app.name}`,
       `  with:`,
       `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+      `    workspace-name: ${app.name}`,
+      `    working-directory: ${app.dir}`,
       `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
       `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
       `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
@@ -554,6 +574,8 @@ export function renderTailorSetupAction(params: { packageManager: PackageManager
   return [
     `# This file is user-owned. Generated once by \`tailor-sdk setup coordinate\` and never overwritten.`,
     `# Customize freely: add pre/post steps, change install flags, etc.`,
+    `name: Tailor Setup`,
+    `description: Install dependencies and run tailor-sdk setup for composite action callers.`,
     `runs:`,
     `  using: composite`,
     `  steps:`,

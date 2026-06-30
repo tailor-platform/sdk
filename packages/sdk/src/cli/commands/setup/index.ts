@@ -1,7 +1,6 @@
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
-import { logger } from "#/cli/shared/logger";
 import { checkGitHub } from "./check";
 import { setupCoordinate, setupGitHub } from "./generate";
 
@@ -43,9 +42,6 @@ const coordinateCommand = defineAppCommand({
       tag: arg(z.boolean().default(false), {
         description: "Generate a tag target coordinator",
       }),
-      preview: arg(z.boolean().default(false), {
-        description: "Generate a preview coordinator",
-      }),
       environment: arg(z.string().min(1).optional(), {
         description: "GitHub Environment for the plan/deploy jobs",
       }),
@@ -55,10 +51,6 @@ const coordinateCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    if (args.preview) {
-      logger.warn("Preview coordinator is not yet implemented. Use --branch or --tag.");
-      return;
-    }
     const coordinateKind = args.tag ? "tag" : "branch";
     await setupCoordinate({
       coordinatorName: args.name,

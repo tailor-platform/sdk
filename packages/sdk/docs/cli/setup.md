@@ -106,7 +106,6 @@ tailor-sdk setup coordinate [options]
 | `--action <ACTION>`           | -     | Composite action to include (can be specified multiple times). tailor- prefix optional. | No       | `[]`    |
 | `--branch <BRANCH>`           | -     | Branch target: deploy trigger branch (defaults to the detected default branch)          | No       | -       |
 | `--tag`                       | -     | Generate a tag target coordinator                                                       | No       | `false` |
-| `--preview`                   | -     | Generate a preview coordinator                                                          | No       | `false` |
 | `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs                                             | No       | -       |
 | `--force`                     | -     | Discard hand edits and regenerate                                                       | No       | `false` |
 

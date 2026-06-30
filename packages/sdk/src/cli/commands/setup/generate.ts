@@ -402,7 +402,7 @@ async function resolve(options: SetupGitHubOptions): Promise<Resolved> {
     environment,
     dir,
     packageManager,
-    plan: kind === "branch" ? options.plan : kind === "action" ? false : true,
+    plan: kind === "branch" ? options.plan : kind === "action" || kind === "preview" ? false : true,
     region: kind === "preview" ? options.region : undefined,
     requirePreviewLabel: kind === "preview" ? (options.requirePreviewLabel ?? false) : undefined,
     erdPreview: kind === "branch" ? options.erdPreview : false,
@@ -675,8 +675,13 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   const apps: CoordinateApp[] = actions.map((actionName) => {
     const name = actionName.startsWith("tailor-") ? actionName.slice("tailor-".length) : actionName;
     const entry = lock?.targets.find((t) => t.kind === "action" && t.workspaceName === name);
-    const dir = entry?.inputs.dir ?? ".";
-    return { name, dir };
+    if (!entry) {
+      throw new Error(
+        `Action target "${name}" not found in .github/tailor-sdk.lock. ` +
+          `Run \`tailor-sdk setup action --name ${name}\` first.`,
+      );
+    }
+    return { name, dir: entry.inputs.dir };
   });
 
   const render = renderCoordinateWorkflow({
