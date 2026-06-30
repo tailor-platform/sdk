@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { checkGitHub, findTargetDrift, resolveWithinRoot, type TargetState } from "./check";
-import { setupGitHub, type SetupGitHubOptions } from "./generate";
+import { setupGitHub, type BranchSetupOptions } from "./generate";
 import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
 
@@ -201,9 +201,8 @@ describe("checkGitHub (integration)", () => {
     `setup-gh-check-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
 
-  const setupOptions = (overrides: Partial<SetupGitHubOptions> = {}): SetupGitHubOptions => ({
-    tag: false,
-    tagPattern: "v*",
+  const setupOptions = (overrides: Partial<BranchSetupOptions> = {}): BranchSetupOptions => ({
+    kind: "branch",
     plan: true,
     erdPreview: false,
     dir: ".",
