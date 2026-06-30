@@ -248,11 +248,11 @@ export const setupCommand = defineCommand({
   name: "setup",
   description: "Generate CI deploy workflows for your project. (beta)",
   subCommands: {
-    action: actionCommand,
     branch: branchCommand,
-    check: checkCommand,
-    coordinate: coordinateCommand,
-    preview: previewCommand,
     tag: tagCommand,
+    preview: previewCommand,
+    action: actionCommand,
+    coordinate: coordinateCommand,
+    check: checkCommand,
   },
 });
