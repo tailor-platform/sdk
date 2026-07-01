@@ -461,6 +461,58 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     expect(previousOwner.staticWebsite.changeSet.deletes).toEqual([]);
     expect(previousOwner.staticWebsite.changeSet.lines()).toEqual([]);
   });
+
+  test("drops workflow job function deletes claimed by another deployment", () => {
+    const previousOwner = emptyResults();
+    previousOwner.workflow.jobFunctionDeletes.push({
+      workspaceId: "ws",
+      jobFunctionName: "shared-job",
+    });
+    const jobFunctionDeletes = previousOwner.workflow.jobFunctionDeletes;
+
+    const nextOwner = emptyResults();
+    nextOwner.workflow.changeSet.creates.push({
+      name: "next-workflow",
+      usedJobNames: ["shared-job"],
+    } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.workflow.jobFunctionDeletes).toBe(jobFunctionDeletes);
+    expect(previousOwner.workflow.jobFunctionDeletes).toEqual([]);
+  });
+
+  test("drops workflow job function deletes claimed by another unchanged deployment", () => {
+    const previousOwner = emptyResults();
+    previousOwner.workflow.jobFunctionDeletes.push(
+      {
+        workspaceId: "ws",
+        jobFunctionName: "shared-job",
+      },
+      {
+        workspaceId: "ws",
+        jobFunctionName: "orphaned-job",
+      },
+    );
+
+    const nextOwner = emptyResults();
+    nextOwner.workflow.unchangedWorkflowJobNames.add("shared-job");
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.workflow.jobFunctionDeletes).toEqual([
+      {
+        workspaceId: "ws",
+        jobFunctionName: "orphaned-job",
+      },
+    ]);
+  });
 });
 
 describe("confirmDeploymentPlans", () => {

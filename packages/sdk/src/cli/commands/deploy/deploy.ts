@@ -1126,12 +1126,15 @@ function collectImportantResourceDeletions(results: PlanResults): ImportantResou
   return importantDeletions;
 }
 
+type WorkflowJobFunctionItem = { jobFunctionName: string };
+type ManagedResourceItem = HasName | WorkflowJobFunctionItem;
+
 type ManagedResourceChangeSet = {
-  creates: HasName[];
-  updates: HasName[];
-  deletes: HasName[];
-  replaces: HasName[];
-  unchanged: HasName[];
+  creates: ManagedResourceItem[];
+  updates: ManagedResourceItem[];
+  deletes: ManagedResourceItem[];
+  replaces: ManagedResourceItem[];
+  unchanged: ManagedResourceItem[];
 };
 
 type ManagedResourceGroup = {
@@ -1139,9 +1142,10 @@ type ManagedResourceGroup = {
   resourceType: string;
   namespaceFields?: readonly string[];
   namespaceOwnerResourceType?: string;
+  getName?: (item: ManagedResourceItem) => string;
 };
 
-function readResourceField(item: HasName, field: string): string | undefined {
+function readResourceField(item: ManagedResourceItem, field: string): string | undefined {
   const itemRecord = item as unknown as Record<string, unknown>;
   for (const requestField of ["request", "deleteRequest", "createRequest"]) {
     const request = itemRecord[requestField];
@@ -1155,16 +1159,26 @@ function readResourceField(item: HasName, field: string): string | undefined {
   return value == null ? undefined : String(value);
 }
 
-function managedResourceKey(group: ManagedResourceGroup, item: HasName): string {
+function managedResourceName(group: ManagedResourceGroup, item: ManagedResourceItem): string {
+  if (group.getName) {
+    return group.getName(item);
+  }
+  return (item as HasName).name;
+}
+
+function managedResourceKey(group: ManagedResourceGroup, item: ManagedResourceItem): string {
   const namespace = group.namespaceFields
     ?.map((field) => readResourceField(item, field))
     .find((value) => value !== undefined);
   return namespace
-    ? `${group.resourceType}:${namespace}:${item.name}`
-    : `${group.resourceType}:${item.name}`;
+    ? `${group.resourceType}:${namespace}:${managedResourceName(group, item)}`
+    : `${group.resourceType}:${managedResourceName(group, item)}`;
 }
 
-function managedNamespaceOwnerKey(group: ManagedResourceGroup, item: HasName): string | undefined {
+function managedNamespaceOwnerKey(
+  group: ManagedResourceGroup,
+  item: ManagedResourceItem,
+): string | undefined {
   if (!group.namespaceOwnerResourceType) {
     return undefined;
   }
@@ -1177,7 +1191,7 @@ function managedNamespaceOwnerKey(group: ManagedResourceGroup, item: HasName): s
 function addManagedResourceClaims(
   claims: Set<string>,
   group: ManagedResourceGroup,
-  item: HasName,
+  item: ManagedResourceItem,
 ): void {
   claims.add(managedResourceKey(group, item));
   const namespaceOwnerKey = managedNamespaceOwnerKey(group, item);
@@ -1189,7 +1203,7 @@ function addManagedResourceClaims(
 function isManagedResourceClaimed(
   claims: ReadonlySet<string>,
   group: ManagedResourceGroup,
-  item: HasName,
+  item: ManagedResourceItem,
 ): boolean {
   if (claims.has(managedResourceKey(group, item))) {
     return true;
@@ -1210,6 +1224,36 @@ function retainDeletesNotClaimed(
     }
   }
   group.changeSet.deletes.length = writeIndex;
+}
+
+function workflowJobFunctionItems(items: ReadonlyArray<ManagedResourceItem>): HasName[] {
+  const jobNames = new Set<string>();
+  for (const item of items) {
+    const usedJobNames = (item as unknown as { usedJobNames?: unknown }).usedJobNames;
+    if (!Array.isArray(usedJobNames)) {
+      continue;
+    }
+    for (const jobName of usedJobNames) {
+      if (typeof jobName === "string") {
+        jobNames.add(jobName);
+      }
+    }
+  }
+  return [...jobNames].map((name) => ({ name }));
+}
+
+function workflowJobFunctionResourceGroup(results: PlanResults): ManagedResourceGroup {
+  return {
+    changeSet: {
+      creates: workflowJobFunctionItems(results.workflow.changeSet.creates),
+      updates: workflowJobFunctionItems(results.workflow.changeSet.updates),
+      replaces: workflowJobFunctionItems(results.workflow.changeSet.replaces),
+      unchanged: [...results.workflow.unchangedWorkflowJobNames].map((name) => ({ name })),
+      deletes: results.workflow.jobFunctionDeletes,
+    },
+    resourceType: "workflow_job_function",
+    getName: (item) => ("jobFunctionName" in item ? item.jobFunctionName : item.name),
+  };
 }
 
 function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
@@ -1313,6 +1357,7 @@ function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
     },
     { changeSet: results.executor.changeSet, resourceType: "executor" },
     { changeSet: results.workflow.changeSet, resourceType: "workflow" },
+    workflowJobFunctionResourceGroup(results),
     { changeSet: results.secretManager.vaultChangeSet, resourceType: "secret.vault" },
     {
       changeSet: results.secretManager.secretChangeSet,
