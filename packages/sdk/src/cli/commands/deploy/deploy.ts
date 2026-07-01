@@ -1275,10 +1275,14 @@ function retainDeletesNotClaimed(
 ): void {
   let writeIndex = 0;
   for (const item of group.changeSet.deletes) {
-    if (!isManagedResourceClaimed(otherClaims, group, item)) {
-      group.changeSet.deletes[writeIndex] = item;
-      writeIndex += 1;
+    if (isManagedResourceClaimed(otherClaims, group, item)) {
+      logger.debug(
+        `Skipping delete of ${managedResourceKey(group, item)}: still managed by another config in this deploy.`,
+      );
+      continue;
     }
+    group.changeSet.deletes[writeIndex] = item;
+    writeIndex += 1;
   }
   group.changeSet.deletes.length = writeIndex;
 }

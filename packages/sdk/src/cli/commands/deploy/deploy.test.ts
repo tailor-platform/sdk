@@ -388,6 +388,7 @@ describe("visible same-run namespaces", () => {
 
 describe("dropCrossDeploymentManagedDeletes", () => {
   test("drops stale deletes for resources claimed by another deployment", () => {
+    const debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => {});
     const previousOwner = emptyResults();
     previousOwner.tailorDB.changeSet.service.deletes.push({ name: "shared" } as never);
     previousOwner.tailorDB.changeSet.type.deletes.push({
@@ -418,6 +419,10 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     expect(previousOwner.tailorDB.changeSet.service.deletes).toEqual([]);
     expect(previousOwner.tailorDB.changeSet.type.deletes).toEqual([]);
     expect(previousOwner.tailorDB.changeSet.gqlPermission.deletes).toEqual([]);
+    expect(debugSpy).toHaveBeenCalledWith(
+      expect.stringContaining("still managed by another config"),
+    );
+    debugSpy.mockRestore();
   });
 
   test("keeps deletes that are not claimed by another deployment", () => {
