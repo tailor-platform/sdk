@@ -1598,6 +1598,25 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report hoisted var for-loop runtime-looking bindings", async () => {
+    await writeProjectFile(
+      "resolvers/hoisted-for-var.ts",
+      [
+        "function run() {",
+        "  for (var tailor of sources) {}",
+        "  tailor.idp.Client;",
+        "  for (var tailordb in sources) {}",
+        "  tailordb.file.upload;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports runtime globals outside class static block var bindings", async () => {
     await writeProjectFile(
       "resolvers/static-block-var-outside.ts",

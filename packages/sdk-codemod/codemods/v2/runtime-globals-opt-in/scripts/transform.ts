@@ -626,6 +626,18 @@ function forBindingChildren(loop: SgNode): SgNode[] {
     : [];
 }
 
+function forVarBindingIncludesName(loop: SgNode, name: string): boolean {
+  const children = loop.children();
+  const keywordIndex = children.findIndex(
+    (child) => child.kind() === "in" || child.kind() === "of",
+  );
+  if (keywordIndex === -1) return false;
+
+  const beforeKeyword = children.slice(0, keywordIndex);
+  if (!beforeKeyword.some((child) => child.kind() === "var")) return false;
+  return beforeKeyword.some((child) => bindingIncludesName(child, name));
+}
+
 function scopeHasImportBinding(scope: SgNode, name: string, namespace: BindingNamespace): boolean {
   for (const importStmt of scope.findAll({ rule: { kind: "import_statement" } })) {
     if (!sameNode(nearestReviewScope(importStmt.parent()), scope)) continue;
@@ -659,6 +671,13 @@ function scopeHasValueBinding(scope: SgNode, name: string): boolean {
     if (!varDeclarator && hasAncestorBeforeScope(decl, scope, REVIEW_FOR_KINDS)) continue;
     const binding = firstDeclaratorChild(decl);
     if (binding && bindingIncludesName(binding, name)) return true;
+  }
+
+  for (const loop of scope.findAll({
+    rule: { any: [...REVIEW_FOR_KINDS].map((kind) => ({ kind })) },
+  })) {
+    if (!sameNode(nearestVarReviewScope(loop.parent()), scope)) continue;
+    if (forVarBindingIncludesName(loop, name)) return true;
   }
 
   for (const param of scope.findAll({
