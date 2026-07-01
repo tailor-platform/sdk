@@ -849,7 +849,7 @@ function addBundledScripts(
  * @param targets - Built deployment targets to merge
  * @returns Combined bundled scripts across all targets
  */
-export function mergeBundledScripts(
+function mergeBundledScripts(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): BuiltDeploymentTarget["bundledScripts"] {
   const bundledScripts: BuiltDeploymentTarget["bundledScripts"] = {
@@ -871,6 +871,40 @@ export function mergeBundledScripts(
   }
 
   return bundledScripts;
+}
+
+/**
+ * Reject executor and workflow-job names that collide across configs. These map
+ * to workspace-global function-registry entries (executor--<name>,
+ * workflow--<name>), so a duplicate would make one config's apply overwrite or
+ * fail on another's; resolver and auth-hook names are namespace-qualified and
+ * are intentionally excluded.
+ * @param targets - Built deployment targets to check
+ */
+export function assertUniqueGlobalFunctionNames(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): void {
+  const executors = new Set<string>();
+  const workflowJobs = new Set<string>();
+
+  for (const target of targets) {
+    for (const name of target.bundledScripts.executors.keys()) {
+      if (executors.has(name)) {
+        throw new Error(
+          `Duplicate executor name "${name}" across config files. Executor and workflow job names must be unique across all configs in a single deploy.`,
+        );
+      }
+      executors.add(name);
+    }
+    for (const name of target.bundledScripts.workflowJobs.keys()) {
+      if (workflowJobs.has(name)) {
+        throw new Error(
+          `Duplicate workflow job name "${name}" across config files. Executor and workflow job names must be unique across all configs in a single deploy.`,
+        );
+      }
+      workflowJobs.add(name);
+    }
+  }
 }
 
 function collectPlannedExternalTailorDBServices(
@@ -1543,9 +1577,9 @@ export async function deploy(options?: DeployOptions) {
       return { bundledScripts: mergeBundledScripts(targets) };
     }
 
-    // Reject duplicate bundle names across configs before planning so the
-    // failure surfaces up front instead of mid-apply on the second upload.
-    mergeBundledScripts(targets);
+    // Reject workspace-global function-name collisions across configs before
+    // planning so the failure surfaces up front instead of mid-apply.
+    assertUniqueGlobalFunctionNames(targets);
 
     // Note: the normal apply path intentionally skips writing bundle files to
     // .tailor-sdk/. Bundles are kept in memory and uploaded directly to the

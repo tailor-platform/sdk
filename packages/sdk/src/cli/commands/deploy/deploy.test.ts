@@ -3,12 +3,12 @@ import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { createChangeSet } from "./change-set";
 import {
+  assertUniqueGlobalFunctionNames,
   confirmDeploymentPlans,
   computeRenamedAppDeletions,
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
   dropCrossDeploymentManagedDeletes,
-  mergeBundledScripts,
   parseDeployConfigPaths,
   printDeploymentPlans,
   printPlanResults,
@@ -796,7 +796,7 @@ type FakeBundledScripts = {
 
 function fakeTarget(
   bundles: FakeBundledScripts,
-): Parameters<typeof mergeBundledScripts>[0][number] {
+): Parameters<typeof assertUniqueGlobalFunctionNames>[0][number] {
   return {
     bundledScripts: {
       resolvers: new Map(Object.entries(bundles.resolvers ?? {})),
@@ -804,40 +804,71 @@ function fakeTarget(
       workflowJobs: new Map(Object.entries(bundles.workflowJobs ?? {})),
       authHooks: new Map(Object.entries(bundles.authHooks ?? {})),
     },
-  } as unknown as Parameters<typeof mergeBundledScripts>[0][number];
+  } as unknown as Parameters<typeof assertUniqueGlobalFunctionNames>[0][number];
 }
 
-describe("mergeBundledScripts", () => {
-  test("throws when two configs define the same executor bundle name", () => {
+describe("assertUniqueGlobalFunctionNames", () => {
+  test("throws when two configs define the same executor name", () => {
     expect(() =>
-      mergeBundledScripts([
+      assertUniqueGlobalFunctionNames([
         fakeTarget({ executors: { "sync-user": "a" } }),
         fakeTarget({ executors: { "sync-user": "b" } }),
       ]),
-    ).toThrow('Duplicate executor bundle name "sync-user" across config files.');
+    ).toThrow(
+      'Duplicate executor name "sync-user" across config files. Executor and workflow job names must be unique across all configs in a single deploy.',
+    );
   });
 
-  test("throws when two configs define the same workflow job bundle name", () => {
+  test("throws when two configs define the same workflow job name", () => {
     expect(() =>
-      mergeBundledScripts([
+      assertUniqueGlobalFunctionNames([
         fakeTarget({ workflowJobs: { "notify-job": "a" } }),
         fakeTarget({ workflowJobs: { "notify-job": "b" } }),
       ]),
-    ).toThrow('Duplicate workflow job bundle name "notify-job" across config files.');
+    ).toThrow(
+      'Duplicate workflow job name "notify-job" across config files. Executor and workflow job names must be unique across all configs in a single deploy.',
+    );
   });
 
-  test("merges distinct bundle names across configs without throwing", () => {
-    const merged = mergeBundledScripts([
-      fakeTarget({ executors: { "sync-user": "a" } }),
-      fakeTarget({ executors: { "sync-order": "b" } }),
-    ]);
-
-    expect([...merged.executors.keys()]).toEqual(["sync-user", "sync-order"]);
+  test("accepts distinct executor names across configs", () => {
+    expect(() =>
+      assertUniqueGlobalFunctionNames([
+        fakeTarget({ executors: { "sync-user": "a" } }),
+        fakeTarget({ executors: { "sync-order": "b" } }),
+      ]),
+    ).not.toThrow();
   });
 
   test("is a no-op for a single config", () => {
     expect(() =>
-      mergeBundledScripts([fakeTarget({ executors: { "sync-user": "a" } })]),
+      assertUniqueGlobalFunctionNames([fakeTarget({ executors: { "sync-user": "a" } })]),
+    ).not.toThrow();
+  });
+
+  test("accepts the same resolver name in different namespaces", () => {
+    expect(() =>
+      assertUniqueGlobalFunctionNames([
+        fakeTarget({ resolvers: { get: "buyer" } }),
+        fakeTarget({ resolvers: { get: "supplier" } }),
+      ]),
+    ).not.toThrow();
+  });
+
+  test("ignores duplicate resolver bundle names across configs", () => {
+    expect(() =>
+      assertUniqueGlobalFunctionNames([
+        fakeTarget({ resolvers: { get: "a" } }),
+        fakeTarget({ resolvers: { get: "b" } }),
+      ]),
+    ).not.toThrow();
+  });
+
+  test("ignores duplicate auth hook bundle names across configs", () => {
+    expect(() =>
+      assertUniqueGlobalFunctionNames([
+        fakeTarget({ authHooks: { "before-login": "a" } }),
+        fakeTarget({ authHooks: { "before-login": "b" } }),
+      ]),
     ).not.toThrow();
   });
 });
