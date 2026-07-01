@@ -18,16 +18,14 @@ export const inspectCommand = defineAppCommand({
       desc: "Inspect a deeply nested input with `(oneof config)` annotations.",
     },
   ],
-  args: z
-    .object({
-      endpoint: arg(z.string(), {
-        positional: true,
-        description:
-          "API endpoint to inspect (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
-        completion: { custom: { choices: listMethodNames() } },
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    endpoint: arg(z.string(), {
+      positional: true,
+      description:
+        "API endpoint to inspect (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
+      completion: { custom: { choices: listMethodNames() } },
+    }),
+  }),
   run: (args) => {
     const methodName = extractMethodName(args.endpoint);
     const method = getMethodDescriptor(methodName);

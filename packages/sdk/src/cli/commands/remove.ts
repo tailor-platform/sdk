@@ -170,12 +170,10 @@ export async function remove(options?: RemoveOptions): Promise<void> {
 export const removeCommand = defineAppCommand({
   name: "remove",
   description: "Remove all resources managed by the application from the workspace.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const { client, workspaceId, application, config } = await loadOptions({

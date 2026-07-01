@@ -62,12 +62,10 @@ export async function listOAuth2Clients(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all OAuth2 clients in the application.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const oauth2Clients = await listOAuth2Clients({
       workspaceId: args["workspace-id"],

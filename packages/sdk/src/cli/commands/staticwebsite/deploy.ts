@@ -229,20 +229,18 @@ export function logSkippedFiles(skippedFiles: string[]) {
 export const deployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy a static website from a local build directory.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      name: arg(z.string(), {
-        alias: "n",
-        description: "Static website name",
-      }),
-      dir: arg(z.string(), {
-        alias: "d",
-        description: "Path to the static website files",
-        completion: { type: "directory" },
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    name: arg(z.string(), {
+      alias: "n",
+      description: "Static website name",
+    }),
+    dir: arg(z.string(), {
+      alias: "d",
+      description: "Path to the static website files",
+      completion: { type: "directory" },
+    }),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);

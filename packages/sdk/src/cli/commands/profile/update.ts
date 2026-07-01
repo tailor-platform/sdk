@@ -9,35 +9,33 @@ import type { ProfileInfo } from "./types";
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update profile properties.",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        positional: true,
-        description: "Profile name",
-      }),
-      user: arg(z.string().optional(), {
-        alias: "u",
-        description: "New user email address or machine user client ID",
-      }),
-      "workspace-id": arg(z.string().optional(), {
-        alias: "w",
-        description: "New workspace ID",
-      }),
-      permission: arg(z.enum(["write", "read"]).optional(), {
-        description:
-          "Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.",
-      }),
-      "machine-user": arg(z.string().optional(), {
-        alias: "m",
-        description:
-          "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.",
-      }),
-      "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
-        description:
-          "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction.",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      positional: true,
+      description: "Profile name",
+    }),
+    user: arg(z.string().optional(), {
+      alias: "u",
+      description: "New user email address or machine user client ID",
+    }),
+    "workspace-id": arg(z.string().optional(), {
+      alias: "w",
+      description: "New workspace ID",
+    }),
+    permission: arg(z.enum(["write", "read"]).optional(), {
+      description:
+        "Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.",
+    }),
+    "machine-user": arg(z.string().optional(), {
+      alias: "m",
+      description:
+        "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.",
+    }),
+    "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
+      description:
+        "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction.",
+    }),
+  }),
   run: async (args) => {
     const config = await readPlatformConfig();
 

@@ -8,6 +8,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
+// strip unknown keys
 const getOrganizationOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
 });
@@ -42,11 +43,9 @@ export async function getOrganization(options: GetOrganizationOptions): Promise<
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Show detailed information about an organization.",
-  args: z
-    .object({
-      ...organizationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+  }),
   run: async (args) => {
     const organization = await getOrganization({
       organizationId: args["organization-id"],

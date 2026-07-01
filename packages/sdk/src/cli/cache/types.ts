@@ -1,10 +1,12 @@
 import { z } from "zod";
 
+// strip unknown keys
 const cacheOutputFileSchema = z.object({
   outputPath: z.string(),
   contentHash: z.string(),
 });
 
+// strip unknown keys
 const cacheEntrySchema = z.object({
   kind: z.literal("bundle"),
   inputHash: z.string(),
@@ -13,6 +15,7 @@ const cacheEntrySchema = z.object({
   createdAt: z.string(),
 });
 
+// strip unknown keys
 const cacheManifestSchema = z.object({
   version: z.literal(1),
   sdkVersion: z.string(),

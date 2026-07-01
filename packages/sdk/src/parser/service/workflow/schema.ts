@@ -32,7 +32,7 @@ const durationSchema = (maxSeconds: number) =>
   });
 
 export const RetryPolicySchema = z
-  .object({
+  .strictObject({
     maxRetries: z.number().int().min(1).max(10).describe("Maximum number of retries (1-10)"),
     initialBackoff: durationSchema(3600).describe(
       "Initial backoff duration (e.g., '1s', '500ms', '1m', max 1h)",
@@ -42,7 +42,7 @@ export const RetryPolicySchema = z
     ),
     backoffMultiplier: z.number().min(1).describe("Backoff multiplier (>= 1)"),
   })
-  .strict()
+
   .refine((data) => durationToSeconds(data.initialBackoff) <= durationToSeconds(data.maxBackoff), {
     message: "initialBackoff must be less than or equal to maxBackoff",
     path: ["initialBackoff"],
@@ -61,13 +61,11 @@ export const ConcurrencyPolicySchema = z.strictObject({
     .describe("Maximum number of concurrent executions (1-1000)"),
 });
 
-export const WorkflowSchema = z
-  .object({
-    name: z.string().describe("Workflow name"),
-    mainJob: WorkflowJobSchema.describe("Main job that starts the workflow"),
-    retryPolicy: RetryPolicySchema.optional().describe("Retry policy for the workflow"),
-    concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
-      "Concurrency policy for the workflow",
-    ),
-  })
-  .strict();
+export const WorkflowSchema = z.strictObject({
+  name: z.string().describe("Workflow name"),
+  mainJob: WorkflowJobSchema.describe("Main job that starts the workflow"),
+  retryPolicy: RetryPolicySchema.optional().describe("Retry policy for the workflow"),
+  concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
+    "Concurrency policy for the workflow",
+  ),
+});

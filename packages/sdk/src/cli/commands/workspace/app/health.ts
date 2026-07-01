@@ -9,6 +9,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { appHealthInfo, type AppHealthInfo } from "./transform";
 
+// strip unknown keys
 const healthOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
@@ -56,15 +57,13 @@ export async function getAppHealth(options: HealthOptions): Promise<AppHealthInf
 export const healthCommand = defineAppCommand({
   name: "health",
   description: "Check application schema health",
-  args: z
-    .object({
-      ...workspaceArgs,
-      name: arg(z.string(), {
-        description: "Application name",
-        alias: "n",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    name: arg(z.string(), {
+      description: "Application name",
+      alias: "n",
+    }),
+  }),
   run: async (args) => {
     const health = await getAppHealth({
       workspaceId: args["workspace-id"],

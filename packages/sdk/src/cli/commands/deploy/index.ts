@@ -8,28 +8,26 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 export const deployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy your application by applying the Tailor configuration.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      ...confirmationArgs,
-      "dry-run": arg(z.boolean().optional(), {
-        alias: "d",
-        description: "Run the command without making any changes",
-      }),
-      "no-schema-check": arg(z.boolean().optional(), {
-        description: "Skip schema diff check against migration snapshots",
-      }),
-      "no-validate": arg(z.boolean().optional(), {
-        description: "Skip client-side validation against platform resource constraints",
-      }),
-      "no-cache": arg(z.boolean().optional(), {
-        description: "Disable bundle caching for this run",
-      }),
-      "clean-cache": arg(z.boolean().optional(), {
-        description: "Clean the bundle cache before building",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    ...confirmationArgs,
+    "dry-run": arg(z.boolean().optional(), {
+      alias: "d",
+      description: "Run the command without making any changes",
+    }),
+    "no-schema-check": arg(z.boolean().optional(), {
+      description: "Skip schema diff check against migration snapshots",
+    }),
+    "no-validate": arg(z.boolean().optional(), {
+      description: "Skip client-side validation against platform resource constraints",
+    }),
+    "no-cache": arg(z.boolean().optional(), {
+      description: "Disable bundle caching for this run",
+    }),
+    "clean-cache": arg(z.boolean().optional(), {
+      description: "Clean the bundle cache before building",
+    }),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const { initTelemetry } = await import("#/cli/telemetry/index");

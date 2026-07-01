@@ -10,15 +10,13 @@ import { logger } from "#/cli/shared/logger";
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get details of a specific static website.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      name: arg(z.string(), {
-        positional: true,
-        description: "Static website name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    name: arg(z.string(), {
+      positional: true,
+      description: "Static website name",
+    }),
+  }),
   run: async (args) => {
     const accessToken = await loadAccessToken({
       profile: args.profile,

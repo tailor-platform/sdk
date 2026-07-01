@@ -7,14 +7,12 @@ import { logger } from "#/cli/shared/logger";
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a profile.",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        positional: true,
-        description: "Profile name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      positional: true,
+      description: "Profile name",
+    }),
+  }),
   run: async (args) => {
     const config = await readPlatformConfig();
 

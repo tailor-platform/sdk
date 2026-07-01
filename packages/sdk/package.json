@@ -223,6 +223,7 @@
     "@types/semver": "7.7.1",
     "@typescript/native-preview": "7.0.0-dev.20260620.1",
     "@vitest/coverage-v8": "4.1.9",
+    "eslint-plugin-zod": "4.7.0",
     "oxfmt": "0.55.0",
     "oxlint": "1.70.0",
     "oxlint-tsgolint": "0.23.0",

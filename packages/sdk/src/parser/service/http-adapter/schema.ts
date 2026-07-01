@@ -4,14 +4,14 @@ import { functionSchema } from "../common";
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
 const inputHandlersSchema = z
-  .object({
+  .strictObject({
     get: functionSchema.optional().describe("Handler for GET requests"),
     post: functionSchema.optional().describe("Handler for POST requests"),
     put: functionSchema.optional().describe("Handler for PUT requests"),
     patch: functionSchema.optional().describe("Handler for PATCH requests"),
     delete: functionSchema.optional().describe("Handler for DELETE requests"),
   })
-  .strict()
+
   .refine(
     // optional fields become undefined after zod parses them
     // oxlint-disable-next-line typescript/no-unnecessary-condition
@@ -21,7 +21,7 @@ const inputHandlersSchema = z
   .describe("Per-method functions that transform HTTP requests to GraphQL requests");
 
 export const HttpAdapterConfigSchema = z
-  .object({
+  .strictObject({
     name: z
       .string()
       .regex(
@@ -45,5 +45,5 @@ export const HttpAdapterConfigSchema = z
       .optional()
       .describe("Function that transforms GraphQL response to HTTP response"),
   })
-  .strict()
+
   .brand("HttpAdapterConfig");
