@@ -4,7 +4,7 @@ import { isSdkBranded } from "#/utils/brand";
 import type { Executor } from "#/types/executor.generated";
 
 export function stripExecutorTriggerArgs(executor: unknown): unknown {
-  if (!isSdkBranded(executor, "executor") || executor === null || typeof executor !== "object") {
+  if (!isSdkBranded(executor, "executor")) {
     return executor;
   }
 
