@@ -618,6 +618,57 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("reports runtime globals outside class static block var bindings", async () => {
+    await writeProjectFile(
+      "resolvers/static-block-var-outside.ts",
+      [
+        "class Local {",
+        "  static {",
+        "    var tailor: unknown;",
+        "  }",
+        "}",
+        "const clientFactory = tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/static-block-var-outside.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/static-block-var-outside.ts",
+            line: 6,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = tailor.idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("does not report class static block local var bindings", async () => {
+    await writeProjectFile(
+      "resolvers/static-block-var-local.ts",
+      [
+        "class Local {",
+        "  static {",
+        "    var tailor: unknown;",
+        "    tailor.idp.Client;",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports runtime globals inside self-closing JSX in js files", async () => {
     await writeProjectFile(
       "components/view.js",
@@ -660,6 +711,30 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 1,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "export const view = <div value={tailor.idp.Client} />;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports runtime globals inside js JSX attributes containing comparison operators", async () => {
+    await writeProjectFile(
+      "components/comparison.js",
+      ["export const view = <Foo value={count > tailor.idp.Client} />;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["components/comparison.js"],
+        findings: [
+          expect.objectContaining({
+            file: "components/comparison.js",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "export const view = <Foo value={count > tailor.idp.Client} />;",
           }),
         ],
       }),
@@ -822,6 +897,47 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 2,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "const upload = (global as any).tailordb.file.upload;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports wrapped global object runtime global roots", async () => {
+    await writeProjectFile(
+      "resolvers/wrapped-global-object.ts",
+      [
+        "const optional = globalThis?.tailor.idp.Client;",
+        "const nonNull = globalThis!.tailor.idp.Client;",
+        "const castOptional = (globalThis as any)?.tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/wrapped-global-object.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/wrapped-global-object.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const optional = globalThis?.tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/wrapped-global-object.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const nonNull = globalThis!.tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/wrapped-global-object.ts",
+            line: 3,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const castOptional = (globalThis as any)?.tailor.idp.Client;",
           }),
         ],
       }),

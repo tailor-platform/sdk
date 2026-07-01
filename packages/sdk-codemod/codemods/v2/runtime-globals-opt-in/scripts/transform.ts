@@ -27,6 +27,7 @@ const REVIEW_SCOPE_KINDS = new Set([
   "arrow_function",
   "method_definition",
   "internal_module",
+  "class_static_block",
 ]);
 const REVIEW_VALUE_PARAMETER_SCOPE_KINDS = new Set([
   "function_declaration",
@@ -70,6 +71,7 @@ const REVIEW_VAR_SCOPE_KINDS = new Set([
   "arrow_function",
   "method_definition",
   "internal_module",
+  "class_static_block",
 ]);
 
 type BindingNamespace = "type" | "value";
@@ -100,7 +102,7 @@ function isJsLikeFile(filePath: string): boolean {
 }
 
 function looksLikeJsx(source: string): boolean {
-  return source.includes("</") || /<[A-Za-z][\w.:]*(?:\s[^<>]*)?\/>/.test(source);
+  return source.includes("</") || /<[A-Za-z][\w.:]*(?=[\s/>])[\s\S]*?\/>/.test(source);
 }
 
 function sourceLang(filePath: string, source: string): Lang {
@@ -422,7 +424,7 @@ function addReviewFinding(
 
 function runtimeRootReference(source: string): RuntimeRootReference | null {
   const globalObjectMatch =
-    /^\s*(?:(globalThis|global)|\(\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))\.(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
+    /^\s*(?:(globalThis|global)|\(\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))\s*(?:\.|\?\.|!\s*\.)(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
       source,
     );
   if (globalObjectMatch) {
