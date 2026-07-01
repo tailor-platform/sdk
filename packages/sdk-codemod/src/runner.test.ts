@@ -1175,6 +1175,17 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "namespace-import.ts"),
+        [
+          'import * as cfg from "../tailor.config";',
+          "",
+          "export async function run() {",
+          '  return cfg.auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "non-call.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1208,6 +1219,7 @@ describe("runCodemods", () => {
             "collision.ts",
             "destructure.ts",
             "import-equals-collision.ts",
+            "namespace-import.ts",
             "non-call.ts",
             "type-collision.ts",
             "wrapped-collision.ts",
@@ -1226,6 +1238,11 @@ describe("runCodemods", () => {
               file: "import-equals-collision.ts",
               line: 5,
               excerpt: 'return auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "namespace-import.ts",
+              line: 4,
+              excerpt: 'return cfg.auth.getConnectionToken("google");',
             }),
             expect.objectContaining({
               file: "non-call.ts",

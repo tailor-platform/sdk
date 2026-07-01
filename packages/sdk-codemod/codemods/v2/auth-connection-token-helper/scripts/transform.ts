@@ -156,6 +156,19 @@ function findTailorConfigAuthBindings(imports: SgNode[]): AuthBinding[] {
   );
 }
 
+function findTailorConfigNamespaceAuthLocalNames(imports: SgNode[]): Set<string> {
+  return new Set(
+    imports.flatMap((importStmt) =>
+      importBindings(importStmt)
+        .filter(
+          (binding) =>
+            binding.namespace && !binding.typeOnly && isTailorConfigSource(binding.source),
+        )
+        .map((binding) => binding.localName),
+    ),
+  );
+}
+
 function runtimeAuthconnectionReference(imports: SgNode[]): string | null {
   for (const importStmt of imports) {
     for (const binding of importBindings(importStmt)) {
@@ -547,8 +560,12 @@ function authConnectionTokenReferenceFromMember(
 }
 
 function authReceiverIdentifier(node: SgNode | null): SgNode | null {
+  const receiver = unwrapReceiverExpression(node);
+  return receiver?.kind() === "identifier" ? receiver : null;
+}
+
+function unwrapReceiverExpression(node: SgNode | null): SgNode | null {
   if (!node) return null;
-  if (node.kind() === "identifier") return node;
   if (
     ![
       "parenthesized_expression",
@@ -558,11 +575,24 @@ function authReceiverIdentifier(node: SgNode | null): SgNode | null {
       "type_assertion",
     ].includes(node.kind())
   ) {
-    return null;
+    return node;
   }
 
   for (const child of node.children()) {
-    const receiver = authReceiverIdentifier(child);
+    if (
+      ![
+        "identifier",
+        "member_expression",
+        "parenthesized_expression",
+        "as_expression",
+        "satisfies_expression",
+        "non_null_expression",
+        "type_assertion",
+      ].includes(child.kind())
+    ) {
+      continue;
+    }
+    const receiver = unwrapReceiverExpression(child);
     if (receiver) return receiver;
   }
   return null;
@@ -572,6 +602,58 @@ function findAuthConnectionTokenReferences(root: SgNode, authLocalNames: Set<str
   const references: TokenCall[] = [];
   for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
     const reference = authConnectionTokenReferenceFromMember(member, authLocalNames);
+    if (reference) references.push(reference);
+  }
+  return references;
+}
+
+function authConnectionTokenNamespaceReferenceFromMember(
+  member: SgNode,
+  namespaceAuthLocalNames: Set<string>,
+): TokenCall | null {
+  const property = member.field("property");
+  const object = member.field("object");
+  const receiver = namespaceAuthReceiverIdentifier(object, namespaceAuthLocalNames);
+  if (property?.text() !== GET_CONNECTION_TOKEN || !object || !receiver) return null;
+  if (isReferenceShadowed(receiver, receiver.text())) return null;
+
+  const range = object.range();
+  return {
+    objectNode: object,
+    localName: receiver.text(),
+    range: [range.start.index, range.end.index],
+  };
+}
+
+function namespaceAuthReceiverIdentifier(
+  node: SgNode | null,
+  namespaceAuthLocalNames: Set<string>,
+): SgNode | null {
+  const receiver = unwrapReceiverExpression(node);
+  if (receiver?.kind() !== "member_expression") return null;
+
+  const property = receiver.field("property");
+  const object = receiver.field("object");
+  if (
+    property?.text() !== "auth" ||
+    object?.kind() !== "identifier" ||
+    !namespaceAuthLocalNames.has(object.text())
+  ) {
+    return null;
+  }
+  return object;
+}
+
+function findAuthConnectionTokenNamespaceReferences(
+  root: SgNode,
+  namespaceAuthLocalNames: Set<string>,
+): TokenCall[] {
+  const references: TokenCall[] = [];
+  for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
+    const reference = authConnectionTokenNamespaceReferenceFromMember(
+      member,
+      namespaceAuthLocalNames,
+    );
     if (reference) references.push(reference);
   }
   return references;
@@ -976,8 +1058,10 @@ export function reviewFindings(
   const imports = findImportStatements(root);
   const authBindings = findTailorConfigAuthBindings(imports);
   const authLocalNames = new Set(authBindings.map((binding) => binding.localName));
+  const namespaceAuthLocalNames = findTailorConfigNamespaceAuthLocalNames(imports);
   const references = [
     ...findAuthConnectionTokenReferences(root, authLocalNames),
+    ...findAuthConnectionTokenNamespaceReferences(root, namespaceAuthLocalNames),
     ...findAuthConnectionTokenDestructures(root, authLocalNames),
   ].toSorted((a, b) => a.range[0] - b.range[0]);
 
