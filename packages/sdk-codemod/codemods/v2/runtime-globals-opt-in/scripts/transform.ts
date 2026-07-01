@@ -1,8 +1,32 @@
 import { parse, Lang } from "@ast-grep/napi";
+import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
+const RUNTIME_ROOT_NAME_PATTERN = String.raw`(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
+const TAILOR_RUNTIME_MEMBER_PATTERN = String.raw`(?:authconnection|context|iconv|idp|secretmanager|workflow)`;
+const TAILORDB_RUNTIME_MEMBER_PATTERN = String.raw`(?:Client|CommandType|QueryResult|file)`;
+const RUNTIME_ERROR_GLOBAL_PATTERN = String.raw`Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)`;
+const DIRECT_RUNTIME_GLOBAL_PATTERN = new RegExp(
+  String.raw`^\s*(?:tailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER_PATTERN}\b|tailor\s*(?:\?\.|!\s*)?\[|tailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER_PATTERN}\b|tailordb\s*(?:\?\.|!\s*)?\[|${RUNTIME_ERROR_GLOBAL_PATTERN}\b)`,
+);
+const GLOBAL_OBJECT_RUNTIME_ROOT_PATTERN = new RegExp(
+  String.raw`^\s*(globalThis|global)\s*(?:(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME_PATTERN}\b|(?:\?\.|!\s*)?\[\s*["']${RUNTIME_ROOT_NAME_PATTERN}["']\s*\])`,
+);
+const SOURCE_STRING_RUNTIME_GLOBAL_PATTERN = new RegExp(
+  String.raw`(?:^|[\r\n]\s*|(?:=>|[=(:,<{\[])\s*|\b(?:return|await|typeof|new)\s+)(?:new\s+)?(?:tailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER_PATTERN}\b|tailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER_PATTERN}\b|(?:globalThis|global)\s*(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME_PATTERN}\b|${RUNTIME_ERROR_GLOBAL_PATTERN}\.[A-Za-z_$][\w$]*)`,
+);
+const REVIEW_TEXT_FILTER_PATTERN =
+  /\b(?:tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)|globalThis|global)\b/;
+const REVIEW_NODE_KINDS = new Set([
+  "identifier",
+  "member_expression",
+  "nested_identifier",
+  "nested_type_identifier",
+  "subscript_expression",
+  "type_identifier",
+]);
 const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
 
 interface ImportBinding {
@@ -183,6 +207,16 @@ function localDeclarationNames(root: SgNode): Set<string> {
   return names;
 }
 
+function importedNames(imports: SgNode[]): Set<string> {
+  const names = new Set<string>();
+  for (const importStmt of imports) {
+    for (const binding of importBindings(importStmt)) {
+      names.add(binding.localName);
+    }
+  }
+  return names;
+}
+
 function findImportStatements(root: SgNode): SgNode[] {
   return root
     .findAll({ rule: { kind: "import_statement" } })
@@ -302,6 +336,152 @@ function findTailorIdpClientConstructors(root: SgNode): SgNode[] {
     .filter(hasConstructorArguments)
     .map((node) => node.field("constructor"))
     .filter((node): node is SgNode => node?.text() === TAILOR_IDP_CLIENT);
+}
+
+function excerptForLine(source: string, line: number): string {
+  return source.split(/\r?\n/)[line - 1]?.trimEnd() ?? "";
+}
+
+function addReviewFinding(
+  findings: LlmReviewFinding[],
+  seen: Set<string>,
+  source: string,
+  file: string,
+  line: number,
+  message: string,
+): void {
+  const excerpt = excerptForLine(source, line);
+  const key = `${file}:${line}:${message}:${excerpt}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  findings.push({ file, line, message, excerpt });
+}
+
+function runtimeRootReference(
+  source: string,
+): { rootName: string; globalObjectName?: string } | null {
+  const globalObjectMatch = GLOBAL_OBJECT_RUNTIME_ROOT_PATTERN.exec(source);
+  if (globalObjectMatch) {
+    return {
+      rootName: globalObjectMatch[2] ?? globalObjectMatch[3]!,
+      globalObjectName: globalObjectMatch[1]!,
+    };
+  }
+
+  const directMatch = DIRECT_RUNTIME_GLOBAL_PATTERN.exec(source);
+  return directMatch
+    ? { rootName: directMatch[1] ?? directMatch[0].trim().split(/\W/, 1)[0]! }
+    : null;
+}
+
+function hasAncestorKind(node: SgNode, kind: string): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === kind) return true;
+    current = current.parent();
+  }
+  return false;
+}
+
+function isObjectPairKey(parent: SgNode, stringNode: SgNode): boolean {
+  if (parent.kind() !== "pair") return false;
+  const children = parent.children();
+  const colonIndex = children.findIndex((child) => child.kind() === ":");
+  const stringIndex = children.findIndex(
+    (child) => child.range().start.index === stringNode.range().start.index,
+  );
+  return stringIndex !== -1 && colonIndex !== -1 && stringIndex < colonIndex;
+}
+
+function isNonCodeStringFragment(fragment: SgNode): boolean {
+  const stringNode = fragment.parent();
+  if (!stringNode) return false;
+  const parent = stringNode.parent();
+  if (!parent) return false;
+  if (parent.kind() === "subscript_expression") return true;
+  if (isObjectPairKey(parent, stringNode)) return true;
+  if (hasAncestorKind(stringNode, "import_statement")) return true;
+  return hasAncestorKind(stringNode, "export_statement");
+}
+
+function collectStringRuntimeGlobalFindings(
+  root: SgNode,
+  source: string,
+  file: string,
+  findings: LlmReviewFinding[],
+  seen: Set<string>,
+): void {
+  for (const fragment of root.findAll({ rule: { kind: "string_fragment" } })) {
+    if (isNonCodeStringFragment(fragment)) continue;
+    const startLine = fragment.range().start.line + 1;
+    const lines = fragment.text().split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      if (!SOURCE_STRING_RUNTIME_GLOBAL_PATTERN.test(lines[i]!)) continue;
+      addReviewFinding(
+        findings,
+        seen,
+        source,
+        file,
+        startLine + i,
+        "Embedded code string uses Tailor runtime globals and needs manual migration.",
+      );
+    }
+  }
+}
+
+function collectDirectRuntimeGlobalFindings(
+  root: SgNode,
+  source: string,
+  file: string,
+  findings: LlmReviewFinding[],
+  seen: Set<string>,
+): void {
+  const imports = findImportStatements(root);
+  const localNames = localDeclarationNames(root);
+  const importNames = importedNames(imports);
+
+  for (const node of root.findAll({
+    rule: { any: [...REVIEW_NODE_KINDS].map((kind) => ({ kind })) },
+  })) {
+    const rootRef = runtimeRootReference(node.text());
+    if (!rootRef) continue;
+    if (localNames.has(rootRef.rootName) || importNames.has(rootRef.rootName)) continue;
+    if (
+      rootRef.globalObjectName &&
+      (localNames.has(rootRef.globalObjectName) || importNames.has(rootRef.globalObjectName))
+    ) {
+      continue;
+    }
+    addReviewFinding(
+      findings,
+      seen,
+      source,
+      file,
+      node.range().start.line + 1,
+      "Tailor runtime global reference remains after automatic migration.",
+    );
+  }
+}
+
+export function reviewFindings(
+  source: string,
+  filePath: string,
+  relativePath: string,
+): LlmReviewFinding[] {
+  if (!REVIEW_TEXT_FILTER_PATTERN.test(source)) return [];
+
+  let root: SgNode;
+  try {
+    root = parse(sourceLang(filePath, source), source).root();
+  } catch {
+    return [];
+  }
+
+  const findings: LlmReviewFinding[] = [];
+  const seen = new Set<string>();
+  collectDirectRuntimeGlobalFindings(root, source, relativePath, findings, seen);
+  collectStringRuntimeGlobalFindings(root, source, relativePath, findings, seen);
+  return findings;
 }
 
 /**
