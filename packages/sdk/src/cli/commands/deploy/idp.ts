@@ -24,8 +24,12 @@ import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
-import { fetchExistingResourcesWithLabels } from "./owned-resource";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
@@ -499,21 +503,16 @@ async function planServices(
     };
 
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "IdP service",
-            resourceName: idp.name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "IdP service",
-            resourceName: idp.name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "IdP service",
+        resourceName: idp.name,
+        conflicts,
+        unmanaged,
+      });
       if (
         owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
@@ -538,11 +537,13 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: entry?.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name: namespaceName,
