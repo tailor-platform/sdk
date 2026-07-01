@@ -179,7 +179,6 @@ function deployComparableSnapshot(
   snapshot: SchemaSnapshot,
   remoteTypes: ReadonlyArray<ProtoTailorDBType>,
   input: TailorDBDeployInput | undefined,
-  executorUsedTypes: ReadonlySet<string>,
 ): SchemaSnapshot {
   const comparable = structuredClone(snapshot) as SchemaSnapshot;
   const remoteTypesByName = new Map(remoteTypes.map((type) => [type.name, type]));
@@ -189,11 +188,7 @@ function deployComparableSnapshot(
     const settings: SnapshotSettings = { ...type.settings };
     const remoteSettings = remoteTypesByName.get(typeName)?.schema?.settings;
 
-    if (
-      type.settings?.publishEvents === undefined &&
-      executorUsedTypes.has(typeName) &&
-      remoteSettings?.publishRecordEvents
-    ) {
+    if (type.settings?.publishEvents === undefined && remoteSettings?.publishRecordEvents) {
       settings.publishEvents = true;
     }
 
@@ -243,7 +238,6 @@ async function getRemoteMigrationNumber(
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migration config
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
- * @param {ReadonlySet<string>} executorUsedTypes - Types used by record-trigger executors
  * @returns {Promise<RemoteSchemaVerificationResult[]>} Verification results per namespace
  */
 async function verifyRemoteSchema(
@@ -251,7 +245,6 @@ async function verifyRemoteSchema(
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTypes: ReadonlySet<string>,
 ): Promise<RemoteSchemaVerificationResult[]> {
   const results: RemoteSchemaVerificationResult[] = [];
 
@@ -294,7 +287,6 @@ async function verifyRemoteSchema(
       expectedSnapshot,
       remoteTypes,
       tailorDBInputs.find((input) => input.namespace === namespace),
-      executorUsedTypes,
     );
 
     // Compare remote with expected snapshot
@@ -353,7 +345,6 @@ type ValidateAndDetectResult = {
  * @param {LoadedConfig} config - Loaded application config (includes path)
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
- * @param {ReadonlySet<string>} executorUsedTypes - Types used by record-trigger executors
  * @returns {Promise<ValidateAndDetectResult>} Pending migrations and namespaces that have migration directories configured
  */
 async function validateAndDetectMigrations(
@@ -363,7 +354,6 @@ async function validateAndDetectMigrations(
   config: LoadedConfig,
   noSchemaCheck: boolean,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTypes: ReadonlySet<string>,
 ): Promise<ValidateAndDetectResult> {
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
@@ -399,7 +389,6 @@ async function validateAndDetectMigrations(
         workspaceId,
         namespacesWithMigrations,
         tailorDBInputs,
-        executorUsedTypes,
       );
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
 
@@ -550,7 +539,6 @@ export async function applyTailorDB(
       migrationContext.config,
       migrationContext.noSchemaCheck,
       migrationContext.tailorDBInputs,
-      migrationContext.executorUsedTypes,
     );
 
     if (pendingMigrations.length > 0) {

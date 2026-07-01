@@ -1437,4 +1437,34 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
       "Remote schema verification failed",
     );
   });
+
+  test("accepts previously derived publish events after executor removal", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+
+    const client = schemaVerificationClient({
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: true,
+      disableGqlOperations: {
+        create: false,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    });
+
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userType },
+      },
+    ];
+    planResult.context.executorUsedTypes = new Set();
+
+    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+  });
 });
