@@ -5,6 +5,8 @@ import { createChangeSet } from "./change-set";
 import {
   confirmDeploymentPlans,
   computeRenamedAppDeletions,
+  collectVisibleResolverNamespaces,
+  collectVisibleTailorDBTypeNamespaces,
   dropCrossDeploymentManagedDeletes,
   parseDeployConfigPaths,
   printDeploymentPlans,
@@ -149,6 +151,19 @@ function plannedDeployment(name: string, results: PlanResults): PlannedDeploymen
     application: { name },
     ...results,
   } as unknown as PlannedDeployment;
+}
+
+function muteConfirmLogger(): () => void {
+  const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+  const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+  const successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+  const newlineSpy = vi.spyOn(logger, "newline").mockImplementation(() => {});
+  return () => {
+    warnSpy.mockRestore();
+    logSpy.mockRestore();
+    successSpy.mockRestore();
+    newlineSpy.mockRestore();
+  };
 }
 
 describe("summarizePlanResults", () => {
@@ -309,6 +324,50 @@ describe("parseDeployConfigPaths", () => {
   });
 });
 
+describe("visible same-run namespaces", () => {
+  test("ignores TailorDB types in namespaces not visible to the current app", () => {
+    const current = {
+      tailorDBServices: [],
+      externalTailorDBNamespaces: ["shared"],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const sharedOwner = {
+      tailorDBServices: [{ namespace: "shared", types: { User: {} } }],
+      externalTailorDBNamespaces: [],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const unrelated = {
+      tailorDBServices: [{ namespace: "analytics", types: { User: {} } }],
+      externalTailorDBNamespaces: [],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+
+    const result = collectVisibleTailorDBTypeNamespaces(current, [current, sharedOwner, unrelated]);
+
+    expect(result.get("User")).toBe("shared");
+  });
+
+  test("ignores resolvers in namespaces not visible to the current app", () => {
+    const current = {
+      subgraphs: [{ Type: "pipeline", Name: "shared-pipeline" }],
+      resolverServices: [],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const sharedOwner = {
+      subgraphs: [{ Type: "pipeline", Name: "shared-pipeline" }],
+      resolverServices: [
+        { namespace: "shared-pipeline", resolvers: { findUser: { name: "findUser" } } },
+      ],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const unrelated = {
+      subgraphs: [{ Type: "pipeline", Name: "analytics-pipeline" }],
+      resolverServices: [
+        { namespace: "analytics-pipeline", resolvers: { findUser: { name: "findUser" } } },
+      ],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+
+    const result = collectVisibleResolverNamespaces(current, [current, sharedOwner, unrelated]);
+
+    expect(result.get("findUser")).toBe("shared-pipeline");
+  });
+});
+
 describe("dropCrossDeploymentManagedDeletes", () => {
   test("drops stale deletes for resources claimed by another deployment", () => {
     const previousOwner = emptyResults();
@@ -406,34 +465,62 @@ describe("dropCrossDeploymentManagedDeletes", () => {
 
 describe("confirmDeploymentPlans", () => {
   test("uses resource owners from all deployments before deleting renamed apps", async () => {
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-    const successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
-    const newlineSpy = vi.spyOn(logger, "newline").mockImplementation(() => {});
-    const renamedTarget = emptyResults();
-    renamedTarget.tailorDB.conflicts.push({
-      resourceType: "TailorDB service",
-      resourceName: "shared",
-      currentOwner: "old-app",
-    });
+    const restoreLogger = muteConfirmLogger();
+    try {
+      const renamedTarget = emptyResults();
+      renamedTarget.tailorDB.conflicts.push({
+        resourceType: "TailorDB service",
+        resourceName: "shared",
+        currentOwner: "old-app",
+      });
 
-    const peer = emptyResults();
-    peer.staticWebsite.resourceOwners.add("old-app");
+      const peer = emptyResults();
+      peer.staticWebsite.resourceOwners.add("old-app");
 
-    await confirmDeploymentPlans({
-      deployments: [
-        plannedDeployment("new-app", renamedTarget),
-        plannedDeployment("peer-app", peer),
-      ],
-      yes: true,
-    });
+      await confirmDeploymentPlans({
+        deployments: [
+          plannedDeployment("new-app", renamedTarget),
+          plannedDeployment("peer-app", peer),
+        ],
+        yes: true,
+      });
 
-    expect(renamedTarget.app.deletes).toEqual([]);
+      expect(renamedTarget.app.deletes).toEqual([]);
+    } finally {
+      restoreLogger();
+    }
+  });
 
-    warnSpy.mockRestore();
-    logSpy.mockRestore();
-    successSpy.mockRestore();
-    newlineSpy.mockRestore();
+  test("deduplicates renamed app deletions across deployments", async () => {
+    const restoreLogger = muteConfirmLogger();
+    try {
+      const first = emptyResults();
+      first.tailorDB.conflicts.push({
+        resourceType: "TailorDB service",
+        resourceName: "shared",
+        currentOwner: "old-app",
+      });
+      const second = emptyResults();
+      second.pipeline.conflicts.push({
+        resourceType: "Pipeline service",
+        resourceName: "shared-pipeline",
+        currentOwner: "old-app",
+      });
+
+      await confirmDeploymentPlans({
+        deployments: [
+          plannedDeployment("new-app-a", first),
+          plannedDeployment("new-app-b", second),
+        ],
+        yes: true,
+      });
+
+      expect([...first.app.deletes, ...second.app.deletes].map((item) => item.name)).toEqual([
+        "old-app",
+      ]);
+    } finally {
+      restoreLogger();
+    }
   });
 });
 
