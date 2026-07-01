@@ -3,6 +3,7 @@ import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { createChangeSet } from "./change-set";
 import {
+  confirmDeploymentPlans,
   computeRenamedAppDeletions,
   dropCrossDeploymentManagedDeletes,
   parseDeployConfigPaths,
@@ -361,6 +362,78 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     ]);
 
     expect(previousOwner.tailorDB.changeSet.type.deletes).toHaveLength(1);
+  });
+
+  test("drops nested deletes when another deployment claims the owning namespace", () => {
+    const previousOwner = emptyResults();
+    previousOwner.tailorDB.changeSet.service.deletes.push({ name: "shared" } as never);
+    previousOwner.tailorDB.changeSet.type.deletes.push({
+      name: "User",
+      request: { namespaceName: "shared" },
+    } as never);
+
+    const nextOwner = emptyResults();
+    nextOwner.tailorDB.changeSet.service.unchanged.push({ name: "shared" } as never);
+    nextOwner.tailorDB.changeSet.type.unchanged.push({ name: "User" } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.tailorDB.changeSet.service.deletes).toEqual([]);
+    expect(previousOwner.tailorDB.changeSet.type.deletes).toEqual([]);
+  });
+
+  test("mutates filtered delete arrays in place", () => {
+    const previousOwner = emptyResults();
+    previousOwner.staticWebsite.changeSet.deletes.push({ name: "shared-site" } as never);
+    const deletes = previousOwner.staticWebsite.changeSet.deletes;
+
+    const nextOwner = emptyResults();
+    nextOwner.staticWebsite.changeSet.unchanged.push({ name: "shared-site" } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.staticWebsite.changeSet.deletes).toBe(deletes);
+    expect(previousOwner.staticWebsite.changeSet.deletes).toEqual([]);
+    expect(previousOwner.staticWebsite.changeSet.lines()).toEqual([]);
+  });
+});
+
+describe("confirmDeploymentPlans", () => {
+  test("uses resource owners from all deployments before deleting renamed apps", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    const successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+    const newlineSpy = vi.spyOn(logger, "newline").mockImplementation(() => {});
+    const renamedTarget = emptyResults();
+    renamedTarget.tailorDB.conflicts.push({
+      resourceType: "TailorDB service",
+      resourceName: "shared",
+      currentOwner: "old-app",
+    });
+
+    const peer = emptyResults();
+    peer.staticWebsite.resourceOwners.add("old-app");
+
+    await confirmDeploymentPlans({
+      deployments: [
+        plannedDeployment("new-app", renamedTarget),
+        plannedDeployment("peer-app", peer),
+      ],
+      yes: true,
+    });
+
+    expect(renamedTarget.app.deletes).toEqual([]);
+
+    warnSpy.mockRestore();
+    logSpy.mockRestore();
+    successSpy.mockRestore();
+    newlineSpy.mockRestore();
   });
 });
 

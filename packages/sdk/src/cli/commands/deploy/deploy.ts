@@ -1127,6 +1127,7 @@ type ManagedResourceGroup = {
   changeSet: ManagedResourceChangeSet;
   resourceType: string;
   namespaceFields?: readonly string[];
+  namespaceOwnerResourceType?: string;
 };
 
 function readResourceField(item: HasName, field: string): string | undefined {
@@ -1152,8 +1153,61 @@ function managedResourceKey(group: ManagedResourceGroup, item: HasName): string 
     : `${group.resourceType}:${item.name}`;
 }
 
+function managedNamespaceOwnerKey(group: ManagedResourceGroup, item: HasName): string | undefined {
+  if (!group.namespaceOwnerResourceType) {
+    return undefined;
+  }
+  const namespace = group.namespaceFields
+    ?.map((field) => readResourceField(item, field))
+    .find((value) => value !== undefined);
+  return namespace ? `${group.namespaceOwnerResourceType}:${namespace}` : undefined;
+}
+
+function addManagedResourceClaims(
+  claims: Set<string>,
+  group: ManagedResourceGroup,
+  item: HasName,
+): void {
+  claims.add(managedResourceKey(group, item));
+  const namespaceOwnerKey = managedNamespaceOwnerKey(group, item);
+  if (namespaceOwnerKey) {
+    claims.add(namespaceOwnerKey);
+  }
+}
+
+function isManagedResourceClaimed(
+  claims: ReadonlySet<string>,
+  group: ManagedResourceGroup,
+  item: HasName,
+): boolean {
+  if (claims.has(managedResourceKey(group, item))) {
+    return true;
+  }
+  const namespaceOwnerKey = managedNamespaceOwnerKey(group, item);
+  return namespaceOwnerKey ? claims.has(namespaceOwnerKey) : false;
+}
+
+function retainDeletesNotClaimed(
+  group: ManagedResourceGroup,
+  otherClaims: ReadonlySet<string>,
+): void {
+  let writeIndex = 0;
+  for (const item of group.changeSet.deletes) {
+    if (!isManagedResourceClaimed(otherClaims, group, item)) {
+      group.changeSet.deletes[writeIndex] = item;
+      writeIndex += 1;
+    }
+  }
+  group.changeSet.deletes.length = writeIndex;
+}
+
 function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
-  const namespaceFields = ["namespaceName", "authNamespace", "vaultName"] as const;
+  const namespaceFields = [
+    "namespaceName",
+    "authNamespace",
+    "vaultName",
+    "staticWebsiteName",
+  ] as const;
   return [
     { changeSet: results.functionRegistry.changeSet, resourceType: "function_registry" },
     { changeSet: results.tailorDB.changeSet.service, resourceType: "tailordb.service" },
@@ -1161,16 +1215,20 @@ function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
       changeSet: results.tailorDB.changeSet.type,
       resourceType: "tailordb.type",
       namespaceFields,
+      namespaceOwnerResourceType: "tailordb.service",
     },
     {
       changeSet: results.tailorDB.changeSet.gqlPermission,
       resourceType: "tailordb.gql_permission",
       namespaceFields,
+      namespaceOwnerResourceType: "tailordb.service",
     },
     { changeSet: results.staticWebsite.changeSet, resourceType: "staticwebsite" },
     {
       changeSet: results.staticWebsite.customDomainChangeSet,
       resourceType: "staticwebsite.custom_domain",
+      namespaceFields,
+      namespaceOwnerResourceType: "staticwebsite",
     },
     { changeSet: results.aiGateway.changeSet, resourceType: "aigateway" },
     { changeSet: results.idp.changeSet.service, resourceType: "idp.service" },
@@ -1178,54 +1236,69 @@ function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
       changeSet: results.idp.changeSet.client,
       resourceType: "idp.client",
       namespaceFields,
+      namespaceOwnerResourceType: "idp.service",
     },
     { changeSet: results.auth.changeSet.service, resourceType: "auth.service" },
     {
       changeSet: results.auth.changeSet.idpConfig,
       resourceType: "auth.idp_config",
       namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.userProfileConfig,
       resourceType: "auth.user_profile_config",
       namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.tenantConfig,
       resourceType: "auth.tenant_config",
       namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.machineUser,
       resourceType: "auth.machine_user",
       namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.oauth2Client,
       resourceType: "auth.oauth2_client",
       namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.authHook,
       resourceType: "auth.hook",
       namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
     },
-    { changeSet: results.auth.changeSet.scim, resourceType: "auth.scim", namespaceFields },
+    {
+      changeSet: results.auth.changeSet.scim,
+      resourceType: "auth.scim",
+      namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
+    },
     {
       changeSet: results.auth.changeSet.scimResource,
       resourceType: "auth.scim_resource",
       namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.connection,
       resourceType: "auth.connection",
       namespaceFields,
+      namespaceOwnerResourceType: "auth.service",
     },
     { changeSet: results.pipeline.changeSet.service, resourceType: "pipeline.service" },
     {
       changeSet: results.pipeline.changeSet.resolver,
       resourceType: "pipeline.resolver",
       namespaceFields,
+      namespaceOwnerResourceType: "pipeline.service",
     },
     { changeSet: results.executor.changeSet, resourceType: "executor" },
     { changeSet: results.workflow.changeSet, resourceType: "workflow" },
@@ -1234,6 +1307,7 @@ function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
       changeSet: results.secretManager.secretChangeSet,
       resourceType: "secret.secret",
       namespaceFields,
+      namespaceOwnerResourceType: "secret.vault",
     },
   ];
 }
@@ -1249,7 +1323,7 @@ export function dropCrossDeploymentManagedDeletes(
         ...group.changeSet.replaces,
         ...group.changeSet.unchanged,
       ]) {
-        claims.add(managedResourceKey(group, item));
+        addManagedResourceClaims(claims, group, item);
       }
       return claims;
     }, new Set<string>()),
@@ -1267,16 +1341,27 @@ export function dropCrossDeploymentManagedDeletes(
     });
 
     for (const group of managedResourceGroups(deploymentPlanResults(deployment))) {
-      group.changeSet.deletes = group.changeSet.deletes.filter(
-        (item) => !otherClaims.has(managedResourceKey(group, item)),
-      );
+      retainDeletesNotClaimed(group, otherClaims);
     }
   });
 }
 
-async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
+function collectDeploymentResourceOwners(
+  deployments: ReadonlyArray<PlannedDeployment>,
+): Set<string> {
+  const owners = new Set<string>();
+  for (const deployment of deployments) {
+    for (const owner of collectResourceOwners(deploymentPlanResults(deployment))) {
+      owners.add(owner);
+    }
+  }
+  return owners;
+}
+
+export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
   const { deployments, yes } = params;
   const targetAppNames = new Set(deployments.map((deployment) => deployment.application.name));
+  const resourceOwners = collectDeploymentResourceOwners(deployments);
   const importantDeletions: ImportantResourceDeletion[] = [];
 
   for (const deployment of deployments) {
@@ -1291,7 +1376,7 @@ async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Pro
 
     const emptyApps = computeRenamedAppDeletions({
       conflicts,
-      resourceOwners: collectResourceOwners(results),
+      resourceOwners,
       targetAppName: deployment.application.name,
       protectedAppNames: targetAppNames,
     });
