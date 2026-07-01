@@ -308,7 +308,7 @@ export default createResolver({
 });
 ```
 
-Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `apply`) after defining new machine users to refresh it.
+Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `deploy`) after defining new machine users to refresh it.
 
 > **Deprecated:** The `auth.invoker("<name>")` helper is still available for backward compatibility. Prefer the string form — it does not require importing `auth` from `tailor.config.ts` into runtime files, avoiding bundling config-layer (Node-only) dependencies.
 
@@ -445,7 +445,7 @@ const response = await fetch("https://www.googleapis.com/...", {
 // authconnection.getConnectionToken("unknown"); // Type error — only "google-connection" is allowed
 ```
 
-Type narrowing is provided by the generated `tailor.d.ts` (the `ConnectionNameRegistry` interface). Run `tailor-sdk generate` (or `apply`) after defining new connections to refresh it. Before the first generate, or when `connections` is not defined in `defineAuth()`, `getConnectionToken()` accepts any string — this also supports connections managed entirely via the CLI.
+Type narrowing is provided by the generated `tailor.d.ts` (the `ConnectionNameRegistry` interface). Run `tailor-sdk generate` (or `deploy`) after defining new connections to refresh it. Before the first generate, or when `connections` is not defined in `defineAuth()`, `getConnectionToken()` accepts any string — this also supports connections managed entirely via the CLI.
 
 > **Deprecated:** `auth.getConnectionToken("<name>")` still works, but is deprecated. Importing `auth` from `tailor.config.ts` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
 
