@@ -1,27 +1,14 @@
 import { parse, Lang } from "@ast-grep/napi";
+import {
+  matchesRuntimeGlobalsSourceString,
+  runtimeGlobalTextPattern,
+} from "../../../../src/runtime-globals-patterns";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
 const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
-const RUNTIME_GLOBAL_TEXT_RE =
-  /\b(?:tailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?|tailordb\.(?:Client|CommandType|QueryResult|file)(?:\.[A-Za-z_$][\w$]*)?|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/;
-const SOURCE_STRING_RUNTIME_GLOBAL_TEXT_PATTERNS = [
-  /\bnew\s+tailor\.idp\.Client\b/,
-  /[=(:,[]\s*tailor\.idp\.Client\b/,
-  /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?\b/,
-  /\btailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
-  /\btailor\[/,
-  /\btailordb\.file\.[A-Za-z_$][\w$]*\s*\(/,
-  /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.file\b/,
-  /(?:\bnew\s+|(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.(?:Client|CommandType|QueryResult)\b/,
-  /<\s*tailordb\.(?:Client|CommandType|QueryResult)\b/,
-  /\btailordb\[/,
-  /(?:\bnew\s+|\bthrow\s+|\binstanceof\s+)Tailor(?:DBFileError|Errors|ErrorMessage)\b/,
-  /(?:[:=<]\s*|\bas\s+)Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)\b/,
-  /[:<]\s*TailorErrorItem\b/,
-];
 const REVIEW_NODE_KINDS = new Set([
   "member_expression",
   "identifier",
@@ -348,10 +335,6 @@ function addReviewFinding(
   findings.push({ file, line, message, excerpt });
 }
 
-function matchesSourceStringRuntimeGlobal(source: string): boolean {
-  return SOURCE_STRING_RUNTIME_GLOBAL_TEXT_PATTERNS.some((pattern) => pattern.test(source));
-}
-
 function collectStringRuntimeGlobalFindings(
   root: SgNode,
   source: string,
@@ -363,7 +346,7 @@ function collectStringRuntimeGlobalFindings(
     const startLine = fragment.range().start.line + 1;
     const lines = fragment.text().split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
-      if (!matchesSourceStringRuntimeGlobal(lines[i]!)) continue;
+      if (!matchesRuntimeGlobalsSourceString(lines[i]!)) continue;
       addReviewFinding(
         findings,
         seen,
@@ -386,8 +369,7 @@ function collectDirectRuntimeGlobalFindings(
   for (const node of root.findAll({
     rule: { any: [...REVIEW_NODE_KINDS].map((kind) => ({ kind })) },
   })) {
-    RUNTIME_GLOBAL_TEXT_RE.lastIndex = 0;
-    if (!RUNTIME_GLOBAL_TEXT_RE.test(node.text())) continue;
+    if (!runtimeGlobalTextPattern.test(node.text())) continue;
     addReviewFinding(
       findings,
       seen,
@@ -404,7 +386,7 @@ export function reviewFindings(
   filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!RUNTIME_GLOBAL_TEXT_RE.test(source)) return [];
+  if (!runtimeGlobalTextPattern.test(source)) return [];
 
   let root: SgNode;
   try {

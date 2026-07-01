@@ -96,6 +96,40 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports bracket runtime globals left for manual migration", async () => {
+    await writeProjectFile(
+      "resolvers/dynamic.ts",
+      [
+        'const clientFactory = tailor["idp"].Client;',
+        'const file = tailordb["file"].upload;',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/dynamic.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/dynamic.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const clientFactory = tailor["idp"].Client;',
+          }),
+          expect.objectContaining({
+            file: "resolvers/dynamic.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const file = tailordb["file"].upload;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("does not report prose-only runtime global mentions inside strings", async () => {
     await writeProjectFile(
       "seed/prose.mjs",

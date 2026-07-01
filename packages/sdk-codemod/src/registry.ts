@@ -1,6 +1,7 @@
 import * as url from "node:url";
 import * as path from "pathe";
 import { gte, lt, parse, valid } from "semver";
+import { runtimeGlobalsSourceStringSuspiciousPatterns } from "./runtime-globals-patterns";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
@@ -595,21 +596,7 @@ export const allCodemods: CodemodPackage[] = [
       "TailorErrorMessage",
       "TailorErrors",
     ],
-    sourceStringSuspiciousPatterns: [
-      "new tailor.idp.Client",
-      /[=(:,[]\s*tailor\.idp\.Client\b/,
-      /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?\b/,
-      /\btailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
-      "tailor[",
-      /\btailordb\.file\.[A-Za-z_$][\w$]*\s*\(/,
-      /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.file\b/,
-      /(?:\bnew\s+|(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.(?:Client|CommandType|QueryResult)\b/,
-      /<\s*tailordb\.(?:Client|CommandType|QueryResult)\b/,
-      "tailordb[",
-      /(?:\bnew\s+|\bthrow\s+|\binstanceof\s+)Tailor(?:DBFileError|Errors|ErrorMessage)\b/,
-      /(?:[:=<]\s*|\bas\s+)Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)\b/,
-      /[:<]\s*TailorErrorItem\b/,
-    ],
+    sourceStringSuspiciousPatterns: runtimeGlobalsSourceStringSuspiciousPatterns,
     examples: [
       {
         caption:
