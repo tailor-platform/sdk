@@ -9,6 +9,8 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
+const RUNTIME_ROOT_NAME_PATTERN = String.raw`(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
+const GLOBAL_OBJECT_REFERENCE_PATTERN = String.raw`(?:(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?|\(+\s*(?:<[^>]+>\s*)?(?:\(+\s*)?(globalThis|global)\s*(?:\)+\s*)?(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\s*\)+)`;
 const BARE_RUNTIME_ROOT_TEXT_PATTERN = /\b(?:tailor|tailordb)\b/;
 const RUNTIME_ROOT_PROPERTY_NAMES = new Set([
   "tailor",
@@ -484,10 +486,9 @@ function addReviewFinding(
 }
 
 function runtimeRootReference(source: string): RuntimeRootReference | null {
-  const globalObjectMatch =
-    /^\s*(?:(globalThis|global)|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)\s*(?:\.|\?\.|!\s*\.)(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
-      source,
-    );
+  const globalObjectMatch = new RegExp(
+    String.raw`^\s*${GLOBAL_OBJECT_REFERENCE_PATTERN}\s*(?:\.|\?\.|!\s*\.)${RUNTIME_ROOT_NAME_PATTERN}\b`,
+  ).exec(source);
   if (globalObjectMatch) {
     return {
       rootName: globalObjectMatch[3]!,
@@ -495,10 +496,9 @@ function runtimeRootReference(source: string): RuntimeRootReference | null {
     };
   }
 
-  const globalObjectBracketMatch =
-    /^\s*(?:(globalThis|global)|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)\s*(?:\?\.|!\s*)?\[\s*["'](tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))["']\s*\]/.exec(
-      source,
-    );
+  const globalObjectBracketMatch = new RegExp(
+    String.raw`^\s*${GLOBAL_OBJECT_REFERENCE_PATTERN}\s*(?:\?\.|!\s*)?\[\s*["']${RUNTIME_ROOT_NAME_PATTERN}["']\s*\]`,
+  ).exec(source);
   if (globalObjectBracketMatch) {
     return {
       rootName: globalObjectBracketMatch[3]!,
@@ -713,14 +713,28 @@ function scopeHasTypeBinding(scope: SgNode, name: string): boolean {
 
 function hasTypeParameterBinding(node: SgNode, name: string): boolean {
   const typeParameters = node.children().find((child) => child.kind() === "type_parameters");
-  if (!typeParameters) return false;
-  for (const typeParameter of typeParameters.findAll({ rule: { kind: "type_parameter" } })) {
-    const binding = typeParameter
-      .children()
-      .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
-    if (binding?.text() === name) return true;
+  if (typeParameters) {
+    for (const typeParameter of typeParameters.findAll({ rule: { kind: "type_parameter" } })) {
+      const binding = typeParameter
+        .children()
+        .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
+      if (binding?.text() === name) return true;
+    }
   }
-  return false;
+
+  const inferType =
+    node.kind() === "infer_type"
+      ? node
+      : node.children().find((child) => child.kind() === "infer_type");
+  const inferBinding = inferType?.children().find((child) => child.kind() === "type_identifier");
+  if (inferBinding?.text() === name) return true;
+
+  const mappedType =
+    node.kind() === "mapped_type_clause"
+      ? node
+      : node.children().find((child) => child.kind() === "mapped_type_clause");
+  const mappedBinding = mappedType?.children().find((child) => child.kind() === "type_identifier");
+  return mappedBinding?.text() === name;
 }
 
 function ancestorHasTypeBinding(node: SgNode, name: string): boolean {
@@ -829,6 +843,12 @@ function indexedTypeQueryMember(node: SgNode, rootName: string): string | null {
   return runtimeIndexedTypeMember(rootName, member) ? member : null;
 }
 
+function isNestedTypeIdentifierChild(node: SgNode): boolean {
+  return (
+    node.kind() !== "nested_type_identifier" && hasAncestorKind(node, "nested_type_identifier")
+  );
+}
+
 function nodeChildIndex(parent: SgNode, node: SgNode): number {
   return parent.children().findIndex((child) => sameNode(child, node));
 }
@@ -896,10 +916,9 @@ function declaratorInitializer(node: SgNode): SgNode | null {
 
 function globalObjectReferenceName(node: SgNode | null): string | null {
   const text = node?.text() ?? "";
-  const match =
-    /^\s*(?:(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+.+)?|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+(?:!\s*)?)\s*$/.exec(
-      text,
-    );
+  const match = new RegExp(String.raw`^\s*${GLOBAL_OBJECT_REFERENCE_PATTERN}(?:!\s*)?\s*$`).exec(
+    text,
+  );
   return match ? (match[1] ?? match[2]!) : null;
 }
 
@@ -1049,6 +1068,7 @@ function collectDirectRuntimeGlobalFindings(
     rule: { any: [...REVIEW_NODE_KINDS].map((kind) => ({ kind })) },
   })) {
     if (hasDeclarationReferenceAncestor(node)) continue;
+    if (isNestedTypeIdentifierChild(node)) continue;
     const nodeText = node.text();
     const rootRef = runtimeRootReference(nodeText);
     if (!rootRef) continue;

@@ -91,6 +91,40 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports embedded code strings that start with runtime globals", async () => {
+    await writeProjectFile(
+      "seed/leading.mjs",
+      [
+        "const code = `tailor.idp.Client;`;",
+        "const globalCode = `globalThis.tailor.idp.Client;`;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["seed/leading.mjs"],
+        findings: [
+          expect.objectContaining({
+            file: "seed/leading.mjs",
+            line: 1,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const code = `tailor.idp.Client;`;",
+          }),
+          expect.objectContaining({
+            file: "seed/leading.mjs",
+            line: 2,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const globalCode = `globalThis.tailor.idp.Client;`;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports spaced bracket runtime globals inside embedded code strings", async () => {
     await writeProjectFile(
       "seed/spaced-bracket.mjs",
@@ -517,6 +551,34 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports destructured aliases of parenthesized casted ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-parenthesized-casted-destructure.ts",
+      [
+        "const { tailor } = ((globalThis) as any);",
+        "const clientFactory = tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-parenthesized-casted-destructure.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-parenthesized-casted-destructure.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const { tailor } = ((globalThis) as any);",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports grouped casted runtime roots", async () => {
     await writeProjectFile(
       "resolvers/grouped-casted-root.ts",
@@ -573,6 +635,34 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 1,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "const runtime = (globalThis as any).tailor;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports parenthesized casted aliases of ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-parenthesized-casted-alias.ts",
+      [
+        "const runtime = ((globalThis) as any).tailor;",
+        "const clientFactory = runtime.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-parenthesized-casted-alias.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-parenthesized-casted-alias.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const runtime = ((globalThis) as any).tailor;",
           }),
         ],
       }),
@@ -950,6 +1040,32 @@ describe("runtime-globals-opt-in review findings", () => {
     await writeProjectFile(
       "resolvers/type-namespace-import.ts",
       ['import type * as tailor from "./types";', "type User = tailor.idp.User;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report runtime-looking qualified type members", async () => {
+    await writeProjectFile(
+      "resolvers/qualified-type-member.ts",
+      ["type RuntimeError = Foo.TailorErrors;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report infer or mapped runtime-looking type parameters", async () => {
+    await writeProjectFile(
+      "resolvers/local-type-parameter-forms.ts",
+      [
+        "type Inferred<T> = T extends infer TailorErrors ? TailorErrors : never;",
+        "type Mapped<T> = { [TailorErrorItem in keyof T]: T[TailorErrorItem] };",
+        "",
+      ].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
