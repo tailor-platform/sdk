@@ -12,6 +12,7 @@ const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
 const REVIEW_NODE_KINDS = new Set([
   "member_expression",
   "identifier",
+  "nested_identifier",
   "nested_type_identifier",
   "shorthand_property_identifier",
   "subscript_expression",
@@ -48,11 +49,7 @@ const REVIEW_BINDING_LEFT_SIDE_KINDS = new Set([
   "required_parameter",
   "variable_declarator",
 ]);
-const REVIEW_DECLARATION_REFERENCE_ANCESTOR_KINDS = new Set([
-  "export_clause",
-  "export_specifier",
-  "import_statement",
-]);
+const REVIEW_DECLARATION_REFERENCE_ANCESTOR_KINDS = new Set(["import_statement"]);
 const REVIEW_FOR_BINDING_DECLARATION_KINDS = new Set([
   "lexical_declaration",
   "variable_declaration",
@@ -459,6 +456,13 @@ function hasDeclarationReferenceAncestor(node: SgNode): boolean {
   let current = node.parent();
   while (current) {
     if (REVIEW_DECLARATION_REFERENCE_ANCESTOR_KINDS.has(current.kind())) return true;
+    if (current.kind() === "export_clause" || current.kind() === "export_specifier") {
+      let exportParent = current.parent();
+      while (exportParent && exportParent.kind() !== "export_statement") {
+        exportParent = exportParent.parent();
+      }
+      return exportParent?.children().some((child) => child.kind() === "from") ?? false;
+    }
     current = current.parent();
   }
   return false;

@@ -416,6 +416,60 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("reports import-equals runtime globals left for manual migration", async () => {
+    await writeProjectFile(
+      "resolvers/import-equals.ts",
+      ["import Idp = tailor.idp;", "import Result = tailordb.QueryResult;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/import-equals.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/import-equals.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "import Idp = tailor.idp;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/import-equals.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "import Result = tailordb.QueryResult;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports local export clauses that reference runtime globals", async () => {
+    await writeProjectFile(
+      "resolvers/export-local.ts",
+      ["export { TailorErrors };", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/export-local.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/export-local.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "export { TailorErrors };",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports runtime globals inside classic for loop bodies", async () => {
     await writeProjectFile(
       "resolvers/for-body.ts",
