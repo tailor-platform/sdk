@@ -5,6 +5,7 @@ import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
 import { getNamespacesWithMigrations } from "../tailordb/migrate/config";
+import { normalizeActionContent } from "./generate";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import { hashContent, type LockTarget, readLock } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
@@ -213,9 +214,10 @@ export function resolveWithinRoot(outputDir: string, relPath: string): string | 
 
 // Treat any read failure (missing file, EISDIR, TOCTOU race, permissions) as an
 // absent file so the audit reports drift instead of crashing.
-function readHash(absFile: string): string | null {
+function readHash(absFile: string, normalize?: (content: string) => string): string | null {
   try {
-    return hashContent(fs.readFileSync(absFile, "utf-8"));
+    const content = fs.readFileSync(absFile, "utf-8");
+    return hashContent(normalize ? normalize(content) : content);
   } catch {
     return null;
   }
@@ -326,7 +328,10 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   const findings: DriftFinding[] = [];
   for (const target of lock.targets) {
     const absFile = resolveWithinRoot(outputDir, target.file);
-    const currentHash = absFile === null ? null : readHash(absFile);
+    const currentHash =
+      absFile === null
+        ? null
+        : readHash(absFile, target.kind === "action" ? normalizeActionContent : undefined);
     // Coordinator targets are config-less; skip the probe so config-dir drift is never emitted.
     const configAbs =
       target.kind === "coordinate"
