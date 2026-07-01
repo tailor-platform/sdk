@@ -20,6 +20,7 @@ const REVIEW_NODE_KINDS = new Set([
 const REVIEW_SCOPE_KINDS = new Set([
   "program",
   "statement_block",
+  "switch_body",
   "function_declaration",
   "function_expression",
   "arrow_function",
@@ -41,6 +42,7 @@ const REVIEW_TYPE_DECLARATION_KINDS = [
   "import_alias",
 ];
 const REVIEW_BINDING_LEFT_SIDE_KINDS = new Set([
+  "assignment_pattern",
   "object_assignment_pattern",
   "optional_parameter",
   "required_parameter",

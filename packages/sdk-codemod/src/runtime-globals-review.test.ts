@@ -575,6 +575,62 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports runtime globals outside switch case bindings", async () => {
+    await writeProjectFile(
+      "resolvers/switch-case.ts",
+      [
+        "switch (kind) {",
+        '  case "local":',
+        "    const tailor = {};",
+        "    break;",
+        "}",
+        "const clientFactory = tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/switch-case.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/switch-case.ts",
+            line: 6,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = tailor.idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports runtime globals inside array destructuring defaults", async () => {
+    await writeProjectFile(
+      "resolvers/array-default.ts",
+      ["const [client = tailor.idp.Client] = opts;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/array-default.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/array-default.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const [client = tailor.idp.Client] = opts;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports shorthand Tailor error globals left for manual migration", async () => {
     await writeProjectFile("errors.ts", ["const exported = { TailorErrors };", ""].join("\n"));
 
