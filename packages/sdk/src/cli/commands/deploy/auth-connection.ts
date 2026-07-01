@@ -1,8 +1,12 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { AuthConnection_Type } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import {
+  AuthConnection_Status,
+  AuthConnection_Type,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { type AuthService } from "#/cli/services/auth/service";
 import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -18,6 +22,7 @@ import type { ApplyPhase } from "./phase";
 import type {
   CreateAuthConnectionRequestSchema,
   DeleteAuthConnectionRequestSchema,
+  UpdateAuthConnectionRequestSchema,
 } from "@tailor-platform/tailor-proto/auth_pb";
 import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
@@ -33,10 +38,9 @@ type UpdateConnection = {
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
-type ReplaceConnection = {
+type MaskedUpdateConnection = {
   name: string;
-  deleteRequest: MessageInitShape<typeof DeleteAuthConnectionRequestSchema>;
-  createRequest: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
+  updateRequest: MessageInitShape<typeof UpdateAuthConnectionRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
@@ -70,34 +74,33 @@ function buildConnectionRequest(
   };
 }
 
-function hashConnectionConfig(config: AuthConnectionConfig): string {
-  const serialized = JSON.stringify({
-    type: config.type,
-    providerUrl: config.providerUrl,
-    issuerUrl: config.issuerUrl,
-    clientId: config.clientId,
-    clientSecret: config.clientSecret,
-    authUrl: config.authUrl ?? "",
-    tokenUrl: config.tokenUrl ?? "",
-  });
-  return hashValue(serialized);
-}
-
-function hasNonSecretFieldChanged(
+function buildUpdateMask(
   existing: AuthConnection,
   desired: AuthConnectionConfig,
-): boolean {
+  secretChanged: boolean,
+): { paths: string[] } {
   if (existing.config.case !== "oauth2") {
-    return true;
+    const paths = [
+      "type",
+      "oauth2.provider_url",
+      "oauth2.issuer_url",
+      "oauth2.client_id",
+      "oauth2.auth_url",
+      "oauth2.token_url",
+    ];
+    if (desired.clientSecret) paths.push("oauth2.client_secret");
+    return { paths };
   }
-  const oauth2 = existing.config.value;
-  return (
-    oauth2.providerUrl !== desired.providerUrl ||
-    oauth2.issuerUrl !== desired.issuerUrl ||
-    oauth2.clientId !== desired.clientId ||
-    oauth2.authUrl !== (desired.authUrl ?? "") ||
-    oauth2.tokenUrl !== (desired.tokenUrl ?? "")
-  );
+  // The SDK only creates OAUTH2 connections, so no type change is possible here.
+  const paths: string[] = [];
+  const v = existing.config.value;
+  if (v.providerUrl !== desired.providerUrl) paths.push("oauth2.provider_url");
+  if (v.issuerUrl !== desired.issuerUrl) paths.push("oauth2.issuer_url");
+  if (v.clientId !== desired.clientId) paths.push("oauth2.client_id");
+  if (v.authUrl !== (desired.authUrl ?? "")) paths.push("oauth2.auth_url");
+  if (v.tokenUrl !== (desired.tokenUrl ?? "")) paths.push("oauth2.token_url");
+  if (secretChanged && desired.clientSecret) paths.push("oauth2.client_secret");
+  return { paths };
 }
 
 /**
@@ -120,7 +123,7 @@ export async function planAuthConnections(
     CreateConnection,
     UpdateConnection,
     DeleteConnection,
-    ReplaceConnection
+    MaskedUpdateConnection
   >("Auth connections");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
@@ -190,16 +193,18 @@ export async function planAuthConnections(
         }
       }
 
-      const currentHash = hashConnectionConfig(config);
+      const currentHash = hashValue(config.clientSecret);
       const storedHash = state.connections?.[name];
-      const nonSecretChanged = hasNonSecretFieldChanged(existing.resource, config);
       const secretChanged = currentHash !== storedHash;
+      const updateMask = buildUpdateMask(existing.resource, config, secretChanged);
 
-      if (nonSecretChanged || secretChanged) {
+      if (updateMask.paths.length > 0) {
         changeSet.replaces.push({
           name,
-          deleteRequest: { workspaceId, connectionName: name },
-          createRequest: buildConnectionRequest(workspaceId, name, config),
+          updateRequest: {
+            ...buildConnectionRequest(workspaceId, name, config),
+            updateMask,
+          } as MessageInitShape<typeof UpdateAuthConnectionRequestSchema>,
           metaRequest,
         });
       } else if (!existing.label) {
@@ -242,24 +247,6 @@ export async function planAuthConnections(
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
-function extractOAuth2Config(
-  connection: MessageInitShape<typeof CreateAuthConnectionRequestSchema>["connection"],
-): AuthConnectionConfig | undefined {
-  if (!connection) return undefined;
-  const config = connection.config;
-  if (!config || config.case !== "oauth2") return undefined;
-  const v = config.value;
-  return {
-    type: "oauth2",
-    providerUrl: v.providerUrl ?? "",
-    issuerUrl: v.issuerUrl ?? "",
-    clientId: v.clientId ?? "",
-    clientSecret: v.clientSecret ?? "",
-    authUrl: (v.authUrl as string) || undefined,
-    tokenUrl: (v.tokenUrl as string) || undefined,
-  };
-}
-
 /**
  * Apply auth connection changes for the given phase.
  * @param client - Operator client instance
@@ -278,12 +265,23 @@ export async function applyAuthConnections(
       changeSet.creates.map(async (create) => {
         await client.createAuthConnection(create.request);
         await client.setMetadata(create.metaRequest);
+        logger.info(
+          `Connection "${create.name}" was created. Authorize it with:\n` +
+            `  tailor-sdk authconnection authorize --name ${create.name}\n` +
+            `Or via the Console: tailor-sdk authconnection open`,
+        );
       }),
     );
 
     for (const replace of changeSet.replaces) {
-      await client.deleteAuthConnection(replace.deleteRequest);
-      await client.createAuthConnection(replace.createRequest);
+      const resp = await client.updateAuthConnection(replace.updateRequest);
+      if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
+        logger.warn(
+          `Connection "${replace.name}" requires re-authorization. Authorize with:\n` +
+            `  tailor-sdk authconnection authorize --name ${replace.name}\n` +
+            `Or via the Console: tailor-sdk authconnection open`,
+        );
+      }
       await client.setMetadata(replace.metaRequest);
     }
 
@@ -300,15 +298,18 @@ export async function applyAuthConnections(
       state.connections = {};
     }
     for (const create of changeSet.creates) {
-      const oauth2 = extractOAuth2Config(create.request.connection);
-      if (oauth2) {
-        state.connections[create.name] = hashConnectionConfig(oauth2);
+      const conn = create.request.connection;
+      if (conn?.config?.case === "oauth2") {
+        state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
       }
     }
     for (const replace of changeSet.replaces) {
-      const oauth2 = extractOAuth2Config(replace.createRequest.connection);
-      if (oauth2) {
-        state.connections[replace.name] = hashConnectionConfig(oauth2);
+      const conn = replace.updateRequest.connection;
+      if (
+        conn?.config?.case === "oauth2" &&
+        replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret")
+      ) {
+        state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
       }
     }
     saveSecretsState(state);

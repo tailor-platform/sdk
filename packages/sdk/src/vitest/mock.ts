@@ -37,6 +37,11 @@ import {
 } from "../configure/services/workflow/test-env-key";
 import type { TailorEnv } from "#/runtime/types";
 import type { User as IdpUser } from "../runtime/idp";
+// Import from the public entry (not `#/configure/...`) so this d.ts references
+// `@tailor-platform/sdk` externally instead of inlining the registry — the same
+// generated `declare module "@tailor-platform/sdk"` that narrows
+// `authconnection.getConnectionToken` then also narrows this mock's API.
+import type { AuthConnectionTokenResult, ConnectionName } from "@tailor-platform/sdk";
 
 export { RUNTIME_FLAG_KEY } from "./globals";
 
@@ -105,7 +110,7 @@ interface SecretCall {
 }
 
 interface AuthConnectionCall {
-  connectionName: string;
+  connectionName: ConnectionName;
 }
 
 interface IdpCall {
@@ -645,10 +650,9 @@ export function mockAuthconnection() {
   const root = tailorRoot();
   const prev = root.authconnection;
 
-  let tokens: Record<string, unknown> = {};
+  let tokens: Partial<Record<ConnectionName, AuthConnectionTokenResult>> = {};
   const getConnectionToken = vi.fn(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (connectionName: string): Promise<any> =>
+    async (connectionName: ConnectionName): Promise<AuthConnectionTokenResult> =>
       tokens[connectionName] ?? { access_token: "mock-token" },
   );
 
@@ -658,13 +662,13 @@ export function mockAuthconnection() {
     /** The `getConnectionToken` `vi.fn`. */
     getConnectionToken,
 
-    setTokens(value: Record<string, unknown>): void {
+    setTokens(value: Partial<Record<ConnectionName, AuthConnectionTokenResult>>): void {
       tokens = value;
     },
 
     get calls(): AuthConnectionCall[] {
       return getConnectionToken.mock.calls.map(([connectionName]) => ({
-        connectionName: connectionName as string,
+        connectionName,
       }));
     },
 

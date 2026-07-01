@@ -10,6 +10,7 @@ declare module "@tailor-platform/sdk" {
   interface Env {}
   interface MachineUserNameRegistry {}
   interface IdpNameRegistry {}
+  interface ConnectionNameRegistry {}
 }
 
 export {};

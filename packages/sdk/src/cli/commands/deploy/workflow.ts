@@ -203,11 +203,11 @@ async function registerJobFunctions(
     }
   }
   // Fetch existing job functions with their names
-  const existingJobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
+  const existingJobFunctions = await fetchAll(async (pageToken, _maxPageSize) => {
     const response = await client.listWorkflowJobFunctions({
       workspaceId,
       pageToken,
-      pageSize: maxPageSize,
+      pageSize: 100, // FIXME: Temporarily limited to 100 items due to platform constraints.
     });
     return [response.jobFunctions.map((j) => j.name), response.nextPageToken];
   });
@@ -512,11 +512,11 @@ async function planWorkflowJobFunctionDeletes(
   params: PlanWorkflowJobFunctionDeletesParams,
 ): Promise<DeleteWorkflowJobFunction[]> {
   const { client, workspaceId, appName, appId, retainedWorkflowJobNames } = params;
-  const existingJobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
+  const existingJobFunctions = await fetchAll(async (pageToken, _maxPageSize) => {
     const response = await client.listWorkflowJobFunctions({
       workspaceId,
       pageToken,
-      pageSize: maxPageSize,
+      pageSize: 100, // FIXME: Temporarily limited to 100 items due to platform constraints.
     });
     return [response.jobFunctions.map((jobFunction) => jobFunction.name), response.nextPageToken];
   });

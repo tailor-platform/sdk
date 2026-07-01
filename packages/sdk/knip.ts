@@ -1,7 +1,6 @@
 import { entry } from "./scripts/build-entries.mjs";
 import type { KnipConfig } from "knip";
 
-// Share the build entry list with tsdown and the declaration build script.
 export default {
   ignoreExportsUsedInFile: true,
   tags: ["-lintignore"],
@@ -15,6 +14,5 @@ export default {
     "src/vitest/integration/vitest.config.ts",
     "zinfer.config.ts",
   ],
-  ignoreDependencies: ["vite"],
   ignoreBinaries: ["knip", "publint", "actionlint"],
 } satisfies KnipConfig;

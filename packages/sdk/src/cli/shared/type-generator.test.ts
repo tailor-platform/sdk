@@ -118,6 +118,23 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain('"primary-idp": true;');
     expect(result).toContain("backoffice: true;");
   });
+
+  test("should generate empty ConnectionNameRegistry when no connections provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface ConnectionNameRegistry {}");
+  });
+
+  test("should generate ConnectionNameRegistry with connection names", () => {
+    const result = generateTypeDefinition(undefined, undefined, undefined, undefined, undefined, [
+      "google-oauth",
+      "ms365-oauth",
+    ]);
+
+    expect(result).toContain("interface ConnectionNameRegistry");
+    expect(result).toContain('"google-oauth": true;');
+    expect(result).toContain('"ms365-oauth": true;');
+  });
 });
 
 describe("resolveTypeDefinitionPath", () => {
@@ -233,5 +250,46 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
 
     const { idpNames } = extractAttributesFromConfig(config);
     expect(idpNames).toEqual(["primary-idp", "backoffice"]);
+  });
+
+  test("extracts connection names into ConnectionNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        machineUserAttributes: {},
+        machineUsers: {},
+        connections: {
+          "google-oauth": {
+            type: "oauth2",
+            providerUrl: "https://accounts.google.com",
+            issuerUrl: "https://accounts.google.com",
+            clientId: "x",
+            clientSecret: "y",
+          },
+          "ms365-oauth": {
+            type: "oauth2",
+            providerUrl: "https://login.microsoftonline.com",
+            issuerUrl: "https://login.microsoftonline.com",
+            clientId: "x",
+            clientSecret: "y",
+          },
+        },
+      }),
+    };
+
+    const { connectionNames } = extractAttributesFromConfig(config);
+    expect(connectionNames).toEqual(["google-oauth", "ms365-oauth"]);
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      connectionNames,
+    );
+    expect(content).toContain("interface ConnectionNameRegistry");
+    expect(content).toContain('"google-oauth": true;');
+    expect(content).toContain('"ms365-oauth": true;');
   });
 });

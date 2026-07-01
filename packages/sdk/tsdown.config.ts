@@ -58,6 +58,8 @@ const jsPlugins: TsdownPluginOption[] = [
   }) as TsdownPluginOption,
 ];
 
+const externalDeps = ["vite", "vitest", /^@tailor-platform\/sdk$/];
+
 const sharedOptions = {
   entry,
   format: "esm",
@@ -79,8 +81,11 @@ export default defineConfig([
     clean: true,
     dts: false,
     sourcemap: true,
-    // peer dependencies: prevent bundling, resolve at runtime
-    deps: { neverBundle: ["vite", "vitest"] },
+    // peer dependencies: prevent bundling, resolve at runtime.
+    // `@tailor-platform/sdk` (self-name) is kept external so subpath entries can reference
+    // types like `ConnectionName` from the main entry instead of inlining them, letting a
+    // single `declare module "@tailor-platform/sdk"` augmentation narrow every entry point.
+    deps: { neverBundle: externalDeps },
     plugins: jsPlugins,
     onSuccess: (config) => {
       copyErdViewerAssets(config.outDir);
@@ -97,6 +102,7 @@ export default defineConfig([
     banner: {
       dts: runtimeGlobalsBanner,
     },
+    deps: { neverBundle: externalDeps },
     onSuccess: (config) => {
       stripBannerExceptConfigureEntry(config.outDir);
     },

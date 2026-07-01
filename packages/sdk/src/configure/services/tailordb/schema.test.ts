@@ -2,10 +2,10 @@
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { t } from "#/configure/types/index";
 import { unauthenticatedTailorUser } from "#/configure/user";
-import { db } from "./schema";
+import { db, type TailorAnyDBField } from "./schema";
 import type { FieldValidateInput, ValidateConfig } from "#/configure/types/field.types";
 import type { TailorUser } from "#/runtime/types";
-import type { output } from "#/types/helpers";
+import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
 
 describe("TailorDBField basic field type tests", () => {
@@ -378,6 +378,91 @@ describe("TailorDBField modifier chain tests", () => {
   });
 });
 
+describe("TailorDBField type error message tests", () => {
+  test("invalid field modifiers expose type-level error messages", () => {
+    const dbField = db.string();
+    expectTypeOf(dbField.typeName).toEqualTypeOf<
+      TypeLevelError<"typeName cannot be used on TailorDB fields">
+    >();
+
+    const erasedDBField: TailorAnyDBField = db.string();
+    // @ts-expect-error typeName cannot be used on TailorDB fields
+    erasedDBField.typeName("InvalidTypeName");
+
+    const described = db.string().description("Name");
+    expectTypeOf(described.description).toEqualTypeOf<
+      TypeLevelError<".description() has already been set">
+    >();
+
+    const _userType = db.type("User", {
+      name: db.string(),
+    });
+    const related = db.uuid().relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
+    expectTypeOf(related.relation).toEqualTypeOf<
+      TypeLevelError<".relation() has already been set">
+    >();
+
+    const indexed = db.string().index();
+    expectTypeOf(indexed.index).toEqualTypeOf<TypeLevelError<".index() has already been set">>();
+
+    const arrayString = db.string({ array: true });
+    expectTypeOf(arrayString.index).toEqualTypeOf<
+      TypeLevelError<"index cannot be set on array fields">
+    >();
+
+    const unique = db.string().unique();
+    expectTypeOf(unique.unique).toEqualTypeOf<TypeLevelError<".unique() has already been set">>();
+
+    const uniqueArray = db.string({ array: true });
+    expectTypeOf(uniqueArray.unique).toEqualTypeOf<
+      TypeLevelError<"unique cannot be set on array fields">
+    >();
+
+    const vector = db.string().vector();
+    expectTypeOf(vector.vector).toEqualTypeOf<TypeLevelError<".vector() has already been set">>();
+
+    const nonString = db.int();
+    expectTypeOf(nonString.vector).toEqualTypeOf<
+      TypeLevelError<"vector can only be set on non-array string fields">
+    >();
+
+    const hooked = db.string().hooks({ create: () => "created" });
+    expectTypeOf(hooked.hooks).toEqualTypeOf<TypeLevelError<".hooks() has already been set">>();
+    expectTypeOf(hooked.serial).toEqualTypeOf<TypeLevelError<"serial cannot be set after hooks">>();
+
+    const emptyHooked = db.string().hooks({});
+    expectTypeOf(emptyHooked.hooks).toEqualTypeOf<
+      TypeLevelError<".hooks() has already been set">
+    >();
+
+    const nested = db.object({ name: db.string() });
+    expectTypeOf(nested.hooks).toEqualTypeOf<
+      TypeLevelError<"hooks cannot be set on nested type fields">
+    >();
+
+    const validated = db.string().validate(() => true);
+    expectTypeOf(validated.validate).toEqualTypeOf<
+      TypeLevelError<".validate() has already been set">
+    >();
+
+    const serial = db.string().serial({ start: 0 });
+    expectTypeOf(serial.serial).toEqualTypeOf<TypeLevelError<".serial() has already been set">>();
+    expectTypeOf(serial.hooks).toEqualTypeOf<TypeLevelError<"hooks cannot be set after serial">>();
+
+    const nonSerial = db.bool();
+    expectTypeOf(nonSerial.serial).toEqualTypeOf<
+      TypeLevelError<"serial can only be set on non-array integer or string fields">
+    >();
+
+    expectTypeOf(db.string({ optional: true }).serial).toEqualTypeOf<
+      TypeLevelError<"serial can only be set on non-array integer or string fields">
+    >();
+  });
+});
+
 describe("TailorDBField relation modifier tests", () => {
   test("relation does not create reference type", () => {
     const _userType = db.type("User", {
@@ -403,16 +488,15 @@ describe("TailorDBField relation modifier tests", () => {
       name: db.string(),
     });
 
+    const related = db.uuid().relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
     // @ts-expect-error relation() cannot be called after relation() has already been called
-    db.uuid()
-      .relation({
-        type: "oneToOne",
-        toward: { type: _userType },
-      })
-      .relation({
-        type: "oneToOne",
-        toward: { type: _userType },
-      });
+    related.relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
   });
 });
 
@@ -431,11 +515,12 @@ describe("TailorDBField hooks modifier tests", () => {
   });
 
   test("setting hooks on nested field causes type error", () => {
-    // @ts-expect-error hooks() cannot be called on nested fields
-    db.object({
+    const nested = db.object({
       first: db.string(),
       last: db.string(),
-    }).hooks({ create: () => ({ first: "A", last: "B" }) });
+    });
+    // @ts-expect-error hooks() cannot be called on nested fields
+    nested.hooks({ create: () => ({ first: "A", last: "B" }) });
   });
 
   test("hooks modifier on string field receives string", () => {
@@ -496,10 +581,9 @@ describe("TailorDBField validate modifier tests", () => {
   });
 
   test("calling validate modifier more than once causes type error", () => {
+    const validated = db.string().validate(() => true);
     // @ts-expect-error validate() cannot be called after validate() has already been called
-    db.string()
-      .validate(() => true)
-      .validate(() => true);
+    validated.validate(() => true);
   });
 
   test("validate modifier on string field receives string", () => {
@@ -1355,11 +1439,16 @@ describe("TailorDBType files method tests", () => {
       avatar: db.string(), // existing field
     });
 
-    // This should be a type error - files field name conflicts with existing field
     type FilesParam = Parameters<typeof _userType.files>[0];
-    // "avatar" key should be `never` due to Partial<Record<keyof output<this>, never>>
-    expectTypeOf<FilesParam>().toExtend<{ avatar?: never }>();
-    expectTypeOf<FilesParam>().not.toExtend<{ nonExists?: never }>();
+    expectTypeOf<FilesParam>().toExtend<{
+      avatar?: TypeLevelError<"file keys cannot use existing field names">;
+    }>();
+    expectTypeOf<FilesParam>().not.toExtend<{
+      nonExists?: TypeLevelError<"file keys cannot use existing field names">;
+    }>();
+
+    // @ts-expect-error file keys cannot use existing field names
+    _userType.files({ avatar: "profile image" });
   });
 
   test("files field names that do not conflict are allowed", () => {

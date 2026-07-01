@@ -1,8 +1,35 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test, expectTypeOf } from "vitest";
 import { t } from "./type";
+import type { TypeLevelError } from "#/types/helpers";
+
+type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Expect<T extends true> = T;
+type TypeEquals<T, Message extends string> = Equal<T, TypeLevelError<Message>>;
 
 describe("typeName method type safety", () => {
+  test("invalid field modifiers expose type-level error messages", () => {
+    const described = t.string().description("Name");
+    type _Description = Expect<
+      TypeEquals<typeof described.description, ".description() has already been set">
+    >;
+
+    const scalar = t.string();
+    type _TypeNameScalar = Expect<
+      TypeEquals<typeof scalar.typeName, "typeName can only be set on enum or object fields">
+    >;
+
+    const named = t.enum(["active", "inactive"]).typeName("Status");
+    type _TypeNameDuplicate = Expect<
+      TypeEquals<typeof named.typeName, ".typeName() has already been set">
+    >;
+
+    const validated = t.string().validate(() => true);
+    type _ValidateDuplicate = Expect<
+      TypeEquals<typeof validated.validate, ".validate() has already been set">
+    >;
+  });
+
   test("should allow typeName on enum types", () => {
     const enumField = t.enum(["active", "inactive"]);
     const withTypeName = enumField.typeName("CustomEnum");
