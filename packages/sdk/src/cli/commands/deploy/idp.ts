@@ -24,14 +24,8 @@ import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import { fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
@@ -411,37 +405,20 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingServices = await fetchExistingResourcesWithLabels({
+    client,
+    workspaceId,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { idpServices, nextPageToken } = await client.listIdPServices({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [idpServices, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.namespace?.name,
+    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "idp", name),
   });
-  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      if (!resource.namespace?.name) {
-        return;
-      }
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "idp", resource.namespace.name),
-      });
-      existingServices[resource.namespace.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   for (const idp of idps) {
     const namespaceName = idp.name;

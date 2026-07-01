@@ -34,13 +34,8 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import {
-  buildMetaRequest,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+import { buildMetaRequest, isOwnedByApp, resourceTrn } from "./label";
+import { fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "#/configure/services/auth/types";
 import type {
@@ -397,37 +392,20 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingServices = await fetchExistingResourcesWithLabels({
+    client,
+    workspaceId,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { authServices, nextPageToken } = await client.listAuthServices({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [authServices, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.namespace?.name,
+    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "auth", name),
   });
-  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      if (!resource.namespace?.name) {
-        return;
-      }
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "auth", resource.namespace.name),
-      });
-      existingServices[resource.namespace.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   for (const auth of auths) {
     const { config } = auth;
