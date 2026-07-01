@@ -480,19 +480,24 @@ export async function resolveTokens(
   };
 }
 
+interface UserTokenData {
+  accessToken: string;
+  refreshToken?: string;
+}
+
 /**
  * Save tokens for a user, writing to keyring or config as appropriate.
  * @param config - Platform config
  * @param user - User identifier
  * @param tokens - Token data to save
- * @param tokens.accessToken
- * @param tokens.refreshToken
+ * @param tokens.accessToken - Access token to persist
+ * @param tokens.refreshToken - Refresh token to persist when available
  * @param expiresAt - Token expiration date
  */
 export async function saveUserTokens(
   config: PfConfig,
   user: string,
-  tokens: { accessToken: string; refreshToken?: string },
+  tokens: UserTokenData,
   expiresAt: string,
 ): Promise<void> {
   if (process.env.TAILOR_USE_KEYRING && (await isKeyringAvailable())) {
