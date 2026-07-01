@@ -2,7 +2,14 @@ import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { createChangeSet } from "./change-set";
-import { computeRenamedAppDeletions, printPlanResults, summarizePlanResults } from "./deploy";
+import {
+  computeRenamedAppDeletions,
+  parseDeployConfigPaths,
+  printDeploymentPlans,
+  printPlanResults,
+  summarizePlanResults,
+} from "./deploy";
+import type { PlannedDeployment } from "./apply-phases";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
@@ -135,6 +142,13 @@ function entry(action: GroupedDisplayEntry["action"], name: string): GroupedDisp
   return { action, symbol: "+", name, labels: [] };
 }
 
+function plannedDeployment(name: string, results: PlanResults): PlannedDeployment {
+  return {
+    application: { name },
+    ...results,
+  } as unknown as PlannedDeployment;
+}
+
 describe("summarizePlanResults", () => {
   test("counts display entries and service actions", () => {
     const displayEntries: GroupedDisplayEntry[] = [
@@ -253,6 +267,35 @@ describe("computeRenamedAppDeletions", () => {
   });
 });
 
+describe("parseDeployConfigPaths", () => {
+  test("preserves default config lookup when no path is provided", () => {
+    const previous = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+    delete process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+    try {
+      expect(parseDeployConfigPaths()).toEqual([undefined]);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+      } else {
+        process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH = previous;
+      }
+    }
+  });
+
+  test("splits comma-separated config paths", () => {
+    expect(parseDeployConfigPaths("buyer/tailor.config.ts, supplier/tailor.config.ts")).toEqual([
+      "buyer/tailor.config.ts",
+      "supplier/tailor.config.ts",
+    ]);
+  });
+
+  test("rejects empty comma-separated entries", () => {
+    expect(() => parseDeployConfigPaths("buyer/tailor.config.ts,")).toThrow(
+      "--config must contain one or more non-empty config paths.",
+    );
+  });
+});
+
 describe("printPlanResults", () => {
   test("routes dry-run output to stdout via logger.out", () => {
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
@@ -367,5 +410,42 @@ describe("printPlanResults", () => {
 
     outSpy.mockRestore();
     logSpy.mockRestore();
+  });
+});
+
+describe("printDeploymentPlans", () => {
+  test("emits one aggregate payload for multi-config dry-run --json", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    const first = emptyResults();
+    first.staticWebsite.changeSet.creates.push({ name: "buyer-site" } as never);
+    const second = emptyResults();
+    second.aiGateway.changeSet.creates.push({ name: "supplier-gateway" } as never);
+
+    const summary = printDeploymentPlans(
+      [plannedDeployment("buyer", first), plannedDeployment("supplier", second)],
+      { dryRun: true },
+    );
+
+    expect(outSpy).toHaveBeenCalledOnce();
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { create: number };
+      changes: Array<{ action: string; name: string }>;
+      warnings: unknown[];
+      conflicts: unknown[];
+    };
+    expect(summary.create).toBe(2);
+    expect(payload.summary.create).toBe(2);
+    expect(payload.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "create", name: "buyer-site" }),
+        expect.objectContaining({ action: "create", name: "supplier-gateway" }),
+      ]),
+    );
+    expect(payload.warnings).toEqual([]);
+    expect(payload.conflicts).toEqual([]);
+
+    outSpy.mockRestore();
   });
 });

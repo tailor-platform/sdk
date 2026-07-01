@@ -16,9 +16,10 @@ import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
-import { applyAIGateway, planAIGateway } from "./aigateway";
-import { applyApplication, planApplication } from "./application";
-import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
+import { planAIGateway } from "./aigateway";
+import { planApplication } from "./application";
+import { applyDeploymentPlans, type PlannedDeployment } from "./apply-phases";
+import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import {
   formatPlanSummary,
   summarizeChangeSets,
@@ -34,14 +35,8 @@ import {
   type OwnerConflict,
   type UnmanagedResource,
 } from "./confirm";
+import { buildPlannedExecutorsByName, formatExecutorChangeEntries, planExecutor } from "./executor";
 import {
-  applyExecutor,
-  buildPlannedExecutorsByName,
-  formatExecutorChangeEntries,
-  planExecutor,
-} from "./executor";
-import {
-  applyFunctionRegistry,
   collectFunctionEntries,
   filterBundledWorkflowJobs,
   planFunctionRegistry,
@@ -55,14 +50,14 @@ import {
   type GroupedDisplayEntry,
   type NamespaceAction,
 } from "./grouped-display";
-import { applyIdP, planIdP } from "./idp";
+import { planIdP } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
-import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
-import { applySecretManager, planSecretManager } from "./secret-manager";
-import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
-import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
+import { formatResolverChangeEntries, planPipeline } from "./resolver";
+import { planSecretManager } from "./secret-manager";
+import { planStaticWebsite } from "./staticwebsite";
+import { formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { validatePlan } from "./validate-plan";
-import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
+import { formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { PlanContext } from "./types";
 
 export interface DeployOptions {
@@ -211,19 +206,61 @@ type PlanResults = {
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
+type BuildDeploymentTargetParams = {
+  configPath: string | undefined;
+  dryRun: boolean;
+  buildOnly: boolean;
+  noCache: boolean;
+  packageVersion: string;
+  cacheDir: string;
+};
+
+type BuiltDeploymentTarget = {
+  config: Awaited<ReturnType<typeof loadConfig>>["config"];
+  application: Application;
+  workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+  httpAdapterBuildResult: Awaited<ReturnType<typeof loadApplication>>["httpAdapterBuildResult"];
+  bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
+};
+
+type PlanDeploymentTargetParams = {
+  target: BuiltDeploymentTarget;
+  client: OperatorClient;
+  workspaceId: string;
+  noSchemaCheck: boolean | undefined;
+};
+
+type ConfirmDeploymentPlansParams = {
+  deployments: PlannedDeployment[];
+  yes: boolean;
+};
+
 type PrintPlanOptions = {
   dryRun?: boolean;
 };
 
-/**
- * Format and output the plan results, then return a summary of change counts.
- * In JSON dry-run mode a JSON payload is written to stdout. In all other modes
- * the human-readable diff goes to stdout (dry-run) or stderr (apply).
- * @param results - Planned results across all services
- * @param opts - Output options (dry-run mode flag)
- * @returns Aggregated plan summary counts
- */
-export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions): PlanSummary {
+type JsonPlanPayload = {
+  summary: PlanSummary;
+  changes: Array<Pick<GroupedDisplayEntry, "action" | "name" | "labels" | "namespace">>;
+  warnings: Array<{
+    type: "unmanaged" | "skippedSecret";
+    resourceType: string;
+    name: string;
+  }>;
+  conflicts: Array<{
+    resourceType: string;
+    name: string;
+    currentOwner: string;
+  }>;
+};
+
+type PlanReport = {
+  summary: PlanSummary;
+  json: JsonPlanPayload;
+  lines: string[];
+};
+
+function buildPlanReport(results: PlanResults): PlanReport {
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
@@ -336,67 +373,63 @@ export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions):
     ...results.secretManager.conflicts,
   ];
 
-  if (logger.jsonMode && opts?.dryRun) {
-    const allEntries = [
-      ...allDisplayEntries,
-      ...tailorDBServiceActions.map(({ action, name }) => ({
-        action,
-        name,
-        labels: ["tailorDB"],
-        namespace: undefined,
-      })),
-      ...pipelineServiceActions.map(({ action, name }) => ({
-        action,
-        name,
-        labels: ["pipeline"],
-        namespace: undefined,
-      })),
-      ...idpServiceActions.map(({ action, name }) => ({
-        action,
-        name,
-        labels: ["idp"],
-        namespace: undefined,
-      })),
-      ...authServiceActions.map(({ action, name }) => ({
-        action,
-        name,
-        labels: ["auth"],
-        namespace: undefined,
-      })),
-      ...formatChangeSetEntries(otherFunctionRegistryChanges),
-      ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
-      ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
-      ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
-      ...formatChangeSetEntries(results.app, ["application"]),
-      ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
-      ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
-    ];
-    const changes = allEntries.map(({ action, name, labels, namespace }) => ({
+  const allEntries = [
+    ...allDisplayEntries,
+    ...tailorDBServiceActions.map(({ action, name }) => ({
       action,
       name,
-      labels,
-      namespace,
-    }));
-    const warnings = [
-      ...allUnmanaged.map(({ resourceType, resourceName }) => ({
-        type: "unmanaged" as const,
-        resourceType,
-        name: resourceName,
-      })),
-      ...results.secretManager.skippedSecrets.map((name) => ({
-        type: "skippedSecret" as const,
-        resourceType: "secret",
-        name,
-      })),
-    ];
-    const conflicts = allConflicts.map(({ resourceType, resourceName, currentOwner }) => ({
+      labels: ["tailorDB"],
+      namespace: undefined,
+    })),
+    ...pipelineServiceActions.map(({ action, name }) => ({
+      action,
+      name,
+      labels: ["pipeline"],
+      namespace: undefined,
+    })),
+    ...idpServiceActions.map(({ action, name }) => ({
+      action,
+      name,
+      labels: ["idp"],
+      namespace: undefined,
+    })),
+    ...authServiceActions.map(({ action, name }) => ({
+      action,
+      name,
+      labels: ["auth"],
+      namespace: undefined,
+    })),
+    ...formatChangeSetEntries(otherFunctionRegistryChanges),
+    ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
+    ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
+    ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
+    ...formatChangeSetEntries(results.app, ["application"]),
+    ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
+    ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
+  ];
+  const changes = allEntries.map(({ action, name, labels, namespace }) => ({
+    action,
+    name,
+    labels,
+    namespace,
+  }));
+  const warnings = [
+    ...allUnmanaged.map(({ resourceType, resourceName }) => ({
+      type: "unmanaged" as const,
       resourceType,
       name: resourceName,
-      currentOwner,
-    }));
-    logger.out({ summary, changes, warnings, conflicts });
-    return summary;
-  }
+    })),
+    ...results.secretManager.skippedSecrets.map((name) => ({
+      type: "skippedSecret" as const,
+      resourceType: "secret",
+      name,
+    })),
+  ];
+  const conflicts = allConflicts.map(({ resourceType, resourceName, currentOwner }) => ({
+    resourceType,
+    name: resourceName,
+    currentOwner,
+  }));
 
   const allLines: string[] = [
     ...buildGroupedDisplayLines(
@@ -442,14 +475,37 @@ export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions):
 
   allLines.push(formatPlanSummary(summary));
 
-  const output = allLines.join("\n");
+  return {
+    summary,
+    json: { summary, changes, warnings, conflicts },
+    lines: allLines,
+  };
+}
+
+/**
+ * Format and output the plan results, then return a summary of change counts.
+ * In JSON dry-run mode a JSON payload is written to stdout. In all other modes
+ * the human-readable diff goes to stdout (dry-run) or stderr (apply).
+ * @param results - Planned results across all services
+ * @param opts - Output options (dry-run mode flag)
+ * @returns Aggregated plan summary counts
+ */
+export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions): PlanSummary {
+  const report = buildPlanReport(results);
+
+  if (logger.jsonMode && opts?.dryRun) {
+    logger.out(report.json);
+    return report.summary;
+  }
+
+  const output = report.lines.join("\n");
   if (opts?.dryRun) {
     logger.out(output);
   } else {
     logger.log(output);
   }
 
-  return summary;
+  return report.summary;
 }
 
 /**
@@ -496,6 +552,415 @@ export function summarizePlanResults(
 }
 
 /**
+ * Parse the deploy config option into one or more config paths.
+ * @param configPath - Raw `--config` option value
+ * @returns Config paths, or one undefined entry to preserve default config lookup
+ */
+export function parseDeployConfigPaths(configPath?: string): Array<string | undefined> {
+  const rawConfigPath = configPath ?? process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+  if (rawConfigPath === undefined) {
+    return [undefined];
+  }
+
+  const configPaths = rawConfigPath.split(",").map((entry) => entry.trim());
+  if (configPaths.some((entry) => entry.length === 0)) {
+    throw new Error("--config must contain one or more non-empty config paths.");
+  }
+  return configPaths;
+}
+
+async function buildDeploymentTarget(
+  params: BuildDeploymentTargetParams,
+): Promise<BuiltDeploymentTarget> {
+  const { configPath, dryRun, buildOnly, noCache, packageVersion, cacheDir } = params;
+  const { config, plugins } = await withSpan("build.loadConfig", async () => {
+    const foundPath = loadConfigPath(configPath);
+    if (foundPath) {
+      const resolvedPath = path.resolve(process.cwd(), foundPath);
+      if (fs.existsSync(resolvedPath)) {
+        await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
+      }
+    }
+    return loadConfig(configPath);
+  });
+
+  const configDir = path.dirname(config.path);
+  const lockfilePath =
+    findUpSync("pnpm-lock.yaml", { cwd: configDir }) ??
+    findUpSync("package-lock.json", { cwd: configDir }) ??
+    findUpSync("yarn.lock", { cwd: configDir }) ??
+    findUpSync("bun.lock", { cwd: configDir });
+  const cacheManager = createCacheManager({
+    enabled: !noCache,
+    cacheDir,
+    sdkVersion: packageVersion,
+    lockfileHash: lockfilePath ? hashFile(lockfilePath) : undefined,
+  });
+
+  let pluginManager: PluginManager | undefined;
+  if (plugins.length > 0) {
+    pluginManager = new PluginManager(plugins);
+  }
+
+  await withSpan("build.generateUserTypes", () =>
+    generateUserTypes({ config, configPath: config.path }),
+  );
+
+  let application: Application;
+  let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+  let httpAdapterBuildResult: Awaited<ReturnType<typeof loadApplication>>["httpAdapterBuildResult"];
+  let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
+  try {
+    const result = await withSpan("build.loadApplication", () =>
+      loadApplication({
+        config,
+        pluginManager,
+        bundleCache: cacheManager.bundleCache,
+      }),
+    );
+    application = result.application;
+    workflowBuildResult = result.workflowBuildResult;
+    httpAdapterBuildResult = result.httpAdapterBuildResult;
+    bundledScripts = result.bundledScripts;
+  } finally {
+    cacheManager.finalize();
+  }
+
+  return {
+    config,
+    application,
+    workflowBuildResult,
+    httpAdapterBuildResult,
+    bundledScripts,
+  };
+}
+
+function addBundledScripts(
+  target: Map<string, string>,
+  source: ReadonlyMap<string, string>,
+  kind: string,
+): void {
+  for (const [name, code] of source) {
+    if (target.has(name)) {
+      throw new Error(`Duplicate ${kind} bundle name "${name}" across config files.`);
+    }
+    target.set(name, code);
+  }
+}
+
+function mergeBundledScripts(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): BuiltDeploymentTarget["bundledScripts"] {
+  const bundledScripts: BuiltDeploymentTarget["bundledScripts"] = {
+    resolvers: new Map(),
+    executors: new Map(),
+    workflowJobs: new Map(),
+    authHooks: new Map(),
+  };
+
+  for (const target of targets) {
+    addBundledScripts(bundledScripts.resolvers, target.bundledScripts.resolvers, "resolver");
+    addBundledScripts(bundledScripts.executors, target.bundledScripts.executors, "executor");
+    addBundledScripts(
+      bundledScripts.workflowJobs,
+      target.bundledScripts.workflowJobs,
+      "workflow job",
+    );
+    addBundledScripts(bundledScripts.authHooks, target.bundledScripts.authHooks, "auth hook");
+  }
+
+  return bundledScripts;
+}
+
+async function planDeploymentTarget(
+  params: PlanDeploymentTargetParams,
+): Promise<PlannedDeployment> {
+  const { target, client, workspaceId, noSchemaCheck } = params;
+  const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
+    target;
+
+  await withSpan("plan.validateTailorDBTypeNames", () =>
+    assertUniqueTailorDBTypeNamesWithExternal({
+      client,
+      workspaceId,
+      tailorDBServices: application.tailorDBServices,
+      externalTailorDBNamespaces: application.externalTailorDBNamespaces,
+    }),
+  );
+
+  const workflowService = application.workflowService;
+  const bundledWorkflowJobs = filterBundledWorkflowJobs(
+    workflowService?.jobs ?? [],
+    workflowBuildResult?.usedJobNames ?? [],
+  );
+  const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs, bundledScripts);
+  const forceApplyAll = await withSpan("plan.detectSdkVersionChange", () =>
+    shouldForceApplyAll(client, workspaceId, application, functionEntries),
+  );
+
+  return withSpan("plan", async () => {
+    const idpUserTriggerTargets = collectIdpUserTriggerTargets(application);
+    const ctx: PlanContext = {
+      client,
+      workspaceId,
+      application,
+      forRemoval: false,
+      config,
+      noSchemaCheck,
+      forceApplyAll,
+      idpUserTriggerTargets,
+    };
+    const functionRegistry = await withSpan("plan.functionRegistry", () =>
+      planFunctionRegistry(client, workspaceId, application.name, application.id, functionEntries),
+    );
+    const unchangedWorkflowJobs = new Set(
+      functionRegistry.changeSet.unchanged
+        .filter((entry) => entry.name.startsWith(WORKFLOW_PREFIX))
+        .map((entry) => entry.name.slice(WORKFLOW_PREFIX.length)),
+    );
+    const [
+      tailorDB,
+      staticWebsite,
+      aiGateway,
+      idp,
+      auth,
+      pipeline,
+      app,
+      executor,
+      workflow,
+      secretManager,
+    ] = await Promise.all([
+      withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+      withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+      withSpan("plan.aiGateway", () => planAIGateway(ctx)),
+      withSpan("plan.idp", () => planIdP(ctx)),
+      withSpan("plan.auth", () => planAuth(ctx)),
+      withSpan("plan.pipeline", () => planPipeline(ctx)),
+      withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
+      withSpan("plan.executor", () => planExecutor(ctx)),
+      withSpan("plan.workflow", () =>
+        planWorkflow(
+          client,
+          workspaceId,
+          application.name,
+          application.id,
+          workflowService?.workflows ?? {},
+          workflowBuildResult?.mainJobDeps ?? {},
+          unchangedWorkflowJobs,
+        ),
+      ),
+      withSpan("plan.secretManager", () => planSecretManager(ctx)),
+    ]);
+
+    return {
+      application,
+      functionRegistry,
+      tailorDB,
+      staticWebsite,
+      aiGateway,
+      idp,
+      auth,
+      pipeline,
+      app,
+      executor,
+      workflow,
+      secretManager,
+    };
+  });
+}
+
+function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
+  return {
+    functionRegistry: deployment.functionRegistry,
+    tailorDB: deployment.tailorDB,
+    staticWebsite: deployment.staticWebsite,
+    aiGateway: deployment.aiGateway,
+    idp: deployment.idp,
+    auth: deployment.auth,
+    pipeline: deployment.pipeline,
+    app: deployment.app,
+    executor: deployment.executor,
+    workflow: deployment.workflow,
+    secretManager: deployment.secretManager,
+  };
+}
+
+function collectOwnerConflicts(results: PlanResults): OwnerConflict[] {
+  return [
+    ...results.functionRegistry.conflicts,
+    ...results.tailorDB.conflicts,
+    ...results.staticWebsite.conflicts,
+    ...results.aiGateway.conflicts,
+    ...results.idp.conflicts,
+    ...results.auth.conflicts,
+    ...results.pipeline.conflicts,
+    ...results.executor.conflicts,
+    ...results.workflow.conflicts,
+    ...results.secretManager.conflicts,
+  ];
+}
+
+function collectUnmanagedResources(results: PlanResults): UnmanagedResource[] {
+  return [
+    ...results.functionRegistry.unmanaged,
+    ...results.tailorDB.unmanaged,
+    ...results.staticWebsite.unmanaged,
+    ...results.aiGateway.unmanaged,
+    ...results.idp.unmanaged,
+    ...results.auth.unmanaged,
+    ...results.pipeline.unmanaged,
+    ...results.executor.unmanaged,
+    ...results.workflow.unmanaged,
+    ...results.secretManager.unmanaged,
+  ];
+}
+
+function collectResourceOwners(results: PlanResults): Set<string> {
+  return new Set([
+    ...results.functionRegistry.resourceOwners,
+    ...results.tailorDB.resourceOwners,
+    ...results.staticWebsite.resourceOwners,
+    ...results.aiGateway.resourceOwners,
+    ...results.idp.resourceOwners,
+    ...results.auth.resourceOwners,
+    ...results.pipeline.resourceOwners,
+    ...results.executor.resourceOwners,
+    ...results.workflow.resourceOwners,
+    ...results.secretManager.resourceOwners,
+  ]);
+}
+
+function collectImportantResourceDeletions(results: PlanResults): ImportantResourceDeletion[] {
+  const importantDeletions: ImportantResourceDeletion[] = [];
+  for (const del of results.tailorDB.changeSet.type.deletes) {
+    importantDeletions.push({
+      resourceType: "TailorDB type",
+      resourceName: del.name,
+    });
+  }
+  for (const del of results.staticWebsite.changeSet.deletes) {
+    importantDeletions.push({
+      resourceType: "StaticWebsite",
+      resourceName: del.name,
+    });
+  }
+  for (const del of results.aiGateway.changeSet.deletes) {
+    importantDeletions.push({
+      resourceType: "AIGateway",
+      resourceName: del.name,
+    });
+  }
+  for (const del of results.auth.changeSet.oauth2Client.deletes) {
+    importantDeletions.push({
+      resourceType: "OAuth2 client",
+      resourceName: del.name,
+    });
+  }
+  for (const replace of results.auth.changeSet.oauth2Client.replaces) {
+    importantDeletions.push({
+      resourceType: "OAuth2 client (client type change)",
+      resourceName: replace.name,
+    });
+  }
+  for (const del of results.auth.changeSet.connection.deletes) {
+    importantDeletions.push({
+      resourceType: "Auth connection",
+      resourceName: del.name,
+    });
+  }
+  for (const del of results.secretManager.vaultChangeSet.deletes) {
+    importantDeletions.push({
+      resourceType: "Secret Manager vault",
+      resourceName: del.name,
+    });
+  }
+  for (const del of results.secretManager.secretChangeSet.deletes) {
+    importantDeletions.push({
+      resourceType: "Secret Manager secret",
+      resourceName: del.name,
+    });
+  }
+  return importantDeletions;
+}
+
+async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
+  const { deployments, yes } = params;
+  const importantDeletions: ImportantResourceDeletion[] = [];
+
+  for (const deployment of deployments) {
+    const results = deploymentPlanResults(deployment);
+    const conflicts = collectOwnerConflicts(results);
+    await confirmOwnerConflict(conflicts, deployment.application.name, yes);
+
+    const unmanaged = collectUnmanagedResources(results);
+    await confirmUnmanagedResources(unmanaged, deployment.application.name, yes);
+
+    importantDeletions.push(...collectImportantResourceDeletions(results));
+
+    const emptyApps = computeRenamedAppDeletions({
+      conflicts,
+      resourceOwners: collectResourceOwners(results),
+      targetAppName: deployment.application.name,
+    });
+    for (const emptyApp of emptyApps) {
+      deployment.app.deletes.push({
+        name: emptyApp,
+        request: {
+          workspaceId: deployment.tailorDB.context.workspaceId,
+          applicationName: emptyApp,
+        },
+      });
+    }
+  }
+
+  await confirmImportantResourceDeletion(importantDeletions, yes);
+}
+
+function sumPlanSummaries(summaries: ReadonlyArray<PlanSummary>): PlanSummary {
+  return summaries.reduce<PlanSummary>(
+    (acc, summary) => ({
+      create: acc.create + summary.create,
+      update: acc.update + summary.update,
+      delete: acc.delete + summary.delete,
+      replace: acc.replace + summary.replace,
+    }),
+    { create: 0, update: 0, delete: 0, replace: 0 },
+  );
+}
+
+export function printDeploymentPlans(
+  deployments: ReadonlyArray<PlannedDeployment>,
+  opts?: PrintPlanOptions,
+): PlanSummary {
+  if (logger.jsonMode && opts?.dryRun) {
+    const reports = deployments.map((deployment) =>
+      buildPlanReport(deploymentPlanResults(deployment)),
+    );
+    const summary = sumPlanSummaries(reports.map((report) => report.summary));
+    logger.out({
+      summary,
+      changes: reports.flatMap((report) => report.json.changes),
+      warnings: reports.flatMap((report) => report.json.warnings),
+      conflicts: reports.flatMap((report) => report.json.conflicts),
+    });
+    return summary;
+  }
+
+  const summaries = deployments.map((deployment) =>
+    printPlanResults(deploymentPlanResults(deployment), opts),
+  );
+  return sumPlanSummaries(summaries);
+}
+
+async function validateDeploymentPlans(
+  deployments: ReadonlyArray<PlannedDeployment>,
+): Promise<void> {
+  for (const deployment of deployments) {
+    await validatePlan(deploymentPlanResults(deployment));
+  }
+}
+
+/**
  * Deploy the configured application to the Tailor platform.
  * @param options - Options for deploy execution
  * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
@@ -504,102 +969,40 @@ export async function deploy(options?: DeployOptions) {
   return withSpan("deploy", async (rootSpan) => {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
-    // Phase 0: Build
-    const {
-      config,
-      application,
-      workflowBuildResult,
-      httpAdapterBuildResult,
-      bundledScripts,
-      buildOnly,
-    } = await withSpan("build", async () => {
+    const configPaths = parseDeployConfigPaths(options?.configPath);
+    const { targets, buildOnly } = await withSpan("build", async () => {
       const dryRun = options?.dryRun ?? false;
       const buildOnly =
         options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
-
-      const { config, plugins } = await withSpan("build.loadConfig", async () => {
-        const foundPath = loadConfigPath(options?.configPath);
-        // Locally inject a missing app id; in CI require an existing id
-        // instead of auto-generating one. CI dry-runs still run the check
-        // read-only (so a forgotten id fails the PR plan); local dry-run and
-        // build-only skip it. See ensureConfigIdForDeploy.
-        if (foundPath) {
-          const resolvedPath = path.resolve(process.cwd(), foundPath);
-          if (fs.existsSync(resolvedPath)) {
-            await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
-          }
-        }
-        return loadConfig(options?.configPath);
-      });
-
       const noCache = options?.noCache ?? false;
-
-      // Initialize cache manager
       const packageJson = await readPackageJson();
       const cacheDir = path.resolve(getDistDir(), "cache");
       if (options?.cleanCache) {
         fs.rmSync(cacheDir, { recursive: true, force: true });
         logger.info("Bundle cache cleaned");
       }
-      const configDir = path.dirname(config.path);
-      const lockfilePath =
-        findUpSync("pnpm-lock.yaml", { cwd: configDir }) ??
-        findUpSync("package-lock.json", { cwd: configDir }) ??
-        findUpSync("yarn.lock", { cwd: configDir }) ??
-        findUpSync("bun.lock", { cwd: configDir });
-      const cacheManager = createCacheManager({
-        enabled: !noCache,
-        cacheDir,
-        sdkVersion: packageJson.version ?? "unknown",
-        lockfileHash: lockfilePath ? hashFile(lockfilePath) : undefined,
-      });
 
-      let pluginManager: PluginManager | undefined;
-      if (plugins.length > 0) {
-        pluginManager = new PluginManager(plugins);
-      }
-
-      await withSpan("build.generateUserTypes", () =>
-        generateUserTypes({ config, configPath: config.path }),
-      );
-
-      let application: Application;
-      let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
-      let httpAdapterBuildResult: Awaited<
-        ReturnType<typeof loadApplication>
-      >["httpAdapterBuildResult"];
-      let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
-      try {
-        const result = await withSpan("build.loadApplication", () =>
-          loadApplication({
-            config,
-            pluginManager,
-            bundleCache: cacheManager.bundleCache,
+      const targets: BuiltDeploymentTarget[] = [];
+      for (const configPath of configPaths) {
+        targets.push(
+          await buildDeploymentTarget({
+            configPath,
+            dryRun,
+            buildOnly,
+            noCache,
+            packageVersion: packageJson.version ?? "unknown",
+            cacheDir,
           }),
         );
-        application = result.application;
-        workflowBuildResult = result.workflowBuildResult;
-        httpAdapterBuildResult = result.httpAdapterBuildResult;
-        bundledScripts = result.bundledScripts;
-      } finally {
-        // Persist even on partial failure: successfully built bundles
-        // are cached so the next run only rebuilds what failed.
-        cacheManager.finalize();
       }
 
       return {
-        config,
-        plugins,
-        application,
-        workflowBuildResult,
-        httpAdapterBuildResult,
-        bundledScripts,
-        dryRun,
+        targets,
         buildOnly,
       };
     });
     if (buildOnly) {
-      return { bundledScripts };
+      return { bundledScripts: mergeBundledScripts(targets) };
     }
 
     // Note: the normal apply path intentionally skips writing bundle files to
@@ -617,265 +1020,35 @@ export async function deploy(options?: DeployOptions) {
       profile: options?.profile,
     });
 
-    rootSpan.setAttribute("app.name", application.name);
+    rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    await withSpan("plan.validateTailorDBTypeNames", () =>
-      assertUniqueTailorDBTypeNamesWithExternal({
-        client,
-        workspaceId,
-        tailorDBServices: application.tailorDBServices,
-        externalTailorDBNamespaces: application.externalTailorDBNamespaces,
-      }),
-    );
-
-    // Collect function entries from in-memory bundled scripts (after build, before plan)
-    const workflowService = application.workflowService;
-    const bundledWorkflowJobs = filterBundledWorkflowJobs(
-      workflowService?.jobs ?? [],
-      workflowBuildResult?.usedJobNames ?? [],
-    );
-    const functionEntries = collectFunctionEntries(
-      application,
-      bundledWorkflowJobs,
-      bundledScripts,
-    );
+    const deployments: PlannedDeployment[] = [];
+    for (const target of targets) {
+      deployments.push(
+        await planDeploymentTarget({
+          target,
+          client,
+          workspaceId,
+          noSchemaCheck: options?.noSchemaCheck,
+        }),
+      );
+    }
 
     const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;
-    const forceApplyAll = await withSpan("plan.detectSdkVersionChange", () =>
-      shouldForceApplyAll(client, workspaceId, application, functionEntries),
-    );
-
-    // Phase 1: Plan
-    const {
-      functionRegistry,
-      tailorDB,
-      staticWebsite,
-      aiGateway,
-      idp,
-      auth,
-      pipeline,
-      app,
-      executor,
-      workflow,
-      secretManager,
-    } = await withSpan("plan", async () => {
-      const idpUserTriggerTargets = collectIdpUserTriggerTargets(application);
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config,
-        noSchemaCheck: options?.noSchemaCheck,
-        forceApplyAll,
-        idpUserTriggerTargets,
-      };
-      const functionRegistry = await withSpan("plan.functionRegistry", () =>
-        planFunctionRegistry(
-          client,
-          workspaceId,
-          application.name,
-          application.id,
-          functionEntries,
-        ),
-      );
-      const unchangedWorkflowJobs = new Set(
-        functionRegistry.changeSet.unchanged
-          .filter((entry) => entry.name.startsWith(WORKFLOW_PREFIX))
-          .map((entry) => entry.name.slice(WORKFLOW_PREFIX.length)),
-      );
-      const [
-        tailorDB,
-        staticWebsite,
-        aiGateway,
-        idp,
-        auth,
-        pipeline,
-        app,
-        executor,
-        workflow,
-        secretManager,
-      ] = await Promise.all([
-        withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-        withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-        withSpan("plan.aiGateway", () => planAIGateway(ctx)),
-        withSpan("plan.idp", () => planIdP(ctx)),
-        withSpan("plan.auth", () => planAuth(ctx)),
-        withSpan("plan.pipeline", () => planPipeline(ctx)),
-        withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
-        withSpan("plan.executor", () => planExecutor(ctx)),
-        withSpan("plan.workflow", () =>
-          planWorkflow(
-            client,
-            workspaceId,
-            application.name,
-            application.id,
-            workflowService?.workflows ?? {},
-            workflowBuildResult?.mainJobDeps ?? {},
-            unchangedWorkflowJobs,
-          ),
-        ),
-        withSpan("plan.secretManager", () => planSecretManager(ctx)),
-      ]);
-      return {
-        functionRegistry,
-        tailorDB,
-        staticWebsite,
-        aiGateway,
-        idp,
-        auth,
-        pipeline,
-        app,
-        executor,
-        workflow,
-        secretManager,
-      };
-    });
 
     // Phase 1b: Confirm
     await withSpan("confirm", async () => {
-      const allConflicts: OwnerConflict[] = [
-        ...functionRegistry.conflicts,
-        ...tailorDB.conflicts,
-        ...staticWebsite.conflicts,
-        ...aiGateway.conflicts,
-        ...idp.conflicts,
-        ...auth.conflicts,
-        ...pipeline.conflicts,
-        ...executor.conflicts,
-        ...workflow.conflicts,
-        ...secretManager.conflicts,
-      ];
-      await confirmOwnerConflict(allConflicts, application.name, yes);
-
-      const allUnmanaged: UnmanagedResource[] = [
-        ...functionRegistry.unmanaged,
-        ...tailorDB.unmanaged,
-        ...staticWebsite.unmanaged,
-        ...aiGateway.unmanaged,
-        ...idp.unmanaged,
-        ...auth.unmanaged,
-        ...pipeline.unmanaged,
-        ...executor.unmanaged,
-        ...workflow.unmanaged,
-        ...secretManager.unmanaged,
-      ];
-      await confirmUnmanagedResources(allUnmanaged, application.name, yes);
-
-      const importantDeletions: ImportantResourceDeletion[] = [];
-      for (const del of tailorDB.changeSet.type.deletes) {
-        importantDeletions.push({
-          resourceType: "TailorDB type",
-          resourceName: del.name,
-        });
-      }
-      for (const del of staticWebsite.changeSet.deletes) {
-        importantDeletions.push({
-          resourceType: "StaticWebsite",
-          resourceName: del.name,
-        });
-      }
-      for (const del of aiGateway.changeSet.deletes) {
-        importantDeletions.push({
-          resourceType: "AIGateway",
-          resourceName: del.name,
-        });
-      }
-      for (const del of auth.changeSet.oauth2Client.deletes) {
-        importantDeletions.push({
-          resourceType: "OAuth2 client",
-          resourceName: del.name,
-        });
-      }
-      for (const replace of auth.changeSet.oauth2Client.replaces) {
-        importantDeletions.push({
-          resourceType: "OAuth2 client (client type change)",
-          resourceName: replace.name,
-        });
-      }
-      for (const del of auth.changeSet.connection.deletes) {
-        importantDeletions.push({
-          resourceType: "Auth connection",
-          resourceName: del.name,
-        });
-      }
-      for (const del of secretManager.vaultChangeSet.deletes) {
-        importantDeletions.push({
-          resourceType: "Secret Manager vault",
-          resourceName: del.name,
-        });
-      }
-      for (const del of secretManager.secretChangeSet.deletes) {
-        importantDeletions.push({
-          resourceType: "Secret Manager secret",
-          resourceName: del.name,
-        });
-      }
-      await confirmImportantResourceDeletion(importantDeletions, yes);
-
-      // Delete renamed applications
-      const resourceOwners = new Set([
-        ...functionRegistry.resourceOwners,
-        ...tailorDB.resourceOwners,
-        ...staticWebsite.resourceOwners,
-        ...aiGateway.resourceOwners,
-        ...idp.resourceOwners,
-        ...auth.resourceOwners,
-        ...pipeline.resourceOwners,
-        ...executor.resourceOwners,
-        ...workflow.resourceOwners,
-        ...secretManager.resourceOwners,
-      ]);
-      const emptyApps = computeRenamedAppDeletions({
-        conflicts: allConflicts,
-        resourceOwners,
-        targetAppName: application.name,
-      });
-      for (const emptyApp of emptyApps) {
-        app.deletes.push({
-          name: emptyApp,
-          request: {
-            workspaceId,
-            applicationName: emptyApp,
-          },
-        });
-      }
+      await confirmDeploymentPlans({ deployments, yes });
     });
 
-    const planSummary = printPlanResults(
-      {
-        functionRegistry,
-        tailorDB,
-        staticWebsite,
-        aiGateway,
-        idp,
-        auth,
-        pipeline,
-        app,
-        executor,
-        workflow,
-        secretManager,
-      },
-      { dryRun: options?.dryRun },
-    );
+    const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
 
     if (options?.noValidate) {
       logger.warn("Client-side validation skipped (--no-validate).");
     } else {
-      await validatePlan({
-        functionRegistry,
-        tailorDB,
-        staticWebsite,
-        idp,
-        auth,
-        pipeline,
-        app,
-        executor,
-        workflow,
-        secretManager,
-      });
+      await validateDeploymentPlans(deployments);
     }
 
     if (dryRun) {
@@ -883,60 +1056,7 @@ export async function deploy(options?: DeployOptions) {
       return undefined;
     }
 
-    // Phase 2: Create/Update services that Application depends on
-    await withSpan("apply.createUpdateServices", async () => {
-      await applySecretManager(client, secretManager, "create-update", application);
-      await applyFunctionRegistry(client, workspaceId, functionRegistry, "create-update");
-      await applyStaticWebsite(client, staticWebsite, "create-update");
-      await applyAIGateway(client, aiGateway, "create-update");
-      await applyIdP(client, idp, "create-update");
-      await applyAuth(client, auth, "create-update");
-      await applyTailorDB(client, tailorDB, "create-update");
-      await applyPipeline(client, pipeline, "create-update");
-    });
-
-    // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
-    await withSpan("apply.deleteSubgraphResources", async () => {
-      await applyPipeline(client, pipeline, "delete-resources");
-      await applyAuth(client, auth, "delete-resources");
-      await applyIdP(client, idp, "delete-resources");
-    });
-
-    // Phase 4: Create/Update Application
-    await withSpan("apply.createUpdateApplication", () =>
-      applyApplication(client, app, "create-update"),
-    );
-
-    // Phase 5: Create/Update services that depend on Application
-    await withSpan("apply.createUpdateDependentServices", async () => {
-      await applyExecutor(client, executor, "create-update");
-      await applyWorkflow(client, workflow, "create-update");
-    });
-
-    // Phase 6: Delete services that depend on Application
-    await withSpan("apply.deleteDependentServices", async () => {
-      await applyWorkflow(client, workflow, "delete");
-      await applyExecutor(client, executor, "delete");
-      await applyStaticWebsite(client, staticWebsite, "delete");
-      await applyAIGateway(client, aiGateway, "delete");
-      await applySecretManager(client, secretManager, "delete");
-    });
-
-    // Phase 7: Delete Application
-    await withSpan("apply.deleteApplication", () => applyApplication(client, app, "delete"));
-
-    // Phase 8: Delete subgraph services (after Application is deleted, no reference errors)
-    await withSpan("apply.deleteSubgraphServices", async () => {
-      await applyPipeline(client, pipeline, "delete-services");
-      await applyAuth(client, auth, "delete-services");
-      await applyIdP(client, idp, "delete-services");
-      await applyTailorDB(client, tailorDB, "delete-services");
-    });
-
-    // Phase 9: Delete unused function registry entries
-    await withSpan("apply.cleanup", () =>
-      applyFunctionRegistry(client, workspaceId, functionRegistry, "delete"),
-    );
+    await withSpan("apply", () => applyDeploymentPlans(client, workspaceId, deployments));
 
     if (logger.jsonMode) {
       logger.out({ summary: planSummary, status: "applied" });

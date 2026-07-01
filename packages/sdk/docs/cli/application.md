@@ -59,22 +59,32 @@ tailor-sdk deploy [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                                 |
-| `--dry-run`                     | `-d`  | Run the command without making any changes                        | No       | -                    | -                                 |
-| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots                | No       | -                    | -                                 |
-| `--no-validate`                 | -     | Skip client-side validation against platform resource constraints | No       | -                    | -                                 |
-| `--no-cache`                    | -     | Disable bundle caching for this run                               | No       | -                    | -                                 |
-| `--clean-cache`                 | -     | Clean the bundle cache before building                            | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                                          | Required | Default              | Env                               |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------ | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                         | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                    | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together. | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                            | No       | `false`              | -                                 |
+| `--dry-run`                     | `-d`  | Run the command without making any changes                                           | No       | -                    | -                                 |
+| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots                                   | No       | -                    | -                                 |
+| `--no-validate`                 | -     | Skip client-side validation against platform resource constraints                    | No       | -                    | -                                 |
+| `--no-cache`                    | -     | Disable bundle caching for this run                                                  | No       | -                    | -                                 |
+| `--clean-cache`                 | -     | Clean the bundle cache before building                                               | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 **Config File Modification:**
 
 On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
+
+**Multiple Config Deploys:**
+
+To deploy interdependent applications to the same workspace in one run, pass comma-separated config paths:
+
+```bash
+tailor-sdk deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.ts
+```
+
+When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `external: true` during the same deploy.
 
 **Migration Handling:**
 
