@@ -1,8 +1,12 @@
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import { bundleHttpAdapters } from "./bundler";
+
+const nodeRequire = createRequire(import.meta.url);
+const graphqlWebModule = nodeRequire.resolve("@0no-co/graphql.web");
 
 describe("bundleHttpAdapters", () => {
   let tmpDir: string | undefined;
@@ -27,13 +31,16 @@ describe("bundleHttpAdapters", () => {
       sourceFile,
       `
 import { createHttpAdapter } from "@tailor-platform/sdk";
+import { parse } from ${JSON.stringify(graphqlWebModule)};
+
+const getUserDocument = parse("query U($id: ID!) { user(id: $id) { id name } }");
 
 export default createHttpAdapter({
   name: "get-user",
   pathPattern: "/users/*",
   input: {
     get: (req) => ({
-      query: "query U($id: ID!) { user(id: $id) { id name } }",
+      query: getUserDocument,
       variables: { id: req.path.split("/")[2] },
     }),
   },
@@ -59,6 +66,18 @@ export default createHttpAdapter({
     // either double quotes or backticks for the case literal).
     expect(inputCode).toMatch(/case\s*[`"]GET[`"]/);
     expect(outputCode).toContain("globalThis.transform");
+
+    const runtime: {
+      transform?: (req: { method: string; path: string }) => {
+        query: string;
+        variables: { id: string | undefined };
+      };
+    } = {};
+    new Function("globalThis", inputCode!).call(runtime, runtime);
+    const request = runtime.transform!({ method: "GET", path: "/users/user-1" });
+    expect(request.query).toContain("query U");
+    expect(request.query).toContain("user(id: $id)");
+    expect(request.variables.id).toBe("user-1");
   });
 
   test("dispatches to the matching method handler at runtime", async () => {
@@ -98,6 +117,38 @@ export default createHttpAdapter({
     expect(() => runtime.transform!({ method: "PUT" })).toThrow(
       /unsupported method: PUT.*GET, POST, DELETE/,
     );
+  });
+
+  test("passes through nullish input handler results", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "http-adapter-bundle-")));
+    const sourceFile = path.join(tmpDir, "adapter.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+
+export default createHttpAdapter({
+  name: "nullish",
+  pathPattern: "/x",
+  input: {
+    get: () => null,
+    post: () => undefined,
+  },
+});
+`,
+    );
+
+    const result = await bundleHttpAdapters([
+      { name: "nullish", sourceFile, methods: ["get", "post"], hasOutput: false },
+    ]);
+
+    const inputCode = result.bundledInputs.get("nullish");
+    expect(inputCode).toBeDefined();
+
+    const runtime: { transform?: (req: { method: string }) => unknown } = {};
+    new Function("globalThis", inputCode!).call(runtime, runtime);
+    expect(runtime.transform!({ method: "GET" })).toBeNull();
+    expect(runtime.transform!({ method: "POST" })).toBeUndefined();
   });
 
   test("drops console calls below the configured log level", async () => {

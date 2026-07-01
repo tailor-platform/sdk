@@ -44,11 +44,10 @@
     "@changesets/cli": "3.0.0-next.5",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.2",
-    "eslint-plugin-zod": "4.7.0",
-    "knip": "6.17.1",
+    "knip": "6.23.0",
     "lefthook": "2.1.9",
-    "oxfmt": "0.55.0",
-    "oxlint": "1.70.0",
+    "oxfmt": "0.56.0",
+    "oxlint": "1.71.0",
     "pkg-pr-new": "0.0.75",
     "publint": "0.3.21",
     "tsx": "4.22.4",
@@ -57,5 +56,5 @@
   "engines": {
     "node": ">= 22.15.0"
   },
-  "packageManager": "pnpm@11.8.0"
+  "packageManager": "pnpm@11.9.0"
 }

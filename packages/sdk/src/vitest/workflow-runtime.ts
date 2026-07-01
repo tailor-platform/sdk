@@ -7,6 +7,7 @@ import { platformSerialize } from "../utils/test/platform-serialize";
 export interface DefaultWorkflowRuntime {
   triggerJobFunction: (name: string, args?: unknown) => unknown;
   triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
+  resumeWorkflow: (executionId: string) => Promise<string>;
   wait: (key: string, payload?: unknown) => unknown;
   resolve: (
     executionId: string,
@@ -26,6 +27,7 @@ export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
       platformSerialize(args);
       return TRIGGER_DEFAULT;
     },
+    resumeWorkflow: async (executionId: string): Promise<string> => executionId,
     wait: (key: string): unknown => {
       throw new Error(
         `No wait handler for "${key}". Acquire mockWorkflow() and call setWaitHandler(...).`,

@@ -84,4 +84,24 @@ describe("buildViewerHtml", () => {
     const parsed = extractEmbeddedSchema(html) as TailorDbErdSchema;
     expect(parsed.tables[0]?.description).toBe(description);
   });
+
+  test("embeds optional diff data for the viewer", () => {
+    const html = buildViewerHtml({
+      schema: buildSchema(),
+      diff: {
+        namespace: "tailordb",
+        baseRevision: "base",
+        headRevision: "head",
+        changed: true,
+        summary: { added: 1, changed: 0, removed: 0 },
+        changes: [{ action: "added", entity: "table", path: "User", detail: "Table added" }],
+      },
+    });
+
+    expect(html).toContain('<script type="application/json" id="erd-schema">');
+    expect(html).toContain('<script type="application/json" id="erd-diff">');
+    expect(html).toContain("function diffDetail(");
+    expect(html).toContain("diff-detail");
+    expect(html.match(/<\/script>/g)).toHaveLength(3);
+  });
 });

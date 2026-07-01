@@ -252,6 +252,12 @@ function createLocalWorkflowRuntime(
       platformSerialize(args);
       return TRIGGER_DEFAULT;
     },
+    resumeWorkflow: async (executionId) => {
+      if (previous) {
+        return await previous.resumeWorkflow(executionId);
+      }
+      return executionId;
+    },
     wait: (key, payload) => {
       if (previous) {
         return previous.wait(key, payload);

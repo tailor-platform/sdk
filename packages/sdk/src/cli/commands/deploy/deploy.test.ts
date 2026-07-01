@@ -1,6 +1,8 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { createChangeSet } from "./change-set";
-import { computeRenamedAppDeletions, summarizePlanResults } from "./deploy";
+import { computeRenamedAppDeletions, printPlanResults, summarizePlanResults } from "./deploy";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
@@ -153,7 +155,6 @@ describe("summarizePlanResults", () => {
       update: 4,
       delete: 1,
       replace: 0,
-      unchanged: 0,
     });
   });
 
@@ -169,7 +170,6 @@ describe("summarizePlanResults", () => {
       update: 1,
       delete: 0,
       replace: 0,
-      unchanged: 0,
     });
   });
 
@@ -184,7 +184,6 @@ describe("summarizePlanResults", () => {
       update: 0,
       delete: 0,
       replace: 0,
-      unchanged: 0,
     });
   });
 
@@ -208,7 +207,6 @@ describe("summarizePlanResults", () => {
       update: 2,
       delete: 0,
       replace: 0,
-      unchanged: 0,
     });
   });
 });
@@ -252,5 +250,122 @@ describe("computeRenamedAppDeletions", () => {
     });
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("printPlanResults", () => {
+  test("routes dry-run output to stdout via logger.out", () => {
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    printPlanResults(emptyResults(), { dryRun: true });
+
+    expect(outSpy).toHaveBeenCalled();
+    expect(logSpy).not.toHaveBeenCalled();
+
+    outSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test("routes apply output to stderr via logger.log", () => {
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    printPlanResults(emptyResults(), { dryRun: false });
+
+    expect(logSpy).toHaveBeenCalled();
+    expect(outSpy).not.toHaveBeenCalled();
+
+    outSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test("emits JSON with summary, changes, warnings, and conflicts for dry-run --json", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    const summary = printPlanResults(emptyResults(), { dryRun: true });
+
+    expect(outSpy).toHaveBeenCalledOnce();
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: unknown;
+      changes: unknown[];
+      warnings: unknown[];
+      conflicts: unknown[];
+    };
+    expect(payload).toHaveProperty("summary");
+    expect(payload).toHaveProperty("changes");
+    expect(payload).toHaveProperty("warnings");
+    expect(payload).toHaveProperty("conflicts");
+    expect(Array.isArray(payload.changes)).toBe(true);
+    expect(Array.isArray(payload.warnings)).toBe(true);
+    expect(Array.isArray(payload.conflicts)).toBe(true);
+    expect(summary.create).toBe(0);
+
+    outSpy.mockRestore();
+  });
+
+  test("includes unmanaged resources and skipped secrets in warnings", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    const results = emptyResults();
+    results.tailorDB.unmanaged = [{ resourceType: "tailorDB", resourceName: "OldType" }];
+    results.secretManager.skippedSecrets = ["DB_PASSWORD"];
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      warnings: Array<{ type: string; resourceType: string; name: string }>;
+    };
+    expect(payload.warnings).toContainEqual({
+      type: "unmanaged",
+      resourceType: "tailorDB",
+      name: "OldType",
+    });
+    expect(payload.warnings).toContainEqual({
+      type: "skippedSecret",
+      resourceType: "secret",
+      name: "DB_PASSWORD",
+    });
+
+    outSpy.mockRestore();
+  });
+
+  test("includes owner conflicts in conflicts", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    const results = emptyResults();
+    results.tailorDB.conflicts = [
+      { resourceType: "tailorDB", resourceName: "User", currentOwner: "other-app" },
+    ];
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      conflicts: Array<{ resourceType: string; name: string; currentOwner: string }>;
+    };
+    expect(payload.conflicts).toContainEqual({
+      resourceType: "tailorDB",
+      name: "User",
+      currentOwner: "other-app",
+    });
+
+    outSpy.mockRestore();
+  });
+
+  test("does not emit JSON for apply --json; still prints plan to stderr", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    printPlanResults(emptyResults(), { dryRun: false });
+
+    expect(outSpy).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalled();
+
+    outSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });
