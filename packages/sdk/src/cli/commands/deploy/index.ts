@@ -1,7 +1,7 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { deploy } from "#/cli/commands/deploy/deploy";
-import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
+import { confirmationArgs, multiConfigArg, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 
@@ -12,13 +12,7 @@ export const deployCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      config: arg(z.string().default("tailor.config.ts"), {
-        alias: "c",
-        description:
-          "Path to SDK config file. Use comma-separated paths to deploy multiple apps together.",
-        env: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
-        completion: { type: "file", extensions: ["ts"] },
-      }),
+      ...multiConfigArg,
       ...confirmationArgs,
       "dry-run": arg(z.boolean().optional(), {
         alias: "d",
