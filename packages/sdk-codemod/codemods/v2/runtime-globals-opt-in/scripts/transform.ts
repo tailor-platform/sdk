@@ -899,7 +899,8 @@ function isBareRuntimeRootValueReference(node: SgNode, rootName: string): boolea
 
   const parent = node.parent();
   if (!parent) return false;
-  if (parent.kind() === "variable_declarator" || parent.kind() === "assignment_expression") {
+  if (parent.kind() === "assignment_expression") return true;
+  if (parent.kind() === "variable_declarator") {
     return appearsAfterEquals(parent, node);
   }
   if (parent.kind() === "assignment_pattern" || parent.kind() === "object_assignment_pattern") {

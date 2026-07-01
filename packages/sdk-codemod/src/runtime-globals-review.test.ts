@@ -418,6 +418,36 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports assignment targets that write ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/bare-runtime-root-assignment.ts",
+      ["tailor = mockTailor;", "tailordb = mockDb;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/bare-runtime-root-assignment.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/bare-runtime-root-assignment.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "tailor = mockTailor;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/bare-runtime-root-assignment.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "tailordb = mockDb;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports shorthand bare ambient runtime root references", async () => {
     await writeProjectFile(
       "resolvers/shorthand-bare-runtime-root.ts",
@@ -847,6 +877,17 @@ describe("runtime-globals-opt-in review findings", () => {
     await writeProjectFile(
       "errors.ts",
       ['throw new Error("Please renew tailor.idp.Client credentials");', ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report runtime-looking names inside string data", async () => {
+    await writeProjectFile(
+      "resolvers/string-data.ts",
+      ['const names = ["TailorErrors", "TailorErrorItem"];', ""].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
