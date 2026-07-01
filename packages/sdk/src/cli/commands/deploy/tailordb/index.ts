@@ -1427,7 +1427,7 @@ async function planServices(
         request: {
           workspaceId,
           namespaceName: tailordb.namespace,
-          // Set UTC to match tailorctl/terraform
+          // Keep generated TailorDB services aligned with Terraform defaults.
           defaultTimezone: "UTC",
         },
         metaRequest,
