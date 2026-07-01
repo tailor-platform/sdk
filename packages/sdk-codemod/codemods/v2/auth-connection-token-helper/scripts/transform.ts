@@ -335,6 +335,11 @@ function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
       continue;
     }
 
+    if (child.kind() === "expression_statement") {
+      collectUsingDeclarationNames(child, names);
+      continue;
+    }
+
     if (child.kind() === "lexical_declaration" || child.kind() === "variable_declaration") {
       collectVariableDeclaratorNames(child, names);
       continue;
@@ -343,6 +348,22 @@ function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
     if (["function_declaration", "class_declaration", "enum_declaration"].includes(child.kind())) {
       const name = child.children().find((grandchild) => grandchild.kind() === "identifier");
       if (name) names.add(name.text());
+    }
+  }
+}
+
+function collectUsingDeclarationNames(scope: SgNode, names: Set<string>): void {
+  const assignment = scope.children().find((child) => child.kind() === "assignment_expression");
+  if (!assignment) return;
+
+  const children = assignment.children();
+  const usingIndex = children.findIndex((child) => child.kind() === "using");
+  const end = children.findIndex((child, index) => index > usingIndex && child.kind() === "=");
+  if (usingIndex === -1 || end === -1) return;
+
+  for (const child of children.slice(usingIndex + 1, end)) {
+    if (["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind())) {
+      collectBindingNames(child, names);
     }
   }
 }
@@ -499,6 +520,59 @@ function findAuthConnectionTokenReferences(root: SgNode, authLocalNames: Set<str
   return references;
 }
 
+function objectPatternHasGetConnectionToken(pattern: SgNode): boolean {
+  return pattern.children().some((child) => {
+    if (
+      child.kind() === "shorthand_property_identifier_pattern" &&
+      child.text() === GET_CONNECTION_TOKEN
+    ) {
+      return true;
+    }
+
+    if (child.kind() !== "pair_pattern") return false;
+    return child
+      .children()
+      .some(
+        (grandchild) =>
+          grandchild.kind() === "property_identifier" && grandchild.text() === GET_CONNECTION_TOKEN,
+      );
+  });
+}
+
+function findAuthConnectionTokenDestructures(
+  root: SgNode,
+  authLocalNames: Set<string>,
+): TokenCall[] {
+  const references: TokenCall[] = [];
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const children = decl.children();
+    const equalIndex = children.findIndex((child) => child.kind() === "=");
+    const binding = firstDeclaratorChild(decl);
+    const initializer = children
+      .slice(equalIndex + 1)
+      .find((child) => child.kind() === "identifier");
+    if (
+      equalIndex === -1 ||
+      binding?.kind() !== "object_pattern" ||
+      !objectPatternHasGetConnectionToken(binding) ||
+      initializer?.kind() !== "identifier" ||
+      !authLocalNames.has(initializer.text())
+    ) {
+      continue;
+    }
+
+    if (isReferenceShadowed(initializer, initializer.text())) continue;
+
+    const range = decl.range();
+    references.push({
+      objectNode: initializer,
+      localName: initializer.text(),
+      range: [range.start.index, range.end.index],
+    });
+  }
+  return references;
+}
+
 function findAuthConnectionTokenCalls(root: SgNode, authLocalNames: Set<string>): TokenCall[] {
   const calls: TokenCall[] = [];
   for (const call of root.findAll({ rule: { kind: "call_expression" } })) {
@@ -568,6 +642,29 @@ function buildOnlyNamedImportRemovalEdit(source: string, importStmt: SgNode): Ed
   return { startPos: start, endPos: end, insertedText: "" };
 }
 
+function skipInlineTrivia(source: string, index: number): number {
+  let pos = index;
+  while (pos < source.length) {
+    while (pos < source.length && (source[pos] === " " || source[pos] === "\t")) pos++;
+
+    if (source.startsWith("/*", pos)) {
+      const end = source.indexOf("*/", pos + 2);
+      if (end === -1) return pos;
+      pos = end + 2;
+      continue;
+    }
+
+    if (source.startsWith("//", pos)) {
+      const end = source.indexOf("\n", pos + 2);
+      pos = end === -1 ? source.length : end + 1;
+      continue;
+    }
+
+    return pos;
+  }
+  return pos;
+}
+
 function buildImportSpecRemovalEdit(source: string, binding: AuthBinding): Edit | null {
   const allSpecs = binding.importStmt.findAll({ rule: { kind: "import_specifier" } });
   if (allSpecs.length === 1) {
@@ -582,7 +679,7 @@ function buildImportSpecRemovalEdit(source: string, binding: AuthBinding): Edit 
   const r = binding.spec.range();
   let start = r.start.index;
   let end = r.end.index;
-  while (end < source.length && (source[end] === " " || source[end] === "\t")) end++;
+  end = skipInlineTrivia(source, end);
   if (source[end] === ",") {
     end++;
     while (end < source.length && (source[end] === " " || source[end] === "\t")) end++;
@@ -805,10 +902,11 @@ export function reviewFindings(
 
   const imports = findImportStatements(root);
   const authBindings = findTailorConfigAuthBindings(imports);
-  const references = findAuthConnectionTokenReferences(
-    root,
-    new Set(authBindings.map((binding) => binding.localName)),
-  );
+  const authLocalNames = new Set(authBindings.map((binding) => binding.localName));
+  const references = [
+    ...findAuthConnectionTokenReferences(root, authLocalNames),
+    ...findAuthConnectionTokenDestructures(root, authLocalNames),
+  ].toSorted((a, b) => a.range[0] - b.range[0]);
 
   return references.map((reference) => ({
     file: relativePath,
