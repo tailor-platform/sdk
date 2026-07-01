@@ -107,18 +107,12 @@ re-exported by `plugin/types.ts`).
 
 ## CLI Command Design: Flags Over Positionals
 
-politty supports an opt-in plugin-dispatch hook (`onUnknownSubcommand`, not
-currently wired up in this SDK's `runMain()` call) that execs an external
-`<cli>-<name>` binary for an unrecognized subcommand. Its dispatch check
-skips any command that defines its own `run` — including a zero-arg `run`
-that only forwards to a default subcommand — since it tests just whether
-`run` is defined, not what it does with its arguments.
-
-New leaf commands should still avoid the specific shape this hook cares
-about most: a command whose `run` actually parses a positional, mixed with
-`subCommands` on the same node (a "hybrid" command). Once a `run` parses a
-positional, there is no way to tell whether an unrecognized first argument
-was meant as that positional or as a subcommand name.
+politty has an opt-in plugin-dispatch hook (`onUnknownSubcommand`, not wired
+up in this SDK yet) that execs an external `<cli>-<name>` binary for an
+unrecognized subcommand. Its dispatch check skips any command that defines
+`run`, regardless of whether that `run` parses a positional — so a command
+that both parses one and has `subCommands` (a "hybrid") leaves no way to
+tell an unrecognized first argument apart from a subcommand name.
 
 - Prefer flags and subcommands over positional arguments. They're
   order-independent, unambiguous, and subcommand groups remain a plugin
@@ -126,9 +120,7 @@ was meant as that positional or as a subcommand name.
 - If a leaf command needs a positional, limit it to a single natural subject
   (e.g. `api inspect <endpoint>`) and give that command **no** `subCommands`
   of its own.
-- Do not add a new command whose `run` both parses a positional and shares
-  the node with `subCommands`. This doesn't apply retroactively to existing
-  commands whose `run` only forwards to a default subcommand with no
-  arguments (e.g. `runCommand(defaultSubCommand, [])`) — only `api`
-  (`packages/sdk/src/cli/commands/api/index.ts`) currently has the
-  positional-parsing form this rule targets.
+- Don't add a new hybrid command. `api`
+  (`packages/sdk/src/cli/commands/api/index.ts`) is the one existing
+  exception; this doesn't apply retroactively to commands whose `run` just
+  forwards to a default subcommand with no arguments.
