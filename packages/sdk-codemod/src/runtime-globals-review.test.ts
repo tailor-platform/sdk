@@ -127,6 +127,30 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports casted runtime globals inside embedded code strings", async () => {
+    await writeProjectFile(
+      "seed/casted-root.mjs",
+      ["const code = `", "const c = (tailor as any).idp.Client;", "`;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["seed/casted-root.mjs"],
+        findings: [
+          expect.objectContaining({
+            file: "seed/casted-root.mjs",
+            line: 2,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const c = (tailor as any).idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports direct runtime globals skipped because of binding collisions", async () => {
     await writeProjectFile(
       "resolvers/createUser.ts",
@@ -306,6 +330,40 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 2,
             message: expect.stringContaining("runtime global reference"),
             excerpt: 'const clientFactory = tailor ["idp"].Client;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports optional and non-null bracket runtime globals", async () => {
+    await writeProjectFile(
+      "resolvers/optional-bracket.ts",
+      [
+        'const clientFactory = tailor?.["idp"].Client;',
+        'const upload = tailordb!["file"].upload;',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/optional-bracket.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/optional-bracket.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const clientFactory = tailor?.["idp"].Client;',
+          }),
+          expect.objectContaining({
+            file: "resolvers/optional-bracket.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const upload = tailordb!["file"].upload;',
           }),
         ],
       }),
@@ -788,6 +846,30 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 1,
             message: expect.stringContaining("runtime global reference"),
             excerpt: 'const { client = tailor ["idp"].Client } = opts;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports runtime globals inside computed destructuring keys", async () => {
+    await writeProjectFile(
+      "resolvers/destructuring-computed-key.ts",
+      ["const { [tailor.idp.Client]: value } = opts;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/destructuring-computed-key.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/destructuring-computed-key.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const { [tailor.idp.Client]: value } = opts;",
           }),
         ],
       }),

@@ -6,8 +6,11 @@ const RUNTIME_MEMBER_SUFFIX = String.raw`(?:\.[A-Za-z_$][\w$]*)?`;
 const CASTED_RUNTIME_ROOT_SUFFIX = String.raw`(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?`;
 const TAILOR_WRAPPED_RUNTIME_ROOT = String.raw`\(\s*(?:<[^>]+>\s*)?tailor\s*${CASTED_RUNTIME_ROOT_SUFFIX}\)`;
 const TAILORDB_WRAPPED_RUNTIME_ROOT = String.raw`\(\s*(?:<[^>]+>\s*)?tailordb\s*${CASTED_RUNTIME_ROOT_SUFFIX}\)`;
-const TAILOR_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|\btailor\s*\[)`;
-const TAILORDB_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|\btailordb\s*\[)`;
+const TAILOR_RUNTIME_BRACKET_ACCESS = String.raw`(?:\btailor\s*(?:\?\.|!\s*)?|${TAILOR_WRAPPED_RUNTIME_ROOT}\s*(?:\?\.|!\s*)?)\[`;
+const TAILORDB_RUNTIME_BRACKET_ACCESS = String.raw`(?:\btailordb\s*(?:\?\.|!\s*)?|${TAILORDB_WRAPPED_RUNTIME_ROOT}\s*(?:\?\.|!\s*)?)\[`;
+const SOURCE_STRING_EXPRESSION_PREFIX = String.raw`(?:(?:=>|[=(:,<{\[])\s*|\b(?:return|await|typeof)\s+)`;
+const TAILOR_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_RUNTIME_BRACKET_ACCESS})`;
+const TAILORDB_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_RUNTIME_BRACKET_ACCESS})`;
 
 export const runtimeGlobalTextPattern = new RegExp(
   `(?:${TAILOR_RUNTIME_ROOT_ACCESS}|${TAILORDB_RUNTIME_ROOT_ACCESS}|\\bTailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)\\b)`,
@@ -19,17 +22,31 @@ export const runtimeGlobalsSourceStringSuspiciousPatterns = [
   /[=(:,[]\s*(?:tailor\s*(?:\?\.|!\s*\.)|\(\s*tailor\s*\)\s*\.)\s*idp\.Client\b/,
   /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?\b/,
   /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)(?:tailor\s*(?:\?\.|!\s*\.)|\(\s*tailor\s*\)\s*(?:\.|\?\.))\s*(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?\b/,
+  new RegExp(
+    String.raw`${SOURCE_STRING_EXPRESSION_PREFIX}${TAILOR_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}\b`,
+  ),
   /\btailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
   /(?:tailor\s*(?:\?\.|!\s*\.)|\(\s*tailor\s*\)\s*(?:\.|\?\.))\s*(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
+  new RegExp(
+    String.raw`${TAILOR_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILOR_RUNTIME_MEMBER}\.[A-Za-z_$][\w$]*\s*\(`,
+  ),
   /\btailor\s*\[/,
+  new RegExp(TAILOR_RUNTIME_BRACKET_ACCESS),
   /\btailordb\.file\.[A-Za-z_$][\w$]*\s*\(/,
   /(?:tailordb\s*(?:\?\.|!\s*\.)|\(\s*tailordb\s*\)\s*(?:\.|\?\.))\s*file\.[A-Za-z_$][\w$]*\s*\(/,
+  new RegExp(
+    String.raw`${TAILORDB_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*file\.[A-Za-z_$][\w$]*\s*\(`,
+  ),
   /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.file\b/,
   /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)(?:tailordb\s*(?:\?\.|!\s*\.)|\(\s*tailordb\s*\)\s*(?:\.|\?\.))\s*file\b/,
   /(?:\bnew\s+|(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.(?:Client|CommandType|QueryResult)\b/,
   /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)(?:tailordb\s*(?:\?\.|!\s*\.)|\(\s*tailordb\s*\)\s*(?:\.|\?\.))\s*(?:Client|CommandType|QueryResult)\b/,
+  new RegExp(
+    String.raw`${SOURCE_STRING_EXPRESSION_PREFIX}${TAILORDB_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}\b`,
+  ),
   /<\s*tailordb\.(?:Client|CommandType|QueryResult)\b/,
   /\btailordb\s*\[/,
+  new RegExp(TAILORDB_RUNTIME_BRACKET_ACCESS),
   /(?:\bnew\s+|\bthrow\s+|\binstanceof\s+)Tailor(?:DBFileError|Errors|ErrorMessage)\b/,
   /(?:[:=<]\s*|\bas\s+)Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)\b/,
   /[:<]\s*TailorErrorItem\b/,

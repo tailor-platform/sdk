@@ -200,7 +200,9 @@ function collectBindingNames(node: SgNode, out: Set<string>): void {
   const bindingChildren = equalsIndex === -1 ? children : children.slice(0, equalsIndex);
 
   for (const child of bindingChildren) {
-    if (child.kind() === "property_identifier") continue;
+    if (child.kind() === "property_identifier" || child.kind() === "computed_property_name") {
+      continue;
+    }
     collectBindingNames(child, out);
   }
 }
