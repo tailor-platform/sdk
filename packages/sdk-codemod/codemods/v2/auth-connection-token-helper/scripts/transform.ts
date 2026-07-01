@@ -285,6 +285,13 @@ function hasRuntimeReferenceShadow(localNames: Set<string>, runtimeRef: string):
   return localNames.has(runtimeRef.split(".")[0]!);
 }
 
+function collectVariableDeclaratorNames(scope: SgNode, names: Set<string>): void {
+  for (const decl of scope.children().filter((child) => child.kind() === "variable_declarator")) {
+    const binding = firstDeclaratorChild(decl);
+    if (binding) collectBindingNames(binding, names);
+  }
+}
+
 function collectParameterNames(scope: SgNode, names: Set<string>): void {
   const params = scope.children().find((child) => child.kind() === "formal_parameters");
   if (!params) return;
@@ -322,12 +329,7 @@ function collectArrowParameterNames(scope: SgNode, names: Set<string>): void {
 function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
   for (const child of scope.children()) {
     if (child.kind() === "lexical_declaration" || child.kind() === "variable_declaration") {
-      for (const decl of child
-        .children()
-        .filter((grandchild) => grandchild.kind() === "variable_declarator")) {
-        const binding = firstDeclaratorChild(decl);
-        if (binding) collectBindingNames(binding, names);
-      }
+      collectVariableDeclaratorNames(child, names);
       continue;
     }
 
@@ -338,12 +340,59 @@ function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
   }
 }
 
+function collectForInitializerNames(scope: SgNode, names: Set<string>): void {
+  const children = scope.children();
+  const start = children.findIndex((child) => child.kind() === "(");
+  const end = children.findIndex((child, index) => index > start && child.kind() === ";");
+  if (start === -1 || end === -1) return;
+
+  for (const child of children.slice(start + 1, end)) {
+    if (child.kind() === "lexical_declaration" || child.kind() === "variable_declaration") {
+      collectVariableDeclaratorNames(child, names);
+    }
+  }
+}
+
+function isNestedFunctionOrClassScope(scope: SgNode): boolean {
+  return (
+    [
+      "function_declaration",
+      "function_expression",
+      "arrow_function",
+      "method_definition",
+      "class_declaration",
+      "class",
+    ].includes(scope.kind()) ||
+    scope.children().some((child) => child.kind() === "formal_parameters")
+  );
+}
+
+function isVarDeclaration(scope: SgNode): boolean {
+  return (
+    scope.kind() === "variable_declaration" &&
+    scope.children().some((child) => child.kind() === "var")
+  );
+}
+
+function collectFunctionScopedVarNames(scope: SgNode, names: Set<string>): void {
+  for (const child of scope.children()) {
+    if (isNestedFunctionOrClassScope(child)) continue;
+
+    if (isVarDeclaration(child)) {
+      collectVariableDeclaratorNames(child, names);
+    }
+
+    collectFunctionScopedVarNames(child, names);
+  }
+}
+
 function directlyDeclaredNames(scope: SgNode): Set<string> {
   const names = new Set<string>();
   const kind = scope.kind();
 
   if (scope.children().some((child) => child.kind() === "formal_parameters")) {
     collectParameterNames(scope, names);
+    collectFunctionScopedVarNames(scope, names);
   }
 
   if (kind === "arrow_function") {
@@ -356,6 +405,8 @@ function directlyDeclaredNames(scope: SgNode): Set<string> {
     }
   } else if (kind === "statement_block" || kind === "program") {
     collectDirectBlockNames(scope, names);
+  } else if (kind === "for_statement") {
+    collectForInitializerNames(scope, names);
   } else if (kind === "for_in_statement") {
     const children = scope.children();
     const keywordIndex = children.findIndex(
