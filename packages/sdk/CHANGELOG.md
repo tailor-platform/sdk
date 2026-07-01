@@ -1,5 +1,48 @@
 # @tailor-platform/sdk
 
+## 1.70.1
+### Patch Changes
+
+
+
+- [#1603](https://github.com/tailor-platform/sdk/pull/1603) [`756251e`](https://github.com/tailor-platform/sdk/commit/756251ebd15a5955167ce1be3b510ef47cb63de4) Thanks [@toiroakr](https://github.com/toiroakr)! - Preserve OAuth sessions when updating auth connections by using in-place updates instead of delete-and-recreate. Only changed configuration fields are sent to the server. When no client secret is provided (such as in CI environments), the update preserves the existing secret. Users are notified to authorize newly created connections, and warned to re-authorize if an update revokes the session.
+
+
+
+- [#1567](https://github.com/tailor-platform/sdk/pull/1567) [`c770356`](https://github.com/tailor-platform/sdk/commit/c770356a2c103cd58bd3f986f89b433f55ce923d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @bufbuild/protobuf to v2.12.1
+
+
+
+- [#1568](https://github.com/tailor-platform/sdk/pull/1568) [`d3cffc2`](https://github.com/tailor-platform/sdk/commit/d3cffc245b6cd3a752daee7afe1eeb4862b6a8b6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @urql/core to v6.0.3
+
+
+
+- [#1573](https://github.com/tailor-platform/sdk/pull/1573) [`b152a8f`](https://github.com/tailor-platform/sdk/commit/b152a8fe4f398673891a058ab4058b0b968e006c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.7.0
+
+
+
+- [#1593](https://github.com/tailor-platform/sdk/pull/1593) [`8bebf86`](https://github.com/tailor-platform/sdk/commit/8bebf8607fdac140ad3044ae62e79d4e859ee729) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.1.3
+
+
+
+- [#1595](https://github.com/tailor-platform/sdk/pull/1595) [`19b3afd`](https://github.com/tailor-platform/sdk/commit/19b3afda6c3898bff8e824f673b3db647011f2e4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.10.0
+
+
+
+- [#1597](https://github.com/tailor-platform/sdk/pull/1597) [`682ef34`](https://github.com/tailor-platform/sdk/commit/682ef346199aa839ed205d4812a746c041904ee9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.49.0
+
+
+
+- [#1598](https://github.com/tailor-platform/sdk/pull/1598) [`a5a4c58`](https://github.com/tailor-platform/sdk/commit/a5a4c58cabc24af3088d85c7a0d975d5be459def) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.10.1
+
+
+
+- [#1596](https://github.com/tailor-platform/sdk/pull/1596) [`821e1c7`](https://github.com/tailor-platform/sdk/commit/821e1c7dfc86c12f430afeb33501f0a2275a5ec5) Thanks [@toiroakr](https://github.com/toiroakr)! - temporarily limit pageSize for listWorkflowJobFunctions
+
+
+
+- [#1569](https://github.com/tailor-platform/sdk/pull/1569) [`259dec9`](https://github.com/tailor-platform/sdk/commit/259dec92592c7927bcfb0e2d5dcbbd0e206eeba3) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB migration drift checks to normalize reconstructed snapshots and remote schemas through the same snapshot shape before comparison.
+
 ## 1.70.0
 ### Minor Changes
 
