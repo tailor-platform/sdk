@@ -885,51 +885,83 @@ function mergeBundledScripts(
   return bundledScripts;
 }
 
+type GlobalResourceCheck = {
+  resourceLabel: string;
+  namesOf: (target: BuiltDeploymentTarget) => Iterable<string>;
+};
+
+const GLOBAL_RESOURCE_CHECKS: ReadonlyArray<GlobalResourceCheck> = [
+  { resourceLabel: "Application", namesOf: (target) => [target.application.name] },
+  {
+    resourceLabel: "Executor",
+    // Executor names come from the loaded executors rather than the bundle:
+    // non-function operations (webhook, graphql, workflow) are not bundled
+    // yet still create a global executor resource, so a bundle-only check
+    // would miss them.
+    namesOf: (target) =>
+      Object.values(target.application.executorService?.executors ?? {}).map(
+        (executor) => executor.name,
+      ),
+  },
+  { resourceLabel: "Workflow job", namesOf: (target) => target.bundledScripts.workflowJobs.keys() },
+  {
+    resourceLabel: "StaticWebsite",
+    namesOf: (target) => target.application.staticWebsiteServices.map((service) => service.name),
+  },
+  {
+    resourceLabel: "TailorDB namespace",
+    namesOf: (target) => target.application.tailorDBServices.map((service) => service.namespace),
+  },
+  {
+    resourceLabel: "Auth namespace",
+    namesOf: (target) => {
+      const name = target.application.authService?.config.name;
+      return name === undefined ? [] : [name];
+    },
+  },
+  {
+    resourceLabel: "IdP namespace",
+    namesOf: (target) => target.application.idpServices.map((idp) => idp.name),
+  },
+  {
+    resourceLabel: "Resolver namespace",
+    namesOf: (target) => target.application.resolverServices.map((service) => service.namespace),
+  },
+  {
+    resourceLabel: "AIGateway",
+    namesOf: (target) => target.application.aiGatewayServices.map((service) => service.name),
+  },
+  {
+    resourceLabel: "Secret Manager vault",
+    namesOf: (target) => target.application.secrets.map((vault) => vault.vaultName),
+  },
+];
+
 /**
- * Reject application, executor, and workflow-job names that collide across
- * configs. Applications (trn ...:application:<name>) are workspace-global, so
- * a duplicate would target the same resource from two configs. Executor
- * resources (trn ...:executor:<name>) and workflow-job function-registry entries
- * (workflow--<name>) are likewise workspace-global, so a duplicate would make one
- * config's apply overwrite or fail on another's; resolver and auth-hook names are
- * namespace-qualified and are intentionally excluded. Executor names come from
- * the loaded executors rather than the bundle: non-function operations
- * (webhook, graphql, workflow) are not bundled yet still create a global
- * executor resource, so a bundle-only check would miss them.
+ * Reject resource names that collide across configs. Each checked resource
+ * type is workspace-global (its TRN is not qualified by namespace or app), so
+ * a duplicate name would make two configs target the same platform resource:
+ * one config's apply could overwrite the other's, or a fresh create could be
+ * attempted twice. Resolver and auth-hook function names are namespace- or
+ * app-qualified and are intentionally excluded.
  * @param targets - Built deployment targets to check
  */
 export function assertUniqueGlobalFunctionNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): void {
-  const applications = new Set<string>();
-  const executors = new Set<string>();
-  const workflowJobs = new Set<string>();
-
-  for (const target of targets) {
-    const applicationName = target.application.name;
-    if (applications.has(applicationName)) {
-      throw new Error(
-        `Duplicate application name "${applicationName}" across config files. Application names must be unique across all configs in a single deploy.`,
-      );
-    }
-    applications.add(applicationName);
-
-    for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
-      const name = executor.name;
-      if (executors.has(name)) {
-        throw new Error(
-          `Duplicate executor name "${name}" across config files. Executor and workflow job names must be unique across all configs in a single deploy.`,
-        );
+  for (const check of GLOBAL_RESOURCE_CHECKS) {
+    const seen = new Set<string>();
+    for (const target of targets) {
+      for (const name of check.namesOf(target)) {
+        if (seen.has(name)) {
+          const lowerCaseLabel =
+            check.resourceLabel.charAt(0).toLowerCase() + check.resourceLabel.slice(1);
+          throw new Error(
+            `Duplicate ${check.resourceLabel} name "${name}" across config files. ${lowerCaseLabel} names must be unique across all configs in a single deploy.`,
+          );
+        }
+        seen.add(name);
       }
-      executors.add(name);
-    }
-    for (const name of target.bundledScripts.workflowJobs.keys()) {
-      if (workflowJobs.has(name)) {
-        throw new Error(
-          `Duplicate workflow job name "${name}" across config files. Executor and workflow job names must be unique across all configs in a single deploy.`,
-        );
-      }
-      workflowJobs.add(name);
     }
   }
 }
