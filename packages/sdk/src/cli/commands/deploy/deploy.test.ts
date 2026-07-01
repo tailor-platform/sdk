@@ -6,6 +6,8 @@ import {
   assertUniqueGlobalFunctionNames,
   confirmDeploymentPlans,
   computeRenamedAppDeletions,
+  collectExternalAuthIdpConfigNames,
+  collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
   dropCrossDeploymentManagedDeletes,
@@ -366,6 +368,21 @@ describe("visible same-run namespaces", () => {
     const result = collectVisibleResolverNamespaces(current, [current, sharedOwner, unrelated]);
 
     expect(result.get("findUser")).toBe("shared-pipeline");
+  });
+
+  test("collects IdP names declared by peer configs in the same deploy", () => {
+    const current = {
+      idpServices: [],
+      subgraphs: [],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const peer = {
+      idpServices: [{ name: "peer-idp" }],
+      subgraphs: [],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+
+    const result = collectVisibleIdpNames([current, peer]);
+
+    expect(result.has("peer-idp")).toBe(true);
   });
 });
 
@@ -890,6 +907,50 @@ describe("assertUniqueGlobalFunctionNames", () => {
       assertUniqueGlobalFunctionNames([
         fakeTarget({ authHooks: { "before-login": "a" } }),
         fakeTarget({ authHooks: { "before-login": "b" } }),
+      ]),
+    ).not.toThrow();
+  });
+});
+
+function fakeAuthTarget(
+  name: string,
+  idpConfigName?: string,
+): Parameters<typeof collectExternalAuthIdpConfigNames>[0][number] {
+  return {
+    application: {
+      authService: {
+        config: {
+          name,
+          idProvider: idpConfigName === undefined ? undefined : { name: idpConfigName },
+        },
+      },
+    },
+  } as unknown as Parameters<typeof collectExternalAuthIdpConfigNames>[0][number];
+}
+
+describe("collectExternalAuthIdpConfigNames", () => {
+  test("collects the IdP config name declared by each auth namespace", () => {
+    const result = collectExternalAuthIdpConfigNames([fakeAuthTarget("shared-auth", "my-idp")]);
+
+    expect(result.get("shared-auth")).toBe("my-idp");
+  });
+
+  test("throws when two configs declare the same auth namespace with different IdP configs", () => {
+    expect(() =>
+      collectExternalAuthIdpConfigNames([
+        fakeAuthTarget("shared-auth", "idp-a"),
+        fakeAuthTarget("shared-auth", "idp-b"),
+      ]),
+    ).toThrow(
+      'Auth namespace "shared-auth" is defined by multiple config files with different IdP configs. Auth namespace names must be unique across all configs in a single deploy.',
+    );
+  });
+
+  test("does not throw when two configs declare the same auth namespace with the same IdP config", () => {
+    expect(() =>
+      collectExternalAuthIdpConfigNames([
+        fakeAuthTarget("shared-auth", "my-idp"),
+        fakeAuthTarget("shared-auth", "my-idp"),
       ]),
     ).not.toThrow();
   });

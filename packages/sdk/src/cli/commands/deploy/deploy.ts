@@ -271,6 +271,18 @@ function collectApplicationResolverNamespaces(
   );
 }
 
+export function collectVisibleIdpNames(
+  applications: ReadonlyArray<Readonly<Application>>,
+): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const candidate of applications) {
+    for (const name of collectApplicationIdpNames(candidate)) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
 export function collectVisibleResolverNamespaces(
   application: Readonly<Application>,
   applications: ReadonlyArray<Readonly<Application>>,
@@ -927,15 +939,24 @@ function collectPlannedExternalTailorDBServices(
   );
 }
 
-function collectExternalAuthIdpConfigNames(
+export function collectExternalAuthIdpConfigNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlyMap<string, string | undefined> {
   const idpConfigNames = new Map<string, string | undefined>();
   for (const target of targets) {
     const authService = target.application.authService;
-    if (authService) {
-      idpConfigNames.set(authService.config.name, authService.config.idProvider?.name);
+    if (!authService) {
+      continue;
     }
+    const { name } = authService.config;
+    const idpConfigName = authService.config.idProvider?.name;
+    if (idpConfigNames.has(name) && idpConfigNames.get(name) !== idpConfigName) {
+      throw new Error(
+        `Auth namespace "${name}" is defined by multiple config files with different IdP configs. ` +
+          `Auth namespace names must be unique across all configs in a single deploy.`,
+      );
+    }
+    idpConfigNames.set(name, idpConfigName);
   }
   return idpConfigNames;
 }
@@ -986,7 +1007,7 @@ async function planDeploymentTarget(
       externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
       tailorDBTypeNamespaces,
       resolverNamespaces,
-      idpNames: collectApplicationIdpNames(application),
+      idpNames: collectVisibleIdpNames(applications),
     };
     const functionRegistry = await withSpan("plan.functionRegistry", () =>
       planFunctionRegistry(client, workspaceId, application.name, application.id, functionEntries),
