@@ -12,13 +12,14 @@ const TAILORDB_RUNTIME_BRACKET_ACCESS = String.raw`(?:\btailordb\s*(?:\?\.|!\s*)
 const SOURCE_STRING_EXPRESSION_PREFIX = String.raw`(?:^|[\r\n]\s*|(?:=>|[=(:,<{\[])\s*|\b(?:return|await|typeof)\s+)`;
 const RUNTIME_ROOT_NAME = String.raw`(?:tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
 const BARE_RUNTIME_ROOT_NAME = String.raw`(?:tailor|tailordb)`;
-const SOURCE_STRING_EXPRESSION_SUFFIX = String.raw`(?=\s*(?:$|[;,.?:)\]}]))`;
+const SOURCE_STRING_EXPRESSION_SUFFIX = String.raw`(?=\s*(?:$|[;,?:)\]}]))`;
 const GLOBAL_OBJECT_RUNTIME_ROOT = String.raw`(?:\b(?:globalThis|global)\b|\(+\s*(?:<[^>]+>\s*)?(?:\(+\s*)?(?:globalThis|global)\s*(?:\)+\s*)?(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\s*\)+)`;
 const GLOBAL_RUNTIME_ROOT_ACCESS = String.raw`${GLOBAL_OBJECT_RUNTIME_ROOT}\s*(?:(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME}\b|(?:\?\.|!\s*)?\[\s*["']${RUNTIME_ROOT_NAME}["']\s*\])`;
+const GLOBAL_RUNTIME_ROOT_SOURCE_ACCESS = String.raw`${GLOBAL_RUNTIME_ROOT_ACCESS}(?:\.[A-Za-z_$][\w$]*)*`;
 const TAILOR_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_WRAPPED_RUNTIME_ROOT}${WRAPPED_RUNTIME_MEMBER_ACCESS}${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_RUNTIME_BRACKET_ACCESS})`;
 const TAILORDB_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_WRAPPED_RUNTIME_ROOT}${WRAPPED_RUNTIME_MEMBER_ACCESS}${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_RUNTIME_BRACKET_ACCESS})`;
 const LEADING_RUNTIME_GLOBAL_SOURCE_STRING = new RegExp(
-  String.raw`^\s*(?:${GLOBAL_RUNTIME_ROOT_ACCESS}|${TAILOR_RUNTIME_ROOT_ACCESS}|${TAILORDB_RUNTIME_ROOT_ACCESS})`,
+  String.raw`^\s*(?:${GLOBAL_RUNTIME_ROOT_SOURCE_ACCESS}|${TAILOR_RUNTIME_ROOT_ACCESS}|${TAILORDB_RUNTIME_ROOT_ACCESS})${SOURCE_STRING_EXPRESSION_SUFFIX}`,
 );
 
 export const runtimeGlobalTextPattern = new RegExp(

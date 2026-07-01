@@ -1026,6 +1026,34 @@ function collectGlobalObjectDestructureFindings(
       seen,
     );
   }
+
+  for (const assignmentPattern of root.findAll({ rule: { kind: "assignment_pattern" } })) {
+    collectGlobalObjectDestructureFinding(
+      assignmentPattern,
+      firstDeclaratorChild(assignmentPattern),
+      declaratorInitializer(assignmentPattern),
+      source,
+      file,
+      importedNames,
+      findings,
+      seen,
+    );
+  }
+
+  for (const param of root.findAll({
+    rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
+  })) {
+    collectGlobalObjectDestructureFinding(
+      param,
+      firstDeclaratorChild(param),
+      declaratorInitializer(param),
+      source,
+      file,
+      importedNames,
+      findings,
+      seen,
+    );
+  }
 }
 
 function collectStringRuntimeGlobalFindings(

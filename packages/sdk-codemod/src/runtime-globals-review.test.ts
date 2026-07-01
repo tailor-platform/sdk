@@ -643,6 +643,32 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports destructured parameter defaults of ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-parameter-default-destructure.ts",
+      ["function run({ tailor } = globalThis) {", "  return tailor.idp.Client;", "}", ""].join(
+        "\n",
+      ),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-parameter-default-destructure.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-parameter-default-destructure.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "function run({ tailor } = globalThis) {",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports grouped casted runtime roots", async () => {
     await writeProjectFile(
       "resolvers/grouped-casted-root.ts",
@@ -876,7 +902,11 @@ describe("runtime-globals-opt-in review findings", () => {
   test("does not report prose runtime globals inside direct code wrappers", async () => {
     await writeProjectFile(
       "errors.ts",
-      ['throw new Error("Please renew tailor.idp.Client credentials");', ""].join("\n"),
+      [
+        'throw new Error("Please renew tailor.idp.Client credentials");',
+        'console.log("tailor.idp.Client credentials");',
+        "",
+      ].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
