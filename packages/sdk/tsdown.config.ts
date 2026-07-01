@@ -105,10 +105,9 @@ const jsPlugins: TsdownPluginOption[] = [
 
 const dtsPlugins: TsdownPluginOption[] = [yamlText()];
 
-// Two passes over the same `dist`: the first emits bundled JS (no dts), the
-// second emits unbundled dts (`unbundle` mirrors the src tree) with real
-// identifier names. Only the JS pass may `clean`; the dts pass must not, or it
-// would wipe the JS output. Array order is the execution order.
+// Two configs share the same `dist`: JS stays bundled, while dts output uses
+// `unbundle` to mirror the src tree with real identifier names. Only the JS
+// config opts into `clean` so declaration files can be emitted alongside it.
 export default defineConfig([
   {
     ...shared,
