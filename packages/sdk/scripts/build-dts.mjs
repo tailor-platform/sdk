@@ -10,11 +10,16 @@ const runtimeGlobalsBannerPattern =
   /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\r?\n/;
 
 function isBareSpecifier(id) {
-  return !id.startsWith(".") && !id.startsWith("/") && !id.startsWith("#/");
+  return (
+    !path.isAbsolute(id) &&
+    !path.win32.isAbsolute(id) &&
+    !id.startsWith(".") &&
+    !id.startsWith("#/")
+  );
 }
 
-function isExternal(id) {
-  return isBareSpecifier(id) && !id.startsWith("@tailor-platform/tailor-proto");
+function isExternal(id, _importer, isResolved) {
+  return !isResolved && isBareSpecifier(id) && !id.startsWith("@tailor-platform/tailor-proto");
 }
 
 function removeDtsArtifacts(dir) {
