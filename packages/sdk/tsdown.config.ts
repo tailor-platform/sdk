@@ -1,7 +1,7 @@
 import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import Sonda from "sonda/rolldown";
-import { defineConfig, type TsdownPluginOption } from "tsdown";
+import { defineConfig, type TsdownPluginOption, type UserConfig } from "tsdown";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
 // `banner.dts` injects the triple-slash into every emitted d.mts. Keep it only
@@ -45,11 +45,55 @@ function yamlText() {
   };
 }
 
+// Keep in sync with `entry` in knip.json: knip's tsdown plugin can't statically
+// read this list once the config is a two-element array, so entries are declared
+// there too.
+const entry = [
+  "src/configure/index.ts",
+  "src/cli/index.ts",
+  "src/cli/lib.ts",
+  "src/cli/skills.ts",
+  "src/utils/test/index.ts",
+  "src/kysely/index.ts",
+  "src/plugin/index.ts",
+  "src/plugin/builtin/kysely-type/index.ts",
+  "src/plugin/builtin/enum-constants/index.ts",
+  "src/plugin/builtin/file-utils/index.ts",
+  "src/plugin/builtin/seed/index.ts",
+  "src/seed/index.ts",
+  "src/vitest/index.ts",
+  "src/vitest/environment.ts",
+  "src/vitest/setup.ts",
+  "src/runtime/index.ts",
+  "src/runtime/globals.ts",
+  "src/runtime/iconv.ts",
+  "src/runtime/secretmanager.ts",
+  "src/runtime/authconnection.ts",
+  "src/runtime/idp.ts",
+  "src/runtime/workflow.ts",
+  "src/runtime/context.ts",
+  "src/runtime/file.ts",
+];
+
+const shared = {
+  target: "node22",
+  outDir: "dist",
+  tsconfig: "./tsconfig.json",
+  minify: false,
+  outExtensions: () => ({
+    js: ".mjs",
+    dts: ".d.mts",
+  }),
+  // peer dependencies: prevent bundling, resolve at runtime
+  deps: { neverBundle: ["vite", "vitest"] },
+  sourcemap: true,
+} satisfies UserConfig;
+
 // Annotate as TsdownPluginOption[] to work around a tsgo TS2321 caused by
 // rolldown's Plugin type appearing under two paths in node_modules (root
 // rc.17 from tsdown's pin, packages/sdk rc.18 from our direct dep). tsc
 // handles this fine; tsgo's recursive Plugin comparison gets stuck.
-const plugins: TsdownPluginOption[] = [
+const jsPlugins: TsdownPluginOption[] = [
   yamlText(),
   Sonda({
     open: false,
@@ -59,55 +103,40 @@ const plugins: TsdownPluginOption[] = [
   }) as TsdownPluginOption,
 ];
 
-export default defineConfig({
-  entry: [
-    "src/configure/index.ts",
-    "src/cli/index.ts",
-    "src/cli/lib.ts",
-    "src/cli/skills.ts",
-    "src/utils/test/index.ts",
-    "src/kysely/index.ts",
-    "src/plugin/index.ts",
-    "src/plugin/builtin/kysely-type/index.ts",
-    "src/plugin/builtin/enum-constants/index.ts",
-    "src/plugin/builtin/file-utils/index.ts",
-    "src/plugin/builtin/seed/index.ts",
-    "src/seed/index.ts",
-    "src/vitest/index.ts",
-    "src/vitest/environment.ts",
-    "src/vitest/setup.ts",
-    "src/runtime/index.ts",
-    "src/runtime/globals.ts",
-    "src/runtime/iconv.ts",
-    "src/runtime/secretmanager.ts",
-    "src/runtime/authconnection.ts",
-    "src/runtime/idp.ts",
-    "src/runtime/workflow.ts",
-    "src/runtime/context.ts",
-    "src/runtime/file.ts",
-  ],
-  format: ["esm"],
-  target: "node22",
-  platform: "node",
-  clean: true,
-  dts: true,
-  outDir: "dist",
-  tsconfig: "./tsconfig.json",
-  minify: false,
-  outExtensions: () => ({
-    js: ".mjs",
-    dts: ".d.mts",
-  }),
-  // Remove in v2.0.
-  banner: {
-    dts: '/// <reference types="@tailor-platform/sdk/runtime/globals" />',
+const dtsPlugins: TsdownPluginOption[] = [yamlText()];
+
+// Two passes over the same `dist`: the first emits bundled JS (no dts), the
+// second emits unbundled dts (`unbundle` mirrors the src tree) with real
+// identifier names. Only the JS pass may `clean`; the dts pass must not, or it
+// would wipe the JS output. Array order is the execution order.
+export default defineConfig([
+  {
+    ...shared,
+    entry,
+    format: ["esm"],
+    platform: "node",
+    clean: true,
+    dts: false,
+    plugins: jsPlugins,
+    onSuccess: (config) => {
+      copyErdViewerAssets(config.outDir);
+    },
   },
-  // peer dependencies: prevent bundling, resolve at runtime
-  deps: { neverBundle: ["vite", "vitest"] },
-  sourcemap: true,
-  plugins,
-  onSuccess: (config) => {
-    stripBannerExceptConfigureEntry(config.outDir);
-    copyErdViewerAssets(config.outDir);
+  {
+    ...shared,
+    entry,
+    format: ["esm"],
+    platform: "node",
+    clean: false,
+    dts: { emitDtsOnly: true },
+    unbundle: true,
+    // Remove in v2.0.
+    banner: {
+      dts: '/// <reference types="@tailor-platform/sdk/runtime/globals" />',
+    },
+    plugins: dtsPlugins,
+    onSuccess: (config) => {
+      stripBannerExceptConfigureEntry(config.outDir);
+    },
   },
-});
+]);
