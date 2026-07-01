@@ -1041,6 +1041,62 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("flags only unresolved auth connection token helper calls for LLM review", async () => {
+      const codemod = allCodemods.find((entry) => entry.id === "v2/auth-connection-token-helper");
+      if (!codemod?.scriptPath) throw new Error("auth connection token codemod missing script");
+      const scriptPath = path.resolve(
+        __dirname,
+        "../codemods",
+        codemod.scriptPath.replace(/\.js$/, ".ts"),
+      );
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-auth-token-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "migrated.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export async function run() {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "collision.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "const authconnection = createClient();",
+          "",
+          "export async function run() {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+      const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+
+      expect(result.changed).toBe(true);
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "v2/auth-connection-token-helper",
+          prompt: codemod.prompt,
+          files: ["collision.ts"],
+          findings: [
+            expect.objectContaining({
+              file: "collision.ts",
+              line: 6,
+              excerpt: 'return auth.getConnectionToken("google");',
+            }),
+          ],
+        },
+      ]);
+    });
+
     test("suppresses LLM review when a superseding codemod is selected", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-superseded-"));
       tmpDir = dir;
