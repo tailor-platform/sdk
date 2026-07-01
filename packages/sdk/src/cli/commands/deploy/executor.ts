@@ -320,22 +320,25 @@ function areExecutorsEqual(
   );
 }
 
-function resolveTailorDBNamespace(
-  application: Readonly<Application>,
-  typeName: string,
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
-): string {
-  for (const service of application.tailorDBServices) {
-    if (Object.hasOwn(service.types, typeName)) {
-      return service.namespace;
-    }
+function resolveNamespace(params: {
+  resourceLabel: string;
+  resourceName: string;
+  localNamespaces: ReadonlyArray<string>;
+  findLocalNamespace: () => string | undefined;
+  sameRunNamespaces?: ReadonlyMap<string, string | undefined>;
+}): string {
+  const { resourceLabel, resourceName, localNamespaces, findLocalNamespace, sameRunNamespaces } =
+    params;
+  const localNamespace = findLocalNamespace();
+  if (localNamespace !== undefined) {
+    return localNamespace;
   }
-  if (sameRunNamespaces?.has(typeName)) {
-    const sameRunNamespace = sameRunNamespaces.get(typeName);
+  if (sameRunNamespaces?.has(resourceName)) {
+    const sameRunNamespace = sameRunNamespaces.get(resourceName);
     if (!sameRunNamespace) {
       throw new Error(
-        `TailorDB type "${typeName}" is defined in multiple namespaces in this deploy run. ` +
-          `Move the trigger to the application that owns the type or use unique type names.`,
+        `${resourceLabel} "${resourceName}" is defined in multiple namespaces in this deploy run. ` +
+          `Move the trigger to the application that owns it or use unique names.`,
       );
     }
     return sameRunNamespace;
@@ -343,13 +346,26 @@ function resolveTailorDBNamespace(
   const sameRunAvailableNamespaces = sameRunNamespaces
     ? [...new Set([...sameRunNamespaces.values()].filter((value) => value !== undefined))]
     : [];
-  const availableNamespaces = [
-    ...application.tailorDBServices.map((s) => s.namespace),
-    ...sameRunAvailableNamespaces,
-  ];
+  const availableNamespaces = [...localNamespaces, ...sameRunAvailableNamespaces];
   throw new Error(
-    `TailorDB type "${typeName}" not found in any namespace. Available namespaces: ${availableNamespaces.join(", ")}`,
+    `${resourceLabel} "${resourceName}" not found in any namespace. Available namespaces: ${availableNamespaces.join(", ")}`,
   );
+}
+
+function resolveTailorDBNamespace(
+  application: Readonly<Application>,
+  typeName: string,
+  sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
+): string {
+  return resolveNamespace({
+    resourceLabel: "TailorDB type",
+    resourceName: typeName,
+    localNamespaces: application.tailorDBServices.map((service) => service.namespace),
+    findLocalNamespace: () =>
+      application.tailorDBServices.find((service) => Object.hasOwn(service.types, typeName))
+        ?.namespace,
+    sameRunNamespaces,
+  });
 }
 
 function resolveResolverNamespace(
@@ -357,31 +373,16 @@ function resolveResolverNamespace(
   resolverName: string,
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
 ): string {
-  for (const service of application.resolverServices) {
-    if (Object.values(service.resolvers).some((r) => r.name === resolverName)) {
-      return service.namespace;
-    }
-  }
-  if (sameRunNamespaces?.has(resolverName)) {
-    const sameRunNamespace = sameRunNamespaces.get(resolverName);
-    if (!sameRunNamespace) {
-      throw new Error(
-        `Resolver "${resolverName}" is defined in multiple namespaces in this deploy run. ` +
-          `Move the trigger to the application that owns the resolver or use unique resolver names.`,
-      );
-    }
-    return sameRunNamespace;
-  }
-  const sameRunAvailableNamespaces = sameRunNamespaces
-    ? [...new Set([...sameRunNamespaces.values()].filter((value) => value !== undefined))]
-    : [];
-  const availableNamespaces = [
-    ...application.resolverServices.map((s) => s.namespace),
-    ...sameRunAvailableNamespaces,
-  ];
-  throw new Error(
-    `Resolver "${resolverName}" not found in any namespace. Available namespaces: ${availableNamespaces.join(", ")}`,
-  );
+  return resolveNamespace({
+    resourceLabel: "Resolver",
+    resourceName: resolverName,
+    localNamespaces: application.resolverServices.map((service) => service.namespace),
+    findLocalNamespace: () =>
+      application.resolverServices.find((service) =>
+        Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
+      )?.namespace,
+    sameRunNamespaces,
+  });
 }
 
 /**
