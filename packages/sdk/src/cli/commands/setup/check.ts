@@ -4,6 +4,8 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
+import { getNamespacesWithMigrations } from "../tailordb/migrate/config";
+import { normalizeActionContent } from "./generate";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import { hashContent, type LockTarget, readLock } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
@@ -18,7 +20,10 @@ export type DriftRule =
   | "template-version"
   | "config-dir"
   | "default-branch"
-  | "erd-namespaces";
+  | "erd-namespaces"
+  | "migration-drift"
+  | "seed-validate"
+  | "static-websites";
 
 export type DriftFinding = {
   /** Human label for the target: `<kind> <workspaceName>`. */
@@ -40,6 +45,12 @@ export type TargetState = {
   templateVersion: number;
   /** Current owned TailorDB namespaces for ERD preview checks, or null when unavailable. */
   erdNamespaces: string[] | null;
+  /** Whether the current config has TailorDB namespaces with migrations (branch/tag only). */
+  hasMigrations?: boolean;
+  /** Whether the current config uses the seed plugin (branch/tag only). */
+  hasSeeds?: boolean;
+  /** Whether the current config has staticWebsites configured (action only). */
+  hasStaticWebsites?: boolean;
 };
 
 /**
@@ -90,7 +101,7 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
   }
 
   if (
-    target.kind === "branch" &&
+    (target.kind === "branch" || target.kind === "coordinate" || target.kind === "preview") &&
     target.inputs.branchAutoDetected !== false &&
     state.defaultBranch !== null &&
     target.inputs.branch !== null &&
@@ -123,6 +134,48 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
           "TailorDB namespaces for ERD preview changed. Re-run setup so the ERD preview matrix is regenerated.",
       });
     }
+  }
+
+  if (
+    (target.kind === "branch" || target.kind === "tag") &&
+    target.inputs.migrationDriftCheck === false &&
+    state.hasMigrations === true
+  ) {
+    findings.push({
+      target: id,
+      rule: "migration-drift",
+      message:
+        "TailorDB namespaces with migrations were added to the config. " +
+        "Re-run setup so the tailor-migration-drift-check step is included in the plan job.",
+    });
+  }
+
+  if (
+    (target.kind === "branch" || target.kind === "tag") &&
+    target.inputs.seedValidate === false &&
+    state.hasSeeds === true
+  ) {
+    findings.push({
+      target: id,
+      rule: "seed-validate",
+      message:
+        "Seed plugin detected in the current config. " +
+        "Re-run setup so the tailor-seed-validate step is included in the plan job.",
+    });
+  }
+
+  if (
+    target.kind === "action" &&
+    target.inputs.hasStaticWebsites === false &&
+    state.hasStaticWebsites === true
+  ) {
+    findings.push({
+      target: id,
+      rule: "static-websites",
+      message:
+        "Static websites were added to the config. " +
+        "Re-run setup so the build-site slot is included in the composite action.",
+    });
   }
 
   return findings;
@@ -161,9 +214,10 @@ export function resolveWithinRoot(outputDir: string, relPath: string): string | 
 
 // Treat any read failure (missing file, EISDIR, TOCTOU race, permissions) as an
 // absent file so the audit reports drift instead of crashing.
-function readHash(absFile: string): string | null {
+function readHash(absFile: string, normalize?: (content: string) => string): string | null {
   try {
-    return hashContent(fs.readFileSync(absFile, "utf-8"));
+    const content = fs.readFileSync(absFile, "utf-8");
+    return hashContent(normalize ? normalize(content) : content);
   } catch {
     return null;
   }
@@ -172,17 +226,43 @@ function readHash(absFile: string): string | null {
 export type CheckGitHubOptions = {
   /** Repository root where `.github` lives. */
   outputDir: string;
+  /**
+   * When true, run in CI mode: skip checks that are handled at runtime by
+   * the deployed GitHub Actions (e.g. TAILOR_PLATFORM_WORKSPACE_ID presence).
+   */
+  ci?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
   /** Injectable config-existence probe, for testing. */
   configExistsAt?: (configPath: string) => boolean;
   /** Injectable TailorDB namespace loader, for testing. Defaults to loading the config. */
   loadErdNamespaces?: (configPath: string) => Promise<string[]> | string[];
+  /** Injectable migration detector, for testing. Defaults to loading the config. */
+  loadHasMigrations?: (configPath: string) => Promise<boolean> | boolean;
+  /** Injectable seed plugin detector, for testing. Defaults to loading the config. */
+  loadHasSeeds?: (configPath: string) => Promise<boolean> | boolean;
+  /** Injectable static website detector, for testing. Defaults to loading the config. */
+  loadHasStaticWebsites?: (configPath: string) => Promise<boolean> | boolean;
 };
 
 async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
   const { config } = await loadConfig(configPath);
   return extractOwnedNamespaces(config);
+}
+
+async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
+  const { config } = await loadConfig(configPath);
+  return getNamespacesWithMigrations(config, path.dirname(configPath)).length > 0;
+}
+
+async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
+  const { plugins } = await loadConfig(configPath);
+  return plugins.some((p) => p.id === "@tailor-platform/seed");
+}
+
+async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean> {
+  const { config } = await loadConfig(configPath);
+  return (config.staticWebsites?.length ?? 0) > 0;
 }
 
 /**
@@ -202,27 +282,87 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   if (!lock || lock.targets.length === 0) {
     throw new Error(
       "No managed workflows found (.github/tailor-sdk.lock is missing or empty). " +
-        "Run `tailor-sdk setup` first.",
+        "Run `tailor-sdk setup branch` (or another setup subcommand) first.",
+    );
+  }
+
+  // In local (non-CI) mode, check that TAILOR_PLATFORM_WORKSPACE_ID is set for
+  // targets that directly read vars.TAILOR_PLATFORM_WORKSPACE_ID: branch, tag,
+  // and coordinate (coordinators pass it into each per-app deploy step).
+  // Action targets (composite actions) receive workspace-id as a caller input and
+  // never read vars.* themselves. Preview targets create per-PR workspaces and
+  // don't reference TAILOR_PLATFORM_WORKSPACE_ID either.
+  // In CI the plan/deploy actions handle this at runtime.
+  if (!options.ci) {
+    const needsWorkspaceId = lock.targets.some(
+      (t) => t.kind === "branch" || t.kind === "tag" || t.kind === "coordinate",
+    );
+    if (needsWorkspaceId && !process.env["TAILOR_PLATFORM_WORKSPACE_ID"]) {
+      throw new Error(
+        "TAILOR_PLATFORM_WORKSPACE_ID is not set. " +
+          "Provision the workspace and set the variable:\n" +
+          "  tailor-sdk workspace create   # if it does not exist yet; copy the id\n" +
+          "  gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env <environment>",
+      );
+    }
+  }
+
+  const slackToken = Boolean(process.env["TAILOR_SLACK_BOT_TOKEN"]);
+  const slackChannelId = Boolean(process.env["TAILOR_SLACK_CHANNEL_ID"]);
+  if (slackToken !== slackChannelId) {
+    throw new Error(
+      `Slack is partially configured: ` +
+        `${slackToken ? "TAILOR_SLACK_BOT_TOKEN is set" : "TAILOR_SLACK_CHANNEL_ID is set"} but not both. ` +
+        "TAILOR_SLACK_BOT_TOKEN (secret) and TAILOR_SLACK_CHANNEL_ID (variable) must be set together, " +
+        "or neither should be set.",
     );
   }
 
   const exists = options.configExistsAt ?? ((p: string) => fs.existsSync(p));
   const defaultBranch = detectDefaultBranchSafe(outputDir, options.gitRunner);
   const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
+  const loadHasMigrations = options.loadHasMigrations ?? defaultLoadHasMigrations;
+  const loadHasSeeds = options.loadHasSeeds ?? defaultLoadHasSeeds;
+  const loadHasStaticWebsites = options.loadHasStaticWebsites ?? defaultLoadHasStaticWebsites;
 
   const findings: DriftFinding[] = [];
   for (const target of lock.targets) {
     const absFile = resolveWithinRoot(outputDir, target.file);
-    const currentHash = absFile === null ? null : readHash(absFile);
-    const configAbs = resolveWithinRoot(
-      outputDir,
-      path.join(target.inputs.dir, "tailor.config.ts"),
-    );
-    const configExists = configAbs !== null && exists(configAbs);
+    const currentHash =
+      absFile === null
+        ? null
+        : readHash(absFile, target.kind === "action" ? normalizeActionContent : undefined);
+    // Coordinator targets are config-less; skip the probe so config-dir drift is never emitted.
+    const configAbs =
+      target.kind === "coordinate"
+        ? null
+        : resolveWithinRoot(outputDir, path.join(target.inputs.dir, "tailor.config.ts"));
+    const configExists = target.kind === "coordinate" || (configAbs !== null && exists(configAbs));
     const erdNamespaces =
       target.kind === "branch" && target.inputs.erdPreview && configAbs !== null && configExists
         ? await loadErdNamespaces(configAbs)
         : null;
+    const hasMigrations =
+      (target.kind === "branch" || target.kind === "tag") &&
+      target.inputs.migrationDriftCheck !== undefined &&
+      configAbs !== null &&
+      configExists
+        ? await loadHasMigrations(configAbs)
+        : undefined;
+    const hasSeeds =
+      (target.kind === "branch" || target.kind === "tag") &&
+      target.inputs.seedValidate !== undefined &&
+      configAbs !== null &&
+      configExists
+        ? await loadHasSeeds(configAbs)
+        : undefined;
+    const hasStaticWebsites =
+      target.kind === "action" &&
+      target.inputs.hasStaticWebsites !== undefined &&
+      configAbs !== null &&
+      configExists
+        ? await loadHasStaticWebsites(configAbs)
+        : undefined;
     findings.push(
       ...findTargetDrift(target, {
         fileExists: currentHash !== null,
@@ -231,6 +371,9 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
         defaultBranch,
         templateVersion: TEMPLATE_VERSION,
         erdNamespaces,
+        hasMigrations,
+        hasSeeds,
+        hasStaticWebsites,
       }),
     );
   }
