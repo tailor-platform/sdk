@@ -1111,6 +1111,32 @@ describe("runCodemods", () => {
           "",
         ].join("\n"),
       );
+      await fs.promises.writeFile(
+        path.join(dir, "switch-shadowed.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "switch (kind) {",
+          '  case "github":',
+          "    const auth = createClient();",
+          '    auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "default-ref.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "function read({ x = auth }) {",
+          "  return x;",
+          "}",
+          "",
+          'export const token = await auth.getConnectionToken("google");',
+          "",
+        ].join("\n"),
+      );
 
       using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
