@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
+  normalizeActionContent,
   setupCoordinate,
   setupTarget,
   type BranchSetupOptions,
@@ -576,6 +577,60 @@ describe("decideAction", () => {
         .action,
     ).toBe("restore");
   });
+
+  test("normalize: custom run: body normalises to regenerate", () => {
+    // The lock records the hash of the normalised content (placeholder run body).
+    // A user who changes the build command should not trigger drift.
+    const original = [
+      "    - id: build-site",
+      "      shell: bash",
+      "      run: |",
+      "        true",
+      "    - id: tailor-apply",
+    ].join("\n");
+    const edited = [
+      "    - id: build-site",
+      "      shell: bash",
+      "      run: |",
+      "        pnpm build",
+      "    - id: tailor-apply",
+    ].join("\n");
+    const normalizedTarget = {
+      ...target,
+      contentHash: hashContent(normalizeActionContent(original)),
+    };
+    expect(
+      decideAction({
+        existing: normalizedTarget,
+        fileExists: true,
+        currentContent: edited,
+        force: false,
+        normalize: normalizeActionContent,
+      }).action,
+    ).toBe("regenerate");
+  });
+});
+
+describe("normalizeActionContent", () => {
+  const BASE = [
+    "    - id: build-site",
+    "      shell: bash",
+    "      run: |",
+    "        # user build command here",
+    "    - id: tailor-apply",
+  ].join("\n");
+
+  test("replaces run body with placeholder", () => {
+    const result = normalizeActionContent(BASE);
+    expect(result).toContain("- id: build-site");
+    expect(result).not.toContain("# user build command here");
+    expect(result).toContain("        true");
+  });
+
+  test("no-op when build-site step is absent", () => {
+    const content = "    - id: tailor-apply\n      uses: tailor-platform/actions/deploy@abc";
+    expect(normalizeActionContent(content)).toBe(content);
+  });
 });
 
 describe("setupTarget (integration)", () => {
@@ -918,6 +973,7 @@ describe("setupCoordinate", () => {
     expect(fs.existsSync(setupAction)).toBe(true);
 
     const wfContent = fs.readFileSync(wf, "utf-8");
+    expect(() => parseYAML(wfContent)).not.toThrow();
     expect(wfContent).toContain("tailor-deploy-api");
     expect(wfContent).toContain("working-directory: .");
 

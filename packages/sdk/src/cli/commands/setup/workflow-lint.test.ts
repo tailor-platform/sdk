@@ -16,6 +16,7 @@ import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   renderBranchWorkflow,
+  renderCoordinateWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   type PackageManager,
@@ -26,7 +27,11 @@ import {
 // ---------------------------------------------------------------------------
 
 function isActionlintAvailable(): boolean {
-  const result = spawnSync("actionlint", ["--version"], { encoding: "utf-8" });
+  const result = spawnSync("actionlint", ["--version"], {
+    encoding: "utf-8",
+    timeout: 5000,
+    killSignal: "SIGKILL",
+  });
   return result.status === 0;
 }
 
@@ -242,6 +247,118 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflo
       environment: "production",
     });
     const { ok, output } = writeAndLint("tag-bun-noguard-env", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+});
+
+// Minimal composite action stub used by coordinate workflow tests.
+const COMPOSITE_ACTION_STUB = `\
+name: stub
+description: stub
+inputs:
+  workspace-id:
+    required: true
+  name:
+    required: true
+  working-directory:
+    required: false
+    default: "."
+  package-manager:
+    required: false
+    default: pnpm
+  platform-client-id:
+    required: true
+  platform-client-secret:
+    required: true
+  slack-token:
+    required: false
+  slack-channel-id:
+    required: false
+  user-mapping:
+    required: false
+outputs:
+  app-url:
+    description: stub
+    value: ""
+runs:
+  using: composite
+  steps:
+    - run: echo stub
+      shell: bash
+`;
+
+describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinateWorkflow", () => {
+  let cTmpDir: string;
+
+  beforeAll(() => {
+    cTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "coord-lint-"));
+    fs.mkdirSync(path.join(cTmpDir, ".github", "workflows"), { recursive: true });
+    fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-setup"), { recursive: true });
+    fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-api"), { recursive: true });
+    // Use an inline stub instead of renderTailorSetupAction output to avoid
+    // remote action references (tailor-platform/actions/setup@...) that would
+    // cause actionlint to perform network lookups and hang in offline CI.
+    fs.writeFileSync(
+      path.join(cTmpDir, ".github", "actions", "tailor-setup", "action.yml"),
+      "name: stub-setup\ndescription: stub\nruns:\n  using: composite\n  steps:\n    - run: echo stub\n      shell: bash\n",
+    );
+    fs.writeFileSync(
+      path.join(cTmpDir, ".github", "actions", "tailor-api", "action.yml"),
+      COMPOSITE_ACTION_STUB,
+    );
+  });
+
+  afterAll(() => {
+    if (cTmpDir) fs.rmSync(cTmpDir, { recursive: true, force: true });
+  });
+
+  function lintCoordinate(name: string, content: string): LintResult {
+    const wfPath = path.join(cTmpDir, ".github", "workflows", `${name}.yml`);
+    fs.writeFileSync(wfPath, content);
+    // Run from REPO_ROOT (the sdk repo root) rather than from cTmpDir so that
+    // the aqua proxy resolves actionlint from the project's aqua.yaml rather
+    // than from a temp dir that has no aqua config.  Local uses: references
+    // (./.github/actions/...) will not resolve from REPO_ROOT but we ignore
+    // those errors so actionlint still validates the workflow structure.
+    const result = spawnSync(
+      "actionlint",
+      ["-color", "-ignore", "action ./.github/actions/tailor-[^ ]+ is not found", wfPath],
+      {
+        encoding: "utf-8",
+        cwd: REPO_ROOT,
+        timeout: 15000,
+        killSignal: "SIGKILL",
+      },
+    );
+    const output = `${result.stdout}${result.stderr}`.trim();
+    return { ok: result.status === 0, output };
+  }
+
+  const COORD_COMMON = {
+    coordinatorName: "main",
+    apps: [{ name: "api", dir: "." }],
+    environment: "production",
+    packageManager: "pnpm" as PackageManager,
+  };
+
+  test("coordinate / branch", () => {
+    const { content } = renderCoordinateWorkflow({
+      ...COORD_COMMON,
+      kind: "branch",
+      branch: "main",
+    });
+    const { ok, output } = lintCoordinate("coord-branch", content);
+    expect(ok, `actionlint errors:\n${output}`).toBe(true);
+  });
+
+  test("coordinate / tag", () => {
+    const { content } = renderCoordinateWorkflow({
+      ...COORD_COMMON,
+      kind: "tag",
+      branch: "main",
+      tagPattern: "v*",
+    });
+    const { ok, output } = lintCoordinate("coord-tag", content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 });
