@@ -794,6 +794,40 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports casted global object runtime global roots", async () => {
+    await writeProjectFile(
+      "resolvers/casted-global-object.ts",
+      [
+        "const clientFactory = (globalThis as any).tailor.idp.Client;",
+        "const upload = (global as any).tailordb.file.upload;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/casted-global-object.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/casted-global-object.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = (globalThis as any).tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/casted-global-object.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const upload = (global as any).tailordb.file.upload;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports runtime globals reached through globalThis", async () => {
     await writeProjectFile(
       "resolvers/global-this.ts",
@@ -954,6 +988,23 @@ describe("runtime-globals-opt-in review findings", () => {
         ],
       }),
     ]);
+  });
+
+  test("does not report local generic type parameters", async () => {
+    await writeProjectFile(
+      "resolvers/generic-type-parameters.ts",
+      [
+        "type Fn<TailorErrors> = (value: TailorErrors) => TailorErrors;",
+        "interface Box<TailorErrorItem> {",
+        "  value: TailorErrorItem;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
   });
 
   test("reports shorthand Tailor error globals left for manual migration", async () => {

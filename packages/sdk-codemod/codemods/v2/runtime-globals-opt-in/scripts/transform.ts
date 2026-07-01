@@ -422,11 +422,14 @@ function addReviewFinding(
 
 function runtimeRootReference(source: string): RuntimeRootReference | null {
   const globalObjectMatch =
-    /^\s*(globalThis|global)\.(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
+    /^\s*(?:(globalThis|global)|\(\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))\.(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
       source,
     );
   if (globalObjectMatch) {
-    return { rootName: globalObjectMatch[2]!, globalObjectName: globalObjectMatch[1]! };
+    return {
+      rootName: globalObjectMatch[3]!,
+      globalObjectName: globalObjectMatch[1] ?? globalObjectMatch[2]!,
+    };
   }
 
   const parenthesizedMatch =
@@ -612,6 +615,27 @@ function scopeHasTypeBinding(scope: SgNode, name: string): boolean {
   return false;
 }
 
+function hasTypeParameterBinding(node: SgNode, name: string): boolean {
+  const typeParameters = node.children().find((child) => child.kind() === "type_parameters");
+  if (!typeParameters) return false;
+  for (const typeParameter of typeParameters.findAll({ rule: { kind: "type_parameter" } })) {
+    const binding = typeParameter
+      .children()
+      .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
+    if (binding?.text() === name) return true;
+  }
+  return false;
+}
+
+function ancestorHasTypeBinding(node: SgNode, name: string): boolean {
+  let current = node.parent();
+  while (current) {
+    if (hasTypeParameterBinding(current, name)) return true;
+    current = current.parent();
+  }
+  return false;
+}
+
 function ancestorHasValueBinding(node: SgNode, name: string): boolean {
   let current = node.parent();
   while (current) {
@@ -663,6 +687,7 @@ function hasRuntimeBindingInScope(
   const namespace = reviewNodeBindingNamespace(node);
   if (importedNames[namespace].has(rootName)) return true;
   if (namespace === "value" && ancestorHasValueBinding(node, rootName)) return true;
+  if (namespace === "type" && ancestorHasTypeBinding(node, rootName)) return true;
 
   let scope = nearestReviewScope(node);
   while (scope) {
