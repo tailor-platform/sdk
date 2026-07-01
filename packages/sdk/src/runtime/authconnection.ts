@@ -39,7 +39,7 @@ const api = (): TailorAuthconnectionAPI =>
 /**
  * See {@link TailorAuthconnectionAPI.getConnectionToken}.
  * @param args - Forwarded to {@link TailorAuthconnectionAPI.getConnectionToken}
- * @returns Token payload (provider-specific shape)
+ * @returns Token payload
  */
 export const getConnectionToken: TailorAuthconnectionAPI["getConnectionToken"] = (...args) =>
   api().getConnectionToken(...args);
