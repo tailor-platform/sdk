@@ -472,7 +472,7 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_2,
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
-    suspiciousPatterns: [/\bauth\s*\.\s*getConnectionToken\s*\(/],
+    suspiciousPatterns: [/\.\s*getConnectionToken\s*\(/],
     examples: [
       {
         before:
@@ -486,14 +486,15 @@ export const allCodemods: CodemodPackage[] = [
       "is removed. Runtime code should call authconnection.getConnectionToken(...) from",
       "@tailor-platform/sdk/runtime instead of importing auth from tailor.config.ts.",
       "",
-      "For each auth.getConnectionToken(<expr>) call:",
+      "For each <receiver>.getConnectionToken(<expr>) call where <receiver> is a",
+      "defineAuth() result imported from tailor.config.ts:",
       "1. Replace it with authconnection.getConnectionToken(<expr>).",
       '2. Add or reuse `import { authconnection } from "@tailor-platform/sdk/runtime"`.',
       "3. Remove the auth import from tailor.config.ts only when no other auth reference",
       "   remains in the file.",
       "",
-      "Leave existing tailor.authconnection.getConnectionToken(...) or runtime",
-      "authconnection.getConnectionToken(...) calls unchanged.",
+      "Leave calls unchanged when the receiver is already the runtime authconnection",
+      "wrapper or global tailor.authconnection.",
     ].join("\n"),
   },
   {

@@ -297,10 +297,8 @@ describe("getApplicableCodemods", () => {
     expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
     expect(pattern).toBeInstanceOf(RegExp);
     expect((pattern as RegExp).test('await auth.getConnectionToken("google")')).toBe(true);
-    expect((pattern as RegExp).test('await auth . getConnectionToken("google")')).toBe(true);
-    expect((pattern as RegExp).test('await authconnection.getConnectionToken("google")')).toBe(
-      false,
-    );
+    expect((pattern as RegExp).test('await mainAuth . getConnectionToken("google")')).toBe(true);
+    expect((pattern as RegExp).test('await getConnectionToken("google")')).toBe(false);
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime");
   });
 });
