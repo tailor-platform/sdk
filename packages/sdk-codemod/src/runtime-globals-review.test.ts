@@ -262,6 +262,28 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report local declarations after spaced bracket runtime-looking names", async () => {
+    await writeProjectFile(
+      "resolvers/local-after.ts",
+      ['const localClient = tailor ["idp"].Client;', "const tailor = {};", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report local function runtime-looking names", async () => {
+    await writeProjectFile(
+      "resolvers/local-function.ts",
+      ["function tailor() {}", 'const localClient = tailor ["idp"].Client;', ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports spaced bracket runtime globals outside unrelated binding scopes", async () => {
     await writeProjectFile(
       "resolvers/scoped.ts",
