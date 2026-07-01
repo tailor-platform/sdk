@@ -484,19 +484,29 @@ function collectOwnExpressionName(scope: SgNode, names: Set<string>): void {
   }
 }
 
-function directlyDeclaredNames(scope: SgNode): Set<string> {
+function isInsideFormalParameters(node: SgNode, scope: SgNode): boolean {
+  const params = scope.children().find((child) => child.kind() === "formal_parameters");
+  if (!params) return false;
+
+  const nodeStart = node.range().start.index;
+  const paramsRange = params.range();
+  return nodeStart >= paramsRange.start.index && nodeStart < paramsRange.end.index;
+}
+
+function directlyDeclaredNames(scope: SgNode, reference: SgNode): Set<string> {
   const names = new Set<string>();
   const kind = scope.kind();
+  const referenceInParameters = isInsideFormalParameters(reference, scope);
 
   collectOwnExpressionName(scope, names);
 
   if (scope.children().some((child) => child.kind() === "formal_parameters")) {
     collectParameterNames(scope, names);
-    collectFunctionScopedVarNames(scope, names);
+    if (!referenceInParameters) collectFunctionScopedVarNames(scope, names);
   }
 
   if (kind === "arrow_function") {
-    collectFunctionScopedVarNames(scope, names);
+    if (!referenceInParameters) collectFunctionScopedVarNames(scope, names);
     collectArrowParameterNames(scope, names);
   } else if (kind === "catch_clause") {
     for (const child of scope.children()) {
@@ -528,7 +538,7 @@ function directlyDeclaredNames(scope: SgNode): Set<string> {
 function isReferenceShadowed(node: SgNode, localName: string): boolean {
   let current = node.parent();
   while (current) {
-    if (directlyDeclaredNames(current).has(localName)) return true;
+    if (directlyDeclaredNames(current, node).has(localName)) return true;
     current = current.parent();
   }
   return false;
