@@ -40,6 +40,17 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
     });
   });
 
+  test("resumeWorkflow forwards executionId and returns Promise<string>", async () => {
+    using wf = mockWorkflow();
+    wf.setResumeHandler("exec-resumed");
+
+    const promise = workflow.resumeWorkflow("exec-1");
+
+    expectTypeOf(promise).toEqualTypeOf<Promise<string>>();
+    await expect(promise).resolves.toBe("exec-resumed");
+    expect(wf.resumeWorkflow.mock.calls).toEqual([["exec-1"]]);
+  });
+
   test("triggerJobFunction forwards and returns enqueued result", () => {
     using wf = mockWorkflow();
     wf.enqueueResult({ ok: true });

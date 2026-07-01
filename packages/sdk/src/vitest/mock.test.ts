@@ -704,6 +704,32 @@ describe("mock", () => {
       ]);
     });
 
+    test("resumeWorkflow echoes the executionId by default", async () => {
+      using wf = mockWorkflow();
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-42");
+      expect(result).toBe("exec-42");
+      expect(wf.resumeWorkflow.mock.calls).toEqual([["exec-42"]]);
+    });
+
+    test("setResumeHandler with string controls resumeWorkflow response", async () => {
+      using wf = mockWorkflow();
+      wf.setResumeHandler("exec-resumed");
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-original");
+      expect(result).toBe("exec-resumed");
+    });
+
+    test("setResumeHandler with function receives executionId", async () => {
+      using wf = mockWorkflow();
+      const seen: unknown[] = [];
+      wf.setResumeHandler((executionId) => {
+        seen.push(executionId);
+        return `resumed:${executionId}`;
+      });
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-1");
+      expect(result).toBe("resumed:exec-1");
+      expect(seen).toEqual(["exec-1"]);
+    });
+
     test("records wait calls", () => {
       using wf = mockWorkflow();
       (globalThis as any).tailor.workflow.wait("key", { data: 1 });
