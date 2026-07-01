@@ -348,7 +348,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     ];
     planResult.changeSet.type.updates = [];
 
-    const migration = mkAddFieldMigration(1, "SalesOrder", "reference");
+    const migration = mkFieldMigration("field_added", 1, "SalesOrder", "reference");
     migration.diff.changes = [
       {
         kind: "field_added",
