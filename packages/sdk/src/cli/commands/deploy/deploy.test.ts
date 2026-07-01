@@ -849,10 +849,6 @@ describe("assertUniqueGlobalFunctionNames", () => {
   });
 
   test("throws when two configs define the same non-bundled executor name", () => {
-    // Regression: non-function executors (webhook/graphql/workflow ops) are not
-    // bundled, so they never appear in bundledScripts.executors, yet they still
-    // create a workspace-global executor resource. A bundle-only check would miss
-    // this collision; detecting from loaded executors catches it.
     expect(() =>
       assertUniqueGlobalFunctionNames([
         fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
