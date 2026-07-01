@@ -1,8 +1,8 @@
 import { entry } from "./tsdown.config";
 import type { KnipConfig } from "knip";
 
-// knip's tsdown plugin can't statically read the entry list from a two-pass
-// array config, so the build entries are imported directly from tsdown.config.
+// knip's tsdown plugin can't statically read the entry list from this
+// multi-config tsdown setup, so import the build entries directly.
 export default {
   ignoreExportsUsedInFile: true,
   tags: ["-lintignore"],

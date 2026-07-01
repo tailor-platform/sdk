@@ -46,7 +46,7 @@ function yamlText() {
 }
 
 // Exported for knip.ts: knip's tsdown plugin can't statically read this list
-// once the config is a two-element array, so knip imports it directly.
+// once the config is split into multiple build entries, so knip imports it directly.
 export const entry = [
   "src/configure/index.ts",
   "src/cli/index.ts",
@@ -105,9 +105,8 @@ const jsPlugins: TsdownPluginOption[] = [
 
 const dtsPlugins: TsdownPluginOption[] = [yamlText()];
 
-// Two configs share the same `dist`: JS stays bundled, while dts output uses
-// `unbundle` to mirror the src tree with real identifier names. Only the JS
-// config opts into `clean` so declaration files can be emitted alongside it.
+// JS stays bundled, while dts output uses `unbundle` to mirror the src tree
+// with real identifier names.
 export default defineConfig([
   {
     ...shared,
