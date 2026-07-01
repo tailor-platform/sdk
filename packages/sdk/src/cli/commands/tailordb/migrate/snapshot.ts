@@ -3,6 +3,22 @@
  */
 
 import * as fs from "node:fs";
+import { toJson } from "@bufbuild/protobuf";
+import { ValueSchema } from "@bufbuild/protobuf/wkt";
+import {
+  TailorDBGQLPermission_Action,
+  TailorDBGQLPermission_Operator,
+  TailorDBGQLPermission_Permit,
+  TailorDBType_Permission_Operator,
+  TailorDBType_Permission_Permit,
+  type TailorDBGQLPermission,
+  type TailorDBGQLPermission_Condition,
+  type TailorDBGQLPermission_Operand,
+  type TailorDBType as ProtoTailorDBType,
+  type TailorDBType_Permission,
+  type TailorDBType_Permission_Condition,
+  type TailorDBType_Permission_Operand,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as inflection from "inflection";
 import * as path from "pathe";
 import { z } from "zod";
@@ -12,6 +28,7 @@ import {
   type DiffChange,
   type FieldDiffChange,
   type BreakingChangeInfo,
+  type SnapshotTypeSettingsState,
   type WarningChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
@@ -30,6 +47,8 @@ import type {
   SnapshotFieldConfig,
   SnapshotGqlAction,
   SnapshotGqlPermission,
+  SnapshotPermissionOperand,
+  SnapshotPermissionOperator,
   SnapshotIndexConfig,
   SnapshotPermissionCondition,
   SnapshotRecordPermission,
@@ -37,7 +56,6 @@ import type {
   TailorDBSnapshotType,
 } from "./snapshot-types";
 import type { SchemaDrift } from "./types";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 // ============================================================================
 // Constants
@@ -719,6 +737,18 @@ function applyDiffToSnapshot(
         }
         break;
       }
+      case "type_settings_modified": {
+        const existing = types[change.typeName];
+        if (existing) {
+          types[change.typeName] = {
+            ...existing,
+            description: change.after.description,
+            pluralForm: change.after.pluralForm,
+            settings: change.after.settings ?? {},
+          };
+        }
+        break;
+      }
       case "field_added":
       case "field_modified": {
         const existing = types[change.typeName];
@@ -1287,10 +1317,14 @@ function compareIndexes(
       const oldFieldsStr = JSON.stringify(oldIndex.fields.toSorted());
       const newFieldsStr = JSON.stringify(newIndex.fields.toSorted());
 
-      if (oldFieldsStr !== newFieldsStr || oldIndex.unique !== newIndex.unique) {
+      if (
+        oldFieldsStr !== newFieldsStr ||
+        (oldIndex.unique ?? false) !== (newIndex.unique ?? false)
+      ) {
         const reasons: string[] = [];
         if (oldFieldsStr !== newFieldsStr) reasons.push("fields changed");
-        if (oldIndex.unique !== newIndex.unique) reasons.push("unique constraint changed");
+        if ((oldIndex.unique ?? false) !== (newIndex.unique ?? false))
+          reasons.push("unique constraint changed");
         ctx.changes.push({
           kind: "index_modified",
           typeName,
@@ -1485,6 +1519,75 @@ function comparePermissions(
   }
 }
 
+type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;
+type SnapshotGqlOperations = NonNullable<SnapshotSettings["gqlOperations"]>;
+
+function normalizeComparableGqlOperations(
+  operations: SnapshotGqlOperations | undefined,
+): SnapshotGqlOperations | undefined {
+  if (!operations) return undefined;
+
+  const normalized: SnapshotGqlOperations = {};
+  if (operations.create === false) normalized.create = false;
+  if (operations.update === false) normalized.update = false;
+  if (operations.delete === false) normalized.delete = false;
+  if (operations.read === false) normalized.read = false;
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeComparableSettings(
+  settings: TailorDBSnapshotType["settings"],
+): TailorDBSnapshotType["settings"] | undefined {
+  const normalized: SnapshotSettings = {};
+
+  if (settings?.aggregation === true) normalized.aggregation = true;
+  if (settings?.bulkUpsert === true) normalized.bulkUpsert = true;
+  if (settings?.publishEvents === true) normalized.publishEvents = true;
+
+  const gqlOperations = normalizeComparableGqlOperations(settings?.gqlOperations);
+  if (gqlOperations) normalized.gqlOperations = gqlOperations;
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function comparableTypeSettings(type: TailorDBSnapshotType): SnapshotTypeSettingsState {
+  const settings = normalizeComparableSettings(type.settings);
+  return {
+    ...(type.description ? { description: type.description } : {}),
+    pluralForm: inflection.camelize(type.pluralForm, true),
+    ...(settings && { settings }),
+  };
+}
+
+function snapshotTypeSettingsState(type: TailorDBSnapshotType): SnapshotTypeSettingsState {
+  return {
+    ...(type.description ? { description: type.description } : {}),
+    pluralForm: type.pluralForm,
+    settings: type.settings ?? {},
+  };
+}
+
+function compareTypeSettings(
+  ctx: DiffContext,
+  typeName: string,
+  previous: TailorDBSnapshotType,
+  current: TailorDBSnapshotType,
+): void {
+  const previousComparable = comparableTypeSettings(previous);
+  const currentComparable = comparableTypeSettings(current);
+
+  if (JSON.stringify(previousComparable) === JSON.stringify(currentComparable)) return;
+
+  ctx.changes.push({
+    kind: "type_settings_modified",
+    typeName,
+    reason: "settings changed",
+    before: snapshotTypeSettingsState(previous),
+    after: snapshotTypeSettingsState(current),
+  });
+}
+
 /**
  * Compare two snapshots and generate a diff
  * @param {SchemaSnapshot} previous - Previous schema snapshot
@@ -1546,6 +1649,9 @@ function compareNormalizedSnapshots(
       current.types[typeName],
       `type "${typeName}" missing from current snapshot`,
     );
+
+    // Compare type-level settings and metadata
+    compareTypeSettings(ctx, typeName, prevType, currType);
 
     // Compare fields
     compareTypeFields(ctx, typeName, prevType, currType);
@@ -1798,6 +1904,78 @@ export function assertValidMigrationFiles(migrationsDir: string, namespace: stri
 // Remote Schema Verification
 // ============================================================================
 
+export interface RemoteGqlPermission {
+  typeName: string;
+  permission?: TailorDBGQLPermission;
+}
+
+type RemoteFieldConfig = NonNullable<ProtoTailorDBType["schema"]>["fields"][string];
+type RemoteRelationshipConfig = NonNullable<ProtoTailorDBType["schema"]>["relationships"][string];
+
+function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotFieldConfig {
+  const config: SnapshotFieldConfig = {
+    type: remoteField.type,
+    required: remoteField.required,
+  };
+
+  if (remoteField.array) config.array = true;
+  if (remoteField.index) config.index = true;
+  if (remoteField.unique) config.unique = true;
+  if (remoteField.foreignKey) {
+    config.foreignKey = true;
+    if (remoteField.foreignKeyType) config.foreignKeyType = remoteField.foreignKeyType;
+    if (remoteField.foreignKeyField) config.foreignKeyField = remoteField.foreignKeyField;
+  }
+  const allowedValues = remoteField.allowedValues;
+  if (allowedValues.length > 0) {
+    config.allowedValues = allowedValues.map((v) => ({
+      value: v.value,
+      ...(v.description && { description: v.description }),
+    }));
+  }
+
+  if (remoteField.description) config.description = remoteField.description;
+  if (remoteField.vector) config.vector = true;
+
+  if (remoteField.hooks) {
+    config.hooks = {};
+    if (remoteField.hooks.create?.expr) {
+      config.hooks.create = { expr: remoteField.hooks.create.expr };
+    }
+    if (remoteField.hooks.update?.expr) {
+      config.hooks.update = { expr: remoteField.hooks.update.expr };
+    }
+  }
+
+  const validate = remoteField.validate;
+  if (validate.length > 0) {
+    config.validate = validate.map((v) => ({
+      script: { expr: v.script?.expr ?? "" },
+      errorMessage: v.errorMessage ?? "",
+    }));
+  }
+
+  if (remoteField.serial) {
+    config.serial = {
+      start: Number(remoteField.serial.start),
+      ...(remoteField.serial.maxValue && { maxValue: Number(remoteField.serial.maxValue) }),
+      ...(remoteField.serial.format && { format: remoteField.serial.format }),
+    };
+  }
+
+  if (remoteField.scale !== undefined) config.scale = remoteField.scale;
+
+  const nestedFields = remoteField.fields;
+  if (Object.keys(nestedFields).length > 0) {
+    config.fields = createSnapshotRecord<SnapshotFieldConfig>();
+    for (const [fieldName, nestedField] of Object.entries(nestedFields)) {
+      config.fields[fieldName] = convertRemoteFieldToSnapshot(nestedField);
+    }
+  }
+
+  return config;
+}
+
 /**
  * Convert remote ParsedTailorDBType to SnapshotFieldConfig for comparison
  * @param {ProtoTailorDBType} remoteType - Remote TailorDB type from API
@@ -1810,73 +1988,342 @@ function convertRemoteFieldsToSnapshot(
   const remoteFields = remoteType.schema?.fields ?? {};
 
   for (const [fieldName, remoteField] of Object.entries(remoteFields)) {
-    const config: SnapshotFieldConfig = {
-      type: remoteField.type,
-      required: remoteField.required,
-    };
-
-    if (remoteField.array) config.array = true;
-    if (remoteField.index) config.index = true;
-    if (remoteField.unique) config.unique = true;
-    if (remoteField.foreignKey) {
-      config.foreignKey = true;
-      if (remoteField.foreignKeyType) config.foreignKeyType = remoteField.foreignKeyType;
-      if (remoteField.foreignKeyField) config.foreignKeyField = remoteField.foreignKeyField;
-    }
-    if (remoteField.allowedValues.length > 0) {
-      config.allowedValues = remoteField.allowedValues.map((v) => ({
-        value: v.value,
-        ...(v.description && { description: v.description }),
-      }));
-    }
-
-    if (remoteField.description) config.description = remoteField.description;
-    if (remoteField.vector) config.vector = true;
-
-    if (remoteField.hooks) {
-      config.hooks = {};
-      if (remoteField.hooks.create?.expr) {
-        config.hooks.create = { expr: remoteField.hooks.create.expr };
-      }
-      if (remoteField.hooks.update?.expr) {
-        config.hooks.update = { expr: remoteField.hooks.update.expr };
-      }
-    }
-
-    if (remoteField.validate.length > 0) {
-      config.validate = remoteField.validate.map((v) => ({
-        script: { expr: v.script?.expr ?? "" },
-        errorMessage: v.errorMessage ?? "",
-      }));
-    }
-
-    if (remoteField.serial) {
-      config.serial = {
-        start: Number(remoteField.serial.start),
-        ...(remoteField.serial.maxValue && { maxValue: Number(remoteField.serial.maxValue) }),
-        ...(remoteField.serial.format && { format: remoteField.serial.format }),
-      };
-    }
-
-    if (remoteField.scale !== undefined) config.scale = remoteField.scale;
-
-    // TODO: Add nested field conversion when remote API supports it
-
-    fields[fieldName] = config;
+    fields[fieldName] = convertRemoteFieldToSnapshot(remoteField);
   }
 
   return fields;
 }
 
-function convertRemoteTypeToSnapshot(remoteType: ProtoTailorDBType): TailorDBSnapshotType {
+function convertRemoteSettingsToSnapshot(
+  remoteSettings: NonNullable<ProtoTailorDBType["schema"]>["settings"] | undefined,
+): TailorDBSnapshotType["settings"] | undefined {
+  const settings: SnapshotSettings = {};
+
+  if (remoteSettings?.aggregation) settings.aggregation = true;
+  if (remoteSettings?.bulkUpsert) settings.bulkUpsert = true;
+  if (remoteSettings?.publishRecordEvents) settings.publishEvents = true;
+
+  const disabled = remoteSettings?.disableGqlOperations;
+  if (disabled) {
+    const gqlOperations: SnapshotGqlOperations = {};
+    if (disabled.create) gqlOperations.create = false;
+    if (disabled.update) gqlOperations.update = false;
+    if (disabled.delete) gqlOperations.delete = false;
+    if (disabled.read) gqlOperations.read = false;
+    if (Object.keys(gqlOperations).length > 0) settings.gqlOperations = gqlOperations;
+  }
+
+  return Object.keys(settings).length > 0 ? settings : undefined;
+}
+
+function convertRemoteIndexesToSnapshot(
+  remoteIndexes: NonNullable<ProtoTailorDBType["schema"]>["indexes"] | undefined,
+): Record<string, SnapshotIndexConfig> | undefined {
+  const indexes = createSnapshotRecord<SnapshotIndexConfig>();
+  for (const [indexName, indexConfig] of Object.entries(remoteIndexes ?? {})) {
+    indexes[indexName] = {
+      fields: indexConfig.fieldNames,
+      ...(indexConfig.unique && { unique: true }),
+    };
+  }
+  return Object.keys(indexes).length > 0 ? indexes : undefined;
+}
+
+function convertRemoteFilesToSnapshot(
+  remoteFiles: NonNullable<ProtoTailorDBType["schema"]>["files"] | undefined,
+): Record<string, string> | undefined {
+  const files = createSnapshotRecord<string>();
+  for (const [fileName, fileConfig] of Object.entries(remoteFiles ?? {})) {
+    files[fileName] = fileConfig.description || "";
+  }
+  return Object.keys(files).length > 0 ? files : undefined;
+}
+
+function convertRemoteRelationshipToSnapshot(
+  relationship: RemoteRelationshipConfig,
+  direction: "forward" | "backward",
+): SnapshotRelationship {
+  return direction === "forward"
+    ? {
+        targetType: relationship.refType,
+        targetField: relationship.srcField,
+        sourceField: relationship.refField,
+        isArray: relationship.array,
+        description: relationship.description || "",
+      }
+    : {
+        targetType: relationship.refType,
+        targetField: relationship.refField,
+        sourceField: relationship.srcField,
+        isArray: relationship.array,
+        description: relationship.description || "",
+      };
+}
+
+function remoteRelationshipMatchesExpectedDirection(
+  relationship: RemoteRelationshipConfig,
+  expected: SnapshotRelationship,
+  direction: "forward" | "backward",
+): boolean {
+  const converted = convertRemoteRelationshipToSnapshot(relationship, direction);
+  return (
+    converted.targetType === expected.targetType &&
+    converted.targetField === expected.targetField &&
+    converted.sourceField === expected.sourceField &&
+    converted.isArray === expected.isArray
+  );
+}
+
+function inferRemoteRelationshipDirection(
+  relationshipName: string,
+  relationship: RemoteRelationshipConfig,
+  expectedType: TailorDBSnapshotType | undefined,
+): "forward" | "backward" {
+  const expectedForward = expectedType?.forwardRelationships?.[relationshipName];
+  const expectedBackward = expectedType?.backwardRelationships?.[relationshipName];
+
+  if (expectedForward && !expectedBackward) return "forward";
+  if (expectedBackward && !expectedForward) return "backward";
+  if (
+    expectedForward &&
+    remoteRelationshipMatchesExpectedDirection(relationship, expectedForward, "forward")
+  ) {
+    return "forward";
+  }
+  if (
+    expectedBackward &&
+    remoteRelationshipMatchesExpectedDirection(relationship, expectedBackward, "backward")
+  ) {
+    return "backward";
+  }
+
+  return relationship.array ? "backward" : "forward";
+}
+
+function convertRemoteRelationshipsToSnapshot(
+  remoteRelationships: NonNullable<ProtoTailorDBType["schema"]>["relationships"] | undefined,
+  expectedType?: TailorDBSnapshotType,
+): Pick<TailorDBSnapshotType, "forwardRelationships" | "backwardRelationships"> {
+  const forwardRelationships = createSnapshotRecord<SnapshotRelationship>();
+  const backwardRelationships = createSnapshotRecord<SnapshotRelationship>();
+
+  for (const [relationshipName, relationship] of Object.entries(remoteRelationships ?? {})) {
+    const direction = inferRemoteRelationshipDirection(
+      relationshipName,
+      relationship,
+      expectedType,
+    );
+    if (direction === "forward") {
+      forwardRelationships[relationshipName] = convertRemoteRelationshipToSnapshot(
+        relationship,
+        direction,
+      );
+    } else {
+      backwardRelationships[relationshipName] = convertRemoteRelationshipToSnapshot(
+        relationship,
+        direction,
+      );
+    }
+  }
+
+  return {
+    ...(Object.keys(forwardRelationships).length > 0 && { forwardRelationships }),
+    ...(Object.keys(backwardRelationships).length > 0 && { backwardRelationships }),
+  };
+}
+
+type RemoteRecordPolicy = NonNullable<TailorDBType_Permission>["create"][number];
+
+function convertRemotePermit(permit: TailorDBType_Permission_Permit): "allow" | "deny" {
+  switch (permit) {
+    case TailorDBType_Permission_Permit.ALLOW:
+      return "allow";
+    case TailorDBType_Permission_Permit.DENY:
+      return "deny";
+    default:
+      throw new Error(`Unsupported record permission permit: ${permit}`);
+  }
+}
+
+function convertRemoteGqlPermit(permit: TailorDBGQLPermission_Permit): "allow" | "deny" {
+  switch (permit) {
+    case TailorDBGQLPermission_Permit.ALLOW:
+      return "allow";
+    case TailorDBGQLPermission_Permit.DENY:
+      return "deny";
+    default:
+      throw new Error(`Unsupported GQL permission permit: ${permit}`);
+  }
+}
+
+function convertRemoteRecordOperator(
+  operator: TailorDBType_Permission_Operator,
+): SnapshotPermissionOperator {
+  switch (operator) {
+    case TailorDBType_Permission_Operator.EQ:
+      return "eq";
+    case TailorDBType_Permission_Operator.NE:
+      return "ne";
+    case TailorDBType_Permission_Operator.IN:
+      return "in";
+    case TailorDBType_Permission_Operator.NIN:
+      return "nin";
+    case TailorDBType_Permission_Operator.HAS_ANY:
+      return "hasAny";
+    case TailorDBType_Permission_Operator.NHAS_ANY:
+      return "nhasAny";
+    default:
+      throw new Error(`Unsupported record permission operator: ${operator}`);
+  }
+}
+
+function convertRemoteGqlOperator(
+  operator: TailorDBGQLPermission_Operator,
+): SnapshotPermissionOperator {
+  switch (operator) {
+    case TailorDBGQLPermission_Operator.EQ:
+      return "eq";
+    case TailorDBGQLPermission_Operator.NE:
+      return "ne";
+    case TailorDBGQLPermission_Operator.IN:
+      return "in";
+    case TailorDBGQLPermission_Operator.NIN:
+      return "nin";
+    case TailorDBGQLPermission_Operator.HAS_ANY:
+      return "hasAny";
+    case TailorDBGQLPermission_Operator.NHAS_ANY:
+      return "nhasAny";
+    default:
+      throw new Error(`Unsupported GQL permission operator: ${operator}`);
+  }
+}
+
+function convertRemoteValueOperand(
+  operand: TailorDBType_Permission_Operand | TailorDBGQLPermission_Operand | undefined,
+): SnapshotPermissionOperand {
+  switch (operand?.kind.case) {
+    case "userField":
+      return { user: operand.kind.value };
+    case "recordField":
+      return { record: operand.kind.value };
+    case "oldRecordField":
+      return { oldRecord: operand.kind.value };
+    case "newRecordField":
+      return { newRecord: operand.kind.value };
+    case "value":
+      return toJson(ValueSchema, operand.kind.value) as SnapshotPermissionOperand;
+    default:
+      throw new Error("Unsupported permission operand");
+  }
+}
+
+function convertRemoteRecordCondition(
+  condition: TailorDBType_Permission_Condition,
+): SnapshotPermissionCondition {
+  return [
+    convertRemoteValueOperand(condition.left),
+    convertRemoteRecordOperator(condition.operator),
+    convertRemoteValueOperand(condition.right),
+  ];
+}
+
+function convertRemoteGqlCondition(
+  condition: TailorDBGQLPermission_Condition,
+): SnapshotPermissionCondition {
+  return [
+    convertRemoteValueOperand(condition.left),
+    convertRemoteGqlOperator(condition.operator),
+    convertRemoteValueOperand(condition.right),
+  ];
+}
+
+function convertRemoteRecordPolicy(policy: RemoteRecordPolicy): SnapshotActionPermission {
+  return {
+    conditions: policy.conditions.map(convertRemoteRecordCondition),
+    permit: convertRemotePermit(policy.permit),
+    ...(policy.description && { description: policy.description }),
+  };
+}
+
+function convertRemoteRecordPermissionToSnapshot(
+  permission: TailorDBType_Permission | undefined,
+): SnapshotRecordPermission | undefined {
+  const recordPermission: SnapshotRecordPermission = {
+    create: permission?.create.map(convertRemoteRecordPolicy) ?? [],
+    read: permission?.read.map(convertRemoteRecordPolicy) ?? [],
+    update: permission?.update.map(convertRemoteRecordPolicy) ?? [],
+    delete: permission?.delete.map(convertRemoteRecordPolicy) ?? [],
+  };
+
+  return Object.values(recordPermission).some((policies) => policies.length > 0)
+    ? recordPermission
+    : undefined;
+}
+
+function convertRemoteGqlAction(action: TailorDBGQLPermission_Action): SnapshotGqlAction {
+  switch (action) {
+    case TailorDBGQLPermission_Action.ALL:
+      return "all";
+    case TailorDBGQLPermission_Action.CREATE:
+      return "create";
+    case TailorDBGQLPermission_Action.READ:
+      return "read";
+    case TailorDBGQLPermission_Action.UPDATE:
+      return "update";
+    case TailorDBGQLPermission_Action.DELETE:
+      return "delete";
+    case TailorDBGQLPermission_Action.AGGREGATE:
+      return "aggregate";
+    case TailorDBGQLPermission_Action.BULK_UPSERT:
+      return "bulkUpsert";
+    default:
+      throw new Error(`Unsupported GQL permission action: ${action}`);
+  }
+}
+
+function convertRemoteGqlPermissionToSnapshot(
+  permission: TailorDBGQLPermission | undefined,
+): SnapshotGqlPermission | undefined {
+  const policies =
+    permission?.policies.map((policy) => ({
+      conditions: policy.conditions.map(convertRemoteGqlCondition),
+      actions: policy.actions.map(convertRemoteGqlAction),
+      permit: convertRemoteGqlPermit(policy.permit),
+      ...(policy.description && { description: policy.description }),
+    })) ?? [];
+
+  return policies.length > 0 ? policies : undefined;
+}
+
+function convertRemoteTypeToSnapshot(
+  remoteType: ProtoTailorDBType,
+  expectedType?: TailorDBSnapshotType,
+): TailorDBSnapshotType {
+  const settings = convertRemoteSettingsToSnapshot(remoteType.schema?.settings);
+  const relationships = convertRemoteRelationshipsToSnapshot(
+    remoteType.schema?.relationships,
+    expectedType,
+  );
+  const recordPermission = convertRemoteRecordPermissionToSnapshot(remoteType.schema?.permission);
   const snapshotType: TailorDBSnapshotType = {
     name: remoteType.name,
     pluralForm: remoteType.schema?.settings?.pluralForm || inflection.pluralize(remoteType.name),
     fields: convertRemoteFieldsToSnapshot(remoteType),
+    ...(settings && { settings }),
+    ...relationships,
   };
 
   if (remoteType.schema?.description) {
     snapshotType.description = remoteType.schema.description;
+  }
+  const indexes = convertRemoteIndexesToSnapshot(remoteType.schema?.indexes);
+  if (indexes) snapshotType.indexes = indexes;
+
+  const files = convertRemoteFilesToSnapshot(remoteType.schema?.files);
+  if (files) snapshotType.files = files;
+
+  if (recordPermission) {
+    snapshotType.permissions = { record: recordPermission };
   }
 
   return snapshotType;
@@ -1886,15 +2333,36 @@ function convertRemoteTypeToSnapshot(remoteType: ProtoTailorDBType): TailorDBSna
  * Convert remote TailorDB types into the normalized snapshot shape used by drift checks.
  * @param {ProtoTailorDBType[]} remoteTypes - Remote TailorDB types from the API
  * @param {string} namespace - Namespace for the reconstructed snapshot
+ * @param {readonly RemoteGqlPermission[]} remoteGqlPermissions - Remote GQL permissions for the namespace
+ * @param {SchemaSnapshot} expectedSnapshot - Optional snapshot used to disambiguate remote relationship direction
  * @returns {NormalizedSchemaSnapshot} Normalized snapshot-shaped remote state
  */
 export function createSnapshotFromRemoteTypes(
   remoteTypes: ProtoTailorDBType[],
   namespace: string,
+  remoteGqlPermissions: readonly RemoteGqlPermission[] = [],
+  expectedSnapshot?: SchemaSnapshot,
 ): NormalizedSchemaSnapshot {
   const types = createSnapshotRecord<TailorDBSnapshotType>();
   for (const remoteType of remoteTypes) {
-    types[remoteType.name] = convertRemoteTypeToSnapshot(remoteType);
+    types[remoteType.name] = convertRemoteTypeToSnapshot(
+      remoteType,
+      expectedSnapshot?.types[remoteType.name],
+    );
+  }
+
+  for (const permission of remoteGqlPermissions) {
+    const { typeName } = permission;
+    const snapshotType = types[typeName];
+    if (!snapshotType) continue;
+
+    const gqlPermission = convertRemoteGqlPermissionToSnapshot(permission.permission);
+    if (!gqlPermission) continue;
+
+    snapshotType.permissions = {
+      ...snapshotType.permissions,
+      gql: gqlPermission,
+    };
   }
 
   return normalizeSchemaSnapshot({
@@ -2015,120 +2483,183 @@ const SYSTEM_FIELDS = new Set(["id"]);
  * Compare remote TailorDB types with a local snapshot
  * @param {ProtoTailorDBType[]} remoteTypes - Remote types from listParsedTailorDBTypes API
  * @param {SchemaSnapshot} snapshot - Local schema snapshot
+ * @param {readonly RemoteGqlPermission[]} remoteGqlPermissions - Remote GQL permissions for the namespace
  * @returns {SchemaDrift[]} List of drifts detected
  */
 export function compareRemoteWithSnapshot(
   remoteTypes: ProtoTailorDBType[],
   snapshot: SchemaSnapshot,
+  remoteGqlPermissions: readonly RemoteGqlPermission[] = [],
 ): SchemaDrift[] {
   return compareNormalizedRemoteWithSnapshot(
-    createSnapshotFromRemoteTypes(remoteTypes, snapshot.namespace),
-    normalizeSchemaSnapshot(snapshot),
+    createRemoteComparableSnapshot(
+      createSnapshotFromRemoteTypes(
+        remoteTypes,
+        snapshot.namespace,
+        remoteGqlPermissions,
+        snapshot,
+      ),
+    ),
+    createRemoteComparableSnapshot(snapshot),
   );
+}
+
+function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
+  const types = createSnapshotRecord<TailorDBSnapshotType>();
+
+  for (const [typeName, type] of Object.entries(snapshot.types)) {
+    const fields = createSnapshotRecord<SnapshotFieldConfig>();
+    for (const [fieldName, field] of Object.entries(type.fields)) {
+      if (SYSTEM_FIELDS.has(fieldName)) continue;
+      fields[fieldName] = field;
+    }
+    types[typeName] = { ...type, fields };
+  }
+
+  return normalizeSchemaSnapshot({
+    ...snapshot,
+    types,
+  });
+}
+
+function fieldDriftFromChange(
+  change: Extract<DiffChange, { kind: "field_modified" }>,
+): SchemaDrift {
+  return (
+    compareFields(change.typeName, change.fieldName, change.before, change.after) ?? {
+      typeName: change.typeName,
+      kind: "field_mismatch",
+      fieldName: change.fieldName,
+      details: `Field '${change.fieldName}' differs between remote and snapshot`,
+    }
+  );
+}
+
+function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
+  switch (change.kind) {
+    case "type_added":
+      return {
+        typeName: change.typeName,
+        kind: "type_missing_remote",
+        details: `Type '${change.typeName}' exists in snapshot but not in remote`,
+      };
+    case "type_removed":
+      return {
+        typeName: change.typeName,
+        kind: "type_missing_local",
+        details: `Type '${change.typeName}' exists in remote but not in snapshot`,
+      };
+    case "type_settings_modified":
+    case "type_modified":
+      return {
+        typeName: change.typeName,
+        kind: "type_settings_mismatch",
+        details: change.reason ?? "Type settings differ between remote and snapshot",
+      };
+    case "field_added":
+      return {
+        typeName: change.typeName,
+        kind: "field_missing_remote",
+        fieldName: change.fieldName,
+        details: `Field '${change.fieldName}' exists in snapshot but not in remote`,
+      };
+    case "field_removed":
+      return {
+        typeName: change.typeName,
+        kind: "field_missing_local",
+        fieldName: change.fieldName,
+        details: `Field '${change.fieldName}' exists in remote but not in snapshot`,
+      };
+    case "field_modified":
+      return fieldDriftFromChange(change);
+    case "index_added":
+      return {
+        typeName: change.typeName,
+        kind: "index_missing_remote",
+        indexName: change.indexName,
+        details: `Index '${change.indexName}' exists in snapshot but not in remote`,
+      };
+    case "index_removed":
+      return {
+        typeName: change.typeName,
+        kind: "index_missing_local",
+        indexName: change.indexName,
+        details: `Index '${change.indexName}' exists in remote but not in snapshot`,
+      };
+    case "index_modified":
+      return {
+        typeName: change.typeName,
+        kind: "index_mismatch",
+        indexName: change.indexName,
+        details: change.reason ?? `Index '${change.indexName}' differs between remote and snapshot`,
+      };
+    case "file_added":
+      return {
+        typeName: change.typeName,
+        kind: "file_missing_remote",
+        fileName: change.fieldName,
+        details: `File '${change.fieldName}' exists in snapshot but not in remote`,
+      };
+    case "file_removed":
+      return {
+        typeName: change.typeName,
+        kind: "file_missing_local",
+        fileName: change.fieldName,
+        details: `File '${change.fieldName}' exists in remote but not in snapshot`,
+      };
+    case "file_modified":
+      return {
+        typeName: change.typeName,
+        kind: "file_mismatch",
+        fileName: change.fieldName,
+        details: change.reason ?? `File '${change.fieldName}' differs between remote and snapshot`,
+      };
+    case "relationship_added":
+      return {
+        typeName: change.typeName,
+        kind: "relationship_missing_remote",
+        relationshipName: change.relationshipName,
+        relationshipType: change.relationshipType,
+        details: `Relationship '${change.relationshipName}' exists in snapshot but not in remote`,
+      };
+    case "relationship_removed":
+      return {
+        typeName: change.typeName,
+        kind: "relationship_missing_local",
+        relationshipName: change.relationshipName,
+        relationshipType: change.relationshipType,
+        details: `Relationship '${change.relationshipName}' exists in remote but not in snapshot`,
+      };
+    case "relationship_modified":
+      return {
+        typeName: change.typeName,
+        kind: "relationship_mismatch",
+        relationshipName: change.relationshipName,
+        relationshipType: change.relationshipType,
+        details:
+          change.reason ??
+          `Relationship '${change.relationshipName}' differs between remote and snapshot`,
+      };
+    case "permission_modified":
+      return {
+        typeName: change.typeName,
+        kind: "permission_mismatch",
+        details: change.reason ?? "Permissions differ between remote and snapshot",
+      };
+    default: {
+      change satisfies never;
+      throw new Error("Unsupported diff change");
+    }
+  }
 }
 
 function compareNormalizedRemoteWithSnapshot(
   remoteSnapshot: NormalizedSchemaSnapshot,
   snapshot: NormalizedSchemaSnapshot,
 ): SchemaDrift[] {
-  const drifts: SchemaDrift[] = [];
-
-  // Build maps for easy lookup
-  const remoteTypeMap = new Map(Object.entries(remoteSnapshot.types));
-
-  const snapshotTypeNames = new Set(Object.keys(snapshot.types));
-  const remoteTypeNames = new Set(Object.keys(remoteSnapshot.types));
-
-  // Check for types missing in remote
-  for (const typeName of snapshotTypeNames) {
-    if (!remoteTypeNames.has(typeName)) {
-      drifts.push({
-        typeName,
-        kind: "type_missing_remote",
-        details: `Type '${typeName}' exists in snapshot but not in remote`,
-      });
-    }
-  }
-
-  // Check for types missing in snapshot (unexpected types in remote)
-  for (const typeName of remoteTypeNames) {
-    if (!snapshotTypeNames.has(typeName)) {
-      drifts.push({
-        typeName,
-        kind: "type_missing_local",
-        details: `Type '${typeName}' exists in remote but not in snapshot`,
-      });
-    }
-  }
-
-  // Compare fields for types that exist in both
-  for (const typeName of snapshotTypeNames) {
-    if (!remoteTypeNames.has(typeName)) continue;
-
-    const remoteType = assertDefined(
-      remoteTypeMap.get(typeName),
-      `type "${typeName}" missing from remoteTypeMap`,
-    );
-    const snapshotType = assertDefined(
-      snapshot.types[typeName],
-      `type "${typeName}" missing from snapshot`,
-    );
-
-    const remoteFields = remoteType.fields;
-    const snapshotFields = snapshotType.fields;
-
-    // Exclude system fields (like 'id') from comparison
-    const remoteFieldNames = new Set(
-      Object.keys(remoteFields).filter((f) => !SYSTEM_FIELDS.has(f)),
-    );
-    const snapshotFieldNames = new Set(
-      Object.keys(snapshotFields).filter((f) => !SYSTEM_FIELDS.has(f)),
-    );
-
-    // Check for fields missing in remote
-    for (const fieldName of snapshotFieldNames) {
-      if (!remoteFieldNames.has(fieldName)) {
-        drifts.push({
-          typeName,
-          kind: "field_missing_remote",
-          fieldName,
-          details: `Field '${fieldName}' exists in snapshot but not in remote`,
-        });
-      }
-    }
-
-    // Check for fields missing in snapshot
-    for (const fieldName of remoteFieldNames) {
-      if (!snapshotFieldNames.has(fieldName)) {
-        drifts.push({
-          typeName,
-          kind: "field_missing_local",
-          fieldName,
-          details: `Field '${fieldName}' exists in remote but not in snapshot`,
-        });
-      }
-    }
-
-    // Compare fields that exist in both
-    for (const fieldName of snapshotFieldNames) {
-      if (!remoteFieldNames.has(fieldName)) continue;
-
-      const drift = compareFields(
-        typeName,
-        fieldName,
-        assertDefined(remoteFields[fieldName], `field "${fieldName}" missing from remoteFields`),
-        assertDefined(
-          snapshotFields[fieldName],
-          `field "${fieldName}" missing from snapshotFields`,
-        ),
-      );
-      if (drift) {
-        drifts.push(drift);
-      }
-    }
-  }
-
-  return drifts;
+  return compareNormalizedSnapshots(remoteSnapshot, snapshot).changes.map(
+    schemaDriftFromDiffChange,
+  );
 }
 
 /**
@@ -2156,6 +2687,15 @@ export function formatSchemaDrifts(drifts: SchemaDrift[]): string {
     for (const drift of typeDrifts) {
       if (drift.fieldName) {
         lines.push(`    - Field '${drift.fieldName}': ${drift.details}`);
+      } else if (drift.indexName) {
+        lines.push(`    - Index '${drift.indexName}': ${drift.details}`);
+      } else if (drift.fileName) {
+        lines.push(`    - File '${drift.fileName}': ${drift.details}`);
+      } else if (drift.relationshipName) {
+        const relationshipType = drift.relationshipType ? ` (${drift.relationshipType})` : "";
+        lines.push(
+          `    - Relationship${relationshipType} '${drift.relationshipName}': ${drift.details}`,
+        );
       } else {
         lines.push(`    - ${drift.details}`);
       }

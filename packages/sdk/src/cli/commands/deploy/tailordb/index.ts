@@ -40,6 +40,7 @@ import {
   getLatestMigrationNumber,
   getMigrationFiles,
   INITIAL_SCHEMA_NUMBER,
+  type RemoteGqlPermission,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
@@ -105,6 +106,29 @@ async function fetchRemoteTypes(
         pageSize: maxPageSize,
       });
       return [tailordbTypes, nextPageToken];
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        return [[], ""];
+      }
+      throw error;
+    }
+  });
+}
+
+async function fetchRemoteGqlPermissions(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<RemoteGqlPermission[]> {
+  return fetchAll(async (pageToken, maxPageSize) => {
+    try {
+      const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
+        workspaceId,
+        namespaceName: namespace,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [permissions, nextPageToken];
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         return [[], ""];
@@ -188,9 +212,10 @@ async function verifyRemoteSchema(
 
     // Fetch remote types
     const remoteTypes = await fetchRemoteTypes(client, workspaceId, namespace);
+    const remoteGqlPermissions = await fetchRemoteGqlPermissions(client, workspaceId, namespace);
 
     // Compare remote with expected snapshot
-    const drifts = compareRemoteWithSnapshot(remoteTypes, expectedSnapshot);
+    const drifts = compareRemoteWithSnapshot(remoteTypes, expectedSnapshot, remoteGqlPermissions);
 
     results.push({
       namespace,
