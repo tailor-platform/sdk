@@ -348,6 +348,10 @@ function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
     }
 
     if (child.kind() === "expression_statement") {
+      const moduleDecl = child
+        .children()
+        .find((grandchild) => grandchild.kind() === "internal_module");
+      if (moduleDecl) collectDeclarationName(moduleDecl, names);
       collectUsingDeclarationNames(child, names);
       continue;
     }
@@ -357,11 +361,23 @@ function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
       continue;
     }
 
-    if (["function_declaration", "class_declaration", "enum_declaration"].includes(child.kind())) {
-      const name = child.children().find((grandchild) => grandchild.kind() === "identifier");
-      if (name) names.add(name.text());
+    if (
+      [
+        "function_declaration",
+        "class_declaration",
+        "enum_declaration",
+        "internal_module",
+        "import_alias",
+      ].includes(child.kind())
+    ) {
+      collectDeclarationName(child, names);
     }
   }
+}
+
+function collectDeclarationName(node: SgNode, names: Set<string>): void {
+  const name = node.children().find((child) => child.kind() === "identifier");
+  if (name) names.add(name.text());
 }
 
 function collectUsingDeclarationNames(scope: SgNode, names: Set<string>): void {
@@ -446,6 +462,11 @@ function collectOwnExpressionName(scope: SgNode, names: Set<string>): void {
       .children()
       .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
     if (name) names.add(name.text());
+    return;
+  }
+
+  if (scope.kind() === "internal_module") {
+    collectDeclarationName(scope, names);
   }
 }
 
@@ -505,22 +526,46 @@ function authConnectionTokenReferenceFromMember(
 ): TokenCall | null {
   const property = member.field("property");
   const object = member.field("object");
+  const receiver = authReceiverIdentifier(object);
   if (
     property?.text() !== GET_CONNECTION_TOKEN ||
-    object?.kind() !== "identifier" ||
-    !authLocalNames.has(object.text())
+    !object ||
+    !receiver ||
+    !authLocalNames.has(receiver.text())
   ) {
     return null;
   }
 
-  if (isReferenceShadowed(object, object.text())) return null;
+  if (isReferenceShadowed(receiver, receiver.text())) return null;
 
   const range = object.range();
   return {
     objectNode: object,
-    localName: object.text(),
+    localName: receiver.text(),
     range: [range.start.index, range.end.index],
   };
+}
+
+function authReceiverIdentifier(node: SgNode | null): SgNode | null {
+  if (!node) return null;
+  if (node.kind() === "identifier") return node;
+  if (
+    ![
+      "parenthesized_expression",
+      "as_expression",
+      "satisfies_expression",
+      "non_null_expression",
+      "type_assertion",
+    ].includes(node.kind())
+  ) {
+    return null;
+  }
+
+  for (const child of node.children()) {
+    const receiver = authReceiverIdentifier(child);
+    if (receiver) return receiver;
+  }
+  return null;
 }
 
 function findAuthConnectionTokenReferences(root: SgNode, authLocalNames: Set<string>): TokenCall[] {
