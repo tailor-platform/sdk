@@ -1151,6 +1151,18 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "import-equals-collision.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          'import authconnection = require("./client");',
+          "",
+          "export async function run() {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "non-call.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1180,7 +1192,13 @@ describe("runCodemods", () => {
         {
           codemodId: "v2/auth-connection-token-helper",
           prompt: codemod.prompt,
-          files: ["collision.ts", "destructure.ts", "non-call.ts", "type-collision.ts"],
+          files: [
+            "collision.ts",
+            "destructure.ts",
+            "import-equals-collision.ts",
+            "non-call.ts",
+            "type-collision.ts",
+          ],
           findings: [
             expect.objectContaining({
               file: "collision.ts",
@@ -1190,6 +1208,11 @@ describe("runCodemods", () => {
             expect.objectContaining({
               file: "destructure.ts",
               excerpt: "export const { getConnectionToken } = auth;",
+            }),
+            expect.objectContaining({
+              file: "import-equals-collision.ts",
+              line: 5,
+              excerpt: 'return auth.getConnectionToken("google");',
             }),
             expect.objectContaining({
               file: "non-call.ts",

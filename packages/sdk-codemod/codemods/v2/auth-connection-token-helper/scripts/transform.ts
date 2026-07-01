@@ -269,17 +269,29 @@ function localDeclarationNames(root: SgNode): Set<string> {
 function hasRuntimeImportCollision(localNames: Set<string>, imports: SgNode[]): boolean {
   if (localNames.has(AUTHCONNECTION)) return true;
 
-  return imports.some((importStmt) =>
-    importBindings(importStmt).some(
-      (binding) =>
-        binding.localName === AUTHCONNECTION &&
-        !(
-          binding.source === RUNTIME_MODULE &&
-          binding.importedName === AUTHCONNECTION &&
-          !binding.namespace &&
-          !binding.typeOnly
-        ),
-    ),
+  return imports.some(
+    (importStmt) =>
+      importEqualsLocalName(importStmt) === AUTHCONNECTION ||
+      importBindings(importStmt).some(
+        (binding) =>
+          binding.localName === AUTHCONNECTION &&
+          !(
+            binding.source === RUNTIME_MODULE &&
+            binding.importedName === AUTHCONNECTION &&
+            !binding.namespace &&
+            !binding.typeOnly
+          ),
+      ),
+  );
+}
+
+function importEqualsLocalName(importStmt: SgNode): string | null {
+  const clause = importStmt.children().find((child) => child.kind() === "import_require_clause");
+  return (
+    clause
+      ?.children()
+      .find((child) => child.kind() === "identifier")
+      ?.text() ?? null
   );
 }
 
@@ -632,14 +644,30 @@ function buildOnlyNamedImportRemovalEdit(source: string, importStmt: SgNode): Ed
   const named = namedImportsNode(importStmt);
   if (!named) return null;
 
-  let start = named.range().start.index;
+  let start = skipBackwardImportTrivia(source, named.range().start.index);
   const end = named.range().end.index;
-  while (start > 0 && (source[start - 1] === " " || source[start - 1] === "\t")) start--;
   if (source[start - 1] === ",") {
     start--;
-    while (start > 0 && (source[start - 1] === " " || source[start - 1] === "\t")) start--;
+    start = skipBackwardImportTrivia(source, start);
   }
   return { startPos: start, endPos: end, insertedText: "" };
+}
+
+function skipBackwardImportTrivia(source: string, index: number): number {
+  let pos = index;
+  while (pos > 0) {
+    while (pos > 0 && /\s/.test(source[pos - 1]!)) pos--;
+
+    if (source.slice(pos - 2, pos) === "*/") {
+      const start = source.lastIndexOf("/*", pos - 2);
+      if (start === -1) return pos;
+      pos = start;
+      continue;
+    }
+
+    return pos;
+  }
+  return pos;
 }
 
 function skipInlineTrivia(source: string, index: number): number {
