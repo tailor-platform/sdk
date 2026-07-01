@@ -125,6 +125,40 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports embedded code strings that alias bare runtime roots", async () => {
+    await writeProjectFile(
+      "seed/bare-root.mjs",
+      [
+        "const code = `const runtime = tailor;`;",
+        "const dbCode = `const runtime = tailordb;`;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["seed/bare-root.mjs"],
+        findings: [
+          expect.objectContaining({
+            file: "seed/bare-root.mjs",
+            line: 1,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const code = `const runtime = tailor;`;",
+          }),
+          expect.objectContaining({
+            file: "seed/bare-root.mjs",
+            line: 2,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const dbCode = `const runtime = tailordb;`;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports spaced bracket runtime globals inside embedded code strings", async () => {
     await writeProjectFile(
       "seed/spaced-bracket.mjs",

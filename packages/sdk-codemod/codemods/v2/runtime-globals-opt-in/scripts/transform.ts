@@ -1039,7 +1039,13 @@ function collectStringRuntimeGlobalFindings(
     const lines = fragment.text().split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
-      if (!runtimeGlobalTextPattern.test(line) && !globalRuntimeRootTextPattern.test(line)) {
+      const hasRuntimeGlobal = runtimeGlobalTextPattern.test(line);
+      const hasGlobalRuntimeRoot = globalRuntimeRootTextPattern.test(line);
+      const hasBareRuntimeRoot = BARE_RUNTIME_ROOT_TEXT_PATTERN.test(line);
+      if (!hasRuntimeGlobal && !hasGlobalRuntimeRoot && !hasBareRuntimeRoot) {
+        continue;
+      }
+      if (!hasRuntimeGlobal && !hasGlobalRuntimeRoot && /^(?:tailor|tailordb)$/.test(line.trim())) {
         continue;
       }
       const context = i === 0 ? line : `${lines[i - 1]}\n${line}`;
