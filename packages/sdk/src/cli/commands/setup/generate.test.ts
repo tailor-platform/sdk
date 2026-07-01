@@ -919,6 +919,33 @@ describe("setupTarget (integration)", () => {
     const lock = readLock(testDir);
     expect(lock?.targets[0]).toMatchObject({ inputs: { seedValidate: true } });
   });
+
+  test("action: preserves user-edited build-site run body on rerun without --force", async () => {
+    const actionOpts = (): Parameters<typeof setupTarget>[0] => ({
+      kind: "action",
+      workspaceName: "my-app",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadHasStaticWebsites: async () => true,
+    });
+    // First run: generate the composite action
+    await setupTarget(actionOpts());
+    const actionFile = path.join(testDir, ".github/actions/tailor-my-app/action.yml");
+    // Simulate user customizing the build command
+    const generated = fs.readFileSync(actionFile, "utf-8");
+    const edited = generated.replace(
+      /(\s*- id: build-site[\s\S]*?run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/,
+      (_, header, _body, tail) => `${header}\n        pnpm run build:static${tail}`,
+    );
+    fs.writeFileSync(actionFile, edited, "utf-8");
+    // Second run: should preserve the custom build command
+    await setupTarget(actionOpts());
+    const afterRerun = fs.readFileSync(actionFile, "utf-8");
+    expect(afterRerun).toContain("pnpm run build:static");
+  });
 });
 
 describe("setupCoordinate", () => {

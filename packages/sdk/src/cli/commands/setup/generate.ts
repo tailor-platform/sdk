@@ -462,6 +462,31 @@ export function normalizeActionContent(content: string): string {
 }
 
 /**
+ * Extract the run: body of the build-site step from action content.
+ * Returns null when the step is absent (hasStaticWebsites is false).
+ * @param content - Action workflow content
+ * @returns The captured run body string (includes leading newline), or null
+ */
+function extractBuildSiteRunBody(content: string): string | null {
+  const m = BUILD_SITE_RUN_RE.exec(content);
+  return m ? (m[2] ?? null) : null;
+}
+
+/**
+ * Replace the run: body of the build-site step in action content.
+ * No-op when the step is absent.
+ * @param content - Target action workflow content
+ * @param body - Run body to inject (includes leading newline and indentation)
+ * @returns Content with the run body replaced
+ */
+function injectBuildSiteRunBody(content: string, body: string): string {
+  return content.replace(
+    BUILD_SITE_RUN_RE,
+    (_, header, _placeholder, tail) => `${header}${body}${tail}`,
+  );
+}
+
+/**
  * Decide how to reconcile a target with the on-disk file and lock state.
  * @param obj - Decision inputs
  * @param obj.existing - The matching lock target, if any
@@ -615,8 +640,19 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   }
   const idInjected = idResult?.injected ?? false;
 
+  // For action targets, preserve the user-editable build-site run body when
+  // regenerating (hash matched after normalization) so that custom build commands
+  // survive non-forced reruns without being silently overwritten.
+  let contentToWrite = resolved.render.content;
+  if (decision.action === "regenerate" && normalize && currentContent !== null) {
+    const existingBody = extractBuildSiteRunBody(currentContent);
+    if (existingBody !== null) {
+      contentToWrite = injectBuildSiteRunBody(contentToWrite, existingBody);
+    }
+  }
+
   fs.mkdirSync(path.dirname(absFile), { recursive: true });
-  fs.writeFileSync(absFile, resolved.render.content, "utf-8");
+  fs.writeFileSync(absFile, contentToWrite, "utf-8");
 
   const newTarget: LockTarget = {
     kind: resolved.kind,
