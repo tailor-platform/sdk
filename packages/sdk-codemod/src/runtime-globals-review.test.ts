@@ -564,6 +564,59 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports runtime globals inside intrinsic self-closing JSX in js files", async () => {
+    await writeProjectFile(
+      "components/intrinsic.js",
+      ["export const view = <div value={tailor.idp.Client} />;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["components/intrinsic.js"],
+        findings: [
+          expect.objectContaining({
+            file: "components/intrinsic.js",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "export const view = <div value={tailor.idp.Client} />;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("keeps ts files with jsx-like strings in TypeScript mode", async () => {
+    await writeProjectFile(
+      "resolvers/type-assertion.ts",
+      [
+        'const template = "<Foo />";',
+        "const casted = <Bar>value;",
+        "const clientFactory = tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/type-assertion.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/type-assertion.ts",
+            line: 3,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = tailor.idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports runtime globals inside destructuring defaults", async () => {
     await writeProjectFile(
       "resolvers/destructuring-default.ts",

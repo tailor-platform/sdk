@@ -87,12 +87,18 @@ function quickFilter(source: string): boolean {
   return source.includes(TAILOR_IDP_CLIENT);
 }
 
+function isJsLikeFile(filePath: string): boolean {
+  return [".js", ".mjs", ".cjs"].some((ext) => filePath.endsWith(ext));
+}
+
 function looksLikeJsx(source: string): boolean {
-  return source.includes("</") || /<[A-Z][\w.:]*(?:\s[^<>]*)?\/>/.test(source);
+  return source.includes("</") || /<[A-Za-z][\w.:]*(?:\s[^<>]*)?\/>/.test(source);
 }
 
 function sourceLang(filePath: string, source: string): Lang {
-  return filePath.endsWith(".tsx") || filePath.endsWith(".jsx") || looksLikeJsx(source)
+  return filePath.endsWith(".tsx") ||
+    filePath.endsWith(".jsx") ||
+    (isJsLikeFile(filePath) && looksLikeJsx(source))
     ? Lang.Tsx
     : Lang.TypeScript;
 }
