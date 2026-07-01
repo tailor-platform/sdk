@@ -126,8 +126,18 @@ jobs:
           # Example: node scripts/seed.mjs
           true
       # __SEED_DATA_END__
+      - id: slack-prereq
+        if: always()
+        shell: bash
+        env:
+          SLACK_TOKEN: ${{ secrets.TAILOR_SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ vars.TAILOR_SLACK_CHANNEL_ID }}
+        run: |
+          if [[ -n "$SLACK_TOKEN" && -n "$SLACK_CHANNEL_ID" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
       - id: tailor-notify
-        if: always() && vars.TAILOR_SLACK_CHANNEL_ID != ''
+        if: always() && steps.slack-prereq.outputs.ready == 'true'
         uses: tailor-platform/actions/notify@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
         with:
           provider: slack
