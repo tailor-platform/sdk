@@ -874,11 +874,14 @@ function mergeBundledScripts(
 }
 
 /**
- * Reject executor and workflow-job names that collide across configs. These map
- * to workspace-global function-registry entries (executor--<name>,
- * workflow--<name>), so a duplicate would make one config's apply overwrite or
- * fail on another's; resolver and auth-hook names are namespace-qualified and
- * are intentionally excluded.
+ * Reject executor and workflow-job names that collide across configs. Executor
+ * resources (trn ...:executor:<name>) and workflow-job function-registry entries
+ * (workflow--<name>) are workspace-global, so a duplicate would make one config's
+ * apply overwrite or fail on another's; resolver and auth-hook names are
+ * namespace-qualified and are intentionally excluded. Executor names come from
+ * the loaded executors rather than the bundle: non-function operations
+ * (webhook, graphql, workflow) are not bundled yet still create a global
+ * executor resource, so a bundle-only check would miss them.
  * @param targets - Built deployment targets to check
  */
 export function assertUniqueGlobalFunctionNames(
@@ -888,7 +891,8 @@ export function assertUniqueGlobalFunctionNames(
   const workflowJobs = new Set<string>();
 
   for (const target of targets) {
-    for (const name of target.bundledScripts.executors.keys()) {
+    for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
+      const name = executor.name;
       if (executors.has(name)) {
         throw new Error(
           `Duplicate executor name "${name}" across config files. Executor and workflow job names must be unique across all configs in a single deploy.`,

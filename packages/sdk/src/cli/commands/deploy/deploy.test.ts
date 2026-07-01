@@ -792,12 +792,19 @@ type FakeBundledScripts = {
   executors?: Record<string, string>;
   workflowJobs?: Record<string, string>;
   authHooks?: Record<string, string>;
+  executorNames?: string[];
 };
 
 function fakeTarget(
   bundles: FakeBundledScripts,
 ): Parameters<typeof assertUniqueGlobalFunctionNames>[0][number] {
+  const executorNames = bundles.executorNames ?? Object.keys(bundles.executors ?? {});
   return {
+    application: {
+      executorService: {
+        executors: Object.fromEntries(executorNames.map((name) => [`/${name}.ts`, { name }])),
+      },
+    },
     bundledScripts: {
       resolvers: new Map(Object.entries(bundles.resolvers ?? {})),
       executors: new Map(Object.entries(bundles.executors ?? {})),
@@ -811,11 +818,26 @@ describe("assertUniqueGlobalFunctionNames", () => {
   test("throws when two configs define the same executor name", () => {
     expect(() =>
       assertUniqueGlobalFunctionNames([
-        fakeTarget({ executors: { "sync-user": "a" } }),
-        fakeTarget({ executors: { "sync-user": "b" } }),
+        fakeTarget({ executorNames: ["sync-user"] }),
+        fakeTarget({ executorNames: ["sync-user"] }),
       ]),
     ).toThrow(
       'Duplicate executor name "sync-user" across config files. Executor and workflow job names must be unique across all configs in a single deploy.',
+    );
+  });
+
+  test("throws when two configs define the same non-bundled executor name", () => {
+    // Regression: non-function executors (webhook/graphql/workflow ops) are not
+    // bundled, so they never appear in bundledScripts.executors, yet they still
+    // create a workspace-global executor resource. A bundle-only check would miss
+    // this collision; detecting from loaded executors catches it.
+    expect(() =>
+      assertUniqueGlobalFunctionNames([
+        fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
+        fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
+      ]),
+    ).toThrow(
+      'Duplicate executor name "forward-webhook" across config files. Executor and workflow job names must be unique across all configs in a single deploy.',
     );
   });
 
@@ -833,15 +855,15 @@ describe("assertUniqueGlobalFunctionNames", () => {
   test("accepts distinct executor names across configs", () => {
     expect(() =>
       assertUniqueGlobalFunctionNames([
-        fakeTarget({ executors: { "sync-user": "a" } }),
-        fakeTarget({ executors: { "sync-order": "b" } }),
+        fakeTarget({ executorNames: ["sync-user"] }),
+        fakeTarget({ executorNames: ["sync-order"] }),
       ]),
     ).not.toThrow();
   });
 
   test("is a no-op for a single config", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([fakeTarget({ executors: { "sync-user": "a" } })]),
+      assertUniqueGlobalFunctionNames([fakeTarget({ executorNames: ["sync-user"] })]),
     ).not.toThrow();
   });
 
