@@ -151,6 +151,42 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports global object and casted runtime globals inside embedded code strings", async () => {
+    await writeProjectFile(
+      "seed/global-object-casted-root.mjs",
+      [
+        "const code = `",
+        "const clientFactory = globalThis.tailor.idp.Client;",
+        "const db = new (tailordb as any).Client();",
+        "`;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["seed/global-object-casted-root.mjs"],
+        findings: [
+          expect.objectContaining({
+            file: "seed/global-object-casted-root.mjs",
+            line: 2,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const clientFactory = globalThis.tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "seed/global-object-casted-root.mjs",
+            line: 3,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const db = new (tailordb as any).Client();",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports direct runtime globals skipped because of binding collisions", async () => {
     await writeProjectFile(
       "resolvers/createUser.ts",
@@ -549,6 +585,23 @@ describe("runtime-globals-opt-in review findings", () => {
     await writeProjectFile(
       "resolvers/type-namespace-import.ts",
       ['import type * as tailor from "./types";', "type User = tailor.idp.User;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report names imported inside declaration scopes", async () => {
+    await writeProjectFile(
+      "types/ambient-module.d.ts",
+      [
+        'declare module "pkg" {',
+        '  import type * as tailor from "./types";',
+        "  type User = tailor.idp.User;",
+        "}",
+        "",
+      ].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);

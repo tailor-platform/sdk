@@ -607,11 +607,24 @@ function forBindingChildren(loop: SgNode): SgNode[] {
     : [];
 }
 
+function scopeHasImportBinding(scope: SgNode, name: string, namespace: BindingNamespace): boolean {
+  for (const importStmt of scope.findAll({ rule: { kind: "import_statement" } })) {
+    if (!sameNode(nearestReviewScope(importStmt.parent()), scope)) continue;
+    for (const binding of importBindings(importStmt)) {
+      if (binding.localName !== name) continue;
+      if (namespace === "type" || !binding.typeOnly) return true;
+    }
+  }
+  return false;
+}
+
 function scopeHasValueBinding(scope: SgNode, name: string): boolean {
   if (scope.kind() === "function_expression" || scope.kind() === "generator_function") {
     const functionName = scope.children().find((child) => child.kind() === "identifier");
     if (functionName?.text() === name) return true;
   }
+
+  if (scopeHasImportBinding(scope, name, "value")) return true;
 
   for (const decl of scope.findAll({ rule: { kind: "variable_declarator" } })) {
     const varDeclarator = isVarDeclarator(decl);
@@ -664,6 +677,8 @@ function scopeHasValueBinding(scope: SgNode, name: string): boolean {
 }
 
 function scopeHasTypeBinding(scope: SgNode, name: string): boolean {
+  if (scopeHasImportBinding(scope, name, "type")) return true;
+
   for (const decl of scope.findAll({
     rule: { any: REVIEW_TYPE_DECLARATION_KINDS.map((kind) => ({ kind })) },
   })) {
