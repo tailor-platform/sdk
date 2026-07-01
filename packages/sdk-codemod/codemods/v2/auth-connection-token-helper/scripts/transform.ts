@@ -559,6 +559,43 @@ function buildImportSpecRemovalEdit(source: string, binding: AuthBinding): Edit 
   return { startPos: r.start.index, endPos: r.end.index, insertedText: "" };
 }
 
+function importRangeKey(importStmt: SgNode): string {
+  const range = importStmt.range();
+  return `${range.start.index}:${range.end.index}`;
+}
+
+function buildGroupedImportSpecRemovalEdits(
+  source: string,
+  importStmt: SgNode,
+  bindings: AuthBinding[],
+): Edit[] {
+  const allSpecs = importStmt.findAll({ rule: { kind: "import_specifier" } });
+  const removableSpecStarts = new Set(bindings.map((binding) => binding.spec.range().start.index));
+
+  if (removableSpecStarts.size === allSpecs.length) {
+    if (hasDefaultOrNamespaceImport(importStmt)) {
+      const edit = buildOnlyNamedImportRemovalEdit(source, importStmt);
+      return edit ? [edit] : [];
+    }
+
+    const range = importStmt.range();
+    return [{ startPos: range.start.index, endPos: range.end.index, insertedText: "" }];
+  }
+
+  if (bindings.length === 1) {
+    const edit = buildImportSpecRemovalEdit(source, bindings[0]!);
+    return edit ? [edit] : [];
+  }
+
+  const named = namedImportsNode(importStmt);
+  if (!named) return [];
+
+  const keptSpecTexts = allSpecs
+    .filter((spec) => !removableSpecStarts.has(spec.range().start.index))
+    .map((spec) => spec.text());
+  return [named.replace(`{ ${keptSpecTexts.join(", ")} }`)];
+}
+
 function isDirectiveStatement(node: SgNode): boolean {
   return node.kind() === "expression_statement" && node.children()[0]?.kind() === "string";
 }
@@ -665,6 +702,10 @@ function transformParsed(source: string, root: SgNode): string | null {
     scheduledRangesByLocalName.set(call.localName, ranges);
   }
 
+  const removableBindingsByImport = new Map<
+    string,
+    { importStmt: SgNode; bindings: AuthBinding[] }
+  >();
   for (const binding of authBindings) {
     if (calls.every((call) => call.localName !== binding.localName)) continue;
     const remainingRefs = countRemainingRefs(
@@ -673,8 +714,17 @@ function transformParsed(source: string, root: SgNode): string | null {
       scheduledRangesByLocalName.get(binding.localName) ?? [],
     );
     if (remainingRefs > 0) continue;
-    const edit = buildImportSpecRemovalEdit(source, binding);
-    if (edit) edits.push(edit);
+    const key = importRangeKey(binding.importStmt);
+    const group = removableBindingsByImport.get(key) ?? {
+      importStmt: binding.importStmt,
+      bindings: [],
+    };
+    group.bindings.push(binding);
+    removableBindingsByImport.set(key, group);
+  }
+
+  for (const group of removableBindingsByImport.values()) {
+    edits.push(...buildGroupedImportSpecRemovalEdits(source, group.importStmt, group.bindings));
   }
 
   const result = normalizeSource(applyEdits(source, edits));
