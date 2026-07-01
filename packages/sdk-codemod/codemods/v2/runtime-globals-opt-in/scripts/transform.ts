@@ -64,6 +64,11 @@ interface RuntimeBindingNames {
   value: Set<string>;
 }
 
+interface RuntimeRootReference {
+  rootName: string;
+  globalObject: boolean;
+}
+
 interface ImportBinding {
   localName: string;
   importedName?: string;
@@ -389,12 +394,18 @@ function addReviewFinding(
   findings.push({ file, line, message, excerpt });
 }
 
-function runtimeRootName(source: string): string | null {
-  return (
-    /^\s*(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
+function runtimeRootReference(source: string): RuntimeRootReference | null {
+  const globalObjectMatch =
+    /^\s*globalThis\.(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
       source,
-    )?.[1] ?? null
-  );
+    );
+  if (globalObjectMatch) {
+    return { rootName: globalObjectMatch[1]!, globalObject: true };
+  }
+
+  const bareMatch =
+    /^\s*(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(source);
+  return bareMatch ? { rootName: bareMatch[1]!, globalObject: false } : null;
 }
 
 function importedRuntimeNames(imports: SgNode[]): RuntimeBindingNames {
@@ -609,8 +620,11 @@ function collectDirectRuntimeGlobalFindings(
   })) {
     if (hasDeclarationReferenceAncestor(node)) continue;
     const nodeText = node.text();
-    const rootName = runtimeRootName(nodeText);
-    if (!rootName || hasRuntimeBindingInScope(node, rootName, importedNames)) continue;
+    const rootRef = runtimeRootReference(nodeText);
+    if (!rootRef) continue;
+    if (!rootRef.globalObject && hasRuntimeBindingInScope(node, rootRef.rootName, importedNames)) {
+      continue;
+    }
     if (!runtimeGlobalTextPattern.test(nodeText)) continue;
     addReviewFinding(
       findings,

@@ -469,6 +469,40 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports runtime globals reached through globalThis", async () => {
+    await writeProjectFile(
+      "resolvers/global-this.ts",
+      [
+        "const clientFactory = globalThis.tailor.idp.Client;",
+        "const errors = globalThis.TailorErrors;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/global-this.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/global-this.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = globalThis.tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/global-this.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const errors = globalThis.TailorErrors;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports shorthand Tailor error globals left for manual migration", async () => {
     await writeProjectFile("errors.ts", ["const exported = { TailorErrors };", ""].join("\n"));
 
