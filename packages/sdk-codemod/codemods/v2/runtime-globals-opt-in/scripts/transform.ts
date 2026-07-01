@@ -16,7 +16,6 @@ const REVIEW_NODE_KINDS = new Set([
   "shorthand_property_identifier",
   "subscript_expression",
   "type_identifier",
-  "new_expression",
 ]);
 
 interface ImportBinding {
@@ -349,7 +348,10 @@ function collectStringRuntimeGlobalFindings(
     const startLine = fragment.range().start.line + 1;
     const lines = fragment.text().split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
-      if (!matchesRuntimeGlobalsSourceString(lines[i]!)) continue;
+      const line = lines[i]!;
+      if (!runtimeGlobalTextPattern.test(line)) continue;
+      const context = i === 0 ? line : `${lines[i - 1]}\n${line}`;
+      if (!matchesRuntimeGlobalsSourceString(context)) continue;
       addReviewFinding(
         findings,
         seen,

@@ -67,6 +67,30 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports embedded code strings when syntax cue and global split lines", async () => {
+    await writeProjectFile(
+      "seed/wrapped.mjs",
+      ["const code = `", "const C =", " tailor.idp.Client;", "`;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["seed/wrapped.mjs"],
+        findings: [
+          expect.objectContaining({
+            file: "seed/wrapped.mjs",
+            line: 3,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "tailor.idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports direct runtime globals skipped because of binding collisions", async () => {
     await writeProjectFile(
       "resolvers/createUser.ts",
@@ -173,6 +197,17 @@ describe("runtime-globals-opt-in review findings", () => {
         'console.log("Use the migration guide before changing runtime globals");',
         "",
       ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report prose runtime globals inside direct code wrappers", async () => {
+    await writeProjectFile(
+      "errors.ts",
+      ['throw new Error("Please renew tailor.idp.Client credentials");', ""].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
