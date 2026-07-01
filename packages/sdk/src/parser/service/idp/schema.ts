@@ -36,18 +36,16 @@ function normalizeIdPGqlOperations(
 export const IdPGqlOperationsSchema = z
   .union([
     z.literal("query"),
-    z
-      .object({
-        create: z.boolean().optional().describe("Enable _createUser mutation (default: true)"),
-        update: z.boolean().optional().describe("Enable _updateUser mutation (default: true)"),
-        delete: z.boolean().optional().describe("Enable _deleteUser mutation (default: true)"),
-        read: z.boolean().optional().describe("Enable _users and _user queries (default: true)"),
-        sendPasswordResetEmail: z
-          .boolean()
-          .optional()
-          .describe("Enable _sendPasswordResetEmail mutation (default: true)"),
-      })
-      .strict(),
+    z.strictObject({
+      create: z.boolean().optional().describe("Enable _createUser mutation (default: true)"),
+      update: z.boolean().optional().describe("Enable _updateUser mutation (default: true)"),
+      delete: z.boolean().optional().describe("Enable _deleteUser mutation (default: true)"),
+      read: z.boolean().optional().describe("Enable _users and _user queries (default: true)"),
+      sendPasswordResetEmail: z
+        .boolean()
+        .optional()
+        .describe("Enable _sendPasswordResetEmail mutation (default: true)"),
+    }),
   ])
   .describe(
     "Configuration for GraphQL operations on IdP users.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
@@ -66,7 +64,7 @@ const allowedReturnOriginPattern =
   /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url)$/;
 
 export const IdPUserAuthPolicySchema = z
-  .object({
+  .strictObject({
     useNonEmailIdentifier: z
       .boolean()
       .optional()
@@ -143,7 +141,7 @@ export const IdPUserAuthPolicySchema = z
       .optional()
       .describe("Label shown next to the user account in authenticator apps"),
   })
-  .strict()
+
   .refine(
     (data) =>
       data.passwordMinLength === undefined ||
@@ -233,13 +231,13 @@ const emailFieldSchema = z
   .regex(/^[^\r\n]*$/, "must not contain newline characters");
 
 export const IdPEmailConfigSchema = z
-  .object({
+  .strictObject({
     fromName: emailFieldSchema.optional().describe("Default sender display name for emails"),
     passwordResetSubject: emailFieldSchema
       .optional()
       .describe("Default subject for password reset emails"),
   })
-  .strict()
+
   .describe("Namespace-level email configuration defaults");
 
 const IdPPermissionOperandSchema = z.union([
@@ -247,10 +245,10 @@ const IdPPermissionOperandSchema = z.union([
   z.boolean(),
   z.array(z.string()).readonly(),
   z.array(z.boolean()).readonly(),
-  z.object({ user: z.string() }).strict(),
-  z.object({ idpUser: z.enum(["id", "name", "disabled"]) }).strict(),
-  z.object({ oldIdpUser: z.enum(["id", "name", "disabled"]) }).strict(),
-  z.object({ newIdpUser: z.enum(["id", "name", "disabled"]) }).strict(),
+  z.strictObject({ user: z.string() }),
+  z.strictObject({ idpUser: z.enum(["id", "name", "disabled"]) }),
+  z.strictObject({ oldIdpUser: z.enum(["id", "name", "disabled"]) }),
+  z.strictObject({ newIdpUser: z.enum(["id", "name", "disabled"]) }),
 ]);
 
 const IdPPermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
@@ -261,16 +259,14 @@ const IdPPermissionConditionSchema = z
 
 const IdPActionPermissionSchema = z.union([
   // Object format: { conditions, description?, permit? }
-  z
-    .object({
-      conditions: z.union([
-        IdPPermissionConditionSchema,
-        z.array(IdPPermissionConditionSchema).readonly(),
-      ]),
-      description: z.string().optional(),
-      permit: z.boolean().optional(),
-    })
-    .strict(),
+  z.strictObject({
+    conditions: z.union([
+      IdPPermissionConditionSchema,
+      z.array(IdPPermissionConditionSchema).readonly(),
+    ]),
+    description: z.string().optional(),
+    permit: z.boolean().optional(),
+  }),
   // Single condition tuple: [operand, operator, operand]
   z
     .tuple([IdPPermissionOperandSchema, IdPPermissionOperatorSchema, IdPPermissionOperandSchema])
@@ -298,7 +294,7 @@ const IdPActionPermissionSchema = z.union([
 ]);
 
 export const IdPPermissionSchema = z
-  .object({
+  .strictObject({
     create: z.array(IdPActionPermissionSchema).readonly(),
     read: z.array(IdPActionPermissionSchema).readonly(),
     update: z.array(IdPActionPermissionSchema).readonly(),
@@ -306,14 +302,14 @@ export const IdPPermissionSchema = z
     sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly(),
     unenrollMfa: z.array(IdPActionPermissionSchema).readonly().optional(),
   })
-  .strict()
+
   .describe("Per-operation permission policies for IdP users");
 
 export const IdPSchema = z
-  .object({
+  .strictObject({
     name: z.string().describe("IdP service name"),
     authorization: z
-      .union([z.literal("insecure"), z.literal("loggedIn"), z.object({ cel: z.string() }).strict()])
+      .union([z.literal("insecure"), z.literal("loggedIn"), z.strictObject({ cel: z.string() })])
       .optional()
       .describe("Authorization mode for IdP API access"),
     clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),
@@ -336,7 +332,7 @@ export const IdPSchema = z
       "Per-operation permission policies for IdP users",
     ),
   })
-  .strict()
+
   .refine(
     (data) =>
       !data.userAuthPolicy?.enableMfa ||

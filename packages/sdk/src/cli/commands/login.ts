@@ -136,9 +136,9 @@ export const loginCommand = defineAppCommand({
   name: "login",
   description: "Login to Tailor Platform.",
   args: z.xor([
-    z.object({}).strict().describe("User Login"),
+    z.strictObject({}).describe("User Login"),
     z
-      .object({
+      .strictObject({
         "machine-user": arg(z.literal(true), {
           description: "Login as a platform machine user.",
           required: true,
@@ -153,7 +153,6 @@ export const loginCommand = defineAppCommand({
           env: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
         }),
       })
-      .strict()
       .describe("Machine User Login"),
   ]),
   run: async (args) => {

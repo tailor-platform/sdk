@@ -64,15 +64,13 @@ export async function getOAuth2Client(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get OAuth2 client credentials (including client secret).",
-  args: z
-    .object({
-      ...deploymentArgs,
-      name: arg(z.string(), {
-        positional: true,
-        description: "OAuth2 client name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    name: arg(z.string(), {
+      positional: true,
+      description: "OAuth2 client name",
+    }),
+  }),
   run: async (args) => {
     const credentials = await getOAuth2Client({
       name: args.name,

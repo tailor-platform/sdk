@@ -6,21 +6,19 @@ import { defineAppCommand } from "#/cli/shared/command";
 export const upgradeCommand = defineAppCommand({
   name: "upgrade",
   description: "Run codemods to upgrade your project to a newer SDK version.",
-  args: z
-    .object({
-      from: arg(z.string(), {
-        description: "SDK version before the upgrade (e.g., 1.33.0)",
-      }),
-      "dry-run": arg(z.boolean().default(false), {
-        alias: "d",
-        description: "Preview changes without modifying files",
-      }),
-      path: arg(z.string().default("."), {
-        description: "Project directory to upgrade",
-        completion: { type: "directory" },
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    from: arg(z.string(), {
+      description: "SDK version before the upgrade (e.g., 1.33.0)",
+    }),
+    "dry-run": arg(z.boolean().default(false), {
+      alias: "d",
+      description: "Preview changes without modifying files",
+    }),
+    path: arg(z.string().default("."), {
+      description: "Project directory to upgrade",
+      completion: { type: "directory" },
+    }),
+  }),
   run: async (args) => {
     const { initTelemetry } = await import("#/cli/telemetry/index");
     await initTelemetry();

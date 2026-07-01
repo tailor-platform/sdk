@@ -27,6 +27,7 @@ import type { Jsonifiable } from "type-fest";
 export const testRunCommand = defineAppCommand({
   name: "test-run",
   description: "Run a function on the Tailor Platform server without deploying.",
+  // strip unknown keys
   args: z.object({
     ...workspaceArgs,
     file: arg(z.string(), {

@@ -93,12 +93,10 @@ export async function getExecutor<E extends ExecutorLike>(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get executor details",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...nameArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...nameArgs,
+  }),
   run: async (args) => {
     const executor = await getExecutor({
       name: args.name,

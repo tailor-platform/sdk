@@ -7,7 +7,7 @@ import ml from "#/utils/multiline";
 export const currentCommand = defineAppCommand({
   name: "current",
   description: "Show current user.",
-  args: z.object({}).strict(),
+  args: z.strictObject({}),
   run: async () => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;

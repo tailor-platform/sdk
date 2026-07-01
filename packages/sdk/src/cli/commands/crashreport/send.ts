@@ -11,15 +11,13 @@ import type { CrashReport } from "#/cli/crashreport/report";
 export const sendCommand = defineAppCommand({
   name: "send",
   description: "Submit a crash report to help improve the SDK.",
-  args: z
-    .object({
-      file: arg(z.string(), {
-        description: "Path to the crash report file",
-        required: true,
-        completion: { type: "file", extensions: ["log"] },
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    file: arg(z.string(), {
+      description: "Path to the crash report file",
+      required: true,
+      completion: { type: "file", extensions: ["log"] },
+    }),
+  }),
   run: async (args) => {
     let content: string;
     try {

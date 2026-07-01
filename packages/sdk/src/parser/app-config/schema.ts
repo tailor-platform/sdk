@@ -22,25 +22,23 @@ const logLevelSchema = z
  * label-compatible prefix is added at the metadata boundary, so user-facing
  * configs only need to carry a UUID.
  */
-export const AppConfigSchema = z
-  .object({
-    id: z.uuid({ message: "'id' must be a UUID." }).optional(),
-    name: z.string().min(1, { message: "'name' must be a non-empty string." }),
-    env: z.record(z.string(), envValueSchema).optional(),
-    cors: z.array(z.string()).optional(),
-    allowedIpAddresses: z.array(z.string()).optional(),
-    disableIntrospection: z.boolean().optional(),
-    inlineSourcemap: z.boolean().optional(),
-    logLevel: logLevelSchema.optional(),
-    db: z.unknown().optional(),
-    resolver: z.unknown().optional(),
-    idp: z.unknown().optional(),
-    auth: z.unknown().optional(),
-    executor: z.unknown().optional(),
-    workflow: z.unknown().optional(),
-    httpAdapter: z.unknown().optional(),
-    staticWebsites: z.unknown().optional(),
-    aiGateways: z.unknown().optional(),
-    secrets: z.unknown().optional(),
-  })
-  .strict();
+export const AppConfigSchema = z.strictObject({
+  id: z.uuid({ message: "'id' must be a UUID." }).optional(),
+  name: z.string().min(1, { message: "'name' must be a non-empty string." }),
+  env: z.record(z.string(), envValueSchema).optional(),
+  cors: z.array(z.string()).optional(),
+  allowedIpAddresses: z.array(z.string()).optional(),
+  disableIntrospection: z.boolean().optional(),
+  inlineSourcemap: z.boolean().optional(),
+  logLevel: logLevelSchema.optional(),
+  db: z.unknown().optional(),
+  resolver: z.unknown().optional(),
+  idp: z.unknown().optional(),
+  auth: z.unknown().optional(),
+  executor: z.unknown().optional(),
+  workflow: z.unknown().optional(),
+  httpAdapter: z.unknown().optional(),
+  staticWebsites: z.unknown().optional(),
+  aiGateways: z.unknown().optional(),
+  secrets: z.unknown().optional(),
+});

@@ -29,7 +29,7 @@ interface RuleSummary {
 const listCommand = defineCommand({
   name: "list",
   description: "List the available codemod rules (id, name, kind, version range).",
-  args: z.object({}).strict(),
+  args: z.strictObject({}),
   run: () => {
     const rules: RuleSummary[] = allCodemods.map((codemod) => ({
       id: codemod.id,
@@ -105,23 +105,21 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
       desc: "Preview the changes and any LLM-review prompts without writing files",
     },
   ],
-  args: z
-    .object({
-      from: arg(z.string(), {
-        description: "Source SDK version (the version before upgrade)",
-      }),
-      to: arg(z.string(), {
-        description: "Target SDK version (the version after upgrade)",
-      }),
-      target: arg(z.string().default("."), {
-        description: "Project directory to transform",
-      }),
-      "dry-run": arg(z.boolean().default(false), {
-        alias: "d",
-        description: "Preview changes without modifying files",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    from: arg(z.string(), {
+      description: "Source SDK version (the version before upgrade)",
+    }),
+    to: arg(z.string(), {
+      description: "Target SDK version (the version after upgrade)",
+    }),
+    target: arg(z.string().default("."), {
+      description: "Project directory to transform",
+    }),
+    "dry-run": arg(z.boolean().default(false), {
+      alias: "d",
+      description: "Preview changes without modifying files",
+    }),
+  }),
   run: async (args) => {
     const targetPath = path.resolve(args.target);
     const dryRun = args["dry-run"];

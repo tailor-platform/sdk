@@ -216,36 +216,34 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
     list: listCommand,
     inspect: inspectCommand,
   },
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...configArg,
-      body: arg(z.string().default("{}"), {
-        alias: "b",
-        description: "Request body as JSON.",
-      }),
-      field: arg(fieldArg.array().optional(), {
-        alias: "f",
-        description:
-          "Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body.",
-        completion: {
-          custom: {
-            expand: {
-              dependsOn: ["endpoint"],
-              enumerate: ({ endpoint }) =>
-                enumerateAllFieldCompletions(extractMethodName(endpoint ?? "")),
-            },
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...configArg,
+    body: arg(z.string().default("{}"), {
+      alias: "b",
+      description: "Request body as JSON.",
+    }),
+    field: arg(fieldArg.array().optional(), {
+      alias: "f",
+      description:
+        "Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body.",
+      completion: {
+        custom: {
+          expand: {
+            dependsOn: ["endpoint"],
+            enumerate: ({ endpoint }) =>
+              enumerateAllFieldCompletions(extractMethodName(endpoint ?? "")),
           },
         },
-      }),
-      endpoint: arg(z.string(), {
-        positional: true,
-        description:
-          "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
-        completion: { custom: { choices: listMethodChoices() } },
-      }),
-    })
-    .strict(),
+      },
+    }),
+    endpoint: arg(z.string(), {
+      positional: true,
+      description:
+        "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
+      completion: { custom: { choices: listMethodChoices() } },
+    }),
+  }),
   run: async (args) => {
     // Direct API calls can target any OperatorService method, including
     // Create/Update/Delete. Block all of them under a readonly profile rather
