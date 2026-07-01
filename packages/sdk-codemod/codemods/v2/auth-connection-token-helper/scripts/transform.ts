@@ -187,7 +187,9 @@ function collectBindingNames(node: SgNode, out: Set<string>): void {
     return;
   }
 
-  for (const child of node.children()) {
+  const children = node.children();
+  const defaultIndex = children.findIndex((child) => child.kind() === "=");
+  for (const child of defaultIndex === -1 ? children : children.slice(0, defaultIndex)) {
     if (child.kind() === "property_identifier") continue;
     collectBindingNames(child, out);
   }
@@ -340,6 +342,14 @@ function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
   }
 }
 
+function collectSwitchBodyNames(scope: SgNode, names: Set<string>): void {
+  for (const child of scope.children()) {
+    if (child.kind() === "switch_case" || child.kind() === "switch_default") {
+      collectDirectBlockNames(child, names);
+    }
+  }
+}
+
 function collectForInitializerNames(scope: SgNode, names: Set<string>): void {
   const children = scope.children();
   const start = children.findIndex((child) => child.kind() === "(");
@@ -403,8 +413,10 @@ function directlyDeclaredNames(scope: SgNode): Set<string> {
         collectBindingNames(child, names);
       }
     }
-  } else if (kind === "statement_block" || kind === "program") {
+  } else if (["statement_block", "program", "switch_case", "switch_default"].includes(kind)) {
     collectDirectBlockNames(scope, names);
+  } else if (kind === "switch_body") {
+    collectSwitchBodyNames(scope, names);
   } else if (kind === "for_statement") {
     collectForInitializerNames(scope, names);
   } else if (kind === "for_in_statement") {
