@@ -51,6 +51,7 @@ const REVIEW_SCOPE_KINDS = new Set([
   "method_definition",
   "class",
   "internal_module",
+  "module",
   "class_static_block",
 ]);
 const REVIEW_VALUE_PARAMETER_SCOPE_KINDS = new Set([
@@ -67,6 +68,7 @@ const REVIEW_VALUE_DECLARATION_KINDS = [
   "class_declaration",
   "enum_declaration",
   "internal_module",
+  "module",
   "import_alias",
 ];
 const REVIEW_TYPE_DECLARATION_KINDS = [
@@ -75,6 +77,7 @@ const REVIEW_TYPE_DECLARATION_KINDS = [
   "type_alias_declaration",
   "enum_declaration",
   "internal_module",
+  "module",
   "import_alias",
 ];
 const REVIEW_BINDING_LEFT_SIDE_KINDS = new Set([
@@ -107,6 +110,7 @@ const REVIEW_VAR_SCOPE_KINDS = new Set([
   "arrow_function",
   "method_definition",
   "internal_module",
+  "module",
   "class_static_block",
 ]);
 
@@ -280,6 +284,7 @@ function localDeclarationNames(root: SgNode): Set<string> {
         { kind: "type_alias_declaration" },
         { kind: "enum_declaration" },
         { kind: "internal_module" },
+        { kind: "module" },
         { kind: "import_alias" },
       ],
     },
@@ -331,7 +336,14 @@ function bindingExpressionReferencesName(root: SgNode, name: string): boolean {
   }
 
   for (const assignment of root.findAll({
-    rule: { any: [{ kind: "assignment_pattern" }, { kind: "object_assignment_pattern" }] },
+    rule: {
+      any: [
+        { kind: "assignment_pattern" },
+        { kind: "object_assignment_pattern" },
+        { kind: "optional_parameter" },
+        { kind: "required_parameter" },
+      ],
+    },
   })) {
     const children = assignment.children();
     const equalsIndex = children.findIndex((child) => child.kind() === "=");

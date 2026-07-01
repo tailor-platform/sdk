@@ -1414,6 +1414,19 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report local legacy module runtime-looking bindings", async () => {
+    await writeProjectFile(
+      "resolvers/local-legacy-module.d.ts",
+      ["module tailordb {", "  export interface Client {}", "}", "type X = tailordb.Client;"].join(
+        "\n",
+      ),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("does not report runtime-looking import or export declarations", async () => {
     await writeProjectFile(
       "resolvers/type-imports.ts",
