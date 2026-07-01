@@ -66,6 +66,7 @@ type TriggerHandlerFn = (
   args: unknown,
   options?: TriggerWorkflowOptions,
 ) => string;
+type ResumeHandlerFn = (executionId: string) => string;
 type WaitHandlerFn = (key: string, payload: unknown) => unknown;
 type ResolveHandler = (
   executionId: string,
@@ -352,12 +353,14 @@ export function mockWorkflow() {
     if (wf) await installedTriggerJobFunction(wf.mainJobName, args);
     return TRIGGER_DEFAULT;
   };
+  const defaultResumeWorkflow = async (executionId: string): Promise<string> => executionId;
 
   // Inner vi.fns hold the overridable behavior + call recording; the installed
   // shims below cross the platform JSON boundary (serialize args + results) once
   // so every path (default body, setJobHandler, enqueueResult) is covered.
   const triggerJobFunction = vi.fn(defaultTriggerJob);
   const triggerWorkflow = vi.fn(defaultTriggerWorkflow);
+  const resumeWorkflow = vi.fn(defaultResumeWorkflow);
   const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
   const resolve = vi.fn(
     async (
@@ -380,6 +383,7 @@ export function mockWorkflow() {
       call.length >= 3
         ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
         : triggerWorkflow(call[0], platformSerialize(call[1])),
+    resumeWorkflow: (executionId: string) => resumeWorkflow(executionId),
     wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
     resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
       resolve(executionId, key, (payload: unknown) => {
@@ -395,6 +399,8 @@ export function mockWorkflow() {
     triggerJobFunction,
     /** The `triggerWorkflow` `vi.fn`. */
     triggerWorkflow,
+    /** The `resumeWorkflow` `vi.fn`. */
+    resumeWorkflow,
     /** The `wait` `vi.fn`. */
     wait,
     /** The `resolve` `vi.fn`. */
@@ -447,6 +453,19 @@ export function mockWorkflow() {
       triggerWorkflow.mockImplementation(
         typeof handler === "function"
           ? async (name, args, options) => handler(name, args, options)
+          : async () => handler,
+      );
+    },
+
+    /**
+     * Configure what `resumeWorkflow` returns. Pass a string (same id every
+     * call) or `(executionId) => string`. Default: echoes the input executionId.
+     * @param handler - Static execution ID or a function returning one
+     */
+    setResumeHandler(handler: string | ResumeHandlerFn): void {
+      resumeWorkflow.mockImplementation(
+        typeof handler === "function"
+          ? async (executionId) => handler(executionId)
           : async () => handler,
       );
     },
@@ -509,6 +528,8 @@ export function mockWorkflow() {
       triggerJobFunction.mockImplementation(defaultTriggerJob);
       triggerWorkflow.mockReset();
       triggerWorkflow.mockImplementation(defaultTriggerWorkflow);
+      resumeWorkflow.mockReset();
+      resumeWorkflow.mockImplementation(defaultResumeWorkflow);
       wait.mockReset();
       wait.mockImplementation(() => null);
       resolve.mockReset();
