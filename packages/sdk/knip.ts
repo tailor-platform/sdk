@@ -10,13 +10,12 @@ export default {
   ignore: [
     "scripts/**",
     "e2e/fixtures/**",
-    "eslint-rules/__tests__/fixtures/**",
     "src/cli/commands/deploy/__test_fixtures__/**",
     "src/cli/commands/tailordb/erd/viewer-assets/**",
     "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
     "zinfer.config.ts",
   ],
-  ignoreDependencies: ["undici", "vite"],
+  ignoreDependencies: ["vite"],
   ignoreBinaries: ["knip", "publint", "actionlint"],
 } satisfies KnipConfig;
