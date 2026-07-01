@@ -1160,6 +1160,16 @@ describe("runCodemods", () => {
           "",
         ].join("\n"),
       );
+      await fs.promises.writeFile(
+        path.join(dir, "destructure.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          'export const token = await auth.getConnectionToken("google");',
+          "export const { getConnectionToken } = auth;",
+          "",
+        ].join("\n"),
+      );
 
       using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
@@ -1170,12 +1180,16 @@ describe("runCodemods", () => {
         {
           codemodId: "v2/auth-connection-token-helper",
           prompt: codemod.prompt,
-          files: ["collision.ts", "non-call.ts", "type-collision.ts"],
+          files: ["collision.ts", "destructure.ts", "non-call.ts", "type-collision.ts"],
           findings: [
             expect.objectContaining({
               file: "collision.ts",
               line: 6,
               excerpt: 'return auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "destructure.ts",
+              excerpt: "export const { getConnectionToken } = auth;",
             }),
             expect.objectContaining({
               file: "non-call.ts",
