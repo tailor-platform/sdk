@@ -10,7 +10,9 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
 const RUNTIME_ROOT_NAME_PATTERN = String.raw`(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
-const GLOBAL_OBJECT_REFERENCE_PATTERN = String.raw`(?:(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?|\(+\s*(?:<[^>]+>\s*)?(?:\(+\s*)?(globalThis|global)\s*(?:\)+\s*)?(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\s*\)+)`;
+const REVIEW_GAP_PATTERN = String.raw`(?:\s|/\*[\s\S]*?\*/)*`;
+const REVIEW_REQUIRED_GAP_PATTERN = String.raw`(?:\s|/\*[\s\S]*?\*/)+`;
+const GLOBAL_OBJECT_REFERENCE_PATTERN = String.raw`(?:(globalThis|global)${REVIEW_GAP_PATTERN}(?:!${REVIEW_GAP_PATTERN})?(?:(?:as|satisfies)${REVIEW_REQUIRED_GAP_PATTERN}[^)]+)?|\(+${REVIEW_GAP_PATTERN}(?:<[^>]+>${REVIEW_GAP_PATTERN})?(?:\(+${REVIEW_GAP_PATTERN})?(globalThis|global)${REVIEW_GAP_PATTERN}(?:\)+${REVIEW_GAP_PATTERN})?(?:!${REVIEW_GAP_PATTERN})?(?:(?:as|satisfies)${REVIEW_REQUIRED_GAP_PATTERN}[^)]+)?${REVIEW_GAP_PATTERN}\)+)`;
 const BARE_RUNTIME_ROOT_TEXT_PATTERN = /\b(?:tailor|tailordb)\b/;
 const RUNTIME_ROOT_PROPERTY_NAMES = new Set([
   "tailor",
@@ -500,7 +502,7 @@ function addReviewFinding(
 
 function runtimeRootReference(source: string): RuntimeRootReference | null {
   const globalObjectMatch = new RegExp(
-    String.raw`^\s*${GLOBAL_OBJECT_REFERENCE_PATTERN}\s*(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME_PATTERN}\b`,
+    String.raw`^${REVIEW_GAP_PATTERN}${GLOBAL_OBJECT_REFERENCE_PATTERN}${REVIEW_GAP_PATTERN}(?:\.|\?\.|!${REVIEW_GAP_PATTERN}\.)${REVIEW_GAP_PATTERN}${RUNTIME_ROOT_NAME_PATTERN}\b`,
   ).exec(source);
   if (globalObjectMatch) {
     return {
@@ -510,7 +512,7 @@ function runtimeRootReference(source: string): RuntimeRootReference | null {
   }
 
   const globalObjectBracketMatch = new RegExp(
-    String.raw`^\s*${GLOBAL_OBJECT_REFERENCE_PATTERN}\s*(?:\?\.|!\s*)?\[\s*["']${RUNTIME_ROOT_NAME_PATTERN}["']\s*\]`,
+    String.raw`^${REVIEW_GAP_PATTERN}${GLOBAL_OBJECT_REFERENCE_PATTERN}${REVIEW_GAP_PATTERN}(?:\?\.|!${REVIEW_GAP_PATTERN})?\[${REVIEW_GAP_PATTERN}["']${RUNTIME_ROOT_NAME_PATTERN}["']${REVIEW_GAP_PATTERN}\]`,
   ).exec(source);
   if (globalObjectBracketMatch) {
     return {
@@ -519,16 +521,16 @@ function runtimeRootReference(source: string): RuntimeRootReference | null {
     };
   }
 
-  const parenthesizedMatch =
-    /^\s*\(+\s*(?:<[^>]+>\s*)?(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+/.exec(
-      source,
-    );
+  const parenthesizedMatch = new RegExp(
+    String.raw`^${REVIEW_GAP_PATTERN}\(+${REVIEW_GAP_PATTERN}(?:<[^>]+>${REVIEW_GAP_PATTERN})?${RUNTIME_ROOT_NAME_PATTERN}${REVIEW_GAP_PATTERN}(?:!${REVIEW_GAP_PATTERN})?(?:(?:as|satisfies)${REVIEW_REQUIRED_GAP_PATTERN}[^)]+)?\)+`,
+  ).exec(source);
   if (parenthesizedMatch) {
     return { rootName: parenthesizedMatch[1]! };
   }
 
-  const bareMatch =
-    /^\s*(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(source);
+  const bareMatch = new RegExp(
+    String.raw`^${REVIEW_GAP_PATTERN}${RUNTIME_ROOT_NAME_PATTERN}\b`,
+  ).exec(source);
   return bareMatch ? { rootName: bareMatch[1]! } : null;
 }
 
@@ -770,14 +772,20 @@ function hasInferTypeBinding(node: SgNode, name: string): boolean {
 function hasConditionalInferTypeBinding(scope: SgNode, node: SgNode, name: string): boolean {
   if (scope.kind() !== "conditional_type") return false;
   const children = scope.children();
-  const inferType = children.find((child) => child.kind() === "infer_type");
-  if (!inferType || !hasInferTypeBinding(inferType, name)) return false;
+  const inferTypes = scope
+    .findAll({ rule: { kind: "infer_type" } })
+    .filter((inferType) => hasInferTypeBinding(inferType, name));
+  if (inferTypes.length === 0) return false;
 
   const nodeRange = node.range();
-  const inferRange = inferType.range();
   if (
-    nodeRange.start.index >= inferRange.start.index &&
-    nodeRange.end.index <= inferRange.end.index
+    inferTypes.some((inferType) => {
+      const inferRange = inferType.range();
+      return (
+        nodeRange.start.index >= inferRange.start.index &&
+        nodeRange.end.index <= inferRange.end.index
+      );
+    })
   ) {
     return true;
   }
@@ -917,9 +925,9 @@ function globalObjectIndexedTypeQuery(node: SgNode): RuntimeRootReference | null
   if (!rootName || !RUNTIME_ROOT_PROPERTY_NAMES.has(rootName)) return null;
 
   const typeQuery = node.findAll({ rule: { kind: "type_query" } })[0];
-  const match = new RegExp(String.raw`^\s*typeof\s+${GLOBAL_OBJECT_REFERENCE_PATTERN}\s*$`).exec(
-    typeQuery?.text() ?? "",
-  );
+  const match = new RegExp(
+    String.raw`^${REVIEW_GAP_PATTERN}typeof${REVIEW_REQUIRED_GAP_PATTERN}${GLOBAL_OBJECT_REFERENCE_PATTERN}${REVIEW_GAP_PATTERN}$`,
+  ).exec(typeQuery?.text() ?? "");
   if (!match) return null;
 
   return {
@@ -992,9 +1000,9 @@ function declaratorInitializer(node: SgNode): SgNode | null {
 
 function globalObjectReferenceName(node: SgNode | null): string | null {
   const text = node?.text() ?? "";
-  const match = new RegExp(String.raw`^\s*${GLOBAL_OBJECT_REFERENCE_PATTERN}(?:!\s*)?\s*$`).exec(
-    text,
-  );
+  const match = new RegExp(
+    String.raw`^${REVIEW_GAP_PATTERN}${GLOBAL_OBJECT_REFERENCE_PATTERN}(?:!${REVIEW_GAP_PATTERN})?${REVIEW_GAP_PATTERN}$`,
+  ).exec(text);
   return match ? (match[1] ?? match[2]!) : null;
 }
 

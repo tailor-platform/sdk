@@ -1265,6 +1265,7 @@ describe("runtime-globals-opt-in review findings", () => {
       "resolvers/local-type-parameter-forms.ts",
       [
         "type Inferred<T> = T extends infer TailorErrors ? TailorErrors : never;",
+        "type NestedInferred<T> = T extends Promise<infer TailorErrorItem> ? TailorErrorItem : never;",
         "type Mapped<T> = { [TailorErrorItem in keyof T]: T[TailorErrorItem] };",
         "",
       ].join("\n"),
@@ -2075,6 +2076,40 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 5,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "const groupedSpaced = (global) . TailorErrors;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports commented global object runtime global roots", async () => {
+    await writeProjectFile(
+      "resolvers/commented-global-object.ts",
+      [
+        "const clientFactory = globalThis/* comment */.tailor.idp.Client;",
+        "const runtime = (globalThis /* comment */).tailor;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/commented-global-object.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/commented-global-object.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = globalThis/* comment */.tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/commented-global-object.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const runtime = (globalThis /* comment */).tailor;",
           }),
         ],
       }),
