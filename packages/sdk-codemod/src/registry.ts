@@ -471,8 +471,8 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_2,
+    scriptPath: "v2/auth-connection-token-helper/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
-    suspiciousPatterns: [/\.\s*getConnectionToken\s*\(/],
     examples: [
       {
         before:
