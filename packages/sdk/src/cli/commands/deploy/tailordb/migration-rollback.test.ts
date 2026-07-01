@@ -140,58 +140,36 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     } as unknown as OperatorClient;
   }
 
-  function createMockPlanResult() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function changeSetGroup(title: string, entries: { creates?: any[]; updates?: any[] } = {}) {
+    const creates = entries.creates ?? [];
+    const updates = entries.updates ?? [];
+    return {
+      creates,
+      updates,
+      deletes: [],
+      title,
+      isEmpty: () => creates.length === 0 && updates.length === 0,
+      lines: () => [],
+    };
+  }
+
+  function buildPlanResult(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    typeChanges: { creates?: any[]; updates?: any[] },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): any {
     const mockService = {
       namespace: "test-ns",
       loadTypes: vi.fn().mockResolvedValue({}),
       types: {},
     } as unknown as TailorDBService;
 
-    const stockReservationCreate = {
-      workspaceId: "test-workspace",
-      namespaceName: "test-ns",
-      tailordbType: {
-        name: "StockReservation",
-        schema: {
-          fields: [
-            { name: "id", type: "uuid", required: true },
-            { name: "quantity", type: "integer", required: true },
-          ],
-        },
-      },
-    };
-
     return {
       changeSet: {
-        service: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB Services",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-        type: {
-          creates: [
-            {
-              name: "StockReservation",
-              request: stockReservationCreate,
-            },
-          ],
-          updates: [],
-          deletes: [],
-          title: "TailorDB Types",
-          isEmpty: () => false,
-          lines: () => [],
-        },
-        gqlPermission: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB GQL Permissions",
-          isEmpty: () => true,
-          lines: () => [],
-        },
+        service: changeSetGroup("TailorDB Services"),
+        type: changeSetGroup("TailorDB Types", typeChanges),
+        gqlPermission: changeSetGroup("TailorDB GQL Permissions"),
       },
       conflicts: [],
       unmanaged: [],
@@ -210,83 +188,54 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
         config: mockConfig,
         noSchemaCheck: true,
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
+    };
+  }
+
+  function createMockPlanResult() {
+    return buildPlanResult({
+      creates: [
+        {
+          name: "StockReservation",
+          request: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-ns",
+            tailordbType: {
+              name: "StockReservation",
+              schema: {
+                fields: [
+                  { name: "id", type: "uuid", required: true },
+                  { name: "quantity", type: "integer", required: true },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    });
   }
 
   function createUpdatePlanResult() {
-    const mockService = {
-      namespace: "test-ns",
-      loadTypes: vi.fn().mockResolvedValue({}),
-      types: {},
-    } as unknown as TailorDBService;
-
-    const goodsReceiptUpdate = {
-      workspaceId: "test-workspace",
-      namespaceName: "test-ns",
-      tailordbType: {
-        name: "GoodsReceipt",
-        schema: {
-          fields: [
-            { name: "id", type: "uuid", required: true },
-            { name: "code", type: "string", required: true },
-            { name: "note", type: "string", required: false },
-          ],
-        },
-      },
-    };
-
-    return {
-      changeSet: {
-        service: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB Services",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-        type: {
-          creates: [],
-          updates: [
-            {
+    return buildPlanResult({
+      updates: [
+        {
+          name: "GoodsReceipt",
+          request: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-ns",
+            tailordbType: {
               name: "GoodsReceipt",
-              request: goodsReceiptUpdate,
+              schema: {
+                fields: [
+                  { name: "id", type: "uuid", required: true },
+                  { name: "code", type: "string", required: true },
+                  { name: "note", type: "string", required: false },
+                ],
+              },
             },
-          ],
-          deletes: [],
-          title: "TailorDB Types",
-          isEmpty: () => false,
-          lines: () => [],
-        },
-        gqlPermission: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB GQL Permissions",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-      },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
-      context: {
-        workspaceId: "test-workspace",
-        application: {
-          name: "test-app",
-          tailorDBServices: [mockService],
-          authService: {
-            config: { name: "auth", machineUsers: { migrator: {} } },
           },
-        } as unknown as Application,
-        tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
-        config: mockConfig,
-        noSchemaCheck: true,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
+        },
+      ],
+    });
   }
 
   function mkAddFieldMigration(
@@ -347,6 +296,27 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     } as any;
   }
 
+  function deletedTypeNames(client: OperatorClient) {
+    return vi.mocked(client.deleteTailorDBType).mock.calls.map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c) => (c[0] as any)?.tailordbTypeName,
+    );
+  }
+
+  async function withOverriddenSnapshot(
+    override: (migrationsDir: string, maxVersion?: number) => unknown,
+    run: () => Promise<void>,
+  ) {
+    const snap = vi.mocked(reconstructSnapshotFromMigrations);
+    type SnapImpl = Parameters<typeof snap.mockImplementation>[0];
+    snap.mockImplementation(override as SnapImpl);
+    try {
+      await run();
+    } finally {
+      snap.mockImplementation(snapshotFixtures.reconstructSnapshotFromMigrations as SnapImpl);
+    }
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -371,12 +341,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
 
     // ...so the failed apply must roll it back: StockReservation did not exist at
     // the prior checkpoint, so it is dropped.
-    const deleteCalls = vi.mocked(client.deleteTailorDBType).mock.calls;
-    const deletedNames = deleteCalls.map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (c) => (c[0] as any)?.tailordbTypeName,
-    );
-    expect(deletedNames).toContain("StockReservation");
+    expect(deletedTypeNames(client)).toContain("StockReservation");
 
     // The checkpoint must stay at the prior migration.
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
@@ -462,10 +427,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
       "migration failed",
     );
 
-    const deletedNames = vi.mocked(client.deleteTailorDBType).mock.calls.map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (c) => (c[0] as any)?.tailordbTypeName,
-    );
+    const deletedNames = deletedTypeNames(client);
     expect(deletedNames).toContain("StockReservation");
     expect(deletedNames).toContain("LeakedType");
   });
@@ -587,11 +549,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     // The script never ran, the type the pre-phase tried to create is rolled
     // back, and the checkpoint is untouched.
     expect(migrationModule.executeMigrations).not.toHaveBeenCalled();
-    const deletedNames = vi.mocked(client.deleteTailorDBType).mock.calls.map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (c) => (c[0] as any)?.tailordbTypeName,
-    );
-    expect(deletedNames).toContain("StockReservation");
+    expect(deletedTypeNames(client)).toContain("StockReservation");
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
@@ -608,24 +566,21 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
 
     // Make rollback's prior-snapshot reconstruction throw (e.g. missing files),
     // while the pre-phase reconstruction (migration N) still succeeds.
-    const snap = vi.mocked(reconstructSnapshotFromMigrations);
-    type SnapImpl = Parameters<typeof snap.mockImplementation>[0];
-    snap.mockImplementation(((migrationsDir: string, maxVersion?: number) => {
-      if ((maxVersion ?? 0) === 0) {
-        throw new Error("rollback snapshot reconstruction failed");
-      }
-      return snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion);
-    }) as SnapImpl);
-
-    try {
-      // The original failure must surface, not the rollback error.
-      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-        "original migration failure",
-      );
-      expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
-    } finally {
-      snap.mockImplementation(snapshotFixtures.reconstructSnapshotFromMigrations as SnapImpl);
-    }
+    await withOverriddenSnapshot(
+      (migrationsDir, maxVersion) => {
+        if ((maxVersion ?? 0) === 0) {
+          throw new Error("rollback snapshot reconstruction failed");
+        }
+        return snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion);
+      },
+      async () => {
+        // The original failure must surface, not the rollback error.
+        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+          "original migration failure",
+        );
+        expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+      },
+    );
   });
 
   test("does not delete any type when the prior snapshot cannot be reconstructed", async () => {
@@ -641,24 +596,18 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
 
     // Prior snapshot is unavailable: new and pre-existing types are then
     // indistinguishable, so nothing must be deleted.
-    const snap = vi.mocked(reconstructSnapshotFromMigrations);
-    type SnapImpl = Parameters<typeof snap.mockImplementation>[0];
-    snap.mockImplementation(((migrationsDir: string, maxVersion?: number) =>
-      (maxVersion ?? 0) === 0
-        ? null
-        : snapshotFixtures.reconstructSnapshotFromMigrations(
-            migrationsDir,
-            maxVersion,
-          )) as SnapImpl);
-
-    try {
-      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-        "original migration failure",
-      );
-      expect(client.deleteTailorDBType).not.toHaveBeenCalled();
-      expect(client.updateTailorDBType).not.toHaveBeenCalled();
-    } finally {
-      snap.mockImplementation(snapshotFixtures.reconstructSnapshotFromMigrations as SnapImpl);
-    }
+    await withOverriddenSnapshot(
+      (migrationsDir, maxVersion) =>
+        (maxVersion ?? 0) === 0
+          ? null
+          : snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion),
+      async () => {
+        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+          "original migration failure",
+        );
+        expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+        expect(client.updateTailorDBType).not.toHaveBeenCalled();
+      },
+    );
   });
 });

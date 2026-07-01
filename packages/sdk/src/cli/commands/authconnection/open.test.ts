@@ -24,23 +24,15 @@ describe("authconnection open --json", () => {
     vi.mocked(open).mockResolvedValue({} as ChildProcess);
   });
 
-  test("emits a parseable JSON object when the browser opens", async () => {
-    using stdout = captureStdout();
-    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    using _json = jsonMode();
-
-    await runCommand(openAuthConnectionCommand, []);
-
-    expect(JSON.parse(stdout.output)).toEqual({
-      consoleUrl:
-        "https://console.tailor.tech/workspaces/12345678-1234-4abc-8def-123456789012/settings/connections",
-      workspaceId: "12345678-1234-4abc-8def-123456789012",
-      opened: true,
-    });
-  });
-
-  test("emits a parseable JSON object when opening the browser fails", async () => {
-    vi.mocked(open).mockRejectedValue(new Error("browser unavailable"));
+  test.each([
+    ["the browser opens", () => vi.mocked(open).mockResolvedValue({} as ChildProcess), true],
+    [
+      "opening the browser fails",
+      () => vi.mocked(open).mockRejectedValue(new Error("browser unavailable")),
+      false,
+    ],
+  ])("emits a parseable JSON object when %s", async (_desc, setupMock, opened) => {
+    setupMock();
 
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -52,7 +44,7 @@ describe("authconnection open --json", () => {
       consoleUrl:
         "https://console.tailor.tech/workspaces/12345678-1234-4abc-8def-123456789012/settings/connections",
       workspaceId: "12345678-1234-4abc-8def-123456789012",
-      opened: false,
+      opened,
     });
   });
 

@@ -36,84 +36,72 @@ const cleanState = (overrides: Partial<TargetState> = {}): TargetState => ({
 });
 
 describe("findTargetDrift", () => {
-  test("no findings when in sync", () => {
-    expect(findTargetDrift(baseTarget(), cleanState())).toEqual([]);
-  });
-
-  test("reports a missing file", () => {
-    const findings = findTargetDrift(baseTarget(), cleanState({ fileExists: false }));
-    expect(findings.map((f) => f.rule)).toEqual(["missing-file"]);
-  });
-
-  test("reports a hand-edited file via hash mismatch", () => {
-    const findings = findTargetDrift(baseTarget(), cleanState({ currentHash: "sha256:zzz" }));
-    expect(findings.map((f) => f.rule)).toEqual(["hand-edit"]);
-  });
-
-  test("does not report hand-edit when the file is missing", () => {
-    const findings = findTargetDrift(
-      baseTarget(),
-      cleanState({ fileExists: false, currentHash: null }),
-    );
-    expect(findings.map((f) => f.rule)).toEqual(["missing-file"]);
-  });
-
-  test("reports an outdated template version", () => {
-    const findings = findTargetDrift(
-      baseTarget({ templateVersion: TEMPLATE_VERSION - 1 }),
-      cleanState(),
-    );
-    expect(findings.map((f) => f.rule)).toEqual(["template-version"]);
-  });
-
-  test("reports a missing config under the recorded dir", () => {
-    const findings = findTargetDrift(baseTarget(), cleanState({ configExists: false }));
-    expect(findings.map((f) => f.rule)).toEqual(["config-dir"]);
-  });
-
-  test("reports a default-branch drift for branch targets", () => {
-    const findings = findTargetDrift(baseTarget(), cleanState({ defaultBranch: "develop" }));
-    expect(findings.map((f) => f.rule)).toEqual(["default-branch"]);
-  });
-
-  test("skips default-branch drift for tag targets", () => {
-    const findings = findTargetDrift(
-      baseTarget({ kind: "tag", inputs: { ...baseTarget().inputs, branch: null } }),
-      cleanState({ defaultBranch: "develop" }),
-    );
-    expect(findings).toEqual([]);
-  });
-
-  test("skips default-branch drift when the branch cannot be detected", () => {
-    const findings = findTargetDrift(baseTarget(), cleanState({ defaultBranch: null }));
-    expect(findings).toEqual([]);
-  });
-
-  test("skips default-branch drift when branch was explicitly set", () => {
-    const findings = findTargetDrift(
-      baseTarget({
-        inputs: { ...baseTarget().inputs, branch: "staging", branchAutoDetected: false },
-      }),
-      cleanState({ defaultBranch: "main" }),
-    );
-    expect(findings).toEqual([]);
-  });
-
-  test("reports default-branch drift when branchAutoDetected is true", () => {
-    const findings = findTargetDrift(
-      baseTarget({
-        inputs: { ...baseTarget().inputs, branch: "main", branchAutoDetected: true },
-      }),
-      cleanState({ defaultBranch: "develop" }),
-    );
-    expect(findings.map((f) => f.rule)).toEqual(["default-branch"]);
-  });
-
-  test("reports default-branch drift when branchAutoDetected is undefined (legacy lock)", () => {
-    const target = baseTarget();
-    delete target.inputs.branchAutoDetected;
-    const findings = findTargetDrift(target, cleanState({ defaultBranch: "develop" }));
-    expect(findings.map((f) => f.rule)).toEqual(["default-branch"]);
+  test.each<[string, Partial<LockTarget>, Partial<TargetState>, string[]]>([
+    ["no findings when in sync", {}, {}, []],
+    ["reports a missing file", {}, { fileExists: false }, ["missing-file"]],
+    [
+      "reports a hand-edited file via hash mismatch",
+      {},
+      { currentHash: "sha256:zzz" },
+      ["hand-edit"],
+    ],
+    [
+      "does not report hand-edit when the file is missing",
+      {},
+      { fileExists: false, currentHash: null },
+      ["missing-file"],
+    ],
+    [
+      "reports an outdated template version",
+      { templateVersion: TEMPLATE_VERSION - 1 },
+      {},
+      ["template-version"],
+    ],
+    [
+      "reports a missing config under the recorded dir",
+      {},
+      { configExists: false },
+      ["config-dir"],
+    ],
+    [
+      "reports a default-branch drift for branch targets",
+      {},
+      { defaultBranch: "develop" },
+      ["default-branch"],
+    ],
+    [
+      "skips default-branch drift for tag targets",
+      { kind: "tag", inputs: { ...baseTarget().inputs, branch: null } },
+      { defaultBranch: "develop" },
+      [],
+    ],
+    [
+      "skips default-branch drift when the branch cannot be detected",
+      {},
+      { defaultBranch: null },
+      [],
+    ],
+    [
+      "skips default-branch drift when branch was explicitly set",
+      { inputs: { ...baseTarget().inputs, branch: "staging", branchAutoDetected: false } },
+      { defaultBranch: "main" },
+      [],
+    ],
+    [
+      "reports default-branch drift when branchAutoDetected is true",
+      { inputs: { ...baseTarget().inputs, branch: "main", branchAutoDetected: true } },
+      { defaultBranch: "develop" },
+      ["default-branch"],
+    ],
+    [
+      "reports default-branch drift when branchAutoDetected is undefined (legacy lock)",
+      { inputs: { ...baseTarget().inputs, branchAutoDetected: undefined } },
+      { defaultBranch: "develop" },
+      ["default-branch"],
+    ],
+  ])("%s", (_name, targetOverrides, stateOverrides, expectedRules) => {
+    const findings = findTargetDrift(baseTarget(targetOverrides), cleanState(stateOverrides));
+    expect(findings.map((f) => f.rule)).toEqual(expectedRules);
   });
 
   test("reports default-branch drift for preview targets", () => {

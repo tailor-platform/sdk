@@ -30,6 +30,10 @@ vi.mock("./change-set", async (importOriginal) => importOriginal());
 
 const workspaceId = "test-workspace";
 const appName = "test-app";
+const matchingSubgraphs = [
+  { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
+  { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
+];
 
 function createMockApplication(
   overrides: {
@@ -115,6 +119,10 @@ function createContext(client: OperatorClient, application = createMockApplicati
   };
 }
 
+async function planForRemoval(client: OperatorClient, application: Application) {
+  return planApplication({ ...createContext(client, application), forRemoval: true });
+}
+
 describe("planApplication", () => {
   test("marks application unchanged when remote state matches desired state", async () => {
     const client = createMockClient([
@@ -126,10 +134,7 @@ describe("planApplication", () => {
         allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
         disableIntrospection: true,
         disabled: false,
-        subgraphs: [
-          { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
-          { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-        ],
+        subgraphs: matchingSubgraphs,
       },
     ]);
 
@@ -151,10 +156,7 @@ describe("planApplication", () => {
         disableIntrospection: true,
         disabled: false,
         label: "other-app",
-        subgraphs: [
-          { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
-          { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-        ],
+        subgraphs: matchingSubgraphs,
       },
     ]);
 
@@ -174,10 +176,7 @@ describe("planApplication", () => {
         allowedIpAddresses: ["1.1.1.1"],
         disableIntrospection: false,
         disabled: false,
-        subgraphs: [
-          { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
-          { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-        ],
+        subgraphs: matchingSubgraphs,
       },
     ]);
 
@@ -198,16 +197,7 @@ describe("planApplication", () => {
         allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
         disableIntrospection: true,
         disabled: false,
-        subgraphs: [
-          {
-            serviceType: Subgraph_ServiceType.TAILORDB,
-            serviceNamespace: "tailordb-a",
-          },
-          {
-            serviceType: Subgraph_ServiceType.PIPELINE,
-            serviceNamespace: "pipeline-a",
-          },
-        ],
+        subgraphs: matchingSubgraphs,
         sdkVersion: "v0-9-0",
       },
     ]);
@@ -239,10 +229,7 @@ describe("planApplication", () => {
           name: oldName,
           authNamespace: "auth-a",
           authIdpConfigName: "idp-a",
-          subgraphs: [
-            { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
-            { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-          ],
+          subgraphs: matchingSubgraphs,
           sdkAppId: appId,
         },
       ]);
@@ -267,10 +254,7 @@ describe("planApplication", () => {
           allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
           disableIntrospection: true,
           disabled: false,
-          subgraphs: [
-            { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
-            { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-          ],
+          subgraphs: matchingSubgraphs,
           sdkAppId: appId,
         },
       ]);
@@ -289,10 +273,7 @@ describe("planApplication", () => {
           name: "other-app",
           authNamespace: "auth-a",
           authIdpConfigName: "idp-a",
-          subgraphs: [
-            { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
-            { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-          ],
+          subgraphs: matchingSubgraphs,
           label: "other-app",
           sdkAppId: "different-id",
         },
@@ -313,19 +294,13 @@ describe("planApplication", () => {
           name: oldName,
           authNamespace: "auth-a",
           authIdpConfigName: "idp-a",
-          subgraphs: [
-            { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
-            { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-          ],
+          subgraphs: matchingSubgraphs,
           sdkAppId: appId,
         },
       ]);
       const application = createMockApplication({ name: appName, id: appId });
 
-      const result = await planApplication({
-        ...createContext(client, application),
-        forRemoval: true,
-      });
+      const result = await planForRemoval(client, application);
 
       expect(result.deletes).toHaveLength(1);
       expect(result.deletes[0]!.name).toBe(oldName);
@@ -334,39 +309,14 @@ describe("planApplication", () => {
   });
 
   describe("forRemoval ownership check (issue #1279)", () => {
-    test("deletes a same-name app owned via legacy sdk-name (no sdk-app-id)", async () => {
-      const client = createMockClient([
-        {
-          name: appName,
-          label: appName,
-        },
-      ]);
-      const application = createMockApplication({ name: appName });
+    test.each([
+      ["legacy sdk-name (no sdk-app-id)", undefined, undefined],
+      ["matching sdk-app-id", "stable-id", "stable-id"],
+    ])("deletes a same-name app owned via %s", async (_case, remoteAppId, localAppId) => {
+      const client = createMockClient([{ name: appName, label: appName, sdkAppId: remoteAppId }]);
+      const application = createMockApplication({ name: appName, id: localAppId });
 
-      const result = await planApplication({
-        ...createContext(client, application),
-        forRemoval: true,
-      });
-
-      expect(result.deletes).toHaveLength(1);
-      expect(result.deletes[0]!.name).toBe(appName);
-    });
-
-    test("deletes a same-name app owned via matching sdk-app-id", async () => {
-      const appId = "stable-id";
-      const client = createMockClient([
-        {
-          name: appName,
-          label: appName,
-          sdkAppId: appId,
-        },
-      ]);
-      const application = createMockApplication({ name: appName, id: appId });
-
-      const result = await planApplication({
-        ...createContext(client, application),
-        forRemoval: true,
-      });
+      const result = await planForRemoval(client, application);
 
       expect(result.deletes).toHaveLength(1);
       expect(result.deletes[0]!.name).toBe(appName);
@@ -374,18 +324,11 @@ describe("planApplication", () => {
 
     test("does not delete a same-name app owned by a different id", async () => {
       const client = createMockClient([
-        {
-          name: appName,
-          label: appName,
-          sdkAppId: "someone-elses-id",
-        },
+        { name: appName, label: appName, sdkAppId: "someone-elses-id" },
       ]);
       const application = createMockApplication({ name: appName, id: "my-id" });
 
-      const result = await planApplication({
-        ...createContext(client, application),
-        forRemoval: true,
-      });
+      const result = await planForRemoval(client, application);
 
       expect(result.deletes).toHaveLength(0);
     });
@@ -397,10 +340,7 @@ describe("planApplication", () => {
       } as unknown as OperatorClient;
       const application = createMockApplication({ name: appName });
 
-      const result = await planApplication({
-        ...createContext(client, application),
-        forRemoval: true,
-      });
+      const result = await planForRemoval(client, application);
 
       expect(result.deletes).toHaveLength(0);
     });
@@ -413,12 +353,8 @@ describe("planApplication", () => {
       ]);
       const application = createMockApplication({ name: appName });
 
-      const result = await planApplication({
-        ...createContext(client, application),
-        forRemoval: true,
-      });
+      const result = await planForRemoval(client, application);
 
-      // Only the same-name app is deleted, and metadata is fetched for it alone.
       expect(result.deletes).toHaveLength(1);
       expect(result.deletes[0]!.name).toBe(appName);
       expect(client.getMetadata).toHaveBeenCalledTimes(1);

@@ -55,6 +55,50 @@ function writeFuturePlatformConfig() {
   );
 }
 
+type PfProfile = {
+  user: string;
+  workspace_id: string;
+  readonly?: boolean;
+  machine_user?: string;
+  machine_user_override?: "allow" | "deny";
+};
+
+type PfUserV2 =
+  | { storage: "keyring"; token_expires_at: string }
+  | { storage: "file"; access_token: string; refresh_token?: string; token_expires_at: string };
+
+type PfConfig = {
+  version: 2;
+  min_sdk_version: `${number}.${number}.${number}`;
+  users: Record<string, PfUserV2>;
+  profiles: Record<string, PfProfile>;
+  current_user: string | null;
+};
+
+function v2Config(overrides: Partial<PfConfig> = {}): PfConfig {
+  return {
+    version: 2,
+    min_sdk_version: "1.29.0",
+    users: {},
+    profiles: {},
+    current_user: null,
+    ...overrides,
+  };
+}
+
+function fileUser(accessToken: string, tokenExpiresAt: string): PfUserV2 {
+  return {
+    access_token: accessToken,
+    refresh_token: "refresh",
+    token_expires_at: tokenExpiresAt,
+    storage: "file",
+  };
+}
+
+function profile(user: string, overrides: Partial<PfProfile> = {}): PfProfile {
+  return { user, workspace_id: "12345678-1234-4abc-8def-123456789012", ...overrides };
+}
+
 describe("loadConfigPath", () => {
   const originalEnv = process.env;
   let tempDir: string;
@@ -92,24 +136,16 @@ describe("loadConfigPath", () => {
     expect(result).toBe(configPath);
   });
 
-  test("finds config in parent directory", () => {
-    const nestedDir = path.join(tempDir, "nested");
+  test.each([
+    ["parent", ["nested"]],
+    ["grandparent", ["nested", "deep"]],
+  ])("finds config in %s directory", (_label, segments) => {
+    const nestedDir = path.join(tempDir, ...segments);
     fs.mkdirSync(nestedDir, { recursive: true });
     const configPath = path.join(tempDir, "tailor.config.ts");
     fs.writeFileSync(configPath, "export default {}");
 
     vi.spyOn(process, "cwd").mockReturnValue(nestedDir);
-    const result = loadConfigPath();
-    expect(result).toBe(configPath);
-  });
-
-  test("finds config in grandparent directory", () => {
-    const deepNestedDir = path.join(tempDir, "nested", "deep");
-    fs.mkdirSync(deepNestedDir, { recursive: true });
-    const configPath = path.join(tempDir, "tailor.config.ts");
-    fs.writeFileSync(configPath, "export default {}");
-
-    vi.spyOn(process, "cwd").mockReturnValue(deepNestedDir);
     const result = loadConfigPath();
     expect(result).toBe(configPath);
   });
@@ -150,13 +186,7 @@ describe("loadWorkspaceId", () => {
     process.env = { ...originalEnv };
     delete process.env.TAILOR_PLATFORM_WORKSPACE_ID;
     delete process.env.TAILOR_PLATFORM_PROFILE;
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
   });
 
   afterEach(() => {
@@ -207,15 +237,9 @@ describe("loadWorkspaceId", () => {
 
     test("env takes precedence over profile", async () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {
-          myprofile: { user: "test", workspace_id: otherUUID },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({ profiles: { myprofile: profile("test", { workspace_id: otherUUID }) } }),
+      );
       const result = await loadWorkspaceId({ profile: "myprofile" });
       expect(result).toBe(validUUID);
     });
@@ -233,38 +257,23 @@ describe("loadWorkspaceId", () => {
 
   describe("opts.profile", () => {
     test("returns workspaceId from profile when opts.profile provided", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: { myprofile: { user: "testuser", workspace_id: validUUID } },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({ profiles: { myprofile: profile("testuser", { workspace_id: validUUID }) } }),
+      );
       const result = await loadWorkspaceId({ profile: "myprofile" });
       expect(result).toBe(validUUID);
     });
 
     test("throws error when profile not found", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {},
-        current_user: null,
-      });
       await expect(loadWorkspaceId({ profile: "nonexistent" })).rejects.toThrow(
         'Profile "nonexistent" not found',
       );
     });
 
     test("throws error when profile workspace_id is invalid UUID", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: { badprofile: { user: "testuser", workspace_id: invalidUUID } },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({ profiles: { badprofile: profile("testuser", { workspace_id: invalidUUID }) } }),
+      );
       await expect(loadWorkspaceId({ profile: "badprofile" })).rejects.toThrow(
         'Invalid value from profile "badprofile": must be a valid UUID',
       );
@@ -274,29 +283,23 @@ describe("loadWorkspaceId", () => {
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
     test("returns workspaceId from env profile when set", async () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: { envprofile: { user: "testuser", workspace_id: validUUID } },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({ profiles: { envprofile: profile("testuser", { workspace_id: validUUID }) } }),
+      );
       const result = await loadWorkspaceId();
       expect(result).toBe(validUUID);
     });
 
     test("opts.profile takes precedence over env profile", async () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {
-          envprofile: { user: "testuser", workspace_id: otherUUID },
-          optsprofile: { user: "testuser", workspace_id: validUUID },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({
+          profiles: {
+            envprofile: profile("testuser", { workspace_id: otherUUID }),
+            optsprofile: profile("testuser", { workspace_id: validUUID }),
+          },
+        }),
+      );
       const result = await loadWorkspaceId({ profile: "optsprofile" });
       expect(result).toBe(validUUID);
     });
@@ -317,13 +320,7 @@ describe("loadMachineUserName", () => {
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
   });
 
   afterEach(() => {
@@ -349,37 +346,33 @@ describe("loadMachineUserName", () => {
 
   test("env takes precedence over profile default", async () => {
     vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          myprofile: profile("u", { workspace_id: validUUID, machine_user: "profile-bot" }),
+        },
+      }),
+    );
     const result = await loadMachineUserName({ profile: "myprofile" });
     expect(result).toBe("env-bot");
   });
 
   test("returns machine_user from profile when profile provided", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          myprofile: profile("u", { workspace_id: validUUID, machine_user: "profile-bot" }),
+        },
+      }),
+    );
     const result = await loadMachineUserName({ profile: "myprofile" });
     expect(result).toBe("profile-bot");
   });
 
   test("returns undefined when profile has no machine_user", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: { myprofile: { user: "u", workspace_id: validUUID } },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({ profiles: { myprofile: profile("u", { workspace_id: validUUID }) } }),
+    );
     const result = await loadMachineUserName({ profile: "myprofile" });
     expect(result).toBeUndefined();
   });
@@ -397,35 +390,30 @@ describe("loadMachineUserName", () => {
 
   test("returns machine_user from env profile when TAILOR_PLATFORM_PROFILE is set", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        envprofile: { user: "u", workspace_id: validUUID, machine_user: "env-profile-bot" },
-      },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          envprofile: profile("u", { workspace_id: validUUID, machine_user: "env-profile-bot" }),
+        },
+      }),
+    );
     const result = await loadMachineUserName();
     expect(result).toBe("env-profile-bot");
   });
 
   describe("machine_user_override: deny", () => {
     beforeEach(() => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {
-          locked: {
-            user: "u",
-            workspace_id: validUUID,
-            machine_user: "profile-bot",
-            machine_user_override: "deny",
+      writePlatformConfig(
+        v2Config({
+          profiles: {
+            locked: profile("u", {
+              workspace_id: validUUID,
+              machine_user: "profile-bot",
+              machine_user_override: "deny",
+            }),
           },
-        },
-        current_user: null,
-      });
+        }),
+      );
     });
 
     test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when opts.machineUser differs", async () => {
@@ -462,15 +450,13 @@ describe("loadMachineUserName", () => {
   });
 
   test("explicit value wins over profile when profile has machine_user but no override (regression guard)", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" },
-      },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          myprofile: profile("u", { workspace_id: validUUID, machine_user: "profile-bot" }),
+        },
+      }),
+    );
     const result = await loadMachineUserName({ machineUser: "explicit-bot", profile: "myprofile" });
     expect(result).toBe("explicit-bot");
   });
@@ -488,13 +474,13 @@ describe("loadMachineUserName", () => {
   });
 
   test("rejects empty opts.machineUser instead of falling back to profile default", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          myprofile: profile("u", { workspace_id: validUUID, machine_user: "profile-bot" }),
+        },
+      }),
+    );
     const err = await loadMachineUserName({ machineUser: "", profile: "myprofile" }).catch(
       (e: unknown) => e,
     );
@@ -519,13 +505,7 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
     vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
   });
 
   describe("env.TAILOR_PLATFORM_TOKEN", () => {
@@ -554,22 +534,12 @@ describe("loadAccessToken", () => {
 
     test("TAILOR_PLATFORM_TOKEN takes precedence over profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          testuser: {
-            access_token: otherToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {
-          myprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({
+          users: { testuser: fileUser(otherToken, futureDate) },
+          profiles: { myprofile: profile("testuser") },
+        }),
+      );
       const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(validToken);
     });
@@ -589,62 +559,33 @@ describe("loadAccessToken", () => {
 
   describe("opts.profile", () => {
     test("returns token from profile when profile provided", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          testuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {
-          myprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({
+          users: { testuser: fileUser(validToken, futureDate) },
+          profiles: { myprofile: profile("testuser") },
+        }),
+      );
       const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(validToken);
     });
 
     test("throws error when profile not found", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {},
-        current_user: null,
-      });
       await expect(loadAccessToken({ profile: "nonexistent" })).rejects.toThrow(
         'Profile "nonexistent" not found',
       );
     });
 
     test("prefers the profile user over current_user", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          currentuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
+      writePlatformConfig(
+        v2Config({
+          users: {
+            currentuser: fileUser(validToken, futureDate),
+            profileuser: fileUser(otherToken, futureDate),
           },
-          profileuser: {
-            access_token: otherToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {
-          myprofile: { user: "profileuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-        },
-        current_user: "currentuser",
-      });
+          profiles: { myprofile: profile("profileuser") },
+          current_user: "currentuser",
+        }),
+      );
       const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(otherToken);
     });
@@ -779,51 +720,30 @@ describe("loadAccessToken", () => {
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
     test("returns token from env profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          testuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {
-          envprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({
+          users: { testuser: fileUser(validToken, futureDate) },
+          profiles: { envprofile: profile("testuser") },
+        }),
+      );
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
 
     test("opts.profile takes precedence over env profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          envuser: {
-            access_token: otherToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
+      writePlatformConfig(
+        v2Config({
+          users: {
+            envuser: fileUser(otherToken, futureDate),
+            optsuser: fileUser(validToken, futureDate),
           },
-          optsuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
+          profiles: {
+            envprofile: profile("envuser"),
+            optsprofile: profile("optsuser"),
           },
-        },
-        profiles: {
-          envprofile: { user: "envuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-          optsprofile: { user: "optsuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-        },
-        current_user: null,
-      });
+        }),
+      );
       const result = await loadAccessToken({ profile: "optsprofile" });
       expect(result).toBe(validToken);
     });
@@ -831,20 +751,12 @@ describe("loadAccessToken", () => {
 
   describe("config.current_user", () => {
     test("returns token from current_user when no env or profile", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          currentuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {},
-        current_user: "currentuser",
-      });
+      writePlatformConfig(
+        v2Config({
+          users: { currentuser: fileUser(validToken, futureDate) },
+          current_user: "currentuser",
+        }),
+      );
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
@@ -933,20 +845,14 @@ describe("profile readonly field", () => {
   });
 
   test("round-trips readonly: true through write/read", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        ro: {
-          user: "u@example.com",
-          workspace_id: "12345678-1234-4abc-8def-123456789012",
-          readonly: true,
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          ro: profile("u@example.com", { readonly: true }),
+          rw: profile("u@example.com"),
         },
-        rw: { user: "u@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-      },
-      current_user: null,
-    });
+      }),
+    );
     const { readPlatformConfig } = await import("./context");
     const config = await readPlatformConfig();
     expect(config.profiles.ro?.readonly).toBe(true);
@@ -973,7 +879,7 @@ describe("V1 to V2 migration", () => {
         },
       },
       profiles: {
-        default: { user: "user@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        default: profile("user@example.com"),
       },
       current_user: "user@example.com",
     });
@@ -1019,21 +925,20 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
   });
 
   test("keeps the config V2 and preserves the keyring user when written without TAILOR_USE_KEYRING", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {
-        "keyring@example.com": { storage: "keyring", token_expires_at: futureDate },
-        "file@example.com": {
-          storage: "file",
-          access_token: "file-access-token",
-          refresh_token: "file-refresh-token",
-          token_expires_at: futureDate,
+    writePlatformConfig(
+      v2Config({
+        users: {
+          "keyring@example.com": { storage: "keyring", token_expires_at: futureDate },
+          "file@example.com": {
+            storage: "file",
+            access_token: "file-access-token",
+            refresh_token: "file-refresh-token",
+            token_expires_at: futureDate,
+          },
         },
-      },
-      profiles: {},
-      current_user: "keyring@example.com",
-    });
+        current_user: "keyring@example.com",
+      }),
+    );
 
     // Disk: stays V2 so the keyring entry is not dropped.
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
@@ -1055,19 +960,18 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
   });
 
   test("still downgrades a file-only config to V1 for backward compatibility", () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {
-        "file@example.com": {
-          storage: "file",
-          access_token: "file-access-token",
-          token_expires_at: futureDate,
+    writePlatformConfig(
+      v2Config({
+        users: {
+          "file@example.com": {
+            storage: "file",
+            access_token: "file-access-token",
+            token_expires_at: futureDate,
+          },
         },
-      },
-      profiles: {},
-      current_user: "file@example.com",
-    });
+        current_user: "file@example.com",
+      }),
+    );
 
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
       version: number;
@@ -1130,21 +1034,20 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
   });
 
   test("clears current_user on V1 downgrade when it points at a user not representable in V1", () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {
-        "file@example.com": {
-          storage: "file",
-          access_token: "file-access-token",
-          token_expires_at: futureDate,
+    writePlatformConfig(
+      v2Config({
+        users: {
+          "file@example.com": {
+            storage: "file",
+            access_token: "file-access-token",
+            token_expires_at: futureDate,
+          },
         },
-      },
-      profiles: {},
-      // current_user references a user that is not in the users map, so it
-      // cannot be represented in V1 and must be cleared on downgrade.
-      current_user: "missing@example.com",
-    });
+        // current_user references a user that is not in the users map, so it
+        // cannot be represented in V1 and must be cleared on downgrade.
+        current_user: "missing@example.com",
+      }),
+    );
 
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
       version: number;
@@ -1157,13 +1060,7 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
 
 describe.skipIf(process.platform === "win32")("writePlatformConfig file permissions", () => {
   test("writes the config file with mode 0600 and its directory with mode 0700", () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
 
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     const fileMode = fs.statSync(configPath).mode & 0o777;
@@ -1179,13 +1076,7 @@ describe.skipIf(process.platform === "win32")("writePlatformConfig file permissi
     fs.writeFileSync(configPath, "stale: true", { mode: 0o644 });
     fs.chmodSync(configPath, 0o644);
 
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
 
     const fileMode = fs.statSync(configPath).mode & 0o777;
     expect(fileMode).toBe(0o600);

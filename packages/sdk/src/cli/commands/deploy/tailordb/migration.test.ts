@@ -83,6 +83,28 @@ function createMockDiff(options: Partial<MigrationDiff> = {}): MigrationDiff {
   };
 }
 
+function createMockMigration(overrides: Partial<PendingMigration> = {}): PendingMigration {
+  return {
+    number: 1,
+    scriptPath: "/path/0001/migrate.ts",
+    hasScript: true,
+    diffPath: "/path/0001/diff.json",
+    namespace: "tailordb",
+    migrationsDir: "/path",
+    diff: createMockDiff(),
+    ...overrides,
+  };
+}
+
+function makeTestDir(prefix: string): string {
+  const dir = path.join(
+    TEST_MIGRATIONS_BASE,
+    `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 function writeDiffFile(baseDir: string, migrationNumber: number, diff: MigrationDiff): void {
   const migDir = path.join(baseDir, formatMigrationNumber(migrationNumber));
   fs.mkdirSync(migDir, { recursive: true });
@@ -109,15 +131,21 @@ function writeSchemaFile(baseDir: string, migrationNumber: number): void {
   );
 }
 
+function createMetadataClient(
+  metadata: { labels: Record<string, string> } | null,
+  setMetadataMock: ReturnType<typeof vi.fn>,
+): OperatorClient {
+  return {
+    getMetadata: vi.fn().mockResolvedValue({ metadata }),
+    setMetadata: setMetadataMock,
+  } as unknown as OperatorClient;
+}
+
 describe("migration", () => {
   let testDir: string;
 
   beforeEach(() => {
-    testDir = path.join(
-      TEST_MIGRATIONS_BASE,
-      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    fs.mkdirSync(testDir, { recursive: true });
+    testDir = makeTestDir("test");
   });
 
   afterAll(() => {
@@ -132,29 +160,36 @@ describe("migration", () => {
   // getMigrationMachineUser
   // ==========================================================================
   describe("getMigrationMachineUser", () => {
-    test("returns explicit machineUser from config", () => {
-      const result = getMigrationMachineUser({ machineUser: "explicit-user" }, ["fallback-user"]);
-      expect(result).toBe("explicit-user");
-    });
-
-    test("falls back to first machine user from auth", () => {
-      const result = getMigrationMachineUser(undefined, ["first-user", "second-user"]);
-      expect(result).toBe("first-user");
-    });
-
-    test("falls back to first machine user when config has no machineUser", () => {
-      const result = getMigrationMachineUser({}, ["first-user", "second-user"]);
-      expect(result).toBe("first-user");
-    });
-
-    test("returns undefined when no machine users available", () => {
-      const result = getMigrationMachineUser(undefined, undefined);
-      expect(result).toBeUndefined();
-    });
-
-    test("returns undefined when machine users array is empty", () => {
-      const result = getMigrationMachineUser(undefined, []);
-      expect(result).toBeUndefined();
+    test.each<
+      [
+        name: string,
+        config: { machineUser?: string } | undefined,
+        machineUsers: string[] | undefined,
+        expected: string | undefined,
+      ]
+    >([
+      [
+        "returns explicit machineUser from config",
+        { machineUser: "explicit-user" },
+        ["fallback-user"],
+        "explicit-user",
+      ],
+      [
+        "falls back to first machine user from auth",
+        undefined,
+        ["first-user", "second-user"],
+        "first-user",
+      ],
+      [
+        "falls back to first machine user when config has no machineUser",
+        {},
+        ["first-user", "second-user"],
+        "first-user",
+      ],
+      ["returns undefined when no machine users available", undefined, undefined, undefined],
+      ["returns undefined when machine users array is empty", undefined, [], undefined],
+    ])("%s", (_name, config, machineUsers, expected) => {
+      expect(getMigrationMachineUser(config, machineUsers)).toBe(expected);
     });
   });
 
@@ -164,33 +199,9 @@ describe("migration", () => {
   describe("groupMigrationsByNamespace", () => {
     test("groups migrations by namespace", () => {
       const migrations = [
-        {
-          namespace: "namespace-a",
-          number: 1,
-          migrationsDir: "/path/a",
-          scriptPath: "/path/a/0001/migrate.ts",
-          hasScript: true,
-          diffPath: "/path/a/0001/diff.json",
-          diff: createMockDiff({ namespace: "namespace-a" }),
-        },
-        {
-          namespace: "namespace-b",
-          number: 1,
-          migrationsDir: "/path/b",
-          scriptPath: "/path/b/0001/migrate.ts",
-          hasScript: true,
-          diffPath: "/path/b/0001/diff.json",
-          diff: createMockDiff({ namespace: "namespace-b" }),
-        },
-        {
-          namespace: "namespace-a",
-          number: 2,
-          migrationsDir: "/path/a",
-          scriptPath: "/path/a/0002/migrate.ts",
-          hasScript: true,
-          diffPath: "/path/a/0002/diff.json",
-          diff: createMockDiff({ namespace: "namespace-a" }),
-        },
+        createMockMigration({ namespace: "namespace-a", number: 1 }),
+        createMockMigration({ namespace: "namespace-b", number: 1 }),
+        createMockMigration({ namespace: "namespace-a", number: 2 }),
       ];
 
       const result = groupMigrationsByNamespace(migrations);
@@ -209,24 +220,8 @@ describe("migration", () => {
 
     test("handles single namespace", () => {
       const migrations = [
-        {
-          namespace: "single",
-          number: 1,
-          migrationsDir: "/path",
-          scriptPath: "/path/0001/migrate.ts",
-          hasScript: true,
-          diffPath: "/path/0001/diff.json",
-          diff: createMockDiff({ namespace: "single" }),
-        },
-        {
-          namespace: "single",
-          number: 2,
-          migrationsDir: "/path",
-          scriptPath: "/path/0002/migrate.ts",
-          hasScript: true,
-          diffPath: "/path/0002/diff.json",
-          diff: createMockDiff({ namespace: "single" }),
-        },
+        createMockMigration({ namespace: "single", number: 1 }),
+        createMockMigration({ namespace: "single", number: 2 }),
       ];
 
       const result = groupMigrationsByNamespace(migrations);
@@ -261,8 +256,6 @@ describe("migration", () => {
 
     test("returns empty array when no pending migrations", async () => {
       const client = createMockClient({ tailordb: 1 });
-
-      // Create migration 0001 (already applied)
       writeDiffFile(testDir, 1, createMockDiff());
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
@@ -275,8 +268,6 @@ describe("migration", () => {
 
     test("detects single pending migration", async () => {
       const client = createMockClient({ tailordb: 0 });
-
-      // Create migration 0001 (pending)
       writeDiffFile(testDir, 1, createMockDiff());
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
@@ -292,8 +283,6 @@ describe("migration", () => {
 
     test("detects multiple pending migrations", async () => {
       const client = createMockClient({ tailordb: 1 });
-
-      // Create migrations 0002 and 0003 (pending)
       writeDiffFile(testDir, 2, createMockDiff());
       writeDiffFile(testDir, 3, createMockDiff());
 
@@ -329,16 +318,12 @@ describe("migration", () => {
       const { logger } = await import("#/cli/shared/logger");
       const client = createMockClient({ tailordb: 0 });
 
-      // Create migration with breaking change but no script
+      // Create migration with breaking change but no script (no migrate.ts file)
       writeDiffFile(
         testDir,
         1,
-        createMockDiff({
-          hasBreakingChanges: true,
-          requiresMigrationScript: true,
-        }),
+        createMockDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
       );
-      // No migrate.ts file
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
         { namespace: "tailordb", migrationsDir: testDir },
@@ -355,14 +340,10 @@ describe("migration", () => {
     test("includes breaking change migration with script", async () => {
       const client = createMockClient({ tailordb: 0 });
 
-      // Create migration with breaking change and script
       writeDiffFile(
         testDir,
         1,
-        createMockDiff({
-          hasBreakingChanges: true,
-          requiresMigrationScript: true,
-        }),
+        createMockDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
       );
       writeMigrateFile(testDir, 1, "export async function main() {}");
 
@@ -377,12 +358,7 @@ describe("migration", () => {
     });
 
     test("sorts migrations by namespace and number", async () => {
-      const testDir2 = path.join(
-        TEST_MIGRATIONS_BASE,
-        `test2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      );
-      fs.mkdirSync(testDir2, { recursive: true });
-
+      const testDir2 = makeTestDir("test2");
       const client = createMockClient({ "namespace-a": 0, "namespace-b": 0 });
 
       // Create migrations in different order
@@ -398,16 +374,14 @@ describe("migration", () => {
 
       const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
 
-      expect(result).toHaveLength(4);
       // Should be sorted by namespace first, then by number
-      expect(result[0]!.namespace).toBe("namespace-a");
-      expect(result[0]!.number).toBe(1);
-      expect(result[1]!.namespace).toBe("namespace-a");
-      expect(result[1]!.number).toBe(2);
-      expect(result[2]!.namespace).toBe("namespace-b");
-      expect(result[2]!.number).toBe(1);
-      expect(result[3]!.namespace).toBe("namespace-b");
-      expect(result[3]!.number).toBe(2);
+      expect(result).toHaveLength(4);
+      expect(result.map((m) => [m.namespace, m.number])).toEqual([
+        ["namespace-a", 1],
+        ["namespace-a", 2],
+        ["namespace-b", 1],
+        ["namespace-b", 2],
+      ]);
     });
   });
 
@@ -417,46 +391,31 @@ describe("migration", () => {
   describe("updateMigrationLabel", () => {
     const workspaceId = "test-workspace";
     const namespace = "tailordb";
+    const expectedTrn = `trn:v1:workspace:${workspaceId}:tailordb:${namespace}`;
 
     test("updates migration label on service metadata", async () => {
       const setMetadataMock = vi.fn();
-      const client = {
-        getMetadata: vi.fn().mockResolvedValue({
-          metadata: {
-            labels: {},
-          },
-        }),
-        setMetadata: setMetadataMock,
-      } as unknown as OperatorClient;
+      const client = createMetadataClient({ labels: {} }, setMetadataMock);
 
       await updateMigrationLabel(client, workspaceId, namespace, 5);
 
       expect(setMetadataMock).toHaveBeenCalledWith({
-        trn: `trn:v1:workspace:${workspaceId}:tailordb:${namespace}`,
-        labels: {
-          [MIGRATION_LABEL_KEY]: "m0005",
-        },
+        trn: expectedTrn,
+        labels: { [MIGRATION_LABEL_KEY]: "m0005" },
       });
     });
 
     test("preserves existing labels", async () => {
       const setMetadataMock = vi.fn();
-      const client = {
-        getMetadata: vi.fn().mockResolvedValue({
-          metadata: {
-            labels: {
-              "existing-label": "value",
-              "another-label": "another-value",
-            },
-          },
-        }),
-        setMetadata: setMetadataMock,
-      } as unknown as OperatorClient;
+      const client = createMetadataClient(
+        { labels: { "existing-label": "value", "another-label": "another-value" } },
+        setMetadataMock,
+      );
 
       await updateMigrationLabel(client, workspaceId, namespace, 3);
 
       expect(setMetadataMock).toHaveBeenCalledWith({
-        trn: `trn:v1:workspace:${workspaceId}:tailordb:${namespace}`,
+        trn: expectedTrn,
         labels: {
           "existing-label": "value",
           "another-label": "another-value",
@@ -467,20 +426,13 @@ describe("migration", () => {
 
     test("handles missing metadata gracefully", async () => {
       const setMetadataMock = vi.fn();
-      const client = {
-        getMetadata: vi.fn().mockResolvedValue({
-          metadata: null,
-        }),
-        setMetadata: setMetadataMock,
-      } as unknown as OperatorClient;
+      const client = createMetadataClient(null, setMetadataMock);
 
       await updateMigrationLabel(client, workspaceId, namespace, 1);
 
       expect(setMetadataMock).toHaveBeenCalledWith({
-        trn: `trn:v1:workspace:${workspaceId}:tailordb:${namespace}`,
-        labels: {
-          [MIGRATION_LABEL_KEY]: "m0001",
-        },
+        trn: expectedTrn,
+        labels: { [MIGRATION_LABEL_KEY]: "m0001" },
       });
     });
   });
@@ -499,19 +451,6 @@ describe("migration", () => {
         machineUsers: ["test-machine-user"],
         dbConfig: {},
         env: {},
-      };
-    }
-
-    function createMockMigration(overrides: Partial<PendingMigration>): PendingMigration {
-      return {
-        number: 1,
-        scriptPath: "/path/0001/migrate.ts",
-        hasScript: true,
-        diffPath: "/path/0001/diff.json",
-        namespace: "tailordb",
-        migrationsDir: "/path",
-        diff: createMockDiff(),
-        ...overrides,
       };
     }
 
@@ -550,18 +489,12 @@ describe("migration", () => {
         createMockMigration({
           number: 1,
           hasScript: true,
-          diff: createMockDiff({
-            hasWarnings: true,
-            requiresMigrationScript: false,
-          }),
+          diff: createMockDiff({ hasWarnings: true, requiresMigrationScript: false }),
         }),
         createMockMigration({
           number: 2,
           hasScript: false,
-          diff: createMockDiff({
-            hasWarnings: true,
-            requiresMigrationScript: false,
-          }),
+          diff: createMockDiff({ hasWarnings: true, requiresMigrationScript: false }),
         }),
       ];
 

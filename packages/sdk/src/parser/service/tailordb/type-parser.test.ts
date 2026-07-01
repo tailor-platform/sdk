@@ -28,50 +28,33 @@ describe("parseTypes", () => {
   });
 
   describe("array field validation", () => {
-    test("should throw error when index is set on array field", () => {
+    test.each([
+      ["index", "index cannot be set on array fields"],
+      ["unique", "unique cannot be set on array fields"],
+    ] as const)("should throw error when %s is set on array field", (metadataKey, message) => {
       // Bypass type check by directly setting metadata
       const field = db.string({ array: true });
-      (field as unknown as { _metadata: { index: boolean } })._metadata.index = true;
+      (field as unknown as { _metadata: Record<string, boolean> })._metadata[metadataKey] = true;
 
       const testType = db.type("Test", {
         tags: field,
       });
 
       expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
-        'Field "tags" on type "Test": index cannot be set on array fields',
+        `Field "tags" on type "Test": ${message}`,
       );
     });
 
-    test("should throw error when unique is set on array field", () => {
-      // Bypass type check by directly setting metadata
-      const field = db.string({ array: true });
-      (field as unknown as { _metadata: { unique: boolean } })._metadata.unique = true;
-
+    test.each([
+      ["index", () => db.string().index()],
+      ["unique", () => db.string().unique()],
+    ] as const)("should allow %s on non-array fields", (metadataKey, buildField) => {
       const testType = db.type("Test", {
-        tags: field,
-      });
-
-      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
-        'Field "tags" on type "Test": unique cannot be set on array fields',
-      );
-    });
-
-    test("should allow index on non-array fields", () => {
-      const testType = db.type("Test", {
-        email: db.string().index(),
+        email: buildField(),
       });
 
       const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
-      expect(result.Test!.fields.email!.config.index).toBe(true);
-    });
-
-    test("should allow unique on non-array fields", () => {
-      const testType = db.type("Test", {
-        email: db.string().unique(),
-      });
-
-      const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
-      expect(result.Test!.fields.email!.config.unique).toBe(true);
+      expect(result.Test!.fields.email!.config[metadataKey]).toBe(true);
     });
   });
 
@@ -122,24 +105,15 @@ describe("parseTypes", () => {
         }),
       });
 
-      expect(() =>
+      const run = () =>
         parseTypes(
           toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
           "test-namespace",
-        ),
-      ).toThrow(/Backward relation name conflicts detected/);
-      expect(() =>
-        parseTypes(
-          toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
-          "test-namespace",
-        ),
-      ).toThrow(/performanceReviews/);
-      expect(() =>
-        parseTypes(
-          toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
-          "test-namespace",
-        ),
-      ).toThrow(/Employee/);
+        );
+
+      expect(run).toThrow(/Backward relation name conflicts detected/);
+      expect(run).toThrow(/performanceReviews/);
+      expect(run).toThrow(/Employee/);
     });
 
     test("should not throw error when backward names are explicitly set to be unique", () => {
@@ -261,47 +235,44 @@ describe("parseTypes", () => {
       });
     });
 
-    test("should throw error when backward name conflicts with existing field", () => {
-      // User has a field named "posts"
-      const user = db.type("User", {
-        name: db.string(),
-        posts: db.string({ array: true }), // existing field
-      });
+    test.each([
+      [
+        "existing field",
+        () =>
+          db.type("User", {
+            name: db.string(),
+            posts: db.string({ array: true }),
+          }),
+      ],
+      [
+        "files field",
+        () =>
+          db
+            .type("User", {
+              name: db.string(),
+            })
+            .files({
+              posts: "user posts file",
+            }),
+      ],
+    ] as const)(
+      "should throw error when backward name conflicts with %s named 'posts'",
+      (_label, buildUser) => {
+        const user = buildUser();
 
-      // Post's backward relation will generate "posts" which conflicts
-      const post = db.type("Post", {
-        userId: db.uuid().relation({
-          type: "n-1",
-          toward: { type: user },
-        }),
-      });
-
-      expect(() =>
-        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/posts/);
-    });
-
-    test("should throw error when backward name conflicts with files field", () => {
-      const user = db
-        .type("User", {
-          name: db.string(),
-        })
-        .files({
-          posts: "user posts file", // files field named "posts"
+        // Post's backward relation will generate "posts" which conflicts
+        const post = db.type("Post", {
+          userId: db.uuid().relation({
+            type: "n-1",
+            toward: { type: user },
+          }),
         });
 
-      // Post's backward relation will generate "posts" which conflicts
-      const post = db.type("Post", {
-        userId: db.uuid().relation({
-          type: "n-1",
-          toward: { type: user },
-        }),
-      });
-
-      expect(() =>
-        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/posts/);
-    });
+        expect(() =>
+          parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+        ).toThrow(/posts/);
+      },
+    );
   });
 
   describe("validateRelationType", () => {
@@ -360,14 +331,13 @@ describe("parseTypes", () => {
       );
     });
 
-    test("should accept valid relation types", () => {
-      const user = db.type("User", {
-        name: db.string(),
-      });
+    test.each(["oneToOne", "1-1", "manyToOne", "n-1", "N-1", "keyOnly"] as const)(
+      "should accept valid relation type %s",
+      (relationType) => {
+        const user = db.type("User", {
+          name: db.string(),
+        });
 
-      const validTypes = ["oneToOne", "1-1", "manyToOne", "n-1", "N-1", "keyOnly"] as const;
-
-      for (const relationType of validTypes) {
         const post = db.type("Post", {
           userId: db.uuid().relation({
             type: relationType,
@@ -378,8 +348,8 @@ describe("parseTypes", () => {
         expect(() =>
           parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
         ).not.toThrow(/relation type/);
-      }
-    });
+      },
+    );
   });
 
   describe("processRelation", () => {
@@ -407,39 +377,33 @@ describe("parseTypes", () => {
       expect(authorIdConfig.index).toBe(true);
     });
 
-    test("should set unique=true for oneToOne relations (relation only)", () => {
-      const user = db.type("User", {
-        name: db.string(),
-      });
-
-      const profile = db.type("Profile", {
-        userId: db.uuid().relation({
-          type: "1-1",
-          toward: { type: user },
-        }),
-      });
-
-      const result = parseTypes(
-        toSchemaOutputs({ User: user, Profile: profile }),
-        "test-namespace",
-      );
-
-      expect(result.Profile!.fields.userId!.config.unique).toBe(true);
-    });
-
-    test("should set unique=true for oneToOne relations (unique before relation)", () => {
-      const user = db.type("User", {
-        name: db.string(),
-      });
-
-      const profile = db.type("Profile", {
-        userId: db
-          .uuid()
-          .unique()
-          .relation({
+    test.each([
+      [
+        "relation only",
+        (user: ReturnType<typeof db.type>) =>
+          db.uuid().relation({
             type: "1-1",
             toward: { type: user },
           }),
+      ],
+      [
+        "unique before relation",
+        (user: ReturnType<typeof db.type>) =>
+          db
+            .uuid()
+            .unique()
+            .relation({
+              type: "1-1",
+              toward: { type: user },
+            }),
+      ],
+    ] as const)("should set unique=true for oneToOne relations (%s)", (_label, buildUserId) => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const profile = db.type("Profile", {
+        userId: buildUserId(user),
       });
 
       const result = parseTypes(
@@ -473,51 +437,48 @@ describe("parseTypes", () => {
       expect(result.Profile!.fields.userId!.config.unique).toBe(true);
     });
 
-    test("should throw error when unique is set on n-1 relation (unique before relation)", () => {
-      const user = db.type("User", {
-        name: db.string(),
-      });
+    test.each([
+      [
+        "unique before relation",
+        (user: ReturnType<typeof db.type>) =>
+          db
+            .uuid()
+            .unique()
+            .relation({
+              type: "n-1",
+              toward: { type: user },
+            }),
+      ],
+      [
+        "unique after relation",
+        (user: ReturnType<typeof db.type>) =>
+          db
+            .uuid()
+            .relation({
+              type: "n-1",
+              toward: { type: user },
+            })
+            .unique(),
+      ],
+    ] as const)(
+      "should throw error when unique is set on n-1 relation (%s)",
+      (_label, buildUserId) => {
+        const user = db.type("User", {
+          name: db.string(),
+        });
 
-      const employee = db.type("Employee", {
-        userID: db
-          .uuid()
-          .unique()
-          .relation({
-            type: "n-1",
-            toward: { type: user },
-          }),
-      });
+        const employee = db.type("Employee", {
+          userID: buildUserId(user),
+        });
 
-      expect(() =>
-        parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
-      ).toThrow(
-        'Field "userID" on type "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
-          "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
-      );
-    });
-
-    test("should throw error when unique is set on n-1 relation (unique after relation)", () => {
-      const user = db.type("User", {
-        name: db.string(),
-      });
-
-      const employee = db.type("Employee", {
-        userID: db
-          .uuid()
-          .relation({
-            type: "n-1",
-            toward: { type: user },
-          })
-          .unique(),
-      });
-
-      expect(() =>
-        parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
-      ).toThrow(
-        'Field "userID" on type "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
-          "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
-      );
-    });
+        expect(() =>
+          parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
+        ).toThrow(
+          'Field "userID" on type "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
+            "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
+        );
+      },
+    );
 
     test("should handle self-referencing relations", () => {
       const node = db.type("Node", {

@@ -103,81 +103,83 @@ function createMockClient(websites: MockWebsite[]): OperatorClient {
   } as unknown as OperatorClient;
 }
 
-function createContext(client: OperatorClient, application?: Application): PlanContext {
+function createContext(
+  client: OperatorClient,
+  application?: Application,
+  forRemoval = false,
+): PlanContext {
   return {
     client,
     workspaceId,
     application: application ?? createMockApplication(),
-    forRemoval: false,
+    forRemoval,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };
 }
 
 describe("planStaticWebsite", () => {
-  test("marks website unchanged when remote state matches desired state", async () => {
-    const client = createMockClient([
-      {
+  test.each([
+    {
+      name: "marks website unchanged when remote state matches desired state",
+      website: {
         name: "site-a",
         description: "Marketing site",
         allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
         label: appName,
       },
-    ]);
-
-    const result = await planStaticWebsite(createContext(client));
-
-    expect(result.changeSet.unchanged).toHaveLength(1);
-    expect(result.changeSet.unchanged[0]!.name).toBe("site-a");
-    expect(result.changeSet.updates).toHaveLength(0);
-  });
-
-  test("marks website updated when remote state differs", async () => {
-    const client = createMockClient([
-      {
+      updates: 0,
+      unchanged: 1,
+      unmanaged: 0,
+      conflicts: 0,
+    },
+    {
+      name: "marks website updated when remote state differs",
+      website: {
         name: "site-a",
         description: "Old site",
         allowedIpAddresses: ["1.1.1.1"],
         label: appName,
       },
-    ]);
-
-    const result = await planStaticWebsite(createContext(client));
-
-    expect(result.changeSet.updates).toHaveLength(1);
-    expect(result.changeSet.unchanged).toHaveLength(0);
-  });
-
-  test("marks website updated when config matches but ownership metadata is missing", async () => {
-    const client = createMockClient([
-      {
+      updates: 1,
+      unchanged: 0,
+      unmanaged: 0,
+      conflicts: 0,
+    },
+    {
+      name: "marks website updated when config matches but ownership metadata is missing",
+      website: {
         name: "site-a",
         description: "Marketing site",
         allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
       },
-    ]);
-
-    const result = await planStaticWebsite(createContext(client));
-
-    expect(result.changeSet.updates).toHaveLength(1);
-    expect(result.changeSet.unchanged).toHaveLength(0);
-    expect(result.unmanaged).toHaveLength(1);
-  });
-
-  test("marks website updated when config matches but resource is owned by another app", async () => {
-    const client = createMockClient([
-      {
+      updates: 1,
+      unchanged: 0,
+      unmanaged: 1,
+      conflicts: 0,
+    },
+    {
+      name: "marks website updated when config matches but resource is owned by another app",
+      website: {
         name: "site-a",
         description: "Marketing site",
         allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
         label: "other-app",
       },
-    ]);
+      updates: 1,
+      unchanged: 0,
+      unmanaged: 0,
+      conflicts: 1,
+    },
+  ])("$name", async ({ website, updates, unchanged, unmanaged, conflicts }) => {
+    const client = createMockClient([website]);
 
     const result = await planStaticWebsite(createContext(client));
 
-    expect(result.changeSet.updates).toHaveLength(1);
-    expect(result.changeSet.unchanged).toHaveLength(0);
-    expect(result.conflicts).toHaveLength(1);
+    expect(result.changeSet.updates).toHaveLength(updates);
+    expect(result.changeSet.unchanged).toHaveLength(unchanged);
+    expect(result.changeSet.unchanged.at(0)?.name).toBe(unchanged > 0 ? "site-a" : undefined);
+    expect(result.unmanaged).toHaveLength(unmanaged);
+    expect(result.conflicts).toHaveLength(conflicts);
   });
 
   test("creates website when it does not exist", async () => {
@@ -349,13 +351,8 @@ describe("planStaticWebsite", () => {
       },
     ]);
 
-    const result = await planStaticWebsite({
-      client,
-      workspaceId,
-      application: createMockApplication({ customDomains: ["example.com"] }),
-      forRemoval: true,
-      config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
-    });
+    const app = createMockApplication({ customDomains: ["example.com"] });
+    const result = await planStaticWebsite(createContext(client, app, true));
 
     expect(result.customDomainChangeSet.creates).toHaveLength(0);
     expect(result.customDomainChangeSet.deletes).toHaveLength(0);
