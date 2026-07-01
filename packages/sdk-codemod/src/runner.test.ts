@@ -1075,6 +1075,17 @@ describe("runCodemods", () => {
           "",
         ].join("\n"),
       );
+      await fs.promises.writeFile(
+        path.join(dir, "shadowed.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export async function run(auth: { getConnectionToken(name: string): Promise<string> }) {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
 
       using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 

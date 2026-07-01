@@ -452,7 +452,26 @@ function applyEdits(source: string, edits: Edit[]): string {
 }
 
 function normalizeSource(source: string): string {
-  return source.replace(/^[\t ]*\n+/, "").replace(/\n{3,}/g, "\n\n");
+  const lines = source.replace(/^[\t ]*\n+/, "").split("\n");
+  const out: string[] = [];
+  let sawImport = false;
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!;
+    if (line.startsWith("import ")) {
+      out.push(line);
+      sawImport = true;
+      continue;
+    }
+    if (sawImport && line.trim() === "") {
+      if (out.at(-1)?.trim() !== "") out.push(line);
+      continue;
+    }
+    out.push(...lines.slice(index));
+    return out.join("\n");
+  }
+
+  return out.join("\n");
 }
 
 function transformParsed(source: string, root: SgNode): string | null {
@@ -534,7 +553,10 @@ export function reviewFindings(
   if (!root) return [];
 
   const imports = findImportStatements(root);
-  const authBindings = findTailorConfigAuthBindings(imports);
+  const localNames = localDeclarationNames(root);
+  const authBindings = findTailorConfigAuthBindings(imports).filter(
+    (binding) => !localNames.has(binding.localName),
+  );
   const calls = findAuthConnectionTokenCalls(
     root,
     new Set(authBindings.map((binding) => binding.localName)),
