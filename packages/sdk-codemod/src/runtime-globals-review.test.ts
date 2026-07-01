@@ -97,6 +97,7 @@ describe("runtime-globals-opt-in review findings", () => {
       [
         "const code = `tailor.idp.Client;`;",
         "const globalCode = `globalThis.tailor.idp.Client;`;",
+        "const errorCode = `TailorErrors.name;`;",
         "",
       ].join("\n"),
     );
@@ -119,6 +120,12 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 2,
             message: expect.stringContaining("Embedded code string"),
             excerpt: "const globalCode = `globalThis.tailor.idp.Client;`;",
+          }),
+          expect.objectContaining({
+            file: "seed/leading.mjs",
+            line: 3,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const errorCode = `TailorErrors.name;`;",
           }),
         ],
       }),
@@ -1283,6 +1290,21 @@ describe("runtime-globals-opt-in review findings", () => {
         "type Inferred<T> = T extends infer TailorErrors ? TailorErrors : never;",
         "type NestedInferred<T> = T extends Promise<infer TailorErrorItem> ? TailorErrorItem : never;",
         "type Mapped<T> = { [TailorErrorItem in keyof T]: T[TailorErrorItem] };",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report runtime-looking function type parameter names", async () => {
+    await writeProjectFile(
+      "resolvers/function-type-parameter-names.ts",
+      [
+        "type Fn = (TailorErrors: unknown) => void;",
+        "type Obj = { (TailorErrorItem: string): void };",
         "",
       ].join("\n"),
     );

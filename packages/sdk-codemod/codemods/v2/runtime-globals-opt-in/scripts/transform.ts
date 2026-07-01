@@ -1218,6 +1218,7 @@ function collectDirectRuntimeGlobalFindings(
   })) {
     if (hasDeclarationReferenceAncestor(node)) continue;
     if (isNestedTypeIdentifierChild(node)) continue;
+    if (isBindingIdentifier(node)) continue;
     const nodeText = node.text();
     const rootRef = runtimeRootReference(nodeText) ?? globalObjectIndexedTypeQuery(node);
     if (!rootRef) continue;
