@@ -23,7 +23,9 @@ const REVIEW_SCOPE_KINDS = new Set([
   "statement_block",
   "switch_body",
   "function_declaration",
+  "generator_function_declaration",
   "function_expression",
+  "generator_function",
   "arrow_function",
   "method_definition",
   "internal_module",
@@ -31,12 +33,15 @@ const REVIEW_SCOPE_KINDS = new Set([
 ]);
 const REVIEW_VALUE_PARAMETER_SCOPE_KINDS = new Set([
   "function_declaration",
+  "generator_function_declaration",
   "function_expression",
+  "generator_function",
   "arrow_function",
   "method_definition",
 ]);
 const REVIEW_VALUE_DECLARATION_KINDS = [
   "function_declaration",
+  "generator_function_declaration",
   "class_declaration",
   "enum_declaration",
   "internal_module",
@@ -57,6 +62,13 @@ const REVIEW_BINDING_LEFT_SIDE_KINDS = new Set([
   "required_parameter",
   "variable_declarator",
 ]);
+const REVIEW_TYPE_PARAMETER_CONTAINER_KINDS = new Set([
+  "call_signature",
+  "construct_signature",
+  "constructor_type",
+  "function_type",
+  "method_signature",
+]);
 const REVIEW_DECLARATION_REFERENCE_ANCESTOR_KINDS = new Set(["import_statement"]);
 const REVIEW_FOR_BINDING_DECLARATION_KINDS = new Set([
   "lexical_declaration",
@@ -67,7 +79,9 @@ const REVIEW_FOR_KINDS = new Set(["for_statement", "for_in_statement"]);
 const REVIEW_VAR_SCOPE_KINDS = new Set([
   "program",
   "function_declaration",
+  "generator_function_declaration",
   "function_expression",
+  "generator_function",
   "arrow_function",
   "method_definition",
   "internal_module",
@@ -235,7 +249,9 @@ function localDeclarationNames(root: SgNode): Set<string> {
     rule: {
       any: [
         { kind: "function_declaration" },
+        { kind: "generator_function_declaration" },
         { kind: "function_expression" },
+        { kind: "generator_function" },
         { kind: "class_declaration" },
         { kind: "class" },
         { kind: "interface_declaration" },
@@ -503,7 +519,9 @@ function nearestReviewScope(node: SgNode | null): SgNode | null {
 
 function valueParameterScope(param: SgNode): SgNode | null {
   const scope = nearestReviewScope(param.parent());
-  return scope && REVIEW_VALUE_PARAMETER_SCOPE_KINDS.has(scope.kind()) ? scope : null;
+  if (!scope || !REVIEW_VALUE_PARAMETER_SCOPE_KINDS.has(scope.kind())) return null;
+  if (hasAncestorBeforeScope(param, scope, REVIEW_TYPE_PARAMETER_CONTAINER_KINDS)) return null;
+  return scope;
 }
 
 function nearestVarReviewScope(node: SgNode | null): SgNode | null {
@@ -574,7 +592,7 @@ function forBindingChildren(loop: SgNode): SgNode[] {
 }
 
 function scopeHasValueBinding(scope: SgNode, name: string): boolean {
-  if (scope.kind() === "function_expression") {
+  if (scope.kind() === "function_expression" || scope.kind() === "generator_function") {
     const functionName = scope.children().find((child) => child.kind() === "identifier");
     if (functionName?.text() === name) return true;
   }

@@ -502,6 +502,35 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports runtime globals outside inline function type parameters", async () => {
+    await writeProjectFile(
+      "resolvers/inline-function-type-parameter.ts",
+      [
+        "function run(_: (tailor: unknown) => void) {",
+        "  const clientFactory = tailor.idp.Client;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/inline-function-type-parameter.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/inline-function-type-parameter.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = tailor.idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("does not report local arrow for or catch runtime-looking names", async () => {
     await writeProjectFile(
       "resolvers/local-binding-forms.ts",
