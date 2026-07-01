@@ -304,31 +304,34 @@ export async function planApplication(
       authIdpConfigName = idProvider.name;
     }
   } else if (application.config.auth) {
-    // Retrieve idpConfig from remote when auth references an external namespace
+    // Prefer peer plans for same-run multi-config deploys; otherwise read remote state.
     authNamespace = application.config.auth.name;
-    const idpConfigs = await fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
-          workspaceId,
-          namespaceName: assertDefined(
-            authNamespace,
-            "authNamespace must be set before listing IDP configs",
-          ),
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [idpConfigs, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
+    authIdpConfigName = context.externalAuthIdpConfigNames?.get(authNamespace);
+    if (!authIdpConfigName) {
+      const idpConfigs = await fetchAll(async (pageToken, maxPageSize) => {
+        try {
+          const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
+            workspaceId,
+            namespaceName: assertDefined(
+              authNamespace,
+              "authNamespace must be set before listing IDP configs",
+            ),
+            pageToken,
+            pageSize: maxPageSize,
+          });
+          return [idpConfigs, nextPageToken];
+        } catch (error) {
+          if (error instanceof ConnectError && error.code === Code.NotFound) {
+            return [[], ""];
+          }
+          throw error;
         }
-        throw error;
-      }
-    });
-    if (idpConfigs.length > 0) {
-      const [firstConfig] = idpConfigs;
-      if (firstConfig) {
-        authIdpConfigName = firstConfig.name;
+      });
+      if (idpConfigs.length > 0) {
+        const [firstConfig] = idpConfigs;
+        if (firstConfig) {
+          authIdpConfigName = firstConfig.name;
+        }
       }
     }
   }

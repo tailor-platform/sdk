@@ -188,6 +188,28 @@ describe("planApplication", () => {
     expect(result.unchanged).toHaveLength(0);
   });
 
+  test("uses planned external Auth IDP config names before remote lookup", async () => {
+    const client = createMockClient([]);
+    const baseApplication = createMockApplication();
+    const application = {
+      ...baseApplication,
+      authService: undefined,
+      config: {
+        ...baseApplication.config,
+        auth: { name: "peer-auth", external: true },
+      },
+      subgraphs: [{ Type: "auth", Name: "peer-auth" }],
+    } as unknown as Application;
+
+    const result = await planApplication({
+      ...createContext(client, application),
+      externalAuthIdpConfigNames: new Map([["peer-auth", "peer-idp"]]),
+    });
+
+    expect(client.listAuthIDPConfigs).not.toHaveBeenCalled();
+    expect(result.creates[0]?.request.authIdpConfigName).toBe("peer-idp");
+  });
+
   test("marks application updated when sdk version differs", async () => {
     const client = createMockClient([
       {

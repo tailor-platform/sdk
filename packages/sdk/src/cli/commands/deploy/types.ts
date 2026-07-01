@@ -19,4 +19,6 @@ export interface PlanContext {
    * no idpUser triggers are defined.
    */
   idpUserTriggerTargets?: ReadonlySet<string>;
+  /** Planned external Auth IDP config names keyed by Auth namespace. */
+  externalAuthIdpConfigNames?: ReadonlyMap<string, string>;
 }

@@ -316,10 +316,18 @@ describe("dropCrossDeploymentManagedDeletes", () => {
       name: "User",
       request: { namespaceName: "shared" },
     } as never);
+    previousOwner.tailorDB.changeSet.gqlPermission.deletes.push({
+      name: "User",
+      request: { namespaceName: "shared" },
+    } as never);
 
     const nextOwner = emptyResults();
     nextOwner.tailorDB.changeSet.service.updates.push({ name: "shared" } as never);
     nextOwner.tailorDB.changeSet.type.updates.push({
+      name: "User",
+      request: { namespaceName: "shared" },
+    } as never);
+    nextOwner.tailorDB.changeSet.gqlPermission.unchanged.push({
       name: "User",
       request: { namespaceName: "shared" },
     } as never);
@@ -331,6 +339,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
 
     expect(previousOwner.tailorDB.changeSet.service.deletes).toEqual([]);
     expect(previousOwner.tailorDB.changeSet.type.deletes).toEqual([]);
+    expect(previousOwner.tailorDB.changeSet.gqlPermission.deletes).toEqual([]);
   });
 
   test("keeps deletes that are not claimed by another deployment", () => {

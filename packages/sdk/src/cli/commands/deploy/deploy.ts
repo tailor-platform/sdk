@@ -692,6 +692,20 @@ function collectPlannedExternalTailorDBServices(
   );
 }
 
+function collectExternalAuthIdpConfigNames(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): ReadonlyMap<string, string> {
+  const idpConfigNames = new Map<string, string>();
+  for (const target of targets) {
+    const authService = target.application.authService;
+    const idProviderName = authService?.config.idProvider?.name;
+    if (authService && idProviderName) {
+      idpConfigNames.set(authService.config.name, idProviderName);
+    }
+  }
+  return idpConfigNames;
+}
+
 async function planDeploymentTarget(
   params: PlanDeploymentTargetParams,
 ): Promise<PlannedDeployment> {
@@ -730,6 +744,7 @@ async function planDeploymentTarget(
       noSchemaCheck,
       forceApplyAll,
       idpUserTriggerTargets,
+      externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
     };
     const functionRegistry = await withSpan("plan.functionRegistry", () =>
       planFunctionRegistry(client, workspaceId, application.name, application.id, functionEntries),
@@ -909,6 +924,7 @@ type ManagedResourceChangeSet = {
   updates: HasName[];
   deletes: HasName[];
   replaces: HasName[];
+  unchanged: HasName[];
 };
 
 type ManagedResourceGroup = {
@@ -1035,6 +1051,7 @@ export function dropCrossDeploymentManagedDeletes(
         ...group.changeSet.creates,
         ...group.changeSet.updates,
         ...group.changeSet.replaces,
+        ...group.changeSet.unchanged,
       ]) {
         claims.add(managedResourceKey(group, item));
       }
