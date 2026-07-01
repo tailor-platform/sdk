@@ -179,7 +179,6 @@ async function planServices(
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, maxPageSize) => {
       const { pipelineServices, nextPageToken } = await client.listPipelineServices({
         workspaceId,
@@ -189,7 +188,7 @@ async function planServices(
       return [pipelineServices, nextPageToken];
     },
     getName: (resource) => resource.namespace?.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "pipeline", name),
+    getTrn: (name) => resourceTrn(workspaceId, "pipeline", name),
   });
 
   for (const pipeline of pipelines) {

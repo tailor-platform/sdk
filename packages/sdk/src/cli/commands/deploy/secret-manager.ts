@@ -121,7 +121,6 @@ export async function planSecretManager(context: PlanContext) {
   // Fetch all existing vaults with metadata to track managed resources
   const existingVaults = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, maxPageSize) => {
       const { vaults, nextPageToken } = await client.listSecretManagerVaults({
         workspaceId,
@@ -131,7 +130,7 @@ export async function planSecretManager(context: PlanContext) {
       return [vaults, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "vault", name),
+    getTrn: (name) => resourceTrn(workspaceId, "vault", name),
   });
 
   const state = loadSecretsState();

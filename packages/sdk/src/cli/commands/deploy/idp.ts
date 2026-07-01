@@ -407,7 +407,6 @@ async function planServices(
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, maxPageSize) => {
       const { idpServices, nextPageToken } = await client.listIdPServices({
         workspaceId,
@@ -417,7 +416,7 @@ async function planServices(
       return [idpServices, nextPageToken];
     },
     getName: (resource) => resource.namespace?.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "idp", name),
+    getTrn: (name) => resourceTrn(workspaceId, "idp", name),
   });
 
   for (const idp of idps) {

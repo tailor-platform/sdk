@@ -1347,7 +1347,6 @@ async function planServices(
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, maxPageSize) => {
       const { tailordbServices, nextPageToken } = await client.listTailorDBServices({
         workspaceId,
@@ -1357,7 +1356,7 @@ async function planServices(
       return [tailordbServices, nextPageToken];
     },
     getName: (resource) => resource.namespace?.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "tailordb", name),
+    getTrn: (name) => resourceTrn(workspaceId, "tailordb", name),
   });
 
   for (const tailordb of tailordbs) {

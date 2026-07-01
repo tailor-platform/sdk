@@ -287,10 +287,8 @@ export async function planFunctionRegistry(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  // Fetch existing function registry entries with their labels
   const existingMap = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, maxPageSize) => {
       const response = await client.listFunctionRegistries({
         workspaceId,
@@ -308,7 +306,7 @@ export async function planFunctionRegistry(
       ];
     },
     getName: (func) => func.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "function_registry", name),
+    getTrn: (name) => resourceTrn(workspaceId, "function_registry", name),
   });
 
   // Process desired entries

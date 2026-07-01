@@ -7,10 +7,9 @@ type ResourcePageFetcher<T> = (pageToken: string, maxPageSize: number) => Promis
 
 export interface FetchExistingResourcesWithLabelsParams<T> {
   client: OperatorClient;
-  workspaceId: string;
   fetchPage: ResourcePageFetcher<T>;
   getName: (resource: T) => string | undefined;
-  getTrn: (workspaceId: string, name: string) => string;
+  getTrn: (name: string) => string;
 }
 
 /**
@@ -18,7 +17,6 @@ export interface FetchExistingResourcesWithLabelsParams<T> {
  * @template T
  * @param params - Resource fetch parameters
  * @param params.client - Operator client instance
- * @param params.workspaceId - Workspace ID
  * @param params.fetchPage - Function that fetches one resource page
  * @param params.getName - Function that extracts the resource name
  * @param params.getTrn - Function that builds the resource TRN
@@ -27,7 +25,7 @@ export interface FetchExistingResourcesWithLabelsParams<T> {
 export async function fetchExistingResourcesWithLabels<T>(
   params: FetchExistingResourcesWithLabelsParams<T>,
 ): Promise<WithLabel<T>> {
-  const { client, workspaceId, fetchPage, getName, getTrn } = params;
+  const { client, fetchPage, getName, getTrn } = params;
   const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       return await fetchPage(pageToken, maxPageSize);
@@ -46,7 +44,7 @@ export async function fetchExistingResourcesWithLabels<T>(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: getTrn(workspaceId, name),
+        trn: getTrn(name),
       });
       existingResources[name] = {
         resource,
