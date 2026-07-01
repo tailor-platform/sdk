@@ -965,10 +965,8 @@ export function assertUniqueGlobalFunctionNames(
     for (const target of targets) {
       for (const name of check.namesOf(target)) {
         if (seen.has(name)) {
-          const lowerCaseLabel =
-            check.resourceLabel.charAt(0).toLowerCase() + check.resourceLabel.slice(1);
           throw new Error(
-            `Duplicate ${check.resourceLabel} name "${name}" across config files. ${lowerCaseLabel} names must be unique across all configs in a single deploy.`,
+            `Duplicate ${check.resourceLabel} name "${name}" across config files. ${check.resourceLabel} names must be unique across all configs in a single deploy.`,
           );
         }
         seen.add(name);

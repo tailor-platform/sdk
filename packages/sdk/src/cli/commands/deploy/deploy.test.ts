@@ -877,7 +877,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ appName: "shared-app" }),
       ]),
     ).toThrow(
-      'Duplicate Application name "shared-app" across config files. application names must be unique across all configs in a single deploy.',
+      'Duplicate Application name "shared-app" across config files. Application names must be unique across all configs in a single deploy.',
     );
   });
 
@@ -888,7 +888,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ executorNames: ["sync-user"] }),
       ]),
     ).toThrow(
-      'Duplicate Executor name "sync-user" across config files. executor names must be unique across all configs in a single deploy.',
+      'Duplicate Executor name "sync-user" across config files. Executor names must be unique across all configs in a single deploy.',
     );
   });
 
@@ -899,7 +899,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
       ]),
     ).toThrow(
-      'Duplicate Executor name "forward-webhook" across config files. executor names must be unique across all configs in a single deploy.',
+      'Duplicate Executor name "forward-webhook" across config files. Executor names must be unique across all configs in a single deploy.',
     );
   });
 
@@ -910,7 +910,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ workflowJobs: { "notify-job": "b" } }),
       ]),
     ).toThrow(
-      'Duplicate Workflow job name "notify-job" across config files. workflow job names must be unique across all configs in a single deploy.',
+      'Duplicate Workflow job name "notify-job" across config files. Workflow job names must be unique across all configs in a single deploy.',
     );
   });
 
@@ -963,7 +963,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
       ]),
     ).toThrow(
-      'Duplicate StaticWebsite name "marketing-site" across config files. staticWebsite names must be unique across all configs in a single deploy.',
+      'Duplicate StaticWebsite name "marketing-site" across config files. StaticWebsite names must be unique across all configs in a single deploy.',
     );
   });
 
@@ -973,7 +973,9 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
         fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
       ]),
-    ).toThrow('Duplicate TailorDB namespace name "shared-db" across config files.');
+    ).toThrow(
+      'Duplicate TailorDB namespace name "shared-db" across config files. TailorDB namespace names must be unique across all configs in a single deploy.',
+    );
   });
 
   test("throws when two configs define the same Auth namespace", () => {
@@ -982,7 +984,9 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ authNamespace: "shared-auth" }),
         fakeTarget({ authNamespace: "shared-auth" }),
       ]),
-    ).toThrow('Duplicate Auth namespace name "shared-auth" across config files.');
+    ).toThrow(
+      'Duplicate Auth namespace name "shared-auth" across config files. Auth namespace names must be unique across all configs in a single deploy.',
+    );
   });
 
   test("throws when two configs define the same IdP namespace", () => {
@@ -991,7 +995,9 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ idpNames: ["shared-idp"] }),
         fakeTarget({ idpNames: ["shared-idp"] }),
       ]),
-    ).toThrow('Duplicate IdP namespace name "shared-idp" across config files.');
+    ).toThrow(
+      'Duplicate IdP namespace name "shared-idp" across config files. IdP namespace names must be unique across all configs in a single deploy.',
+    );
   });
 
   test("throws when two configs define the same Resolver namespace", () => {
@@ -1000,7 +1006,9 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ resolverNamespaces: ["shared-pipeline"] }),
         fakeTarget({ resolverNamespaces: ["shared-pipeline"] }),
       ]),
-    ).toThrow('Duplicate Resolver namespace name "shared-pipeline" across config files.');
+    ).toThrow(
+      'Duplicate Resolver namespace name "shared-pipeline" across config files. Resolver namespace names must be unique across all configs in a single deploy.',
+    );
   });
 
   test("throws when two configs define the same AIGateway name", () => {
@@ -1009,7 +1017,9 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ aiGatewayNames: ["shared-gateway"] }),
         fakeTarget({ aiGatewayNames: ["shared-gateway"] }),
       ]),
-    ).toThrow('Duplicate AIGateway name "shared-gateway" across config files.');
+    ).toThrow(
+      'Duplicate AIGateway name "shared-gateway" across config files. AIGateway names must be unique across all configs in a single deploy.',
+    );
   });
 
   test("throws when two configs define the same Secret Manager vault name", () => {
@@ -1018,7 +1028,9 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ vaultNames: ["shared-vault"] }),
         fakeTarget({ vaultNames: ["shared-vault"] }),
       ]),
-    ).toThrow('Duplicate Secret Manager vault name "shared-vault" across config files.');
+    ).toThrow(
+      'Duplicate Secret Manager vault name "shared-vault" across config files. Secret Manager vault names must be unique across all configs in a single deploy.',
+    );
   });
 
   test("throws when two configs define the same workflow name", () => {
@@ -1027,7 +1039,9 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ workflowNames: ["order-processing"] }),
         fakeTarget({ workflowNames: ["order-processing"] }),
       ]),
-    ).toThrow('Duplicate Workflow name "order-processing" across config files.');
+    ).toThrow(
+      'Duplicate Workflow name "order-processing" across config files. Workflow names must be unique across all configs in a single deploy.',
+    );
   });
 
   test("throws when two configs define the same Auth connection name", () => {
@@ -1036,7 +1050,9 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ authNamespace: "auth-a", authConnectionNames: ["google-sso"] }),
         fakeTarget({ authNamespace: "auth-b", authConnectionNames: ["google-sso"] }),
       ]),
-    ).toThrow('Duplicate Auth connection name "google-sso" across config files.');
+    ).toThrow(
+      'Duplicate Auth connection name "google-sso" across config files. Auth connection names must be unique across all configs in a single deploy.',
+    );
   });
 });
 
