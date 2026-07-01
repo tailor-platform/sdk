@@ -21,6 +21,7 @@ const branchBase: RenderBranchParams = {
   environment: "my-app",
   packageManager: "pnpm",
   plan: true,
+  erdPreview: null,
 };
 
 const tagBase: RenderTagParams = {
@@ -155,6 +156,246 @@ describe("renderBranchWorkflow", () => {
     const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
     expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
     expect(content.match(/id: tailor-generate-check/g)).toHaveLength(1);
+  });
+
+  test("omits ERD preview jobs by default", () => {
+    const { content, generatedIds } = renderBranchWorkflow(branchBase);
+    const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
+    expect(Object.keys(parsed.jobs)).toEqual(["tailor-plan", "tailor-deploy"]);
+    expect(content).not.toContain("tailor-erd-preview");
+    expect(generatedIds).not.toContain("tailor-erd-preview");
+  });
+
+  test("adds ERD preview and comment jobs when enabled", () => {
+    const { content, generatedIds } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
+    });
+    const parsed = parseYAML(content) as { jobs: Record<string, unknown> };
+
+    expect(Object.keys(parsed.jobs)).toEqual([
+      "tailor-plan",
+      "tailor-erd-preview-matrix",
+      "tailor-erd-preview",
+      "tailor-erd-preview-comment",
+      "tailor-deploy",
+    ]);
+    expect(content).toContain(
+      "namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}",
+    );
+    expect(content).toContain(".tailor-erd-base/.github/tailor-sdk.lock");
+    expect(content).toContain("run_tailor_sdk tailordb erd export");
+    expect(content).toContain('run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff');
+    expect(content).toContain("const namespacePattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;");
+    expect(content).toContain("Invalid ERD namespace in");
+    expect(content).toContain("id: tailor-detect-base-package-manager");
+    expect(content).toContain("id: tailor-setup-base-pnpm");
+    expect(content).toContain("id: tailor-setup-base-node");
+    expect(content).toContain("id: tailor-setup-base-yarn");
+    expect(content).toContain("id: tailor-setup-base-bun");
+    expect(content).toContain("id: tailor-install-base");
+    expect(content).toContain("id: tailor-restore-head-setup");
+    expect(content).toContain("node-version-file: .tailor-erd-base/package.json");
+    expect(content).toContain("working-directory: .tailor-erd-base");
+    expect(content).toContain('base_package_manager="$(');
+    expect(content).toContain("package-lock.json");
+    expect(content).toContain('echo "package-manager=$base_package_manager" >> "$GITHUB_OUTPUT"');
+    expect(content).not.toContain('case "$base_package_manager" in');
+    expect(content).toContain(
+      'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
+    );
+    expect(content).toContain("BASE_PACKAGE_MANAGER:");
+    expect(content).toContain("tailor_sdk_bin");
+    expect(content).toContain("run_head_node - <<'NODE'");
+    expect(content).toContain('path.join(githubWorkspace, appDir, "package.json")');
+    expect(content).toContain('path.join(githubWorkspace, "package.json")');
+    expect(content).toContain(
+      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+    );
+    expect(content).toContain('yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;');
+    expect(content).toContain('head_missing="false"');
+    expect(content).toContain("grep -q 'not found in local config.db'");
+    expect(content).toContain('diff_args=(--namespace "$NAMESPACE" --output "$preview_html")');
+    expect(content).toContain("name: ${{ matrix.namespace }}-viewer.html");
+    expect(content).not.toContain("name: ${{ matrix.namespace }}-diff.html");
+    expect(content).toContain("HEAD_SHA: ${{ github.event.pull_request.head.sha }}");
+    expect(content).toContain('current_head=$(gh api "repos/$REPO/pulls/$PR_NUMBER"');
+    expect(content).toContain("archive: false");
+    expect(content).toContain('select(.name | endswith("-viewer.html"))');
+    expect(content).not.toContain('endswith("-diff.html")');
+    expect(content).toContain("github.event.pull_request.head.repo.full_name == github.repository");
+    expect(generatedIds).toEqual(
+      expect.arrayContaining([
+        "tailor-erd-preview-matrix",
+        "tailor-erd-preview-matrix/tailor-checkout",
+        "tailor-erd-preview-matrix/tailor-checkout-base",
+        "tailor-erd-preview-matrix/tailor-erd-preview-matrix",
+        "tailor-erd-preview",
+        "tailor-erd-preview/tailor-checkout",
+        "tailor-erd-preview/tailor-checkout-base",
+        "tailor-erd-preview/tailor-detect-base-package-manager",
+        "tailor-erd-preview/tailor-setup-base-pnpm",
+        "tailor-erd-preview/tailor-setup-base-node",
+        "tailor-erd-preview/tailor-setup-base-yarn",
+        "tailor-erd-preview/tailor-setup-base-bun",
+        "tailor-erd-preview/tailor-install-base",
+        "tailor-erd-preview/tailor-restore-head-setup",
+        "tailor-erd-preview/tailor-build-erd-preview",
+        "tailor-erd-preview/tailor-upload-erd-viewer",
+        "tailor-erd-preview-comment",
+        "tailor-erd-preview-comment/tailor-comment-erd-preview",
+      ]),
+    );
+  });
+
+  test("installs ERD base dependencies without the head checkout cache path", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-detect-base-package-manager");
+    const end = content.indexOf("id: tailor-restore-head-setup");
+    const baseSetup = content.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(baseSetup).not.toContain("tailor-platform/actions/setup@");
+    expect(baseSetup).not.toContain("cache:");
+    expect(baseSetup).toContain("pnpm/action-setup@");
+    expect(baseSetup).toContain("package_json_file: .tailor-erd-base/package.json");
+    expect(baseSetup).toContain(
+      "version: ${{ steps.tailor-detect-base-package-manager.outputs['pnpm-version'] }}",
+    );
+    expect(baseSetup).toContain('fallback = "10";');
+    expect(baseSetup).not.toContain('readManifest("../package.json")');
+    expect(baseSetup).toContain('echo "pnpm-version=$base_pnpm_version" >> "$GITHUB_OUTPUT"');
+    expect(baseSetup).toContain("actions/setup-node@");
+    expect(baseSetup).toContain("id: tailor-setup-base-yarn");
+    expect(baseSetup).toContain("corepack enable");
+    expect(baseSetup).toContain("oven-sh/setup-bun@");
+    expect(baseSetup).toContain("pnpm install --frozen-lockfile");
+    expect(baseSetup).toContain("npm ci");
+    expect(baseSetup).toContain("grep -q '^__metadata:' yarn.lock");
+    expect(baseSetup).toContain("yarn install --immutable");
+    expect(baseSetup).toContain("yarn install --frozen-lockfile");
+    expect(baseSetup).toContain("bun install --frozen-lockfile");
+  });
+
+  test("restores the head setup after installing ERD base dependencies", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const installBase = content.indexOf("id: tailor-install-base");
+    const restoreHead = content.indexOf("id: tailor-restore-head-setup");
+    const buildPreview = content.indexOf("id: tailor-build-erd-preview");
+    const restoreStep = content.slice(restoreHead, buildPreview);
+
+    expect(installBase).toBeGreaterThanOrEqual(0);
+    expect(restoreHead).toBeGreaterThan(installBase);
+    expect(buildPreview).toBeGreaterThan(restoreHead);
+    expect(restoreStep).toContain("uses: tailor-platform/actions/setup@");
+    expect(restoreStep).toContain("package-manager: pnpm");
+  });
+
+  test("runs ERD base export through the base package loader and head SDK bin", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(buildStep).toContain("run_head_tailor_sdk_bin() {");
+    expect(buildStep).toContain("run_base_tailor_sdk_bin() {");
+    expect(buildStep).toContain('cd "$GITHUB_WORKSPACE"');
+    expect(buildStep).toContain('local command_cwd="$1"');
+    expect(buildStep).toContain("process.chdir(commandCwd);");
+    expect(buildStep).toContain('case "pnpm" in');
+    expect(buildStep).toContain('pnpm) run_head_cli_env pnpm exec node "$head_cli_runner" "$@" ;;');
+    expect(buildStep).toContain('npm) run_head_cli_env node "$head_cli_runner" "$@" ;;');
+    expect(buildStep).toContain('yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;');
+    expect(buildStep).toContain('bun) run_head_cli_env bun "$head_cli_runner" "$@" ;;');
+    expect(buildStep).toContain('case "$BASE_PACKAGE_MANAGER" in');
+    expect(buildStep).toContain('cd "$command_cwd"');
+    expect(buildStep).toContain(
+      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+    );
+  });
+
+  test("uses the base setup app directory for ERD base export", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(content).toContain(
+      "base-app-dir: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dir'] }}",
+    );
+    expect(content).toContain(
+      "BASE_APP_DIR: ${{ needs.tailor-erd-preview-matrix.outputs['base-app-dir'] }}",
+    );
+    expect(buildStep).toContain(
+      'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
+    );
+    expect(buildStep).toContain(
+      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+    );
+    expect(buildStep).not.toContain(".tailor-erd-base/$APP_DIR/tailor.config.ts");
+    expect(buildStep).not.toContain('.tailor-erd-base/$APP_DIR" tailordb erd export');
+  });
+
+  test("does not enter the head app directory before missing-head handling", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const beforeHeadConfig = buildStep.slice(
+      0,
+      buildStep.indexOf('head_config="$GITHUB_WORKSPACE'),
+    );
+    expect(beforeHeadConfig).not.toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"');
+    expect(buildStep.match(/cd "\$GITHUB_WORKSPACE\/\$APP_DIR" \|\| exit 1/g)).toHaveLength(1);
+    expect(buildStep).not.toContain('cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_head_node');
+    expect(buildStep).not.toContain(
+      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n              case "__PACKAGE_MANAGER__"',
+    );
+    expect(buildStep).not.toContain(
+      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            TAILOR_PLATFORM_SDK_DTS_PATH',
+    );
+    expect(buildStep).not.toContain(
+      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_sdk tailordb erd diff',
+    );
+    expect(buildStep).toContain('run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff');
+  });
+
+  test("treats missing ERD preview configs as empty diff sides", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      erdPreview: { namespaces: ["tailordb"] },
+    });
+    const start = content.indexOf("id: tailor-build-erd-preview");
+    const end = content.indexOf("id: tailor-upload-erd-viewer");
+    const buildStep = content.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(buildStep).toContain('if [ ! -f "$head_config" ]; then');
+    expect(buildStep).toContain("Head ERD config not found; rendering base objects as removed.");
+    expect(buildStep).toContain('if [ ! -f "$base_config" ]; then');
+    expect(buildStep).toContain("Base ERD config not found; rendering current objects as added.");
   });
 
   test("passes the package manager to the setup action", () => {
@@ -360,6 +601,7 @@ describe("setupGitHub (integration)", () => {
     tag: false,
     tagPattern: "v*",
     plan: true,
+    erdPreview: false,
     dir: ".",
     force: false,
     outputDir: testDir,
@@ -401,6 +643,37 @@ describe("setupGitHub (integration)", () => {
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
     expect(wf).toContain("environment: production");
     expect(readLock(testDir)?.targets[0]?.inputs.environment).toBe("production");
+  });
+
+  test("records ERD preview namespaces in the generated workflow and lock", async () => {
+    await setupGitHub(
+      baseOptions({
+        workspaceName: "my-app",
+        erdPreview: true,
+        loadErdNamespaces: async () => ["tailordb", "analyticsdb"],
+      }),
+    );
+
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    const lock = readLock(testDir);
+    expect(wf).toContain("tailor-erd-preview:");
+    expect(wf).toContain(
+      "namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}",
+    );
+    expect(lock?.targets[0]?.inputs.erdPreview).toBe(true);
+    expect(lock?.targets[0]?.inputs.erdNamespaces).toEqual(["tailordb", "analyticsdb"]);
+  });
+
+  test("rejects ERD preview when no owned TailorDB namespaces exist", async () => {
+    await expect(
+      setupGitHub(
+        baseOptions({
+          workspaceName: "my-app",
+          erdPreview: true,
+          loadErdNamespaces: async () => [],
+        }),
+      ),
+    ).rejects.toThrow(/No TailorDB namespaces/);
   });
 
   test("injects an app id when missing", async () => {
@@ -451,6 +724,15 @@ describe("setupGitHub (integration)", () => {
     await expect(
       setupGitHub(baseOptions({ workspaceName: "my-app", tag: true, plan: false })),
     ).rejects.toThrow(/--no-plan/);
+  });
+
+  test("rejects ERD preview for targets without a PR plan", async () => {
+    await expect(
+      setupGitHub(baseOptions({ workspaceName: "my-app", erdPreview: true, plan: false })),
+    ).rejects.toThrow(/--erd-preview/);
+    await expect(
+      setupGitHub(baseOptions({ workspaceName: "my-app", erdPreview: true, tag: true })),
+    ).rejects.toThrow(/--erd-preview/);
   });
 
   test("rejects a branch name with YAML-unsafe characters", async () => {

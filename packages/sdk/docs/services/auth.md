@@ -308,7 +308,7 @@ export default createResolver({
 });
 ```
 
-Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `apply`) after defining new machine users to refresh it.
+Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new machine users to refresh it.
 
 ## OAuth 2.0 Clients
 
@@ -363,21 +363,18 @@ See [IdP](./idp.md) for configuring identity providers.
 
 ## Auth Connections
 
-Auth connections enable OAuth2 authentication with external providers (Google, Microsoft 365, QuickBooks, etc.) for application-to-application flows. Functions can access connection tokens at runtime via `tailor.authconnection.getConnectionToken()`.
+Auth connections enable OAuth2 authentication with external providers (Google, Microsoft 365, QuickBooks, etc.) for application-to-application flows. Functions can access connection tokens at runtime via `authconnection.getConnectionToken()` (from `@tailor-platform/sdk/runtime`).
 
 For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
 
-> [!WARNING]
-> **Managing connections through `tailor.config.ts` is unreliable for shared and CI deploys.**
-> A deploy revokes and recreates the connection — discarding the token obtained via `authconnection authorize` — whenever it cannot confirm the secret is unchanged. That check relies on a hash stored locally in `.tailor/secrets-state.json`, which is gitignored and therefore not shared across machines. So a deploy from CI, a clean checkout, another developer's machine, or after deleting `.tailor/` recreates the connection and drops its token. Only repeated deploys from the same machine that still holds that state keep the token.
->
-> Because of this, prefer to **create the connection and its token from the Console**. You can jump to the connections page with:
+> [!NOTE]
+> Deploy updates connections **in-place**, preserving the OAuth token. If the connection requires re-authorization after an update, the deploy will warn you:
 >
 > ```bash
+> tailor authconnection authorize --name <connection-name>
+> # Or via the Console:
 > tailor authconnection open
 > ```
->
-> The `connections` field in `defineAuth()` and the `authconnection authorize` flow are documented below for reference.
 
 ### Setup Flow
 
@@ -430,30 +427,25 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 | `authUrl`      | `string` | No       | Override for the authorization endpoint.    |
 | `tokenUrl`     | `string` | No       | Override for the token endpoint.            |
 
-### Change Detection
+### Retrieving Connection Tokens
 
-The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor/` directory forces all connections to be re-sent.
-
-> [!WARNING]
-> The secret hash lives in `.tailor/secrets-state.json`, which is gitignored and not shared across machines or CI. When that state is missing — a clean checkout, CI, another machine, or after deleting `.tailor/` — a deploy cannot confirm the secret is unchanged, so it revokes and recreates the connection and discards the token stored by `authconnection authorize`. For shared and CI workflows, manage the connection and create its token from the Console (`tailor authconnection open`) instead.
-
-### `auth.getConnectionToken()`
-
-`auth.getConnectionToken()` retrieves connection tokens at runtime by calling `tailor.authconnection.getConnectionToken()` internally. When `connections` is defined in `defineAuth()`, the connection name is type-checked and autocompleted against the defined keys:
+Use `authconnection.getConnectionToken()` from `@tailor-platform/sdk/runtime` to retrieve connection tokens at runtime. The connection name is type-checked and autocompleted against the connections defined in `defineAuth()`'s `connections`:
 
 ```typescript
-import { auth } from "../tailor.config";
+import { authconnection } from "@tailor-platform/sdk/runtime";
 
 // In a resolver, executor, or workflow:
-const tokens = await auth.getConnectionToken("google-connection");
+const tokens = await authconnection.getConnectionToken("google-connection");
 const response = await fetch("https://www.googleapis.com/...", {
   headers: { Authorization: `Bearer ${tokens.access_token}` },
 });
 
-// auth.getConnectionToken("unknown"); // Type error — only "google-connection" is allowed
+// authconnection.getConnectionToken("unknown"); // Type error — only "google-connection" is allowed
 ```
 
-When `connections` is not defined, `getConnectionToken()` accepts any string. This supports connections managed entirely via the CLI.
+Type narrowing is provided by the generated `tailor.d.ts` (the `ConnectionNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new connections to refresh it. Before the first generate, or when `connections` is not defined in `defineAuth()`, `getConnectionToken()` accepts any string — this also supports connections managed entirely via the CLI.
+
+> **Deprecated:** `auth.getConnectionToken("<name>")` still works, but is deprecated. Importing `auth` from `tailor.config.ts` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
 
 See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-interfaces.html#auth-connection) for the full runtime API.
 
@@ -475,7 +467,7 @@ tailor authconnection list
 tailor authconnection revoke --name google-connection
 ```
 
-Connection creation is handled by `tailor deploy` via the config, but recreation on deploy can drop the authorized token (see the warning at the top of this section) — for shared and CI workflows, create connections and tokens from the Console (`tailor authconnection open`) instead.
+Connection creation and updates are handled by `tailor deploy` via the config. Deploy updates connections in-place, preserving the authorized token, and warns you if an update requires re-authorization (see the note above).
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 

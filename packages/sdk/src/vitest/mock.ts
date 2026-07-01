@@ -32,6 +32,11 @@ import {
 } from "../configure/services/workflow/test-env-key";
 import type { TailorEnv } from "#/runtime/types";
 import type { User as IdpUser } from "../runtime/idp";
+// Import from the public entry (not `#/configure/...`) so this d.ts references
+// `@tailor-platform/sdk` externally instead of inlining the registry — the same
+// generated `declare module "@tailor-platform/sdk"` that narrows
+// `authconnection.getConnectionToken` then also narrows this mock's API.
+import type { AuthConnectionTokenResult, ConnectionName } from "@tailor-platform/sdk";
 
 export { RUNTIME_FLAG_KEY } from "./globals";
 
@@ -100,7 +105,7 @@ interface SecretCall {
 }
 
 interface AuthConnectionCall {
-  connectionName: string;
+  connectionName: ConnectionName;
 }
 
 interface IdpCall {
@@ -636,10 +641,9 @@ export function mockAuthconnection() {
   const root = tailorRoot();
   const prev = root.authconnection;
 
-  let tokens: Record<string, unknown> = {};
+  let tokens: Partial<Record<ConnectionName, AuthConnectionTokenResult>> = {};
   const getConnectionToken = vi.fn(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (connectionName: string): Promise<any> =>
+    async (connectionName: ConnectionName): Promise<AuthConnectionTokenResult> =>
       tokens[connectionName] ?? { access_token: "mock-token" },
   );
 
@@ -649,13 +653,13 @@ export function mockAuthconnection() {
     /** The `getConnectionToken` `vi.fn`. */
     getConnectionToken,
 
-    setTokens(value: Record<string, unknown>): void {
+    setTokens(value: Partial<Record<ConnectionName, AuthConnectionTokenResult>>): void {
       tokens = value;
     },
 
     get calls(): AuthConnectionCall[] {
       return getConnectionToken.mock.calls.map(([connectionName]) => ({
-        connectionName: connectionName as string,
+        connectionName,
       }));
     },
 
@@ -676,12 +680,31 @@ export function mockAuthconnection() {
 
 const IDP_DEFAULTS: Record<string, unknown> = {
   users: { users: [], nextPageToken: null, totalCount: 0 },
-  user: { id: "mock-id", name: "mock-user", disabled: false },
-  userByName: { id: "mock-id", name: "mock-user", disabled: false },
-  createUser: { id: "mock-id", name: "mock-user", disabled: false },
-  updateUser: { id: "mock-id", name: "mock-user", disabled: false },
+  user: { id: "mock-id", name: "mock-user", disabled: false, mfaEnrolled: false, mfaFactorIds: [] },
+  userByName: {
+    id: "mock-id",
+    name: "mock-user",
+    disabled: false,
+    mfaEnrolled: false,
+    mfaFactorIds: [],
+  },
+  createUser: {
+    id: "mock-id",
+    name: "mock-user",
+    disabled: false,
+    mfaEnrolled: false,
+    mfaFactorIds: [],
+  },
+  updateUser: {
+    id: "mock-id",
+    name: "mock-user",
+    disabled: false,
+    mfaEnrolled: false,
+    mfaFactorIds: [],
+  },
   deleteUser: true,
   sendPasswordResetEmail: true,
+  unenrollMfa: true,
 };
 
 /**
@@ -734,6 +757,7 @@ export function mockIdp() {
     this.deleteUser = async (userId: string) => handle("deleteUser", [userId], namespace);
     this.sendPasswordResetEmail = async (input: unknown) =>
       handle("sendPasswordResetEmail", [input], namespace);
+    this.unenrollMfa = async (input: unknown) => handle("unenrollMfa", [input], namespace);
   }) as unknown as new (config: { namespace: string }) => {
     users(options?: {
       first?: number;
@@ -752,6 +776,7 @@ export function mockIdp() {
     }): Promise<IdpUser>;
     deleteUser(userId: string): Promise<boolean>;
     sendPasswordResetEmail(input: { userId: string; redirectUri: string }): Promise<boolean>;
+    unenrollMfa(input: { userId: string; mfaFactorId: string }): Promise<boolean>;
   };
 
   root.idp = { Client };

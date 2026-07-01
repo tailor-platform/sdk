@@ -42,6 +42,7 @@ import type {
   ListUsersOptions as IdpListUsersOptions,
   ListUsersResponse as IdpListUsersResponse,
   SendPasswordResetEmailInput as IdpSendPasswordResetEmailInput,
+  UnenrollMfaInput as IdpUnenrollMfaInput,
   UpdateUserInput as IdpUpdateUserInput,
   User as IdpUser,
   UserQuery as IdpUserQuery,
@@ -76,6 +77,7 @@ declare global {
       type CreateUserInput = IdpCreateUserInput;
       type UpdateUserInput = IdpUpdateUserInput;
       type SendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
+      type UnenrollMfaInput = IdpUnenrollMfaInput;
     }
 
     namespace workflow {

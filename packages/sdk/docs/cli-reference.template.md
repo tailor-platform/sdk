@@ -67,6 +67,9 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                         |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                                     |
 | `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`, `machineuser token`            |
+| `TAILOR_PLATFORM_URL`                        | Platform API base URL. Saved into profiles created with `profile create --platform-url`                      |
+| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID for user login. Saved into profiles created with `profile create --oauth2-client-id`        |
+| `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                            |
 | `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count            |
 | `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent unary platform RPCs during `apply`/`deploy` (streaming uploads are not gated). Defaults to 16 |
 | `TAILOR_PLATFORM_URL`                        | Tailor Platform API endpoint override                                                                        |
@@ -82,6 +85,8 @@ Token resolution follows this priority order:
 1. `TAILOR_PLATFORM_TOKEN` environment variable
 2. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 3. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
+
+Config-backed login tokens are scoped to the Platform API URL. Profiles with `--platform-url` use the token saved for that URL, so switching profiles can also switch between Platform API environments.
 
 ### Workspace ID Priority
 

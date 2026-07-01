@@ -107,10 +107,12 @@ describe("problem discovery", () => {
   test("discovers the initial problem set from group directories", async () => {
     const problems = await discoverProblems(packageRoot);
 
-    expect(problems).toHaveLength(20);
-    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(16);
+    expect(problems).toHaveLength(22);
+    expect(problems.filter((problem) => problem.group === "sdk-api")).toHaveLength(18);
     expect(problems.filter((problem) => problem.group === "cli")).toHaveLength(4);
     expect(problems.map((problem) => problem.id)).toContain("plugin-registration");
+    expect(problems.map((problem) => problem.id)).toContain("tailordb-profile-assets");
+    expect(problems.map((problem) => problem.id)).toContain("tailordb-array-unique-recovery");
     expect(problems.every((problem) => problem.verifyPath !== undefined)).toBe(true);
     expect(
       problems.every((problem) => problem.sourcePath === `problems/${problem.group}/${problem.id}`),
@@ -486,6 +488,18 @@ describe("verification summary", () => {
               glob: "src/*.txt",
               pattern: "customer",
             },
+            {
+              id: "secret-text-absent",
+              kind: "content-absent",
+              glob: "src/*.txt",
+              pattern: "secret",
+            },
+            {
+              id: "customer-text-absent",
+              kind: "content-absent",
+              glob: "src/*.txt",
+              pattern: "customer",
+            },
             { id: "missing-file", kind: "file-exists", path: "missing.txt" },
           ],
         },
@@ -522,6 +536,12 @@ describe("verification summary", () => {
     });
     expect(summary.checks.find((check) => check.id === "customer-text")).toMatchObject({
       outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "secret-text-absent")).toMatchObject({
+      outcome: "satisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "customer-text-absent")).toMatchObject({
+      outcome: "unsatisfied",
     });
     expect(summary.checks.find((check) => check.id === "missing-file")).toMatchObject({
       outcome: "unsatisfied",

@@ -8,7 +8,16 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import { fetchUserInfo, initOAuth2Client } from "./client";
+import {
+  defaultPlatformBaseUrl,
+  fetchUserInfo,
+  getConsoleBaseUrl,
+  getPlatformBaseUrl,
+  initOAuth2Client,
+  normalizeBaseUrl,
+  rememberPlatformConfigForToken,
+  type PlatformClientConfig,
+} from "./client";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -27,6 +36,9 @@ const pfProfileSchema = z.object({
   readonly: z.boolean().optional(),
   machine_user: z.string().optional(),
   machine_user_override: z.enum(["allow", "deny"]).optional(),
+  platform_url: z.url().optional(),
+  oauth2_client_id: z.string().optional(),
+  console_url: z.url().optional(),
 });
 
 // strip unknown keys
@@ -117,6 +129,14 @@ type LoadWorkspaceIdOptions = {
 type LoadAccessTokenOptions = {
   profile?: string;
 };
+type LoadPlatformClientConfigOptions = {
+  profile?: string;
+  allowMissingProfile?: boolean;
+};
+type LoadConsoleBaseUrlOptions = {
+  profile?: string;
+  allowMissingProfile?: boolean;
+};
 type LoadMachineUserNameOptions = {
   machineUser?: string;
   profile?: string;
@@ -127,6 +147,140 @@ function platformConfigPath() {
     throw new Error("User home directory not found");
   }
   return path.join(xdgConfig, "tailor-platform", "config.yaml");
+}
+
+type ProfilePlatformSettings = {
+  platform_url?: string;
+  oauth2_client_id?: string;
+  console_url?: string;
+};
+
+/**
+ * Convert stored profile platform fields to platform client settings.
+ * @param profile - Profile platform settings
+ * @returns Platform client settings
+ */
+export function platformConfigFromProfile(
+  profile: ProfilePlatformSettings | undefined,
+): PlatformClientConfig | undefined {
+  const config = {
+    ...(profile?.platform_url ? { platformUrl: profile.platform_url } : {}),
+    ...(profile?.oauth2_client_id ? { oauth2ClientId: profile.oauth2_client_id } : {}),
+    ...(profile?.console_url ? { consoleUrl: profile.console_url } : {}),
+  };
+  return Object.keys(config).length > 0 ? config : undefined;
+}
+
+function platformUserKey(user: string, config?: PlatformClientConfig): string {
+  const platformUrl = getPlatformBaseUrl(config);
+  if (platformUrl === normalizeBaseUrl(defaultPlatformBaseUrl)) {
+    return user;
+  }
+  return `${platformUrl}|${user}`;
+}
+
+function canUseLegacyUserKey(platformUrl: string): boolean {
+  try {
+    return getPlatformBaseUrl() === platformUrl;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Strip a platform-URL scope prefix from a config user key, returning the bare
+ * subject/email id that belongs in `current_user` or `profile.user`.
+ * @param userKey - Config user key, optionally scoped as `platformUrl|user`
+ * @returns Bare subject/email id
+ */
+function bareUserId(userKey: string): string {
+  const separatorIndex = userKey.indexOf("|");
+  return separatorIndex === -1 ? userKey : userKey.slice(separatorIndex + 1);
+}
+
+type UserEntryLookupOptions = {
+  allowLegacyUserKey?: boolean;
+};
+
+function findUserEntry(
+  config: PfConfig,
+  user: string,
+  platformConfig?: PlatformClientConfig,
+  opts: UserEntryLookupOptions = {},
+): { userKey: string; bareUser: string; userEntry: PfUser | undefined } {
+  const userKey = platformUserKey(user, platformConfig);
+  const userEntry = config.users[userKey];
+  if (userEntry) {
+    return { userKey, bareUser: user, userEntry };
+  }
+  const platformUrl = getPlatformBaseUrl(platformConfig);
+  if (
+    userKey !== user &&
+    (opts.allowLegacyUserKey === false || !canUseLegacyUserKey(platformUrl))
+  ) {
+    return { userKey, bareUser: user, userEntry };
+  }
+  const legacyEntry = config.users[user];
+  if (legacyEntry) {
+    return { userKey: user, bareUser: user, userEntry: legacyEntry };
+  }
+  const emailMatchedKey = findConfigUserKey(config, user);
+  if (emailMatchedKey) {
+    return {
+      userKey: emailMatchedKey,
+      bareUser: bareUserId(emailMatchedKey),
+      userEntry: config.users[emailMatchedKey],
+    };
+  }
+  return { userKey, bareUser: user, userEntry };
+}
+
+/**
+ * Resolve the config user key that would be used for a user on the selected platform.
+ * @param config - Platform config
+ * @param user - User name
+ * @param platformConfig - Optional platform connection settings
+ * @param opts - Token lookup options
+ * @returns Resolved config user key
+ */
+export function resolveUserTokenKey(
+  config: PfConfig,
+  user: string,
+  platformConfig?: PlatformClientConfig,
+  opts?: UserEntryLookupOptions,
+): string {
+  return findUserEntry(config, user, platformConfig, opts).userKey;
+}
+
+/**
+ * Check whether tokens are registered for a user on the selected platform.
+ * @param config - Platform config
+ * @param user - User name
+ * @param platformConfig - Optional platform connection settings
+ * @param opts - Token lookup options
+ * @returns True when the user has a registered token entry
+ */
+export function hasUserTokenEntry(
+  config: PfConfig,
+  user: string,
+  platformConfig?: PlatformClientConfig,
+  opts?: UserEntryLookupOptions,
+): boolean {
+  return findUserEntry(config, user, platformConfig, opts).userEntry !== undefined;
+}
+
+function hasUserKeyForName(users: Record<string, unknown>, user: string): boolean {
+  return users[user] !== undefined || Object.keys(users).some((key) => key.endsWith(`|${user}`));
+}
+
+/**
+ * Check whether any platform has tokens registered for a user.
+ * @param config - Platform config
+ * @param user - User name
+ * @returns True when the user has a token entry for any platform
+ */
+export function hasAnyUserTokenEntry(config: Pick<PfConfig, "users">, user: string): boolean {
+  return hasUserKeyForName(config.users, user);
 }
 
 /**
@@ -296,7 +450,11 @@ export async function readPlatformConfig(): Promise<PfConfig> {
   `);
 }
 
-function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
+function hasCurrentUserEntry(users: Record<string, unknown>, currentUser: string): boolean {
+  return hasUserKeyForName(users, currentUser);
+}
+
+function toV1ForDisk(config: PfConfigV2 | PfConfig): PfConfigV1 {
   const users: PfConfigV1["users"] = {};
   for (const [name, entry] of Object.entries(config.users)) {
     if (!entry || entry.storage === "keyring") continue;
@@ -306,10 +464,10 @@ function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
       token_expires_at: entry.token_expires_at,
     };
   }
-  // Clear current_user when it points at a user missing from the rebuilt v1
-  // users map, so the downgraded file never references a non-existent user.
   const currentUser =
-    config.current_user && users[config.current_user] ? config.current_user : null;
+    config.current_user && hasCurrentUserEntry(users, config.current_user)
+      ? config.current_user
+      : null;
   return {
     version: 1,
     users,
@@ -318,14 +476,41 @@ function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
   };
 }
 
+function hasProfilePlatformSettings(config: Pick<PfConfig | PfConfigV1, "profiles">): boolean {
+  return Object.values(config.profiles).some(
+    (profile) =>
+      profile?.platform_url !== undefined ||
+      profile?.oauth2_client_id !== undefined ||
+      profile?.console_url !== undefined,
+  );
+}
+
+function hasScopedUserKeys(config: Pick<PfConfig | PfConfigV1, "users">): boolean {
+  return Object.keys(config.users).some((userKey) => userKey.includes("|"));
+}
+
+function toLatestForDisk(config: PfConfig | PfConfigV2 | PfConfigV1): PfConfig {
+  const latestInput =
+    config.version === 3
+      ? config
+      : migrateV2ToV3(config.version === 1 ? migrateV1ToV2(config) : config);
+  return {
+    ...latestInput,
+    version: LATEST_CONFIG_VERSION,
+    min_sdk_version: V3_MIN_SDK_VERSION,
+  };
+}
+
 /**
  * Write Tailor Platform CLI configuration to disk.
- * By default, V2 configs are converted to V1 for backward compatibility, so an
- * older SDK can still read the file. Configs containing a keyring user are kept
- * as V2 regardless, because the keyring storage variant is not representable in
- * V1 and downgrading it would silently drop the user's login. V3 configs are
- * kept as V3 because user keys are canonical subject IDs and may include email
- * metadata that is not representable in older versions.
+ * By default, file-backed configs without newer fields are converted to V1 for
+ * backward compatibility, so an older SDK can still read the file. Configs
+ * containing a keyring user are kept as V3 regardless, because the keyring storage
+ * variant is not representable in V1 and downgrading it would silently drop the
+ * user's login. Configs containing profile-level Platform settings or
+ * platform-scoped user tokens are also kept as V3, because user keys are
+ * canonical subject IDs, may include email metadata, and may be scoped by
+ * platform URL — none of which is representable in older versions.
  *
  * The config file may contain access/refresh tokens when the OS keyring is
  * unavailable, so it is written via {@link writeSecretFile} so other users
@@ -336,7 +521,12 @@ export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) 
   const configPath = platformConfigPath();
   const hasKeyringUser =
     config.version === 2 && Object.values(config.users).some((u) => u?.storage === "keyring");
-  const diskConfig = config.version === 2 && !hasKeyringUser ? toV1ForDisk(config) : config;
+  const diskConfig =
+    hasProfilePlatformSettings(config) || hasScopedUserKeys(config)
+      ? toLatestForDisk(config)
+      : config.version === 2 && !hasKeyringUser
+        ? toV1ForDisk(config)
+        : config;
   writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
@@ -428,6 +618,8 @@ function validateUUID(value: string, source: string): string {
  * @returns Resolved workspace ID
  */
 export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<string> {
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+
   if (opts?.workspaceId) {
     return validateUUID(opts.workspaceId, "--workspace-id option");
   }
@@ -439,10 +631,10 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
     );
   }
 
-  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (profile) {
     const pfConfig = await readPlatformConfig();
-    const wsId = pfConfig.profiles[profile]?.workspace_id;
+    const profileEntry = pfConfig.profiles[profile];
+    const wsId = profileEntry?.workspace_id;
     if (!wsId) {
       throw new Error(`Profile "${profile}" not found`);
     }
@@ -506,55 +698,98 @@ export async function loadMachineUserName(
 /**
  * Load access token from environment variables, command options, or platform config.
  * In CLI context, profile env fallback is also handled by politty's arg env option.
- * Priority: env/TAILOR_PLATFORM_TOKEN > opts/profile > env/profile > config/currentUser > error
+ * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
  * @param opts - Profile options
  * @returns Resolved access token
  */
 export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
-  // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
-  if (process.env.TAILOR_PLATFORM_TOKEN) {
-    return process.env.TAILOR_PLATFORM_TOKEN;
-  }
-  const pfConfig = await readPlatformConfig();
-  let user;
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
-  if (profile) {
-    const u = pfConfig.profiles[profile]?.user;
-    if (!u) {
-      throw new Error(`Profile "${profile}" not found`);
-    }
-    user = u;
-  } else {
-    // config/currentUser
-    const u = pfConfig.current_user;
-    if (!u) {
-      // error
-      throw new Error(ml`
-        Tailor Platform token not found.
-        Please specify token via TAILOR_PLATFORM_TOKEN environment variable or login using 'tailor login' command.
-      `);
-    }
-    user = u;
+  const envToken = process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+  if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
+    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
   }
 
-  return (await fetchLatestToken(pfConfig, user)).accessToken;
+  if (envToken) {
+    const platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
+    rememberPlatformConfigForToken(envToken, platformConfig);
+    return envToken;
+  }
+
+  const pfConfig = await readPlatformConfig();
+  const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
+  if (profile && !profileEntry) {
+    throw new Error(`Profile "${profile}" not found`);
+  }
+  const user = profileEntry?.user ?? pfConfig.current_user;
+  if (!user) {
+    throw new Error(ml`
+      Tailor Platform token not found.
+      Please specify token via TAILOR_PLATFORM_TOKEN environment variable or login using 'tailor login' command.
+    `);
+  }
+  const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  return (await fetchLatestToken(pfConfig, user, fromProfile)).accessToken;
+}
+
+/**
+ * Load platform connection settings from the active profile.
+ * @param opts - Profile options
+ * @returns Resolved platform connection settings, or undefined for the default environment
+ */
+export async function loadPlatformClientConfig(
+  opts?: LoadPlatformClientConfigOptions,
+): Promise<PlatformClientConfig | undefined> {
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  if (!profile) {
+    return undefined;
+  }
+
+  let pfConfig: PfConfig;
+  try {
+    pfConfig = await readPlatformConfig();
+  } catch (error) {
+    if (opts?.allowMissingProfile) {
+      return undefined;
+    }
+    throw error;
+  }
+  const profileEntry = pfConfig.profiles[profile];
+  if (!profileEntry) {
+    if (opts?.allowMissingProfile) {
+      return undefined;
+    }
+    throw new Error(`Profile "${profile}" not found`);
+  }
+  return platformConfigFromProfile(profileEntry);
+}
+
+/**
+ * Load the Tailor Platform Console base URL from environment variables or the active profile.
+ * @param opts - Profile options
+ * @returns Resolved Console base URL
+ */
+export async function loadConsoleBaseUrl(opts?: LoadConsoleBaseUrlOptions): Promise<string> {
+  const platformConfig = await loadPlatformClientConfig(opts);
+  return getConsoleBaseUrl(platformConfig);
 }
 
 /**
  * Resolve the actual token values for a user, reading from keyring or config as appropriate.
  * @param userEntry - User entry from the config
  * @param user - User identifier
+ * @param label - User-facing identifier used in error messages
  * @returns Access token and optional refresh token
  */
 export async function resolveTokens(
   userEntry: PfUser,
   user: string,
+  label = user,
 ): Promise<{ accessToken: string; refreshToken?: string }> {
   if (userEntry.storage === "keyring") {
     const tokens = await loadKeyringTokens(user);
     if (!tokens) {
       throw new Error(ml`
-        Credentials not found in OS keyring for "${user}".
+        Credentials not found in OS keyring for "${label}".
         Please run 'tailor login' and try again.
       `);
     }
@@ -575,6 +810,7 @@ export async function resolveTokens(
  * @param tokens.accessToken - Access token to save
  * @param tokens.refreshToken - Optional refresh token to save
  * @param expiresAt - Token expiration date
+ * @param platformConfig - Optional platform connection settings
  * @param metadata - Optional user metadata to persist with the token entry
  */
 export async function saveUserTokens(
@@ -582,20 +818,22 @@ export async function saveUserTokens(
   user: string,
   tokens: UserTokens,
   expiresAt: string,
+  platformConfig?: PlatformClientConfig,
   metadata?: { email?: string },
 ): Promise<void> {
-  const email = metadata?.email ?? config.users[user]?.email;
-  if (await trySaveTokensInKeyring(user, tokens)) {
-    config.users[user] = {
+  const userKey = platformUserKey(user, platformConfig);
+  const email = metadata?.email ?? config.users[userKey]?.email;
+  if (await trySaveTokensInKeyring(userKey, tokens)) {
+    config.users[userKey] = {
       token_expires_at: expiresAt,
       storage: "keyring",
       ...(email ? { email } : {}),
     };
   } else {
-    if (config.users[user]?.storage === "keyring") {
-      await deleteKeyringTokens(user);
+    if (config.users[userKey]?.storage === "keyring") {
+      await deleteKeyringTokens(userKey);
     }
-    config.users[user] = {
+    config.users[userKey] = {
       access_token: tokens.accessToken,
       refresh_token: tokens.refreshToken,
       token_expires_at: expiresAt,
@@ -609,12 +847,47 @@ export async function saveUserTokens(
  * Delete tokens for a user from keyring if applicable.
  * @param config - Platform config
  * @param user - User identifier
+ * @param platformConfig - Optional platform connection settings
+ * @param opts - Token lookup options
  */
-export async function deleteUserTokens(config: PfConfig, user: string): Promise<void> {
-  const userEntry = config.users[user];
+export async function deleteUserTokens(
+  config: PfConfig,
+  user: string,
+  platformConfig?: PlatformClientConfig,
+  opts?: UserEntryLookupOptions,
+): Promise<void> {
+  const { userKey, userEntry } = findUserEntry(config, user, platformConfig, opts);
   if (userEntry?.storage === "keyring") {
-    await deleteKeyringTokens(user);
+    await deleteKeyringTokens(userKey);
   }
+  delete config.users[userKey];
+}
+
+/**
+ * Resolve stored tokens for a user on the selected platform.
+ * @param config - Platform config
+ * @param user - User name
+ * @param platformConfig - Optional platform connection settings
+ * @param opts - Token lookup options
+ * @returns Stored user entry and token values, or undefined when the user is not logged in
+ */
+export async function loadStoredUserTokens(
+  config: PfConfig,
+  user: string,
+  platformConfig?: PlatformClientConfig,
+  opts?: UserEntryLookupOptions,
+): Promise<
+  | {
+      userEntry: PfUser;
+      accessToken: string;
+      refreshToken?: string;
+    }
+  | undefined
+> {
+  const { userKey, userEntry } = findUserEntry(config, user, platformConfig, opts);
+  if (!userEntry) return undefined;
+  const tokens = await resolveTokens(userEntry, userKey, user);
+  return { userEntry, ...tokens };
 }
 
 function updateUserReferences(config: PfConfig, fromUser: string, toUser: string) {
@@ -634,16 +907,18 @@ function updateUserReferences(config: PfConfig, fromUser: string, toUser: string
  * @param config - Platform config
  * @param legacyUser - Previous user key
  * @param canonicalUser - Canonical user key
+ * @param platformConfig - Optional platform connection settings
  */
 export async function removeLegacyUserAlias(
   config: PfConfig,
   legacyUser: string,
   canonicalUser: string,
+  platformConfig?: PlatformClientConfig,
 ): Promise<void> {
   if (legacyUser === canonicalUser) return;
   updateUserReferences(config, legacyUser, canonicalUser);
-  await deleteUserTokens(config, legacyUser);
-  delete config.users[legacyUser];
+  await deleteUserTokens(config, legacyUser, platformConfig);
+  delete config.users[platformUserKey(legacyUser, platformConfig)];
 }
 
 function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean {
@@ -654,6 +929,7 @@ function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean
  * Fetch the latest access token, refreshing if necessary.
  * @param config - Platform config
  * @param user - User identifier
+ * @param platformConfig - Optional platform connection settings
  * @returns Latest access token and the canonical user ID it is stored under
  *   (the resolved subject when a legacy email key was migrated during refresh,
  *   otherwise the matching config user)
@@ -661,16 +937,9 @@ function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean
 export async function fetchLatestToken(
   config: PfConfig,
   user: string,
+  platformConfig?: PlatformClientConfig,
 ): Promise<{ accessToken: string; user: string }> {
-  const storedUser = findConfigUserKey(config, user);
-  if (!storedUser) {
-    throw new Error(ml`
-      User "${user}" not found.
-      Please verify your user name and login using 'tailor login' command.
-    `);
-  }
-
-  const userEntry = config.users[storedUser];
+  const { userKey, bareUser, userEntry } = findUserEntry(config, user, platformConfig);
   if (!userEntry) {
     throw new Error(ml`
       User "${user}" not found.
@@ -678,10 +947,11 @@ export async function fetchLatestToken(
     `);
   }
 
-  const tokens = await resolveTokens(userEntry, storedUser);
+  const tokens = await resolveTokens(userEntry, userKey, user);
 
   if (new Date(userEntry.token_expires_at) > new Date()) {
-    return { accessToken: tokens.accessToken, user: storedUser };
+    rememberPlatformConfigForToken(tokens.accessToken, platformConfig);
+    return { accessToken: tokens.accessToken, user: bareUser };
   }
 
   if (!tokens.refreshToken) {
@@ -691,7 +961,7 @@ export async function fetchLatestToken(
     `);
   }
 
-  const client = initOAuth2Client();
+  const client = initOAuth2Client(platformConfig);
   let resp;
   try {
     resp = await client.refreshToken({
@@ -710,12 +980,12 @@ export async function fetchLatestToken(
     assertDefined(resp.expiresAt, "token refresh response missing expiresAt"),
   ).toISOString();
 
-  let resolvedUser = storedUser;
-  const previousEmail = userEntry.email ?? inferEmailFromUserId(storedUser);
+  let resolvedUser = bareUser;
+  const previousEmail = userEntry.email ?? inferEmailFromUserId(bareUser);
   let email = previousEmail;
-  if (shouldResolveSubjectOnRefresh(storedUser, userEntry)) {
+  if (shouldResolveSubjectOnRefresh(bareUser, userEntry)) {
     try {
-      const userInfo = await fetchUserInfo(resp.accessToken);
+      const userInfo = await fetchUserInfo(resp.accessToken, platformConfig);
       resolvedUser = userInfo.sub;
       email = userInfo.email;
     } catch (error) {
@@ -731,13 +1001,22 @@ export async function fetchLatestToken(
       refreshToken: resp.refreshToken ?? undefined,
     },
     newExpiresAt,
+    platformConfig,
     { email },
   );
-  await removeLegacyUserAlias(config, storedUser, resolvedUser);
+  const refreshedUserKey = platformUserKey(resolvedUser, platformConfig);
+  if (userKey !== refreshedUserKey) {
+    updateUserReferences(config, bareUser, resolvedUser);
+    if (userEntry.storage === "keyring") {
+      await deleteKeyringTokens(userKey);
+    }
+    delete config.users[userKey];
+  }
   if (previousEmail && email && previousEmail !== email) {
     logger.info(`Updated local user email from "${previousEmail}" to "${email}".`);
   }
   writePlatformConfig(config);
+  rememberPlatformConfigForToken(resp.accessToken, platformConfig);
   return { accessToken: resp.accessToken, user: resolvedUser };
 }
 
