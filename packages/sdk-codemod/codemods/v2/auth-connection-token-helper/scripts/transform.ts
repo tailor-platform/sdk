@@ -272,12 +272,12 @@ function hasRuntimeImportCollision(localNames: Set<string>, imports: SgNode[]): 
   return imports.some((importStmt) =>
     importBindings(importStmt).some(
       (binding) =>
-        !binding.typeOnly &&
         binding.localName === AUTHCONNECTION &&
         !(
           binding.source === RUNTIME_MODULE &&
           binding.importedName === AUTHCONNECTION &&
-          !binding.namespace
+          !binding.namespace &&
+          !binding.typeOnly
         ),
     ),
   );
