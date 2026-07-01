@@ -1,5 +1,12 @@
 # @tailor-platform/create-sdk
 
+## 1.70.1
+### Patch Changes
+
+
+
+- [#1569](https://github.com/tailor-platform/sdk/pull/1569) [`259dec9`](https://github.com/tailor-platform/sdk/commit/259dec92592c7927bcfb0e2d5dcbbd0e206eeba3) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB migration drift checks to normalize reconstructed snapshots and remote schemas through the same snapshot shape before comparison.
+
 ## 1.70.0
 
 ## 1.69.0
