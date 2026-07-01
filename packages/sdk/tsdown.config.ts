@@ -88,7 +88,6 @@ const shared = {
   }),
   // peer dependencies: prevent bundling, resolve at runtime
   deps: { neverBundle: ["vite", "vitest"] },
-  sourcemap: true,
 } satisfies UserConfig;
 
 // Annotate as TsdownPluginOption[] to work around a tsgo TS2321 caused by
@@ -117,6 +116,7 @@ export default defineConfig([
     entry,
     clean: true,
     dts: false,
+    sourcemap: true,
     plugins: jsPlugins,
     onSuccess: (config) => {
       copyErdViewerAssets(config.outDir);
