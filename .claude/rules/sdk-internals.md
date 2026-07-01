@@ -134,7 +134,8 @@ is wired up later.
 - If a leaf command needs a positional, limit it to a single natural subject
   (e.g. `api inspect <endpoint>`) and give that command **no** `subCommands`
   of its own.
-- Do not mix `subCommands` with a `run` that consumes a positional on the
-  same command. A `run` that takes no arguments and only forwards to a
-  default subcommand (e.g. `runCommand(defaultSubCommand, [])`) is fine — the
-  hybrid to avoid is one where `run` actually parses positional input.
+- Do not mix `subCommands` with a `run` on the same command. The dispatch
+  check only tests whether `run` is defined, so even a `run` that takes no
+  arguments and only forwards to a default subcommand (e.g.
+  `runCommand(defaultSubCommand, [])`) blocks dispatch the same as one that
+  parses a positional.
