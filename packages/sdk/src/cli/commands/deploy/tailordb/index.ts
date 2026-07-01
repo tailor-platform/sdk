@@ -281,8 +281,10 @@ async function verifyRemoteSchema(
     }
 
     // Fetch remote types
-    const remoteTypes = await fetchRemoteTypes(client, workspaceId, namespace);
-    const remoteGqlPermissions = await fetchRemoteGqlPermissions(client, workspaceId, namespace);
+    const [remoteTypes, remoteGqlPermissions] = await Promise.all([
+      fetchRemoteTypes(client, workspaceId, namespace),
+      fetchRemoteGqlPermissions(client, workspaceId, namespace),
+    ]);
     const expectedDeploySnapshot = deployComparableSnapshot(
       expectedSnapshot,
       remoteTypes,
