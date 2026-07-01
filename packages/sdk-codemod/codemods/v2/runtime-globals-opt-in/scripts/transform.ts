@@ -9,6 +9,7 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
+const BARE_RUNTIME_ROOT_TEXT_PATTERN = /\b(?:tailor|tailordb)\b/;
 const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
 const REVIEW_TAILOR_RUNTIME_MEMBERS = new Set([
   "authconnection",
@@ -126,7 +127,7 @@ function isJsLikeFile(filePath: string): boolean {
 }
 
 function looksLikeJsx(source: string): boolean {
-  return source.includes("</") || /<[A-Za-z][\w.:]*(?=[\s/>])[\s\S]*?\/>/.test(source);
+  return source.includes("</") || /<[A-Za-z][\w.:-]*(?=[\s/>])[\s\S]*?\/>/.test(source);
 }
 
 function sourceLang(filePath: string, source: string): Lang {
@@ -475,7 +476,7 @@ function addReviewFinding(
 
 function runtimeRootReference(source: string): RuntimeRootReference | null {
   const globalObjectMatch =
-    /^\s*(?:(globalThis|global)|\(\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))\s*(?:\.|\?\.|!\s*\.)(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
+    /^\s*(?:(globalThis|global)|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)\s*(?:\.|\?\.|!\s*\.)(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
       source,
     );
   if (globalObjectMatch) {
@@ -486,7 +487,7 @@ function runtimeRootReference(source: string): RuntimeRootReference | null {
   }
 
   const globalObjectBracketMatch =
-    /^\s*(?:(globalThis|global)|\(\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))\s*(?:\?\.|!\s*)?\[\s*["'](tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))["']\s*\]/.exec(
+    /^\s*(?:(globalThis|global)|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)\s*(?:\?\.|!\s*)?\[\s*["'](tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))["']\s*\]/.exec(
       source,
     );
   if (globalObjectBracketMatch) {
@@ -497,7 +498,7 @@ function runtimeRootReference(source: string): RuntimeRootReference | null {
   }
 
   const parenthesizedMatch =
-    /^\s*\(\s*(?:<[^>]+>\s*)?(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)/.exec(
+    /^\s*\(+\s*(?:<[^>]+>\s*)?(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+/.exec(
       source,
     );
   if (parenthesizedMatch) {
@@ -810,6 +811,31 @@ function indexedTypeQueryMember(node: SgNode, rootName: string): string | null {
   return member && runtimeIndexedTypeMember(rootName, member) ? member : null;
 }
 
+function nodeChildIndex(parent: SgNode, node: SgNode): number {
+  return parent.children().findIndex((child) => sameNode(child, node));
+}
+
+function appearsAfterEquals(parent: SgNode, node: SgNode): boolean {
+  const nodeIndex = nodeChildIndex(parent, node);
+  const equalsIndex = parent.children().findIndex((child) => child.kind() === "=");
+  return nodeIndex !== -1 && equalsIndex !== -1 && nodeIndex > equalsIndex;
+}
+
+function isBareRuntimeRootValueReference(node: SgNode, rootName: string): boolean {
+  if (node.kind() !== "identifier" || node.text() !== rootName) return false;
+  if (rootName !== "tailor" && rootName !== "tailordb") return false;
+
+  const parent = node.parent();
+  if (!parent) return false;
+  if (parent.kind() === "variable_declarator" || parent.kind() === "assignment_expression") {
+    return appearsAfterEquals(parent, node);
+  }
+  if (parent.kind() === "assignment_pattern" || parent.kind() === "object_assignment_pattern") {
+    return appearsAfterEquals(parent, node);
+  }
+  return parent.kind() === "return_statement";
+}
+
 function collectStringRuntimeGlobalFindings(
   root: SgNode,
   source: string,
@@ -869,7 +895,8 @@ function collectDirectRuntimeGlobalFindings(
     if (
       !rootRef.globalObjectName &&
       !runtimeGlobalTextPattern.test(nodeText) &&
-      !indexedTypeQueryMember(node, rootRef.rootName)
+      !indexedTypeQueryMember(node, rootRef.rootName) &&
+      !isBareRuntimeRootValueReference(node, rootRef.rootName)
     ) {
       continue;
     }
@@ -889,7 +916,11 @@ export function reviewFindings(
   filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!runtimeGlobalTextPattern.test(source) && !globalRuntimeRootTextPattern.test(source)) {
+  if (
+    !runtimeGlobalTextPattern.test(source) &&
+    !globalRuntimeRootTextPattern.test(source) &&
+    !BARE_RUNTIME_ROOT_TEXT_PATTERN.test(source)
+  ) {
     return [];
   }
 

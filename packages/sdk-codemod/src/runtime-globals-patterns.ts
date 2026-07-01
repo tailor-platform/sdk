@@ -4,14 +4,14 @@ const TAILOR_RUNTIME_MEMBER = String.raw`(?:authconnection|context|iconv|idp|sec
 const TAILORDB_RUNTIME_MEMBER = String.raw`(?:Client|CommandType|QueryResult|file)`;
 const RUNTIME_MEMBER_SUFFIX = String.raw`(?:\.[A-Za-z_$][\w$]*)?`;
 const CASTED_RUNTIME_ROOT_SUFFIX = String.raw`(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?`;
-const TAILOR_WRAPPED_RUNTIME_ROOT = String.raw`\(\s*(?:<[^>]+>\s*)?tailor\s*${CASTED_RUNTIME_ROOT_SUFFIX}\)`;
-const TAILORDB_WRAPPED_RUNTIME_ROOT = String.raw`\(\s*(?:<[^>]+>\s*)?tailordb\s*${CASTED_RUNTIME_ROOT_SUFFIX}\)`;
+const TAILOR_WRAPPED_RUNTIME_ROOT = String.raw`\(+\s*(?:<[^>]+>\s*)?tailor\s*${CASTED_RUNTIME_ROOT_SUFFIX}\)+`;
+const TAILORDB_WRAPPED_RUNTIME_ROOT = String.raw`\(+\s*(?:<[^>]+>\s*)?tailordb\s*${CASTED_RUNTIME_ROOT_SUFFIX}\)+`;
 const WRAPPED_RUNTIME_MEMBER_ACCESS = String.raw`\s*(?:\.|\?\.|!\s*\.)\s*`;
 const TAILOR_RUNTIME_BRACKET_ACCESS = String.raw`(?:\btailor\s*(?:\?\.|!\s*)?|${TAILOR_WRAPPED_RUNTIME_ROOT}\s*(?:\?\.|!\s*)?)\[`;
 const TAILORDB_RUNTIME_BRACKET_ACCESS = String.raw`(?:\btailordb\s*(?:\?\.|!\s*)?|${TAILORDB_WRAPPED_RUNTIME_ROOT}\s*(?:\?\.|!\s*)?)\[`;
 const SOURCE_STRING_EXPRESSION_PREFIX = String.raw`(?:(?:=>|[=(:,<{\[])\s*|\b(?:return|await|typeof)\s+)`;
 const RUNTIME_ROOT_NAME = String.raw`(?:tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
-const GLOBAL_OBJECT_RUNTIME_ROOT = String.raw`(?:\b(?:globalThis|global)\b|\(\s*(?:<[^>]+>\s*)?(?:globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))`;
+const GLOBAL_OBJECT_RUNTIME_ROOT = String.raw`(?:\b(?:globalThis|global)\b|\(+\s*(?:<[^>]+>\s*)?(?:globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)`;
 const GLOBAL_RUNTIME_ROOT_ACCESS = String.raw`${GLOBAL_OBJECT_RUNTIME_ROOT}\s*(?:(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME}\b|(?:\?\.|!\s*)?\[\s*["']${RUNTIME_ROOT_NAME}["']\s*\])`;
 const TAILOR_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_WRAPPED_RUNTIME_ROOT}${WRAPPED_RUNTIME_MEMBER_ACCESS}${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_RUNTIME_BRACKET_ACCESS})`;
 const TAILORDB_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_WRAPPED_RUNTIME_ROOT}${WRAPPED_RUNTIME_MEMBER_ACCESS}${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_RUNTIME_BRACKET_ACCESS})`;
