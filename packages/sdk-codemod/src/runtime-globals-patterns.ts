@@ -10,13 +10,16 @@ const WRAPPED_RUNTIME_MEMBER_ACCESS = String.raw`\s*(?:\.|\?\.|!\s*\.)\s*`;
 const TAILOR_RUNTIME_BRACKET_ACCESS = String.raw`(?:\btailor\s*(?:\?\.|!\s*)?|${TAILOR_WRAPPED_RUNTIME_ROOT}\s*(?:\?\.|!\s*)?)\[`;
 const TAILORDB_RUNTIME_BRACKET_ACCESS = String.raw`(?:\btailordb\s*(?:\?\.|!\s*)?|${TAILORDB_WRAPPED_RUNTIME_ROOT}\s*(?:\?\.|!\s*)?)\[`;
 const SOURCE_STRING_EXPRESSION_PREFIX = String.raw`(?:(?:=>|[=(:,<{\[])\s*|\b(?:return|await|typeof)\s+)`;
-const GLOBAL_RUNTIME_ROOT_PREFIX = String.raw`\b(?:globalThis|global)\s*(?:\.|\?\.|!\s*\.)\s*`;
+const RUNTIME_ROOT_NAME = String.raw`(?:tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
+const GLOBAL_OBJECT_RUNTIME_ROOT = String.raw`(?:\b(?:globalThis|global)\b|\(\s*(?:<[^>]+>\s*)?(?:globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))`;
+const GLOBAL_RUNTIME_ROOT_ACCESS = String.raw`${GLOBAL_OBJECT_RUNTIME_ROOT}\s*(?:(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME}\b|(?:\?\.|!\s*)?\[\s*["']${RUNTIME_ROOT_NAME}["']\s*\])`;
 const TAILOR_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_WRAPPED_RUNTIME_ROOT}${WRAPPED_RUNTIME_MEMBER_ACCESS}${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_RUNTIME_BRACKET_ACCESS})`;
 const TAILORDB_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_WRAPPED_RUNTIME_ROOT}${WRAPPED_RUNTIME_MEMBER_ACCESS}${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_RUNTIME_BRACKET_ACCESS})`;
 
 export const runtimeGlobalTextPattern = new RegExp(
   `(?:${TAILOR_RUNTIME_ROOT_ACCESS}|${TAILORDB_RUNTIME_ROOT_ACCESS}|\\bTailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)\\b)`,
 );
+export const globalRuntimeRootTextPattern = new RegExp(GLOBAL_RUNTIME_ROOT_ACCESS);
 
 export const runtimeGlobalsSourceStringSuspiciousPatterns = [
   /\bnew\s+tailor\.idp\.Client\b/,
@@ -30,9 +33,8 @@ export const runtimeGlobalsSourceStringSuspiciousPatterns = [
   new RegExp(
     String.raw`\bnew\s+${TAILOR_WRAPPED_RUNTIME_ROOT}${WRAPPED_RUNTIME_MEMBER_ACCESS}${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}\b`,
   ),
-  new RegExp(
-    String.raw`${GLOBAL_RUNTIME_ROOT_PREFIX}tailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}\b`,
-  ),
+  new RegExp(String.raw`${SOURCE_STRING_EXPRESSION_PREFIX}${GLOBAL_RUNTIME_ROOT_ACCESS}`),
+  new RegExp(String.raw`\bnew\s+${GLOBAL_RUNTIME_ROOT_ACCESS}`),
   /\btailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
   /(?:tailor\s*(?:\?\.|!\s*\.)|\(\s*tailor\s*\)\s*(?:\.|\?\.))\s*(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
   new RegExp(
@@ -54,9 +56,6 @@ export const runtimeGlobalsSourceStringSuspiciousPatterns = [
   ),
   new RegExp(
     String.raw`\bnew\s+${TAILORDB_WRAPPED_RUNTIME_ROOT}${WRAPPED_RUNTIME_MEMBER_ACCESS}${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}\b`,
-  ),
-  new RegExp(
-    String.raw`${GLOBAL_RUNTIME_ROOT_PREFIX}tailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}\b`,
   ),
   /<\s*tailordb\.(?:Client|CommandType|QueryResult)\b/,
   /\btailordb\s*\[/,

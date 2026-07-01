@@ -187,6 +187,49 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports global object runtime root forms inside embedded code strings", async () => {
+    await writeProjectFile(
+      "seed/global-object-root-forms.mjs",
+      [
+        "const code = `",
+        "const runtime = globalThis.tailor;",
+        "const clientFactory = (globalThis as any).tailor.idp.Client;",
+        "const bracketClient = globalThis['tailor'].idp.Client;",
+        "`;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["seed/global-object-root-forms.mjs"],
+        findings: [
+          expect.objectContaining({
+            file: "seed/global-object-root-forms.mjs",
+            line: 2,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const runtime = globalThis.tailor;",
+          }),
+          expect.objectContaining({
+            file: "seed/global-object-root-forms.mjs",
+            line: 3,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const clientFactory = (globalThis as any).tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "seed/global-object-root-forms.mjs",
+            line: 4,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const bracketClient = globalThis['tailor'].idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports direct runtime globals skipped because of binding collisions", async () => {
     await writeProjectFile(
       "resolvers/createUser.ts",
@@ -358,6 +401,38 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 2,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "type Query = tailordb.QueryResult<User>;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports indexed type query runtime globals", async () => {
+    await writeProjectFile(
+      "resolvers/indexed-type-query.ts",
+      ["type Idp = typeof tailor['idp'];", "type Client = (typeof tailordb)['Client'];", ""].join(
+        "\n",
+      ),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/indexed-type-query.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/indexed-type-query.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "type Idp = typeof tailor['idp'];",
+          }),
+          expect.objectContaining({
+            file: "resolvers/indexed-type-query.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "type Client = (typeof tailordb)['Client'];",
           }),
         ],
       }),

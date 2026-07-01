@@ -1,5 +1,6 @@
 import { parse, Lang } from "@ast-grep/napi";
 import {
+  globalRuntimeRootTextPattern,
   matchesRuntimeGlobalsSourceString,
   runtimeGlobalTextPattern,
 } from "../../../../src/runtime-globals-patterns";
@@ -8,12 +9,16 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
-const RUNTIME_ROOT_NAME_PATTERN = String.raw`(?:tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
-const GLOBAL_OBJECT_ROOT_PATTERN = String.raw`(?:\b(?:globalThis|global)\b|\(\s*(?:<[^>]+>\s*)?(?:globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))`;
-const GLOBAL_RUNTIME_ROOT_TEXT_PATTERN = new RegExp(
-  String.raw`${GLOBAL_OBJECT_ROOT_PATTERN}\s*(?:(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME_PATTERN}\b|(?:\?\.|!\s*)?\[\s*["']${RUNTIME_ROOT_NAME_PATTERN}["']\s*\])`,
-);
 const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
+const REVIEW_TAILOR_RUNTIME_MEMBERS = new Set([
+  "authconnection",
+  "context",
+  "iconv",
+  "idp",
+  "secretmanager",
+  "workflow",
+]);
+const REVIEW_TAILORDB_RUNTIME_MEMBERS = new Set(["Client", "CommandType", "QueryResult", "file"]);
 const REVIEW_NODE_KINDS = new Set([
   "member_expression",
   "identifier",
@@ -785,6 +790,26 @@ function hasRuntimeBindingInScope(
   return false;
 }
 
+function runtimeIndexedTypeMember(rootName: string, member: string): boolean {
+  if (rootName === "tailor") return REVIEW_TAILOR_RUNTIME_MEMBERS.has(member);
+  if (rootName === "tailordb") return REVIEW_TAILORDB_RUNTIME_MEMBERS.has(member);
+  return false;
+}
+
+function indexedTypeQueryMember(node: SgNode, rootName: string): string | null {
+  if (node.kind() !== "identifier") return null;
+
+  let current = node.parent();
+  while (current && current.kind() !== "lookup_type") {
+    current = current.parent();
+  }
+  if (!current) return null;
+
+  const index = current.children().find((child) => child.kind() === "literal_type");
+  const member = stringValue(index ?? null);
+  return member && runtimeIndexedTypeMember(rootName, member) ? member : null;
+}
+
 function collectStringRuntimeGlobalFindings(
   root: SgNode,
   source: string,
@@ -797,7 +822,9 @@ function collectStringRuntimeGlobalFindings(
     const lines = fragment.text().split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
-      if (!runtimeGlobalTextPattern.test(line)) continue;
+      if (!runtimeGlobalTextPattern.test(line) && !globalRuntimeRootTextPattern.test(line)) {
+        continue;
+      }
       const context = i === 0 ? line : `${lines[i - 1]}\n${line}`;
       if (!matchesRuntimeGlobalsSourceString(context)) continue;
       addReviewFinding(
@@ -839,7 +866,13 @@ function collectDirectRuntimeGlobalFindings(
     ) {
       continue;
     }
-    if (!rootRef.globalObjectName && !runtimeGlobalTextPattern.test(nodeText)) continue;
+    if (
+      !rootRef.globalObjectName &&
+      !runtimeGlobalTextPattern.test(nodeText) &&
+      !indexedTypeQueryMember(node, rootRef.rootName)
+    ) {
+      continue;
+    }
     addReviewFinding(
       findings,
       seen,
@@ -856,7 +889,7 @@ export function reviewFindings(
   filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!runtimeGlobalTextPattern.test(source) && !GLOBAL_RUNTIME_ROOT_TEXT_PATTERN.test(source)) {
+  if (!runtimeGlobalTextPattern.test(source) && !globalRuntimeRootTextPattern.test(source)) {
     return [];
   }
 
