@@ -1178,6 +1178,30 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("reports ambient runtime error types outside infer binding branches", async () => {
+    await writeProjectFile(
+      "resolvers/infer-false-branch-runtime-type.ts",
+      ["type Inferred<T> = T extends infer TailorErrors ? string : TailorErrors;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/infer-false-branch-runtime-type.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/infer-false-branch-runtime-type.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "type Inferred<T> = T extends infer TailorErrors ? string : TailorErrors;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("does not report names imported inside declaration scopes", async () => {
     await writeProjectFile(
       "types/ambient-module.d.ts",
@@ -1426,6 +1450,21 @@ describe("runtime-globals-opt-in review findings", () => {
     await writeProjectFile(
       "resolvers/export-local-specifier-type.ts",
       ["type TailorErrors = Error;", "export { type TailorErrors };", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report namespace re-export aliases", async () => {
+    await writeProjectFile(
+      "resolvers/export-namespace.ts",
+      [
+        'export * as tailor from "./runtime";',
+        'export type * as TailorErrors from "./types";',
+        "",
+      ].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);

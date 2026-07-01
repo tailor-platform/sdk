@@ -592,7 +592,11 @@ function hasDeclarationReferenceAncestor(node: SgNode): boolean {
   let current = node.parent();
   while (current) {
     if (REVIEW_DECLARATION_REFERENCE_ANCESTOR_KINDS.has(current.kind())) return true;
-    if (current.kind() === "export_clause" || current.kind() === "export_specifier") {
+    if (
+      current.kind() === "export_clause" ||
+      current.kind() === "export_specifier" ||
+      current.kind() === "namespace_export"
+    ) {
       let exportParent = current.parent();
       while (exportParent && exportParent.kind() !== "export_statement") {
         exportParent = exportParent.parent();
@@ -722,13 +726,40 @@ function hasTypeParameterBinding(node: SgNode, name: string): boolean {
     }
   }
 
-  const inferType =
-    node.kind() === "infer_type"
-      ? node
-      : node.children().find((child) => child.kind() === "infer_type");
-  const inferBinding = inferType?.children().find((child) => child.kind() === "type_identifier");
-  if (inferBinding?.text() === name) return true;
+  return false;
+}
 
+function hasInferTypeBinding(node: SgNode, name: string): boolean {
+  if (node.kind() !== "infer_type") return false;
+  const binding = node.children().find((child) => child.kind() === "type_identifier");
+  return binding?.text() === name;
+}
+
+function hasConditionalInferTypeBinding(scope: SgNode, node: SgNode, name: string): boolean {
+  if (scope.kind() !== "conditional_type") return false;
+  const children = scope.children();
+  const inferType = children.find((child) => child.kind() === "infer_type");
+  if (!inferType || !hasInferTypeBinding(inferType, name)) return false;
+
+  const nodeRange = node.range();
+  const inferRange = inferType.range();
+  if (
+    nodeRange.start.index >= inferRange.start.index &&
+    nodeRange.end.index <= inferRange.end.index
+  ) {
+    return true;
+  }
+
+  const question = children.find((child) => child.kind() === "?");
+  const colon = children.find((child) => child.kind() === ":");
+  if (!question || !colon) return false;
+  return (
+    nodeRange.start.index > question.range().end.index &&
+    nodeRange.end.index < colon.range().start.index
+  );
+}
+
+function hasMappedTypeBinding(node: SgNode, name: string): boolean {
   const mappedType =
     node.kind() === "mapped_type_clause"
       ? node
@@ -741,6 +772,9 @@ function ancestorHasTypeBinding(node: SgNode, name: string): boolean {
   let current = node.parent();
   while (current) {
     if (hasTypeParameterBinding(current, name)) return true;
+    if (hasInferTypeBinding(current, name)) return true;
+    if (hasConditionalInferTypeBinding(current, node, name)) return true;
+    if (hasMappedTypeBinding(current, name)) return true;
     current = current.parent();
   }
   return false;
