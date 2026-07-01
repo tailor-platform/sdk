@@ -955,6 +955,24 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report runtime-looking string keys or module specifiers", async () => {
+    await writeProjectFile(
+      "resolvers/string-keys.ts",
+      [
+        'import value from "tailor.idp";',
+        'export { value as exported } from "tailordb.file";',
+        'const dynamic = await import("tailor.idp");',
+        'const subscript = other["tailor.idp"];',
+        'const object = { "tailor.idp": 1, "tailordb.file": 2 };',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("does not report locally bound spaced bracket runtime-looking names", async () => {
     await writeProjectFile(
       "resolvers/local.ts",

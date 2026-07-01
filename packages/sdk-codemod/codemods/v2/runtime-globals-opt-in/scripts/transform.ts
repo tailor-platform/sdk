@@ -1080,6 +1080,33 @@ function collectGlobalObjectDestructureFindings(
   }
 }
 
+function isObjectPairKey(parent: SgNode, node: SgNode): boolean {
+  if (parent.kind() !== "pair") return false;
+  const nodeIndex = nodeChildIndex(parent, node);
+  const colonIndex = parent.children().findIndex((child) => child.kind() === ":");
+  return nodeIndex !== -1 && colonIndex !== -1 && nodeIndex < colonIndex;
+}
+
+function isDynamicImportSpecifier(node: SgNode): boolean {
+  const args = node.parent();
+  if (args?.kind() !== "arguments") return false;
+  const call = args.parent();
+  if (call?.kind() !== "call_expression") return false;
+  return call.children()[0]?.kind() === "import";
+}
+
+function isNonCodeStringFragment(fragment: SgNode): boolean {
+  const stringNode = fragment.parent();
+  if (!stringNode) return false;
+  const parent = stringNode.parent();
+  if (!parent) return false;
+  if (parent.kind() === "subscript_expression") return true;
+  if (isObjectPairKey(parent, stringNode)) return true;
+  if (hasAncestorKind(stringNode, "import_statement")) return true;
+  if (hasAncestorKind(stringNode, "export_statement")) return true;
+  return isDynamicImportSpecifier(stringNode);
+}
+
 function collectStringRuntimeGlobalFindings(
   root: SgNode,
   source: string,
@@ -1088,6 +1115,7 @@ function collectStringRuntimeGlobalFindings(
   seen: Set<string>,
 ): void {
   for (const fragment of root.findAll({ rule: { kind: "string_fragment" } })) {
+    if (isNonCodeStringFragment(fragment)) continue;
     const startLine = fragment.range().start.line + 1;
     const lines = fragment.text().split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
