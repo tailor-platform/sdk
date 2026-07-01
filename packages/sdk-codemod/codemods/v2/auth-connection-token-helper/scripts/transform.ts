@@ -322,6 +322,10 @@ function collectParameterNames(scope: SgNode, names: Set<string>): void {
   const params = scope.children().find((child) => child.kind() === "formal_parameters");
   if (!params) return;
 
+  collectFormalParameterNames(params, names);
+}
+
+function collectFormalParameterNames(params: SgNode, names: Set<string>): void {
   for (const param of params.children()) {
     const binding = param
       .children()
@@ -338,15 +342,12 @@ function collectArrowParameterNames(scope: SgNode, names: Set<string>): void {
   if (arrowIndex === -1) return;
 
   for (const child of children.slice(0, arrowIndex)) {
-    if (
-      [
-        "identifier",
-        "object_pattern",
-        "array_pattern",
-        "rest_pattern",
-        "formal_parameters",
-      ].includes(child.kind())
-    ) {
+    if (child.kind() === "formal_parameters") {
+      collectFormalParameterNames(child, names);
+      continue;
+    }
+
+    if (["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind())) {
       collectBindingNames(child, names);
     }
   }
