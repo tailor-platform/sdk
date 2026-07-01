@@ -335,6 +335,30 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports destructured aliases of ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-destructure.ts",
+      ["const { tailor } = globalThis;", "const clientFactory = tailor.idp.Client;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-destructure.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-destructure.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const { tailor } = globalThis;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports grouped casted runtime roots", async () => {
     await writeProjectFile(
       "resolvers/grouped-casted-root.ts",
@@ -491,6 +515,30 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 2,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "type Client = (typeof tailordb)['Client'];",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports dynamic indexed type query runtime globals", async () => {
+    await writeProjectFile(
+      "resolvers/dynamic-indexed-type-query.ts",
+      ["type Key = 'idp';", "type Idp = typeof tailor[Key];", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/dynamic-indexed-type-query.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/dynamic-indexed-type-query.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "type Idp = typeof tailor[Key];",
           }),
         ],
       }),
@@ -823,6 +871,24 @@ describe("runtime-globals-opt-in review findings", () => {
     await writeProjectFile(
       "resolvers/self-named-function.ts",
       ["const run = function tailor() {", "  return tailor.idp.Client;", "};", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report self-named class expressions", async () => {
+    await writeProjectFile(
+      "resolvers/self-named-class.ts",
+      [
+        "const Local = class tailor {",
+        "  static getClient() {",
+        "    return tailor.idp.Client;",
+        "  }",
+        "};",
+        "",
+      ].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);

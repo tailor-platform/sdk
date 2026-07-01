@@ -10,6 +10,8 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
 const BARE_RUNTIME_ROOT_TEXT_PATTERN = /\b(?:tailor|tailordb)\b/;
+const RUNTIME_ROOT_PROPERTY_PATTERN =
+  /\b(?:tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/;
 const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
 const REVIEW_TAILOR_RUNTIME_MEMBERS = new Set([
   "authconnection",
@@ -39,6 +41,7 @@ const REVIEW_SCOPE_KINDS = new Set([
   "generator_function",
   "arrow_function",
   "method_definition",
+  "class",
   "internal_module",
   "class_static_block",
 ]);
@@ -630,6 +633,11 @@ function scopeHasValueBinding(scope: SgNode, name: string): boolean {
     if (functionName?.text() === name) return true;
   }
 
+  if (scope.kind() === "class") {
+    const className = scope.children().find((child) => child.kind() === "type_identifier");
+    if (className?.text() === name) return true;
+  }
+
   if (scopeHasImportBinding(scope, name, "value")) return true;
 
   for (const decl of scope.findAll({ rule: { kind: "variable_declarator" } })) {
@@ -799,16 +807,20 @@ function runtimeIndexedTypeMember(rootName: string, member: string): boolean {
 
 function indexedTypeQueryMember(node: SgNode, rootName: string): string | null {
   if (node.kind() !== "identifier") return null;
+  if (rootName !== "tailor" && rootName !== "tailordb") return null;
 
   let current = node.parent();
+  let hasTypeQuery = false;
   while (current && current.kind() !== "lookup_type") {
+    if (current.kind() === "type_query") hasTypeQuery = true;
     current = current.parent();
   }
-  if (!current) return null;
+  if (!current || !hasTypeQuery) return null;
 
   const index = current.children().find((child) => child.kind() === "literal_type");
   const member = stringValue(index ?? null);
-  return member && runtimeIndexedTypeMember(rootName, member) ? member : null;
+  if (!member) return "*";
+  return runtimeIndexedTypeMember(rootName, member) ? member : null;
 }
 
 function nodeChildIndex(parent: SgNode, node: SgNode): number {
@@ -834,6 +846,49 @@ function isBareRuntimeRootValueReference(node: SgNode, rootName: string): boolea
     return appearsAfterEquals(parent, node);
   }
   return parent.kind() === "return_statement";
+}
+
+function declaratorInitializer(node: SgNode): SgNode | null {
+  const children = node.children();
+  const equalsIndex = children.findIndex((child) => child.kind() === "=");
+  return equalsIndex === -1 ? null : (children[equalsIndex + 1] ?? null);
+}
+
+function globalObjectReferenceName(node: SgNode | null): string | null {
+  const text = node?.text() ?? "";
+  const match =
+    /^\s*(?:(globalThis|global)|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)\s*$/.exec(
+      text,
+    );
+  return match ? (match[1] ?? match[2]!) : null;
+}
+
+function collectGlobalObjectDestructureFindings(
+  root: SgNode,
+  source: string,
+  file: string,
+  importedNames: RuntimeBindingNames,
+  findings: LlmReviewFinding[],
+  seen: Set<string>,
+): void {
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const binding = firstDeclaratorChild(decl);
+    if (!binding || !RUNTIME_ROOT_PROPERTY_PATTERN.test(binding.text())) continue;
+
+    const init = declaratorInitializer(decl);
+    const globalObjectName = globalObjectReferenceName(init);
+    if (!globalObjectName) continue;
+    if (init && hasRuntimeBindingInScope(init, globalObjectName, importedNames)) continue;
+
+    addReviewFinding(
+      findings,
+      seen,
+      source,
+      file,
+      decl.range().start.line + 1,
+      "Tailor runtime global reference remains after automatic migration.",
+    );
+  }
 }
 
 function collectStringRuntimeGlobalFindings(
@@ -934,14 +989,9 @@ export function reviewFindings(
   const findings: LlmReviewFinding[] = [];
   const seen = new Set<string>();
   const imports = findImportStatements(root);
-  collectDirectRuntimeGlobalFindings(
-    root,
-    source,
-    relativePath,
-    importedRuntimeNames(imports),
-    findings,
-    seen,
-  );
+  const importedNames = importedRuntimeNames(imports);
+  collectDirectRuntimeGlobalFindings(root, source, relativePath, importedNames, findings, seen);
+  collectGlobalObjectDestructureFindings(root, source, relativePath, importedNames, findings, seen);
   collectStringRuntimeGlobalFindings(root, source, relativePath, findings, seen);
   return findings;
 }
