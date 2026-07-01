@@ -1537,23 +1537,46 @@ const GQL_ACTION_ORDER: Record<SnapshotGqlAction, number> = {
   bulkUpsert: 6,
 };
 
+// Policies and conditions combine as an order-independent set on the platform,
+// so canonicalize their order before comparison to avoid false drift when the
+// remote returns them in a different order than the local snapshot declares.
+function sortByJson<T>(items: readonly T[]): T[] {
+  return items
+    .map((item) => [JSON.stringify(item), item] as const)
+    .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([, item]) => item);
+}
+
 function comparableGqlPermission(
   permission: SnapshotGqlPermission | undefined,
 ): SnapshotGqlPermission | undefined {
   const policies = permission?.map((policy) => ({
     ...policy,
+    conditions: sortByJson(policy.conditions),
     actions: policy.actions.toSorted(
       (left, right) => GQL_ACTION_ORDER[left] - GQL_ACTION_ORDER[right],
     ),
   }));
-  return policies && policies.length > 0 ? policies : undefined;
+  return policies && policies.length > 0 ? sortByJson(policies) : undefined;
 }
 
 function comparableRecordPermission(
   permission: SnapshotRecordPermission | undefined,
 ): SnapshotRecordPermission | undefined {
   if (!permission) return undefined;
-  return Object.values(permission).some((policies) => policies.length > 0) ? permission : undefined;
+  if (!Object.values(permission).some((policies) => policies.length > 0)) return undefined;
+
+  const canonical: SnapshotRecordPermission = {
+    create: sortByJson(permission.create.map(canonicalActionPermission)),
+    read: sortByJson(permission.read.map(canonicalActionPermission)),
+    update: sortByJson(permission.update.map(canonicalActionPermission)),
+    delete: sortByJson(permission.delete.map(canonicalActionPermission)),
+  };
+  return canonical;
+}
+
+function canonicalActionPermission(policy: SnapshotActionPermission): SnapshotActionPermission {
+  return { ...policy, conditions: sortByJson(policy.conditions) };
 }
 
 type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;

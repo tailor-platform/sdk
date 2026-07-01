@@ -2819,6 +2819,102 @@ describe("snapshot", () => {
       ).toEqual([expect.objectContaining({ typeName: "Task", kind: "permission_mismatch" })]);
     });
 
+    test("ignores permission policy order when comparing remote snapshots", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Task: {
+            name: "Task",
+            pluralForm: "Tasks",
+            fields: { id: { type: "uuid", required: true } },
+            permissions: {
+              record: {
+                create: [],
+                read: [
+                  { conditions: [], permit: "allow", description: "everyone" },
+                  { conditions: [], permit: "deny", description: "blocked" },
+                ],
+                update: [],
+                delete: [],
+              },
+              gql: [
+                { conditions: [], actions: ["read"], permit: "allow" },
+                { conditions: [], actions: ["create"], permit: "deny" },
+              ],
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        {
+          name: "Task",
+          schema: {
+            fields: {
+              id: {
+                type: "uuid",
+                required: true,
+                array: false,
+                index: false,
+                unique: false,
+                foreignKey: false,
+                allowedValues: [],
+                vector: false,
+                validate: [],
+                fields: {},
+              },
+            },
+            relationships: {},
+            indexes: {},
+            files: {},
+            settings: { pluralForm: "Tasks" },
+            permission: {
+              create: [],
+              read: [
+                {
+                  conditions: [],
+                  permit: TailorDBType_Permission_Permit.DENY,
+                  description: "blocked",
+                },
+                {
+                  conditions: [],
+                  permit: TailorDBType_Permission_Permit.ALLOW,
+                  description: "everyone",
+                },
+              ],
+              update: [],
+              delete: [],
+            },
+          },
+        } as unknown as ProtoTailorDBType,
+      ];
+      const remoteGqlPermissions = [
+        {
+          typeName: "Task",
+          permission: {
+            id: "task-gql-permission",
+            policies: [
+              {
+                conditions: [],
+                actions: [TailorDBGQLPermission_Action.CREATE],
+                permit: TailorDBGQLPermission_Permit.DENY,
+                description: "",
+              },
+              {
+                conditions: [],
+                actions: [TailorDBGQLPermission_Action.READ],
+                permit: TailorDBGQLPermission_Permit.ALLOW,
+                description: "",
+              },
+            ],
+          },
+        } as unknown as RemoteGqlPermission,
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot, remoteGqlPermissions)).toEqual([]);
+    });
+
     test("does not report drift for one-to-one backward relationships", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
