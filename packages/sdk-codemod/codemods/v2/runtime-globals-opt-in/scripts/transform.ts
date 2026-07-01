@@ -12,6 +12,8 @@ const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
 const REVIEW_NODE_KINDS = new Set([
   "member_expression",
   "identifier",
+  "nested_type_identifier",
+  "subscript_expression",
   "type_identifier",
   "new_expression",
 ]);

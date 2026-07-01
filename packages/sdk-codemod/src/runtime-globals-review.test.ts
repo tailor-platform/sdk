@@ -130,6 +130,40 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports bare subscript and type runtime globals left for manual migration", async () => {
+    await writeProjectFile(
+      "resolvers/types.ts",
+      [
+        'const runtimeNamespace = tailor["idp"];',
+        "type Query = tailordb.QueryResult<User>;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/types.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/types.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const runtimeNamespace = tailor["idp"];',
+          }),
+          expect.objectContaining({
+            file: "resolvers/types.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "type Query = tailordb.QueryResult<User>;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("does not report prose-only runtime global mentions inside strings", async () => {
     await writeProjectFile(
       "seed/prose.mjs",
