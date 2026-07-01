@@ -1499,8 +1499,10 @@ function comparePermissions(
   newGqlPerm: SnapshotGqlPermission | undefined,
 ): void {
   // Compare record permissions
-  const oldRecordStr = JSON.stringify(oldRecordPerm ?? null);
-  const newRecordStr = JSON.stringify(newRecordPerm ?? null);
+  const oldComparableRecordPerm = comparableRecordPermission(oldRecordPerm);
+  const newComparableRecordPerm = comparableRecordPermission(newRecordPerm);
+  const oldRecordStr = JSON.stringify(oldComparableRecordPerm ?? null);
+  const newRecordStr = JSON.stringify(newComparableRecordPerm ?? null);
   const recordPermChanged = oldRecordStr !== newRecordStr;
 
   // Compare GQL permissions
@@ -1519,8 +1521,8 @@ function comparePermissions(
       kind: "permission_modified",
       typeName,
       reason: `${reasons.join(" and ")} changed`,
-      before: { recordPermission: oldRecordPerm, gqlPermission: oldComparableGqlPerm },
-      after: { recordPermission: newRecordPerm, gqlPermission: newComparableGqlPerm },
+      before: { recordPermission: oldComparableRecordPerm, gqlPermission: oldComparableGqlPerm },
+      after: { recordPermission: newComparableRecordPerm, gqlPermission: newComparableGqlPerm },
     });
   }
 }
@@ -1538,12 +1540,20 @@ const GQL_ACTION_ORDER: Record<SnapshotGqlAction, number> = {
 function comparableGqlPermission(
   permission: SnapshotGqlPermission | undefined,
 ): SnapshotGqlPermission | undefined {
-  return permission?.map((policy) => ({
+  const policies = permission?.map((policy) => ({
     ...policy,
     actions: policy.actions.toSorted(
       (left, right) => GQL_ACTION_ORDER[left] - GQL_ACTION_ORDER[right],
     ),
   }));
+  return policies && policies.length > 0 ? policies : undefined;
+}
+
+function comparableRecordPermission(
+  permission: SnapshotRecordPermission | undefined,
+): SnapshotRecordPermission | undefined {
+  if (!permission) return undefined;
+  return Object.values(permission).some((policies) => policies.length > 0) ? permission : undefined;
 }
 
 type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;

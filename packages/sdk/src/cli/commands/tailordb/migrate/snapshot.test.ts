@@ -2726,6 +2726,50 @@ describe("snapshot", () => {
       ]);
     });
 
+    test("treats empty permission blocks as unset during remote comparison", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+            },
+            permissions: {
+              record: {
+                create: [],
+                read: [],
+                update: [],
+                delete: [],
+              },
+              gql: [],
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+          },
+          {
+            permission: {
+              create: [],
+              read: [],
+              update: [],
+              delete: [],
+            },
+          },
+        ),
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([]);
+    });
+
     test("uses remote GQL permissions when comparing remote snapshots", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
