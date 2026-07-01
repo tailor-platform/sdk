@@ -113,3 +113,26 @@ re-exported by `plugin/types.ts`).
 - Types derived from schemas are generated into `src/types/*.generated.ts` by zinfer — no runtime dependency on zod
 - Hand-written shared types live in pure type modules, whose import closure contains no runtime modules at all, so even a bundler that resolves the full module graph finds nothing to include
 - See the `schema-types` rule for details
+
+## CLI Command Design: Flags Over Positionals
+
+politty's plugin dispatch (`tailor-sdk <name>` execs an external
+`tailor-sdk-<name>` binary for unknown subcommands) is guarded by
+`!command.run`: a command with its own `run` never dispatches to a plugin,
+because an unknown positional there is a real argument, not an unknown
+subcommand. This means **a single command node cannot both expose
+`subCommands` for plugin extension and take a positional argument in its own
+`run`** — doing so permanently forecloses plugin dispatch on that node and
+makes the positional/subcommand boundary ambiguous.
+
+- Prefer flags and subcommands over positional arguments. They're
+  order-independent, unambiguous, and subcommand groups remain a plugin
+  extension point.
+- If a leaf command needs a positional, limit it to a single natural subject
+  (e.g. `query <sql>`, `api <method>`) and give that command **no**
+  `subCommands` of its own.
+- Do not mix `subCommands` with a `run` that consumes a positional on the
+  same command (a "hybrid" command). A `run` that takes no arguments and only
+  forwards to a default subcommand (e.g. `runCommand(defaultSubCommand, [])`)
+  is fine — the hybrid to avoid is one where `run` actually parses positional
+  input.
