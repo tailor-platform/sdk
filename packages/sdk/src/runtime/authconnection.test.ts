@@ -17,12 +17,12 @@ describe("@tailor-platform/sdk/runtime/authconnection", () => {
   test("getConnectionToken forwards to global and records call", async () => {
     using ac = mockAuthconnection();
     ac.setTokens({
-      google: { access_token: "ya29.xxx", expires_in: 3600 },
+      google: { access_token: "ya29.xxx" },
     });
 
     const result = await authconnection.getConnectionToken("google");
 
-    expect(result).toEqual({ access_token: "ya29.xxx", expires_in: 3600 });
+    expect(result).toEqual({ access_token: "ya29.xxx" });
     expect(ac.calls).toEqual([{ connectionName: "google" }]);
   });
 

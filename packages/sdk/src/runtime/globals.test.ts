@@ -26,6 +26,12 @@ describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () =>
     >();
   });
 
+  test("tailor.workflow.resumeWorkflow returns Promise<string>", () => {
+    expectTypeOf<ReturnType<typeof tailor.workflow.resumeWorkflow>>().toEqualTypeOf<
+      Promise<string>
+    >();
+  });
+
   test("tailor.context.Invoker is exposed as a namespace type", () => {
     expectTypeOf<tailor.context.Invoker | null>().not.toBeAny();
   });

@@ -669,7 +669,7 @@ describe("planWorkflow", () => {
       expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
         workspaceId,
         pageToken: "",
-        pageSize: 1000,
+        pageSize: 100,
       });
       expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "orphaned-job" }]);
     });

@@ -6,7 +6,13 @@
     "noEmit": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUncheckedSideEffectImports": true,
     "strict": true,
+    "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
   "include": ["**/*.ts", "**/*.js"],

@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { cp, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spinner } from "@clack/prompts";
-import { Context } from "./context";
+import { type Context } from "./context";
 
 // pnpm-workspace.yaml with allowBuilds for SDK and its transitive deps.
 // This cannot live in the template source because the templates are

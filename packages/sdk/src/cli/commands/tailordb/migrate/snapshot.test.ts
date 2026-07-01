@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterAll } from "vitest";
+import { describe, expect, expectTypeOf, test, beforeEach, afterAll, vi } from "vitest";
 import {
   createSnapshotFromLocalTypes,
   loadSnapshot,
@@ -12,7 +12,9 @@ import {
   compareSnapshots,
   compareLocalTypesWithSnapshot,
   compareRemoteWithSnapshot,
+  createSnapshotFromRemoteTypes,
   formatSchemaDrifts,
+  normalizeSchemaSnapshot,
   writeSnapshot,
   writeDiff,
   validateMigrationFiles,
@@ -22,6 +24,7 @@ import {
   DIFF_FILE_NAME,
   INITIAL_SCHEMA_NUMBER,
   formatMigrationNumber,
+  type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
 import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
@@ -199,6 +202,41 @@ describe("snapshot", () => {
 
       expect(snapshot.version).toBe(SCHEMA_SNAPSHOT_VERSION);
       expect(snapshot.types).toEqual({});
+    });
+  });
+
+  describe("normalizeSchemaSnapshot", () => {
+    test("normalizes legacy type and nested field defaults in one pass", () => {
+      const snapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Product: {
+            name: "Product",
+            fields: {
+              price: { type: "decimal", required: true },
+              metadata: {
+                type: "object",
+                required: false,
+                fields: {
+                  discount: { type: "decimal", required: false },
+                },
+              },
+            },
+          },
+        },
+      } as unknown as SchemaSnapshot;
+
+      const normalized = normalizeSchemaSnapshot(snapshot);
+
+      expect(normalized).toBe(snapshot);
+      expectTypeOf(normalized).toEqualTypeOf<NormalizedSchemaSnapshot>();
+      expectTypeOf<NormalizedSchemaSnapshot>().toExtend<SchemaSnapshot>();
+      expectTypeOf<SchemaSnapshot>().not.toExtend<NormalizedSchemaSnapshot>();
+      expect(snapshot.types.Product?.pluralForm).toBe("Products");
+      expect(snapshot.types.Product?.fields.price?.scale).toBe(6);
+      expect(snapshot.types.Product?.fields.metadata?.fields?.discount?.scale).toBe(6);
     });
   });
 
@@ -979,6 +1017,29 @@ describe("snapshot", () => {
       expect(loaded.version).toBe(SCHEMA_SNAPSHOT_VERSION);
       expect(loaded.types.User).toBeDefined();
     });
+
+    test("preserves type names that match Object prototype keys", () => {
+      const types = Object.create(null) as SchemaSnapshot["types"];
+      types["__proto__"] = {
+        name: "__proto__",
+        pluralForm: "__proto__",
+        fields: { id: { type: "uuid", required: true } },
+      };
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types,
+      };
+
+      const filePath = path.join(testDir, "proto_schema.json");
+      fs.writeFileSync(filePath, JSON.stringify(snapshot, null, 2));
+
+      const loaded = loadSnapshot(filePath);
+
+      expect(Object.hasOwn(loaded.types, "__proto__")).toBe(true);
+      expect(loaded.types["__proto__"]?.fields.id).toBeDefined();
+    });
   });
 
   describe("loadDiff", () => {
@@ -1502,6 +1563,45 @@ describe("snapshot", () => {
       expect(reconstructed?.types.User!.fields.email).toBeDefined();
     });
 
+    test("applies added type names that match Object prototype keys", () => {
+      const initialSnapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {},
+      };
+
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "type_added",
+            typeName: "__proto__",
+            after: {
+              name: "__proto__",
+              pluralForm: "__proto__",
+              fields: { id: { type: "uuid", required: true } },
+            },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: false,
+      };
+
+      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, initialSnapshot);
+      writeDiffToDir(testDir, 1, diff);
+
+      const reconstructed = reconstructSnapshotFromMigrations(testDir);
+
+      expect(Object.hasOwn(reconstructed?.types ?? {}, "__proto__")).toBe(true);
+      expect(reconstructed?.types["__proto__"]?.fields.id).toBeDefined();
+    });
+
     test("applies multiple diffs sequentially (directory structure)", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
@@ -1982,6 +2082,73 @@ describe("snapshot", () => {
         },
       } as unknown as ProtoTailorDBType;
     }
+
+    test("reconstructs remote types as normalized schema snapshots", () => {
+      const snapshot = createSnapshotFromRemoteTypes(
+        [
+          createMockRemoteType("Order", {
+            id: { type: "uuid", required: true },
+            amount: { type: "decimal", required: true },
+          }),
+        ],
+        namespace,
+      );
+
+      expect(snapshot.namespace).toBe(namespace);
+      expect(snapshot.types.Order?.pluralForm).toBe("Orders");
+      expect(snapshot.types.Order?.fields.amount?.scale).toBe(6);
+    });
+
+    test("normalizes remote snapshots once at the schema level", () => {
+      const remoteTypes = [
+        createMockRemoteType("Order", {
+          amount: { type: "decimal", required: true },
+        }),
+      ];
+
+      const values = Object.values;
+      const normalizedFieldRecords: unknown[] = [];
+      const valuesSpy = vi.spyOn(Object, "values").mockImplementation((value) => {
+        if (Object.hasOwn(value, "amount")) {
+          normalizedFieldRecords.push(value);
+        }
+        return values(value);
+      });
+      try {
+        createSnapshotFromRemoteTypes(remoteTypes, namespace);
+      } finally {
+        valuesSpy.mockRestore();
+      }
+
+      expect(normalizedFieldRecords).toHaveLength(1);
+    });
+
+    test("keeps remote type names that match Object prototype keys", () => {
+      const remoteTypes = [
+        createMockRemoteType("__proto__", {
+          id: { type: "uuid", required: true },
+        }),
+      ];
+
+      const remoteSnapshot = createSnapshotFromRemoteTypes(remoteTypes, namespace);
+      expect(Object.hasOwn(remoteSnapshot.types, "__proto__")).toBe(true);
+
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {},
+      };
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts).toEqual([
+        {
+          typeName: "__proto__",
+          kind: "type_missing_local",
+          details: "Type '__proto__' exists in remote but not in snapshot",
+        },
+      ]);
+    });
 
     test("returns empty array when remote and snapshot match exactly", () => {
       const snapshot: SchemaSnapshot = {

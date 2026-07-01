@@ -25,6 +25,28 @@ tailor-sdk deploy -p staging
 
 Profiles are created with `write` permission by default. The production profile above opts into `--permission read`, which blocks write commands such as `deploy` while the profile is active — a guard against deploying to production by accident. To deploy to production deliberately, pass the workspace explicitly with `-w` without selecting the profile — the guard applies only while a profile is selected via `-p` or `TAILOR_PLATFORM_PROFILE` — or use a separate profile created with `write` permission.
 
+If a profile targets a non-default Tailor Platform API, save that connection on the profile as well. User login tokens are stored per Platform URL, so you can log in once for each Platform and then switch with only the profile:
+
+```bash
+export TAILOR_PLATFORM_URL=<platform-api-url>
+export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=<oauth2-client-id>
+export TAILOR_PLATFORM_CONSOLE_URL=<console-url>
+
+tailor-sdk login
+tailor-sdk profile create development \
+  -u you@example.com \
+  -w <development-workspace-id> \
+  --platform-url "$TAILOR_PLATFORM_URL" \
+  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
+  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"
+
+unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL
+tailor-sdk deploy -p development
+tailor-sdk open -p development
+```
+
+After the profile exists, run `tailor-sdk login -p development` to refresh the login for that Platform without re-exporting the connection variables.
+
 ## Varying config values per environment
 
 `tailor.config.ts` is a TypeScript module evaluated locally each time an SDK command loads it, so any value can branch on `process.env`. If the config also defines an auth before-login hook, mind the `process.env` caveat in [Environment Variables](./configuration.md#environment-variables). Keep one env file per environment and load it with the global [`--env-file`](./cli-reference.md#environment-file-loading) option:

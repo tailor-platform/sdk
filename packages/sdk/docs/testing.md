@@ -185,7 +185,7 @@ import { mockAuthconnection } from "@tailor-platform/sdk/vitest";
 test("returns configured token", async () => {
   using ac = mockAuthconnection();
   ac.setTokens({
-    google: { access_token: "ya29.xxx", expires_in: 3600 },
+    google: { access_token: "ya29.xxx" },
   });
 
   const token = await tailor.authconnection.getConnectionToken("google");
@@ -567,6 +567,35 @@ describe("resolveApproval resolver", () => {
 ```
 
 `setResolveHandler` receives `(executionId, key, callback)` and decides whether to invoke the callback — that's how you assert the value returned to the suspended job.
+
+#### Resolvers that resume failed workflows
+
+Resolvers or executors that call `workflow.resumeWorkflow(executionId)` delegate to `tailor.workflow.resumeWorkflow` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().setResumeHandler` to control the returned execution ID and inspect `resumeWorkflow.mock.calls`:
+
+```typescript
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
+import { describe, expect, test } from "vitest";
+import resolver from "./retryFailedWorkflow";
+
+describe("retryFailedWorkflow resolver", () => {
+  test("resumes a failed workflow execution", async () => {
+    using wf = mockWorkflow();
+    wf.setResumeHandler("exec-resumed-123");
+
+    const result = await resolver.body({
+      input: { executionId: "exec-failed-456" },
+      user: unauthenticatedTailorUser,
+      env: {},
+    });
+
+    expect(result).toEqual({ resumedExecutionId: "exec-resumed-123" });
+    expect(wf.resumeWorkflow.mock.calls).toEqual([["exec-failed-456"]]);
+  });
+});
+```
+
+`setResumeHandler` accepts a static string (same execution ID for every call) or a function `(executionId) => string` that computes one per call. By default the mock echoes the input `executionId`.
 
 ### Testing Executors
 

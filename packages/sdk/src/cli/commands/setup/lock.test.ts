@@ -18,7 +18,6 @@ function makeLock(): LockFile {
           environment: "my-app",
           dir: ".",
           packageManager: "pnpm",
-          plan: true,
         },
         generatedIds: ["tailor-deploy", "tailor-deploy/tailor-apply"],
         ejectedIds: [],

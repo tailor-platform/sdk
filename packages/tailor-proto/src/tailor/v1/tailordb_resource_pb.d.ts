@@ -363,6 +363,11 @@ export declare type TailorDBType_FieldConfig = Message<"tailor.v1.TailorDBType.F
    * @generated from field: optional int32 scale = 18;
    */
   scale?: number;
+
+  /**
+   * @generated from field: bool optional_on_create = 19;
+   */
+  optionalOnCreate: boolean;
 };
 
 /**
