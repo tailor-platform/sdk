@@ -4,6 +4,96 @@ import { gte, lt, parse, valid } from "semver";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
+const RENAME_BIN_SOURCE_VALUE_FLAGS = [
+  "--env-file-if-exists",
+  "--env-file",
+  "--profile",
+  "--config",
+  "--workspace-id",
+  "--arg",
+  "--query",
+  "--file",
+  "--name",
+  "--namespace",
+  "--dir",
+  "-e",
+  "-p",
+  "-c",
+  "-w",
+  "-a",
+  "-q",
+  "-f",
+  "-n",
+];
+const RENAME_BIN_SOURCE_COMMANDS = [
+  "api",
+  "apply",
+  "authconnection",
+  "completion",
+  "crash-report",
+  "crashreport",
+  "deploy",
+  "executor",
+  "function",
+  "generate",
+  "init",
+  "login",
+  "logout",
+  "machineuser",
+  "oauth2client",
+  "open",
+  "organization",
+  "profile",
+  "query",
+  "remove",
+  "secret",
+  "setup",
+  "show",
+  "skills",
+  "staticwebsite",
+  "tailordb",
+  "upgrade",
+  "user",
+  "workflow",
+  "workspace",
+];
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const RENAME_BIN_SOURCE_VALUE_GUARDS = RENAME_BIN_SOURCE_VALUE_FLAGS.flatMap((flag) => {
+  const escaped = escapeRegExp(flag);
+  return [`(?<!${escaped}\\s+)`, `(?<!${escaped}=)`];
+}).join("");
+const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})`;
+const RENAME_BIN_SOURCE_COMMAND_TOKEN =
+  "tailor-sdk(?:(?:\\.(?:cmd|ps1|exe))|(?:@[^\\s'\"`;|&)]+))?(?![\\w-])";
+const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
+  [
+    "(?<![.\\w-])",
+    "(?<![\"'])",
+    "(?<!\\\\[\"'])",
+    RENAME_BIN_SOURCE_VALUE_GUARDS,
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
+    `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
+  ].join(""),
+);
+const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
+  [
+    "(?:^|[\\s;&|\\x00])(?:sh|bash|zsh)\\s+-\\w*c\\w*\\s+\\\\?[\"']",
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
+    `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
+  ].join(""),
+);
+const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
+  [
+    RENAME_BIN_SOURCE_VALUE_GUARDS,
+    "[\"']",
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
+    "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
+  ].join(""),
+);
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 
@@ -618,12 +708,27 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/rename-bin",
     name: "tailor-sdk binary → tailor",
     description:
-      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Exact ignore-file entries for `.tailor-sdk/` are handled by the generated-output ignore codemod.",
+      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, source files, generated declaration comments, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Exact ignore-file entries for `.tailor-sdk/` are handled by the generated-output ignore codemod.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/rename-bin/scripts/transform.js",
-    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,yml,yaml}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+      "**/*.md",
+    ],
     legacyPatterns: ["tailor-sdk"],
+    sourceStringLegacyPatterns: [
+      RENAME_BIN_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN,
+    ],
+    sourceTextLegacyPatterns: [
+      RENAME_BIN_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN,
+    ],
     examples: [
       {
         lang: "sh",
