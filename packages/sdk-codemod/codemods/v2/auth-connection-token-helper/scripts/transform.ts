@@ -233,6 +233,34 @@ function localDeclarationNames(root: SgNode): Set<string> {
     if (name) names.add(name.text());
   }
 
+  for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
+    for (const child of catchClause.children()) {
+      if (["identifier", "object_pattern", "array_pattern"].includes(child.kind())) {
+        collectBindingNames(child, names);
+      }
+    }
+  }
+
+  for (const arrow of root.findAll({ rule: { kind: "arrow_function" } })) {
+    const children = arrow.children();
+    const arrowIndex = children.findIndex((child) => child.kind() === "=>");
+    if (arrowIndex === -1) continue;
+    for (const child of children.slice(0, arrowIndex)) {
+      collectBindingNames(child, names);
+    }
+  }
+
+  for (const loop of root.findAll({ rule: { kind: "for_in_statement" } })) {
+    const children = loop.children();
+    const keywordIndex = children.findIndex(
+      (child) => child.kind() === "in" || child.kind() === "of",
+    );
+    if (keywordIndex === -1) continue;
+    for (const child of children.slice(0, keywordIndex)) {
+      collectBindingNames(child, names);
+    }
+  }
+
   return names;
 }
 
@@ -252,6 +280,10 @@ function hasRuntimeImportCollision(root: SgNode, imports: SgNode[]): boolean {
         ),
     ),
   );
+}
+
+function hasRuntimeReferenceShadow(root: SgNode, runtimeRef: string): boolean {
+  return localDeclarationNames(root).has(runtimeRef.split(".")[0]!);
 }
 
 function findAuthConnectionTokenCalls(root: SgNode, authLocalNames: Set<string>): TokenCall[] {
@@ -299,21 +331,12 @@ function countRemainingRefs(
   localName: string,
   scheduledRanges: Array<[number, number]>,
 ): number {
-  let count = 0;
-  const visit = (node: SgNode): void => {
-    if (
-      REFERENCE_KINDS.has(node.kind()) &&
-      node.text() === localName &&
-      !isInsideImportStatement(node) &&
-      !isInsideScheduledRange(node, scheduledRanges)
-    ) {
-      count++;
-      return;
-    }
-    for (const child of node.children()) visit(child);
-  };
-  visit(root);
-  return count;
+  return root
+    .findAll({ rule: { any: [...REFERENCE_KINDS].map((kind) => ({ kind })) } })
+    .filter((node) => node.text() === localName)
+    .filter(
+      (node) => !isInsideImportStatement(node) && !isInsideScheduledRange(node, scheduledRanges),
+    ).length;
 }
 
 function importClause(importStmt: SgNode): SgNode | null {
@@ -444,6 +467,7 @@ function transformParsed(source: string, root: SgNode): string | null {
 
   const existingRuntimeRef = runtimeAuthconnectionReference(imports);
   if (!existingRuntimeRef && hasRuntimeImportCollision(root, imports)) return null;
+  if (existingRuntimeRef && hasRuntimeReferenceShadow(root, existingRuntimeRef)) return null;
 
   const runtimeRef = existingRuntimeRef ?? AUTHCONNECTION;
   const edits: Edit[] = calls.map((call) => call.objectNode.replace(runtimeRef));
@@ -475,17 +499,18 @@ function transformParsed(source: string, root: SgNode): string | null {
   return result === source ? null : result;
 }
 
-export default function transform(source: string, filePath: string): string | null {
+function parseRoot(source: string, filePath: string): SgNode | null {
   if (!quickFilter(source)) return null;
-
-  let root: SgNode;
   try {
-    root = parse(sourceLang(filePath, source), source).root();
+    return parse(sourceLang(filePath, source), source).root();
   } catch {
     return null;
   }
+}
 
-  return transformParsed(source, root);
+export default function transform(source: string, filePath: string): string | null {
+  const root = parseRoot(source, filePath);
+  return root ? transformParsed(source, root) : null;
 }
 
 function lineForIndex(source: string, index: number): number {
@@ -503,14 +528,8 @@ export function reviewFindings(
   filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!quickFilter(source)) return [];
-
-  let root: SgNode;
-  try {
-    root = parse(sourceLang(filePath, source), source).root();
-  } catch {
-    return [];
-  }
+  const root = parseRoot(source, filePath);
+  if (!root) return [];
 
   const imports = findImportStatements(root);
   const authBindings = findTailorConfigAuthBindings(imports);
