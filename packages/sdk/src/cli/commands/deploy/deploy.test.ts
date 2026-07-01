@@ -8,6 +8,7 @@ import {
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
   dropCrossDeploymentManagedDeletes,
+  mergeBundledScripts,
   parseDeployConfigPaths,
   printDeploymentPlans,
   printPlanResults,
@@ -513,6 +514,62 @@ describe("dropCrossDeploymentManagedDeletes", () => {
       },
     ]);
   });
+
+  test("drops an app delete claimed by another deployment that creates that app", () => {
+    const previousOwner = emptyResults();
+    previousOwner.app.deletes.push({
+      name: "shared-app",
+      request: { workspaceId: "ws", applicationName: "shared-app" },
+    } as never);
+    const appDeletes = previousOwner.app.deletes;
+
+    const nextOwner = emptyResults();
+    nextOwner.app.creates.push({ name: "shared-app" } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.app.deletes).toBe(appDeletes);
+    expect(previousOwner.app.deletes).toEqual([]);
+  });
+
+  test("drops an app delete claimed by another deployment that leaves that app unchanged", () => {
+    const previousOwner = emptyResults();
+    previousOwner.app.deletes.push({
+      name: "shared-app",
+      request: { workspaceId: "ws", applicationName: "shared-app" },
+    } as never);
+
+    const nextOwner = emptyResults();
+    nextOwner.app.unchanged.push({ name: "shared-app" } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.app.deletes).toEqual([]);
+  });
+
+  test("keeps an app delete not claimed by another deployment", () => {
+    const previousOwner = emptyResults();
+    previousOwner.app.deletes.push({
+      name: "old-app",
+      request: { workspaceId: "ws", applicationName: "old-app" },
+    } as never);
+
+    const nextOwner = emptyResults();
+    nextOwner.app.creates.push({ name: "different-app" } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.app.deletes).toHaveLength(1);
+  });
 });
 
 describe("confirmDeploymentPlans", () => {
@@ -727,5 +784,60 @@ describe("printDeploymentPlans", () => {
     expect(payload.conflicts).toEqual([]);
 
     outSpy.mockRestore();
+  });
+});
+
+type FakeBundledScripts = {
+  resolvers?: Record<string, string>;
+  executors?: Record<string, string>;
+  workflowJobs?: Record<string, string>;
+  authHooks?: Record<string, string>;
+};
+
+function fakeTarget(
+  bundles: FakeBundledScripts,
+): Parameters<typeof mergeBundledScripts>[0][number] {
+  return {
+    bundledScripts: {
+      resolvers: new Map(Object.entries(bundles.resolvers ?? {})),
+      executors: new Map(Object.entries(bundles.executors ?? {})),
+      workflowJobs: new Map(Object.entries(bundles.workflowJobs ?? {})),
+      authHooks: new Map(Object.entries(bundles.authHooks ?? {})),
+    },
+  } as unknown as Parameters<typeof mergeBundledScripts>[0][number];
+}
+
+describe("mergeBundledScripts", () => {
+  test("throws when two configs define the same executor bundle name", () => {
+    expect(() =>
+      mergeBundledScripts([
+        fakeTarget({ executors: { "sync-user": "a" } }),
+        fakeTarget({ executors: { "sync-user": "b" } }),
+      ]),
+    ).toThrow('Duplicate executor bundle name "sync-user" across config files.');
+  });
+
+  test("throws when two configs define the same workflow job bundle name", () => {
+    expect(() =>
+      mergeBundledScripts([
+        fakeTarget({ workflowJobs: { "notify-job": "a" } }),
+        fakeTarget({ workflowJobs: { "notify-job": "b" } }),
+      ]),
+    ).toThrow('Duplicate workflow job bundle name "notify-job" across config files.');
+  });
+
+  test("merges distinct bundle names across configs without throwing", () => {
+    const merged = mergeBundledScripts([
+      fakeTarget({ executors: { "sync-user": "a" } }),
+      fakeTarget({ executors: { "sync-order": "b" } }),
+    ]);
+
+    expect([...merged.executors.keys()]).toEqual(["sync-user", "sync-order"]);
+  });
+
+  test("is a no-op for a single config", () => {
+    expect(() =>
+      mergeBundledScripts([fakeTarget({ executors: { "sync-user": "a" } })]),
+    ).not.toThrow();
   });
 });

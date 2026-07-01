@@ -841,7 +841,15 @@ function addBundledScripts(
   }
 }
 
-function mergeBundledScripts(
+/**
+ * Merge per-config bundled scripts into one set, throwing when two configs
+ * share a bundle name. Bundle names map to workspace-global function-registry
+ * entries, so a collision would make one config's apply overwrite or fail on
+ * the other's function; running this before apply surfaces it up front.
+ * @param targets - Built deployment targets to merge
+ * @returns Combined bundled scripts across all targets
+ */
+export function mergeBundledScripts(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): BuiltDeploymentTarget["bundledScripts"] {
   const bundledScripts: BuiltDeploymentTarget["bundledScripts"] = {
@@ -1347,6 +1355,7 @@ function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
     },
     { changeSet: results.executor.changeSet, resourceType: "executor" },
     { changeSet: results.workflow.changeSet, resourceType: "workflow" },
+    { changeSet: results.app, resourceType: "application" },
     workflowJobFunctionResourceGroup(results),
     { changeSet: results.secretManager.vaultChangeSet, resourceType: "secret.vault" },
     {
@@ -1533,6 +1542,10 @@ export async function deploy(options?: DeployOptions) {
     if (buildOnly) {
       return { bundledScripts: mergeBundledScripts(targets) };
     }
+
+    // Reject duplicate bundle names across configs before planning so the
+    // failure surfaces up front instead of mid-apply on the second upload.
+    mergeBundledScripts(targets);
 
     // Note: the normal apply path intentionally skips writing bundle files to
     // .tailor-sdk/. Bundles are kept in memory and uploaded directly to the
