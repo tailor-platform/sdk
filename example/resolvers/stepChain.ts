@@ -14,17 +14,15 @@ export default createResolver({
             first: t
               .string()
               .description("User's first name")
-              .validate([
-                ({ value }) => value.length >= 2,
-                "First name must be at least 2 characters",
-              ]),
+              .validate(({ newValue }) =>
+                newValue.length >= 2 ? undefined : "First name must be at least 2 characters",
+              ),
             last: t
               .string()
               .description("User's last name")
-              .validate([
-                ({ value }) => value.length >= 2,
-                "Last name must be at least 2 characters",
-              ]),
+              .validate(({ newValue }) =>
+                newValue.length >= 2 ? undefined : "Last name must be at least 2 characters",
+              ),
           })
           .description("User's full name"),
         activatedAt: t.datetime({ optional: true }).description("User activation timestamp"),

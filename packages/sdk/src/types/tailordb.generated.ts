@@ -57,7 +57,7 @@ export type DBFieldMetadata = {
       }
     | undefined;
   /** Validation functions for the field */
-  validate?: (Function | [Function, string])[] | undefined;
+  validate?: Function[] | undefined;
   /** Serial (auto-increment) configuration */
   serial?:
     | {
@@ -1023,6 +1023,7 @@ export type TailorDBTypeRawInput = {
           };
         }
       | undefined;
+    typeValidate?: Function | undefined;
   };
 };
 
@@ -1055,7 +1056,7 @@ export type TailorDBTypeRaw = {
               update?: Function | undefined;
             }
           | undefined;
-        validate?: (Function | [Function, string])[] | undefined;
+        validate?: Function[] | undefined;
         serial?:
           | {
               start: number;
@@ -1095,6 +1096,7 @@ export type TailorDBTypeRaw = {
           };
         }
       | undefined;
+    typeValidate?: Function | undefined;
   };
 };
 

@@ -4,7 +4,9 @@ export const attachedFiles = db.object(
   {
     id: db.uuid(),
     name: db.string(),
-    size: db.int().validate(({ value }) => value > 0),
+    size: db
+      .int()
+      .validate(({ newValue }) => (newValue <= 0 ? "Size must be positive" : undefined)),
     type: db.enum(["text", "image"]),
   },
   { array: true },

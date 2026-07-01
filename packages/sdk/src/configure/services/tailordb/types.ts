@@ -90,6 +90,8 @@ export interface TailorDBTypeMetadata {
       unique?: boolean;
     }
   >;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  typeValidate?: Function;
 }
 
 /**
@@ -145,11 +147,15 @@ export type TailorDBInstance<
 
 // --- Hook types (UX-focused, for configure layer) ---
 
-type HookFn<TValue, TData, TReturn> = (args: {
-  value: TValue;
-  data: TData extends Record<string, unknown>
+type HookArgs<TData> =
+  TData extends Record<string, unknown>
     ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
     : unknown;
+
+type HookFn<TValue, TData, TReturn> = (args: {
+  value: TValue;
+  newRecord: HookArgs<TData>;
+  oldRecord: HookArgs<TData> | null;
   invoker: TailorPrincipal | null;
   now: Date;
 }) => TReturn;
@@ -158,6 +164,25 @@ export type Hook<TData, TReturn, TCreateReturn = TReturn> = {
   create?: HookFn<TReturn | null, TData, TCreateReturn>;
   update?: HookFn<TReturn | null, TData, TReturn>;
 };
+
+type DottedPaths<T, Prefix extends string = ""> =
+  T extends Record<string, unknown>
+    ? {
+        [K in keyof T & string]: `${Prefix}${K}` | DottedPaths<NonNullable<T[K]>, `${Prefix}${K}.`>;
+      }[keyof T & string]
+    : never;
+
+export type TypeValidateFn<
+  F extends Record<string, TailorAnyDBField>,
+  TData = { [K in keyof F]: output<F[K]> },
+> = (
+  args: {
+    newRecord: HookArgs<TData>;
+    oldRecord: HookArgs<TData> | null;
+    invoker: TailorPrincipal | null;
+  },
+  issues: (field: DottedPaths<Omit<TData, "id">>, message: string) => void,
+) => void;
 
 export type Hooks<
   F extends Record<string, TailorAnyDBField>,

@@ -10,8 +10,10 @@ export const customer = db
     postalCode: db.string(),
     address: db.string({ optional: true }),
     city: db.string({ optional: true }).validate(
-      ({ value }) => (value ? value.length > 1 : true),
-      ({ value }) => (value ? value.length < 100 : true),
+      ({ newValue }) =>
+        newValue && newValue.length <= 1 ? "City must be longer than 1 character" : undefined,
+      ({ newValue }) =>
+        newValue && newValue.length >= 100 ? "City must be shorter than 100 characters" : undefined,
     ),
     fullAddress: db.string(),
     state: db.string(),
@@ -19,12 +21,18 @@ export const customer = db
   })
   .hooks({
     fullAddress: {
-      create: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
-      update: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
+      create: ({ newRecord }) => `${newRecord.postalCode} ${newRecord.address} ${newRecord.city}`,
+      update: ({ newRecord }) => `${newRecord.postalCode} ${newRecord.address} ${newRecord.city}`,
     },
   })
   .validate({
-    name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
+    name: ({ newValue }) =>
+      newValue.length <= 5 ? "Name must be longer than 5 characters" : undefined,
+  })
+  .validate(({ newRecord }, issues) => {
+    if (newRecord.country === "JP" && !newRecord.postalCode) {
+      issues("postalCode", "Postal code is required for Japan");
+    }
   })
   .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

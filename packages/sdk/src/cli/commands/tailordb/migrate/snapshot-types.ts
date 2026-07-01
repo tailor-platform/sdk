@@ -219,6 +219,7 @@ export interface TailorDBSnapshotType {
     record?: SnapshotRecordPermission;
     gql?: SnapshotGqlPermission;
   };
+  typeValidateExpr?: string;
 }
 
 export type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;

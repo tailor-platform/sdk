@@ -1,5 +1,7 @@
 // Platform-injected record map for type-level hook/validate scripts.
 const INPUT = "_input";
+const NEW_RECORD = "_newRecord";
+const OLD_RECORD = "_oldRecord";
 // Shared operation timestamp bound once per script execution.
 const NOW = "_now";
 
@@ -94,34 +96,37 @@ function buildHookObject(
  * failing message keyed by its dotted field path.
  * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
  * @param {string} accessExpr - JS expression to access the parent object
+ * @param {string} oldAccessExpr - JS expression to access the old record's parent object
  * @param {string} keyPrefix - Dotted path prefix for error keys
  * @returns {string[]} Array of validation statement strings
  */
 function buildValidateStatements(
   fields: Record<string, ScriptFieldConfig>,
   accessExpr: string,
+  oldAccessExpr: string,
   keyPrefix: string,
 ): string[] {
   const statements: string[] = [];
 
   for (const [name, config] of Object.entries(fields)) {
     const access = `${accessExpr}[${key(name)}]`;
+    const oldAccess = `${oldAccessExpr}?.[${key(name)}]`;
     const fieldPath = keyPrefix ? `${keyPrefix}.${name}` : name;
 
     if (isNestedType(config) && config.fields) {
-      statements.push(...buildValidateStatements(config.fields, `(${access} || {})`, fieldPath));
+      statements.push(
+        ...buildValidateStatements(config.fields, `(${access} || {})`, oldAccess, fieldPath),
+      );
       continue;
     }
 
     const validators = (config.validate ?? []).filter((v) => v.script?.expr);
     if (validators.length > 0) {
-      const chain = validators
-        .map(
-          (v) =>
-            `if (!(${v.script?.expr})) { __errs[${key(fieldPath)}] = ${key(v.errorMessage)}; }`,
-        )
-        .join(" else ");
-      statements.push(`{ const _value = ${access}; ${chain} }`);
+      const chain = validators.map((v) => `(${v.script?.expr})`).join(" ?? ");
+      statements.push(
+        `{ const _value = ${access}; const _oldValue = ${oldAccess} ?? null;` +
+          ` const __r = ${chain}; if (typeof __r === "string") { __errs[${key(fieldPath)}] = __r; } }`,
+      );
     }
   }
 
@@ -129,14 +134,13 @@ function buildValidateStatements(
 }
 
 function wrapHook(objectExpr: string): string {
-  return `(() => { const ${NOW} = new Date(); const _data = ${INPUT}; return ${objectExpr}; })()`;
+  return `(() => { const ${NOW} = new Date(); return ${objectExpr}; })()`;
 }
 
-function wrapValidate(statements: string[]): string {
-  return (
-    `(() => { const _data = ${INPUT}; const __errs = {}; ` +
-    `${statements.join(" ")} return __errs; })()`
-  );
+function wrapValidate(statements: string[], typeValidateExpr?: string): string {
+  const issuesFn = typeValidateExpr ? " const __issues = (f, m) => { __errs[f] = m; };" : "";
+  const typeValidateStmt = typeValidateExpr ? ` ${typeValidateExpr};` : "";
+  return `(() => { const __errs = {};${issuesFn} ${statements.join(" ")}${typeValidateStmt} return __errs; })()`;
 }
 
 /**
@@ -146,9 +150,13 @@ function wrapValidate(statements: string[]): string {
  * instant.  Defaults are applied after hooks on create only.  Validators
  * run with the same rules on create and update.
  * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
+ * @param {string} [typeValidateExpr] - Precompiled type-level validate expression
  * @returns {TypeScripts} Aggregated type-level scripts
  */
-export function buildTypeScripts(fields: Record<string, ScriptFieldConfig>): TypeScripts {
+export function buildTypeScripts(
+  fields: Record<string, ScriptFieldConfig>,
+  typeValidateExpr?: string,
+): TypeScripts {
   const result: TypeScripts = {};
 
   const hook: { create?: ScriptRef; update?: ScriptRef } = {};
@@ -162,9 +170,9 @@ export function buildTypeScripts(fields: Record<string, ScriptFieldConfig>): Typ
     result.typeHook = hook;
   }
 
-  const statements = buildValidateStatements(fields, INPUT, "");
-  if (statements.length > 0) {
-    const expr = wrapValidate(statements);
+  const statements = buildValidateStatements(fields, NEW_RECORD, OLD_RECORD, "");
+  if (statements.length > 0 || typeValidateExpr) {
+    const expr = wrapValidate(statements, typeValidateExpr);
     result.typeValidate = { create: { expr }, update: { expr } };
   }
 

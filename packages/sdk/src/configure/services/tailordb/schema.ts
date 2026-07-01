@@ -27,7 +27,7 @@ import type {
   TailorFieldType,
   TailorToTs,
   FieldValidateInput,
-  ValidateConfig,
+  ValidateFn,
   Validators,
 } from "#/configure/types/field.types";
 import type { UUIDString } from "#/configure/types/scalar.types";
@@ -36,7 +36,7 @@ import type { InferredAttributes } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
-import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures } from "./types";
+import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures, TypeValidateFn } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // Erased DB fields stay assignable across builder method-state changes.
@@ -366,6 +366,7 @@ export interface TailorDBType<
   _description?: string;
 
   hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
+  validate(fn: TypeValidateFn<Fields>): TailorDBType<Fields, User>;
   validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
   features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
   indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
@@ -846,6 +847,8 @@ function createTailorDBType<
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  let _typeValidate: Function | undefined;
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -881,6 +884,7 @@ function createTailorDBType<
         permissions: _permissions,
         files: _files,
         ...(Object.keys(indexes).length > 0 && { indexes }),
+        ...(_typeValidate && { typeValidate: _typeValidate }),
       };
     },
 
@@ -897,28 +901,15 @@ function createTailorDBType<
       return this;
     },
 
-    validate(validators: Validators<Fields>) {
-      Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
+    validate(validatorsOrFn: Validators<Fields> | TypeValidateFn<Fields>) {
+      if (typeof validatorsOrFn === "function") {
+        _typeValidate = validatorsOrFn;
+        return this;
+      }
+      Object.entries(validatorsOrFn).forEach(([fieldName, fieldValidators]) => {
         const field = this.fields[fieldName] as TailorAnyDBField;
-
-        const validators = fieldValidators as
-          | FieldValidateInput<unknown>
-          | FieldValidateInput<unknown>[];
-
-        const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> => {
-          return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
-        };
-
-        let updatedField: TailorAnyDBField;
-        if (Array.isArray(validators)) {
-          if (isValidateConfig(validators)) {
-            updatedField = field.validate(validators);
-          } else {
-            updatedField = field.validate(...validators);
-          }
-        } else {
-          updatedField = field.validate(validators);
-        }
+        const fns = fieldValidators as ValidateFn<unknown> | ValidateFn<unknown>[];
+        const updatedField = Array.isArray(fns) ? field.validate(...fns) : field.validate(fns);
         (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
       });
       return this;

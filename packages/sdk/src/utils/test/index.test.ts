@@ -170,12 +170,12 @@ describe("createTailorDBHook", () => {
 
   describe("create hook on a top-level field", () => {
     test("invokes the create hook with value, full data, and a null invoker", () => {
-      const seen: { value: unknown; data: unknown; invoker: unknown }[] = [];
+      const seen: { value: unknown; newRecord: unknown; invoker: unknown }[] = [];
       const type = db.type("Order", { total: db.float(), tax: db.float() }).hooks({
         tax: {
-          create: ({ value, data, invoker }) => {
-            seen.push({ value, data, invoker });
-            return (data as { total: number }).total * 0.1;
+          create: ({ value, newRecord, invoker }) => {
+            seen.push({ value, newRecord, invoker });
+            return (newRecord as { total: number }).total * 0.1;
           },
         },
       });
@@ -184,7 +184,7 @@ describe("createTailorDBHook", () => {
       expect(seen).toEqual([
         {
           value: undefined,
-          data: { total: 100, tax: undefined },
+          newRecord: { total: 100, tax: undefined },
           invoker: null,
         },
       ]);

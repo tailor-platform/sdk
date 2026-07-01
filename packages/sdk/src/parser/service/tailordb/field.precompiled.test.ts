@@ -20,7 +20,8 @@ describe("parseFieldConfig precompiled expressions", () => {
   });
 
   test("uses precompiled validate expression when attached", () => {
-    const validator = ({ value }: { value: string }) => value.length > 0;
+    const validator = ({ newValue }: { newValue: string }) =>
+      newValue.length <= 0 ? "Must not be empty" : undefined;
     setPrecompiledScriptExpr(validator, "PRECOMPILED_VALIDATE_EXPR");
 
     const type = db.type("User", {

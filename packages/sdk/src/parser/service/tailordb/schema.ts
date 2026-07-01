@@ -81,10 +81,7 @@ export const DBFieldMetadataSchema = z.strictObject({
     })
     .optional()
     .describe("Lifecycle hooks for the field"),
-  validate: z
-    .array(z.union([functionSchema, z.tuple([functionSchema, z.string()])]))
-    .optional()
-    .describe("Validation functions for the field"),
+  validate: z.array(functionSchema).optional().describe("Validation functions for the field"),
   serial: z
     .strictObject({
       start: z.number().describe("Starting value for the serial sequence"),
@@ -270,6 +267,7 @@ export const TailorDBTypeSchema = z.strictObject({
           }),
         )
         .optional(),
+      typeValidate: functionSchema.optional(),
     })
     .strict(),
 });
