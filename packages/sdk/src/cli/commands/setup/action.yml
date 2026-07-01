@@ -49,7 +49,8 @@ runs:
       run: |
         # Replace with your static website build command.
         # Example: pnpm --filter <package-name> run build:static
-        # Note: this file is managed by tailor-sdk; re-running setup action will overwrite edits.
+        # Note: this file is managed by tailor-sdk. Edits are flagged as drift by setup check,
+        # and will be overwritten if you re-run setup action with --force.
         true
     # __STATIC_WEBSITE_BUILD_END__
     - id: tailor-apply

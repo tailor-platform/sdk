@@ -438,6 +438,29 @@ type Decision =
   | { action: "restore" }
   | { action: "conflict"; reason: string };
 
+// Matches the user-editable run: body under the build-site step. Used to
+// normalise the content before hashing so that custom build commands do not
+// trigger false hand-edit drift.
+const BUILD_SITE_RUN_RE =
+  /([ \t]*- id: build-site\n[ \t]+shell: bash\n[ \t]+run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/;
+
+/**
+ * Strip the mutable run: body of the build-site step before hashing.
+ * When hasStaticWebsites is true the step is present; users are expected to
+ * replace the placeholder command with their actual build command.  We only
+ * hash the structural parts (step id, shell declaration, run: key) so that
+ * editing the build command does not look like unintended drift.
+ * When hasStaticWebsites is false the step is absent, so the regex is a no-op.
+ * @param content - Raw action workflow content
+ * @returns Normalised content with the build-site run body replaced by a placeholder
+ */
+export function normalizeActionContent(content: string): string {
+  return content.replace(
+    BUILD_SITE_RUN_RE,
+    (_, header, _body, tail) => `${header}\n        true${tail}`,
+  );
+}
+
 /**
  * Decide how to reconcile a target with the on-disk file and lock state.
  * @param obj - Decision inputs
@@ -445,6 +468,7 @@ type Decision =
  * @param obj.fileExists - Whether the workflow file is present on disk
  * @param obj.currentContent - On-disk content when present
  * @param obj.force - Whether --force was passed
+ * @param obj.normalize - Optional content normaliser applied before hashing
  * @returns The reconciliation action
  */
 export function decideAction(obj: {
@@ -452,8 +476,9 @@ export function decideAction(obj: {
   fileExists: boolean;
   currentContent: string | null;
   force: boolean;
+  normalize?: (content: string) => string;
 }): Decision {
-  const { existing, fileExists, currentContent, force } = obj;
+  const { existing, fileExists, currentContent, force, normalize } = obj;
 
   if (!existing) {
     if (!fileExists) return { action: "create" };
@@ -468,8 +493,11 @@ export function decideAction(obj: {
 
   // Lock has this target.
   if (!fileExists) return { action: "restore" };
-  if (currentContent !== null && hashContent(currentContent) === existing.contentHash) {
-    return { action: "regenerate" };
+  if (currentContent !== null) {
+    const normalizedContent = normalize ? normalize(currentContent) : currentContent;
+    if (hashContent(normalizedContent) === existing.contentHash) {
+      return { action: "regenerate" };
+    }
   }
   if (force) return { action: "regenerate" };
   return {
@@ -562,11 +590,13 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   const fileExists = fs.existsSync(absFile);
   const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
 
+  const normalize = resolved.kind === "action" ? normalizeActionContent : undefined;
   const decision = decideAction({
     existing,
     fileExists,
     currentContent,
     force: options.force,
+    normalize,
   });
 
   if (decision.action === "conflict") {
@@ -596,7 +626,9 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     inputs: resolved.inputs,
     generatedIds: resolved.render.generatedIds,
     ejectedIds: existing?.ejectedIds ?? [],
-    contentHash: hashContent(resolved.render.content),
+    contentHash: hashContent(
+      normalize ? normalize(resolved.render.content) : resolved.render.content,
+    ),
   };
 
   // Replace in place to keep the lock diff minimal when re-running setup for
