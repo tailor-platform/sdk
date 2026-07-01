@@ -33,7 +33,7 @@ import {
   type ResolverServiceInput,
   type WorkflowServiceConfig,
 } from "#/configure/config/types";
-import { type AuthConfig, type AuthOwnConfig } from "#/configure/services/auth/types";
+import { type AuthConfig } from "#/configure/services/auth/types";
 import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
@@ -192,13 +192,6 @@ type DefineAuthResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function stripAuthConnectionTokenHelper(config: AuthOwnConfig): AuthOwnConfig {
-  const configWithConnectionToken = config as AuthOwnConfig & { getConnectionToken?: unknown };
-  if (typeof configWithConnectionToken.getConnectionToken !== "function") return config;
-  const { getConnectionToken: _getConnectionToken, ...authConfig } = configWithConnectionToken;
-  return authConfig as AuthOwnConfig;
-}
-
 function defineAuth(
   config: AuthConfig | undefined,
   tailorDBServices: ReadonlyArray<TailorDBService>,
@@ -213,7 +206,7 @@ function defineAuth(
   let authService: AuthService | undefined;
   if (!("external" in config)) {
     authService = createAuthService(
-      AuthConfigSchema.parse(stripAuthConnectionTokenHelper(config)),
+      AuthConfigSchema.parse(config),
       tailorDBServices,
       externalTailorDBNamespaces,
     );
