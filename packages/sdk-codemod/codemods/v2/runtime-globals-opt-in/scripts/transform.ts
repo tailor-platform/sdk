@@ -87,8 +87,12 @@ function quickFilter(source: string): boolean {
   return source.includes(TAILOR_IDP_CLIENT);
 }
 
+function looksLikeJsx(source: string): boolean {
+  return source.includes("</") || /<[A-Z][\w.:]*(?:\s[^<>]*)?\/>/.test(source);
+}
+
 function sourceLang(filePath: string, source: string): Lang {
-  return filePath.endsWith(".tsx") || filePath.endsWith(".jsx") || source.includes("</")
+  return filePath.endsWith(".tsx") || filePath.endsWith(".jsx") || looksLikeJsx(source)
     ? Lang.Tsx
     : Lang.TypeScript;
 }
@@ -608,6 +612,9 @@ function ancestorHasValueBinding(node: SgNode, name: string): boolean {
 function isInTypeOnlyExportStatement(node: SgNode): boolean {
   let current = node.parent();
   while (current) {
+    if (current.kind() === "export_specifier") {
+      if (current.children().some((child) => child.kind() === "type")) return true;
+    }
     if (current.kind() === "export_statement") {
       return current.children().some((child) => child.kind() === "type");
     }

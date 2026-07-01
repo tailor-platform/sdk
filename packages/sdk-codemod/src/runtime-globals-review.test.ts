@@ -481,6 +481,17 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report local per-specifier type-only export clauses", async () => {
+    await writeProjectFile(
+      "resolvers/export-local-specifier-type.ts",
+      ["type TailorErrors = Error;", "export { type TailorErrors };", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports runtime globals inside classic for loop bodies", async () => {
     await writeProjectFile(
       "resolvers/for-body.ts",
@@ -527,6 +538,30 @@ describe("runtime-globals-opt-in review findings", () => {
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
 
     expect(result.llmReviews).toEqual([]);
+  });
+
+  test("reports runtime globals inside self-closing JSX in js files", async () => {
+    await writeProjectFile(
+      "components/view.js",
+      ["export const view = <Foo value={tailor.idp.Client} />;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["components/view.js"],
+        findings: [
+          expect.objectContaining({
+            file: "components/view.js",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "export const view = <Foo value={tailor.idp.Client} />;",
+          }),
+        ],
+      }),
+    ]);
   });
 
   test("reports runtime globals inside destructuring defaults", async () => {
