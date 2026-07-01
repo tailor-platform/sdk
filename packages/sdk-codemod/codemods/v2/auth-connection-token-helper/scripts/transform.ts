@@ -264,8 +264,7 @@ function localDeclarationNames(root: SgNode): Set<string> {
   return names;
 }
 
-function hasRuntimeImportCollision(root: SgNode, imports: SgNode[]): boolean {
-  const localNames = localDeclarationNames(root);
+function hasRuntimeImportCollision(localNames: Set<string>, imports: SgNode[]): boolean {
   if (localNames.has(AUTHCONNECTION)) return true;
 
   return imports.some((importStmt) =>
@@ -282,8 +281,8 @@ function hasRuntimeImportCollision(root: SgNode, imports: SgNode[]): boolean {
   );
 }
 
-function hasRuntimeReferenceShadow(root: SgNode, runtimeRef: string): boolean {
-  return localDeclarationNames(root).has(runtimeRef.split(".")[0]!);
+function hasRuntimeReferenceShadow(localNames: Set<string>, runtimeRef: string): boolean {
+  return localNames.has(runtimeRef.split(".")[0]!);
 }
 
 function findAuthConnectionTokenCalls(root: SgNode, authLocalNames: Set<string>): TokenCall[] {
@@ -458,7 +457,10 @@ function normalizeSource(source: string): string {
 
 function transformParsed(source: string, root: SgNode): string | null {
   const imports = findImportStatements(root);
-  const authBindings = findTailorConfigAuthBindings(imports);
+  const localNames = localDeclarationNames(root);
+  const authBindings = findTailorConfigAuthBindings(imports).filter(
+    (binding) => !localNames.has(binding.localName),
+  );
   if (authBindings.length === 0) return null;
 
   const authLocalNames = new Set(authBindings.map((binding) => binding.localName));
@@ -466,8 +468,8 @@ function transformParsed(source: string, root: SgNode): string | null {
   if (calls.length === 0) return null;
 
   const existingRuntimeRef = runtimeAuthconnectionReference(imports);
-  if (!existingRuntimeRef && hasRuntimeImportCollision(root, imports)) return null;
-  if (existingRuntimeRef && hasRuntimeReferenceShadow(root, existingRuntimeRef)) return null;
+  if (!existingRuntimeRef && hasRuntimeImportCollision(localNames, imports)) return null;
+  if (existingRuntimeRef && hasRuntimeReferenceShadow(localNames, existingRuntimeRef)) return null;
 
   const runtimeRef = existingRuntimeRef ?? AUTHCONNECTION;
   const edits: Edit[] = calls.map((call) => call.objectNode.replace(runtimeRef));
