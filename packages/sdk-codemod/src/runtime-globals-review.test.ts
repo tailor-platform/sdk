@@ -465,6 +465,17 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("does not report type-only namespace import qualified types", async () => {
+    await writeProjectFile(
+      "resolvers/type-namespace-import.ts",
+      ['import type * as tailor from "./types";', "type User = tailor.idp.User;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports runtime globals outside type signature parameters", async () => {
     await writeProjectFile(
       "resolvers/type-signature-parameter.ts",

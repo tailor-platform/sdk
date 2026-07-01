@@ -699,9 +699,20 @@ function isInTypeOnlyExportStatement(node: SgNode): boolean {
   return false;
 }
 
+function hasAncestorKind(node: SgNode, kind: string): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === kind) return true;
+    current = current.parent();
+  }
+  return false;
+}
+
 function reviewNodeBindingNamespace(node: SgNode): BindingNamespace {
   if (node.kind() === "identifier" && isInTypeOnlyExportStatement(node)) return "type";
-  return node.kind() === "nested_type_identifier" || node.kind() === "type_identifier"
+  return node.kind() === "nested_type_identifier" ||
+    node.kind() === "type_identifier" ||
+    hasAncestorKind(node, "nested_type_identifier")
     ? "type"
     : "value";
 }
