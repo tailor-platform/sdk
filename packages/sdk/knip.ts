@@ -1,8 +1,7 @@
-import { entry } from "./tsdown.config";
+import { entry } from "./scripts/build-entries.mjs";
 import type { KnipConfig } from "knip";
 
-// knip's tsdown plugin can't statically read the entry list from this
-// multi-config tsdown setup, so import the build entries directly.
+// Share the build entry list with tsdown and the declaration build script.
 export default {
   ignoreExportsUsedInFile: true,
   tags: ["-lintignore"],
