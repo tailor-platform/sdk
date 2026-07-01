@@ -464,6 +464,39 @@ export const allCodemods: CodemodPackage[] = [
     ],
   },
   {
+    id: "v2/auth-connection-token-helper",
+    name: "auth.getConnectionToken() → runtime authconnection",
+    description:
+      "The deprecated `auth.getConnectionToken()` helper returned by `defineAuth()` is removed in v2. Use `authconnection.getConnectionToken(...)` from `@tailor-platform/sdk/runtime` in resolvers, executors, and workflows instead.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [/\bauth\s*\.\s*getConnectionToken\s*\(/],
+    examples: [
+      {
+        before:
+          'import { auth } from "../tailor.config";\n\nconst token = await auth.getConnectionToken("google");',
+        after:
+          'import { authconnection } from "@tailor-platform/sdk/runtime";\n\nconst token = await authconnection.getConnectionToken("google");',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2 the auth.getConnectionToken() helper returned by defineAuth()",
+      "is removed. Runtime code should call authconnection.getConnectionToken(...) from",
+      "@tailor-platform/sdk/runtime instead of importing auth from tailor.config.ts.",
+      "",
+      "For each auth.getConnectionToken(<expr>) call:",
+      "1. Replace it with authconnection.getConnectionToken(<expr>).",
+      '2. Add or reuse `import { authconnection } from "@tailor-platform/sdk/runtime"`.',
+      "3. Remove the auth import from tailor.config.ts only when no other auth reference",
+      "   remains in the file.",
+      "",
+      "Leave existing tailor.authconnection.getConnectionToken(...) or runtime",
+      "authconnection.getConnectionToken(...) calls unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v2/tailordb-namespace",
     name: "Tailordb → tailordb (lowercase ambient namespace)",
     description:

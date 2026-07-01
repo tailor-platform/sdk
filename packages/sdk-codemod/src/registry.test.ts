@@ -286,4 +286,21 @@ describe("getApplicableCodemods", () => {
       expect.arrayContaining(["openDownloadStream", "openFileDownloadStream"]),
     );
   });
+
+  test("auth connection token helper review is scoped to deprecated helper calls", () => {
+    const codemod = getApplicableCodemods("1.67.1", "2.0.0-next.2").find(
+      (entry) => entry.id === "v2/auth-connection-token-helper",
+    );
+    const pattern = codemod?.suspiciousPatterns?.[0];
+
+    expect(codemod?.scriptPath).toBeUndefined();
+    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
+    expect(pattern).toBeInstanceOf(RegExp);
+    expect((pattern as RegExp).test('await auth.getConnectionToken("google")')).toBe(true);
+    expect((pattern as RegExp).test('await auth . getConnectionToken("google")')).toBe(true);
+    expect((pattern as RegExp).test('await authconnection.getConnectionToken("google")')).toBe(
+      false,
+    );
+    expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime");
+  });
 });
