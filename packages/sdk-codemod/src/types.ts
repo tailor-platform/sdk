@@ -60,6 +60,13 @@ export interface CodemodPackage {
    */
   sourceStringLegacyPatterns?: CodemodPatternGroup[];
   /**
+   * Patterns to detect only inside comments and JSX text of source files after
+   * a transform runs. Use this for source text that is intentionally masked
+   * from generic residual matching, but still contains user-facing command
+   * examples that need a manual follow-up warning.
+   */
+  sourceTextLegacyPatterns?: CodemodPatternGroup[];
+  /**
    * Patterns that, when present in a file's post-transform content, mark it
    * as a candidate for LLM-assisted review. Use this for migrations the
    * deterministic transform cannot safely complete on its own (e.g. a value

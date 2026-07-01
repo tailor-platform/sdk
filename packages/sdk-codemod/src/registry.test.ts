@@ -1,3 +1,4 @@
+import picomatch from "picomatch";
 import { describe, expect, test } from "vitest";
 import { allCodemods, getApplicableCodemods } from "./registry";
 
@@ -130,6 +131,36 @@ describe("getApplicableCodemods", () => {
     expect(envVarRename?.sourceStringLegacyPatterns).toEqual(
       expect.arrayContaining(["PLATFORM_URL", "PLATFORM_OAUTH2_CLIENT_ID", "LOG_LEVEL"]),
     );
+  });
+
+  test("rename-bin scans source files and declaration comments", () => {
+    const sourcePattern = "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}";
+    const renameBin = getApplicableCodemods("1.67.1", "2.0.0").find(
+      (codemod) => codemod.id === "v2/rename-bin",
+    );
+
+    expect(renameBin?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
+    expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(3);
+    expect(renameBin?.sourceTextLegacyPatterns).toHaveLength(3);
+    const sourceStringPatterns = renameBin?.sourceStringLegacyPatterns as RegExp[];
+    const matchesSourceStringPattern = (value: string) =>
+      sourceStringPatterns.some((pattern) => pattern.test(value));
+    expect(matchesSourceStringPattern("tailor-sdk deploy")).toBe(true);
+    expect(matchesSourceStringPattern("tailor-sdk apply")).toBe(true);
+    expect(matchesSourceStringPattern('sh -c "tailor-sdk apply"')).toBe(true);
+    expect(matchesSourceStringPattern('bash -lc "tailor-sdk crash-report list"')).toBe(true);
+    expect(matchesSourceStringPattern('Run "tailor-sdk crash-report list" manually')).toBe(true);
+    expect(matchesSourceStringPattern("tailor-sdk.cmd crash-report list")).toBe(true);
+    expect(matchesSourceStringPattern("tailor --profile tailor-sdk deploy")).toBe(false);
+    expect(matchesSourceStringPattern("tailor --name   tailor-sdk deploy")).toBe(false);
+    expect(matchesSourceStringPattern('tailor --arg "tailor-sdk deploy" deploy')).toBe(false);
+    expect(matchesSourceStringPattern('tailor --arg "tailor-sdk apply" deploy')).toBe(false);
+    expect(matchesSourceStringPattern("tailor --name 'tailor-sdk crash-report list' deploy")).toBe(
+      false,
+    );
+    const matches = picomatch(renameBin?.filePatterns ?? [], { dot: true });
+    expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
+    expect(matches("tailor.d.ts")).toBe(true);
   });
 
   test("flags source files for runtime globals review", () => {
