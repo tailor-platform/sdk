@@ -11,6 +11,7 @@ const inputHandlersSchema = z
     patch: functionSchema.optional().describe("Handler for PATCH requests"),
     delete: functionSchema.optional().describe("Handler for DELETE requests"),
   })
+
   .refine(
     // optional fields become undefined after zod parses them
     // oxlint-disable-next-line typescript/no-unnecessary-condition
@@ -44,4 +45,5 @@ export const HttpAdapterConfigSchema = z
       .optional()
       .describe("Function that transforms GraphQL response to HTTP response"),
   })
+
   .brand("HttpAdapterConfig");

@@ -25,8 +25,7 @@ function normalizeGqlOperations(
 export const GqlOperationsSchema = z
   .union([
     z.literal("query"),
-    // strip unknown keys
-    z.object({
+    z.strictObject({
       create: z.boolean().optional().describe("Enable create mutation (default: true)"),
       update: z.boolean().optional().describe("Enable update mutation (default: true)"),
       delete: z.boolean().optional().describe("Enable delete mutation (default: true)"),
@@ -55,14 +54,12 @@ const TailorFieldTypeSchema = z.enum([
   "nested",
 ]);
 
-// strip unknown keys
-const AllowedValueSchema = z.object({
+const AllowedValueSchema = z.strictObject({
   value: z.string(),
   description: z.string().optional(),
 });
 
-// strip unknown keys
-export const DBFieldMetadataSchema = z.object({
+export const DBFieldMetadataSchema = z.strictObject({
   required: z.boolean().optional().describe("Whether the field is required"),
   array: z.boolean().optional().describe("Whether the field is an array"),
   description: z.string().optional().describe("Field description"),
@@ -77,9 +74,8 @@ export const DBFieldMetadataSchema = z.object({
   foreignKey: z.boolean().optional().describe("Whether the field is a foreign key"),
   foreignKeyType: z.string().optional().describe("Target type name for foreign key relations"),
   foreignKeyField: z.string().optional().describe("Target field name for foreign key relations"),
-  // strip unknown keys
   hooks: z
-    .object({
+    .strictObject({
       create: functionSchema.optional().describe("Hook function called on record creation"),
       update: functionSchema.optional().describe("Hook function called on record update"),
     })
@@ -89,9 +85,8 @@ export const DBFieldMetadataSchema = z.object({
     .array(z.union([functionSchema, z.tuple([functionSchema, z.string()])]))
     .optional()
     .describe("Validation functions for the field"),
-  // strip unknown keys
   serial: z
-    .object({
+    .strictObject({
       start: z.number().describe("Starting value for the serial sequence"),
       maxValue: z.number().optional().describe("Maximum value for the serial sequence"),
       format: z.string().optional().describe("Format string for serial value (string type only)"),
@@ -109,11 +104,9 @@ export const DBFieldMetadataSchema = z.object({
 
 const RelationTypeSchema = z.enum(relationTypesKeys);
 
-// strip unknown keys
-export const RawRelationConfigSchema = z.object({
+export const RawRelationConfigSchema = z.strictObject({
   type: RelationTypeSchema.describe("Relation cardinality type"),
-  // strip unknown keys
-  toward: z.object({
+  toward: z.strictObject({
     type: z.string().describe("Target type name, or 'self' for self-relations"),
     as: z.string().optional().describe("Custom forward relation name"),
     key: z.string().optional().describe("Target field to join on (default: 'id')"),
@@ -135,8 +128,7 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
  * Schema for TailorDB type settings.
  * Normalizes gqlOperations from alias ("query") to object format.
  */
-// strip unknown keys
-export const TailorDBTypeSettingsSchema = z.object({
+export const TailorDBTypeSettingsSchema = z.strictObject({
   pluralForm: z.string().optional().describe("Custom plural form of the type name for GraphQL"),
   aggregation: z.boolean().optional().describe("Enable aggregation queries for this type"),
   bulkUpsert: z.boolean().optional().describe("Enable bulk upsert mutation for this type"),
@@ -178,12 +170,9 @@ const GqlPermissionOperandSchema = z.union(
 
 const RecordPermissionOperandSchema = z.union([
   GqlPermissionOperandSchema,
-  // strip unknown keys
-  z.object({ record: z.string() }),
-  // strip unknown keys
-  z.object({ oldRecord: z.string() }),
-  // strip unknown keys
-  z.object({ newRecord: z.string() }),
+  z.strictObject({ record: z.string() }),
+  z.strictObject({ oldRecord: z.string() }),
+  z.strictObject({ newRecord: z.string() }),
 ]);
 
 const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in", "hasAny", "not hasAny"]);
@@ -198,8 +187,7 @@ const GqlPermissionConditionSchema = z
 
 const ActionPermissionSchema = z.union([
   // Object format: { conditions, description?, permit? }
-  // strip unknown keys
-  z.object({
+  z.strictObject({
     conditions: z.union([
       RecordPermissionConditionSchema,
       z.array(RecordPermissionConditionSchema).readonly(),
@@ -242,19 +230,16 @@ const GqlPermissionActionSchema = z.enum([
   "bulkUpsert",
 ]);
 
-// strip unknown keys
-const GqlPermissionPolicySchema = z.object({
+const GqlPermissionPolicySchema = z.strictObject({
   conditions: z.array(GqlPermissionConditionSchema).readonly(),
   actions: z.union([z.literal("all"), z.array(GqlPermissionActionSchema).readonly()]),
   permit: z.boolean().optional(),
   description: z.string().optional(),
 });
 
-// strip unknown keys
-export const RawPermissionsSchema = z.object({
-  // strip unknown keys
+export const RawPermissionsSchema = z.strictObject({
   record: z
-    .object({
+    .strictObject({
       create: z.array(ActionPermissionSchema).readonly(),
       read: z.array(ActionPermissionSchema).readonly(),
       update: z.array(ActionPermissionSchema).readonly(),
@@ -264,32 +249,31 @@ export const RawPermissionsSchema = z.object({
   gql: z.array(GqlPermissionPolicySchema).readonly().optional(),
 });
 
-// strip unknown keys
-export const TailorDBTypeSchema = z.object({
+export const TailorDBTypeSchema = z.strictObject({
   name: z.string(),
   fields: z.record(z.string(), TailorDBFieldSchema),
-  // strip unknown keys
-  metadata: z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    settings: TailorDBTypeSettingsSchema.optional(),
-    permissions: RawPermissionsSchema,
-    files: z.record(z.string(), z.string()),
-    indexes: z
-      .record(
-        z.string(),
-        // strip unknown keys
-        z.object({
-          fields: z.array(z.string()),
-          unique: z.boolean().optional(),
-        }),
-      )
-      .optional(),
-  }),
+  // oxlint-disable-next-line zod/prefer-strict-object, tailor-zod/require-object-policy-comment -- Keep z.object().strict() so zinfer preserves the RawPermissions alias in generated types.
+  metadata: z
+    .object({
+      name: z.string(),
+      description: z.string().optional(),
+      settings: TailorDBTypeSettingsSchema.optional(),
+      permissions: RawPermissionsSchema,
+      files: z.record(z.string(), z.string()),
+      indexes: z
+        .record(
+          z.string(),
+          z.strictObject({
+            fields: z.array(z.string()),
+            unique: z.boolean().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .strict(),
 });
 
-// strip unknown keys
-const TailorDBMigrationConfigSchema = z.object({
+const TailorDBMigrationConfigSchema = z.strictObject({
   directory: z.string().describe("Directory containing migration files"),
   machineUser: z.string().optional().describe("Machine user name for migration execution"),
 });
@@ -298,8 +282,7 @@ const TailorDBMigrationConfigSchema = z.object({
  * Schema for TailorDB service configuration.
  * Normalizes gqlOperations from alias ("query") to object format.
  */
-// strip unknown keys
-export const TailorDBServiceConfigSchema = z.object({
+export const TailorDBServiceConfigSchema = z.strictObject({
   files: z.array(z.string()).describe("Glob patterns for TailorDB type definition files"),
   ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from type discovery"),
   erdSite: z.string().optional().describe("URL for the ERD (Entity Relationship Diagram) site"),

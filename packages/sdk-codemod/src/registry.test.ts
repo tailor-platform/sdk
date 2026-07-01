@@ -1,3 +1,4 @@
+import picomatch from "picomatch";
 import { describe, expect, test } from "vitest";
 import { allCodemods, getApplicableCodemods } from "./registry";
 
@@ -8,8 +9,85 @@ describe("getApplicableCodemods", () => {
     expect(codemods[0]!.id).toBe("v2/define-generators-to-plugins");
   });
 
+  test("returns all v2 codemods when upgrading to the stable boundary", () => {
+    expect(getApplicableCodemods("1.67.1", "2.0.0").map((codemod) => codemod.id)).toEqual(
+      allCodemods.map((codemod) => codemod.id),
+    );
+  });
+
+  test("returns codemods when upgrading to a prerelease at their version boundary", () => {
+    const prereleaseCodemods = getApplicableCodemods("1.67.1", "2.0.0-next.2");
+    const prereleaseIds = prereleaseCodemods.map((codemod) => codemod.id);
+
+    expect(prereleaseIds).toEqual(
+      allCodemods
+        .filter(
+          (codemod) =>
+            codemod.prereleaseUntil === "2.0.0-next.1" ||
+            codemod.prereleaseUntil === "2.0.0-next.2",
+        )
+        .map((codemod) => codemod.id),
+    );
+    expect(prereleaseIds).not.toContain("v2/auth-attributes-rename");
+    expect(prereleaseIds).not.toContain("v2/env-var-rename");
+    expect(prereleaseIds).not.toContain("v2/rename-bin");
+    expect(prereleaseIds).not.toContain("v2/node-minimum-22-15-0");
+  });
+
   test("returns empty when both versions are before the codemod boundary", () => {
     expect(getApplicableCodemods("1.0.0", "1.5.0")).toEqual([]);
+  });
+
+  test("uses each codemod's prerelease boundary", () => {
+    const ids = getApplicableCodemods("1.67.1", "2.0.0-next.1").map((codemod) => codemod.id);
+    const authInvokerCallUnwrap = getApplicableCodemods("1.67.1", "2.0.0-next.1").find(
+      (codemod) => codemod.id === "v2/auth-invoker-call-unwrap",
+    );
+
+    expect(ids).toContain("v2/test-run-arg-input");
+    expect(ids).toContain("v2/auth-invoker-call-unwrap");
+    expect(authInvokerCallUnwrap?.suspiciousPatterns).toEqual(["auth.invoker"]);
+    expect(authInvokerCallUnwrap?.reviewSupersededBy).toEqual(["v2/auth-invoker-unwrap"]);
+    expect(ids).not.toContain("v2/execute-script-arg");
+    expect(ids).not.toContain("v2/principal-unify");
+  });
+
+  test("throws when a prerelease boundary is not a prerelease version", () => {
+    allCodemods.push({
+      id: "v2/invalid-prerelease-boundary",
+      name: "Invalid prerelease boundary",
+      description: "Invalid prerelease boundary",
+      since: "1.0.0",
+      until: "2.0.0",
+      prereleaseUntil: "2.0.0",
+    });
+
+    try {
+      expect(() => getApplicableCodemods("1.0.0", "2.0.0-next.1")).toThrow(
+        "Codemod v2/invalid-prerelease-boundary prereleaseUntil must be a prerelease version: 2.0.0",
+      );
+    } finally {
+      allCodemods.pop();
+    }
+  });
+
+  test("returns empty when the source prerelease already reached the codemod boundary", () => {
+    expect(getApplicableCodemods("2.0.0-next.2", "2.0.0-next.2")).toEqual([]);
+  });
+
+  test("runs stable-only codemods when upgrading from a prerelease to stable", () => {
+    const ids = getApplicableCodemods("2.0.0-next.2", "2.0.0").map((codemod) => codemod.id);
+
+    expect(ids).toContain("v2/auth-attributes-rename");
+    expect(ids).toContain("v2/env-var-rename");
+    expect(ids).toContain("v2/rename-bin");
+    expect(ids).toContain("v2/node-minimum-22-15-0");
+    expect(ids).not.toContain("v2/principal-unify");
+    expect(ids).not.toContain("v2/auth-invoker-unwrap");
+  });
+
+  test("returns empty when the target prerelease is before the codemod boundary", () => {
+    expect(getApplicableCodemods("1.67.1", "1.99.0-next.1")).toEqual([]);
   });
 
   test("returns empty when both versions are after the codemod boundary", () => {
@@ -55,18 +133,121 @@ describe("getApplicableCodemods", () => {
     );
   });
 
-  test("flags CommonJS TypeScript files for runtime globals review", () => {
+  test("rename-bin scans source files and declaration comments", () => {
+    const sourcePattern = "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}";
+    const renameBin = getApplicableCodemods("1.67.1", "2.0.0").find(
+      (codemod) => codemod.id === "v2/rename-bin",
+    );
+
+    expect(renameBin?.filePatterns).toEqual(expect.arrayContaining([sourcePattern]));
+    expect(renameBin?.sourceStringLegacyPatterns).toHaveLength(3);
+    expect(renameBin?.sourceTextLegacyPatterns).toHaveLength(3);
+    const sourceStringPatterns = renameBin?.sourceStringLegacyPatterns as RegExp[];
+    const matchesSourceStringPattern = (value: string) =>
+      sourceStringPatterns.some((pattern) => pattern.test(value));
+    expect(matchesSourceStringPattern("tailor-sdk deploy")).toBe(true);
+    expect(matchesSourceStringPattern("tailor-sdk apply")).toBe(true);
+    expect(matchesSourceStringPattern('sh -c "tailor-sdk apply"')).toBe(true);
+    expect(matchesSourceStringPattern('bash -lc "tailor-sdk crash-report list"')).toBe(true);
+    expect(matchesSourceStringPattern('Run "tailor-sdk crash-report list" manually')).toBe(true);
+    expect(matchesSourceStringPattern("tailor-sdk.cmd crash-report list")).toBe(true);
+    expect(matchesSourceStringPattern("tailor --profile tailor-sdk deploy")).toBe(false);
+    expect(matchesSourceStringPattern("tailor --name   tailor-sdk deploy")).toBe(false);
+    expect(matchesSourceStringPattern('tailor --arg "tailor-sdk deploy" deploy')).toBe(false);
+    expect(matchesSourceStringPattern('tailor --arg "tailor-sdk apply" deploy')).toBe(false);
+    expect(matchesSourceStringPattern("tailor --name 'tailor-sdk crash-report list' deploy")).toBe(
+      false,
+    );
+    const matches = picomatch(renameBin?.filePatterns ?? [], { dot: true });
+    expect(matches("packages/app/frontend/e2e/global-setup.ts")).toBe(true);
+    expect(matches("tailor.d.ts")).toBe(true);
+  });
+
+  test("flags source files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
-    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts}");
+    expect(codemod?.scriptPath).toBe("v2/runtime-globals-opt-in/scripts/transform.js");
+    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
     expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
+    expect(codemod?.suspiciousPatterns).toContain("tailor.secretmanager");
+    expect(codemod?.suspiciousPatterns).toContain("tailor.authconnection");
+    expect(codemod?.sourceStringSuspiciousPatterns).toContain("new tailor.idp.Client");
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const C = tailor.idp.Client;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("await tailor.secretmanager.getSecret();"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("const { getSecret } = tailor.secretmanager;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp &&
+          pattern.test("const getInvoker = tailor.context.getInvoker;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const { upload } = tailordb.file;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const e: TailorErrors = err;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("type U = Promise<tailor.idp.User>;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("type Ctor = typeof tailordb.Client;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("return tailordb.Client;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("foo(tailordb.Client);"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("type F = () => tailordb.QueryResult<User>;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp &&
+          pattern.test("type R = Promise<tailordb.QueryResult<User>>;"),
+      ),
+    ).toBe(true);
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 
   test("leads runtime globals migration with the typed wrappers", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
 
-    expect(codemod?.prompt).toContain('import { idp } from "@tailor-platform/sdk/runtime"');
+    expect(codemod?.prompt).toContain("new idp.Client(...)");
     expect(codemod?.examples?.[0]?.after).toContain(
       'import { idp } from "@tailor-platform/sdk/runtime"',
     );
