@@ -110,7 +110,7 @@ interface SecretCall {
 }
 
 interface AuthConnectionCall {
-  connectionName: string;
+  connectionName: ConnectionName;
 }
 
 interface IdpCall {
