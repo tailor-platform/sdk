@@ -26,19 +26,7 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-vi.mock("./change-set", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  const createChangeSet = original.createChangeSet as (title: string) => {
-    print: () => void;
-  };
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...createChangeSet(title),
-      print: () => {},
-    }),
-  };
-});
+vi.mock("./change-set", async (importOriginal) => importOriginal());
 
 const workspaceId = "test-workspace";
 const appName = "test-app";

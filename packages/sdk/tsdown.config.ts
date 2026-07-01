@@ -74,10 +74,10 @@ export default defineConfig({
     dts: ".d.mts",
   }),
   // peer dependencies: prevent bundling, resolve at runtime.
-  // `@tailor-platform/sdk` (self-name) is kept external so the `./cli` entry's
-  // types reference `MachineUserName`/`MachineUserNameRegistry` from the main
-  // entry instead of inlining them, letting a single
-  // `declare module "@tailor-platform/sdk"` augmentation narrow both entries.
+  // `@tailor-platform/sdk` (self-name) is kept external so subpath entries can reference
+  // types like `ConnectionName`/`MachineUserName` from the main entry instead of inlining
+  // them, letting a single `declare module "@tailor-platform/sdk"` augmentation narrow
+  // every entry point.
   deps: { neverBundle: ["vite", "vitest", /^@tailor-platform\/sdk$/] },
   sourcemap: true,
   plugins,

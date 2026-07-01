@@ -6,7 +6,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 2;
+export const TEMPLATE_VERSION = 5;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -28,6 +28,7 @@ export type RenderBranchParams = {
   environment: string;
   packageManager: PackageManager;
   plan: boolean;
+  erdPreview: { namespaces: string[] } | null;
 };
 
 export type RenderTagParams = {
@@ -109,7 +110,8 @@ function applyCommon(
   return out
     .replaceAll("__WORKSPACE_NAME__", () => params.workspaceName)
     .replaceAll("__ENVIRONMENT__", () => environment)
-    .replaceAll("__PACKAGE_MANAGER__", () => packageManager);
+    .replaceAll("__PACKAGE_MANAGER__", () => packageManager)
+    .replaceAll("__APP_DIR__", () => workingDirectory ?? ".");
 }
 
 /**
@@ -123,9 +125,12 @@ function applyCommon(
  */
 export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   const { branch, plan } = params;
+  const erdPreview = plan ? params.erdPreview : null;
 
   let out = branchTemplate;
   out = block(out, "PLAN_JOB", plan);
+  out = block(out, "ERD_PREVIEW_JOB", erdPreview !== null);
+  out = block(out, "ERD_PREVIEW_COMMENT_JOB", erdPreview !== null);
   out = block(out, "PULL_REQUEST", plan);
   out = block(out, "DISPATCH_INPUTS", plan);
   // With no plan there is no PR/dry-run path, so the deploy job always runs.
@@ -152,6 +157,29 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-plan/tailor-setup",
       "tailor-plan/tailor-generate-check",
       "tailor-plan/tailor-plan",
+    );
+  }
+  if (erdPreview) {
+    generatedIds.push(
+      "tailor-erd-preview-matrix",
+      "tailor-erd-preview-matrix/tailor-checkout",
+      "tailor-erd-preview-matrix/tailor-checkout-base",
+      "tailor-erd-preview-matrix/tailor-erd-preview-matrix",
+      "tailor-erd-preview",
+      "tailor-erd-preview/tailor-checkout",
+      "tailor-erd-preview/tailor-setup",
+      "tailor-erd-preview/tailor-checkout-base",
+      "tailor-erd-preview/tailor-detect-base-package-manager",
+      "tailor-erd-preview/tailor-setup-base-pnpm",
+      "tailor-erd-preview/tailor-setup-base-node",
+      "tailor-erd-preview/tailor-setup-base-yarn",
+      "tailor-erd-preview/tailor-setup-base-bun",
+      "tailor-erd-preview/tailor-install-base",
+      "tailor-erd-preview/tailor-restore-head-setup",
+      "tailor-erd-preview/tailor-build-erd-preview",
+      "tailor-erd-preview/tailor-upload-erd-viewer",
+      "tailor-erd-preview-comment",
+      "tailor-erd-preview-comment/tailor-comment-erd-preview",
     );
   }
   generatedIds.push(

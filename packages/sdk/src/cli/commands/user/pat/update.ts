@@ -1,11 +1,9 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import ml from "#/utils/multiline";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
+import { createPatOperatorClient } from "./user";
 
 export const updateCommand = defineAppCommand({
   name: "update",
@@ -22,17 +20,7 @@ export const updateCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable();
-    const config = await readPlatformConfig();
-
-    if (!config.current_user) {
-      throw new Error(ml`
-        No user logged in.
-        Please login first using 'tailor login' command.
-      `);
-    }
-
-    const { accessToken: token } = await fetchLatestToken(config, config.current_user);
-    const client = await initOperatorClient(token);
+    const client = await createPatOperatorClient();
 
     // Delete the existing token
     await client.deletePersonalAccessToken({

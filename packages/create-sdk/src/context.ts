@@ -50,6 +50,7 @@ const validateName = (name: string | undefined) => {
   if (existsSync(resolve(name))) {
     return `Directory "${name}" already exists. Please choose a different project name.`;
   }
+  return undefined;
 };
 
 const validateTemplate = async (template: string) => {
@@ -57,6 +58,7 @@ const validateTemplate = async (template: string) => {
   if (!availables.includes(template)) {
     return `Template "${template}" is not available. Available templates are: ${availables.join(", ")}.`;
   }
+  return undefined;
 };
 
 export const collectContext = async ({ name, template }: Opts): Promise<Context> => {

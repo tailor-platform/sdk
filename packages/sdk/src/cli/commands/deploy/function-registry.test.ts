@@ -39,7 +39,7 @@ vi.mock("./change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -353,7 +353,7 @@ describe("splitFunctionRegistryChanges", () => {
       replaces: [],
       unchanged: [{ name: "workflow--check-inventory" }, { name: "executor--user-created" }],
       isEmpty: () => false,
-      print: () => {},
+      lines: () => [],
     });
 
     expect(workflowJobChanges.creates).toEqual([{ name: "workflow--process-order" }]);
@@ -410,7 +410,7 @@ describe("applyFunctionRegistry phase separation", () => {
         unchanged: [],
         title: "Function registry",
         isEmpty: () => false,
-        print: () => {},
+        lines: () => [],
       },
       conflicts: [],
       unmanaged: [],

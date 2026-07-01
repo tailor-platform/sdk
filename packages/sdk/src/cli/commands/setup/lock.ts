@@ -19,6 +19,8 @@ export type LockInputs = {
   dir: string;
   packageManager: string;
   plan: boolean;
+  erdPreview?: boolean;
+  erdNamespaces?: string[];
 };
 
 export type LockTarget = {

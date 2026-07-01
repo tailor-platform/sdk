@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { logBetaWarning } from "#/cli/shared/beta";
+import { extractOwnedNamespaces } from "#/cli/shared/config";
+import { loadConfig } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import { hashContent, type LockTarget, readLock } from "./lock";
@@ -15,7 +17,8 @@ export type DriftRule =
   | "hand-edit"
   | "template-version"
   | "config-dir"
-  | "default-branch";
+  | "default-branch"
+  | "erd-namespaces";
 
 export type DriftFinding = {
   /** Human label for the target: `<kind> <workspaceName>`. */
@@ -35,6 +38,8 @@ export type TargetState = {
   defaultBranch: string | null;
   /** The template version this SDK build generates. */
   templateVersion: number;
+  /** Current owned TailorDB namespaces for ERD preview checks, or null when unavailable. */
+  erdNamespaces: string[] | null;
 };
 
 /**
@@ -101,6 +106,25 @@ export function findTargetDrift(target: LockTarget, state: TargetState): DriftFi
     });
   }
 
+  if (target.kind === "branch" && target.inputs.erdPreview && state.configExists) {
+    const recorded = [...(target.inputs.erdNamespaces ?? [])].toSorted((a, b) =>
+      a.localeCompare(b),
+    );
+    const current = state.erdNamespaces?.toSorted((a, b) => a.localeCompare(b)) ?? null;
+    if (
+      current === null ||
+      recorded.length !== current.length ||
+      recorded.some((namespace, index) => namespace !== current[index])
+    ) {
+      findings.push({
+        target: id,
+        rule: "erd-namespaces",
+        message:
+          "TailorDB namespaces for ERD preview changed. Re-run setup so the ERD preview matrix is regenerated.",
+      });
+    }
+  }
+
   return findings;
 }
 
@@ -152,7 +176,14 @@ export type CheckGitHubOptions = {
   gitRunner?: GitRunner;
   /** Injectable config-existence probe, for testing. */
   configExistsAt?: (configPath: string) => boolean;
+  /** Injectable TailorDB namespace loader, for testing. Defaults to loading the config. */
+  loadErdNamespaces?: (configPath: string) => Promise<string[]> | string[];
 };
+
+async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
+  const { config } = await loadConfig(configPath);
+  return extractOwnedNamespaces(config);
+}
 
 /**
  * Audit the generated workflows for drift against the current config/repo
@@ -163,7 +194,7 @@ export type CheckGitHubOptions = {
  * (per-rule ignore / continue-on-error); the CLI itself reports via exit code.
  * @param options - Check options
  */
-export function checkGitHub(options: CheckGitHubOptions): void {
+export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   logBetaWarning("setup");
 
   const { outputDir } = options;
@@ -177,6 +208,7 @@ export function checkGitHub(options: CheckGitHubOptions): void {
 
   const exists = options.configExistsAt ?? ((p: string) => fs.existsSync(p));
   const defaultBranch = detectDefaultBranchSafe(outputDir, options.gitRunner);
+  const loadErdNamespaces = options.loadErdNamespaces ?? defaultLoadErdNamespaces;
 
   const findings: DriftFinding[] = [];
   for (const target of lock.targets) {
@@ -186,13 +218,19 @@ export function checkGitHub(options: CheckGitHubOptions): void {
       outputDir,
       path.join(target.inputs.dir, "tailor.config.ts"),
     );
+    const configExists = configAbs !== null && exists(configAbs);
+    const erdNamespaces =
+      target.kind === "branch" && target.inputs.erdPreview && configAbs !== null && configExists
+        ? await loadErdNamespaces(configAbs)
+        : null;
     findings.push(
       ...findTargetDrift(target, {
         fileExists: currentHash !== null,
         currentHash,
-        configExists: configAbs !== null && exists(configAbs),
+        configExists,
         defaultBranch,
         templateVersion: TEMPLATE_VERSION,
+        erdNamespaces,
       }),
     );
   }

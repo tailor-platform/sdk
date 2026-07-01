@@ -49,9 +49,9 @@ import {
   WORKFLOW_PREFIX,
 } from "./function-registry";
 import {
+  buildGroupedDisplayLines,
   extractServiceActions,
   formatChangeSetEntries,
-  printGroupedDisplaySection,
   type GroupedDisplayEntry,
   type NamespaceAction,
 } from "./grouped-display";
@@ -211,7 +211,19 @@ type PlanResults = {
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-function printPlanResults(results: PlanResults) {
+type PrintPlanOptions = {
+  dryRun?: boolean;
+};
+
+/**
+ * Format and output the plan results, then return a summary of change counts.
+ * In JSON dry-run mode a JSON payload is written to stdout. In all other modes
+ * the human-readable diff goes to stdout (dry-run) or stderr (apply).
+ * @param results - Planned results across all services
+ * @param opts - Output options (dry-run mode flag)
+ * @returns Aggregated plan summary counts
+ */
+export function printPlanResults(results: PlanResults, opts?: PrintPlanOptions): PlanSummary {
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
@@ -275,38 +287,14 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf),
   ];
 
-  // Print grouped sections
   const { otherChanges: otherFunctionRegistryChanges } = splitFunctionRegistryChanges(
     results.functionRegistry.changeSet,
-  );
-  printGroupedDisplaySection(
-    results.functionRegistry.changeSet.title,
-    formatChangeSetEntries(otherFunctionRegistryChanges),
   );
   const tailorDBServiceActions = extractServiceActions(results.tailorDB.changeSet.service);
   const pipelineServiceActions = extractServiceActions(results.pipeline.changeSet.service);
   const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
   const authServiceActions = extractServiceActions(results.auth.changeSet.service);
-  results.staticWebsite.changeSet.print();
-  results.staticWebsite.customDomainChangeSet.print();
-  results.aiGateway.changeSet.print();
-  results.app.print();
-  printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
-  printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
-  printGroupedDisplaySection("Executor", executorEntries);
-  printGroupedDisplaySection("Workflow", workflowEntries);
-  printGroupedDisplaySection("IdP", idpEntries, idpServiceActions);
-  printGroupedDisplaySection("Auth", authEntries, authServiceActions);
-  results.secretManager.vaultChangeSet.print();
-  results.secretManager.secretChangeSet.print();
-  if (results.secretManager.skippedSecrets.length > 0) {
-    logger.log(styles.bold("Secret Manager secrets (skipped - no value provided):"));
-    for (const name of results.secretManager.skippedSecrets) {
-      logger.log(`  ${styles.dim("○")} ${name}`);
-    }
-  }
 
-  // Compute summary: count display entries + service actions + non-grouped changesets
   const allDisplayEntries = [
     ...tailorDBEntries,
     ...pipelineEntries,
@@ -322,7 +310,146 @@ function printPlanResults(results: PlanResults) {
     ...authServiceActions,
   ];
   const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
-  logger.log(formatPlanSummary(summary));
+
+  const allUnmanaged = [
+    ...results.functionRegistry.unmanaged,
+    ...results.tailorDB.unmanaged,
+    ...results.staticWebsite.unmanaged,
+    ...results.aiGateway.unmanaged,
+    ...results.idp.unmanaged,
+    ...results.auth.unmanaged,
+    ...results.pipeline.unmanaged,
+    ...results.executor.unmanaged,
+    ...results.workflow.unmanaged,
+    ...results.secretManager.unmanaged,
+  ];
+  const allConflicts = [
+    ...results.functionRegistry.conflicts,
+    ...results.tailorDB.conflicts,
+    ...results.staticWebsite.conflicts,
+    ...results.aiGateway.conflicts,
+    ...results.idp.conflicts,
+    ...results.auth.conflicts,
+    ...results.pipeline.conflicts,
+    ...results.executor.conflicts,
+    ...results.workflow.conflicts,
+    ...results.secretManager.conflicts,
+  ];
+
+  if (logger.jsonMode && opts?.dryRun) {
+    const allEntries = [
+      ...allDisplayEntries,
+      ...tailorDBServiceActions.map(({ action, name }) => ({
+        action,
+        name,
+        labels: ["tailorDB"],
+        namespace: undefined,
+      })),
+      ...pipelineServiceActions.map(({ action, name }) => ({
+        action,
+        name,
+        labels: ["pipeline"],
+        namespace: undefined,
+      })),
+      ...idpServiceActions.map(({ action, name }) => ({
+        action,
+        name,
+        labels: ["idp"],
+        namespace: undefined,
+      })),
+      ...authServiceActions.map(({ action, name }) => ({
+        action,
+        name,
+        labels: ["auth"],
+        namespace: undefined,
+      })),
+      ...formatChangeSetEntries(otherFunctionRegistryChanges),
+      ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
+      ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
+      ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
+      ...formatChangeSetEntries(results.app, ["application"]),
+      ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
+      ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
+    ];
+    const changes = allEntries.map(({ action, name, labels, namespace }) => ({
+      action,
+      name,
+      labels,
+      namespace,
+    }));
+    const warnings = [
+      ...allUnmanaged.map(({ resourceType, resourceName }) => ({
+        type: "unmanaged" as const,
+        resourceType,
+        name: resourceName,
+      })),
+      ...results.secretManager.skippedSecrets.map((name) => ({
+        type: "skippedSecret" as const,
+        resourceType: "secret",
+        name,
+      })),
+    ];
+    const conflicts = allConflicts.map(({ resourceType, resourceName, currentOwner }) => ({
+      resourceType,
+      name: resourceName,
+      currentOwner,
+    }));
+    logger.out({ summary, changes, warnings, conflicts });
+    return summary;
+  }
+
+  const allLines: string[] = [
+    ...buildGroupedDisplayLines(
+      results.functionRegistry.changeSet.title,
+      formatChangeSetEntries(otherFunctionRegistryChanges),
+    ),
+    ...results.staticWebsite.changeSet.lines(),
+    ...results.staticWebsite.customDomainChangeSet.lines(),
+    ...results.aiGateway.changeSet.lines(),
+    ...results.app.lines(),
+    ...buildGroupedDisplayLines("TailorDB", tailorDBEntries, tailorDBServiceActions),
+    ...buildGroupedDisplayLines("Resolver", pipelineEntries, pipelineServiceActions),
+    ...buildGroupedDisplayLines("Executor", executorEntries),
+    ...buildGroupedDisplayLines("Workflow", workflowEntries),
+    ...buildGroupedDisplayLines("IdP", idpEntries, idpServiceActions),
+    ...buildGroupedDisplayLines("Auth", authEntries, authServiceActions),
+    ...results.secretManager.vaultChangeSet.lines(),
+    ...results.secretManager.secretChangeSet.lines(),
+  ];
+
+  if (allUnmanaged.length > 0) {
+    allLines.push(styles.bold("Unmanaged resources (not in config):"));
+    for (const { resourceType, resourceName } of allUnmanaged) {
+      allLines.push(`  ${styles.warning("⚠")} ${styles.bold(resourceType)} "${resourceName}"`);
+    }
+  }
+
+  if (results.secretManager.skippedSecrets.length > 0) {
+    allLines.push(styles.bold("Secret Manager secrets (skipped - no value provided):"));
+    for (const name of results.secretManager.skippedSecrets) {
+      allLines.push(`  ${styles.dim("○")} ${name}`);
+    }
+  }
+
+  if (allConflicts.length > 0) {
+    allLines.push(styles.bold("Owner conflicts (will require confirmation on apply):"));
+    for (const { resourceType, resourceName, currentOwner } of allConflicts) {
+      allLines.push(
+        `  ${styles.warning("!")} ${styles.bold(resourceType)} "${resourceName}" — owned by "${currentOwner}"`,
+      );
+    }
+  }
+
+  allLines.push(formatPlanSummary(summary));
+
+  const output = allLines.join("\n");
+  if (opts?.dryRun) {
+    logger.out(output);
+  } else {
+    logger.log(output);
+  }
+
+  return summary;
 }
 
 /**
@@ -337,13 +464,7 @@ export function summarizePlanResults(
   displayEntries: ReadonlyArray<GroupedDisplayEntry>,
   serviceActions: ReadonlyArray<NamespaceAction>,
 ): PlanSummary {
-  const summary: PlanSummary = {
-    create: 0,
-    update: 0,
-    delete: 0,
-    replace: 0,
-    unchanged: 0,
-  };
+  const summary: PlanSummary = { create: 0, update: 0, delete: 0, replace: 0 };
 
   // Count grouped display entries
   for (const entry of displayEntries) {
@@ -723,19 +844,22 @@ export async function deploy(options?: DeployOptions) {
       }
     });
 
-    printPlanResults({
-      functionRegistry,
-      tailorDB,
-      staticWebsite,
-      aiGateway,
-      idp,
-      auth,
-      pipeline,
-      app,
-      executor,
-      workflow,
-      secretManager,
-    });
+    const planSummary = printPlanResults(
+      {
+        functionRegistry,
+        tailorDB,
+        staticWebsite,
+        aiGateway,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+        secretManager,
+      },
+      { dryRun: options?.dryRun },
+    );
 
     if (options?.noValidate) {
       logger.warn("Client-side validation skipped (--no-validate).");
@@ -756,7 +880,7 @@ export async function deploy(options?: DeployOptions) {
 
     if (dryRun) {
       logger.info("Dry run enabled. No changes applied.");
-      return;
+      return undefined;
     }
 
     // Phase 2: Create/Update services that Application depends on
@@ -814,6 +938,12 @@ export async function deploy(options?: DeployOptions) {
       applyFunctionRegistry(client, workspaceId, functionRegistry, "delete"),
     );
 
-    logger.success("Successfully applied changes.");
+    if (logger.jsonMode) {
+      logger.out({ summary: planSummary, status: "applied" });
+    } else {
+      logger.success("Successfully applied changes.");
+    }
+
+    return undefined;
   });
 }

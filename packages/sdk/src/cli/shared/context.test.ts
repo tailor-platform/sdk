@@ -7,8 +7,10 @@ import {
   fetchLatestToken,
   loadAccessToken,
   loadConfigPath,
+  loadConsoleBaseUrl,
   loadMachineUserName,
   loadWorkspaceId,
+  platformConfigFromProfile,
   readPlatformConfig,
   saveUserTokens,
   writePlatformConfig,
@@ -67,6 +69,15 @@ beforeEach(() => {
   keyringPasswords.clear();
   keyringSetPasswordFailure.error = undefined;
 });
+
+function writeFuturePlatformConfig() {
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(
+    configPath,
+    "version: 999\nmin_sdk_version: 999.0.0\nusers: {}\nprofiles: {}\ncurrent_user: null\n",
+  );
+}
 
 describe("loadConfigPath", () => {
   const originalEnv = process.env;
@@ -158,6 +169,7 @@ describe("loadWorkspaceId", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    clientMocks.refreshToken.mockReset();
     resetKeyringState();
     process.env = { ...originalEnv };
     delete process.env.TAILOR_PLATFORM_WORKSPACE_ID;
@@ -178,6 +190,15 @@ describe("loadWorkspaceId", () => {
   describe("opts.workspaceId", () => {
     test("returns workspaceId from options when provided", async () => {
       const result = await loadWorkspaceId({ workspaceId: validUUID });
+      expect(result).toBe(validUUID);
+    });
+
+    test("opts.workspaceId takes precedence over an unreadable env profile config", async () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      writeFuturePlatformConfig();
+
+      const result = await loadWorkspaceId({ workspaceId: validUUID });
+
       expect(result).toBe(validUUID);
     });
 
@@ -220,6 +241,16 @@ describe("loadWorkspaceId", () => {
         current_user: null,
       });
       const result = await loadWorkspaceId({ profile: "myprofile" });
+      expect(result).toBe(validUUID);
+    });
+
+    test("env workspace ID takes precedence over an unreadable env profile config", async () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
+      writeFuturePlatformConfig();
+
+      const result = await loadWorkspaceId();
+
       expect(result).toBe(validUUID);
     });
   });
@@ -511,6 +542,8 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("TAILOR_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", undefined);
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -523,6 +556,23 @@ describe("loadAccessToken", () => {
   describe("env.TAILOR_PLATFORM_TOKEN", () => {
     test("returns token from TAILOR_PLATFORM_TOKEN when set", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
+      const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+    });
+
+    test("returns token from TAILOR_PLATFORM_TOKEN before reading an unreadable env profile config", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
+      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+      writeFuturePlatformConfig();
+
+      const result = await loadAccessToken();
+
+      expect(result).toBe(validToken);
+    });
+
+    test("TAILOR_PLATFORM_TOKEN takes precedence over TAILOR_TOKEN", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
+      vi.stubEnv("TAILOR_TOKEN", otherToken);
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
@@ -551,11 +601,14 @@ describe("loadAccessToken", () => {
   });
 
   describe("env.TAILOR_TOKEN", () => {
-    test("ignores the removed TAILOR_TOKEN fallback", async () => {
+    test("falls back to the deprecated TAILOR_TOKEN with a warning", async () => {
       vi.stubEnv("TAILOR_TOKEN", validToken);
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      await expect(loadAccessToken()).rejects.toThrow(/Tailor Platform token not found/);
-      expect(warnSpy).not.toHaveBeenCalled();
+      const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+      expect(warnSpy).toHaveBeenCalledWith(
+        "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
+      );
     });
   });
 
@@ -619,6 +672,130 @@ describe("loadAccessToken", () => {
       });
       const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(otherToken);
+    });
+
+    test("returns the token saved for the profile platform URL", async () => {
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {},
+        profiles: {
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+      const config = await readPlatformConfig();
+      await saveUserTokens(
+        config,
+        "testuser",
+        {
+          accessToken: validToken,
+          refreshToken: "refresh",
+        },
+        futureDate,
+        { platformUrl: "https://api.dev.tailor.tech" },
+      );
+      writePlatformConfig(config);
+
+      const result = await loadAccessToken({ profile: "dev" });
+
+      expect(result).toBe(validToken);
+    });
+
+    test("falls back to a legacy user token for a profile platform URL without persisting it", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          testuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+            storage: "file",
+          },
+        },
+        profiles: {
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+
+      const result = await loadAccessToken({ profile: "dev" });
+
+      expect(result).toBe(validToken);
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toBeUndefined();
+    });
+
+    test("does not fall back to an unscoped token for a profile platform URL without matching env", async () => {
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          testuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+            storage: "file",
+          },
+        },
+        profiles: {
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+
+      await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
+        'User "testuser" not found',
+      );
+    });
+
+    test("removes a legacy unscoped token after refreshing it into a scoped platform key", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+      const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
+      const refreshedExpiresAt = Date.now() + 3600 * 1000;
+      clientMocks.refreshToken.mockResolvedValueOnce({
+        accessToken: "refreshed-token",
+        refreshToken: "refreshed-refresh",
+        expiresAt: refreshedExpiresAt,
+      });
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          testuser: {
+            access_token: "legacy-token",
+            refresh_token: "legacy-refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {},
+        current_user: "testuser",
+      });
+
+      const result = await loadAccessToken();
+
+      expect(result).toBe("refreshed-token");
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users.testuser).toBeUndefined();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toMatchObject({
+        storage: "keyring",
+        token_expires_at: new Date(refreshedExpiresAt).toISOString(),
+      });
     });
   });
 
@@ -753,7 +930,7 @@ describe("loadAccessToken", () => {
       const config = await readPlatformConfig();
 
       expect(token).toBe("new-access-token");
-      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token");
+      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token", undefined);
       expect(config.version).toBe(3);
       expect(config.users["legacy@example.com"]).toBeUndefined();
       expect(config.users["platform-user-sub"]).toMatchObject({
@@ -835,7 +1012,7 @@ describe("loadAccessToken", () => {
       const config = await readPlatformConfig();
 
       expect(token).toBe("new-access-token");
-      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token");
+      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token", undefined);
       expect(config.users["platform-user-sub"]).toBeUndefined();
       expect(config.users["legacy@example.com"]).toMatchObject({
         storage: "keyring",
@@ -851,6 +1028,76 @@ describe("loadAccessToken", () => {
   describe("error case: no token source", () => {
     test("throws error when no token source is available", async () => {
       await expect(loadAccessToken()).rejects.toThrow("Tailor Platform token not found");
+    });
+  });
+});
+
+describe("loadConsoleBaseUrl", () => {
+  beforeEach(() => {
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("returns console_url from the selected profile", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+
+    await expect(loadConsoleBaseUrl({ profile: "dev" })).resolves.toBe(
+      "https://console.dev.tailor.tech",
+    );
+  });
+
+  test("falls back to the default console URL when missing profiles are allowed and config is unreadable", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "missing");
+    writeFuturePlatformConfig();
+
+    await expect(loadConsoleBaseUrl({ allowMissingProfile: true })).resolves.toBe(
+      "https://console.tailor.tech",
+    );
+  });
+});
+
+describe("platformConfigFromProfile", () => {
+  test("returns undefined when the profile has no platform settings", () => {
+    expect(platformConfigFromProfile({})).toBeUndefined();
+  });
+
+  test("returns the profile platform settings that are set", () => {
+    expect(
+      platformConfigFromProfile({
+        platform_url: "https://api.dev.tailor.tech",
+        oauth2_client_id: "dev-client",
+        console_url: "https://console.dev.tailor.tech",
+      }),
+    ).toEqual({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
     });
   });
 });
@@ -915,6 +1162,7 @@ describe("saveUserTokens", () => {
       "platform-user-sub",
       { accessToken: "access-token", refreshToken: "refresh-token" },
       futureDate,
+      undefined,
       { email: "user@example.com" },
     );
 
@@ -1164,6 +1412,58 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     };
     expect(diskConfig.version).toBe(1);
     expect(diskConfig.current_user).toBe("file@example.com");
+  });
+
+  test("keeps platform settings and scoped token keys in a min-SDK gated config format", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "file@example.com": {
+          storage: "file",
+          access_token: "file-access-token",
+          token_expires_at: futureDate,
+        },
+        "https://api.dev.tailor.tech|file@example.com": {
+          storage: "file",
+          access_token: "scoped-access-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {
+        dev: {
+          user: "file@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: "file@example.com",
+    });
+
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      version: number;
+      min_sdk_version?: string;
+      users: Record<string, unknown>;
+      profiles: Record<
+        string,
+        {
+          platform_url?: string;
+          oauth2_client_id?: string;
+          console_url?: string;
+        }
+      >;
+    };
+    expect(diskConfig.version).toBe(3);
+    expect(diskConfig.min_sdk_version).toBe("2.0.0");
+    expect(diskConfig.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
+    expect(diskConfig.profiles.dev?.oauth2_client_id).toBe("dev-client");
+    expect(diskConfig.profiles.dev?.console_url).toBe("https://console.dev.tailor.tech");
+    expect(diskConfig.users["https://api.dev.tailor.tech|file@example.com"]).toBeDefined();
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
   });
 
   test("clears current_user on V1 downgrade when it points at a user not representable in V1", () => {

@@ -86,8 +86,8 @@ defineIdp("my-idp", {
 - `read` - Controls who can read IdP users
 - `update` - Controls who can update IdP users
 - `delete` - Controls who can delete IdP users
-- `sendPasswordResetEmail` - Controls who can send password reset emails. The examples above disable this operation; to enable it, use a permission such as `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]`.
-- `unenrollMfa` - Controls who can remove an enrolled MFA factor from a user. Required when `userAuthPolicy.enableMfa` is `true`; omit otherwise. Typically restricted to administrators.
+- `sendPasswordResetEmail` - Controls who can send password reset emails. Required unless `userAuthPolicy.disablePasswordAuth` is `true` or `gqlOperations.sendPasswordResetEmail` is `false` (the password-reset flow has no meaning when password authentication is off or the operation is disabled). Set `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]` to allow, or `[]` to deny.
+- `unenrollMfa` - Controls who can remove an enrolled MFA factor from a user. Required when `userAuthPolicy.enableMfa` is `true` unless `gqlOperations.unenrollMfa` is `false`; omit otherwise. Typically restricted to administrators.
 
 **Policy fields:** each entry in an operation's policy array supports:
 
@@ -207,7 +207,21 @@ defineIdp("my-idp", {
 - `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
 - `requireMfa: true` requires `enableMfa: true`.
 - `enableMfa: true` requires at least one entry in `allowedReturnOrigins`.
-- `enableMfa: true` requires `permission` to be defined and to include an explicit `unenrollMfa` policy (an empty array `[]` to deny is fine).
+- `enableMfa: true` requires `permission` to be defined and to include an explicit `unenrollMfa` policy (an empty array `[]` to deny is fine), unless `gqlOperations.unenrollMfa` is `false` (or `gqlOperations: "query"`, which normalizes to the same), in which case the operation is turned off and the policy may be omitted.
+
+**Runtime API:** function code can inspect and revoke a user's enrolled factor through `idp.Client`. The `User` records returned by `user`, `userByName`, `users`, `createUser`, and `updateUser` expose `mfaEnrolled` (boolean) and `mfaFactorIds` (string array), and `client.unenrollMfa({ userId, mfaFactorId })` removes a single factor. The factor ID to pass back is one of the entries in `user.mfaFactorIds`. Calling `unenrollMfa` requires the `unenrollMfa` permission above.
+
+```typescript
+import { idp } from "@tailor-platform/sdk/runtime";
+
+const client = new idp.Client({ namespace: "my-idp" });
+const user = await client.user("user-id");
+if (user.mfaEnrolled) {
+  for (const factorId of user.mfaFactorIds) {
+    await client.unenrollMfa({ userId: user.id, mfaFactorId: factorId });
+  }
+}
+```
 
 ### gqlOperations
 
@@ -222,6 +236,8 @@ defineIdp("my-idp", {
     update: true,
     delete: false,
     sendPasswordResetEmail: false,
+    requestMfaSettingsUrl: false,
+    unenrollMfa: false,
   },
 });
 ```
@@ -233,8 +249,10 @@ defineIdp("my-idp", {
 - `update` - The `_updateUser` mutation.
 - `delete` - The `_deleteUser` mutation.
 - `sendPasswordResetEmail` - The `_sendPasswordResetEmail` mutation.
+- `requestMfaSettingsUrl` - The `_requestMfaSettingsUrl` query that issues a self-service URL for MFA settings.
+- `unenrollMfa` - The `_unenrollMfa` mutation that removes a user's enrolled MFA factor. When set to `false`, `permission.unenrollMfa` may be omitted even with `userAuthPolicy.enableMfa: true`.
 
-**Shortcut:** pass the string `"query"` to expose a read-only IdP. It enables `read` and disables every mutation.
+**Shortcut:** pass the string `"query"` to expose a read-only IdP. It enables the queries (`read`, `requestMfaSettingsUrl`) and disables every mutation.
 
 ```typescript
 defineIdp("my-idp", {

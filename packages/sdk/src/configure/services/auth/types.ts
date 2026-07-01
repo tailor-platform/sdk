@@ -45,9 +45,6 @@ export type MachineUserName = keyof MachineUserNameRegistry extends never
 /** Result of retrieving a connection token at runtime. */
 export type AuthConnectionTokenResult = {
   access_token: string;
-  refresh_token?: string;
-  token_type?: string;
-  expiry?: string;
 };
 
 // Helper types for literal permission and auth attribute operands.
@@ -338,6 +335,11 @@ type ConnectionNames<Config> = Config extends { connections?: Record<infer K, un
 
 export type DefinedAuth<Name extends string, Config> = Config & {
   name: Name;
+  /**
+   * @deprecated Use `authconnection.getConnectionToken(...)` from `@tailor-platform/sdk/runtime` instead.
+   * Importing `auth` from `tailor.config.ts` into runtime files pulls config-layer (Node-only)
+   * dependencies into the bundle.
+   */
   getConnectionToken<C extends ConnectionNames<Config>>(
     connectionName: C,
   ): Promise<AuthConnectionTokenResult>;

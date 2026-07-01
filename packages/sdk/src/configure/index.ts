@@ -24,6 +24,10 @@ export {
 } from "#/runtime/types";
 export { type MachineUserNameRegistry, type MachineUserName } from "#/configure/types/machine-user";
 export { type IdpNameRegistry, type IdpName } from "#/configure/types/idp-name";
+export {
+  type ConnectionNameRegistry,
+  type ConnectionName,
+} from "#/configure/types/connection-name";
 
 export * from "#/configure/services/index";
 
