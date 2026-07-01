@@ -3,8 +3,11 @@ import type { CodemodPatternGroup } from "./types";
 const TAILOR_RUNTIME_MEMBER = String.raw`(?:authconnection|context|iconv|idp|secretmanager|workflow)`;
 const TAILORDB_RUNTIME_MEMBER = String.raw`(?:Client|CommandType|QueryResult|file)`;
 const RUNTIME_MEMBER_SUFFIX = String.raw`(?:\.[A-Za-z_$][\w$]*)?`;
-const TAILOR_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|\(\s*tailor\s*\)\s*(?:\.|\?\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|\btailor\s*\[)`;
-const TAILORDB_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|\(\s*tailordb\s*\)\s*(?:\.|\?\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|\btailordb\s*\[)`;
+const CASTED_RUNTIME_ROOT_SUFFIX = String.raw`(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?`;
+const TAILOR_WRAPPED_RUNTIME_ROOT = String.raw`\(\s*(?:<[^>]+>\s*)?tailor\s*${CASTED_RUNTIME_ROOT_SUFFIX}\)`;
+const TAILORDB_WRAPPED_RUNTIME_ROOT = String.raw`\(\s*(?:<[^>]+>\s*)?tailordb\s*${CASTED_RUNTIME_ROOT_SUFFIX}\)`;
+const TAILOR_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailor\s*(?:\.|\?\.|!\s*\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILOR_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILOR_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|\btailor\s*\[)`;
+const TAILORDB_RUNTIME_ROOT_ACCESS = String.raw`(?:\btailordb\s*(?:\.|\?\.|!\s*\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|${TAILORDB_WRAPPED_RUNTIME_ROOT}\s*(?:\.|\?\.)\s*${TAILORDB_RUNTIME_MEMBER}${RUNTIME_MEMBER_SUFFIX}|\btailordb\s*\[)`;
 
 export const runtimeGlobalTextPattern = new RegExp(
   `(?:${TAILOR_RUNTIME_ROOT_ACCESS}|${TAILORDB_RUNTIME_ROOT_ACCESS}|\\bTailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)\\b)`,

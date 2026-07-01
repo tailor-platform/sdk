@@ -421,7 +421,7 @@ function runtimeRootReference(source: string): RuntimeRootReference | null {
   }
 
   const parenthesizedMatch =
-    /^\s*\(\s*(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\s*\)/.exec(
+    /^\s*\(\s*(?:<[^>]+>\s*)?(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)/.exec(
       source,
     );
   if (parenthesizedMatch) {
@@ -530,6 +530,11 @@ function forBindingChildren(loop: SgNode): SgNode[] {
 }
 
 function scopeHasValueBinding(scope: SgNode, name: string): boolean {
+  if (scope.kind() === "function_expression") {
+    const functionName = scope.children().find((child) => child.kind() === "identifier");
+    if (functionName?.text() === name) return true;
+  }
+
   for (const decl of scope.findAll({ rule: { kind: "variable_declarator" } })) {
     const varDeclarator = isVarDeclarator(decl);
     const declarationScope = varDeclarator

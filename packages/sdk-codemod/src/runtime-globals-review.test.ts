@@ -401,6 +401,17 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report self-named function expressions", async () => {
+    await writeProjectFile(
+      "resolvers/self-named-function.ts",
+      ["const run = function tailor() {", "  return tailor.idp.Client;", "};", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("does not report runtime-looking import or export declarations", async () => {
     await writeProjectFile(
       "resolvers/type-imports.ts",
@@ -676,6 +687,40 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 3,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "const grouped = (tailor).workflow;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports casted runtime global roots", async () => {
+    await writeProjectFile(
+      "resolvers/casted-root.ts",
+      [
+        "const clientFactory = (tailor as any).idp.Client;",
+        "const upload = (tailordb!).file.upload;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/casted-root.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/casted-root.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = (tailor as any).idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/casted-root.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const upload = (tailordb!).file.upload;",
           }),
         ],
       }),
