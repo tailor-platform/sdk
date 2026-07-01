@@ -116,23 +116,25 @@ re-exported by `plugin/types.ts`).
 
 ## CLI Command Design: Flags Over Positionals
 
-politty's plugin dispatch (`tailor-sdk <name>` execs an external
-`tailor-sdk-<name>` binary for unknown subcommands) is guarded by
-`!command.run`: a command with its own `run` never dispatches to a plugin,
-because an unknown positional there is a real argument, not an unknown
-subcommand. This means **a single command node cannot both expose
-`subCommands` for plugin extension and take a positional argument in its own
-`run`** — doing so permanently forecloses plugin dispatch on that node and
-makes the positional/subcommand boundary ambiguous.
+politty supports an opt-in plugin-dispatch hook (`onUnknownSubcommand`, not
+currently wired up in this SDK's `runMain()` call) that execs an external
+`<cli>-<name>` binary for an unrecognized subcommand. Its dispatch check
+skips any command that defines its own `run`, since an unrecognized
+positional there is a real argument, not an unknown subcommand name. The
+check only looks at whether `run` is defined, not at what `run` does with
+its arguments — so a command that mixes `subCommands` with a `run` consuming
+a positional (a "hybrid" command) leaves no way to tell whether an
+unrecognized first argument was meant as the positional or as a subcommand
+name. Designing away from hybrids now keeps this dispatch path usable if it
+is wired up later.
 
 - Prefer flags and subcommands over positional arguments. They're
   order-independent, unambiguous, and subcommand groups remain a plugin
   extension point.
 - If a leaf command needs a positional, limit it to a single natural subject
-  (e.g. `query <sql>`, `api <method>`) and give that command **no**
-  `subCommands` of its own.
+  (e.g. `api inspect <endpoint>`) and give that command **no** `subCommands`
+  of its own.
 - Do not mix `subCommands` with a `run` that consumes a positional on the
-  same command (a "hybrid" command). A `run` that takes no arguments and only
-  forwards to a default subcommand (e.g. `runCommand(defaultSubCommand, [])`)
-  is fine — the hybrid to avoid is one where `run` actually parses positional
-  input.
+  same command. A `run` that takes no arguments and only forwards to a
+  default subcommand (e.g. `runCommand(defaultSubCommand, [])`) is fine — the
+  hybrid to avoid is one where `run` actually parses positional input.
