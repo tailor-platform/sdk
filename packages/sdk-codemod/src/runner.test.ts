@@ -1163,6 +1163,18 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "wrapped-collision.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          'import authconnection = require("./client");',
+          "",
+          "export async function run() {",
+          '  return (auth as any).getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "non-call.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1198,6 +1210,7 @@ describe("runCodemods", () => {
             "import-equals-collision.ts",
             "non-call.ts",
             "type-collision.ts",
+            "wrapped-collision.ts",
           ],
           findings: [
             expect.objectContaining({
@@ -1222,6 +1235,11 @@ describe("runCodemods", () => {
               file: "type-collision.ts",
               line: 6,
               excerpt: 'return auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "wrapped-collision.ts",
+              line: 5,
+              excerpt: 'return (auth as any).getConnectionToken("google");',
             }),
           ],
         },
