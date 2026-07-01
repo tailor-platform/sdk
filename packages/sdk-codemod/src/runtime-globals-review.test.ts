@@ -131,6 +131,8 @@ describe("runtime-globals-opt-in review findings", () => {
       [
         "const code = `const runtime = tailor;`;",
         "const dbCode = `const runtime = tailordb;`;",
+        "const nonNullCode = `const runtime = tailor!;`;",
+        "const castedCode = `const runtime = tailordb as any;`;",
         "",
       ].join("\n"),
     );
@@ -153,6 +155,18 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 2,
             message: expect.stringContaining("Embedded code string"),
             excerpt: "const dbCode = `const runtime = tailordb;`;",
+          }),
+          expect.objectContaining({
+            file: "seed/bare-root.mjs",
+            line: 3,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const nonNullCode = `const runtime = tailor!;`;",
+          }),
+          expect.objectContaining({
+            file: "seed/bare-root.mjs",
+            line: 4,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: "const castedCode = `const runtime = tailordb as any;`;",
           }),
         ],
       }),
@@ -964,6 +978,7 @@ describe("runtime-globals-opt-in review findings", () => {
         'const dynamic = await import("tailor.idp");',
         'const subscript = other["tailor.idp"];',
         'const object = { "tailor.idp": 1, "tailordb.file": 2 };',
+        'const computed = { ["tailor.idp.Client"]: 1 };',
         "",
       ].join("\n"),
     );

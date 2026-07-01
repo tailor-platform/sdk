@@ -1133,6 +1133,7 @@ function isNonCodeStringFragment(fragment: SgNode): boolean {
   if (!parent) return false;
   if (parent.kind() === "subscript_expression") return true;
   if (isObjectPairKey(parent, stringNode)) return true;
+  if (hasAncestorKind(stringNode, "computed_property_name")) return true;
   if (hasAncestorKind(stringNode, "import_statement")) return true;
   if (hasAncestorKind(stringNode, "export_statement")) return true;
   return isDynamicImportSpecifier(stringNode);

@@ -269,6 +269,8 @@ describe("getApplicableCodemods", () => {
     expect(matchesSourceStringPattern("tailor")).toBe(false);
     expect(matchesSourceStringPattern(" tailordb ")).toBe(false);
     expect(matchesSourceStringPattern("const runtimeRoot = tailor;")).toBe(true);
+    expect(matchesSourceStringPattern("const runtimeRoot = tailor!;")).toBe(true);
+    expect(matchesSourceStringPattern("const runtimeRoot = tailordb as any;")).toBe(true);
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 
