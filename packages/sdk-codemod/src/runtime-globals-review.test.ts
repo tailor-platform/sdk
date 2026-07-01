@@ -401,6 +401,74 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report runtime-looking import or export declarations", async () => {
+    await writeProjectFile(
+      "resolvers/type-imports.ts",
+      [
+        'import type { TailorErrors } from "./types";',
+        'export type { TailorErrors as RuntimeTailorErrors } from "./types";',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("reports runtime globals inside classic for loop bodies", async () => {
+    await writeProjectFile(
+      "resolvers/for-body.ts",
+      [
+        "for (let i = 0; i < 1; i++) {",
+        '  const clientFactory = tailor ["idp"].Client;',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/for-body.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/for-body.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const clientFactory = tailor ["idp"].Client;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports runtime globals inside destructuring defaults", async () => {
+    await writeProjectFile(
+      "resolvers/destructuring-default.ts",
+      ['const { client = tailor ["idp"].Client } = opts;', ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/destructuring-default.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/destructuring-default.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const { client = tailor ["idp"].Client } = opts;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports shorthand Tailor error globals left for manual migration", async () => {
     await writeProjectFile("errors.ts", ["const exported = { TailorErrors };", ""].join("\n"));
 

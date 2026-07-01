@@ -168,9 +168,7 @@ describe("getApplicableCodemods", () => {
 
     expect(codemod?.scriptPath).toBe("v2/runtime-globals-opt-in/scripts/transform.js");
     expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
-    expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
-    expect(codemod?.suspiciousPatterns).toContain("tailor.secretmanager");
-    expect(codemod?.suspiciousPatterns).toContain("tailor.authconnection");
+    expect(codemod?.suspiciousPatterns).toBeUndefined();
     expect(
       codemod?.sourceStringSuspiciousPatterns?.some(
         (pattern) =>

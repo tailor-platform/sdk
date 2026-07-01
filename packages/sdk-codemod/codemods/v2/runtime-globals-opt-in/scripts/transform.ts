@@ -40,6 +40,21 @@ const REVIEW_TYPE_DECLARATION_KINDS = [
   "internal_module",
   "import_alias",
 ];
+const REVIEW_BINDING_LEFT_SIDE_KINDS = new Set([
+  "object_assignment_pattern",
+  "optional_parameter",
+  "required_parameter",
+  "variable_declarator",
+]);
+const REVIEW_DECLARATION_REFERENCE_ANCESTOR_KINDS = new Set([
+  "export_clause",
+  "export_specifier",
+  "import_statement",
+]);
+const REVIEW_FOR_BINDING_DECLARATION_KINDS = new Set([
+  "lexical_declaration",
+  "variable_declaration",
+]);
 const REVIEW_FOR_KINDS = new Set(["for_statement", "for_in_statement"]);
 
 type BindingNamespace = "type" | "value";
@@ -146,7 +161,13 @@ function collectBindingNames(node: SgNode, out: Set<string>): void {
     return;
   }
 
-  for (const child of node.children()) {
+  const children = node.children();
+  const equalsIndex = REVIEW_BINDING_LEFT_SIDE_KINDS.has(kind)
+    ? children.findIndex((child) => child.kind() === "=")
+    : -1;
+  const bindingChildren = equalsIndex === -1 ? children : children.slice(0, equalsIndex);
+
+  for (const child of bindingChildren) {
     if (child.kind() === "property_identifier") continue;
     collectBindingNames(child, out);
   }
@@ -420,6 +441,28 @@ function hasAncestorBeforeScope(node: SgNode, scope: SgNode, kinds: Set<string>)
   return false;
 }
 
+function hasDeclarationReferenceAncestor(node: SgNode): boolean {
+  let current = node.parent();
+  while (current) {
+    if (REVIEW_DECLARATION_REFERENCE_ANCESTOR_KINDS.has(current.kind())) return true;
+    current = current.parent();
+  }
+  return false;
+}
+
+function forBindingChildren(loop: SgNode): SgNode[] {
+  const children = loop.children();
+
+  if (loop.kind() === "for_statement") {
+    return children.filter((child) => REVIEW_FOR_BINDING_DECLARATION_KINDS.has(child.kind()));
+  }
+
+  const keywordIndex = children.findIndex(
+    (child) => child.kind() === "in" || child.kind() === "of",
+  );
+  return keywordIndex === -1 ? [] : children.slice(0, keywordIndex);
+}
+
 function scopeHasValueBinding(scope: SgNode, name: string): boolean {
   for (const decl of scope.findAll({ rule: { kind: "variable_declarator" } })) {
     if (!sameNode(nearestReviewScope(decl.parent()), scope)) continue;
@@ -444,6 +487,11 @@ function scopeHasValueBinding(scope: SgNode, name: string): boolean {
     const arrowIndex = scope.children().findIndex((child) => child.kind() === "=>");
     if (arrowIndex !== -1) {
       for (const child of scope.children().slice(0, arrowIndex)) {
+        if (
+          !["array_pattern", "identifier", "object_pattern", "rest_pattern"].includes(child.kind())
+        ) {
+          continue;
+        }
         if (bindingIncludesName(child, name)) return true;
       }
     }
@@ -487,12 +535,7 @@ function ancestorHasValueBinding(node: SgNode, name: string): boolean {
     }
 
     if (REVIEW_FOR_KINDS.has(current.kind())) {
-      const children = current.children();
-      const keywordIndex = children.findIndex(
-        (child) => child.kind() === "in" || child.kind() === "of",
-      );
-      const bindingChildren = keywordIndex === -1 ? children : children.slice(0, keywordIndex);
-      for (const child of bindingChildren) {
+      for (const child of forBindingChildren(current)) {
         if (bindingIncludesName(child, name)) return true;
       }
     }
@@ -564,6 +607,7 @@ function collectDirectRuntimeGlobalFindings(
   for (const node of root.findAll({
     rule: { any: [...REVIEW_NODE_KINDS].map((kind) => ({ kind })) },
   })) {
+    if (hasDeclarationReferenceAncestor(node)) continue;
     const nodeText = node.text();
     const rootName = runtimeRootName(nodeText);
     if (!rootName || hasRuntimeBindingInScope(node, rootName, importedNames)) continue;
