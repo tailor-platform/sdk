@@ -369,17 +369,14 @@ Auth connections enable OAuth2 authentication with external providers (Google, M
 
 For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
 
-> [!WARNING]
-> **Managing connections through `tailor.config.ts` is unreliable for shared and CI deploys.**
-> A deploy revokes and recreates the connection — discarding the token obtained via `authconnection authorize` — whenever it cannot confirm the secret is unchanged. That check relies on a hash stored locally in `.tailor-sdk/secrets-state.json`, which is gitignored and therefore not shared across machines. So a deploy from CI, a clean checkout, another developer's machine, or after deleting `.tailor-sdk/` recreates the connection and drops its token. Only repeated deploys from the same machine that still holds that state keep the token.
->
-> Because of this, prefer to **create the connection and its token from the Console**. You can jump to the connections page with:
+> [!NOTE]
+> Deploy updates connections **in-place**, preserving the OAuth token. If the connection requires re-authorization after an update, the deploy will warn you:
 >
 > ```bash
+> tailor-sdk authconnection authorize --name <connection-name>
+> # Or via the Console:
 > tailor-sdk authconnection open
 > ```
->
-> The `connections` field in `defineAuth()` and the `authconnection authorize` flow are documented below for reference.
 
 ### Setup Flow
 
@@ -431,13 +428,6 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 | `clientSecret` | `string` | Yes      | OAuth2 client secret.                       |
 | `authUrl`      | `string` | No       | Override for the authorization endpoint.    |
 | `tokenUrl`     | `string` | No       | Override for the token endpoint.            |
-
-### Change Detection
-
-The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
-
-> [!WARNING]
-> The secret hash lives in `.tailor-sdk/secrets-state.json`, which is gitignored and not shared across machines or CI. When that state is missing — a clean checkout, CI, another machine, or after deleting `.tailor-sdk/` — a deploy cannot confirm the secret is unchanged, so it revokes and recreates the connection and discards the token stored by `authconnection authorize`. For shared and CI workflows, manage the connection and create its token from the Console (`tailor-sdk authconnection open`) instead.
 
 ### `auth.getConnectionToken()`
 
