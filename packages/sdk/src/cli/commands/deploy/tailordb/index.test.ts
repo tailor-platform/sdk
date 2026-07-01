@@ -1405,4 +1405,36 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
 
     await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
   });
+
+  test("rejects remote-only deploy settings during schema verification", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+
+    const client = schemaVerificationClient({
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: false,
+      disableGqlOperations: {
+        create: true,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    });
+
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userType },
+      },
+    ];
+    planResult.context.executorUsedTypes = new Set();
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+  });
 });
