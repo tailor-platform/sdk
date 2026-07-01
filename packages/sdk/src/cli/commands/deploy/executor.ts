@@ -384,7 +384,15 @@ function resolveResolverNamespace(
   );
 }
 
-function collectApplicationIdpNames(application: Readonly<Application>): ReadonlySet<string> {
+/**
+ * Collect IdP names declared by the application, including external IdP
+ * subgraphs.
+ * @param application - Loaded application
+ * @returns IdP names visible from the application config
+ */
+export function collectApplicationIdpNames(
+  application: Readonly<Application>,
+): ReadonlySet<string> {
   const names = new Set(application.idpServices.map((idp) => idp.name));
   for (const subgraph of application.subgraphs) {
     if (subgraph.Type === "idp") {

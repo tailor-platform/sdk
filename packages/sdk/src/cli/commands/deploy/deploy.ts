@@ -35,7 +35,12 @@ import {
   type OwnerConflict,
   type UnmanagedResource,
 } from "./confirm";
-import { buildPlannedExecutorsByName, formatExecutorChangeEntries, planExecutor } from "./executor";
+import {
+  buildPlannedExecutorsByName,
+  collectApplicationIdpNames,
+  formatExecutorChangeEntries,
+  planExecutor,
+} from "./executor";
 import {
   collectFunctionEntries,
   filterBundledWorkflowJobs,
@@ -73,22 +78,6 @@ export interface DeployOptions {
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
-}
-
-/**
- * Collect IdP names declared by the application, including external IdP
- * subgraphs.
- * @param application - Loaded application
- * @returns IdP names visible from the application config
- */
-function collectApplicationIdpNames(application: Readonly<Application>): ReadonlySet<string> {
-  const names = new Set(application.idpServices.map((idp) => idp.name));
-  for (const subgraph of application.subgraphs) {
-    if (subgraph.Type === "idp") {
-      names.add(subgraph.Name);
-    }
-  }
-  return names;
 }
 
 /**
@@ -1170,9 +1159,10 @@ function managedResourceKey(group: ManagedResourceGroup, item: ManagedResourceIt
   const namespace = group.namespaceFields
     ?.map((field) => readResourceField(item, field))
     .find((value) => value !== undefined);
-  return namespace
-    ? `${group.resourceType}:${namespace}:${managedResourceName(group, item)}`
-    : `${group.resourceType}:${managedResourceName(group, item)}`;
+  const name = managedResourceName(group, item);
+  return namespace !== undefined
+    ? `${group.resourceType}:${namespace}:${name}`
+    : `${group.resourceType}:${name}`;
 }
 
 function managedNamespaceOwnerKey(
@@ -1185,7 +1175,7 @@ function managedNamespaceOwnerKey(
   const namespace = group.namespaceFields
     ?.map((field) => readResourceField(item, field))
     .find((value) => value !== undefined);
-  return namespace ? `${group.namespaceOwnerResourceType}:${namespace}` : undefined;
+  return namespace !== undefined ? `${group.namespaceOwnerResourceType}:${namespace}` : undefined;
 }
 
 function addManagedResourceClaims(
