@@ -604,10 +604,21 @@ function hasAncestorBeforeScope(node: SgNode, scope: SgNode, kinds: Set<string>)
   return false;
 }
 
+function isExportSpecifierAliasName(specifier: SgNode, node: SgNode): boolean {
+  const children = specifier.children();
+  const asIndex = children.findIndex((child) => child.kind() === "as");
+  if (asIndex === -1) return false;
+  const nodeIndex = children.findIndex((child) => sameNode(child, node));
+  return nodeIndex > asIndex;
+}
+
 function hasDeclarationReferenceAncestor(node: SgNode): boolean {
   let current = node.parent();
   while (current) {
     if (REVIEW_DECLARATION_REFERENCE_ANCESTOR_KINDS.has(current.kind())) return true;
+    if (current.kind() === "export_specifier" && isExportSpecifierAliasName(current, node)) {
+      return true;
+    }
     if (
       current.kind() === "export_clause" ||
       current.kind() === "export_specifier" ||
@@ -880,8 +891,8 @@ function hasRuntimeBindingInScope(
   node: SgNode,
   rootName: string,
   importedNames: RuntimeBindingNames,
+  namespace = reviewNodeBindingNamespace(node),
 ): boolean {
-  const namespace = reviewNodeBindingNamespace(node);
   if (importedNames[namespace].has(rootName)) return true;
   if (namespace === "value" && ancestorHasValueBinding(node, rootName)) return true;
   if (namespace === "type" && ancestorHasTypeBinding(node, rootName)) return true;
@@ -1224,7 +1235,7 @@ function collectDirectRuntimeGlobalFindings(
     if (!rootRef) continue;
     if (
       rootRef.globalObjectName &&
-      hasRuntimeBindingInScope(node, rootRef.globalObjectName, importedNames)
+      hasRuntimeBindingInScope(node, rootRef.globalObjectName, importedNames, "value")
     ) {
       continue;
     }

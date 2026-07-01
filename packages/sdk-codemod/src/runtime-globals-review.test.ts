@@ -944,6 +944,23 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("does not report indexed global object type queries on local global bindings", async () => {
+    await writeProjectFile(
+      "resolvers/local-indexed-global-type-query.ts",
+      [
+        "const globalThis = { tailor: {} };",
+        'type Tailor = (typeof globalThis)["tailor"];',
+        "const global = { tailordb: {} };",
+        'type Tailordb = (typeof global)["tailordb"];',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports dynamic indexed type query runtime globals", async () => {
     await writeProjectFile(
       "resolvers/dynamic-indexed-type-query.ts",
@@ -1086,6 +1103,23 @@ describe("runtime-globals-opt-in review findings", () => {
     await writeProjectFile(
       "resolvers/local-after.ts",
       ['const localClient = tailor ["idp"].Client;', "const tailor = {};", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report runtime-looking local export alias names", async () => {
+    await writeProjectFile(
+      "resolvers/local-export-aliases.ts",
+      [
+        "const Foo = {};",
+        "export { Foo as tailor };",
+        "type Bar = {};",
+        "export type { Bar as TailorErrors };",
+        "",
+      ].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
