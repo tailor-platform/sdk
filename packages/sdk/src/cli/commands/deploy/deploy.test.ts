@@ -810,6 +810,7 @@ describe("printDeploymentPlans", () => {
 });
 
 type FakeBundledScripts = {
+  appName?: string;
   resolvers?: Record<string, string>;
   executors?: Record<string, string>;
   workflowJobs?: Record<string, string>;
@@ -817,12 +818,16 @@ type FakeBundledScripts = {
   executorNames?: string[];
 };
 
+let fakeTargetSequence = 0;
+
 function fakeTarget(
   bundles: FakeBundledScripts,
 ): Parameters<typeof assertUniqueGlobalFunctionNames>[0][number] {
+  fakeTargetSequence += 1;
   const executorNames = bundles.executorNames ?? Object.keys(bundles.executors ?? {});
   return {
     application: {
+      name: bundles.appName ?? `fake-app-${fakeTargetSequence}`,
       executorService: {
         executors: Object.fromEntries(executorNames.map((name) => [`/${name}.ts`, { name }])),
       },
@@ -837,6 +842,17 @@ function fakeTarget(
 }
 
 describe("assertUniqueGlobalFunctionNames", () => {
+  test("throws when two configs define the same application name", () => {
+    expect(() =>
+      assertUniqueGlobalFunctionNames([
+        fakeTarget({ appName: "shared-app" }),
+        fakeTarget({ appName: "shared-app" }),
+      ]),
+    ).toThrow(
+      'Duplicate application name "shared-app" across config files. Application names must be unique across all configs in a single deploy.',
+    );
+  });
+
   test("throws when two configs define the same executor name", () => {
     expect(() =>
       assertUniqueGlobalFunctionNames([
