@@ -903,6 +903,40 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports indexed global object type query runtime globals", async () => {
+    await writeProjectFile(
+      "resolvers/indexed-global-type-query.ts",
+      [
+        'type Tailor = typeof globalThis["tailor"];',
+        'type Tailordb = (typeof global)["tailordb"];',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/indexed-global-type-query.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/indexed-global-type-query.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'type Tailor = typeof globalThis["tailor"];',
+          }),
+          expect.objectContaining({
+            file: "resolvers/indexed-global-type-query.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'type Tailordb = (typeof global)["tailordb"];',
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports dynamic indexed type query runtime globals", async () => {
     await writeProjectFile(
       "resolvers/dynamic-indexed-type-query.ts",

@@ -33,6 +33,7 @@ const REVIEW_TAILORDB_RUNTIME_MEMBERS = new Set(["Client", "CommandType", "Query
 const REVIEW_NODE_KINDS = new Set([
   "member_expression",
   "identifier",
+  "lookup_type",
   "nested_identifier",
   "nested_type_identifier",
   "shorthand_property_identifier",
@@ -908,6 +909,25 @@ function indexedTypeQueryMember(node: SgNode, rootName: string): string | null {
   return runtimeIndexedTypeMember(rootName, member) ? member : null;
 }
 
+function globalObjectIndexedTypeQuery(node: SgNode): RuntimeRootReference | null {
+  if (node.kind() !== "lookup_type") return null;
+
+  const index = node.children().find((child) => child.kind() === "literal_type");
+  const rootName = stringValue(index ?? null);
+  if (!rootName || !RUNTIME_ROOT_PROPERTY_NAMES.has(rootName)) return null;
+
+  const typeQuery = node.findAll({ rule: { kind: "type_query" } })[0];
+  const match = new RegExp(String.raw`^\s*typeof\s+${GLOBAL_OBJECT_REFERENCE_PATTERN}\s*$`).exec(
+    typeQuery?.text() ?? "",
+  );
+  if (!match) return null;
+
+  return {
+    rootName,
+    globalObjectName: match[1] ?? match[2]!,
+  };
+}
+
 function isNestedTypeIdentifierChild(node: SgNode): boolean {
   return (
     node.kind() !== "nested_type_identifier" && hasAncestorKind(node, "nested_type_identifier")
@@ -1189,7 +1209,7 @@ function collectDirectRuntimeGlobalFindings(
     if (hasDeclarationReferenceAncestor(node)) continue;
     if (isNestedTypeIdentifierChild(node)) continue;
     const nodeText = node.text();
-    const rootRef = runtimeRootReference(nodeText);
+    const rootRef = runtimeRootReference(nodeText) ?? globalObjectIndexedTypeQuery(node);
     if (!rootRef) continue;
     if (
       rootRef.globalObjectName &&
