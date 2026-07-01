@@ -30,7 +30,7 @@ vi.mock("./change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -669,7 +669,7 @@ describe("planWorkflow", () => {
       expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
         workspaceId,
         pageToken: "",
-        pageSize: 1000,
+        pageSize: 100,
       });
       expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "orphaned-job" }]);
     });
@@ -703,7 +703,7 @@ describe("planWorkflow", () => {
             replaces: [],
             unchanged: [],
             isEmpty: () => false,
-            print: () => {},
+            lines: () => [],
           },
           jobFunctionDeletes: [{ workspaceId, jobFunctionName: "removed-job" }],
           conflicts: [],
@@ -772,7 +772,7 @@ describe("planWorkflow", () => {
             replaces: [],
             unchanged: [],
             isEmpty: () => false,
-            print: () => {},
+            lines: () => [],
           },
           jobFunctionDeletes: [
             { workspaceId, jobFunctionName: "job-a" },

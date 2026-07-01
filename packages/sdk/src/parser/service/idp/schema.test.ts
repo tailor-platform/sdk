@@ -680,6 +680,8 @@ describe("IdPSchema validation", () => {
         delete: true,
         read: true,
         sendPasswordResetEmail: true,
+        requestMfaSettingsUrl: true,
+        unenrollMfa: true,
       },
     };
 
@@ -689,6 +691,8 @@ describe("IdPSchema validation", () => {
     expect(result.gqlOperations?.delete).toBe(true);
     expect(result.gqlOperations?.read).toBe(true);
     expect(result.gqlOperations?.sendPasswordResetEmail).toBe(true);
+    expect(result.gqlOperations?.requestMfaSettingsUrl).toBe(true);
+    expect(result.gqlOperations?.unenrollMfa).toBe(true);
   });
 
   test("accepts gqlOperations with partial fields", () => {
@@ -708,6 +712,8 @@ describe("IdPSchema validation", () => {
     expect(result.gqlOperations?.update).toBeUndefined();
     expect(result.gqlOperations?.delete).toBeUndefined();
     expect(result.gqlOperations?.sendPasswordResetEmail).toBeUndefined();
+    expect(result.gqlOperations?.requestMfaSettingsUrl).toBeUndefined();
+    expect(result.gqlOperations?.unenrollMfa).toBeUndefined();
   });
 
   test("accepts missing gqlOperations", () => {
@@ -730,6 +736,8 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.delete).toBeUndefined();
     expect(result.read).toBeUndefined();
     expect(result.sendPasswordResetEmail).toBeUndefined();
+    expect(result.requestMfaSettingsUrl).toBeUndefined();
+    expect(result.unenrollMfa).toBeUndefined();
   });
 
   test("accepts all fields as true", () => {
@@ -739,6 +747,8 @@ describe("IdPGqlOperationsSchema validation", () => {
       delete: true,
       read: true,
       sendPasswordResetEmail: true,
+      requestMfaSettingsUrl: true,
+      unenrollMfa: true,
     };
 
     const result = IdPGqlOperationsSchema.parse(config);
@@ -747,6 +757,8 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.delete).toBe(true);
     expect(result.read).toBe(true);
     expect(result.sendPasswordResetEmail).toBe(true);
+    expect(result.requestMfaSettingsUrl).toBe(true);
+    expect(result.unenrollMfa).toBe(true);
   });
 
   test("accepts all fields as false", () => {
@@ -756,6 +768,8 @@ describe("IdPGqlOperationsSchema validation", () => {
       delete: false,
       read: false,
       sendPasswordResetEmail: false,
+      requestMfaSettingsUrl: false,
+      unenrollMfa: false,
     };
 
     const result = IdPGqlOperationsSchema.parse(config);
@@ -764,6 +778,8 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.delete).toBe(false);
     expect(result.read).toBe(false);
     expect(result.sendPasswordResetEmail).toBe(false);
+    expect(result.requestMfaSettingsUrl).toBe(false);
+    expect(result.unenrollMfa).toBe(false);
   });
 
   test("accepts partial configuration", () => {
@@ -778,6 +794,8 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.update).toBeUndefined();
     expect(result.delete).toBeUndefined();
     expect(result.sendPasswordResetEmail).toBeUndefined();
+    expect(result.requestMfaSettingsUrl).toBeUndefined();
+    expect(result.unenrollMfa).toBeUndefined();
   });
 
   test("accepts 'query' alias and normalizes to read-only mode", () => {
@@ -787,6 +805,8 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.delete).toBe(false);
     expect(result.read).toBe(true);
     expect(result.sendPasswordResetEmail).toBe(false);
+    expect(result.requestMfaSettingsUrl).toBe(true);
+    expect(result.unenrollMfa).toBe(false);
   });
 });
 
@@ -1009,6 +1029,50 @@ describe("IdPSchema permission tests", () => {
     );
   });
 
+  test("accepts permission omitting unenrollMfa when gqlOperations.unenrollMfa is false", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      userAuthPolicy: {
+        enableMfa: true,
+        allowedReturnOrigins: ["https://app.example.com"],
+      },
+      gqlOperations: {
+        unenrollMfa: false,
+      },
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
+  test("accepts permission omitting unenrollMfa when gqlOperations is the 'query' alias and enableMfa is true", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      userAuthPolicy: {
+        enableMfa: true,
+        allowedReturnOrigins: ["https://app.example.com"],
+      },
+      gqlOperations: "query" as const,
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
   test("accepts permission with explicit empty unenrollMfa when enableMfa is true", () => {
     const config = {
       name: "test-idp",
@@ -1047,6 +1111,93 @@ describe("IdPSchema permission tests", () => {
     const result = IdPSchema.parse(config);
     expect(result.permission).toBeDefined();
   });
+
+  test("rejects permission omitting sendPasswordResetEmail when password auth is enabled", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).toThrow(
+      "permission.sendPasswordResetEmail must be set explicitly when password authentication is enabled",
+    );
+  });
+
+  test("accepts permission omitting sendPasswordResetEmail when disablePasswordAuth is true", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      userAuthPolicy: {
+        disablePasswordAuth: true,
+        allowGoogleOauth: true,
+        allowedEmailDomains: ["example.com"],
+      },
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
+  test("accepts permission with explicit empty sendPasswordResetEmail", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
+  test("accepts permission omitting sendPasswordResetEmail when gqlOperations.sendPasswordResetEmail is false", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      gqlOperations: {
+        sendPasswordResetEmail: false,
+      },
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
+
+  test("accepts permission omitting sendPasswordResetEmail when gqlOperations is the 'query' alias", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+      gqlOperations: "query" as const,
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).not.toThrow();
+  });
 });
 
 describe("IdPSchema gqlOperations alias tests", () => {
@@ -1081,5 +1232,7 @@ describe("IdPSchema gqlOperations alias tests", () => {
     expect(result.publishUserEvents).toBe(true);
     expect(result.gqlOperations?.read).toBe(true);
     expect(result.gqlOperations?.create).toBe(false);
+    expect(result.gqlOperations?.requestMfaSettingsUrl).toBe(true);
+    expect(result.gqlOperations?.unenrollMfa).toBe(false);
   });
 });

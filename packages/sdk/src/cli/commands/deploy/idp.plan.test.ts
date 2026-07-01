@@ -19,19 +19,7 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-vi.mock("./change-set", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  const createChangeSet = original.createChangeSet as (title: string) => {
-    print: () => void;
-  };
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...createChangeSet(title),
-      print: () => {},
-    }),
-  };
-});
+vi.mock("./change-set", async (importOriginal) => importOriginal());
 
 const workspaceId = "test-workspace";
 const appName = "test-app";
@@ -41,6 +29,7 @@ type MockIdpServiceOpts = {
   name?: string;
   clients?: string[];
   publishUserEvents?: boolean | undefined;
+  gqlOperations?: Record<string, boolean | undefined>;
 };
 
 function createMockApplication(opts?: {
@@ -74,6 +63,7 @@ function createMockApplication(opts?: {
           delete: true,
           read: true,
           sendPasswordResetEmail: true,
+          ...service.gqlOperations,
         },
         clients: service.clients ?? ["default-idp-client"],
       };
@@ -525,6 +515,46 @@ describe("planIdP", () => {
 
     expect(result.changeSet.client.creates).toHaveLength(1);
     expect(result.changeSet.client.unchanged).toHaveLength(0);
+  });
+});
+
+describe("planIdP / gqlOperations MFA mapping", () => {
+  test("defaults disableGqlOperations.requestMfaSettingsUrl and unenrollMfa to false when local gqlOperations does not disable them", async () => {
+    const app = createMockApplication();
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.creates).toHaveLength(1);
+    const request = result.changeSet.service.creates[0]!.request;
+    expect(request.disableGqlOperations?.requestMfaSettingsUrl).toBe(false);
+    expect(request.disableGqlOperations?.unenrollMfa).toBe(false);
+  });
+
+  test("flips disableGqlOperations.requestMfaSettingsUrl and unenrollMfa to true when local gqlOperations explicitly disables them", async () => {
+    const app = createMockApplication({
+      idpServices: [
+        {
+          gqlOperations: { requestMfaSettingsUrl: false, unenrollMfa: false },
+        },
+      ],
+    });
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.creates).toHaveLength(1);
+    const request = result.changeSet.service.creates[0]!.request;
+    expect(request.disableGqlOperations?.requestMfaSettingsUrl).toBe(true);
+    expect(request.disableGqlOperations?.unenrollMfa).toBe(true);
   });
 });
 

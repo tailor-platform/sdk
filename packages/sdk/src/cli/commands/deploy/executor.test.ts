@@ -46,7 +46,7 @@ vi.mock("./change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });

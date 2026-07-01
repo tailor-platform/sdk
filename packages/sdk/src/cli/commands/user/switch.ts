@@ -1,7 +1,12 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
-import { findConfigUserKey, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import {
+  platformConfigFromProfile,
+  readPlatformConfig,
+  resolveConfigUser,
+  writePlatformConfig,
+} from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 
@@ -16,8 +21,22 @@ export const switchCommand = defineAppCommand({
   }),
   run: async (args) => {
     const config = await readPlatformConfig();
+    const activeProfileName = process.env.TAILOR_PLATFORM_PROFILE;
+    const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
+    if (activeProfileName && !activeProfileEntry) {
+      throw new Error(`Profile "${activeProfileName}" not found`);
+    }
+    const platformConfig = activeProfileEntry
+      ? platformConfigFromProfile(activeProfileEntry)
+      : undefined;
 
-    const user = findConfigUserKey(config, args.user);
+    if (args.user.includes("|")) {
+      throw new Error(
+        `User "${args.user}" looks like a platform-scoped token key. Pass the user name without the platform URL and select the platform with TAILOR_PLATFORM_URL or a profile.`,
+      );
+    }
+
+    const user = resolveConfigUser(config, args.user, platformConfig);
     if (!user) {
       throw new Error(ml`
         User "${args.user}" not found.
@@ -25,9 +44,13 @@ export const switchCommand = defineAppCommand({
       `);
     }
 
-    config.current_user = user;
+    if (activeProfileEntry) {
+      activeProfileEntry.user = user;
+    } else {
+      config.current_user = user;
+    }
     writePlatformConfig(config);
 
-    logger.success(`Current user set to "${args.user}" successfully.`);
+    logger.success(`Current user set to "${user}" successfully.`);
   },
 });

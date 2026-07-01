@@ -1,10 +1,10 @@
-import { logger, styles, symbols } from "#/cli/shared/logger";
+import { styles, symbols } from "#/cli/shared/logger";
 
 export interface HasName {
   name: string;
   /**
    * Optional pre-formatted lines rendered indented beneath the item by
-   * `ChangeSet.print()` (e.g. per-sub-resource diffs embedded in a single
+   * `ChangeSet.lines()` (e.g. per-sub-resource diffs embedded in a single
    * resource).
    */
   details?: readonly string[];
@@ -24,7 +24,7 @@ export type ChangeSet<
   readonly replaces: R[];
   readonly unchanged: Un[];
   isEmpty: () => boolean;
-  print: () => void;
+  lines: () => string[];
 };
 
 export interface PlanSummary {
@@ -32,13 +32,12 @@ export interface PlanSummary {
   update: number;
   delete: number;
   replace: number;
-  unchanged: number;
 }
 
 /**
  * Create a new ChangeSet for tracking resource changes.
  * @param title - Title for the change set
- * @returns Empty ChangeSet instance with isEmpty() and print() methods
+ * @returns Empty ChangeSet instance with isEmpty() and lines() methods
  */
 export function createChangeSet<
   C extends HasName,
@@ -64,21 +63,19 @@ export function createChangeSet<
     replaces,
     unchanged,
     isEmpty,
-    print: () => {
-      if (isEmpty()) {
-        return;
-      }
-      logger.log(styles.bold(`${title}:`));
-      const printItem = (symbol: string, item: HasName) => {
-        logger.log(`  ${symbol} ${item.name}`);
-        for (const detail of item.details ?? []) {
-          logger.log(`    ${detail}`);
-        }
-      };
-      creates.forEach((item) => printItem(symbols.create, item));
-      deletes.forEach((item) => printItem(symbols.delete, item));
-      updates.forEach((item) => printItem(symbols.update, item));
-      replaces.forEach((item) => printItem(symbols.replace, item));
+    lines: () => {
+      if (isEmpty()) return [];
+      const itemLines = (symbol: string) => (item: HasName) => [
+        `  ${symbol} ${item.name}`,
+        ...(item.details ?? []).map((d) => `    ${d}`),
+      ];
+      return [
+        styles.bold(`${title}:`),
+        ...creates.flatMap(itemLines(symbols.create)),
+        ...deletes.flatMap(itemLines(symbols.delete)),
+        ...updates.flatMap(itemLines(symbols.update)),
+        ...replaces.flatMap(itemLines(symbols.replace)),
+      ];
     },
   };
 }
@@ -92,24 +89,17 @@ export function summarizeChangeSets(
   changeSets: Array<
     Pick<
       ChangeSet<HasName, HasName, HasName, HasName>,
-      "creates" | "updates" | "deletes" | "replaces" | "unchanged"
+      "creates" | "updates" | "deletes" | "replaces"
     >
   >,
 ): PlanSummary {
-  const summary: PlanSummary = {
-    create: 0,
-    update: 0,
-    delete: 0,
-    replace: 0,
-    unchanged: 0,
-  };
+  const summary: PlanSummary = { create: 0, update: 0, delete: 0, replace: 0 };
 
   for (const changeSet of changeSets) {
     summary.create += changeSet.creates.length;
     summary.update += changeSet.updates.length;
     summary.delete += changeSet.deletes.length;
     summary.replace += changeSet.replaces.length;
-    summary.unchanged += changeSet.unchanged.length;
   }
 
   return summary;

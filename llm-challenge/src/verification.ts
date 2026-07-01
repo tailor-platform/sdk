@@ -35,6 +35,27 @@ type VerifySpec = {
   checks?: VerifySpecCheck[];
 };
 
+type ContentPatternCheckBase = {
+  id: string;
+  description?: string;
+  glob: string;
+  pattern: string;
+  flags?: string;
+};
+
+type ContentMatchCheck = ContentPatternCheckBase & {
+  kind: "content-match";
+  /**
+   * Minimum number of glob-matching files that must contain the pattern (default 1).
+   * Counts files, not occurrences: a single file with several matches counts once.
+   */
+  minMatches?: number;
+};
+
+type ContentAbsentCheck = ContentPatternCheckBase & {
+  kind: "content-absent";
+};
+
 type VerifySpecCheck =
   | {
       id: string;
@@ -49,19 +70,8 @@ type VerifySpecCheck =
       glob: string;
       minCount?: number;
     }
-  | {
-      id: string;
-      kind: "content-match";
-      description?: string;
-      glob: string;
-      pattern: string;
-      flags?: string;
-      /**
-       * Minimum number of glob-matching files that must contain the pattern (default 1).
-       * Counts files, not occurrences: a single file with several matches counts once.
-       */
-      minMatches?: number;
-    };
+  | ContentMatchCheck
+  | ContentAbsentCheck;
 
 const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
 const TYPECHECK_TIMEOUT_MS = 120_000;
@@ -208,6 +218,9 @@ function evaluateProblemCheck(
     if (check.kind === "content-match") {
       return contentMatchCheck(check, worktreePath, files);
     }
+    if (check.kind === "content-absent") {
+      return contentAbsentCheck(check, worktreePath, files);
+    }
     const unknownCheck = check as { id: string; kind: string };
     return invalidProblemCheck(unknownCheck.id, `Unknown problem check kind: ${unknownCheck.kind}`);
   } catch (error) {
@@ -263,6 +276,38 @@ function contentMatchCheck(
   files: string[],
 ): VerificationCheckResult {
   const minMatches = check.minMatches ?? 1;
+  const matchedFiles = matchingContentFiles(check, worktreePath, files);
+  return {
+    id: check.id,
+    scope: "problem",
+    kind: "assertion",
+    description: check.description ?? `${check.glob} content matches ${check.pattern}`,
+    outcome: matchedFiles.length >= minMatches ? "satisfied" : "unsatisfied",
+    observations: [`matchedFiles: ${matchedFiles.length}`, ...matchedFiles.slice(0, 10)],
+  };
+}
+
+function contentAbsentCheck(
+  check: Extract<VerifySpecCheck, { kind: "content-absent" }>,
+  worktreePath: string,
+  files: string[],
+): VerificationCheckResult {
+  const matchedFiles = matchingContentFiles(check, worktreePath, files);
+  return {
+    id: check.id,
+    scope: "problem",
+    kind: "assertion",
+    description: check.description ?? `${check.glob} content does not match ${check.pattern}`,
+    outcome: matchedFiles.length === 0 ? "satisfied" : "unsatisfied",
+    observations: [`matchedFiles: ${matchedFiles.length}`, ...matchedFiles.slice(0, 10)],
+  };
+}
+
+function matchingContentFiles(
+  check: ContentPatternCheckBase,
+  worktreePath: string,
+  files: string[],
+): string[] {
   const regex = new RegExp(check.pattern, check.flags ?? "");
   const globRegex = globToRegExp(check.glob);
   const matchedFiles: string[] = [];
@@ -273,14 +318,7 @@ function contentMatchCheck(
       matchedFiles.push(file);
     }
   }
-  return {
-    id: check.id,
-    scope: "problem",
-    kind: "assertion",
-    description: check.description ?? `${check.glob} content matches ${check.pattern}`,
-    outcome: matchedFiles.length >= minMatches ? "satisfied" : "unsatisfied",
-    observations: [`matchedFiles: ${matchedFiles.length}`, ...matchedFiles.slice(0, 10)],
-  };
+  return matchedFiles;
 }
 
 function invalidProblemCheck(id: string, message: string): VerificationCheckResult {

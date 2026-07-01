@@ -1,0 +1,81 @@
+# __HEADER__
+name: Tailor Coordinator (__WORKSPACE_NAME__)
+
+on:
+  # __PULL_REQUEST_START__
+  pull_request:
+    branches: ["__BRANCH__"]
+  # __PULL_REQUEST_END__
+  push:
+    # __PUSH_BRANCHES_START__
+    branches: ["__BRANCH__"]
+    # __PUSH_BRANCHES_END__
+    # __PUSH_TAGS_START__
+    tags: [__TAG_PATTERN__]
+    # __PUSH_TAGS_END__
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Preview changes without deploying
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # __TAG_GUARD_JOB_START__
+  tailor-tag-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      on-branch: ${{ steps.tailor-tag-guard.outputs.on-branch }}
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - id: tailor-tag-guard
+        uses: tailor-platform/actions/tag-guard@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        with:
+          target-branch: __BRANCH__
+  # __TAG_GUARD_JOB_END__
+
+  tailor-plan:
+    # __PLAN_NEEDS__
+    # __PLAN_IF__
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: __ENVIRONMENT__
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: tailor-plan-__WORKSPACE_NAME__-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: tailor-setup
+        uses: ./.github/actions/tailor-setup
+      # __PER_APP_PLAN_STEPS__
+
+  tailor-deploy:
+    # __DEPLOY_NEEDS__
+    # __DEPLOY_IF__
+    # __DEPLOY_ENVIRONMENT__
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    concurrency:
+      group: tailor-deploy-__WORKSPACE_NAME__
+      cancel-in-progress: false
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: tailor-setup
+        uses: ./.github/actions/tailor-setup
+      # __PER_APP_DEPLOY_STEPS__

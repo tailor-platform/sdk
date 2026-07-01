@@ -454,16 +454,15 @@ describe("parseTypes", () => {
       const user = db.type("User", {
         name: db.string(),
       });
+      const relatedUserId = db.uuid().relation({
+        type: "1-1",
+        toward: { type: user },
+      });
+      // @ts-expect-error - Testing runtime behavior: 1-1 already implies unique, but we test the call order
+      const userId = relatedUserId.unique();
 
       const profile = db.type("Profile", {
-        // @ts-expect-error - Testing runtime behavior: 1-1 already implies unique, but we test the call order
-        userId: db
-          .uuid()
-          .relation({
-            type: "1-1",
-            toward: { type: user },
-          })
-          .unique(),
+        userId,
       });
 
       const result = parseTypes(
