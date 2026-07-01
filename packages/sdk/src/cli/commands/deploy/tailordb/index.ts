@@ -164,6 +164,8 @@ function namespaceGqlOperations(
   return namespaceConfig(config, tailorDBInputs, namespace)?.gqlOperations;
 }
 
+const GQL_OPERATION_KEYS = ["create", "update", "delete", "read"] as const;
+
 function configuredDisabledGqlOperations(
   operations: DeployGqlOperations,
 ): SnapshotGqlOperations | undefined {
@@ -173,10 +175,9 @@ function configuredDisabledGqlOperations(
   }
 
   const disabled: SnapshotGqlOperations = {};
-  if (operations.create === false) disabled.create = false;
-  if (operations.update === false) disabled.update = false;
-  if (operations.delete === false) disabled.delete = false;
-  if (operations.read === false) disabled.read = false;
+  for (const key of GQL_OPERATION_KEYS) {
+    if (operations[key] === false) disabled[key] = false;
+  }
 
   return definedWhenNotEmpty(disabled);
 }
@@ -188,10 +189,9 @@ function appliedConfiguredDisabledGqlOperations(
   if (!remoteDisabled || !configuredDisabled) return undefined;
 
   const disabled: SnapshotGqlOperations = {};
-  if (configuredDisabled.create === false && remoteDisabled.create) disabled.create = false;
-  if (configuredDisabled.update === false && remoteDisabled.update) disabled.update = false;
-  if (configuredDisabled.delete === false && remoteDisabled.delete) disabled.delete = false;
-  if (configuredDisabled.read === false && remoteDisabled.read) disabled.read = false;
+  for (const key of GQL_OPERATION_KEYS) {
+    if (configuredDisabled[key] === false && remoteDisabled[key]) disabled[key] = false;
+  }
 
   return definedWhenNotEmpty(disabled);
 }

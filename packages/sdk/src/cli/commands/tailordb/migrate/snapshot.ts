@@ -7,14 +7,14 @@ import { toJson } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import {
   TailorDBGQLPermission_Action,
-  TailorDBGQLPermission_Operator,
-  TailorDBGQLPermission_Permit,
   TailorDBType_PermitAction,
   TailorDBType_Permission_Operator,
   TailorDBType_Permission_Permit,
   type TailorDBGQLPermission,
   type TailorDBGQLPermission_Condition,
   type TailorDBGQLPermission_Operand,
+  type TailorDBGQLPermission_Operator,
+  type TailorDBGQLPermission_Permit,
   type TailorDBType as ProtoTailorDBType,
   type TailorDBType_Permission,
   type TailorDBType_Permission_Condition,
@@ -1611,21 +1611,28 @@ function normalizeComparableSettings(
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
-function comparableTypeSettings(type: TailorDBSnapshotType): SnapshotTypeSettingsState {
-  const settings = normalizeComparableSettings(type.settings);
+function typeSettingsState(
+  description: string | undefined,
+  pluralForm: string,
+  settings: TailorDBSnapshotType["settings"],
+): SnapshotTypeSettingsState {
   return {
-    ...(type.description ? { description: type.description } : {}),
-    pluralForm: inflection.camelize(type.pluralForm, true),
+    ...(description ? { description } : {}),
+    pluralForm,
     ...(settings && { settings }),
   };
 }
 
+function comparableTypeSettings(type: TailorDBSnapshotType): SnapshotTypeSettingsState {
+  return typeSettingsState(
+    type.description,
+    inflection.camelize(type.pluralForm, true),
+    normalizeComparableSettings(type.settings),
+  );
+}
+
 function snapshotTypeSettingsState(type: TailorDBSnapshotType): SnapshotTypeSettingsState {
-  return {
-    ...(type.description ? { description: type.description } : {}),
-    pluralForm: type.pluralForm,
-    settings: type.settings ?? {},
-  };
+  return typeSettingsState(type.description, type.pluralForm, type.settings ?? {});
 }
 
 function compareTypeSettings(
@@ -2207,37 +2214,21 @@ type RemotePermissionPermit = TailorDBType_Permission_Permit | TailorDBGQLPermis
 type RemotePermissionOperator = TailorDBType_Permission_Operator | TailorDBGQLPermission_Operator;
 type PermissionSource = "record" | "GQL";
 
-const REMOTE_PERMISSION_PERMIT_PAIRS: readonly (readonly [number, number, "allow" | "deny"])[] = [
-  [TailorDBType_Permission_Permit.ALLOW, TailorDBGQLPermission_Permit.ALLOW, "allow"],
-  [TailorDBType_Permission_Permit.DENY, TailorDBGQLPermission_Permit.DENY, "deny"],
-];
+// TailorDBType_Permission_Permit and TailorDBGQLPermission_Permit share identical numeric values.
+const REMOTE_PERMISSION_PERMITS = new Map<number, "allow" | "deny">([
+  [TailorDBType_Permission_Permit.ALLOW, "allow"],
+  [TailorDBType_Permission_Permit.DENY, "deny"],
+]);
 
-const REMOTE_PERMISSION_PERMITS = new Map<number, "allow" | "deny">(
-  REMOTE_PERMISSION_PERMIT_PAIRS.flatMap(([recordPermit, gqlPermit, permit]) => [
-    [recordPermit, permit],
-    [gqlPermit, permit],
-  ]),
-);
-
-const REMOTE_PERMISSION_OPERATOR_PAIRS: readonly (readonly [
-  number,
-  number,
-  SnapshotPermissionOperator,
-])[] = [
-  [TailorDBType_Permission_Operator.EQ, TailorDBGQLPermission_Operator.EQ, "eq"],
-  [TailorDBType_Permission_Operator.NE, TailorDBGQLPermission_Operator.NE, "ne"],
-  [TailorDBType_Permission_Operator.IN, TailorDBGQLPermission_Operator.IN, "in"],
-  [TailorDBType_Permission_Operator.NIN, TailorDBGQLPermission_Operator.NIN, "nin"],
-  [TailorDBType_Permission_Operator.HAS_ANY, TailorDBGQLPermission_Operator.HAS_ANY, "hasAny"],
-  [TailorDBType_Permission_Operator.NHAS_ANY, TailorDBGQLPermission_Operator.NHAS_ANY, "nhasAny"],
-];
-
-const REMOTE_PERMISSION_OPERATORS = new Map<number, SnapshotPermissionOperator>(
-  REMOTE_PERMISSION_OPERATOR_PAIRS.flatMap(([recordOperator, gqlOperator, operator]) => [
-    [recordOperator, operator],
-    [gqlOperator, operator],
-  ]),
-);
+// TailorDBType_Permission_Operator and TailorDBGQLPermission_Operator share identical numeric values.
+const REMOTE_PERMISSION_OPERATORS = new Map<number, SnapshotPermissionOperator>([
+  [TailorDBType_Permission_Operator.EQ, "eq"],
+  [TailorDBType_Permission_Operator.NE, "ne"],
+  [TailorDBType_Permission_Operator.IN, "in"],
+  [TailorDBType_Permission_Operator.NIN, "nin"],
+  [TailorDBType_Permission_Operator.HAS_ANY, "hasAny"],
+  [TailorDBType_Permission_Operator.NHAS_ANY, "nhasAny"],
+]);
 
 function convertRemotePermit(
   permit: RemotePermissionPermit,
