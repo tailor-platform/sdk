@@ -17,6 +17,13 @@ const REVIEW_NODE_KINDS = new Set([
   "subscript_expression",
   "type_identifier",
 ]);
+const REVIEW_SCOPE_KINDS = new Set([
+  "program",
+  "statement_block",
+  "function_declaration",
+  "function_expression",
+  "arrow_function",
+]);
 
 interface ImportBinding {
   localName: string;
@@ -345,14 +352,77 @@ function runtimeRootName(source: string): string | null {
   );
 }
 
-function runtimeBindingNames(root: SgNode, imports: SgNode[]): Set<string> {
-  const names = localDeclarationNames(root);
+function importedRuntimeNames(imports: SgNode[]): Set<string> {
+  const names = new Set<string>();
   for (const importStmt of imports) {
     for (const binding of importBindings(importStmt)) {
       names.add(binding.localName);
     }
   }
   return names;
+}
+
+function sameNode(a: SgNode | null, b: SgNode): boolean {
+  if (!a) return false;
+  const ar = a.range();
+  const br = b.range();
+  return (
+    a.kind() === b.kind() && ar.start.index === br.start.index && ar.end.index === br.end.index
+  );
+}
+
+function nearestReviewScope(node: SgNode | null): SgNode | null {
+  let current = node;
+  while (current) {
+    if (REVIEW_SCOPE_KINDS.has(current.kind())) return current;
+    current = current.parent();
+  }
+  return null;
+}
+
+function bindingIncludesName(node: SgNode, name: string): boolean {
+  const names = new Set<string>();
+  collectBindingNames(node, names);
+  return names.has(name);
+}
+
+function scopeHasBindingBefore(scope: SgNode, name: string, beforeIndex: number): boolean {
+  for (const decl of scope.findAll({ rule: { kind: "variable_declarator" } })) {
+    if (!sameNode(nearestReviewScope(decl.parent()), scope)) continue;
+    if (decl.range().start.index >= beforeIndex) continue;
+    const binding = firstDeclaratorChild(decl);
+    if (binding && bindingIncludesName(binding, name)) return true;
+  }
+
+  for (const param of scope.findAll({
+    rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
+  })) {
+    if (!sameNode(nearestReviewScope(param.parent()), scope)) continue;
+    const binding = param
+      .children()
+      .find((child) =>
+        ["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind()),
+      );
+    if (binding && bindingIncludesName(binding, name)) return true;
+  }
+
+  return false;
+}
+
+function hasRuntimeBindingInScope(
+  node: SgNode,
+  rootName: string,
+  importedNames: Set<string>,
+): boolean {
+  if (importedNames.has(rootName)) return true;
+
+  const beforeIndex = node.range().start.index;
+  let scope = nearestReviewScope(node);
+  while (scope) {
+    if (scopeHasBindingBefore(scope, rootName, beforeIndex)) return true;
+    scope = nearestReviewScope(scope.parent());
+  }
+  return false;
 }
 
 function collectStringRuntimeGlobalFindings(
@@ -386,7 +456,7 @@ function collectDirectRuntimeGlobalFindings(
   root: SgNode,
   source: string,
   file: string,
-  boundNames: Set<string>,
+  importedNames: Set<string>,
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {
@@ -395,7 +465,7 @@ function collectDirectRuntimeGlobalFindings(
   })) {
     const nodeText = node.text();
     const rootName = runtimeRootName(nodeText);
-    if (!rootName || boundNames.has(rootName)) continue;
+    if (!rootName || hasRuntimeBindingInScope(node, rootName, importedNames)) continue;
     if (!runtimeGlobalTextPattern.test(nodeText)) continue;
     addReviewFinding(
       findings,
@@ -429,7 +499,7 @@ export function reviewFindings(
     root,
     source,
     relativePath,
-    runtimeBindingNames(root, imports),
+    importedRuntimeNames(imports),
     findings,
     seen,
   );

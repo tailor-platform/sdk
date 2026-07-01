@@ -262,6 +262,34 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("reports spaced bracket runtime globals outside unrelated binding scopes", async () => {
+    await writeProjectFile(
+      "resolvers/scoped.ts",
+      [
+        "function capture(tailor: unknown) {}",
+        'const clientFactory = tailor ["idp"].Client;',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/scoped.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/scoped.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const clientFactory = tailor ["idp"].Client;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports shorthand Tailor error globals left for manual migration", async () => {
     await writeProjectFile("errors.ts", ["const exported = { TailorErrors };", ""].join("\n"));
 
