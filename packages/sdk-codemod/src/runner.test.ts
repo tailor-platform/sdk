@@ -1186,6 +1186,27 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "computed.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          'export const token = await auth["getConnectionToken"]("google");',
+          'export const tokenGetter = auth["getConnectionToken"];',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "namespace-computed.ts"),
+        [
+          'import * as cfg from "../tailor.config";',
+          "",
+          "export async function run() {",
+          '  return cfg.auth["getConnectionToken"]("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "non-call.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1217,8 +1238,10 @@ describe("runCodemods", () => {
           prompt: codemod.prompt,
           files: [
             "collision.ts",
+            "computed.ts",
             "destructure.ts",
             "import-equals-collision.ts",
+            "namespace-computed.ts",
             "namespace-import.ts",
             "non-call.ts",
             "type-collision.ts",
@@ -1231,6 +1254,16 @@ describe("runCodemods", () => {
               excerpt: 'return auth.getConnectionToken("google");',
             }),
             expect.objectContaining({
+              file: "computed.ts",
+              line: 3,
+              excerpt: 'export const token = await auth["getConnectionToken"]("google");',
+            }),
+            expect.objectContaining({
+              file: "computed.ts",
+              line: 4,
+              excerpt: 'export const tokenGetter = auth["getConnectionToken"];',
+            }),
+            expect.objectContaining({
               file: "destructure.ts",
               excerpt: "export const { getConnectionToken } = auth;",
             }),
@@ -1238,6 +1271,11 @@ describe("runCodemods", () => {
               file: "import-equals-collision.ts",
               line: 5,
               excerpt: 'return auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "namespace-computed.ts",
+              line: 4,
+              excerpt: 'return cfg.auth["getConnectionToken"]("google");',
             }),
             expect.objectContaining({
               file: "namespace-import.ts",
