@@ -406,6 +406,7 @@ function directlyDeclaredNames(scope: SgNode): Set<string> {
   }
 
   if (kind === "arrow_function") {
+    collectFunctionScopedVarNames(scope, names);
     collectArrowParameterNames(scope, names);
   } else if (kind === "catch_clause") {
     for (const child of scope.children()) {
@@ -443,30 +444,47 @@ function isReferenceShadowed(node: SgNode, localName: string): boolean {
   return false;
 }
 
+function authConnectionTokenReferenceFromMember(
+  member: SgNode,
+  authLocalNames: Set<string>,
+): TokenCall | null {
+  const property = member.field("property");
+  const object = member.field("object");
+  if (
+    property?.text() !== GET_CONNECTION_TOKEN ||
+    object?.kind() !== "identifier" ||
+    !authLocalNames.has(object.text())
+  ) {
+    return null;
+  }
+
+  if (isReferenceShadowed(object, object.text())) return null;
+
+  const range = object.range();
+  return {
+    objectNode: object,
+    localName: object.text(),
+    range: [range.start.index, range.end.index],
+  };
+}
+
+function findAuthConnectionTokenReferences(root: SgNode, authLocalNames: Set<string>): TokenCall[] {
+  const references: TokenCall[] = [];
+  for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
+    const reference = authConnectionTokenReferenceFromMember(member, authLocalNames);
+    if (reference) references.push(reference);
+  }
+  return references;
+}
+
 function findAuthConnectionTokenCalls(root: SgNode, authLocalNames: Set<string>): TokenCall[] {
   const calls: TokenCall[] = [];
   for (const call of root.findAll({ rule: { kind: "call_expression" } })) {
     const callee = call.field("function");
     if (callee?.kind() !== "member_expression") continue;
 
-    const property = callee.field("property");
-    const object = callee.field("object");
-    if (
-      property?.text() !== GET_CONNECTION_TOKEN ||
-      object?.kind() !== "identifier" ||
-      !authLocalNames.has(object.text())
-    ) {
-      continue;
-    }
-
-    if (isReferenceShadowed(object, object.text())) continue;
-
-    const range = object.range();
-    calls.push({
-      objectNode: object,
-      localName: object.text(),
-      range: [range.start.index, range.end.index],
-    });
+    const reference = authConnectionTokenReferenceFromMember(callee, authLocalNames);
+    if (reference) calls.push(reference);
   }
   return calls;
 }
@@ -765,15 +783,15 @@ export function reviewFindings(
 
   const imports = findImportStatements(root);
   const authBindings = findTailorConfigAuthBindings(imports);
-  const calls = findAuthConnectionTokenCalls(
+  const references = findAuthConnectionTokenReferences(
     root,
     new Set(authBindings.map((binding) => binding.localName)),
   );
 
-  return calls.map((call) => ({
+  return references.map((reference) => ({
     file: relativePath,
-    line: lineForIndex(source, call.range[0]),
+    line: lineForIndex(source, reference.range[0]),
     message: "Replace defineAuth auth.getConnectionToken() with runtime authconnection.",
-    excerpt: excerptForIndex(source, call.range[0]),
+    excerpt: excerptForIndex(source, reference.range[0]),
   }));
 }
