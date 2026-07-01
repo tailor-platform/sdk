@@ -1461,6 +1461,9 @@ function compareRelationships(
       if (oldRel.targetField !== newRel.targetField) reasons.push("targetField changed");
       if (oldRel.sourceField !== newRel.sourceField) reasons.push("sourceField changed");
       if (oldRel.isArray !== newRel.isArray) reasons.push("isArray changed");
+      if (oldRel.description !== newRel.description) {
+        reasons.push("description changed");
+      }
 
       if (reasons.length > 0) {
         ctx.changes.push({
@@ -1551,13 +1554,12 @@ function normalizeComparableGqlOperations(
 ): SnapshotGqlOperations | undefined {
   if (!operations) return undefined;
 
-  const normalized: SnapshotGqlOperations = {};
-  if (operations.create === false) normalized.create = false;
-  if (operations.update === false) normalized.update = false;
-  if (operations.delete === false) normalized.delete = false;
-  if (operations.read === false) normalized.read = false;
-
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
+  return {
+    create: operations.create ?? true,
+    update: operations.update ?? true,
+    delete: operations.delete ?? true,
+    read: operations.read ?? true,
+  };
 }
 
 function normalizeComparableSettings(
@@ -2024,6 +2026,7 @@ function convertRemoteValidateExpression(expr: string, action: TailorDBType_Perm
 
 function convertRemoteSettingsToSnapshot(
   remoteSettings: NonNullable<ProtoTailorDBType["schema"]>["settings"] | undefined,
+  expectedSettings?: TailorDBSnapshotType["settings"],
 ): TailorDBSnapshotType["settings"] | undefined {
   const settings: SnapshotSettings = {};
 
@@ -2033,12 +2036,16 @@ function convertRemoteSettingsToSnapshot(
 
   const disabled = remoteSettings?.disableGqlOperations;
   if (disabled) {
-    const gqlOperations: SnapshotGqlOperations = {};
-    if (disabled.create) gqlOperations.create = false;
-    if (disabled.update) gqlOperations.update = false;
-    if (disabled.delete) gqlOperations.delete = false;
-    if (disabled.read) gqlOperations.read = false;
-    if (Object.keys(gqlOperations).length > 0) settings.gqlOperations = gqlOperations;
+    const hasDisabledOperation =
+      disabled.create || disabled.update || disabled.delete || disabled.read;
+    if (expectedSettings?.gqlOperations !== undefined || hasDisabledOperation) {
+      settings.gqlOperations = {
+        create: !disabled.create,
+        update: !disabled.update,
+        delete: !disabled.delete,
+        read: !disabled.read,
+      };
+    }
   }
 
   return Object.keys(settings).length > 0 ? settings : undefined;
@@ -2327,7 +2334,10 @@ function convertRemoteTypeToSnapshot(
   remoteType: ProtoTailorDBType,
   expectedType?: TailorDBSnapshotType,
 ): TailorDBSnapshotType {
-  const settings = convertRemoteSettingsToSnapshot(remoteType.schema?.settings);
+  const settings = convertRemoteSettingsToSnapshot(
+    remoteType.schema?.settings,
+    expectedType?.settings,
+  );
   const relationships = convertRemoteRelationshipsToSnapshot(
     remoteType.schema?.relationships,
     expectedType,

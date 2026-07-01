@@ -768,6 +768,74 @@ describe("snapshot", () => {
       ]);
     });
 
+    test("detects explicit GQL operation enable overrides", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            settings: { gqlOperations: { create: true } },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_settings_modified",
+          typeName: "User",
+          reason: expect.stringContaining("settings changed"),
+        }),
+      ]);
+    });
+
+    test("detects explicit empty GQL operation overrides", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            settings: { gqlOperations: {} },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_settings_modified",
+          typeName: "User",
+          reason: expect.stringContaining("settings changed"),
+        }),
+      ]);
+    });
+
     test("includes relationshipType in relationship_added changes", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
@@ -838,6 +906,59 @@ describe("snapshot", () => {
 
       expect(forwardChange?.relationshipType).toBe("forward");
       expect(backwardChange?.relationshipType).toBe("backward");
+    });
+
+    test("detects relationship description changes", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "Posts by user",
+              },
+            },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "Published posts by user",
+              },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "relationship_modified",
+          typeName: "User",
+          relationshipName: "posts",
+          relationshipType: "backward",
+          reason: expect.stringContaining("description changed"),
+        }),
+      ]);
     });
   });
 
@@ -2510,6 +2631,99 @@ describe("snapshot", () => {
           expect.objectContaining({ typeName: "User", kind: "relationship_mismatch" }),
         ]),
       );
+    });
+
+    test("matches explicit GQL operation enable overrides in remote snapshots", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+            },
+            settings: { gqlOperations: { create: true } },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+          },
+          {
+            settings: {
+              pluralForm: "users",
+              disableGqlOperations: {
+                create: false,
+                update: false,
+                delete: false,
+                read: false,
+              },
+            },
+          },
+        ),
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([]);
+    });
+
+    test("detects remote relationship description mismatch", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+            },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "Posts by user",
+              },
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+          },
+          {
+            relationships: {
+              posts: {
+                refType: "Post",
+                refField: "authorId",
+                srcField: "id",
+                array: true,
+                description: "Published posts by user",
+              },
+            },
+          },
+        ),
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([
+        expect.objectContaining({
+          typeName: "User",
+          kind: "relationship_mismatch",
+          relationshipName: "posts",
+          details: expect.stringContaining("description changed"),
+        }),
+      ]);
     });
 
     test("uses remote GQL permissions when comparing remote snapshots", () => {
