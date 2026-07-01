@@ -102,8 +102,11 @@ export default defineConfig({
   banner: {
     dts: '/// <reference types="@tailor-platform/sdk/runtime/globals" />',
   },
-  // peer dependencies: prevent bundling, resolve at runtime
-  deps: { neverBundle: ["vite", "vitest"] },
+  // peer dependencies: prevent bundling, resolve at runtime.
+  // `@tailor-platform/sdk` (self-name) is kept external so subpath entries can reference
+  // types like `ConnectionName` from the main entry instead of inlining them, letting a
+  // single `declare module "@tailor-platform/sdk"` augmentation narrow every entry point.
+  deps: { neverBundle: ["vite", "vitest", /^@tailor-platform\/sdk$/] },
   sourcemap: true,
   plugins,
   onSuccess: (config) => {

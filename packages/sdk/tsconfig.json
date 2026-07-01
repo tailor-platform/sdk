@@ -5,7 +5,10 @@
     "rootDir": "./",
     "noUncheckedIndexedAccess": true,
     "incremental": true,
-    "tsBuildInfoFile": "./.tsbuildinfo"
+    "tsBuildInfoFile": "./.tsbuildinfo",
+    "paths": {
+      "@tailor-platform/sdk": ["./src/configure/index.ts"]
+    }
   },
   "include": [
     "./src/**/*.ts",
