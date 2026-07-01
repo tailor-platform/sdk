@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/tag-guard@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           target-branch: "__BRANCH__"
   # __TAG_GUARD_JOB_END__
@@ -45,38 +45,38 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/setup@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/install@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/generate-check@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_START__
       - id: tailor-seed-validate
-        uses: tailor-platform/actions/seed-validate@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/seed-validate@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/drift-check@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/migration-drift-check@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __MIGRATION_DRIFT_CHECK_END__
       - id: tailor-plan
-        uses: tailor-platform/actions/plan@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/plan@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -100,15 +100,15 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/setup@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/install@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/deploy@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -138,7 +138,7 @@ jobs:
           fi
       - id: tailor-notify
         if: always() && steps.slack-prereq.outputs.ready == 'true'
-        uses: tailor-platform/actions/notify@a51a94d08b867e576d850d9dd71e6d87f4e0cea0 # feat/setup
+        uses: tailor-platform/actions/notify@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
         with:
           provider: slack
           status: ${{ job.status }}

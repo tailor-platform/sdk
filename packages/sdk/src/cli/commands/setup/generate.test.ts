@@ -78,7 +78,7 @@ describe("renderBranchWorkflow", () => {
   test("pins actions with SHA + version comment, including the tailor actions", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
-    // tailor-platform actions use a branch/tag comment (e.g. "# feat/setup"), not semver
+    // tailor-platform actions use a branch/tag comment (e.g. "# v1.5.0"), not semver
     expect(content).toMatch(/uses: tailor-platform\/actions\/setup@[0-9a-f]{40} # \S+/);
     expect(content).toMatch(/uses: tailor-platform\/actions\/generate-check@[0-9a-f]{40} # \S+/);
     expect(content).toMatch(/uses: tailor-platform\/actions\/plan@[0-9a-f]{40} # \S+/);

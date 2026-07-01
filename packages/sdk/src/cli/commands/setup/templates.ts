@@ -407,7 +407,7 @@ export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   return { content: out, generatedIds };
 }
 
-const ACTIONS_SHA = "a51a94d08b867e576d850d9dd71e6d87f4e0cea0"; // feat/setup
+const ACTIONS_SHA = "d203a37c87b7a69c6040611c33e9e50c1d564ed1"; // v1.5.0
 
 /**
  * Render the coordinator workflow that orchestrates per-app composite actions.
@@ -475,7 +475,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
 
   const driftCheckStep = [
     `- id: tailor-drift-check`,
-    `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # feat/setup`,
+    `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # v1.5.0`,
     `  with:`,
     `    package-manager: ${packageManager}`,
   ].join("\n");
@@ -485,12 +485,12 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       const wdLine = wd ? `\n    working-directory: ${wd}` : "";
       return [
         `- id: tailor-generate-check-${app.name}`,
-        `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # feat/setup`,
+        `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # v1.5.0`,
         `  with:`,
         `    package-manager: ${packageManager}${wdLine}`,
         `- id: tailor-plan-${app.name}`,
         `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
-        `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # feat/setup`,
+        `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # v1.5.0`,
         `  with:`,
         `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
         `    package-manager: ${packageManager}${wdLine}`,
@@ -578,11 +578,11 @@ export function renderTailorSetupAction(params: { packageManager: PackageManager
     `runs:`,
     `  using: composite`,
     `  steps:`,
-    `    - uses: tailor-platform/actions/setup@${ACTIONS_SHA} # feat/setup`,
+    `    - uses: tailor-platform/actions/setup@${ACTIONS_SHA} # v1.5.0`,
     `      with:`,
     `        package-manager: ${packageManager}`,
     `    # Add custom steps here (e.g. private registry authentication)`,
-    `    - uses: tailor-platform/actions/install@${ACTIONS_SHA} # feat/setup`,
+    `    - uses: tailor-platform/actions/install@${ACTIONS_SHA} # v1.5.0`,
     `      with:`,
     `        package-manager: ${packageManager}`,
     `        # editable: install-command:`,
