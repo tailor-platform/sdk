@@ -470,6 +470,17 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("does not report local type-only export clauses", async () => {
+    await writeProjectFile(
+      "resolvers/export-local-type.ts",
+      ["type TailorErrors = Error;", "export type { TailorErrors };", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports runtime globals inside classic for loop bodies", async () => {
     await writeProjectFile(
       "resolvers/for-body.ts",
@@ -499,6 +510,25 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("does not report hoisted var runtime-looking bindings", async () => {
+    await writeProjectFile(
+      "resolvers/hoisted-var.ts",
+      [
+        "function run() {",
+        "  if (ok) {",
+        "    var tailor = {};",
+        "  }",
+        "  tailor.idp.Client;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports runtime globals inside destructuring defaults", async () => {
     await writeProjectFile(
       "resolvers/destructuring-default.ts",
@@ -517,6 +547,47 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 1,
             message: expect.stringContaining("runtime global reference"),
             excerpt: 'const { client = tailor ["idp"].Client } = opts;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports wrapped runtime global roots", async () => {
+    await writeProjectFile(
+      "resolvers/wrapped-root.ts",
+      [
+        "const optional = tailor?.idp.Client;",
+        "const nonNull = tailordb!.file.upload;",
+        "const grouped = (tailor).workflow;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/wrapped-root.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/wrapped-root.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const optional = tailor?.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/wrapped-root.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const nonNull = tailordb!.file.upload;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/wrapped-root.ts",
+            line: 3,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const grouped = (tailor).workflow;",
           }),
         ],
       }),

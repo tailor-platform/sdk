@@ -56,6 +56,13 @@ const REVIEW_FOR_BINDING_DECLARATION_KINDS = new Set([
 ]);
 const REVIEW_FOR_BINDING_KEYWORD_KINDS = new Set(["const", "let", "var"]);
 const REVIEW_FOR_KINDS = new Set(["for_statement", "for_in_statement"]);
+const REVIEW_VAR_SCOPE_KINDS = new Set([
+  "program",
+  "function_declaration",
+  "function_expression",
+  "arrow_function",
+  "method_definition",
+]);
 
 type BindingNamespace = "type" | "value";
 
@@ -403,6 +410,14 @@ function runtimeRootReference(source: string): RuntimeRootReference | null {
     return { rootName: globalObjectMatch[2]!, globalObjectName: globalObjectMatch[1]! };
   }
 
+  const parenthesizedMatch =
+    /^\s*\(\s*(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\s*\)/.exec(
+      source,
+    );
+  if (parenthesizedMatch) {
+    return { rootName: parenthesizedMatch[1]! };
+  }
+
   const bareMatch =
     /^\s*(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(source);
   return bareMatch ? { rootName: bareMatch[1]! } : null;
@@ -435,6 +450,24 @@ function nearestReviewScope(node: SgNode | null): SgNode | null {
     current = current.parent();
   }
   return null;
+}
+
+function nearestVarReviewScope(node: SgNode | null): SgNode | null {
+  let current = node;
+  while (current) {
+    if (REVIEW_VAR_SCOPE_KINDS.has(current.kind())) return current;
+    current = current.parent();
+  }
+  return null;
+}
+
+function isVarDeclarator(decl: SgNode): boolean {
+  return (
+    decl
+      .parent()
+      ?.children()
+      .some((child) => child.kind() === "var") ?? false
+  );
 }
 
 function bindingIncludesName(node: SgNode, name: string): boolean {
@@ -488,8 +521,12 @@ function forBindingChildren(loop: SgNode): SgNode[] {
 
 function scopeHasValueBinding(scope: SgNode, name: string): boolean {
   for (const decl of scope.findAll({ rule: { kind: "variable_declarator" } })) {
-    if (!sameNode(nearestReviewScope(decl.parent()), scope)) continue;
-    if (hasAncestorBeforeScope(decl, scope, REVIEW_FOR_KINDS)) continue;
+    const varDeclarator = isVarDeclarator(decl);
+    const declarationScope = varDeclarator
+      ? nearestVarReviewScope(decl.parent())
+      : nearestReviewScope(decl.parent());
+    if (!sameNode(declarationScope, scope)) continue;
+    if (!varDeclarator && hasAncestorBeforeScope(decl, scope, REVIEW_FOR_KINDS)) continue;
     const binding = firstDeclaratorChild(decl);
     if (binding && bindingIncludesName(binding, name)) return true;
   }
@@ -568,7 +605,19 @@ function ancestorHasValueBinding(node: SgNode, name: string): boolean {
   return false;
 }
 
+function isInTypeOnlyExportStatement(node: SgNode): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === "export_statement") {
+      return current.children().some((child) => child.kind() === "type");
+    }
+    current = current.parent();
+  }
+  return false;
+}
+
 function reviewNodeBindingNamespace(node: SgNode): BindingNamespace {
+  if (node.kind() === "identifier" && isInTypeOnlyExportStatement(node)) return "type";
   return node.kind() === "nested_type_identifier" || node.kind() === "type_identifier"
     ? "type"
     : "value";

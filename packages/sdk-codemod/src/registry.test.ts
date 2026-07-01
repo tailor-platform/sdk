@@ -203,6 +203,22 @@ describe("getApplicableCodemods", () => {
     ).toBe(true);
     expect(
       codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const C = tailor?.idp.Client;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp && pattern.test("const upload = tailordb!.file.upload;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test("const wf = (tailor).workflow;"),
+      ),
+    ).toBe(true);
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
         (pattern) => pattern instanceof RegExp && pattern.test("const { upload } = tailordb.file;"),
       ),
     ).toBe(true);
