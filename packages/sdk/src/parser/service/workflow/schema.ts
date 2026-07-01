@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
 
-export const WorkflowJobSchema = z.object({
+export const WorkflowJobSchema = z.strictObject({
   name: z.string().describe("Job name (must be unique across the project)"),
   trigger: functionSchema.describe("Trigger function that initiates the job"),
   body: functionSchema.describe("Job implementation function"),
@@ -42,6 +42,7 @@ export const RetryPolicySchema = z
     ),
     backoffMultiplier: z.number().min(1).describe("Backoff multiplier (>= 1)"),
   })
+  .strict()
   .refine((data) => durationToSeconds(data.initialBackoff) <= durationToSeconds(data.maxBackoff), {
     message: "initialBackoff must be less than or equal to maxBackoff",
     path: ["initialBackoff"],
@@ -51,7 +52,7 @@ export const RetryPolicySchema = z
     path: ["initialBackoff"],
   });
 
-export const ConcurrencyPolicySchema = z.object({
+export const ConcurrencyPolicySchema = z.strictObject({
   maxConcurrentExecutions: z
     .number()
     .int()
@@ -60,11 +61,13 @@ export const ConcurrencyPolicySchema = z.object({
     .describe("Maximum number of concurrent executions (1-1000)"),
 });
 
-export const WorkflowSchema = z.object({
-  name: z.string().describe("Workflow name"),
-  mainJob: WorkflowJobSchema.describe("Main job that starts the workflow"),
-  retryPolicy: RetryPolicySchema.optional().describe("Retry policy for the workflow"),
-  concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
-    "Concurrency policy for the workflow",
-  ),
-});
+export const WorkflowSchema = z
+  .object({
+    name: z.string().describe("Workflow name"),
+    mainJob: WorkflowJobSchema.describe("Main job that starts the workflow"),
+    retryPolicy: RetryPolicySchema.optional().describe("Retry policy for the workflow"),
+    concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
+      "Concurrency policy for the workflow",
+    ),
+  })
+  .strict();

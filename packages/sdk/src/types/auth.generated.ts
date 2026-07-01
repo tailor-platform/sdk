@@ -412,11 +412,11 @@ export type AuthConfigInput =
       connections?:
         | {
             [x: string]: {
-              type: "oauth2";
               providerUrl: string;
               issuerUrl: string;
               clientId: string;
               clientSecret: string;
+              type: "oauth2";
               authUrl?: string | undefined;
               tokenUrl?: string | undefined;
             };
@@ -482,6 +482,7 @@ export type AuthConfigInput =
                   update?: Function | undefined;
                 }
               | undefined;
+            validate?: (Function | [Function, string])[] | undefined;
             typeName?: string | undefined;
           };
           fields: any;
@@ -610,11 +611,11 @@ export type AuthConfigInput =
       connections?:
         | {
             [x: string]: {
-              type: "oauth2";
               providerUrl: string;
               issuerUrl: string;
               clientId: string;
               clientSecret: string;
+              type: "oauth2";
               authUrl?: string | undefined;
               tokenUrl?: string | undefined;
             };
@@ -760,11 +761,11 @@ export type AuthConfig =
       connections?:
         | {
             [x: string]: {
-              type: "oauth2";
               providerUrl: string;
               issuerUrl: string;
               clientId: string;
               clientSecret: string;
+              type: "oauth2";
               authUrl?: string | undefined;
               tokenUrl?: string | undefined;
             };
@@ -830,6 +831,7 @@ export type AuthConfig =
                   update?: Function | undefined;
                 }
               | undefined;
+            validate?: (Function | [Function, string])[] | undefined;
             typeName?: string | undefined;
           };
           fields: any;
@@ -968,11 +970,11 @@ export type AuthConfig =
       connections?:
         | {
             [x: string]: {
-              type: "oauth2";
               providerUrl: string;
               issuerUrl: string;
               clientId: string;
               clientSecret: string;
+              type: "oauth2";
               authUrl?: string | undefined;
               tokenUrl?: string | undefined;
             };

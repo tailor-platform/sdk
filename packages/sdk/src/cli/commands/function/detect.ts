@@ -7,6 +7,7 @@
 
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { stripExecutorTriggerArgs } from "#/cli/services/executor/loader";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
@@ -76,7 +77,7 @@ export async function detectFunctionType(
   }
 
   // 2. Check executor (only function/jobFunction kinds)
-  const executorResult = ExecutorSchema.safeParse(module.default);
+  const executorResult = ExecutorSchema.safeParse(stripExecutorTriggerArgs(module.default));
   if (executorResult.success) {
     const { operation } = executorResult.data;
     if (operation.kind === "function" || operation.kind === "jobFunction") {
