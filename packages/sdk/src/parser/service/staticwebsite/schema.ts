@@ -10,4 +10,5 @@ export const StaticWebsiteSchema = z
       .describe("IP addresses allowed to access the website"),
     customDomains: z.array(z.string()).optional().describe("Custom domains for the static website"),
   })
+  .strict()
   .brand("StaticWebsiteConfig");

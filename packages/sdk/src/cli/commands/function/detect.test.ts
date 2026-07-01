@@ -40,6 +40,32 @@ export default {
       expect(result.type).toBe("resolver");
       expect(result.name).toBe("my-resolver");
     });
+
+    test("rejects a branded resolver with unknown helper keys", async () => {
+      const filePath = path.join(testDir, "resolver-with-helper.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+const resolver = {
+  operation: "query",
+  name: "my-resolver",
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+  trigger: () => {},
+};
+
+Object.defineProperty(resolver, Symbol.for("tailor-platform/sdk"), {
+  value: "resolver",
+});
+
+export default resolver;
+`,
+      );
+
+      await expect(detectFunctionType({ filePath })).rejects.toThrow(
+        "Could not detect function type",
+      );
+    });
   });
 
   describe("executor detection", () => {
@@ -56,6 +82,33 @@ export default {
     body: (args) => {},
   },
 };
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.type).toBe("executor");
+      expect(result.name).toBe("my-executor");
+    });
+
+    test("detects a function executor with trigger helper args", async () => {
+      const filePath = path.join(testDir, "executor-with-helper.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+const executor = {
+  name: "my-executor",
+  trigger: { kind: "schedule", cron: "0 12 * * *", __args: [{ cron: "0 12 * * *" }] },
+  operation: {
+    kind: "function",
+    body: (args) => {},
+  },
+};
+
+Object.defineProperty(executor, Symbol.for("tailor-platform/sdk"), {
+  value: "executor",
+});
+
+export default executor;
 `,
       );
 
