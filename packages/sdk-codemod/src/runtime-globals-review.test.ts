@@ -180,6 +180,86 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports aliases of ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-alias.ts",
+      ["const runtime = globalThis.tailor;", "const clientFactory = runtime.idp.Client;", ""].join(
+        "\n",
+      ),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-alias.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-alias.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const runtime = globalThis.tailor;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports bracket aliases of ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-bracket-alias.ts",
+      ["const dbRuntime = global['tailordb'];", "const upload = dbRuntime.file.upload;", ""].join(
+        "\n",
+      ),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-bracket-alias.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-bracket-alias.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const dbRuntime = global['tailordb'];",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports casted aliases of ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-casted-alias.ts",
+      [
+        "const runtime = (globalThis as any).tailor;",
+        "const clientFactory = runtime.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-casted-alias.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-casted-alias.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const runtime = (globalThis as any).tailor;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports bracket runtime globals left for manual migration", async () => {
     await writeProjectFile(
       "resolvers/dynamic.ts",

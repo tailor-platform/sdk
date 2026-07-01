@@ -8,6 +8,11 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
+const RUNTIME_ROOT_NAME_PATTERN = String.raw`(?:tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
+const GLOBAL_OBJECT_ROOT_PATTERN = String.raw`(?:\b(?:globalThis|global)\b|\(\s*(?:<[^>]+>\s*)?(?:globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))`;
+const GLOBAL_RUNTIME_ROOT_TEXT_PATTERN = new RegExp(
+  String.raw`${GLOBAL_OBJECT_ROOT_PATTERN}\s*(?:(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME_PATTERN}\b|(?:\?\.|!\s*)?\[\s*["']${RUNTIME_ROOT_NAME_PATTERN}["']\s*\])`,
+);
 const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
 const REVIEW_NODE_KINDS = new Set([
   "member_expression",
@@ -475,6 +480,17 @@ function runtimeRootReference(source: string): RuntimeRootReference | null {
     };
   }
 
+  const globalObjectBracketMatch =
+    /^\s*(?:(globalThis|global)|\(\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\))\s*(?:\?\.|!\s*)?\[\s*["'](tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))["']\s*\]/.exec(
+      source,
+    );
+  if (globalObjectBracketMatch) {
+    return {
+      rootName: globalObjectBracketMatch[3]!,
+      globalObjectName: globalObjectBracketMatch[1] ?? globalObjectBracketMatch[2]!,
+    };
+  }
+
   const parenthesizedMatch =
     /^\s*\(\s*(?:<[^>]+>\s*)?(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)/.exec(
       source,
@@ -808,7 +824,7 @@ function collectDirectRuntimeGlobalFindings(
     ) {
       continue;
     }
-    if (!runtimeGlobalTextPattern.test(nodeText)) continue;
+    if (!rootRef.globalObjectName && !runtimeGlobalTextPattern.test(nodeText)) continue;
     addReviewFinding(
       findings,
       seen,
@@ -825,7 +841,9 @@ export function reviewFindings(
   filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!runtimeGlobalTextPattern.test(source)) return [];
+  if (!runtimeGlobalTextPattern.test(source) && !GLOBAL_RUNTIME_ROOT_TEXT_PATTERN.test(source)) {
+    return [];
+  }
 
   let root: SgNode;
   try {
