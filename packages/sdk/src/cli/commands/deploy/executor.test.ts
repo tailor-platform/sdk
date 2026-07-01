@@ -714,6 +714,7 @@ describe("planExecutor", () => {
 
       const result = await planExecutor(buildPlanContext(application));
 
+      expect(result.changeSet.creates).toHaveLength(1);
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe(expected.case);
       expect(typedConfig.value.eventTypes).toEqual(expected.eventTypes);

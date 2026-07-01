@@ -200,6 +200,31 @@ describe("TailorField enum field tests", () => {
     expect(enumField.metadata.allowedValues).toEqual(expected);
   });
 
+  test("set enum field by passing string infers a string literal union", () => {
+    const enumField = t.enum(["active", "inactive", "pending"]);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
+  });
+
+  test("set enum field by passing object infers a string literal union", () => {
+    const enumField = t.enum([
+      { value: "small", description: "Small size" },
+      { value: "medium" },
+      { value: "large", description: "Large size" },
+    ]);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"small" | "medium" | "large">();
+  });
+
+  test("set enum field by mixing string and object infers a string literal union", () => {
+    const enumField = t.enum(["red", { value: "green", description: "Green color" }, "blue"]);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"red" | "green" | "blue">();
+  });
+
+  test("accepts as const readonly array and infers a string literal union", () => {
+    const STATUSES = ["active", "inactive", "pending"] as const;
+    const enumField = t.enum(STATUSES);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
+  });
+
   test("setting enum without values causes type error", () => {
     // @ts-expect-error AllowedValues requires at least one value
     t.enum([]);
