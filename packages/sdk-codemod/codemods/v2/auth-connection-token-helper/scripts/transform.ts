@@ -659,6 +659,72 @@ function findAuthConnectionTokenNamespaceReferences(
   return references;
 }
 
+function isGetConnectionTokenSubscript(subscript: SgNode): boolean {
+  return stringValue(subscript.field("index")) === GET_CONNECTION_TOKEN;
+}
+
+function authConnectionTokenSubscriptReferenceFromSubscript(
+  subscript: SgNode,
+  authLocalNames: Set<string>,
+): TokenCall | null {
+  const object = subscript.field("object");
+  const receiver = authReceiverIdentifier(object);
+  if (!isGetConnectionTokenSubscript(subscript) || !object || !receiver) return null;
+  if (!authLocalNames.has(receiver.text())) return null;
+  if (isReferenceShadowed(receiver, receiver.text())) return null;
+
+  const range = subscript.range();
+  return {
+    objectNode: object,
+    localName: receiver.text(),
+    range: [range.start.index, range.end.index],
+  };
+}
+
+function findAuthConnectionTokenSubscriptReferences(
+  root: SgNode,
+  authLocalNames: Set<string>,
+): TokenCall[] {
+  const references: TokenCall[] = [];
+  for (const subscript of root.findAll({ rule: { kind: "subscript_expression" } })) {
+    const reference = authConnectionTokenSubscriptReferenceFromSubscript(subscript, authLocalNames);
+    if (reference) references.push(reference);
+  }
+  return references;
+}
+
+function authConnectionTokenNamespaceSubscriptReferenceFromSubscript(
+  subscript: SgNode,
+  namespaceAuthLocalNames: Set<string>,
+): TokenCall | null {
+  const object = subscript.field("object");
+  const receiver = namespaceAuthReceiverIdentifier(object, namespaceAuthLocalNames);
+  if (!isGetConnectionTokenSubscript(subscript) || !object || !receiver) return null;
+  if (isReferenceShadowed(receiver, receiver.text())) return null;
+
+  const range = subscript.range();
+  return {
+    objectNode: object,
+    localName: receiver.text(),
+    range: [range.start.index, range.end.index],
+  };
+}
+
+function findAuthConnectionTokenNamespaceSubscriptReferences(
+  root: SgNode,
+  namespaceAuthLocalNames: Set<string>,
+): TokenCall[] {
+  const references: TokenCall[] = [];
+  for (const subscript of root.findAll({ rule: { kind: "subscript_expression" } })) {
+    const reference = authConnectionTokenNamespaceSubscriptReferenceFromSubscript(
+      subscript,
+      namespaceAuthLocalNames,
+    );
+    if (reference) references.push(reference);
+  }
+  return references;
+}
+
 function objectPatternHasGetConnectionToken(pattern: SgNode): boolean {
   return pattern.children().some((child) => {
     if (
@@ -1062,6 +1128,8 @@ export function reviewFindings(
   const references = [
     ...findAuthConnectionTokenReferences(root, authLocalNames),
     ...findAuthConnectionTokenNamespaceReferences(root, namespaceAuthLocalNames),
+    ...findAuthConnectionTokenSubscriptReferences(root, authLocalNames),
+    ...findAuthConnectionTokenNamespaceSubscriptReferences(root, namespaceAuthLocalNames),
     ...findAuthConnectionTokenDestructures(root, authLocalNames),
   ].toSorted((a, b) => a.range[0] - b.range[0]);
 
