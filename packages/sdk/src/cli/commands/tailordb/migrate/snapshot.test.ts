@@ -2201,34 +2201,34 @@ describe("snapshot", () => {
   // compareRemoteWithSnapshot
   // ==========================================================================
   describe("compareRemoteWithSnapshot", () => {
-    /**
-     * Create a mock ParsedTailorDBType for testing
-     * @param {string} name - Type name
-     * @param {Record<string, object>} fields - Field configurations
-     * @param {Record<string, unknown>} schema - Additional remote schema properties
-     * @returns {ProtoTailorDBType} Mock ParsedTailorDBType
-     */
-    function createMockRemoteType(
-      name: string,
-      fields: Record<
-        string,
-        {
-          type: string;
-          required: boolean;
-          array?: boolean;
-          unique?: boolean;
-          foreignKey?: boolean;
-          foreignKeyType?: string;
-          foreignKeyField?: string;
-          index?: boolean;
-          allowedValues?: { value: string }[];
-          description?: string;
-          scale?: number;
-          validate?: unknown[];
-        }
-      >,
-      schema: Record<string, unknown> = {},
-    ): ProtoTailorDBType {
+    type MockRemoteFieldConfig = {
+      type: string;
+      required: boolean;
+      array?: boolean;
+      unique?: boolean;
+      foreignKey?: boolean;
+      foreignKeyType?: string;
+      foreignKeyField?: string;
+      index?: boolean;
+      allowedValues?: { value: string }[];
+      description?: string;
+      scale?: number;
+      validate?: unknown[];
+      hooks?: {
+        create?: { expr: string };
+        update?: { expr: string };
+      };
+      serial?: {
+        start: number;
+        maxValue?: number;
+        format?: string;
+      };
+      fields?: Record<string, MockRemoteFieldConfig>;
+    };
+
+    function createMockRemoteFieldConfigs(
+      fields: Record<string, MockRemoteFieldConfig>,
+    ): Record<string, unknown> {
       const fieldConfigs: Record<string, unknown> = {};
       for (const [fieldName, config] of Object.entries(fields)) {
         fieldConfigs[fieldName] = {
@@ -2243,16 +2243,32 @@ describe("snapshot", () => {
           description: config.description ?? "",
           allowedValues: config.allowedValues ?? [],
           validate: config.validate ?? [],
-          fields: {},
+          hooks: config.hooks,
+          serial: config.serial,
+          fields: config.fields ? createMockRemoteFieldConfigs(config.fields) : {},
           ...(config.scale !== undefined && { scale: config.scale }),
         };
       }
+      return fieldConfigs;
+    }
 
+    /**
+     * Create a mock ParsedTailorDBType for testing
+     * @param {string} name - Type name
+     * @param {Record<string, object>} fields - Field configurations
+     * @param {Record<string, unknown>} schema - Additional remote schema properties
+     * @returns {ProtoTailorDBType} Mock ParsedTailorDBType
+     */
+    function createMockRemoteType(
+      name: string,
+      fields: Record<string, MockRemoteFieldConfig>,
+      schema: Record<string, unknown> = {},
+    ): ProtoTailorDBType {
       return {
         name,
         schema: {
           ...schema,
-          fields: fieldConfigs,
+          fields: createMockRemoteFieldConfigs(fields),
         },
       } as unknown as ProtoTailorDBType;
     }
@@ -3207,6 +3223,68 @@ describe("snapshot", () => {
       expect(drifts.length).toBe(1);
       expect(drifts[0]!.kind).toBe("field_mismatch");
       expect(drifts[0]!.details).toContain("allowedValues");
+    });
+
+    test("reports detailed drift for hooks, validation, serial, and nested fields", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              metadata: {
+                type: "nested",
+                required: false,
+                hooks: { create: { expr: "snapshotCreate" } },
+                validate: [
+                  {
+                    script: { expr: "snapshotValid" },
+                    errorMessage: "Snapshot validation",
+                  },
+                ],
+                serial: { start: 10, maxValue: 99, format: "S-%02d" },
+                fields: {
+                  child: { type: "string", required: false },
+                },
+              },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          metadata: {
+            type: "nested",
+            required: false,
+            hooks: { create: { expr: "remoteCreate" } },
+            validate: [
+              {
+                action: TailorDBType_PermitAction.ALLOW,
+                script: { expr: "remoteValid" },
+                errorMessage: "Remote validation",
+              },
+            ],
+            serial: { start: 1, maxValue: 9, format: "R-%02d" },
+            fields: {
+              child: { type: "number", required: false },
+            },
+          },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts).toHaveLength(1);
+      expect(drifts[0]!.kind).toBe("field_mismatch");
+      expect(drifts[0]!.details).toContain("hooks.create");
+      expect(drifts[0]!.details).toContain("validate[0].script");
+      expect(drifts[0]!.details).toContain("serial.start");
+      expect(drifts[0]!.details).toContain("fields.child.type");
     });
 
     test("normalizes decimal scale at compare entry so missing scale matches remote default", () => {

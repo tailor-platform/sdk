@@ -42,6 +42,8 @@ import {
   INITIAL_SCHEMA_NUMBER,
   type RemoteGqlPermission,
   type SchemaSnapshot,
+  type SnapshotGqlOperations,
+  type SnapshotSettings,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
@@ -138,10 +140,29 @@ async function fetchRemoteGqlPermissions(
   });
 }
 
-type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;
-type SnapshotGqlOperations = NonNullable<SnapshotSettings["gqlOperations"]>;
 type RemoteTailorDBSettings = NonNullable<NonNullable<ProtoTailorDBType["schema"]>["settings"]>;
 type DeployGqlOperations = SnapshotGqlOperations | "query" | undefined;
+
+function definedWhenNotEmpty<T extends object>(value: T): T | undefined {
+  return Object.keys(value).length > 0 ? value : undefined;
+}
+
+function namespaceConfig(
+  config: LoadedConfig,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  namespace: string,
+): TailorDBServiceConfig | undefined {
+  const inputConfig = tailorDBInputs.find((input) => input.namespace === namespace)?.config;
+  return inputConfig ?? (config.db?.[namespace] as TailorDBServiceConfig | undefined);
+}
+
+function namespaceGqlOperations(
+  config: LoadedConfig,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  namespace: string,
+): DeployGqlOperations {
+  return namespaceConfig(config, tailorDBInputs, namespace)?.gqlOperations;
+}
 
 function configuredDisabledGqlOperations(
   operations: DeployGqlOperations,
@@ -157,7 +178,7 @@ function configuredDisabledGqlOperations(
   if (operations.delete === false) disabled.delete = false;
   if (operations.read === false) disabled.read = false;
 
-  return Object.keys(disabled).length > 0 ? disabled : undefined;
+  return definedWhenNotEmpty(disabled);
 }
 
 function appliedConfiguredDisabledGqlOperations(
@@ -172,19 +193,19 @@ function appliedConfiguredDisabledGqlOperations(
   if (configuredDisabled.delete === false && remoteDisabled.delete) disabled.delete = false;
   if (configuredDisabled.read === false && remoteDisabled.read) disabled.read = false;
 
-  return Object.keys(disabled).length > 0 ? disabled : undefined;
+  return definedWhenNotEmpty(disabled);
 }
 
 function deployComparableSnapshot(
   snapshot: SchemaSnapshot,
   remoteTypes: ReadonlyArray<ProtoTailorDBType>,
-  input: TailorDBDeployInput | undefined,
+  gqlOperations: DeployGqlOperations,
 ): SchemaSnapshot {
-  const comparable = structuredClone(snapshot) as SchemaSnapshot;
   const remoteTypesByName = new Map(remoteTypes.map((type) => [type.name, type]));
-  const configuredDisabled = configuredDisabledGqlOperations(input?.config.gqlOperations);
+  const configuredDisabled = configuredDisabledGqlOperations(gqlOperations);
+  const types: Record<string, TailorDBSnapshotType> = {};
 
-  for (const [typeName, type] of Object.entries(comparable.types)) {
+  for (const [typeName, type] of Object.entries(snapshot.types)) {
     const settings: SnapshotSettings = { ...type.settings };
     const remoteSettings = remoteTypesByName.get(typeName)?.schema?.settings;
 
@@ -200,10 +221,17 @@ function deployComparableSnapshot(
       if (disabled) settings.gqlOperations = disabled;
     }
 
-    type.settings = Object.keys(settings).length > 0 ? settings : undefined;
+    const comparableType = { ...type };
+    const comparableSettings = definedWhenNotEmpty(settings);
+    if (comparableSettings) {
+      comparableType.settings = comparableSettings;
+    } else {
+      delete comparableType.settings;
+    }
+    types[typeName] = comparableType;
   }
 
-  return comparable;
+  return { ...snapshot, types };
 }
 
 /**
@@ -237,6 +265,7 @@ async function getRemoteMigrationNumber(
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migration config
+ * @param {LoadedConfig} config - Loaded application config
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
  * @returns {Promise<RemoteSchemaVerificationResult[]>} Verification results per namespace
  */
@@ -244,6 +273,7 @@ async function verifyRemoteSchema(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
+  config: LoadedConfig,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
 ): Promise<RemoteSchemaVerificationResult[]> {
   const results: RemoteSchemaVerificationResult[] = [];
@@ -288,7 +318,7 @@ async function verifyRemoteSchema(
     const expectedDeploySnapshot = deployComparableSnapshot(
       expectedSnapshot,
       remoteTypes,
-      tailorDBInputs.find((input) => input.namespace === namespace),
+      namespaceGqlOperations(config, tailorDBInputs, namespace),
     );
 
     // Compare remote with expected snapshot
@@ -390,6 +420,7 @@ async function validateAndDetectMigrations(
         client,
         workspaceId,
         namespacesWithMigrations,
+        config,
         tailorDBInputs,
       );
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);

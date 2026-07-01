@@ -1384,6 +1384,35 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
     await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
   });
 
+  test("uses db config gqlOperations when the migration namespace has no deploy input", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+
+    const client = schemaVerificationClient({
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: false,
+      disableGqlOperations: {
+        create: true,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    });
+
+    const planResult = makePlanResult();
+    planResult.context.config.db = {
+      "test-tailordb": {
+        files: [],
+        migration: { directory: "." },
+        gqlOperations: { create: false },
+      },
+    };
+
+    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+  });
+
   test("does not require unapplied deploy-derived settings during schema verification", async () => {
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);

@@ -48,12 +48,14 @@ import type {
   SnapshotFieldConfig,
   SnapshotGqlAction,
   SnapshotGqlPermission,
+  SnapshotGqlOperations,
   SnapshotPermissionOperand,
   SnapshotPermissionOperator,
   SnapshotIndexConfig,
   SnapshotPermissionCondition,
   SnapshotRecordPermission,
   SnapshotRelationship,
+  SnapshotSettings,
   TailorDBSnapshotType,
 } from "./snapshot-types";
 import type { SchemaDrift } from "./types";
@@ -186,6 +188,8 @@ export type {
   SnapshotGqlAction,
   SnapshotGqlPermissionPolicy,
   SnapshotGqlPermission,
+  SnapshotGqlOperations,
+  SnapshotSettings,
   TailorDBSnapshotType,
   SchemaSnapshot,
   NormalizedSchemaSnapshot,
@@ -1579,9 +1583,6 @@ function canonicalActionPermission(policy: SnapshotActionPermission): SnapshotAc
   return { ...policy, conditions: sortByJson(policy.conditions) };
 }
 
-type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;
-type SnapshotGqlOperations = NonNullable<SnapshotSettings["gqlOperations"]>;
-
 function normalizeComparableGqlOperations(
   operations: SnapshotGqlOperations | undefined,
 ): SnapshotGqlOperations | undefined {
@@ -2202,68 +2203,58 @@ function convertRemoteRelationshipsToSnapshot(
 
 type RemoteRecordPolicy = NonNullable<TailorDBType_Permission>["create"][number];
 
-function convertRemotePermit(permit: TailorDBType_Permission_Permit): "allow" | "deny" {
-  switch (permit) {
-    case TailorDBType_Permission_Permit.ALLOW:
-      return "allow";
-    case TailorDBType_Permission_Permit.DENY:
-      return "deny";
-    default:
-      throw new Error(`Unsupported record permission permit: ${permit}`);
-  }
+type RemotePermissionPermit = TailorDBType_Permission_Permit | TailorDBGQLPermission_Permit;
+type RemotePermissionOperator = TailorDBType_Permission_Operator | TailorDBGQLPermission_Operator;
+type PermissionSource = "record" | "GQL";
+
+const REMOTE_PERMISSION_PERMIT_PAIRS: readonly (readonly [number, number, "allow" | "deny"])[] = [
+  [TailorDBType_Permission_Permit.ALLOW, TailorDBGQLPermission_Permit.ALLOW, "allow"],
+  [TailorDBType_Permission_Permit.DENY, TailorDBGQLPermission_Permit.DENY, "deny"],
+];
+
+const REMOTE_PERMISSION_PERMITS = new Map<number, "allow" | "deny">(
+  REMOTE_PERMISSION_PERMIT_PAIRS.flatMap(([recordPermit, gqlPermit, permit]) => [
+    [recordPermit, permit],
+    [gqlPermit, permit],
+  ]),
+);
+
+const REMOTE_PERMISSION_OPERATOR_PAIRS: readonly (readonly [
+  number,
+  number,
+  SnapshotPermissionOperator,
+])[] = [
+  [TailorDBType_Permission_Operator.EQ, TailorDBGQLPermission_Operator.EQ, "eq"],
+  [TailorDBType_Permission_Operator.NE, TailorDBGQLPermission_Operator.NE, "ne"],
+  [TailorDBType_Permission_Operator.IN, TailorDBGQLPermission_Operator.IN, "in"],
+  [TailorDBType_Permission_Operator.NIN, TailorDBGQLPermission_Operator.NIN, "nin"],
+  [TailorDBType_Permission_Operator.HAS_ANY, TailorDBGQLPermission_Operator.HAS_ANY, "hasAny"],
+  [TailorDBType_Permission_Operator.NHAS_ANY, TailorDBGQLPermission_Operator.NHAS_ANY, "nhasAny"],
+];
+
+const REMOTE_PERMISSION_OPERATORS = new Map<number, SnapshotPermissionOperator>(
+  REMOTE_PERMISSION_OPERATOR_PAIRS.flatMap(([recordOperator, gqlOperator, operator]) => [
+    [recordOperator, operator],
+    [gqlOperator, operator],
+  ]),
+);
+
+function convertRemotePermit(
+  permit: RemotePermissionPermit,
+  source: PermissionSource,
+): "allow" | "deny" {
+  const converted = REMOTE_PERMISSION_PERMITS.get(permit);
+  if (converted) return converted;
+  throw new Error(`Unsupported ${source} permission permit: ${permit}`);
 }
 
-function convertRemoteGqlPermit(permit: TailorDBGQLPermission_Permit): "allow" | "deny" {
-  switch (permit) {
-    case TailorDBGQLPermission_Permit.ALLOW:
-      return "allow";
-    case TailorDBGQLPermission_Permit.DENY:
-      return "deny";
-    default:
-      throw new Error(`Unsupported GQL permission permit: ${permit}`);
-  }
-}
-
-function convertRemoteRecordOperator(
-  operator: TailorDBType_Permission_Operator,
+function convertRemoteOperator(
+  operator: RemotePermissionOperator,
+  source: PermissionSource,
 ): SnapshotPermissionOperator {
-  switch (operator) {
-    case TailorDBType_Permission_Operator.EQ:
-      return "eq";
-    case TailorDBType_Permission_Operator.NE:
-      return "ne";
-    case TailorDBType_Permission_Operator.IN:
-      return "in";
-    case TailorDBType_Permission_Operator.NIN:
-      return "nin";
-    case TailorDBType_Permission_Operator.HAS_ANY:
-      return "hasAny";
-    case TailorDBType_Permission_Operator.NHAS_ANY:
-      return "nhasAny";
-    default:
-      throw new Error(`Unsupported record permission operator: ${operator}`);
-  }
-}
-
-function convertRemoteGqlOperator(
-  operator: TailorDBGQLPermission_Operator,
-): SnapshotPermissionOperator {
-  switch (operator) {
-    case TailorDBGQLPermission_Operator.EQ:
-      return "eq";
-    case TailorDBGQLPermission_Operator.NE:
-      return "ne";
-    case TailorDBGQLPermission_Operator.IN:
-      return "in";
-    case TailorDBGQLPermission_Operator.NIN:
-      return "nin";
-    case TailorDBGQLPermission_Operator.HAS_ANY:
-      return "hasAny";
-    case TailorDBGQLPermission_Operator.NHAS_ANY:
-      return "nhasAny";
-    default:
-      throw new Error(`Unsupported GQL permission operator: ${operator}`);
-  }
+  const converted = REMOTE_PERMISSION_OPERATORS.get(operator);
+  if (converted) return converted;
+  throw new Error(`Unsupported ${source} permission operator: ${operator}`);
 }
 
 function convertRemoteValueOperand(
@@ -2290,7 +2281,7 @@ function convertRemoteRecordCondition(
 ): SnapshotPermissionCondition {
   return [
     convertRemoteValueOperand(condition.left),
-    convertRemoteRecordOperator(condition.operator),
+    convertRemoteOperator(condition.operator, "record"),
     convertRemoteValueOperand(condition.right),
   ];
 }
@@ -2300,7 +2291,7 @@ function convertRemoteGqlCondition(
 ): SnapshotPermissionCondition {
   return [
     convertRemoteValueOperand(condition.left),
-    convertRemoteGqlOperator(condition.operator),
+    convertRemoteOperator(condition.operator, "GQL"),
     convertRemoteValueOperand(condition.right),
   ];
 }
@@ -2308,7 +2299,7 @@ function convertRemoteGqlCondition(
 function convertRemoteRecordPolicy(policy: RemoteRecordPolicy): SnapshotActionPermission {
   return {
     conditions: policy.conditions.map(convertRemoteRecordCondition),
-    permit: convertRemotePermit(policy.permit),
+    permit: convertRemotePermit(policy.permit, "record"),
     ...(policy.description && { description: policy.description }),
   };
 }
@@ -2356,7 +2347,7 @@ function convertRemoteGqlPermissionToSnapshot(
     permission?.policies.map((policy) => ({
       conditions: policy.conditions.map(convertRemoteGqlCondition),
       actions: policy.actions.map(convertRemoteGqlAction),
-      permit: convertRemoteGqlPermit(policy.permit),
+      permit: convertRemotePermit(policy.permit, "GQL"),
       ...(policy.description && { description: policy.description }),
     })) ?? [];
 
@@ -2444,6 +2435,268 @@ export function createSnapshotFromRemoteTypes(
   });
 }
 
+function fieldDifferenceValue(value: unknown): string {
+  if (value === undefined || value === "") return "none";
+  return String(value);
+}
+
+function fieldDifferenceKey(prefix: string, key: string): string {
+  return prefix ? `${prefix}.${key}` : key;
+}
+
+function addFieldDifference(
+  differences: string[],
+  prefix: string,
+  key: string,
+  remoteValue: unknown,
+  snapshotValue: unknown,
+): void {
+  if (remoteValue === snapshotValue) return;
+  differences.push(
+    `${fieldDifferenceKey(prefix, key)}: remote=${fieldDifferenceValue(
+      remoteValue,
+    )}, expected=${fieldDifferenceValue(snapshotValue)}`,
+  );
+}
+
+function addBooleanFieldDifference(
+  differences: string[],
+  prefix: string,
+  key: keyof SnapshotFieldConfig,
+  remoteField: SnapshotFieldConfig,
+  snapshotField: SnapshotFieldConfig,
+): void {
+  addFieldDifference(
+    differences,
+    prefix,
+    key,
+    remoteField[key] ?? false,
+    snapshotField[key] ?? false,
+  );
+}
+
+function addAllowedValuesDifferences(
+  differences: string[],
+  prefix: string,
+  remoteField: SnapshotFieldConfig,
+  snapshotField: SnapshotFieldConfig,
+): void {
+  const remoteAllowed = remoteField.allowedValues ?? [];
+  const snapshotAllowed = snapshotField.allowedValues ?? [];
+  if (remoteAllowed.length !== snapshotAllowed.length) {
+    differences.push(
+      `${fieldDifferenceKey(prefix, "allowedValues")} count: remote=${remoteAllowed.length}, expected=${snapshotAllowed.length}`,
+    );
+    return;
+  }
+
+  const snapshotAllowedValues = new Map(snapshotAllowed.map((v) => [v.value, v.description]));
+  for (const value of remoteAllowed) {
+    if (!snapshotAllowedValues.has(value.value)) {
+      differences.push(
+        `${fieldDifferenceKey(prefix, "allowedValues")}: remote has '${value.value}' not in snapshot`,
+      );
+      return;
+    }
+    const snapshotDescription = snapshotAllowedValues.get(value.value);
+    if ((value.description ?? "") !== (snapshotDescription ?? "")) {
+      addFieldDifference(
+        differences,
+        prefix,
+        `allowedValues.${value.value}.description`,
+        value.description ?? "",
+        snapshotDescription ?? "",
+      );
+      return;
+    }
+  }
+
+  const remoteAllowedValues = new Set(remoteAllowed.map((v) => v.value));
+  for (const value of snapshotAllowed) {
+    if (!remoteAllowedValues.has(value.value)) {
+      differences.push(
+        `${fieldDifferenceKey(prefix, "allowedValues")}: snapshot has '${value.value}' not in remote`,
+      );
+      return;
+    }
+  }
+}
+
+function addHooksDifferences(
+  differences: string[],
+  prefix: string,
+  remoteField: SnapshotFieldConfig,
+  snapshotField: SnapshotFieldConfig,
+): void {
+  addFieldDifference(
+    differences,
+    prefix,
+    "hooks.create",
+    remoteField.hooks?.create?.expr ?? "",
+    snapshotField.hooks?.create?.expr ?? "",
+  );
+  addFieldDifference(
+    differences,
+    prefix,
+    "hooks.update",
+    remoteField.hooks?.update?.expr ?? "",
+    snapshotField.hooks?.update?.expr ?? "",
+  );
+}
+
+function addValidationDifferences(
+  differences: string[],
+  prefix: string,
+  remoteField: SnapshotFieldConfig,
+  snapshotField: SnapshotFieldConfig,
+): void {
+  const remoteValidate = remoteField.validate ?? [];
+  const snapshotValidate = snapshotField.validate ?? [];
+  if (remoteValidate.length !== snapshotValidate.length) {
+    differences.push(
+      `${fieldDifferenceKey(prefix, "validate")} count: remote=${remoteValidate.length}, expected=${snapshotValidate.length}`,
+    );
+  }
+
+  const commonLength = Math.min(remoteValidate.length, snapshotValidate.length);
+  for (let index = 0; index < commonLength; index++) {
+    const remoteValidation = assertDefined(
+      remoteValidate[index],
+      `remoteValidate missing index ${index}`,
+    );
+    const snapshotValidation = assertDefined(
+      snapshotValidate[index],
+      `snapshotValidate missing index ${index}`,
+    );
+    addFieldDifference(
+      differences,
+      prefix,
+      `validate[${index}].script`,
+      remoteValidation.script?.expr ?? "",
+      snapshotValidation.script?.expr ?? "",
+    );
+    addFieldDifference(
+      differences,
+      prefix,
+      `validate[${index}].errorMessage`,
+      remoteValidation.errorMessage,
+      snapshotValidation.errorMessage,
+    );
+  }
+}
+
+function addSerialDifferences(
+  differences: string[],
+  prefix: string,
+  remoteField: SnapshotFieldConfig,
+  snapshotField: SnapshotFieldConfig,
+): void {
+  addFieldDifference(
+    differences,
+    prefix,
+    "serial.start",
+    remoteField.serial?.start,
+    snapshotField.serial?.start,
+  );
+  addFieldDifference(
+    differences,
+    prefix,
+    "serial.maxValue",
+    remoteField.serial?.maxValue,
+    snapshotField.serial?.maxValue,
+  );
+  addFieldDifference(
+    differences,
+    prefix,
+    "serial.format",
+    remoteField.serial?.format ?? "",
+    snapshotField.serial?.format ?? "",
+  );
+}
+
+function addNestedFieldDifferences(
+  differences: string[],
+  prefix: string,
+  remoteField: SnapshotFieldConfig,
+  snapshotField: SnapshotFieldConfig,
+): void {
+  const remoteFields = remoteField.fields ?? {};
+  const snapshotFields = snapshotField.fields ?? {};
+  const remoteFieldNames = Object.keys(remoteFields);
+  const snapshotFieldNames = Object.keys(snapshotFields);
+
+  if (remoteFieldNames.length !== snapshotFieldNames.length) {
+    differences.push(
+      `${fieldDifferenceKey(prefix, "fields")} count: remote=${remoteFieldNames.length}, expected=${snapshotFieldNames.length}`,
+    );
+  }
+
+  for (const fieldName of remoteFieldNames) {
+    const remoteNestedField = remoteFields[fieldName];
+    const snapshotNestedField = snapshotFields[fieldName];
+    const nestedPrefix = fieldDifferenceKey(prefix, `fields.${fieldName}`);
+    if (!snapshotNestedField) {
+      differences.push(`${nestedPrefix}: exists in remote but not snapshot`);
+      continue;
+    }
+    addFieldDifferences(
+      differences,
+      nestedPrefix,
+      assertDefined(remoteNestedField, `remote field "${fieldName}" missing`),
+      snapshotNestedField,
+    );
+  }
+
+  for (const fieldName of snapshotFieldNames) {
+    if (remoteFields[fieldName]) continue;
+    differences.push(
+      `${fieldDifferenceKey(prefix, `fields.${fieldName}`)}: exists in snapshot but not remote`,
+    );
+  }
+}
+
+function addFieldDifferences(
+  differences: string[],
+  prefix: string,
+  remoteField: SnapshotFieldConfig,
+  snapshotField: SnapshotFieldConfig,
+): void {
+  addFieldDifference(differences, prefix, "type", remoteField.type, snapshotField.type);
+  addFieldDifference(differences, prefix, "required", remoteField.required, snapshotField.required);
+
+  for (const key of ["array", "index", "unique", "foreignKey", "vector"] as const) {
+    addBooleanFieldDifference(differences, prefix, key, remoteField, snapshotField);
+  }
+
+  addFieldDifference(
+    differences,
+    prefix,
+    "foreignKeyType",
+    remoteField.foreignKeyType,
+    snapshotField.foreignKeyType,
+  );
+  addFieldDifference(
+    differences,
+    prefix,
+    "foreignKeyField",
+    remoteField.foreignKeyField,
+    snapshotField.foreignKeyField,
+  );
+  addFieldDifference(
+    differences,
+    prefix,
+    "description",
+    remoteField.description ?? "",
+    snapshotField.description ?? "",
+  );
+  addAllowedValuesDifferences(differences, prefix, remoteField, snapshotField);
+  addHooksDifferences(differences, prefix, remoteField, snapshotField);
+  addValidationDifferences(differences, prefix, remoteField, snapshotField);
+  addSerialDifferences(differences, prefix, remoteField, snapshotField);
+  addFieldDifference(differences, prefix, "scale", remoteField.scale, snapshotField.scale);
+  addNestedFieldDifferences(differences, prefix, remoteField, snapshotField);
+}
+
 /**
  * Compare a single field between remote and snapshot
  * @param {string} typeName - Name of the type
@@ -2459,79 +2712,7 @@ function compareFields(
   snapshotField: SnapshotFieldConfig,
 ): SchemaDrift | null {
   const differences: string[] = [];
-
-  // Compare type
-  if (remoteField.type !== snapshotField.type) {
-    differences.push(`type: remote=${remoteField.type}, expected=${snapshotField.type}`);
-  }
-
-  // Compare required
-  if (remoteField.required !== snapshotField.required) {
-    differences.push(
-      `required: remote=${remoteField.required}, expected=${snapshotField.required}`,
-    );
-  }
-
-  // Compare array
-  const remoteArray = remoteField.array ?? false;
-  const snapshotArray = snapshotField.array ?? false;
-  if (remoteArray !== snapshotArray) {
-    differences.push(`array: remote=${remoteArray}, expected=${snapshotArray}`);
-  }
-
-  // Compare unique
-  const remoteUnique = remoteField.unique ?? false;
-  const snapshotUnique = snapshotField.unique ?? false;
-  if (remoteUnique !== snapshotUnique) {
-    differences.push(`unique: remote=${remoteUnique}, expected=${snapshotUnique}`);
-  }
-
-  // Compare foreignKey
-  const remoteFk = remoteField.foreignKey ?? false;
-  const snapshotFk = snapshotField.foreignKey ?? false;
-  if (remoteFk !== snapshotFk) {
-    differences.push(`foreignKey: remote=${remoteFk}, expected=${snapshotFk}`);
-  }
-
-  // Compare foreignKeyType
-  if (remoteField.foreignKeyType !== snapshotField.foreignKeyType) {
-    differences.push(
-      `foreignKeyType: remote=${remoteField.foreignKeyType ?? "none"}, expected=${snapshotField.foreignKeyType ?? "none"}`,
-    );
-  }
-
-  const remoteAllowed = remoteField.allowedValues ?? [];
-  const snapshotAllowed = snapshotField.allowedValues ?? [];
-  const remoteAllowedValues = new Set(remoteAllowed.map((v) => v.value));
-  const snapshotAllowedValues = new Set(snapshotAllowed.map((v) => v.value));
-  if (remoteAllowedValues.size !== snapshotAllowedValues.size) {
-    differences.push(
-      `allowedValues count: remote=${remoteAllowedValues.size}, expected=${snapshotAllowedValues.size}`,
-    );
-  } else {
-    for (const v of remoteAllowedValues) {
-      if (!snapshotAllowedValues.has(v)) {
-        differences.push(`allowedValues: remote has '${v}' not in snapshot`);
-        break;
-      }
-    }
-    for (const v of snapshotAllowedValues) {
-      if (!remoteAllowedValues.has(v)) {
-        differences.push(`allowedValues: snapshot has '${v}' not in remote`);
-        break;
-      }
-    }
-  }
-
-  const remoteVector = remoteField.vector ?? false;
-  const snapshotVector = snapshotField.vector ?? false;
-  if (remoteVector !== snapshotVector) {
-    differences.push(`vector: remote=${remoteVector}, expected=${snapshotVector}`);
-  }
-
-  if (remoteField.scale !== snapshotField.scale) {
-    differences.push(`scale: remote=${remoteField.scale}, expected=${snapshotField.scale}`);
-  }
+  addFieldDifferences(differences, "", remoteField, snapshotField);
 
   if (differences.length > 0) {
     return {
