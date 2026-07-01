@@ -379,6 +379,32 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports runtime globals outside type signature parameters", async () => {
+    await writeProjectFile(
+      "resolvers/type-signature-parameter.ts",
+      ["type Fn = (tailor: unknown) => void;", "const clientFactory = tailor.idp.Client;", ""].join(
+        "\n",
+      ),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/type-signature-parameter.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/type-signature-parameter.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = tailor.idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("does not report local arrow for or catch runtime-looking names", async () => {
     await writeProjectFile(
       "resolvers/local-binding-forms.ts",
@@ -405,6 +431,47 @@ describe("runtime-globals-opt-in review findings", () => {
     await writeProjectFile(
       "resolvers/self-named-function.ts",
       ["const run = function tailor() {", "  return tailor.idp.Client;", "};", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("reports runtime globals outside namespace var bindings", async () => {
+    await writeProjectFile(
+      "resolvers/namespace-var-outside.ts",
+      [
+        "namespace N {",
+        "  var tailor: unknown;",
+        "}",
+        "const clientFactory = tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/namespace-var-outside.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/namespace-var-outside.ts",
+            line: 4,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = tailor.idp.Client;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("does not report namespace-local runtime-looking vars", async () => {
+    await writeProjectFile(
+      "resolvers/namespace-var-local.ts",
+      ["namespace N {", "  var tailor: unknown;", "  tailor.idp.Client;", "}", ""].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);

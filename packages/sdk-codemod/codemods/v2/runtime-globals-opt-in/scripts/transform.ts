@@ -26,6 +26,13 @@ const REVIEW_SCOPE_KINDS = new Set([
   "function_expression",
   "arrow_function",
   "method_definition",
+  "internal_module",
+]);
+const REVIEW_VALUE_PARAMETER_SCOPE_KINDS = new Set([
+  "function_declaration",
+  "function_expression",
+  "arrow_function",
+  "method_definition",
 ]);
 const REVIEW_VALUE_DECLARATION_KINDS = [
   "function_declaration",
@@ -62,6 +69,7 @@ const REVIEW_VAR_SCOPE_KINDS = new Set([
   "function_expression",
   "arrow_function",
   "method_definition",
+  "internal_module",
 ]);
 
 type BindingNamespace = "type" | "value";
@@ -210,6 +218,7 @@ function localDeclarationNames(root: SgNode): Set<string> {
   for (const param of root.findAll({
     rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
   })) {
+    if (!valueParameterScope(param)) continue;
     const binding = param
       .children()
       .find((child) =>
@@ -462,6 +471,11 @@ function nearestReviewScope(node: SgNode | null): SgNode | null {
   return null;
 }
 
+function valueParameterScope(param: SgNode): SgNode | null {
+  const scope = nearestReviewScope(param.parent());
+  return scope && REVIEW_VALUE_PARAMETER_SCOPE_KINDS.has(scope.kind()) ? scope : null;
+}
+
 function nearestVarReviewScope(node: SgNode | null): SgNode | null {
   let current = node;
   while (current) {
@@ -549,7 +563,7 @@ function scopeHasValueBinding(scope: SgNode, name: string): boolean {
   for (const param of scope.findAll({
     rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
   })) {
-    if (!sameNode(nearestReviewScope(param.parent()), scope)) continue;
+    if (!sameNode(valueParameterScope(param), scope)) continue;
     const binding = param
       .children()
       .find((child) =>
