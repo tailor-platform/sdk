@@ -244,8 +244,7 @@ function localDeclarationNames(root: SgNode): Set<string> {
       ],
     },
   })) {
-    const name = decl.children().find((child) => child.kind() === "identifier");
-    if (name) names.add(name.text());
+    collectDeclarationName(decl, names);
   }
 
   for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
@@ -389,7 +388,9 @@ function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
 }
 
 function collectDeclarationName(node: SgNode, names: Set<string>): void {
-  const name = node.children().find((child) => child.kind() === "identifier");
+  const name = node
+    .children()
+    .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
   if (name) names.add(name.text());
 }
 
