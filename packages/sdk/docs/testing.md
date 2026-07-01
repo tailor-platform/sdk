@@ -185,7 +185,7 @@ import { mockAuthconnection } from "@tailor-platform/sdk/vitest";
 test("returns configured token", async () => {
   using ac = mockAuthconnection();
   ac.setTokens({
-    google: { access_token: "ya29.xxx", expires_in: 3600 },
+    google: { access_token: "ya29.xxx" },
   });
 
   const token = await tailor.authconnection.getConnectionToken("google");

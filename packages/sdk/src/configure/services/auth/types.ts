@@ -34,9 +34,6 @@ export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUs
 /** Result of retrieving a connection token at runtime. */
 export type AuthConnectionTokenResult = {
   access_token: string;
-  refresh_token?: string;
-  token_type?: string;
-  expiry?: string;
 };
 
 // Helper types for literal permission and auth attribute operands.

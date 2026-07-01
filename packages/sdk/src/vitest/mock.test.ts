@@ -423,11 +423,11 @@ describe("mock", () => {
     test("setTokens provides map-based responses", async () => {
       using ac = mockAuthconnection();
       ac.setTokens({
-        google: { access_token: "ya29.xxx", expires_in: 3600 },
+        google: { access_token: "ya29.xxx" },
       });
 
       const result = await (globalThis as any).tailor.authconnection.getConnectionToken("google");
-      expect(result).toEqual({ access_token: "ya29.xxx", expires_in: 3600 });
+      expect(result).toEqual({ access_token: "ya29.xxx" });
     });
 
     test("returns default token for unknown connection", async () => {

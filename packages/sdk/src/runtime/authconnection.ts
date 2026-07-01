@@ -14,7 +14,10 @@
  */
 
 import type { AuthConnectionTokenResult } from "#/configure/services/auth/types";
-import type { ConnectionName } from "#/configure/types/connection-name";
+// Import from the public entry (not `#/configure/types/connection-name`) so this d.ts
+// references `@tailor-platform/sdk` externally instead of inlining the registry — a single
+// generated `declare module "@tailor-platform/sdk"` then narrows this entry too.
+import type { ConnectionName } from "@tailor-platform/sdk";
 
 /**
  * Platform API surface for `tailor.authconnection`. Describes the shape the
