@@ -330,6 +330,11 @@ function collectArrowParameterNames(scope: SgNode, names: Set<string>): void {
 
 function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
   for (const child of scope.children()) {
+    if (child.kind() === "export_statement") {
+      collectDirectBlockNames(child, names);
+      continue;
+    }
+
     if (child.kind() === "lexical_declaration" || child.kind() === "variable_declaration") {
       collectVariableDeclaratorNames(child, names);
       continue;
