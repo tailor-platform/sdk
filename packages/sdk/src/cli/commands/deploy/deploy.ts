@@ -1056,7 +1056,7 @@ export async function deploy(options?: DeployOptions) {
       return undefined;
     }
 
-    await withSpan("apply", () => applyDeploymentPlans(client, workspaceId, deployments));
+    await applyDeploymentPlans(client, workspaceId, deployments);
 
     if (logger.jsonMode) {
       logger.out({ summary: planSummary, status: "applied" });
