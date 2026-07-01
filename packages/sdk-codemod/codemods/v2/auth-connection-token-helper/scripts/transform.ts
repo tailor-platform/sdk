@@ -396,9 +396,26 @@ function collectFunctionScopedVarNames(scope: SgNode, names: Set<string>): void 
   }
 }
 
+function collectOwnExpressionName(scope: SgNode, names: Set<string>): void {
+  if (scope.kind() === "function_expression" || scope.kind() === "function_declaration") {
+    const name = scope.children().find((child) => child.kind() === "identifier");
+    if (name) names.add(name.text());
+    return;
+  }
+
+  if (scope.kind() === "class" || scope.kind() === "class_declaration") {
+    const name = scope
+      .children()
+      .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
+    if (name) names.add(name.text());
+  }
+}
+
 function directlyDeclaredNames(scope: SgNode): Set<string> {
   const names = new Set<string>();
   const kind = scope.kind();
+
+  collectOwnExpressionName(scope, names);
 
   if (scope.children().some((child) => child.kind() === "formal_parameters")) {
     collectParameterNames(scope, names);
