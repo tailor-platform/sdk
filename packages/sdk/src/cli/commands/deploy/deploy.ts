@@ -905,6 +905,17 @@ const GLOBAL_RESOURCE_CHECKS: ReadonlyArray<GlobalResourceCheck> = [
   },
   { resourceLabel: "Workflow job", namesOf: (target) => target.bundledScripts.workflowJobs.keys() },
   {
+    resourceLabel: "Workflow",
+    namesOf: (target) =>
+      Object.values(target.application.workflowService?.workflows ?? {}).map(
+        (workflow) => workflow.name,
+      ),
+  },
+  {
+    resourceLabel: "Auth connection",
+    namesOf: (target) => Object.keys(target.application.authService?.connections ?? {}),
+  },
+  {
     resourceLabel: "StaticWebsite",
     namesOf: (target) => target.application.staticWebsiteServices.map((service) => service.name),
   },

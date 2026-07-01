@@ -819,10 +819,12 @@ type FakeBundledScripts = {
   staticWebsiteNames?: string[];
   tailorDBNamespaces?: string[];
   authNamespace?: string;
+  authConnectionNames?: string[];
   idpNames?: string[];
   resolverNamespaces?: string[];
   aiGatewayNames?: string[];
   vaultNames?: string[];
+  workflowNames?: string[];
 };
 
 let fakeTargetSequence = 0;
@@ -838,9 +840,21 @@ function fakeTarget(
       executorService: {
         executors: Object.fromEntries(executorNames.map((name) => [`/${name}.ts`, { name }])),
       },
+      workflowService: {
+        workflows: Object.fromEntries(
+          (bundles.workflowNames ?? []).map((name) => [name, { name }]),
+        ),
+      },
       staticWebsiteServices: (bundles.staticWebsiteNames ?? []).map((name) => ({ name })),
       tailorDBServices: (bundles.tailorDBNamespaces ?? []).map((namespace) => ({ namespace })),
-      authService: bundles.authNamespace ? { config: { name: bundles.authNamespace } } : undefined,
+      authService: bundles.authNamespace
+        ? {
+            config: { name: bundles.authNamespace },
+            connections: Object.fromEntries(
+              (bundles.authConnectionNames ?? []).map((name) => [name, {}]),
+            ),
+          }
+        : undefined,
       idpServices: (bundles.idpNames ?? []).map((name) => ({ name })),
       resolverServices: (bundles.resolverNamespaces ?? []).map((namespace) => ({ namespace })),
       aiGatewayServices: (bundles.aiGatewayNames ?? []).map((name) => ({ name })),
@@ -1005,6 +1019,24 @@ describe("assertUniqueGlobalFunctionNames", () => {
         fakeTarget({ vaultNames: ["shared-vault"] }),
       ]),
     ).toThrow('Duplicate Secret Manager vault name "shared-vault" across config files.');
+  });
+
+  test("throws when two configs define the same workflow name", () => {
+    expect(() =>
+      assertUniqueGlobalFunctionNames([
+        fakeTarget({ workflowNames: ["order-processing"] }),
+        fakeTarget({ workflowNames: ["order-processing"] }),
+      ]),
+    ).toThrow('Duplicate Workflow name "order-processing" across config files.');
+  });
+
+  test("throws when two configs define the same Auth connection name", () => {
+    expect(() =>
+      assertUniqueGlobalFunctionNames([
+        fakeTarget({ authNamespace: "auth-a", authConnectionNames: ["google-sso"] }),
+        fakeTarget({ authNamespace: "auth-b", authConnectionNames: ["google-sso"] }),
+      ]),
+    ).toThrow('Duplicate Auth connection name "google-sso" across config files.');
   });
 });
 
