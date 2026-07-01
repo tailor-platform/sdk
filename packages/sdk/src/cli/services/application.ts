@@ -33,8 +33,8 @@ import {
   type ResolverServiceInput,
   type WorkflowServiceConfig,
 } from "#/configure/config/types";
-import { type AuthConfig } from "#/configure/services/auth/types";
-import { type IdPConfig } from "#/configure/services/idp/types";
+import { type AuthConfig, type AuthOwnConfig } from "#/configure/services/auth/types";
+import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -155,12 +155,11 @@ type DefineIdpResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function stripIdpProviderHelper(idpConfig: IdPConfig): IdPConfig {
-  if ("external" in idpConfig) return idpConfig;
-  const configWithProvider = idpConfig as IdPConfig & { provider?: unknown };
+function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
+  const configWithProvider = idpConfig as IdPOwnConfig & { provider?: unknown };
   if (typeof configWithProvider.provider !== "function") return idpConfig;
   const { provider: _provider, ...config } = configWithProvider;
-  return config as IdPConfig;
+  return config as IdPOwnConfig;
 }
 
 function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
@@ -193,12 +192,11 @@ type DefineAuthResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function stripAuthConnectionTokenHelper(config: AuthConfig): AuthConfig {
-  if ("external" in config) return config;
-  const configWithConnectionToken = config as AuthConfig & { getConnectionToken?: unknown };
+function stripAuthConnectionTokenHelper(config: AuthOwnConfig): AuthOwnConfig {
+  const configWithConnectionToken = config as AuthOwnConfig & { getConnectionToken?: unknown };
   if (typeof configWithConnectionToken.getConnectionToken !== "function") return config;
   const { getConnectionToken: _getConnectionToken, ...authConfig } = configWithConnectionToken;
-  return authConfig as AuthConfig;
+  return authConfig as AuthOwnConfig;
 }
 
 function defineAuth(

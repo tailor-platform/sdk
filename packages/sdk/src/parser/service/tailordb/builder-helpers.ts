@@ -18,7 +18,7 @@ const TAILORDB_TYPE_BUILDER_HELPER_KEYS = [
 ] as const;
 
 export function stripTailorDBTypeBuilderHelpers(type: unknown): unknown {
-  if (!isSdkBranded(type, "tailordb-type") || type === null || typeof type !== "object") {
+  if (!isSdkBranded(type, "tailordb-type")) {
     return type;
   }
 
