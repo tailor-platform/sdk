@@ -370,6 +370,34 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports runtime globals when idp is used in binding expressions", async () => {
+    await writeProjectFile(
+      "resolvers/idp-binding-expression.ts",
+      [
+        "const { [idp]: keyedValue, x = idp.foo } = opts;",
+        'const client = new tailor.idp.Client({ namespace: "default" });',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/idp-binding-expression.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/idp-binding-expression.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const client = new tailor.idp.Client({ namespace: "default" });',
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports spaced bracket runtime globals outside unrelated method parameter scopes", async () => {
     await writeProjectFile(
       "resolvers/method-scoped.ts",
@@ -923,6 +951,8 @@ describe("runtime-globals-opt-in review findings", () => {
       [
         "const clientFactory = (tailor as any).idp.Client;",
         "const upload = (tailordb!).file.upload;",
+        "const nonNullClientFactory = (tailor as any)!.idp.Client;",
+        "const nonNullUpload = (tailordb as any)!.file.upload;",
         "",
       ].join("\n"),
     );
@@ -945,6 +975,18 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 2,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "const upload = (tailordb!).file.upload;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/casted-root.ts",
+            line: 3,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const nonNullClientFactory = (tailor as any)!.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/casted-root.ts",
+            line: 4,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const nonNullUpload = (tailordb as any)!.file.upload;",
           }),
         ],
       }),

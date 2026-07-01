@@ -283,6 +283,29 @@ function localDeclarationNames(root: SgNode): Set<string> {
   return names;
 }
 
+function subtreeHasIdentifier(node: SgNode, name: string): boolean {
+  return node.findAll({ rule: { kind: "identifier" } }).some((id) => id.text() === name);
+}
+
+function bindingExpressionReferencesName(root: SgNode, name: string): boolean {
+  for (const computed of root.findAll({ rule: { kind: "computed_property_name" } })) {
+    if (subtreeHasIdentifier(computed, name)) return true;
+  }
+
+  for (const assignment of root.findAll({
+    rule: { any: [{ kind: "assignment_pattern" }, { kind: "object_assignment_pattern" }] },
+  })) {
+    const children = assignment.children();
+    const equalsIndex = children.findIndex((child) => child.kind() === "=");
+    if (equalsIndex === -1) continue;
+    if (children.slice(equalsIndex + 1).some((child) => subtreeHasIdentifier(child, name))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function findImportStatements(root: SgNode): SgNode[] {
   return root
     .findAll({ rule: { kind: "import_statement" } })
@@ -815,7 +838,11 @@ export default function transform(source: string, filePath: string): string | nu
   const imports = findImportStatements(root);
   const existingIdpLocal = runtimeIdpLocalName(imports);
   const idpLocal = existingIdpLocal ?? "idp";
-  if (hasCollision(imports, localDeclarationNames(root), idpLocal, existingIdpLocal === null)) {
+  const localNames = localDeclarationNames(root);
+  if (existingIdpLocal === null && bindingExpressionReferencesName(root, "idp")) {
+    localNames.add("idp");
+  }
+  if (hasCollision(imports, localNames, idpLocal, existingIdpLocal === null)) {
     return null;
   }
 
