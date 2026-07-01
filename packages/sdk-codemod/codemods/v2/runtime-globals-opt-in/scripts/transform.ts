@@ -866,7 +866,8 @@ function isBindingIdentifier(node: SgNode): boolean {
 }
 
 function isBareRuntimeRootValueReference(node: SgNode, rootName: string): boolean {
-  if (node.kind() !== "identifier" || node.text() !== rootName) return false;
+  if (!["identifier", "shorthand_property_identifier"].includes(node.kind())) return false;
+  if (node.text() !== rootName) return false;
   if (rootName !== "tailor" && rootName !== "tailordb") return false;
   if (isBindingIdentifier(node) || isForAssignmentTarget(node)) return false;
 
@@ -890,10 +891,36 @@ function declaratorInitializer(node: SgNode): SgNode | null {
 function globalObjectReferenceName(node: SgNode | null): string | null {
   const text = node?.text() ?? "";
   const match =
-    /^\s*(?:(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+.+)?|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)\s*$/.exec(
+    /^\s*(?:(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+.+)?|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+(?:!\s*)?)\s*$/.exec(
       text,
     );
   return match ? (match[1] ?? match[2]!) : null;
+}
+
+function collectGlobalObjectDestructureFinding(
+  node: SgNode,
+  binding: SgNode | null,
+  init: SgNode | null,
+  source: string,
+  file: string,
+  importedNames: RuntimeBindingNames,
+  findings: LlmReviewFinding[],
+  seen: Set<string>,
+): void {
+  if (!binding || !RUNTIME_ROOT_PROPERTY_PATTERN.test(binding.text())) return;
+
+  const globalObjectName = globalObjectReferenceName(init);
+  if (!globalObjectName) return;
+  if (init && hasRuntimeBindingInScope(init, globalObjectName, importedNames)) return;
+
+  addReviewFinding(
+    findings,
+    seen,
+    source,
+    file,
+    node.range().start.line + 1,
+    "Tailor runtime global reference remains after automatic migration.",
+  );
 }
 
 function collectGlobalObjectDestructureFindings(
@@ -905,21 +932,28 @@ function collectGlobalObjectDestructureFindings(
   seen: Set<string>,
 ): void {
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
-    const binding = firstDeclaratorChild(decl);
-    if (!binding || !RUNTIME_ROOT_PROPERTY_PATTERN.test(binding.text())) continue;
-
-    const init = declaratorInitializer(decl);
-    const globalObjectName = globalObjectReferenceName(init);
-    if (!globalObjectName) continue;
-    if (init && hasRuntimeBindingInScope(init, globalObjectName, importedNames)) continue;
-
-    addReviewFinding(
-      findings,
-      seen,
+    collectGlobalObjectDestructureFinding(
+      decl,
+      firstDeclaratorChild(decl),
+      declaratorInitializer(decl),
       source,
       file,
-      decl.range().start.line + 1,
-      "Tailor runtime global reference remains after automatic migration.",
+      importedNames,
+      findings,
+      seen,
+    );
+  }
+
+  for (const assignment of root.findAll({ rule: { kind: "assignment_expression" } })) {
+    collectGlobalObjectDestructureFinding(
+      assignment,
+      firstDeclaratorChild(assignment),
+      declaratorInitializer(assignment),
+      source,
+      file,
+      importedNames,
+      findings,
+      seen,
     );
   }
 }
