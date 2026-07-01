@@ -905,16 +905,6 @@ function isParameterBindingIdentifier(parent: SgNode, node: SgNode): boolean {
   return sameNode(binding ?? null, node);
 }
 
-function isForAssignmentTarget(node: SgNode): boolean {
-  const parent = node.parent();
-  if (!parent || !REVIEW_FOR_KINDS.has(parent.kind())) return false;
-  const nodeIndex = nodeChildIndex(parent, node);
-  const keywordIndex = parent
-    .children()
-    .findIndex((child) => child.kind() === "in" || child.kind() === "of");
-  return nodeIndex !== -1 && keywordIndex !== -1 && nodeIndex < keywordIndex;
-}
-
 function isBindingIdentifier(node: SgNode): boolean {
   const parent = node.parent();
   if (!parent) return false;
@@ -929,7 +919,7 @@ function isBareRuntimeRootValueReference(node: SgNode, rootName: string): boolea
   if (!["identifier", "shorthand_property_identifier"].includes(node.kind())) return false;
   if (node.text() !== rootName) return false;
   if (rootName !== "tailor" && rootName !== "tailordb") return false;
-  if (isBindingIdentifier(node) || isForAssignmentTarget(node)) return false;
+  if (isBindingIdentifier(node)) return false;
 
   const parent = node.parent();
   if (!parent) return false;

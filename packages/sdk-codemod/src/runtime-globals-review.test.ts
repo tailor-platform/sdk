@@ -1501,6 +1501,36 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports for-loop assignments that write ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/for-assignment-target.ts",
+      ["for (tailor of sources) {}", "for (tailordb in sources) {}", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/for-assignment-target.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/for-assignment-target.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "for (tailor of sources) {}",
+          }),
+          expect.objectContaining({
+            file: "resolvers/for-assignment-target.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "for (tailordb in sources) {}",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("does not report hoisted var runtime-looking bindings", async () => {
     await writeProjectFile(
       "resolvers/hoisted-var.ts",
@@ -1999,9 +2029,21 @@ describe("runtime-globals-opt-in review findings", () => {
         findings: [
           expect.objectContaining({
             file: "resolvers/for-assignment.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "for (tailordb of sources) {",
+          }),
+          expect.objectContaining({
+            file: "resolvers/for-assignment.ts",
             line: 2,
             message: expect.stringContaining("runtime global reference"),
             excerpt: 'tailordb ["file"].upload;',
+          }),
+          expect.objectContaining({
+            file: "resolvers/for-assignment.ts",
+            line: 4,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "for (tailor in sources) {",
           }),
           expect.objectContaining({
             file: "resolvers/for-assignment.ts",
