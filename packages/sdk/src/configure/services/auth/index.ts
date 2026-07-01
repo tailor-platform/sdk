@@ -1,6 +1,5 @@
 import { type TailorDBInstance } from "../tailordb/schema";
 import type {
-  AuthConnectionTokenResult,
   AuthDefinitionBrand,
   AuthServiceInput,
   DefinedAuth,
@@ -154,15 +153,11 @@ export function defineAuth<
   const result = {
     ...config,
     name,
-    getConnectionToken<C extends string>(connectionName: C): Promise<AuthConnectionTokenResult> {
-      return tailor.authconnection.getConnectionToken(connectionName);
-    },
   } as const satisfies (
-    | UserProfileAuthInput<User, Attributes, AttributeList, MachineUserNames>
-    | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes>
+    | UserProfileAuthInput<User, Attributes, AttributeList, MachineUserNames, ConnectionNames>
+    | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>
   ) & {
     name: string;
-    getConnectionToken<C extends string>(connectionName: C): Promise<AuthConnectionTokenResult>;
   };
 
   return result as typeof result & AuthDefinitionBrand;
