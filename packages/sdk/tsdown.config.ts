@@ -45,10 +45,9 @@ function yamlText() {
   };
 }
 
-// Keep in sync with `entry` in knip.json: knip's tsdown plugin can't statically
-// read this list once the config is a two-element array, so entries are declared
-// there too.
-const entry = [
+// Exported for knip.ts: knip's tsdown plugin can't statically read this list
+// once the config is a two-element array, so knip imports it directly.
+export const entry = [
   "src/configure/index.ts",
   "src/cli/index.ts",
   "src/cli/lib.ts",
