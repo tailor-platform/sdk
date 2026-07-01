@@ -309,6 +309,47 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports bare ambient runtime root references", async () => {
+    await writeProjectFile(
+      "resolvers/bare-runtime-root.ts",
+      [
+        "use(tailor);",
+        "const opts = { runtime: tailordb };",
+        "type Runtime = typeof tailor;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/bare-runtime-root.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/bare-runtime-root.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "use(tailor);",
+          }),
+          expect.objectContaining({
+            file: "resolvers/bare-runtime-root.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const opts = { runtime: tailordb };",
+          }),
+          expect.objectContaining({
+            file: "resolvers/bare-runtime-root.ts",
+            line: 3,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "type Runtime = typeof tailor;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports bracket aliases of ambient runtime roots", async () => {
     await writeProjectFile(
       "resolvers/runtime-root-bracket-alias.ts",
@@ -353,6 +394,42 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 1,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "const { tailor } = globalThis;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports destructured aliases of casted ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-casted-destructure.ts",
+      [
+        "const { tailor } = globalThis as any;",
+        "const { tailordb } = global!;",
+        "const clientFactory = tailor.idp.Client;",
+        "const upload = tailordb.file.upload;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-casted-destructure.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-casted-destructure.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const { tailor } = globalThis as any;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/runtime-root-casted-destructure.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const { tailordb } = global!;",
           }),
         ],
       }),

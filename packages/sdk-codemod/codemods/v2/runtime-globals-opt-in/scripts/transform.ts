@@ -833,9 +833,42 @@ function appearsAfterEquals(parent: SgNode, node: SgNode): boolean {
   return nodeIndex !== -1 && equalsIndex !== -1 && nodeIndex > equalsIndex;
 }
 
+function isParameterBindingIdentifier(parent: SgNode, node: SgNode): boolean {
+  if (parent.kind() !== "required_parameter" && parent.kind() !== "optional_parameter") {
+    return false;
+  }
+  const binding = parent
+    .children()
+    .find((child) =>
+      ["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind()),
+    );
+  return sameNode(binding ?? null, node);
+}
+
+function isForAssignmentTarget(node: SgNode): boolean {
+  const parent = node.parent();
+  if (!parent || !REVIEW_FOR_KINDS.has(parent.kind())) return false;
+  const nodeIndex = nodeChildIndex(parent, node);
+  const keywordIndex = parent
+    .children()
+    .findIndex((child) => child.kind() === "in" || child.kind() === "of");
+  return nodeIndex !== -1 && keywordIndex !== -1 && nodeIndex < keywordIndex;
+}
+
+function isBindingIdentifier(node: SgNode): boolean {
+  const parent = node.parent();
+  if (!parent) return false;
+  if (isParameterBindingIdentifier(parent, node)) return true;
+  if (parent.kind() === "variable_declarator") {
+    return sameNode(firstDeclaratorChild(parent), node);
+  }
+  return false;
+}
+
 function isBareRuntimeRootValueReference(node: SgNode, rootName: string): boolean {
   if (node.kind() !== "identifier" || node.text() !== rootName) return false;
   if (rootName !== "tailor" && rootName !== "tailordb") return false;
+  if (isBindingIdentifier(node) || isForAssignmentTarget(node)) return false;
 
   const parent = node.parent();
   if (!parent) return false;
@@ -845,7 +878,7 @@ function isBareRuntimeRootValueReference(node: SgNode, rootName: string): boolea
   if (parent.kind() === "assignment_pattern" || parent.kind() === "object_assignment_pattern") {
     return appearsAfterEquals(parent, node);
   }
-  return parent.kind() === "return_statement";
+  return true;
 }
 
 function declaratorInitializer(node: SgNode): SgNode | null {
@@ -857,7 +890,7 @@ function declaratorInitializer(node: SgNode): SgNode | null {
 function globalObjectReferenceName(node: SgNode | null): string | null {
   const text = node?.text() ?? "";
   const match =
-    /^\s*(?:(globalThis|global)|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)\s*$/.exec(
+    /^\s*(?:(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+.+)?|\(+\s*(?:<[^>]+>\s*)?(globalThis|global)\s*(?:!\s*)?(?:(?:as|satisfies)\s+[^)]+)?\)+)\s*$/.exec(
       text,
     );
   return match ? (match[1] ?? match[2]!) : null;
