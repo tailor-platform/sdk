@@ -76,7 +76,9 @@ const entry = [
 ];
 
 const shared = {
+  format: ["esm"],
   target: "node22",
+  platform: "node",
   outDir: "dist",
   tsconfig: "./tsconfig.json",
   minify: false,
@@ -113,8 +115,6 @@ export default defineConfig([
   {
     ...shared,
     entry,
-    format: ["esm"],
-    platform: "node",
     clean: true,
     dts: false,
     plugins: jsPlugins,
@@ -125,8 +125,6 @@ export default defineConfig([
   {
     ...shared,
     entry,
-    format: ["esm"],
-    platform: "node",
     clean: false,
     dts: { emitDtsOnly: true },
     unbundle: true,
