@@ -10,8 +10,14 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
 const BARE_RUNTIME_ROOT_TEXT_PATTERN = /\b(?:tailor|tailordb)\b/;
-const RUNTIME_ROOT_PROPERTY_PATTERN =
-  /\b(?:tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/;
+const RUNTIME_ROOT_PROPERTY_NAMES = new Set([
+  "tailor",
+  "tailordb",
+  "TailorDBFileError",
+  "TailorErrors",
+  "TailorErrorMessage",
+  "TailorErrorItem",
+]);
 const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
 const REVIEW_TAILOR_RUNTIME_MEMBERS = new Set([
   "authconnection",
@@ -897,6 +903,50 @@ function globalObjectReferenceName(node: SgNode | null): string | null {
   return match ? (match[1] ?? match[2]!) : null;
 }
 
+function literalPropertyKeyName(node: SgNode): string | null {
+  if (
+    node.kind() === "property_identifier" ||
+    node.kind() === "shorthand_property_identifier_pattern"
+  ) {
+    return node.text();
+  }
+
+  const stringMatch = /^\s*["']([^"']+)["']\s*$/.exec(node.text());
+  if (node.kind() === "string" && stringMatch) return stringMatch[1]!;
+
+  const computedStringMatch = /^\[\s*["']([^"']+)["']\s*\]$/.exec(node.text());
+  if (node.kind() === "computed_property_name" && computedStringMatch) {
+    return computedStringMatch[1]!;
+  }
+
+  return null;
+}
+
+function objectPatternPropertyKeyName(node: SgNode): string | null {
+  const directName = literalPropertyKeyName(node);
+  if (directName) return directName;
+
+  if (node.kind() !== "pair_pattern" && node.kind() !== "object_assignment_pattern") {
+    return null;
+  }
+
+  for (const child of node.children()) {
+    if (child.kind() === ":" || child.kind() === "=") return null;
+    const name = literalPropertyKeyName(child);
+    if (name) return name;
+  }
+
+  return null;
+}
+
+function hasRuntimeRootObjectPatternKey(binding: SgNode | null): boolean {
+  if (!binding || binding.kind() !== "object_pattern") return false;
+
+  return binding
+    .children()
+    .some((child) => RUNTIME_ROOT_PROPERTY_NAMES.has(objectPatternPropertyKeyName(child) ?? ""));
+}
+
 function collectGlobalObjectDestructureFinding(
   node: SgNode,
   binding: SgNode | null,
@@ -907,7 +957,7 @@ function collectGlobalObjectDestructureFinding(
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {
-  if (!binding || !RUNTIME_ROOT_PROPERTY_PATTERN.test(binding.text())) return;
+  if (!hasRuntimeRootObjectPatternKey(binding)) return;
 
   const globalObjectName = globalObjectReferenceName(init);
   if (!globalObjectName) return;

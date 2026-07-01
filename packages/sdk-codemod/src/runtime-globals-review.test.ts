@@ -741,6 +741,32 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report plain local bindings initialized from global objects", async () => {
+    await writeProjectFile(
+      "resolvers/plain-global-binding.ts",
+      ["const tailor = globalThis;", "let tailordb;", "tailordb = global;", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test("does not report nested runtime-looking destructures from global objects", async () => {
+    await writeProjectFile(
+      "resolvers/nested-global-destructure.ts",
+      [
+        "const { nested: { tailor } } = globalThis;",
+        "const clientFactory = tailor.idp.Client;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("does not report local declarations after spaced bracket runtime-looking names", async () => {
     await writeProjectFile(
       "resolvers/local-after.ts",
