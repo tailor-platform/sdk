@@ -9,6 +9,7 @@ import {
   TailorDBGQLPermission_Action,
   TailorDBGQLPermission_Operator,
   TailorDBGQLPermission_Permit,
+  TailorDBType_PermitAction,
   TailorDBType_Permission_Operator,
   TailorDBType_Permission_Permit,
   type TailorDBGQLPermission,
@@ -1500,8 +1501,10 @@ function comparePermissions(
   const recordPermChanged = oldRecordStr !== newRecordStr;
 
   // Compare GQL permissions
-  const oldGqlStr = JSON.stringify(oldGqlPerm ?? null);
-  const newGqlStr = JSON.stringify(newGqlPerm ?? null);
+  const oldComparableGqlPerm = comparableGqlPermission(oldGqlPerm);
+  const newComparableGqlPerm = comparableGqlPermission(newGqlPerm);
+  const oldGqlStr = JSON.stringify(oldComparableGqlPerm ?? null);
+  const newGqlStr = JSON.stringify(newComparableGqlPerm ?? null);
   const gqlPermChanged = oldGqlStr !== newGqlStr;
 
   if (recordPermChanged || gqlPermChanged) {
@@ -1513,10 +1516,31 @@ function comparePermissions(
       kind: "permission_modified",
       typeName,
       reason: `${reasons.join(" and ")} changed`,
-      before: { recordPermission: oldRecordPerm, gqlPermission: oldGqlPerm },
-      after: { recordPermission: newRecordPerm, gqlPermission: newGqlPerm },
+      before: { recordPermission: oldRecordPerm, gqlPermission: oldComparableGqlPerm },
+      after: { recordPermission: newRecordPerm, gqlPermission: newComparableGqlPerm },
     });
   }
+}
+
+const GQL_ACTION_ORDER: Record<SnapshotGqlAction, number> = {
+  all: 0,
+  create: 1,
+  read: 2,
+  update: 3,
+  delete: 4,
+  aggregate: 5,
+  bulkUpsert: 6,
+};
+
+function comparableGqlPermission(
+  permission: SnapshotGqlPermission | undefined,
+): SnapshotGqlPermission | undefined {
+  return permission?.map((policy) => ({
+    ...policy,
+    actions: policy.actions.toSorted(
+      (left, right) => GQL_ACTION_ORDER[left] - GQL_ACTION_ORDER[right],
+    ),
+  }));
 }
 
 type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;
@@ -1950,7 +1974,7 @@ function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotF
   const validate = remoteField.validate;
   if (validate.length > 0) {
     config.validate = validate.map((v) => ({
-      script: { expr: v.script?.expr ?? "" },
+      script: { expr: convertRemoteValidateExpression(v.script?.expr ?? "", v.action) },
       errorMessage: v.errorMessage ?? "",
     }));
   }
@@ -1992,6 +2016,10 @@ function convertRemoteFieldsToSnapshot(
   }
 
   return fields;
+}
+
+function convertRemoteValidateExpression(expr: string, action: TailorDBType_PermitAction): string {
+  return action === TailorDBType_PermitAction.DENY && expr.startsWith("!") ? expr.slice(1) : expr;
 }
 
 function convertRemoteSettingsToSnapshot(

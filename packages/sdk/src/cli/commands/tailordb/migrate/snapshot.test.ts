@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import {
   TailorDBGQLPermission_Action,
   TailorDBGQLPermission_Permit,
+  TailorDBType_PermitAction,
   TailorDBType_Permission_Permit,
   type TailorDBType as ProtoTailorDBType,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
@@ -2102,6 +2103,7 @@ describe("snapshot", () => {
           allowedValues?: { value: string }[];
           description?: string;
           scale?: number;
+          validate?: unknown[];
         }
       >,
       schema: Record<string, unknown> = {},
@@ -2119,7 +2121,7 @@ describe("snapshot", () => {
           foreignKeyField: config.foreignKeyField,
           description: config.description ?? "",
           allowedValues: config.allowedValues ?? [],
-          validate: [],
+          validate: config.validate ?? [],
           fields: {},
           ...(config.scale !== undefined && { scale: config.scale }),
         };
@@ -2137,6 +2139,7 @@ describe("snapshot", () => {
     function createMockRemoteGqlPermission(
       typeName: string,
       permit: TailorDBGQLPermission_Permit,
+      actions: TailorDBGQLPermission_Action[] = [TailorDBGQLPermission_Action.READ],
     ): RemoteGqlPermission {
       return {
         typeName,
@@ -2145,7 +2148,7 @@ describe("snapshot", () => {
           policies: [
             {
               conditions: [],
-              actions: [TailorDBGQLPermission_Action.READ],
+              actions,
               permit,
               description: "Can read tasks",
             },
@@ -2270,6 +2273,34 @@ describe("snapshot", () => {
           actions: ["read"],
           permit: "allow",
           description: "Can read tasks",
+        },
+      ]);
+    });
+
+    test("normalizes remote validation expressions back to snapshot form", () => {
+      const snapshot = createSnapshotFromRemoteTypes(
+        [
+          createMockRemoteType("User", {
+            email: {
+              type: "string",
+              required: true,
+              validate: [
+                {
+                  action: TailorDBType_PermitAction.DENY,
+                  script: { expr: "!value.includes('@')" },
+                  errorMessage: "Email is invalid",
+                },
+              ],
+            },
+          }),
+        ],
+        namespace,
+      );
+
+      expect(snapshot.types.User?.fields.email?.validate).toEqual([
+        {
+          script: { expr: "value.includes('@')" },
+          errorMessage: "Email is invalid",
         },
       ]);
     });
@@ -2498,7 +2529,7 @@ describe("snapshot", () => {
               gql: [
                 {
                   conditions: [],
-                  actions: ["read"],
+                  actions: ["read", "create"],
                   permit: "allow",
                   description: "Can read tasks",
                 },
@@ -2516,7 +2547,10 @@ describe("snapshot", () => {
 
       expect(
         compareRemoteWithSnapshot(remoteTypes, snapshot, [
-          createMockRemoteGqlPermission("Task", TailorDBGQLPermission_Permit.ALLOW),
+          createMockRemoteGqlPermission("Task", TailorDBGQLPermission_Permit.ALLOW, [
+            TailorDBGQLPermission_Action.CREATE,
+            TailorDBGQLPermission_Action.READ,
+          ]),
         ]),
       ).toEqual([]);
 
