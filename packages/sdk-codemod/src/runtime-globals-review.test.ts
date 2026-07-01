@@ -503,6 +503,78 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports runtime globals reached through Node global", async () => {
+    await writeProjectFile(
+      "resolvers/global-object.ts",
+      [
+        "const clientFactory = global.tailor.idp.Client;",
+        "const upload = global.tailordb.file.upload;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/global-object.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/global-object.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const clientFactory = global.tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/global-object.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const upload = global.tailordb.file.upload;",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports runtime globals inside for-in or for-of assignments", async () => {
+    await writeProjectFile(
+      "resolvers/for-assignment.ts",
+      [
+        "for (tailordb of sources) {",
+        '  tailordb ["file"].upload;',
+        "}",
+        "for (tailor in sources) {",
+        '  tailor ["idp"].Client;',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/for-assignment.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/for-assignment.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'tailordb ["file"].upload;',
+          }),
+          expect.objectContaining({
+            file: "resolvers/for-assignment.ts",
+            line: 5,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'tailor ["idp"].Client;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports shorthand Tailor error globals left for manual migration", async () => {
     await writeProjectFile("errors.ts", ["const exported = { TailorErrors };", ""].join("\n"));
 

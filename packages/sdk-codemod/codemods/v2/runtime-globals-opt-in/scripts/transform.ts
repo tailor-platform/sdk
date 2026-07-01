@@ -55,6 +55,7 @@ const REVIEW_FOR_BINDING_DECLARATION_KINDS = new Set([
   "lexical_declaration",
   "variable_declaration",
 ]);
+const REVIEW_FOR_BINDING_KEYWORD_KINDS = new Set(["const", "let", "var"]);
 const REVIEW_FOR_KINDS = new Set(["for_statement", "for_in_statement"]);
 
 type BindingNamespace = "type" | "value";
@@ -66,7 +67,7 @@ interface RuntimeBindingNames {
 
 interface RuntimeRootReference {
   rootName: string;
-  globalObject: boolean;
+  globalObjectName?: string;
 }
 
 interface ImportBinding {
@@ -396,16 +397,16 @@ function addReviewFinding(
 
 function runtimeRootReference(source: string): RuntimeRootReference | null {
   const globalObjectMatch =
-    /^\s*globalThis\.(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
+    /^\s*(globalThis|global)\.(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
       source,
     );
   if (globalObjectMatch) {
-    return { rootName: globalObjectMatch[1]!, globalObject: true };
+    return { rootName: globalObjectMatch[2]!, globalObjectName: globalObjectMatch[1]! };
   }
 
   const bareMatch =
     /^\s*(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(source);
-  return bareMatch ? { rootName: bareMatch[1]!, globalObject: false } : null;
+  return bareMatch ? { rootName: bareMatch[1]! } : null;
 }
 
 function importedRuntimeNames(imports: SgNode[]): RuntimeBindingNames {
@@ -471,7 +472,12 @@ function forBindingChildren(loop: SgNode): SgNode[] {
   const keywordIndex = children.findIndex(
     (child) => child.kind() === "in" || child.kind() === "of",
   );
-  return keywordIndex === -1 ? [] : children.slice(0, keywordIndex);
+  if (keywordIndex === -1) return [];
+
+  const beforeKeyword = children.slice(0, keywordIndex);
+  return beforeKeyword.some((child) => REVIEW_FOR_BINDING_KEYWORD_KINDS.has(child.kind()))
+    ? beforeKeyword
+    : [];
 }
 
 function scopeHasValueBinding(scope: SgNode, name: string): boolean {
@@ -622,7 +628,16 @@ function collectDirectRuntimeGlobalFindings(
     const nodeText = node.text();
     const rootRef = runtimeRootReference(nodeText);
     if (!rootRef) continue;
-    if (!rootRef.globalObject && hasRuntimeBindingInScope(node, rootRef.rootName, importedNames)) {
+    if (
+      rootRef.globalObjectName &&
+      hasRuntimeBindingInScope(node, rootRef.globalObjectName, importedNames)
+    ) {
+      continue;
+    }
+    if (
+      !rootRef.globalObjectName &&
+      hasRuntimeBindingInScope(node, rootRef.rootName, importedNames)
+    ) {
       continue;
     }
     if (!runtimeGlobalTextPattern.test(nodeText)) continue;
