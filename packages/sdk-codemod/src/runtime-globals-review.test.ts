@@ -615,6 +615,36 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports destructuring assignments that write ambient runtime roots", async () => {
+    await writeProjectFile(
+      "resolvers/runtime-root-destructure-assignment-target.ts",
+      ["[tailor = fallback] = values;", "({ x: tailordb = fallback } = row);", ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/runtime-root-destructure-assignment-target.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/runtime-root-destructure-assignment-target.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "[tailor = fallback] = values;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/runtime-root-destructure-assignment-target.ts",
+            line: 2,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "({ x: tailordb = fallback } = row);",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports destructured aliases of parenthesized casted ambient runtime roots", async () => {
     await writeProjectFile(
       "resolvers/runtime-root-parenthesized-casted-destructure.ts",
@@ -917,7 +947,7 @@ describe("runtime-globals-opt-in review findings", () => {
   test("does not report runtime-looking names inside string data", async () => {
     await writeProjectFile(
       "resolvers/string-data.ts",
-      ['const names = ["TailorErrors", "TailorErrorItem"];', ""].join("\n"),
+      ['const names = ["TailorErrors", "TailorErrorItem", "tailor", "tailordb"];', ""].join("\n"),
     );
 
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
@@ -1904,6 +1934,8 @@ describe("runtime-globals-opt-in review findings", () => {
         "const optional = globalThis?.tailor.idp.Client;",
         "const nonNull = globalThis!.tailor.idp.Client;",
         "const castOptional = (globalThis as any)?.tailor.idp.Client;",
+        "const spaced = globalThis . tailor.idp.Client;",
+        "const groupedSpaced = (global) . TailorErrors;",
         "",
       ].join("\n"),
     );
@@ -1932,6 +1964,18 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 3,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "const castOptional = (globalThis as any)?.tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/wrapped-global-object.ts",
+            line: 4,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const spaced = globalThis . tailor.idp.Client;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/wrapped-global-object.ts",
+            line: 5,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const groupedSpaced = (global) . TailorErrors;",
           }),
         ],
       }),

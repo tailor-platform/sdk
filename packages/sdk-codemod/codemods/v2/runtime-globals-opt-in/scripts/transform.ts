@@ -487,7 +487,7 @@ function addReviewFinding(
 
 function runtimeRootReference(source: string): RuntimeRootReference | null {
   const globalObjectMatch = new RegExp(
-    String.raw`^\s*${GLOBAL_OBJECT_REFERENCE_PATTERN}\s*(?:\.|\?\.|!\s*\.)${RUNTIME_ROOT_NAME_PATTERN}\b`,
+    String.raw`^\s*${GLOBAL_OBJECT_REFERENCE_PATTERN}\s*(?:\.|\?\.|!\s*\.)\s*${RUNTIME_ROOT_NAME_PATTERN}\b`,
   ).exec(source);
   if (globalObjectMatch) {
     return {
@@ -928,7 +928,7 @@ function isBareRuntimeRootValueReference(node: SgNode, rootName: string): boolea
     return appearsAfterEquals(parent, node);
   }
   if (parent.kind() === "assignment_pattern" || parent.kind() === "object_assignment_pattern") {
-    return appearsAfterEquals(parent, node);
+    return true;
   }
   return true;
 }

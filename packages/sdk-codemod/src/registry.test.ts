@@ -165,6 +165,10 @@ describe("getApplicableCodemods", () => {
 
   test("flags source files for runtime globals review", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-globals-opt-in");
+    const matchesSourceStringPattern = (source: string): boolean =>
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) => pattern instanceof RegExp && pattern.test(source),
+      ) ?? false;
 
     expect(codemod?.scriptPath).toBe("v2/runtime-globals-opt-in/scripts/transform.js");
     expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
@@ -262,6 +266,9 @@ describe("getApplicableCodemods", () => {
           pattern.test("type R = Promise<tailordb.QueryResult<User>>;"),
       ),
     ).toBe(true);
+    expect(matchesSourceStringPattern("tailor")).toBe(false);
+    expect(matchesSourceStringPattern(" tailordb ")).toBe(false);
+    expect(matchesSourceStringPattern("const runtimeRoot = tailor;")).toBe(true);
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime/globals");
   });
 
