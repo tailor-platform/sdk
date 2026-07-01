@@ -171,7 +171,14 @@ describe("getApplicableCodemods", () => {
     expect(codemod?.suspiciousPatterns).toContain("tailor.idp");
     expect(codemod?.suspiciousPatterns).toContain("tailor.secretmanager");
     expect(codemod?.suspiciousPatterns).toContain("tailor.authconnection");
-    expect(codemod?.sourceStringSuspiciousPatterns).toContain("new tailor.idp.Client");
+    expect(
+      codemod?.sourceStringSuspiciousPatterns?.some(
+        (pattern) =>
+          pattern instanceof RegExp &&
+          pattern.test('const client = new tailor.idp.Client({ namespace: "default" });') &&
+          !pattern.test("Please renew tailor.idp.Client credentials"),
+      ),
+    ).toBe(true);
     expect(
       codemod?.sourceStringSuspiciousPatterns?.some(
         (pattern) => pattern instanceof RegExp && pattern.test("const C = tailor.idp.Client;"),

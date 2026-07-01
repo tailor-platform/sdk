@@ -4,23 +4,21 @@ export const runtimeGlobalTextPattern =
   /(?:\b(?:tailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?|tailordb\.(?:Client|CommandType|QueryResult|file)(?:\.[A-Za-z_$][\w$]*)?|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b|\btailor\s*\[|\btailordb\s*\[)/;
 
 export const runtimeGlobalsSourceStringSuspiciousPatterns = [
-  "new tailor.idp.Client",
+  /\bnew\s+tailor\.idp\.Client\b/,
   /[=(:,[]\s*tailor\.idp\.Client\b/,
   /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?\b/,
   /\btailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
-  "tailor[",
+  /\btailor\[/,
   /\btailordb\.file\.[A-Za-z_$][\w$]*\s*\(/,
   /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.file\b/,
   /(?:\bnew\s+|(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.(?:Client|CommandType|QueryResult)\b/,
   /<\s*tailordb\.(?:Client|CommandType|QueryResult)\b/,
-  "tailordb[",
+  /\btailordb\[/,
   /(?:\bnew\s+|\bthrow\s+|\binstanceof\s+)Tailor(?:DBFileError|Errors|ErrorMessage)\b/,
   /(?:[:=<]\s*|\bas\s+)Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)\b/,
   /[:<]\s*TailorErrorItem\b/,
 ] satisfies CodemodPatternGroup[];
 
 export function matchesRuntimeGlobalsSourceString(source: string): boolean {
-  return runtimeGlobalsSourceStringSuspiciousPatterns.some((pattern) =>
-    typeof pattern === "string" ? source.includes(pattern) : pattern.test(source),
-  );
+  return runtimeGlobalsSourceStringSuspiciousPatterns.some((pattern) => pattern.test(source));
 }

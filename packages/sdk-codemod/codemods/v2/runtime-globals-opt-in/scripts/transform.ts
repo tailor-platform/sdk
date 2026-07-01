@@ -13,6 +13,7 @@ const REVIEW_NODE_KINDS = new Set([
   "member_expression",
   "identifier",
   "nested_type_identifier",
+  "shorthand_property_identifier",
   "subscript_expression",
   "type_identifier",
   "new_expression",

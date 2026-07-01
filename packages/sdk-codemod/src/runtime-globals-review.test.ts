@@ -169,6 +169,7 @@ describe("runtime-globals-opt-in review findings", () => {
       "seed/prose.mjs",
       [
         'console.log("Truncating _User via tailor.idp.Client before reseeding");',
+        'console.log("Please renew tailor.idp.Client credentials");',
         'console.log("Use the migration guide before changing runtime globals");',
         "",
       ].join("\n"),
@@ -177,5 +178,26 @@ describe("runtime-globals-opt-in review findings", () => {
     const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
 
     expect(result.llmReviews).toEqual([]);
+  });
+
+  test("reports shorthand Tailor error globals left for manual migration", async () => {
+    await writeProjectFile("errors.ts", ["const exported = { TailorErrors };", ""].join("\n"));
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["errors.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "errors.ts",
+            line: 1,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const exported = { TailorErrors };",
+          }),
+        ],
+      }),
+    ]);
   });
 });
