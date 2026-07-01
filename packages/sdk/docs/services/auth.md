@@ -365,7 +365,7 @@ See [IdP](./idp.md) for configuring identity providers.
 
 ## Auth Connections
 
-Auth connections enable OAuth2 authentication with external providers (Google, Microsoft 365, QuickBooks, etc.) for application-to-application flows. Functions can access connection tokens at runtime via `tailor.authconnection.getConnectionToken()`.
+Auth connections enable OAuth2 authentication with external providers (Google, Microsoft 365, QuickBooks, etc.) for application-to-application flows. Functions can access connection tokens at runtime via `authconnection.getConnectionToken()` (from `@tailor-platform/sdk/runtime`).
 
 For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
 
@@ -429,23 +429,25 @@ The authorize command opens a browser for the OAuth2 flow. The authorization cod
 | `authUrl`      | `string` | No       | Override for the authorization endpoint.    |
 | `tokenUrl`     | `string` | No       | Override for the token endpoint.            |
 
-### `auth.getConnectionToken()`
+### Retrieving Connection Tokens
 
-`auth.getConnectionToken()` retrieves connection tokens at runtime by calling `tailor.authconnection.getConnectionToken()` internally. When `connections` is defined in `defineAuth()`, the connection name is type-checked and autocompleted against the defined keys:
+Use `authconnection.getConnectionToken()` from `@tailor-platform/sdk/runtime` to retrieve connection tokens at runtime. The connection name is type-checked and autocompleted against the connections defined in `defineAuth()`'s `connections`:
 
 ```typescript
-import { auth } from "../tailor.config";
+import { authconnection } from "@tailor-platform/sdk/runtime";
 
 // In a resolver, executor, or workflow:
-const tokens = await auth.getConnectionToken("google-connection");
+const tokens = await authconnection.getConnectionToken("google-connection");
 const response = await fetch("https://www.googleapis.com/...", {
   headers: { Authorization: `Bearer ${tokens.access_token}` },
 });
 
-// auth.getConnectionToken("unknown"); // Type error — only "google-connection" is allowed
+// authconnection.getConnectionToken("unknown"); // Type error — only "google-connection" is allowed
 ```
 
-When `connections` is not defined, `getConnectionToken()` accepts any string. This supports connections managed entirely via the CLI.
+Type narrowing is provided by the generated `tailor.d.ts` (the `ConnectionNameRegistry` interface). Run `tailor-sdk generate` (or `apply`) after defining new connections to refresh it. Before the first generate, or when `connections` is not defined in `defineAuth()`, `getConnectionToken()` accepts any string — this also supports connections managed entirely via the CLI.
+
+> **Deprecated:** `auth.getConnectionToken("<name>")` still works, but is deprecated. Importing `auth` from `tailor.config.ts` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
 
 See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-interfaces.html#auth-connection) for the full runtime API.
 
