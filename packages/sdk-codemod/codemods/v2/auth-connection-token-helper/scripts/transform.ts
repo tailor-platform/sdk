@@ -285,6 +285,101 @@ function hasRuntimeReferenceShadow(localNames: Set<string>, runtimeRef: string):
   return localNames.has(runtimeRef.split(".")[0]!);
 }
 
+function collectParameterNames(scope: SgNode, names: Set<string>): void {
+  const params = scope.children().find((child) => child.kind() === "formal_parameters");
+  if (!params) return;
+
+  for (const param of params.children()) {
+    const binding = param
+      .children()
+      .find((child) =>
+        ["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind()),
+      );
+    if (binding) collectBindingNames(binding, names);
+  }
+}
+
+function collectArrowParameterNames(scope: SgNode, names: Set<string>): void {
+  const children = scope.children();
+  const arrowIndex = children.findIndex((child) => child.kind() === "=>");
+  if (arrowIndex === -1) return;
+
+  for (const child of children.slice(0, arrowIndex)) {
+    if (
+      [
+        "identifier",
+        "object_pattern",
+        "array_pattern",
+        "rest_pattern",
+        "formal_parameters",
+      ].includes(child.kind())
+    ) {
+      collectBindingNames(child, names);
+    }
+  }
+}
+
+function collectDirectBlockNames(scope: SgNode, names: Set<string>): void {
+  for (const child of scope.children()) {
+    if (child.kind() === "lexical_declaration" || child.kind() === "variable_declaration") {
+      for (const decl of child
+        .children()
+        .filter((grandchild) => grandchild.kind() === "variable_declarator")) {
+        const binding = firstDeclaratorChild(decl);
+        if (binding) collectBindingNames(binding, names);
+      }
+      continue;
+    }
+
+    if (["function_declaration", "class_declaration", "enum_declaration"].includes(child.kind())) {
+      const name = child.children().find((grandchild) => grandchild.kind() === "identifier");
+      if (name) names.add(name.text());
+    }
+  }
+}
+
+function directlyDeclaredNames(scope: SgNode): Set<string> {
+  const names = new Set<string>();
+  const kind = scope.kind();
+
+  if (scope.children().some((child) => child.kind() === "formal_parameters")) {
+    collectParameterNames(scope, names);
+  }
+
+  if (kind === "arrow_function") {
+    collectArrowParameterNames(scope, names);
+  } else if (kind === "catch_clause") {
+    for (const child of scope.children()) {
+      if (["identifier", "object_pattern", "array_pattern"].includes(child.kind())) {
+        collectBindingNames(child, names);
+      }
+    }
+  } else if (kind === "statement_block" || kind === "program") {
+    collectDirectBlockNames(scope, names);
+  } else if (kind === "for_in_statement") {
+    const children = scope.children();
+    const keywordIndex = children.findIndex(
+      (child) => child.kind() === "in" || child.kind() === "of",
+    );
+    if (keywordIndex !== -1) {
+      for (const child of children.slice(0, keywordIndex)) {
+        collectBindingNames(child, names);
+      }
+    }
+  }
+
+  return names;
+}
+
+function isReferenceShadowed(node: SgNode, localName: string): boolean {
+  let current = node.parent();
+  while (current) {
+    if (directlyDeclaredNames(current).has(localName)) return true;
+    current = current.parent();
+  }
+  return false;
+}
+
 function findAuthConnectionTokenCalls(root: SgNode, authLocalNames: Set<string>): TokenCall[] {
   const calls: TokenCall[] = [];
   for (const call of root.findAll({ rule: { kind: "call_expression" } })) {
@@ -300,6 +395,8 @@ function findAuthConnectionTokenCalls(root: SgNode, authLocalNames: Set<string>)
     ) {
       continue;
     }
+
+    if (isReferenceShadowed(object, object.text())) continue;
 
     const range = object.range();
     calls.push({
@@ -334,7 +431,10 @@ function countRemainingRefs(
     .findAll({ rule: { any: [...REFERENCE_KINDS].map((kind) => ({ kind })) } })
     .filter((node) => node.text() === localName)
     .filter(
-      (node) => !isInsideImportStatement(node) && !isInsideScheduledRange(node, scheduledRanges),
+      (node) =>
+        !isInsideImportStatement(node) &&
+        !isInsideScheduledRange(node, scheduledRanges) &&
+        !isReferenceShadowed(node, localName),
     ).length;
 }
 
@@ -477,9 +577,7 @@ function normalizeSource(source: string): string {
 function transformParsed(source: string, root: SgNode): string | null {
   const imports = findImportStatements(root);
   const localNames = localDeclarationNames(root);
-  const authBindings = findTailorConfigAuthBindings(imports).filter(
-    (binding) => !localNames.has(binding.localName),
-  );
+  const authBindings = findTailorConfigAuthBindings(imports);
   if (authBindings.length === 0) return null;
 
   const authLocalNames = new Set(authBindings.map((binding) => binding.localName));
@@ -553,10 +651,7 @@ export function reviewFindings(
   if (!root) return [];
 
   const imports = findImportStatements(root);
-  const localNames = localDeclarationNames(root);
-  const authBindings = findTailorConfigAuthBindings(imports).filter(
-    (binding) => !localNames.has(binding.localName),
-  );
+  const authBindings = findTailorConfigAuthBindings(imports);
   const calls = findAuthConnectionTokenCalls(
     root,
     new Set(authBindings.map((binding) => binding.localName)),
