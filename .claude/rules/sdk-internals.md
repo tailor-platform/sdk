@@ -119,14 +119,15 @@ re-exported by `plugin/types.ts`).
 politty supports an opt-in plugin-dispatch hook (`onUnknownSubcommand`, not
 currently wired up in this SDK's `runMain()` call) that execs an external
 `<cli>-<name>` binary for an unrecognized subcommand. Its dispatch check
-skips any command that defines its own `run`, since an unrecognized
-positional there is a real argument, not an unknown subcommand name. The
-check only looks at whether `run` is defined, not at what `run` does with
-its arguments — so a command that mixes `subCommands` with a `run` consuming
-a positional (a "hybrid" command) leaves no way to tell whether an
-unrecognized first argument was meant as the positional or as a subcommand
-name. Designing away from hybrids now keeps this dispatch path usable if it
-is wired up later.
+skips any command that defines its own `run` — including a zero-arg `run`
+that only forwards to a default subcommand — since it tests just whether
+`run` is defined, not what it does with its arguments.
+
+New leaf commands should still avoid the specific shape this hook cares
+about most: a command whose `run` actually parses a positional, mixed with
+`subCommands` on the same node (a "hybrid" command). Once a `run` parses a
+positional, there is no way to tell whether an unrecognized first argument
+was meant as that positional or as a subcommand name.
 
 - Prefer flags and subcommands over positional arguments. They're
   order-independent, unambiguous, and subcommand groups remain a plugin
@@ -134,8 +135,9 @@ is wired up later.
 - If a leaf command needs a positional, limit it to a single natural subject
   (e.g. `api inspect <endpoint>`) and give that command **no** `subCommands`
   of its own.
-- Do not mix `subCommands` with a `run` on the same command. The dispatch
-  check only tests whether `run` is defined, so even a `run` that takes no
-  arguments and only forwards to a default subcommand (e.g.
-  `runCommand(defaultSubCommand, [])`) blocks dispatch the same as one that
-  parses a positional.
+- Do not add a new command whose `run` both parses a positional and shares
+  the node with `subCommands`. This doesn't apply retroactively to existing
+  commands whose `run` only forwards to a default subcommand with no
+  arguments (e.g. `runCommand(defaultSubCommand, [])`) — only `api`
+  (`packages/sdk/src/cli/commands/api/index.ts`) currently has the
+  positional-parsing form this rule targets.
