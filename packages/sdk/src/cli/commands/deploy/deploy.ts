@@ -178,17 +178,20 @@ async function shouldForceApplyAll(
  * @param params.conflicts - Detected owner conflicts across all services
  * @param params.resourceOwners - App names that still own resources we don't manage
  * @param params.targetAppName - The application currently being deployed
+ * @param params.protectedAppNames - App names that must not be deleted
  * @returns Names of empty old applications that should be deleted
  */
 export function computeRenamedAppDeletions(params: {
   conflicts: ReadonlyArray<Pick<OwnerConflict, "currentOwner">>;
   resourceOwners: ReadonlySet<string>;
   targetAppName: string;
+  protectedAppNames?: ReadonlySet<string>;
 }): string[] {
   const { conflicts, resourceOwners, targetAppName } = params;
+  const protectedAppNames = params.protectedAppNames ?? new Set([targetAppName]);
   const conflictOwners = new Set(conflicts.map((c) => c.currentOwner));
   return [...conflictOwners].filter(
-    (owner) => !resourceOwners.has(owner) && owner !== targetAppName,
+    (owner) => !resourceOwners.has(owner) && !protectedAppNames.has(owner),
   );
 }
 
@@ -1060,6 +1063,7 @@ export function dropCrossDeploymentManagedDeletes(
 
 async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
   const { deployments, yes } = params;
+  const targetAppNames = new Set(deployments.map((deployment) => deployment.application.name));
   const importantDeletions: ImportantResourceDeletion[] = [];
 
   for (const deployment of deployments) {
@@ -1076,6 +1080,7 @@ async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Pro
       conflicts,
       resourceOwners: collectResourceOwners(results),
       targetAppName: deployment.application.name,
+      protectedAppNames: targetAppNames,
     });
     for (const emptyApp of emptyApps) {
       deployment.app.deletes.push({
@@ -1214,11 +1219,12 @@ export async function deploy(options?: DeployOptions) {
     const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;
 
+    dropCrossDeploymentManagedDeletes(deployments);
+
     // Phase 1b: Confirm
     await withSpan("confirm", async () => {
       await confirmDeploymentPlans({ deployments, yes });
     });
-    dropCrossDeploymentManagedDeletes(deployments);
 
     const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
 

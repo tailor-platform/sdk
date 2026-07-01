@@ -247,6 +247,17 @@ describe("computeRenamedAppDeletions", () => {
     expect(result).toEqual([]);
   });
 
+  test("skips peer target apps in the same multi-config deploy", () => {
+    const result = computeRenamedAppDeletions({
+      conflicts: [{ currentOwner: "supplier" }],
+      resourceOwners: new Set(),
+      targetAppName: "buyer",
+      protectedAppNames: new Set(["buyer", "supplier"]),
+    });
+
+    expect(result).toEqual([]);
+  });
+
   test("keeps the old app when some of its resources still remain unmanaged", () => {
     const result = computeRenamedAppDeletions({
       conflicts: [{ currentOwner: "old-app" }],
