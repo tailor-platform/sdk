@@ -23,9 +23,16 @@ const REVIEW_SCOPE_KINDS = new Set([
   "function_declaration",
   "function_expression",
   "arrow_function",
+  "method_definition",
 ]);
-const REVIEW_DECLARATION_KINDS = [
+const REVIEW_VALUE_DECLARATION_KINDS = [
   "function_declaration",
+  "class_declaration",
+  "enum_declaration",
+  "internal_module",
+  "import_alias",
+];
+const REVIEW_TYPE_DECLARATION_KINDS = [
   "class_declaration",
   "interface_declaration",
   "type_alias_declaration",
@@ -33,6 +40,14 @@ const REVIEW_DECLARATION_KINDS = [
   "internal_module",
   "import_alias",
 ];
+const REVIEW_FOR_KINDS = new Set(["for_statement", "for_in_statement"]);
+
+type BindingNamespace = "type" | "value";
+
+interface RuntimeBindingNames {
+  type: Set<string>;
+  value: Set<string>;
+}
 
 interface ImportBinding {
   localName: string;
@@ -361,11 +376,12 @@ function runtimeRootName(source: string): string | null {
   );
 }
 
-function importedRuntimeNames(imports: SgNode[]): Set<string> {
-  const names = new Set<string>();
+function importedRuntimeNames(imports: SgNode[]): RuntimeBindingNames {
+  const names: RuntimeBindingNames = { type: new Set<string>(), value: new Set<string>() };
   for (const importStmt of imports) {
     for (const binding of importBindings(importStmt)) {
-      names.add(binding.localName);
+      names.type.add(binding.localName);
+      if (!binding.typeOnly) names.value.add(binding.localName);
     }
   }
   return names;
@@ -395,9 +411,19 @@ function bindingIncludesName(node: SgNode, name: string): boolean {
   return names.has(name);
 }
 
-function scopeHasBinding(scope: SgNode, name: string): boolean {
+function hasAncestorBeforeScope(node: SgNode, scope: SgNode, kinds: Set<string>): boolean {
+  let current = node.parent();
+  while (current && !sameNode(current, scope)) {
+    if (kinds.has(current.kind())) return true;
+    current = current.parent();
+  }
+  return false;
+}
+
+function scopeHasValueBinding(scope: SgNode, name: string): boolean {
   for (const decl of scope.findAll({ rule: { kind: "variable_declarator" } })) {
     if (!sameNode(nearestReviewScope(decl.parent()), scope)) continue;
+    if (hasAncestorBeforeScope(decl, scope, REVIEW_FOR_KINDS)) continue;
     const binding = firstDeclaratorChild(decl);
     if (binding && bindingIncludesName(binding, name)) return true;
   }
@@ -414,8 +440,17 @@ function scopeHasBinding(scope: SgNode, name: string): boolean {
     if (binding && bindingIncludesName(binding, name)) return true;
   }
 
+  if (scope.kind() === "arrow_function") {
+    const arrowIndex = scope.children().findIndex((child) => child.kind() === "=>");
+    if (arrowIndex !== -1) {
+      for (const child of scope.children().slice(0, arrowIndex)) {
+        if (bindingIncludesName(child, name)) return true;
+      }
+    }
+  }
+
   for (const decl of scope.findAll({
-    rule: { any: REVIEW_DECLARATION_KINDS.map((kind) => ({ kind })) },
+    rule: { any: REVIEW_VALUE_DECLARATION_KINDS.map((kind) => ({ kind })) },
   })) {
     if (!sameNode(nearestReviewScope(decl.parent()), scope)) continue;
     const binding = decl
@@ -427,16 +462,65 @@ function scopeHasBinding(scope: SgNode, name: string): boolean {
   return false;
 }
 
+function scopeHasTypeBinding(scope: SgNode, name: string): boolean {
+  for (const decl of scope.findAll({
+    rule: { any: REVIEW_TYPE_DECLARATION_KINDS.map((kind) => ({ kind })) },
+  })) {
+    if (!sameNode(nearestReviewScope(decl.parent()), scope)) continue;
+    const binding = decl
+      .children()
+      .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
+    if (binding && bindingIncludesName(binding, name)) return true;
+  }
+  return false;
+}
+
+function ancestorHasValueBinding(node: SgNode, name: string): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === "catch_clause") {
+      for (const child of current.children()) {
+        if (["identifier", "object_pattern", "array_pattern"].includes(child.kind())) {
+          if (bindingIncludesName(child, name)) return true;
+        }
+      }
+    }
+
+    if (REVIEW_FOR_KINDS.has(current.kind())) {
+      const children = current.children();
+      const keywordIndex = children.findIndex(
+        (child) => child.kind() === "in" || child.kind() === "of",
+      );
+      const bindingChildren = keywordIndex === -1 ? children : children.slice(0, keywordIndex);
+      for (const child of bindingChildren) {
+        if (bindingIncludesName(child, name)) return true;
+      }
+    }
+
+    current = current.parent();
+  }
+  return false;
+}
+
+function reviewNodeBindingNamespace(node: SgNode): BindingNamespace {
+  return node.kind() === "nested_type_identifier" || node.kind() === "type_identifier"
+    ? "type"
+    : "value";
+}
+
 function hasRuntimeBindingInScope(
   node: SgNode,
   rootName: string,
-  importedNames: Set<string>,
+  importedNames: RuntimeBindingNames,
 ): boolean {
-  if (importedNames.has(rootName)) return true;
+  const namespace = reviewNodeBindingNamespace(node);
+  if (importedNames[namespace].has(rootName)) return true;
+  if (namespace === "value" && ancestorHasValueBinding(node, rootName)) return true;
 
   let scope = nearestReviewScope(node);
   while (scope) {
-    if (scopeHasBinding(scope, rootName)) return true;
+    if (namespace === "value" && scopeHasValueBinding(scope, rootName)) return true;
+    if (namespace === "type" && scopeHasTypeBinding(scope, rootName)) return true;
     scope = nearestReviewScope(scope.parent());
   }
   return false;
@@ -473,7 +557,7 @@ function collectDirectRuntimeGlobalFindings(
   root: SgNode,
   source: string,
   file: string,
-  importedNames: Set<string>,
+  importedNames: RuntimeBindingNames,
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {

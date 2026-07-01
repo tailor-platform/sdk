@@ -312,6 +312,95 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports spaced bracket runtime globals outside unrelated method parameter scopes", async () => {
+    await writeProjectFile(
+      "resolvers/method-scoped.ts",
+      [
+        "class Local {",
+        "  method(tailor: unknown) {}",
+        "}",
+        'const clientFactory = tailor ["idp"].Client;',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/method-scoped.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/method-scoped.ts",
+            line: 4,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const clientFactory = tailor ["idp"].Client;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("reports value runtime globals hidden only by type namespace bindings", async () => {
+    await writeProjectFile(
+      "resolvers/type-namespace.ts",
+      [
+        'import type { tailor } from "./types";',
+        "interface tailordb {}",
+        "type TailorErrors = Error;",
+        'const clientFactory = tailor ["idp"].Client;',
+        'const upload = tailordb ["file"].upload;',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["resolvers/type-namespace.ts"],
+        findings: [
+          expect.objectContaining({
+            file: "resolvers/type-namespace.ts",
+            line: 4,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const clientFactory = tailor ["idp"].Client;',
+          }),
+          expect.objectContaining({
+            file: "resolvers/type-namespace.ts",
+            line: 5,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: 'const upload = tailordb ["file"].upload;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  test("does not report local arrow for or catch runtime-looking names", async () => {
+    await writeProjectFile(
+      "resolvers/local-binding-forms.ts",
+      [
+        'const getClient = (tailor: any) => tailor ["idp"].Client;',
+        "for (const tailordb of sources) {",
+        '  tailordb ["file"].upload;',
+        "}",
+        "try {",
+        "  run();",
+        "} catch (tailor) {",
+        '  tailor ["idp"].Client;',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports shorthand Tailor error globals left for manual migration", async () => {
     await writeProjectFile("errors.ts", ["const exported = { TailorErrors };", ""].join("\n"));
 
