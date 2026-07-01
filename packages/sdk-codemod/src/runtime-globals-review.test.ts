@@ -961,6 +961,22 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("does not report indexed type accesses on local type bindings", async () => {
+    await writeProjectFile(
+      "resolvers/local-indexed-type-access.ts",
+      [
+        'import type * as tailordb from "./types";',
+        "type ImportedClient = tailordb['Client'];",
+        "type GenericClient<tailor> = tailor['idp'];",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("does not report prose-only runtime global mentions inside strings", async () => {
     await writeProjectFile(
       "seed/prose.mjs",
@@ -2088,6 +2104,10 @@ describe("runtime-globals-opt-in review findings", () => {
       [
         "const clientFactory = globalThis/* comment */.tailor.idp.Client;",
         "const runtime = (globalThis /* comment */).tailor;",
+        "const lineClientFactory = globalThis // comment",
+        "  .tailor.idp.Client;",
+        "const lineRuntime = global // comment",
+        '  ["tailor"];',
         "",
       ].join("\n"),
     );
@@ -2110,6 +2130,18 @@ describe("runtime-globals-opt-in review findings", () => {
             line: 2,
             message: expect.stringContaining("runtime global reference"),
             excerpt: "const runtime = (globalThis /* comment */).tailor;",
+          }),
+          expect.objectContaining({
+            file: "resolvers/commented-global-object.ts",
+            line: 3,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const lineClientFactory = globalThis // comment",
+          }),
+          expect.objectContaining({
+            file: "resolvers/commented-global-object.ts",
+            line: 5,
+            message: expect.stringContaining("runtime global reference"),
+            excerpt: "const lineRuntime = global // comment",
           }),
         ],
       }),

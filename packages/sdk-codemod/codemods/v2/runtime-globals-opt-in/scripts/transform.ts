@@ -10,8 +10,9 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
 const RUNTIME_ROOT_NAME_PATTERN = String.raw`(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))`;
-const REVIEW_GAP_PATTERN = String.raw`(?:\s|/\*[\s\S]*?\*/)*`;
-const REVIEW_REQUIRED_GAP_PATTERN = String.raw`(?:\s|/\*[\s\S]*?\*/)+`;
+const REVIEW_COMMENT_PATTERN = String.raw`(?:/\*[\s\S]*?\*/|//[^\r\n]*(?:\r?\n|$))`;
+const REVIEW_GAP_PATTERN = String.raw`(?:\s|${REVIEW_COMMENT_PATTERN})*`;
+const REVIEW_REQUIRED_GAP_PATTERN = String.raw`(?:\s|${REVIEW_COMMENT_PATTERN})+`;
 const GLOBAL_OBJECT_REFERENCE_PATTERN = String.raw`(?:(globalThis|global)${REVIEW_GAP_PATTERN}(?:!${REVIEW_GAP_PATTERN})?(?:(?:as|satisfies)${REVIEW_REQUIRED_GAP_PATTERN}[^)]+)?|\(+${REVIEW_GAP_PATTERN}(?:<[^>]+>${REVIEW_GAP_PATTERN})?(?:\(+${REVIEW_GAP_PATTERN})?(globalThis|global)${REVIEW_GAP_PATTERN}(?:\)+${REVIEW_GAP_PATTERN})?(?:!${REVIEW_GAP_PATTERN})?(?:(?:as|satisfies)${REVIEW_REQUIRED_GAP_PATTERN}[^)]+)?${REVIEW_GAP_PATTERN}\)+)`;
 const BARE_RUNTIME_ROOT_TEXT_PATTERN = /\b(?:tailor|tailordb)\b/;
 const RUNTIME_ROOT_PROPERTY_NAMES = new Set([
@@ -868,6 +869,7 @@ function hasAncestorKind(node: SgNode, kind: string): boolean {
 function reviewNodeBindingNamespace(node: SgNode): BindingNamespace {
   if (node.kind() === "identifier" && isInTypeOnlyExportStatement(node)) return "type";
   return node.kind() === "nested_type_identifier" ||
+    node.kind() === "lookup_type" ||
     node.kind() === "type_identifier" ||
     hasAncestorKind(node, "nested_type_identifier")
     ? "type"
