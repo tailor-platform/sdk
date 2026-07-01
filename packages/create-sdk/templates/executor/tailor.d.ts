@@ -16,6 +16,7 @@ declare module "@tailor-platform/sdk" {
   interface IdpNameRegistry {
     "main-idp": true;
   }
+  interface ConnectionNameRegistry {}
 }
 
 export {};
