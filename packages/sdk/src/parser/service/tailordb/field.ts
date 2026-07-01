@@ -199,8 +199,21 @@ const convertToScriptExpr = (
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})({ value: _value, data: _data, invoker: ${tailorPrincipalMap}, now: _now })`,
+    `(${normalized})({ value: _value, newRecord: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now })`,
     formatScriptContext(kind, context),
+  );
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+export const convertTypeValidateToExpr = (fn: Function): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
+  const normalized = stringifyFunction(fn);
+  return assertParsableExpression(
+    `(${normalized})({ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues)`,
+    "type-validate",
   );
 };
 
@@ -242,19 +255,12 @@ export function parseFieldConfig(
           ),
         }
       : {}),
-    validate: metadata.validate?.map((v) => {
-      const { fn, message } =
-        typeof v === "function"
-          ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
-          : { fn: v[0], message: v[1] };
-
-      return {
-        script: {
-          expr: convertToScriptExpr(fn, "validate", context),
-        },
-        errorMessage: message,
-      };
-    }),
+    validate: metadata.validate?.map((fn) => ({
+      script: {
+        expr: convertToScriptExpr(fn, "validate", context),
+      },
+      errorMessage: "",
+    })),
     hooks: metadata.hooks
       ? {
           create: metadata.hooks.create

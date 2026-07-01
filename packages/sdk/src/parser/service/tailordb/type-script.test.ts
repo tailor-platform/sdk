@@ -103,13 +103,13 @@ describe("buildTypeScripts", () => {
     expect(createExpr).toContain('"label": _input["label"] ?? "now"');
   });
 
-  test("builds a validate script keyed by dotted path with negated boolean checks", () => {
+  test("builds a validate script with ?? chain and typeof string check", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       age: {
         type: "integer",
         validate: [
-          { script: { expr: "_value >= 0" }, errorMessage: "must be >= 0" },
-          { script: { expr: "_value < 200" }, errorMessage: "must be < 200" },
+          { script: { expr: "_value >= 0" }, errorMessage: "" },
+          { script: { expr: "_value < 200" }, errorMessage: "" },
         ],
       },
     };
@@ -118,13 +118,47 @@ describe("buildTypeScripts", () => {
     expect(typeHook).toBeUndefined();
 
     const createExpr = typeValidate?.create?.expr ?? "";
-    // Same rules apply to create and update.
     expect(typeValidate?.update?.expr).toBe(createExpr);
     expect(createExpr).toContain("const __errs = {}");
-    expect(createExpr).toContain('if (!(_value >= 0)) { __errs["age"] = "must be >= 0"; }');
-    expect(createExpr).toContain('else if (!(_value < 200)) { __errs["age"] = "must be < 200"; }');
+    expect(createExpr).toContain('const _value = _newRecord["age"]');
+    expect(createExpr).toContain('const _oldValue = _oldRecord?.["age"] ?? null');
+    expect(createExpr).toContain("(_value >= 0) ?? (_value < 200)");
+    expect(createExpr).toContain('if (typeof __r === "string") { __errs["age"] = __r; }');
     expect(createExpr).toContain("return __errs");
-    // `now` is a hook-only concept; validators must not bind a timestamp.
     expect(createExpr).not.toContain("new Date()");
+  });
+
+  test("includes type-level validate with __issues function", () => {
+    const typeValidateExpr =
+      '(({ newRecord }) => { if (newRecord.start > newRecord.end) __issues("start", "bad"); })({ newRecord: _newRecord, oldRecord: _oldRecord }, __issues)';
+
+    const { typeValidate } = buildTypeScripts({}, typeValidateExpr);
+    const expr = typeValidate?.create?.expr ?? "";
+    expect(typeValidate?.update?.expr).toBe(expr);
+    expect(expr).toContain("const __errs = {}");
+    expect(expr).toContain("const __issues = (f, m) => { __errs[f] = m; }");
+    expect(expr).toContain(typeValidateExpr);
+    expect(expr).toContain("return __errs");
+  });
+
+  test("combines field validators and type-level validate in one script", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      name: {
+        type: "string",
+        validate: [{ script: { expr: "checkName(_value)" }, errorMessage: "" }],
+      },
+    };
+    const typeValidateExpr = "typeValidateFn({ newRecord: _newRecord }, __issues)";
+
+    const { typeValidate } = buildTypeScripts(fields, typeValidateExpr);
+    const expr = typeValidate?.create?.expr ?? "";
+    expect(expr).toContain('const _value = _newRecord["name"]');
+    expect(expr).toContain("const __issues = (f, m) => { __errs[f] = m; }");
+    expect(expr).toContain(typeValidateExpr);
+  });
+
+  test("no typeValidate output when no field validators and no type-level validate", () => {
+    expect(buildTypeScripts({})).toEqual({});
+    expect(buildTypeScripts({}, undefined)).toEqual({});
   });
 });

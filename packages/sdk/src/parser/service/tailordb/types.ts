@@ -172,4 +172,5 @@ export interface TailorDBType {
   permissions: Permissions;
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];
+  typeValidateExpr?: string;
 }

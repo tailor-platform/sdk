@@ -24,7 +24,7 @@ describe("typeName method type safety", () => {
       TypeEquals<typeof named.typeName, ".typeName() has already been set">
     >;
 
-    const validated = t.string().validate(() => true);
+    const validated = t.string().validate(() => undefined);
     type _ValidateDuplicate = Expect<
       TypeEquals<typeof validated.validate, ".validate() has already been set">
     >;

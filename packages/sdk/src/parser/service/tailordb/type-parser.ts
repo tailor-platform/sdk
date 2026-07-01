@@ -1,6 +1,6 @@
 import * as inflection from "inflection";
 import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
-import { parseFieldConfig } from "./field";
+import { convertTypeValidateToExpr, parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
 import {
   validateRelationConfig,
@@ -171,6 +171,9 @@ function parseTailorDBType(
     permissions: parsePermissions(metadata.permissions),
     indexes: metadata.indexes,
     files: metadata.files,
+    ...(typeof metadata.typeValidate === "function" && {
+      typeValidateExpr: convertTypeValidateToExpr(metadata.typeValidate),
+    }),
   };
 }
 

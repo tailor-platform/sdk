@@ -392,12 +392,12 @@ describe("snapshot-manifest", () => {
       );
       expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
 
-      // Validators are aggregated into a type-level validate script keyed by the
-      // dotted field path, with the boolean expression negated into a failure.
+      // Validators are aggregated into a type-level validate script using ?? chain.
       const validateExpr = manifest.schema?.typeValidate?.create?.expr ?? "";
-      expect(validateExpr).toContain('__errs["profile.displayName"] = "Display name is required"');
-      expect(validateExpr).toContain("if (!(((_value ?? '').length > 0)))");
-      expect(validateExpr).toContain('__errs["profile.contact.email"] = "Email must contain @"');
+      expect(validateExpr).toContain('__errs["profile.displayName"]');
+      expect(validateExpr).toContain("((_value ?? '').length > 0)");
+      expect(validateExpr).toContain('if (typeof __r === "string")');
+      expect(validateExpr).toContain('__errs["profile.contact.email"]');
       expect(manifest.schema?.typeValidate?.update?.expr).toBe(validateExpr);
     });
 

@@ -16,18 +16,18 @@ export const orderItem = db
     quantity: db
       .int()
       .description("Quantity of the product")
-      .validate(({ value }) => value >= 0),
+      .validate(({ newValue }) => (newValue < 0 ? "Quantity must be non-negative" : undefined)),
     unitPrice: db
       .float()
       .description("Unit price of the product")
-      .validate(({ value }) => value >= 0),
+      .validate(({ newValue }) => (newValue < 0 ? "Unit price must be non-negative" : undefined)),
     totalPrice: db.float({ optional: true }).description("Total price of the order item"),
     ...db.fields.timestamps(),
   })
   .hooks({
     totalPrice: {
-      create: ({ data }) => (data?.quantity ?? 0) * (data.unitPrice ?? 0),
-      update: ({ data }) => (data?.quantity ?? 0) * (data.unitPrice ?? 0),
+      create: ({ newRecord }) => (newRecord?.quantity ?? 0) * (newRecord.unitPrice ?? 0),
+      update: ({ newRecord }) => (newRecord?.quantity ?? 0) * (newRecord.unitPrice ?? 0),
     },
   })
   .permission(permissionLoggedIn)

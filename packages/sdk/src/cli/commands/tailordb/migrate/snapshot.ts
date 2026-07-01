@@ -503,6 +503,10 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
     snapshotType.files = { ...type.files };
   }
 
+  if (type.typeValidateExpr) {
+    snapshotType.typeValidateExpr = type.typeValidateExpr;
+  }
+
   if (Object.keys(type.forwardRelationships).length > 0) {
     snapshotType.forwardRelationships = {};
     for (const [relName, rel] of Object.entries(type.forwardRelationships)) {

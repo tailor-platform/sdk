@@ -3,7 +3,6 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type { TailorPrincipal } from "#/runtime/types";
 import type { output, InferFieldsOutput } from "#/types/helpers";
 import type {
   DateString,
@@ -95,33 +94,14 @@ export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
   : T;
 
 /**
- * Validation function type
+ * Field validation function. Return an error message string to fail, or void/undefined to pass.
  */
-export type ValidateFn<O, D = unknown> = (args: {
-  value: O;
-  data: D;
-  invoker: TailorPrincipal | null;
-}) => boolean;
+export type ValidateFn<O> = (args: { newValue: O; oldValue: O | null }) => string | void;
 
 /**
- * Validation configuration with custom error message
+ * Input type for field validation
  */
-export type ValidateConfig<O, D = unknown> = [ValidateFn<O, D>, string];
-
-/**
- * Field-level validation function
- */
-type FieldValidateFn<O> = ValidateFn<O>;
-
-/**
- * Field-level validation configuration
- */
-type FieldValidateConfig<O> = ValidateConfig<O>;
-
-/**
- * Input type for field validation - can be either a function or a tuple of [function, errorMessage]
- */
-export type FieldValidateInput<O> = FieldValidateFn<O> | FieldValidateConfig<O>;
+export type FieldValidateInput<O> = ValidateFn<O>;
 
 /**
  * Base validators type for field collections
@@ -138,13 +118,7 @@ type ValidatorsBase<
     validate: unknown;
   }
     ? never
-    : K]?:
-    | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
-    | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
-    | (
-        | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
-        | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
-      )[];
+    : K]?: ValidateFn<output<F[K]>> | ValidateFn<output<F[K]>>[];
 }>;
 
 /**
