@@ -8,9 +8,13 @@ import { z } from "zod";
 import { automationLevel } from "./migration-doc";
 import { allCodemods, getApplicableCodemods, resolveCodemodScript } from "./registry";
 import { runCodemods } from "./runner";
+import { createRunnerMetadata } from "./runner-metadata";
 import type { LlmReview, RunOutput } from "./types";
 
-const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta.url)) + "/..");
+const packageRoot = path.dirname(fileURLToPath(import.meta.url)) + "/..";
+const packageJson = await readPackageJSON(packageRoot);
+const packageName = packageJson.name ?? "sdk-codemod";
+const packageVersion = packageJson.version ?? "0.0.0";
 
 /** One rule in the `list` command output. */
 interface RuleSummary {
@@ -54,14 +58,27 @@ function printLlmReview(review: LlmReview): void {
       ? "the codemod cannot safely migrate these automatically"
       : "review the project for this manual change";
   process.stderr.write(`\n🤖 LLM-assisted review suggested (${review.codemodId}) — ${scope}:\n`);
+  const findingsByFile = new Map<string, NonNullable<LlmReview["findings"]>>();
+  for (const finding of review.findings ?? []) {
+    let findings = findingsByFile.get(finding.file);
+    if (!findings) {
+      findings = [];
+      findingsByFile.set(finding.file, findings);
+    }
+    findings.push(finding);
+  }
   for (const file of review.files) {
     process.stderr.write(`  - ${file}\n`);
+    for (const finding of findingsByFile.get(file) ?? []) {
+      process.stderr.write(`    - line ${finding.line}: ${finding.message}\n`);
+      process.stderr.write(`      ${finding.excerpt}\n`);
+    }
   }
   process.stderr.write(`\nPrompt for an LLM:\n${review.prompt.trim()}\n`);
 }
 
 const main = defineCommand({
-  name: packageJson.name ?? "sdk-codemod",
+  name: packageName,
   description: packageJson.description ?? "Codemod runner for Tailor Platform SDK upgrades",
   subCommands: { list: listCommand },
   notes: `Applies the codemods matching the \`--from\`/\`--to\` version range to the
@@ -70,8 +87,11 @@ const main = defineCommand({
 - \`filesModified\`: files a codemod changed
 - \`warnings\`: files that may still need manual migration
 - \`llmReviews\`: changes the codemods could not fully migrate on their own. Each
-  entry has the affected \`files\` and a \`prompt\` — hand the prompt and files to
-  an LLM (or follow it yourself) to finish those cases.
+  entry has the affected \`files\`, optional file-local \`findings\`, and a
+  \`prompt\` — hand the prompt and files to an LLM (or follow it yourself) to
+  finish those cases.
+- \`runner\`: exact codemod runner identity. Local source builds include the
+  repository commit and the build command used to produce \`dist/index.js\`.
 
 Progress, warnings, and the LLM-review prompts are also printed to \`stderr\` in
 human-readable form, so \`stdout\` stays pure JSON for piping.`,
@@ -103,10 +123,16 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
   run: async (args) => {
     const targetPath = path.resolve(args.target);
     const dryRun = args["dry-run"];
+    const runner = createRunnerMetadata({
+      packageName,
+      packageVersion,
+      packageRoot,
+    });
 
     const codemods = getApplicableCodemods(args.from, args.to);
 
     const output: RunOutput = {
+      runner,
       codemodsApplied: 0,
       codemodsSkipped: 0,
       filesModified: [],
@@ -163,4 +189,4 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
   },
 });
 
-void runMain(main, { version: packageJson.version });
+void runMain(main, { version: packageVersion });

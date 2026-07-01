@@ -1,0 +1,7 @@
+name: "@tailor-platform/runtime-globals-opt-in"
+version: "1.0.0"
+description: "Rewrite simple direct tailor.idp.Client runtime global usage to the typed idp wrapper and flag broader runtime globals for review"
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"

@@ -31,6 +31,7 @@ export type TailorFieldInput = {
           update?: Function | undefined;
         }
       | undefined;
+    validate?: (Function | [Function, string])[] | undefined;
     typeName?: string | undefined;
   };
   fields: {
@@ -69,6 +70,7 @@ export type TailorField = {
           update?: Function | undefined;
         }
       | undefined;
+    validate?: (Function | [Function, string])[] | undefined;
     typeName?: string | undefined;
   };
   fields: {

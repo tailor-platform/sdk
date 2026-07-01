@@ -1,9 +1,101 @@
 import * as url from "node:url";
 import * as path from "pathe";
-import { lt, gte, valid } from "semver";
+import { gte, lt, parse, valid } from "semver";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
+const RENAME_BIN_SOURCE_VALUE_FLAGS = [
+  "--env-file-if-exists",
+  "--env-file",
+  "--profile",
+  "--config",
+  "--workspace-id",
+  "--arg",
+  "--query",
+  "--file",
+  "--name",
+  "--namespace",
+  "--dir",
+  "-e",
+  "-p",
+  "-c",
+  "-w",
+  "-a",
+  "-q",
+  "-f",
+  "-n",
+];
+const RENAME_BIN_SOURCE_COMMANDS = [
+  "api",
+  "apply",
+  "authconnection",
+  "completion",
+  "crash-report",
+  "crashreport",
+  "deploy",
+  "executor",
+  "function",
+  "generate",
+  "init",
+  "login",
+  "logout",
+  "machineuser",
+  "oauth2client",
+  "open",
+  "organization",
+  "profile",
+  "query",
+  "remove",
+  "secret",
+  "setup",
+  "show",
+  "skills",
+  "staticwebsite",
+  "tailordb",
+  "upgrade",
+  "user",
+  "workflow",
+  "workspace",
+];
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const RENAME_BIN_SOURCE_VALUE_GUARDS = RENAME_BIN_SOURCE_VALUE_FLAGS.flatMap((flag) => {
+  const escaped = escapeRegExp(flag);
+  return [`(?<!${escaped}\\s+)`, `(?<!${escaped}=)`];
+}).join("");
+const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})`;
+const RENAME_BIN_SOURCE_COMMAND_TOKEN =
+  "tailor-sdk(?:(?:\\.(?:cmd|ps1|exe))|(?:@[^\\s'\"`;|&)]+))?(?![\\w-])";
+const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
+  [
+    "(?<![.\\w-])",
+    "(?<![\"'])",
+    "(?<!\\\\[\"'])",
+    RENAME_BIN_SOURCE_VALUE_GUARDS,
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
+    `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
+  ].join(""),
+);
+const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
+  [
+    "(?:^|[\\s;&|\\x00])(?:sh|bash|zsh)\\s+-\\w*c\\w*\\s+\\\\?[\"']",
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
+    `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
+  ].join(""),
+);
+const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
+  [
+    RENAME_BIN_SOURCE_VALUE_GUARDS,
+    "[\"']",
+    RENAME_BIN_SOURCE_COMMAND_TOKEN,
+    "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
+  ].join(""),
+);
+const V2_NEXT_1 = "2.0.0-next.1";
+const V2_NEXT_2 = "2.0.0-next.2";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -14,6 +106,7 @@ export const allCodemods: CodemodPackage[] = [
       "Migrate defineGenerators() tuple syntax to definePlugins() with explicit plugin imports",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     scriptPath: "v2/define-generators-to-plugins/scripts/transform.js",
     legacyPatterns: ["defineGenerators"],
     examples: [
@@ -48,6 +141,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rewrite deprecated plugin re-export imports (kyselyTypePlugin, enumConstantsPlugin, fileUtilsPlugin, seedPlugin) from `@tailor-platform/sdk/cli` to their dedicated plugin subpaths",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     scriptPath: "v2/plugin-cli-import/scripts/transform.js",
     examples: [
       {
@@ -63,6 +157,7 @@ export const allCodemods: CodemodPackage[] = [
       "Strip the deprecated {input: ...} wrapper from `tailor function test-run --arg` JSON in scripts and docs",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     scriptPath: "v2/test-run-arg-input/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh}", "**/*.md"],
     examples: [
@@ -80,6 +175,7 @@ export const allCodemods: CodemodPackage[] = [
       "Replace deprecated `tailor-sdk-skills` invocations with `tailor-sdk skills install`",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     scriptPath: "v2/sdk-skills-shim/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
     legacyPatterns: ["tailor-sdk-skills"],
@@ -104,6 +200,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename TailorUser/TailorActor/TailorActorType/TailorInvoker to TailorPrincipal, drop unauthenticatedTailorUser, rename resolver body `user` to `caller`, and rename TailorDB callback `user` to `invoker`",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     scriptPath: "v2/principal-unify/scripts/transform.js",
     legacyPatterns: [
       "TailorUser",
@@ -185,6 +282,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rewrite `tailor-sdk apply` invocations in package.json scripts, shell scripts, CI configs, and docs to the canonical v2 `tailor-sdk deploy` command",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     scriptPath: "v2/apply-to-deploy/scripts/transform.js",
     filePatterns: [
       "**/package.json",
@@ -207,6 +305,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rewrite `tailor-sdk crash-report` to `tailor-sdk crashreport` and `--machineuser` to `--machine-user` across package.json scripts, shell scripts, CI configs, and docs",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     scriptPath: "v2/cli-rename/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
     legacyPatterns: ["tailor-sdk crash-report", "--machineuser"],
@@ -277,12 +376,49 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/auth-invoker-call-unwrap",
+    name: 'auth.invoker("name") → "name"',
+    description:
+      'Replace statically identified SDK `auth.invoker("name")` option values with the bare `"name"` string while preserving the `authInvoker` key for SDK versions before the option rename.',
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
+    scriptPath: "v2/auth-invoker-call-unwrap/scripts/transform.js",
+    suspiciousPatterns: ["auth.invoker"],
+    reviewSupersededBy: ["v2/auth-invoker-unwrap"],
+    prompt: [
+      "In Tailor SDK v2 the auth.invoker() helper is removed; an invoker is now the",
+      "machine user name passed directly as a string. The codemod already rewrote the",
+      'statically identified SDK option form authInvoker: auth.invoker("name") to authInvoker: "name". These files still contain',
+      "auth.invoker(...) calls that need manual review.",
+      "",
+      "For each remaining auth.invoker(<expr>) call:",
+      "1. Replace the whole call with <expr> only where the target option expects a",
+      "   machine user name string; platform/runtime authInvoker payloads still expect",
+      "   the object form.",
+      "2. Keep the authInvoker key when targeting SDK versions before the invoker",
+      "   option rename; later v2 targets run a separate codemod for that key rename.",
+      "3. After removing every auth.invoker usage in a file, delete the now-unused auth",
+      "   import (keeping it pulls Node-only config modules into runtime bundles); leave",
+      "   the import if auth is still referenced elsewhere.",
+      "",
+      "Do not change behavior beyond the auth.invoker() removal.",
+    ].join("\n"),
+    examples: [
+      {
+        before: 'createResolver({ authInvoker: auth.invoker("manager") });',
+        after: 'createResolver({ authInvoker: "manager" });',
+      },
+    ],
+  },
+  {
     id: "v2/auth-invoker-unwrap",
     name: 'auth.invoker("name") → invoker: "name"',
     description:
       'Rename statically identified SDK `authInvoker` options to `invoker`, replace `auth.invoker("name")` there with the bare `"name"` string, and drop the `auth` import when no other reference remains. Ambiguous workflow `.trigger()` calls are left for manual review. The `auth.invoker()` helper is removed in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     scriptPath: "v2/auth-invoker-unwrap/scripts/transform.js",
     suspiciousPatterns: [
       "auth.invoker",
@@ -334,6 +470,7 @@ export const allCodemods: CodemodPackage[] = [
       'Rewrite references to the removed capital-cased `Tailordb` ambient namespace (`Tailordb.QueryResult`, `Tailordb.CommandType`, `Tailordb.Client`, `typeof Tailordb.Client`) to the lowercase `tailordb.*` namespace exposed by `@tailor-platform/sdk/runtime/globals`. Because v2 no longer activates ambient declarations automatically, each file that contains `tailordb.*` references after the rewrite must also add `import "@tailor-platform/sdk/runtime/globals"`.',
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     scriptPath: "v2/tailordb-namespace/scripts/transform.js",
     legacyPatterns: ["Tailordb."],
     examples: [
@@ -361,6 +498,7 @@ export const allCodemods: CodemodPackage[] = [
       "Unwrap `JSON.stringify(...)` passed as the `executeScript` `arg` option. In v2 `arg` takes a JSON-serializable value and is serialized internally, so a pre-stringified argument double-encodes.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     scriptPath: "v2/execute-script-arg/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,mjs,cjs,js}"],
     suspiciousPatterns: [
@@ -412,6 +550,7 @@ export const allCodemods: CodemodPackage[] = [
       "The deprecated `openDownloadStream` file-streaming API is removed in v2. Use `downloadStream` for streamed file downloads. The generated file utilities now emit `downloadFileStream` (which calls `downloadStream` and returns `FileDownloadStreamResponse`) instead of the removed `openFileDownloadStream` helper.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     // No scriptPath: this is a codemod-less ("manual") migration.
     filePatterns: ["**/*.{ts,tsx,mts,cts,mjs,cjs,js}"],
     suspiciousPatterns: ["openDownloadStream", "openFileDownloadStream"],
@@ -432,14 +571,18 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/runtime-globals-opt-in",
     name: "Ambient runtime globals are opt-in",
     description:
-      'Importing `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` global declarations. Normal SDK development does not need them — use the SDK APIs and the typed wrappers from `@tailor-platform/sdk/runtime`. Only if you relied on the ambient globals directly, add `import "@tailor-platform/sdk/runtime/globals"`. (The capital-cased `Tailordb.*` namespace is removed separately — see the `Tailordb → tailordb` codemod.)',
+      'Importing `@tailor-platform/sdk` no longer activates the ambient `tailor.*` / `tailordb.*` global declarations. The codemod rewrites simple direct `new tailor.idp.Client(...)` calls to the typed `idp.Client` wrapper from `@tailor-platform/sdk/runtime`; broader runtime global usage remains review-only. Only if you relied on the ambient globals directly, add `import "@tailor-platform/sdk/runtime/globals"`. (The capital-cased `Tailordb.*` namespace is removed separately — see the `Tailordb → tailordb` codemod.)',
     since: "1.0.0",
     until: "2.0.0",
-    filePatterns: ["**/*.{ts,tsx,mts,cts}"],
+    prereleaseUntil: V2_NEXT_1,
+    scriptPath: "v2/runtime-globals-opt-in/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     suspiciousPatterns: [
       "tailor.context",
       "tailor.iconv",
       "tailor.idp",
+      "tailor.secretmanager",
+      "tailor.authconnection",
       "tailor.workflow",
       "tailor[",
       "tailordb.Client",
@@ -451,6 +594,21 @@ export const allCodemods: CodemodPackage[] = [
       "TailorErrorItem",
       "TailorErrorMessage",
       "TailorErrors",
+    ],
+    sourceStringSuspiciousPatterns: [
+      "new tailor.idp.Client",
+      /[=(:,[]\s*tailor\.idp\.Client\b/,
+      /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)(?:\.[A-Za-z_$][\w$]*)?\b/,
+      /\btailor\.(?:authconnection|context|iconv|idp|secretmanager|workflow)\.[A-Za-z_$][\w$]*\s*\(/,
+      "tailor[",
+      /\btailordb\.file\.[A-Za-z_$][\w$]*\s*\(/,
+      /(?:(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.file\b/,
+      /(?:\bnew\s+|(?:=>|[=(:,<{]|\[)\s*|\b(?:return|await|typeof)\s+)tailordb\.(?:Client|CommandType|QueryResult)\b/,
+      /<\s*tailordb\.(?:Client|CommandType|QueryResult)\b/,
+      "tailordb[",
+      /(?:\bnew\s+|\bthrow\s+|\binstanceof\s+)Tailor(?:DBFileError|Errors|ErrorMessage)\b/,
+      /(?:[:=<]\s*|\bas\s+)Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem)\b/,
+      /[:<]\s*TailorErrorItem\b/,
     ],
     examples: [
       {
@@ -472,10 +630,11 @@ export const allCodemods: CodemodPackage[] = [
       "The v2 SDK no longer enables ambient Tailor runtime globals from",
       "`@tailor-platform/sdk`. For each flagged file that uses `tailor.*`,",
       "`tailordb.*`, or Tailor runtime error globals, prefer migrating to the",
-      "typed wrappers from `@tailor-platform/sdk/runtime` (e.g. replace",
-      '`new tailor.idp.Client()` with `import { idp } from "@tailor-platform/sdk/runtime"`',
-      "and `new idp.Client({ namespace })`). The wrappers are self-contained, so the",
-      "ambient globals are no longer needed.",
+      "typed wrappers from `@tailor-platform/sdk/runtime`. The codemod already",
+      "rewrites direct `new tailor.idp.Client(...)` calls to `new idp.Client(...)`",
+      "when the file has no conflicting `tailor` or `idp` binding. For any remaining",
+      "`tailor.idp.Client` references, either resolve the binding collision and use",
+      "`idp.Client`, or keep the ambient global deliberately.",
       "",
       "Only when the file must keep referencing the bare `tailor.*` names directly,",
       "opt into the global declarations instead by adding one of these:",
@@ -484,7 +643,9 @@ export const allCodemods: CodemodPackage[] = [
       "  the relevant tsconfig compilerOptions",
       "",
       "Leave files unchanged when the matching name is local, imported from another",
-      "module, or appears only in comments or strings.",
+      "module, or appears only in comments or prose strings. Embedded code strings",
+      "that use runtime globals are review-only findings; do not insert imports inside",
+      "string literals.",
     ].join("\n"),
   },
   {
@@ -494,6 +655,7 @@ export const allCodemods: CodemodPackage[] = [
       "Workflow job `.trigger()` now aligns with the platform runtime: it returns the job result directly instead of a Promise wrapper, and tests no longer run job bodies locally. Mock trigger responses with `mockWorkflow()` (`setJobHandler` / `enqueueResult`, assert via `triggeredJobs`), or use `runWorkflowLocally()` for a full-chain local run.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     suspiciousPatterns: [".trigger("],
     examples: [
       {
@@ -519,6 +681,7 @@ export const allCodemods: CodemodPackage[] = [
       "CLI login tokens are stored in the OS keyring by default when available, falling back to the platform config file when it is not. No source change is required; re-login if you need tokens moved into the keyring.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
     notice: true,
   },
   {
@@ -528,6 +691,7 @@ export const allCodemods: CodemodPackage[] = [
       "The CLI stores human users by their stable subject ID instead of email (email is kept for display). Legacy email-keyed entries are migrated automatically on the next login or token refresh. No source change is required.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     notice: true,
   },
   {
@@ -537,18 +701,34 @@ export const allCodemods: CodemodPackage[] = [
       "`tailor function logs` maps stack traces against the function bundle only when the execution recorded a `contentHash`. Executions without one now show raw stack traces instead of mapped frames. No source change is required.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_1,
     notice: true,
   },
   {
     id: "v2/rename-bin",
     name: "tailor-sdk binary → tailor",
     description:
-      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Update `.gitignore` entries manually (the codemod skips paths preceded by a dot).",
+      "Rename the CLI binary from `tailor-sdk` to `tailor` in package.json scripts, shell scripts, CI workflows, source files, generated declaration comments, and documentation. Does not rename `.tailor-sdk` directory paths or the `create-tailor-sdk` scaffolding package. Note: v2 also changes the default generated output directory from `.tailor-sdk/` to `.tailor/` and the setup lock file from `.github/tailor-sdk.lock` to `.github/tailor.lock`. Run `mv .tailor-sdk .tailor` to migrate the generated output directory (preserves auth connection state and other local files). Run `git mv .github/tailor-sdk.lock .github/tailor.lock` if the old lock file exists; without it `tailor setup check` will treat all managed workflows as missing. Exact ignore-file entries for `.tailor-sdk/` are handled by the generated-output ignore codemod.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/rename-bin/scripts/transform.js",
-    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,yml,yaml}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+      "**/*.md",
+    ],
     legacyPatterns: ["tailor-sdk"],
+    sourceStringLegacyPatterns: [
+      RENAME_BIN_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN,
+    ],
+    sourceTextLegacyPatterns: [
+      RENAME_BIN_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN,
+      RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN,
+    ],
     examples: [
       {
         lang: "sh",
@@ -561,6 +741,39 @@ export const allCodemods: CodemodPackage[] = [
       "the binary name — leave `.tailor-sdk` directory paths and `create-tailor-sdk`",
       "package references unchanged.",
     ].join("\n"),
+  },
+  {
+    id: "v2/tailor-output-ignore-dir",
+    name: ".tailor-sdk ignore entries → .tailor",
+    description:
+      "Rewrite exact ignore-file entries for the v1 generated output directory from `.tailor-sdk` to the v2 `.tailor` directory. Other `.tailor-sdk` paths and prose are left unchanged.",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/tailor-output-ignore-dir/scripts/transform.js",
+    filePatterns: [
+      "**/.gitignore",
+      "**/.npmignore",
+      "**/.dockerignore",
+      "**/gitignore",
+      "**/npmignore",
+      "**/dockerignore",
+      "**/_gitignore",
+      "**/_npmignore",
+      "**/_dockerignore",
+      "**/__dot__gitignore",
+      "**/__dot__npmignore",
+      "**/__dot__dockerignore",
+      "**/*.gitignore",
+      "**/*.npmignore",
+      "**/*.dockerignore",
+    ],
+    examples: [
+      {
+        lang: "gitignore",
+        before: ".tailor-sdk/",
+        after: ".tailor/",
+      },
+    ],
   },
   {
     id: "v2/node-minimum-22-15-0",
@@ -582,9 +795,71 @@ export function resolveCodemodScript(scriptPath: string): string {
   return path.resolve(CODEMODS_ROOT, scriptPath);
 }
 
+function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boolean {
+  if (gte(toVersion, codemod.until)) {
+    return true;
+  }
+  if (codemod.prereleaseUntil === undefined || !gte(toVersion, codemod.prereleaseUntil)) {
+    return false;
+  }
+
+  const target = parse(toVersion)!;
+  const boundary = parse(codemod.until)!;
+
+  return (
+    target.prerelease.length > 0 &&
+    target.major === boundary.major &&
+    target.minor === boundary.minor &&
+    target.patch === boundary.patch
+  );
+}
+
+function effectiveCodemodBoundary(codemod: CodemodPackage): string {
+  return codemod.prereleaseUntil ?? codemod.until;
+}
+
+function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
+  for (const codemod of codemods) {
+    const boundary = parse(codemod.until);
+    if (boundary === null) {
+      throw new Error(
+        `Codemod ${codemod.id} until must be a valid semver version: ${codemod.until}`,
+      );
+    }
+    if (boundary.prerelease.length > 0) {
+      throw new Error(`Codemod ${codemod.id} until must be a stable version: ${codemod.until}`);
+    }
+    if (codemod.prereleaseUntil === undefined) {
+      continue;
+    }
+
+    const prereleaseBoundary = parse(codemod.prereleaseUntil);
+    if (prereleaseBoundary === null) {
+      throw new Error(
+        `Codemod ${codemod.id} prereleaseUntil must be a valid semver version: ${codemod.prereleaseUntil}`,
+      );
+    }
+    if (prereleaseBoundary.prerelease.length === 0) {
+      throw new Error(
+        `Codemod ${codemod.id} prereleaseUntil must be a prerelease version: ${codemod.prereleaseUntil}`,
+      );
+    }
+    if (
+      prereleaseBoundary.major !== boundary.major ||
+      prereleaseBoundary.minor !== boundary.minor ||
+      prereleaseBoundary.patch !== boundary.patch
+    ) {
+      throw new Error(
+        `Codemod ${codemod.id} prereleaseUntil must target the same version as until: ${codemod.prereleaseUntil}`,
+      );
+    }
+  }
+}
+
 /**
  * Get codemod packages applicable for a version range.
- * A codemod applies when: since <= fromVersion < until <= toVersion
+ * A codemod applies when: since <= fromVersion < boundary <= toVersion.
+ * A target prerelease reaches `until` only when the codemod declares `prereleaseUntil`.
  * @param fromVersion - Current SDK version (semver)
  * @param toVersion - Target SDK version (semver)
  * @returns Array of applicable codemod packages in registration order
@@ -596,11 +871,12 @@ export function getApplicableCodemods(fromVersion: string, toVersion: string): C
   if (!valid(toVersion)) {
     throw new Error(`Invalid toVersion: ${toVersion}`);
   }
+  assertCodemodBoundaries(allCodemods);
 
   return allCodemods.filter(
     (codemod) =>
       gte(fromVersion, codemod.since) &&
-      lt(fromVersion, codemod.until) &&
-      gte(toVersion, codemod.until),
+      lt(fromVersion, effectiveCodemodBoundary(codemod)) &&
+      reachesCodemodBoundary(toVersion, codemod),
   );
 }

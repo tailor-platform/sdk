@@ -36,8 +36,7 @@ function normalizeIdPGqlOperations(
 export const IdPGqlOperationsSchema = z
   .union([
     z.literal("query"),
-    // strip unknown keys
-    z.object({
+    z.strictObject({
       create: z.boolean().optional().describe("Enable _createUser mutation (default: true)"),
       update: z.boolean().optional().describe("Enable _updateUser mutation (default: true)"),
       delete: z.boolean().optional().describe("Enable _deleteUser mutation (default: true)"),
@@ -64,9 +63,8 @@ export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
 const allowedReturnOriginPattern =
   /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url)$/;
 
-// strip unknown keys
 export const IdPUserAuthPolicySchema = z
-  .object({
+  .strictObject({
     useNonEmailIdentifier: z
       .boolean()
       .optional()
@@ -143,6 +141,7 @@ export const IdPUserAuthPolicySchema = z
       .optional()
       .describe("Label shown next to the user account in authenticator apps"),
   })
+
   .refine(
     (data) =>
       data.passwordMinLength === undefined ||
@@ -231,14 +230,14 @@ const emailFieldSchema = z
   .max(200, "must be 200 characters or less")
   .regex(/^[^\r\n]*$/, "must not contain newline characters");
 
-// strip unknown keys
 export const IdPEmailConfigSchema = z
-  .object({
+  .strictObject({
     fromName: emailFieldSchema.optional().describe("Default sender display name for emails"),
     passwordResetSubject: emailFieldSchema
       .optional()
       .describe("Default subject for password reset emails"),
   })
+
   .describe("Namespace-level email configuration defaults");
 
 const IdPPermissionOperandSchema = z.union([
@@ -246,14 +245,10 @@ const IdPPermissionOperandSchema = z.union([
   z.boolean(),
   z.array(z.string()).readonly(),
   z.array(z.boolean()).readonly(),
-  // strip unknown keys
-  z.object({ user: z.string() }),
-  // strip unknown keys
-  z.object({ idpUser: z.enum(["id", "name", "disabled"]) }),
-  // strip unknown keys
-  z.object({ oldIdpUser: z.enum(["id", "name", "disabled"]) }),
-  // strip unknown keys
-  z.object({ newIdpUser: z.enum(["id", "name", "disabled"]) }),
+  z.strictObject({ user: z.string() }),
+  z.strictObject({ idpUser: z.enum(["id", "name", "disabled"]) }),
+  z.strictObject({ oldIdpUser: z.enum(["id", "name", "disabled"]) }),
+  z.strictObject({ newIdpUser: z.enum(["id", "name", "disabled"]) }),
 ]);
 
 const IdPPermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
@@ -264,8 +259,7 @@ const IdPPermissionConditionSchema = z
 
 const IdPActionPermissionSchema = z.union([
   // Object format: { conditions, description?, permit? }
-  // strip unknown keys
-  z.object({
+  z.strictObject({
     conditions: z.union([
       IdPPermissionConditionSchema,
       z.array(IdPPermissionConditionSchema).readonly(),
@@ -299,9 +293,8 @@ const IdPActionPermissionSchema = z.union([
     .readonly(),
 ]);
 
-// strip unknown keys
 export const IdPPermissionSchema = z
-  .object({
+  .strictObject({
     create: z.array(IdPActionPermissionSchema).readonly(),
     read: z.array(IdPActionPermissionSchema).readonly(),
     update: z.array(IdPActionPermissionSchema).readonly(),
@@ -309,11 +302,11 @@ export const IdPPermissionSchema = z
     sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly(),
     unenrollMfa: z.array(IdPActionPermissionSchema).readonly().optional(),
   })
+
   .describe("Per-operation permission policies for IdP users");
 
-// strip unknown keys
 export const IdPSchema = z
-  .object({
+  .strictObject({
     name: z.string().describe("IdP service name"),
     authorization: z
       .union([z.literal("insecure"), z.literal("loggedIn"), z.strictObject({ cel: z.string() })])
@@ -339,6 +332,7 @@ export const IdPSchema = z
       "Per-operation permission policies for IdP users",
     ),
   })
+
   .refine(
     (data) =>
       !data.userAuthPolicy?.enableMfa ||

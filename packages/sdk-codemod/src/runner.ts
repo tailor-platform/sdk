@@ -5,7 +5,14 @@ import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { CodemodPackage, CodemodPattern, CodemodPatternGroup, LlmReview } from "./types";
+import type {
+  CodemodPackage,
+  CodemodPattern,
+  CodemodPatternGroup,
+  LlmReview,
+  LlmReviewFinding,
+  ReviewFindingsFn,
+} from "./types";
 import type { SgNode } from "@ast-grep/napi";
 
 /**
@@ -53,12 +60,37 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
 const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+const SOURCE_STRING_FRAGMENT_SEPARATOR = "\0";
 const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
   "comment",
   "string",
   "regex",
   "string_fragment",
+  "jsx_text",
 ]);
+const SOURCE_VALUE_FLAGS = new Set([
+  "--env-file-if-exists",
+  "--env-file",
+  "--profile",
+  "--config",
+  "--workspace-id",
+  "--arg",
+  "--query",
+  "--file",
+  "--name",
+  "--namespace",
+  "--dir",
+  "-e",
+  "-p",
+  "-c",
+  "-w",
+  "-a",
+  "-q",
+  "-f",
+  "-n",
+]);
+const SOURCE_CLI_BINARY_RE =
+  /^(?:(?:.*[\\/])?tailor(?:\.(?:cmd|ps1|exe))?|(?:.*[\\/])?tailor-sdk(?:@[^\s'"`;|&)]+)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
 
 function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
@@ -119,14 +151,22 @@ function printDiff(filePath: string, before: string, after: string): void {
  * Load a transform module from a TypeScript file path.
  * Expects the module to have a default export that is a TransformFn.
  * @param scriptPath - Absolute path to the transform script
- * @returns The transform function
+ * @returns The transform function and optional review detector
  */
-async function loadTransform(scriptPath: string): Promise<TransformFn> {
+async function loadTransformModule(
+  scriptPath: string,
+): Promise<{ transform: TransformFn; reviewFindings?: ReviewFindingsFn }> {
   const mod = await import(url.pathToFileURL(scriptPath).href);
   if (typeof mod.default !== "function") {
     throw new Error(`Transform at ${scriptPath} does not have a default export function`);
   }
-  return mod.default as TransformFn;
+  return {
+    transform: mod.default as TransformFn,
+    reviewFindings:
+      typeof mod.reviewFindings === "function"
+        ? (mod.reviewFindings as ReviewFindingsFn)
+        : undefined,
+  };
 }
 
 /** A loaded transform with its file matcher. */
@@ -134,16 +174,47 @@ interface LoadedTransform {
   id: string;
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
+  reviewFindings?: ReviewFindingsFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: CodemodPatternGroup[];
   sourceStringLegacyPatterns: CodemodPatternGroup[];
+  sourceTextLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
+  sourceStringSuspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
+  reviewSupersededBy: string[];
 }
 
 function contentForResidualMatching(relative: string, content: string): string {
   const ext = path.extname(relative).toLowerCase();
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
+}
+
+function sourceStringFragmentGapForResidualMatching(gap: string): string {
+  if (/^\\["']$/.test(gap)) return gap.slice(1);
+  return /^(?:\\(?:[nrtvf]|\r\n|\r|\n)|\s)+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
+}
+
+function sourceStringNodeContentForResidualMatching(node: SgNode, content: string): string | null {
+  const parts: string[] = [];
+  let previousFragmentEnd: number | null = null;
+
+  for (const child of node.children()) {
+    if (child.kind() !== "string_fragment") continue;
+
+    const range = child.range();
+    if (previousFragmentEnd != null && range.start.index > previousFragmentEnd) {
+      parts.push(
+        sourceStringFragmentGapForResidualMatching(
+          content.slice(previousFragmentEnd, range.start.index),
+        ),
+      );
+    }
+    parts.push(child.text());
+    previousFragmentEnd = range.end.index;
+  }
+
+  return parts.length === 0 ? null : parts.join("");
 }
 
 function sourceStringContentForResidualMatching(relative: string, content: string): string | null {
@@ -157,9 +228,54 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
     return null;
   }
 
+  const sourceStrings: string[] = [];
+  const visit = (node: SgNode): void => {
+    if (node.kind() === "arguments") {
+      const value = sourceArgumentsCommandContent(node, content);
+      if (value != null) sourceStrings.push(value);
+    }
+    if (node.kind() === "array") {
+      const value = sourceArrayCommandContent(node, content);
+      if (value != null) sourceStrings.push(value);
+    }
+    const kind = node.kind();
+    if (kind === "string" || kind === "template_string") {
+      if (isSourceTailorSdkValueArgument(node, content)) return;
+      const sourceString = sourceStringNodeContentForResidualMatching(node, content);
+      if (sourceString != null) sourceStrings.push(sourceString);
+    }
+    for (const child of node.children()) {
+      if (child.kind() === "string_fragment") continue;
+      visit(child);
+    }
+  };
+  visit(root);
+  return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function isConstVariableDeclarator(node: SgNode): boolean {
+  return (
+    node
+      .parent()
+      ?.children()
+      .some((child) => child.kind() === "const") ?? false
+  );
+}
+
+function sourceTextContentForResidualMatching(relative: string, content: string): string | null {
+  const ext = path.extname(relative).toLowerCase();
+  if (!SOURCE_EXTENSIONS.has(ext)) return null;
+
+  let root: SgNode;
+  try {
+    root = parse(sourceLang(relative), content).root();
+  } catch {
+    return null;
+  }
+
   const fragments: string[] = [];
   const visit = (node: SgNode): void => {
-    if (node.kind() === "string_fragment") {
+    if (node.kind() === "comment" || node.kind() === "jsx_text") {
       fragments.push(node.text());
       return;
     }
@@ -168,12 +284,199 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
     }
   };
   visit(root);
-  return fragments.join("\n");
+  return fragments.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function sourceArgumentsCommandContent(node: SgNode, source: string): string | null {
+  const args = sourceArrayElements(node);
+  const executable = args[0] == null ? null : sourceStringLikeNodeContent(args[0]!, source);
+  const argv = args[1];
+  if (executable == null || argv?.kind() !== "array") return null;
+
+  const values = sourceArrayCommandValues(argv, source);
+  return values.length === 0 ? null : [executable, ...values].join(" ");
+}
+
+function sourceArrayCommandContent(node: SgNode, source: string): string | null {
+  const values = sourceArrayCommandValues(node, source);
+  return values.length < 2 ? null : values.join(" ");
+}
+
+function sourceArrayCommandValues(node: SgNode, source: string): string[] {
+  const values: string[] = [];
+  for (const element of sourceArrayElements(node)) {
+    if (isSourceValueArgument(element, source)) continue;
+    const value = sourceStringLikeNodeContent(element, source);
+    if (value != null) values.push(value);
+  }
+  return values;
+}
+
+function isSourceTailorSdkValueArgument(fragment: SgNode, source: string): boolean {
+  const text =
+    fragment.kind() === "string_fragment"
+      ? fragment.text()
+      : sourceStringLikeNodeContent(fragment, source);
+  return text != null && text.includes("tailor-sdk") && isSourceValueArgument(fragment, source);
+}
+
+function isSyntaxOnlyNode(node: SgNode): boolean {
+  const kind = node.kind();
+  return (
+    kind === "[" ||
+    kind === "]" ||
+    kind === "(" ||
+    kind === ")" ||
+    kind === "," ||
+    kind === "comment"
+  );
+}
+
+function sourceArrayElements(node: SgNode): SgNode[] {
+  return node.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
+}
+
+function nodeRangeKey(node: SgNode): string {
+  const range = node.range();
+  return `${range.start.index}:${range.end.index}`;
+}
+
+function sourceStringLikeNodeContent(node: SgNode, source: string): string | null {
+  const directValue = sourceStringNodeContent(node, source);
+  if (directValue != null) return directValue;
+  return node.kind() === "identifier" ? sourceScopedStringVariableContent(node, source) : null;
+}
+
+function sourceScopedStringVariableContent(identifier: SgNode, source: string): string | null {
+  const name = identifier.text();
+  const before = identifier.range().start.index;
+  let current = identifier.parent();
+  while (current != null) {
+    if (isSourceScopeNode(current)) {
+      const value = findSourceStringVariableInScope(current, name, before, source);
+      if (value != null) return value;
+    }
+    current = current.parent();
+  }
+  return null;
+}
+
+function findSourceStringVariableInScope(
+  scope: SgNode,
+  name: string,
+  before: number,
+  source: string,
+): string | null {
+  let value: string | null = null;
+  const visit = (node: SgNode): void => {
+    if (node !== scope && isSourceScopeNode(node)) return;
+    if (node.kind() === "variable_declarator" && node.range().end.index < before) {
+      const declarationValue = sourceStringVariableDeclarationValue(node, name, source);
+      if (declarationValue != null) value = declarationValue;
+      return;
+    }
+    for (const child of node.children()) {
+      visit(child);
+    }
+  };
+  visit(scope);
+  return value;
+}
+
+function sourceStringVariableDeclarationValue(
+  node: SgNode,
+  name: string,
+  source: string,
+): string | null {
+  if (!isConstVariableDeclarator(node)) return null;
+  const children = node.children();
+  const identifier = children.find((child) => child.kind() === "identifier");
+  if (identifier?.text() !== name) return null;
+  const initializer = children.findLast(
+    (child) => sourceConstInitializerContent(child, source) != null,
+  );
+  return initializer == null ? null : sourceConstInitializerContent(initializer, source);
+}
+
+function sourceConstInitializerContent(node: SgNode, source: string): string | null {
+  const directValue = sourceStringNodeContent(node, source);
+  if (directValue != null) return directValue;
+  if (
+    node.kind() !== "as_expression" &&
+    node.kind() !== "satisfies_expression" &&
+    node.kind() !== "parenthesized_expression"
+  ) {
+    return null;
+  }
+  for (const child of node.children()) {
+    const childValue = sourceConstInitializerContent(child, source);
+    if (childValue != null) return childValue;
+  }
+  return null;
+}
+
+function isSourceScopeNode(node: SgNode): boolean {
+  const kind = node.kind();
+  return (
+    kind === "program" ||
+    kind === "statement_block" ||
+    kind === "function_declaration" ||
+    kind === "arrow_function" ||
+    kind === "method_definition"
+  );
+}
+
+function sourceStringNodeContent(node: SgNode, source: string): string | null {
+  const kind = node.kind();
+  if (kind !== "string" && kind !== "template_string") return null;
+  if (
+    kind === "template_string" &&
+    node.children().some((child: SgNode) => child.kind() === "template_substitution")
+  ) {
+    return null;
+  }
+  const range = node.range();
+  return source.slice(range.start.index + 1, range.end.index - 1);
+}
+
+function isSourceValueArgument(fragment: SgNode, source: string): boolean {
+  const stringNode = fragment.kind() === "string_fragment" ? fragment.parent() : fragment;
+  if (stringNode == null) return false;
+  const parent = stringNode.parent();
+  if (parent?.kind() !== "array") return false;
+
+  const elements = sourceArrayElements(parent);
+  const index = elements.findIndex((element) => nodeRangeKey(element) === nodeRangeKey(stringNode));
+  if (index <= 0) return false;
+  if (!isTailorCliArgumentArray(parent, index, source)) return false;
+
+  const previous = sourceStringLikeNodeContent(elements[index - 1]!, source);
+  return (
+    previous != null &&
+    SOURCE_VALUE_FLAGS.has(previous.split("=", 1)[0]!) &&
+    !previous.includes("=")
+  );
+}
+
+function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
+  const argumentsNode = arrayNode.parent();
+  if (argumentsNode?.kind() === "arguments") {
+    const callArgs = sourceArrayElements(argumentsNode);
+    const executable =
+      callArgs[0] == null ? null : sourceStringLikeNodeContent(callArgs[0]!, source);
+    if (executable != null && SOURCE_CLI_BINARY_RE.test(executable)) return true;
+  }
+
+  const elements = sourceArrayElements(arrayNode);
+  return elements.slice(0, index).some((element) => {
+    const value = sourceStringLikeNodeContent(element, source);
+    return value != null && SOURCE_CLI_BINARY_RE.test(value);
+  });
 }
 
 function sourceLang(relative: string): Lang {
   const ext = path.extname(relative).toLowerCase();
-  return ext === ".tsx" || ext === ".jsx" ? Lang.Tsx : Lang.TypeScript;
+  return ext === ".tsx" || ext === ".jsx" || ext === ".js" ? Lang.Tsx : Lang.TypeScript;
 }
 
 function isProcessEnvSubscriptKey(node: SgNode): boolean {
@@ -260,10 +563,22 @@ function matchResidualPattern(content: string, pattern: CodemodPatternGroup): st
     : null;
 }
 
+function matchResidualPatternFragment(
+  content: string,
+  pattern: CodemodPatternGroup,
+): string | null {
+  for (const fragment of content.split(SOURCE_STRING_FRAGMENT_SEPARATOR)) {
+    const label = matchResidualPattern(fragment, pattern);
+    if (label != null) return label;
+  }
+  return null;
+}
+
 function legacyPatternWarnings(
   relative: string,
   content: string,
   sourceStringContent: string | null,
+  sourceTextContent: string | null,
   transforms: LoadedTransform[],
 ): string[] {
   return transforms.flatMap((lt) => {
@@ -274,7 +589,13 @@ function legacyPatternWarnings(
     );
     if (sourceStringContent != null) {
       for (const pattern of lt.sourceStringLegacyPatterns) {
-        const label = matchResidualPattern(sourceStringContent, pattern);
+        const label = matchResidualPatternFragment(sourceStringContent, pattern);
+        if (label != null) found.add(label);
+      }
+    }
+    if (sourceTextContent != null) {
+      for (const pattern of lt.sourceTextLegacyPatterns) {
+        const label = matchResidualPatternFragment(sourceTextContent, pattern);
         if (label != null) found.add(label);
       }
     }
@@ -283,6 +604,15 @@ function legacyPatternWarnings(
       `${relative}: contains ${Array.from(found).join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
     ];
   });
+}
+
+function compareReviewFindings(a: LlmReviewFinding, b: LlmReviewFinding): number {
+  return (
+    a.file.localeCompare(b.file) ||
+    a.line - b.line ||
+    a.message.localeCompare(b.message) ||
+    a.excerpt.localeCompare(b.excerpt)
+  );
 }
 
 /**
@@ -305,14 +635,19 @@ export async function runCodemods(
   const loaded: LoadedTransform[] = [];
   for (const { codemod, scriptPath } of codemods) {
     const patterns = codemod.filePatterns ?? DEFAULT_FILE_PATTERNS;
+    const loadedModule = scriptPath ? await loadTransformModule(scriptPath) : undefined;
     loaded.push({
       id: codemod.id,
-      transform: scriptPath ? await loadTransform(scriptPath) : undefined,
+      transform: loadedModule?.transform,
+      reviewFindings: loadedModule?.reviewFindings,
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
+      sourceTextLegacyPatterns: codemod.sourceTextLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
+      sourceStringSuspiciousPatterns: codemod.sourceStringSuspiciousPatterns ?? [],
       prompt: codemod.prompt,
+      reviewSupersededBy: codemod.reviewSupersededBy ?? [],
     });
   }
 
@@ -320,8 +655,8 @@ export async function runCodemods(
   const warnings: string[] = [];
   const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
-  // codemod id -> files flagged for LLM-assisted review
-  const suspiciousByCodemod = new Map<string, string[]>();
+  const suspiciousByCodemod = new Map<string, Set<string>>();
+  const findingsByCodemod = new Map<string, LlmReviewFinding[]>();
 
   for await (const relative of walkFiles(targetPath)) {
     const absolute = path.resolve(targetPath, relative);
@@ -359,28 +694,76 @@ export async function runCodemods(
 
     const residualContent = contentForResidualMatching(relative, current);
     const sourceStringContent = sourceStringContentForResidualMatching(relative, current);
+    const sourceTextContent = sourceTextContentForResidualMatching(relative, current);
     warnings.push(
-      ...legacyPatternWarnings(relative, residualContent, sourceStringContent, matchedTransforms),
+      ...legacyPatternWarnings(
+        relative,
+        residualContent,
+        sourceStringContent,
+        sourceTextContent,
+        matchedTransforms,
+      ),
     );
 
     for (const lt of matchedTransforms) {
-      if (!lt.prompt || lt.suspiciousPatterns.length === 0) continue;
-      if (lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null)) {
-        const files = suspiciousByCodemod.get(lt.id) ?? [];
-        files.push(relative);
-        suspiciousByCodemod.set(lt.id, files);
+      if (!lt.prompt) continue;
+      const filesForReview = (): Set<string> => {
+        let files = suspiciousByCodemod.get(lt.id);
+        if (!files) {
+          files = new Set<string>();
+          suspiciousByCodemod.set(lt.id, files);
+        }
+        return files;
+      };
+      if (lt.reviewFindings) {
+        const findings = await lt.reviewFindings(current, absolute, relative);
+        if (findings.length > 0) {
+          const files = filesForReview();
+          for (const finding of findings) {
+            files.add(finding.file);
+          }
+          let existing = findingsByCodemod.get(lt.id);
+          if (!existing) {
+            existing = [];
+            findingsByCodemod.set(lt.id, existing);
+          }
+          existing.push(...findings);
+        }
+      }
+      const matchesSource =
+        lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null) ||
+        (sourceStringContent != null &&
+          lt.sourceStringSuspiciousPatterns.some(
+            (p) => matchResidualPattern(sourceStringContent, p) !== null,
+          ));
+      if (matchesSource) {
+        filesForReview().add(relative);
       }
     }
   }
 
   const llmReviews: LlmReview[] = [];
+  const loadedIds = new Set(loaded.map((lt) => lt.id));
   for (const lt of loaded) {
     if (!lt.prompt) continue;
-    if (lt.suspiciousPatterns.length > 0) {
+    if (lt.reviewSupersededBy.some((id) => loadedIds.has(id))) continue;
+    if (
+      lt.suspiciousPatterns.length > 0 ||
+      lt.sourceStringSuspiciousPatterns.length > 0 ||
+      lt.reviewFindings
+    ) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);
       // Sort for deterministic output regardless of filesystem traversal order.
-      if (files) llmReviews.push({ codemodId: lt.id, prompt: lt.prompt, files: files.toSorted() });
+      if (files) {
+        const findings = findingsByCodemod.get(lt.id)?.toSorted(compareReviewFindings);
+        llmReviews.push({
+          codemodId: lt.id,
+          prompt: lt.prompt,
+          files: Array.from(files).toSorted(),
+          ...(findings && findings.length > 0 ? { findings } : {}),
+        });
+      }
     } else if (lt.legacyPatterns.length === 0) {
       // Codemod-less manual change with no pattern to scope by: surface as
       // project-wide guidance (legacyPattern-only entries warn instead).

@@ -95,6 +95,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/env-var-rename")).resolves.toBeUndefined();
   });
 
+  test("v2/auth-invoker-call-unwrap transforms correctly", async () => {
+    await expect(runFixtureCases("v2/auth-invoker-call-unwrap")).resolves.toBeUndefined();
+  });
+
   test("v2/auth-invoker-unwrap transforms correctly", async () => {
     await expect(runFixtureCases("v2/auth-invoker-unwrap")).resolves.toBeUndefined();
   });
@@ -103,8 +107,16 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/tailordb-namespace")).resolves.toBeUndefined();
   });
 
+  test("v2/runtime-globals-opt-in transforms correctly", async () => {
+    await expect(runFixtureCases("v2/runtime-globals-opt-in")).resolves.toBeUndefined();
+  });
+
   test("v2/execute-script-arg transforms correctly", async () => {
     await expect(runFixtureCases("v2/execute-script-arg")).resolves.toBeUndefined();
+  });
+
+  test("v2/tailor-output-ignore-dir transforms correctly", async () => {
+    await expect(runFixtureCases("v2/tailor-output-ignore-dir")).resolves.toBeUndefined();
   });
 
   test("v2/rename-bin transforms correctly", async () => {

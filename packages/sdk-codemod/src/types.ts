@@ -1,3 +1,5 @@
+import type { RunnerMetadata } from "./runner-metadata";
+
 /** A before/after code pair shown in the generated migration doc. */
 export interface CodemodExample {
   /** Code as written before the migration. */
@@ -28,6 +30,8 @@ export interface CodemodPackage {
   since: string;
   /** Target version this codemod upgrades to (semver, exclusive upper bound) */
   until: string;
+  /** Earliest prerelease target that should apply this codemod before `until` is stable. */
+  prereleaseUntil?: string;
   /**
    * Path to the jssg transform script relative to the codemods root. Omit for a
    * codemod-less ("manual") migration that ships only guidance — `prompt`,
@@ -56,6 +60,13 @@ export interface CodemodPackage {
    */
   sourceStringLegacyPatterns?: CodemodPatternGroup[];
   /**
+   * Patterns to detect only inside comments and JSX text of source files after
+   * a transform runs. Use this for source text that is intentionally masked
+   * from generic residual matching, but still contains user-facing command
+   * examples that need a manual follow-up warning.
+   */
+  sourceTextLegacyPatterns?: CodemodPatternGroup[];
+  /**
    * Patterns that, when present in a file's post-transform content, mark it
    * as a candidate for LLM-assisted review. Use this for migrations the
    * deterministic transform cannot safely complete on its own (e.g. a value
@@ -68,10 +79,19 @@ export interface CodemodPackage {
    */
   suspiciousPatterns?: CodemodPatternGroup[];
   /**
+   * Patterns to detect only inside string/template fragments of source files
+   * for LLM-assisted review. Use this when source strings normally remain
+   * masked for `suspiciousPatterns`, but embedded code snippets may still need
+   * manual migration. Has no effect unless `prompt` is also set.
+   */
+  sourceStringSuspiciousPatterns?: CodemodPatternGroup[];
+  /**
    * Prompt that instructs an LLM how to finish the migration for files matched
-   * by `suspiciousPatterns`.
+   * by `suspiciousPatterns` or `sourceStringSuspiciousPatterns`.
    */
   prompt?: string;
+  /** Codemod ids whose LLM review prompt supersedes this prompt when both are selected. */
+  reviewSupersededBy?: string[];
   /** Before/after examples shown in the generated migration doc. */
   examples?: CodemodExample[];
   /**
@@ -82,6 +102,25 @@ export interface CodemodPackage {
   notice?: boolean;
 }
 
+/** A specific location that needs manual or LLM-assisted migration review. */
+export interface LlmReviewFinding {
+  /** File path relative to the transformed project root. */
+  file: string;
+  /** One-based line number in the post-transform file content. */
+  line: number;
+  /** Short reason this location needs review. */
+  message: string;
+  /** Trimmed source line or nearby expression for local context. */
+  excerpt: string;
+}
+
+/** Detector exported by a transform module for precise review locations. */
+export type ReviewFindingsFn = (
+  source: string,
+  filePath: string,
+  relativePath: string,
+) => Promise<LlmReviewFinding[]> | LlmReviewFinding[];
+
 /** A batch of files an LLM should review for one codemod, with its prompt. */
 export interface LlmReview {
   /** Codemod id that flagged these files. */
@@ -90,12 +129,15 @@ export interface LlmReview {
   prompt: string;
   /** Files (relative to the target) that matched a suspicious pattern. */
   files: string[];
+  /** Optional file-local findings produced by the codemod script. */
+  findings?: LlmReviewFinding[];
 }
 
 /**
  * JSON output written to stdout by the sdk-codemod CLI.
  */
 export interface RunOutput {
+  runner: RunnerMetadata;
   codemodsApplied: number;
   codemodsSkipped: number;
   filesModified: string[];

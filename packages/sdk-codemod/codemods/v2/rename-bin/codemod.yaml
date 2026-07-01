@@ -1,6 +1,6 @@
 name: "@tailor-platform/rename-bin"
 version: "1.0.0"
-description: "Rename the CLI binary from tailor-sdk to tailor in scripts, CI workflows, and documentation"
+description: "Rename the CLI binary from tailor-sdk to tailor in scripts, source files, CI workflows, and documentation"
 engine: jssg
 language: text
 since: "1.0.0"
