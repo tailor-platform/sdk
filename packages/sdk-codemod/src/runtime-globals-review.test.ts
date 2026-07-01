@@ -91,6 +91,42 @@ describe("runtime-globals-opt-in review findings", () => {
     ]);
   });
 
+  test("reports spaced bracket runtime globals inside embedded code strings", async () => {
+    await writeProjectFile(
+      "seed/spaced-bracket.mjs",
+      [
+        "const code = `",
+        'const clientFactory = tailor ["idp"].Client;',
+        'const upload = tailordb ["file"].upload;',
+        "`;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/runtime-globals-opt-in",
+        files: ["seed/spaced-bracket.mjs"],
+        findings: [
+          expect.objectContaining({
+            file: "seed/spaced-bracket.mjs",
+            line: 2,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: 'const clientFactory = tailor ["idp"].Client;',
+          }),
+          expect.objectContaining({
+            file: "seed/spaced-bracket.mjs",
+            line: 3,
+            message: expect.stringContaining("Embedded code string"),
+            excerpt: 'const upload = tailordb ["file"].upload;',
+          }),
+        ],
+      }),
+    ]);
+  });
+
   test("reports direct runtime globals skipped because of binding collisions", async () => {
     await writeProjectFile(
       "resolvers/createUser.ts",
