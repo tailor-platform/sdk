@@ -337,6 +337,24 @@ function addReviewFinding(
   findings.push({ file, line, message, excerpt });
 }
 
+function runtimeRootName(source: string): string | null {
+  return (
+    /^\s*(tailor|tailordb|Tailor(?:DBFileError|Errors|ErrorMessage|ErrorItem))\b/.exec(
+      source,
+    )?.[1] ?? null
+  );
+}
+
+function runtimeBindingNames(root: SgNode, imports: SgNode[]): Set<string> {
+  const names = localDeclarationNames(root);
+  for (const importStmt of imports) {
+    for (const binding of importBindings(importStmt)) {
+      names.add(binding.localName);
+    }
+  }
+  return names;
+}
+
 function collectStringRuntimeGlobalFindings(
   root: SgNode,
   source: string,
@@ -368,13 +386,17 @@ function collectDirectRuntimeGlobalFindings(
   root: SgNode,
   source: string,
   file: string,
+  boundNames: Set<string>,
   findings: LlmReviewFinding[],
   seen: Set<string>,
 ): void {
   for (const node of root.findAll({
     rule: { any: [...REVIEW_NODE_KINDS].map((kind) => ({ kind })) },
   })) {
-    if (!runtimeGlobalTextPattern.test(node.text())) continue;
+    const nodeText = node.text();
+    const rootName = runtimeRootName(nodeText);
+    if (!rootName || boundNames.has(rootName)) continue;
+    if (!runtimeGlobalTextPattern.test(nodeText)) continue;
     addReviewFinding(
       findings,
       seen,
@@ -402,7 +424,15 @@ export function reviewFindings(
 
   const findings: LlmReviewFinding[] = [];
   const seen = new Set<string>();
-  collectDirectRuntimeGlobalFindings(root, source, relativePath, findings, seen);
+  const imports = findImportStatements(root);
+  collectDirectRuntimeGlobalFindings(
+    root,
+    source,
+    relativePath,
+    runtimeBindingNames(root, imports),
+    findings,
+    seen,
+  );
   collectStringRuntimeGlobalFindings(root, source, relativePath, findings, seen);
   return findings;
 }

@@ -251,6 +251,17 @@ describe("runtime-globals-opt-in review findings", () => {
     expect(result.llmReviews).toEqual([]);
   });
 
+  test("does not report locally bound spaced bracket runtime-looking names", async () => {
+    await writeProjectFile(
+      "resolvers/local.ts",
+      ["const tailor = {};", 'const localClient = tailor ["idp"].Client;', ""].join("\n"),
+    );
+
+    const result = await runCodemods([runtimeGlobalsEntry], tmpDir!, false);
+
+    expect(result.llmReviews).toEqual([]);
+  });
+
   test("reports shorthand Tailor error globals left for manual migration", async () => {
     await writeProjectFile("errors.ts", ["const exported = { TailorErrors };", ""].join("\n"));
 
