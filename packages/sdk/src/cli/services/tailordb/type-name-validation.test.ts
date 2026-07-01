@@ -189,4 +189,21 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
       }),
     ).rejects.toThrow(/external namespace "shared-a".*external namespace "shared-b"/);
   });
+
+  test("validates planned external namespaces without fetching remote types", async () => {
+    const client = {
+      listTailorDBTypes: vi.fn(),
+    };
+
+    await expect(
+      assertUniqueTailorDBTypeNamesWithExternal({
+        client,
+        workspaceId: "workspace-id",
+        tailorDBServices: [localService("local", ["User"])],
+        externalTailorDBNamespaces: ["shared"],
+        plannedExternalTailorDBServices: [localService("shared", ["User"])],
+      }),
+    ).rejects.toThrow(/namespace "local".*external namespace "shared"/);
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
+  });
 });

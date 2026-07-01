@@ -84,6 +84,11 @@ import type {
 } from "@tailor-platform/tailor-proto/auth_pb";
 import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
+type AuthApplyPhase =
+  | Exclude<ApplyPhase, "delete">
+  | "create-update-prerequisites"
+  | "create-update-dependents";
+
 /**
  * Apply auth-related changes for the given phase.
  * @param client - Operator client instance
@@ -94,11 +99,10 @@ import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/met
 export async function applyAuth(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planAuth>>,
-  phase: Exclude<ApplyPhase, "delete"> = "create-update",
+  phase: AuthApplyPhase = "create-update",
 ) {
   const { changeSet } = result;
-  if (phase === "create-update") {
-    // Services
+  const applyServices = async () => {
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
         await client.createAuthService(create.request);
@@ -109,15 +113,26 @@ export async function applyAuth(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
+  };
 
-    // Auth Connections
+  const applyMachineUsers = async () => {
+    await Promise.all([
+      ...changeSet.machineUser.creates.map((create) =>
+        client.createAuthMachineUser(create.request),
+      ),
+      ...changeSet.machineUser.updates.map((update) =>
+        client.updateAuthMachineUser(update.request),
+      ),
+    ]);
+  };
+
+  const applyCreateUpdateDependents = async (includeMachineUsers = false) => {
     await applyAuthConnections(
       client,
       { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
       "create-update",
     );
 
-    // IdPConfigs
     await Promise.all([
       ...changeSet.idpConfig.creates.map(async (create) => {
         if (create.idpConfig.kind === "BuiltInIdP") {
@@ -143,7 +158,6 @@ export async function applyAuth(
       }),
     ]);
 
-    // UserProfileConfigs
     await Promise.all([
       ...changeSet.userProfileConfig.creates.map((create) =>
         client.createUserProfileConfig(create.request),
@@ -153,29 +167,20 @@ export async function applyAuth(
       ),
     ]);
 
-    // TenantConfigs
     await Promise.all([
       ...changeSet.tenantConfig.creates.map((create) => client.createTenantConfig(create.request)),
       ...changeSet.tenantConfig.updates.map((update) => client.updateTenantConfig(update.request)),
     ]);
 
-    // MachineUsers
-    await Promise.all([
-      ...changeSet.machineUser.creates.map((create) =>
-        client.createAuthMachineUser(create.request),
-      ),
-      ...changeSet.machineUser.updates.map((update) =>
-        client.updateAuthMachineUser(update.request),
-      ),
-    ]);
+    if (includeMachineUsers) {
+      await applyMachineUsers();
+    }
 
-    // AuthHooks (after machine users, since hooks reference invokers)
     await Promise.all([
       ...changeSet.authHook.creates.map((create) => client.createAuthHook(create.request)),
       ...changeSet.authHook.updates.map((update) => client.updateAuthHook(update.request)),
     ]);
 
-    // OAuth2Clients
     await Promise.all([
       ...changeSet.oauth2Client.creates.map(async (create) => {
         const oauth2Client = assertDefined(
@@ -205,7 +210,6 @@ export async function applyAuth(
       }),
     ]);
 
-    // OAuth2Clients replaces (client type changed): delete then create sequentially
     for (const replace of changeSet.oauth2Client.replaces) {
       await client.deleteAuthOAuth2Client(replace.deleteRequest);
       const replaceOauth2Client = assertDefined(
@@ -221,13 +225,11 @@ export async function applyAuth(
       await client.createAuthOAuth2Client(replace.createRequest);
     }
 
-    // SCIMConfigs
     await Promise.all([
       ...changeSet.scim.creates.map((create) => client.createAuthSCIMConfig(create.request)),
       ...changeSet.scim.updates.map((update) => client.updateAuthSCIMConfig(update.request)),
     ]);
 
-    // SCIMResources
     await Promise.all([
       ...changeSet.scimResource.creates.map((create) =>
         client.createAuthSCIMResource(create.request),
@@ -236,6 +238,16 @@ export async function applyAuth(
         client.updateAuthSCIMResource(update.request),
       ),
     ]);
+  };
+
+  if (phase === "create-update-prerequisites") {
+    await applyServices();
+    await applyMachineUsers();
+  } else if (phase === "create-update") {
+    await applyServices();
+    await applyCreateUpdateDependents(true);
+  } else if (phase === "create-update-dependents") {
+    await applyCreateUpdateDependents();
   } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // SCIMResources

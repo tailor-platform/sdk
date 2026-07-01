@@ -66,10 +66,13 @@ export async function applyDeploymentPlans(
       await applyIdP(client, deployment.idp, "create-update");
     }
     for (const deployment of deployments) {
+      await applyAuth(client, deployment.auth, "create-update-prerequisites");
+    }
+    for (const deployment of deployments) {
       await applyTailorDB(client, deployment.tailorDB, "create-update");
     }
     for (const deployment of deployments) {
-      await applyAuth(client, deployment.auth, "create-update");
+      await applyAuth(client, deployment.auth, "create-update-dependents");
     }
     for (const deployment of deployments) {
       await applyPipeline(client, deployment.pipeline, "create-update");

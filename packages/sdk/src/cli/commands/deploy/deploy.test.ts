@@ -4,6 +4,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { createChangeSet } from "./change-set";
 import {
   computeRenamedAppDeletions,
+  dropCrossDeploymentManagedDeletes,
   parseDeployConfigPaths,
   printDeploymentPlans,
   printPlanResults,
@@ -293,6 +294,53 @@ describe("parseDeployConfigPaths", () => {
     expect(() => parseDeployConfigPaths("buyer/tailor.config.ts,")).toThrow(
       "--config must contain one or more non-empty config paths.",
     );
+  });
+});
+
+describe("dropCrossDeploymentManagedDeletes", () => {
+  test("drops stale deletes for resources claimed by another deployment", () => {
+    const previousOwner = emptyResults();
+    previousOwner.tailorDB.changeSet.service.deletes.push({ name: "shared" } as never);
+    previousOwner.tailorDB.changeSet.type.deletes.push({
+      name: "User",
+      request: { namespaceName: "shared" },
+    } as never);
+
+    const nextOwner = emptyResults();
+    nextOwner.tailorDB.changeSet.service.updates.push({ name: "shared" } as never);
+    nextOwner.tailorDB.changeSet.type.updates.push({
+      name: "User",
+      request: { namespaceName: "shared" },
+    } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.tailorDB.changeSet.service.deletes).toEqual([]);
+    expect(previousOwner.tailorDB.changeSet.type.deletes).toEqual([]);
+  });
+
+  test("keeps deletes that are not claimed by another deployment", () => {
+    const previousOwner = emptyResults();
+    previousOwner.tailorDB.changeSet.type.deletes.push({
+      name: "User",
+      request: { namespaceName: "old" },
+    } as never);
+
+    const nextOwner = emptyResults();
+    nextOwner.tailorDB.changeSet.type.updates.push({
+      name: "User",
+      request: { namespaceName: "new" },
+    } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.tailorDB.changeSet.type.deletes).toHaveLength(1);
   });
 });
 

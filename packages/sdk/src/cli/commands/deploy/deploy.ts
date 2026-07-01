@@ -225,6 +225,7 @@ type BuiltDeploymentTarget = {
 
 type PlanDeploymentTargetParams = {
   target: BuiltDeploymentTarget;
+  targets: ReadonlyArray<BuiltDeploymentTarget>;
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
@@ -672,10 +673,26 @@ function mergeBundledScripts(
   return bundledScripts;
 }
 
+function collectPlannedExternalTailorDBServices(
+  target: BuiltDeploymentTarget,
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): Application["tailorDBServices"] {
+  const externalNamespaces = new Set(target.application.externalTailorDBNamespaces);
+  if (externalNamespaces.size === 0) {
+    return [];
+  }
+
+  return targets.flatMap((candidate) =>
+    candidate.application.tailorDBServices.filter((service) =>
+      externalNamespaces.has(service.namespace),
+    ),
+  );
+}
+
 async function planDeploymentTarget(
   params: PlanDeploymentTargetParams,
 ): Promise<PlannedDeployment> {
-  const { target, client, workspaceId, noSchemaCheck } = params;
+  const { target, targets, client, workspaceId, noSchemaCheck } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
 
@@ -685,6 +702,7 @@ async function planDeploymentTarget(
       workspaceId,
       tailorDBServices: application.tailorDBServices,
       externalTailorDBNamespaces: application.externalTailorDBNamespaces,
+      plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
     }),
   );
 
@@ -883,6 +901,163 @@ function collectImportantResourceDeletions(results: PlanResults): ImportantResou
   return importantDeletions;
 }
 
+type ManagedResourceChangeSet = {
+  creates: HasName[];
+  updates: HasName[];
+  deletes: HasName[];
+  replaces: HasName[];
+};
+
+type ManagedResourceGroup = {
+  changeSet: ManagedResourceChangeSet;
+  resourceType: string;
+  namespaceFields?: readonly string[];
+};
+
+function readResourceField(item: HasName, field: string): string | undefined {
+  const itemRecord = item as unknown as Record<string, unknown>;
+  for (const requestField of ["request", "deleteRequest", "createRequest"]) {
+    const request = itemRecord[requestField];
+    if (request && typeof request === "object" && field in request) {
+      const value = (request as Record<string, unknown>)[field];
+      return value == null ? undefined : String(value);
+    }
+  }
+
+  const value = itemRecord[field];
+  return value == null ? undefined : String(value);
+}
+
+function managedResourceKey(group: ManagedResourceGroup, item: HasName): string {
+  const namespace = group.namespaceFields
+    ?.map((field) => readResourceField(item, field))
+    .find((value) => value !== undefined);
+  return namespace
+    ? `${group.resourceType}:${namespace}:${item.name}`
+    : `${group.resourceType}:${item.name}`;
+}
+
+function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
+  const namespaceFields = ["namespaceName", "authNamespace", "vaultName"] as const;
+  return [
+    { changeSet: results.functionRegistry.changeSet, resourceType: "function_registry" },
+    { changeSet: results.tailorDB.changeSet.service, resourceType: "tailordb.service" },
+    {
+      changeSet: results.tailorDB.changeSet.type,
+      resourceType: "tailordb.type",
+      namespaceFields,
+    },
+    {
+      changeSet: results.tailorDB.changeSet.gqlPermission,
+      resourceType: "tailordb.gql_permission",
+      namespaceFields,
+    },
+    { changeSet: results.staticWebsite.changeSet, resourceType: "staticwebsite" },
+    {
+      changeSet: results.staticWebsite.customDomainChangeSet,
+      resourceType: "staticwebsite.custom_domain",
+    },
+    { changeSet: results.aiGateway.changeSet, resourceType: "aigateway" },
+    { changeSet: results.idp.changeSet.service, resourceType: "idp.service" },
+    {
+      changeSet: results.idp.changeSet.client,
+      resourceType: "idp.client",
+      namespaceFields,
+    },
+    { changeSet: results.auth.changeSet.service, resourceType: "auth.service" },
+    {
+      changeSet: results.auth.changeSet.idpConfig,
+      resourceType: "auth.idp_config",
+      namespaceFields,
+    },
+    {
+      changeSet: results.auth.changeSet.userProfileConfig,
+      resourceType: "auth.user_profile_config",
+      namespaceFields,
+    },
+    {
+      changeSet: results.auth.changeSet.tenantConfig,
+      resourceType: "auth.tenant_config",
+      namespaceFields,
+    },
+    {
+      changeSet: results.auth.changeSet.machineUser,
+      resourceType: "auth.machine_user",
+      namespaceFields,
+    },
+    {
+      changeSet: results.auth.changeSet.oauth2Client,
+      resourceType: "auth.oauth2_client",
+      namespaceFields,
+    },
+    {
+      changeSet: results.auth.changeSet.authHook,
+      resourceType: "auth.hook",
+      namespaceFields,
+    },
+    { changeSet: results.auth.changeSet.scim, resourceType: "auth.scim", namespaceFields },
+    {
+      changeSet: results.auth.changeSet.scimResource,
+      resourceType: "auth.scim_resource",
+      namespaceFields,
+    },
+    {
+      changeSet: results.auth.changeSet.connection,
+      resourceType: "auth.connection",
+      namespaceFields,
+    },
+    { changeSet: results.pipeline.changeSet.service, resourceType: "pipeline.service" },
+    {
+      changeSet: results.pipeline.changeSet.resolver,
+      resourceType: "pipeline.resolver",
+      namespaceFields,
+    },
+    { changeSet: results.executor.changeSet, resourceType: "executor" },
+    { changeSet: results.workflow.changeSet, resourceType: "workflow" },
+    { changeSet: results.secretManager.vaultChangeSet, resourceType: "secret.vault" },
+    {
+      changeSet: results.secretManager.secretChangeSet,
+      resourceType: "secret.secret",
+      namespaceFields,
+    },
+  ];
+}
+
+export function dropCrossDeploymentManagedDeletes(
+  deployments: ReadonlyArray<PlannedDeployment>,
+): void {
+  const claimsByDeployment = deployments.map((deployment) =>
+    managedResourceGroups(deploymentPlanResults(deployment)).reduce((claims, group) => {
+      for (const item of [
+        ...group.changeSet.creates,
+        ...group.changeSet.updates,
+        ...group.changeSet.replaces,
+      ]) {
+        claims.add(managedResourceKey(group, item));
+      }
+      return claims;
+    }, new Set<string>()),
+  );
+
+  deployments.forEach((deployment, deploymentIndex) => {
+    const otherClaims = new Set<string>();
+    claimsByDeployment.forEach((claims, claimIndex) => {
+      if (claimIndex === deploymentIndex) {
+        return;
+      }
+      for (const claim of claims) {
+        otherClaims.add(claim);
+      }
+    });
+
+    for (const group of managedResourceGroups(deploymentPlanResults(deployment))) {
+      group.changeSet.deletes = group.changeSet.deletes.filter(
+        (item) => !otherClaims.has(managedResourceKey(group, item)),
+      );
+    }
+  });
+}
+
 async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
   const { deployments, yes } = params;
   const importantDeletions: ImportantResourceDeletion[] = [];
@@ -1028,6 +1203,7 @@ export async function deploy(options?: DeployOptions) {
       deployments.push(
         await planDeploymentTarget({
           target,
+          targets,
           client,
           workspaceId,
           noSchemaCheck: options?.noSchemaCheck,
@@ -1042,6 +1218,7 @@ export async function deploy(options?: DeployOptions) {
     await withSpan("confirm", async () => {
       await confirmDeploymentPlans({ deployments, yes });
     });
+    dropCrossDeploymentManagedDeletes(deployments);
 
     const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
 
