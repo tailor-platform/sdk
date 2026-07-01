@@ -561,9 +561,6 @@ importers:
       oxlint-tsgolint:
         specifier: 0.23.0
         version: 0.23.0
-      rolldown-plugin-dts:
-        specifier: 0.26.0
-        version: 0.26.0(@typescript/native-preview@7.0.0-dev.20260621.1)(oxc-resolver@11.20.0)(rolldown@1.1.2)(typescript@6.0.3)
       sonda:
         specifier: 0.13.1
         version: 0.13.1

@@ -1,15 +1,37 @@
-import { cpSync, rmSync } from "node:fs";
+import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { entry } from "./scripts/build-entries.mjs";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
+const runtimeGlobalsBanner = '/// <reference types="@tailor-platform/sdk/runtime/globals" />';
+const runtimeGlobalsBannerPattern =
+  /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\r?\n/;
+
 function copyErdViewerAssets(outDir: string): void {
   const source = path.resolve("src/cli/commands/tailordb/erd/viewer-assets");
   const target = path.resolve(outDir, "cli/erd-viewer-assets");
   rmSync(target, { recursive: true, force: true });
   cpSync(source, target, { recursive: true });
+}
+
+function stripBannerExceptConfigureEntry(outDir: string): void {
+  const root = path.resolve(outDir);
+  const keep = path.join(root, "configure", "index.d.mts");
+  const walk = (current: string): void => {
+    for (const dirent of readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, dirent.name);
+      if (dirent.isDirectory()) {
+        walk(full);
+      } else if (dirent.isFile() && dirent.name.endsWith(".d.mts") && full !== keep) {
+        const content = readFileSync(full, "utf-8");
+        const cleaned = content.replace(runtimeGlobalsBannerPattern, "");
+        if (cleaned !== content) writeFileSync(full, cleaned, "utf-8");
+      }
+    }
+  };
+  walk(root);
 }
 
 function yamlText() {
@@ -36,13 +58,11 @@ const jsPlugins: TsdownPluginOption[] = [
   }) as TsdownPluginOption,
 ];
 
-export default defineConfig({
+const sharedOptions = {
   entry,
-  format: ["esm"],
+  format: "esm",
   target: "node22",
   platform: "node",
-  clean: true,
-  dts: false,
   outDir: "dist",
   tsconfig: "./tsconfig.json",
   minify: false,
@@ -50,11 +70,35 @@ export default defineConfig({
     js: ".mjs",
     dts: ".d.mts",
   }),
-  // peer dependencies: prevent bundling, resolve at runtime
-  deps: { neverBundle: ["vite", "vitest"] },
-  sourcemap: true,
-  plugins: jsPlugins,
-  onSuccess: (config) => {
-    copyErdViewerAssets(config.outDir);
+} as const;
+
+export default defineConfig([
+  {
+    ...sharedOptions,
+    name: "js",
+    clean: true,
+    dts: false,
+    sourcemap: true,
+    // peer dependencies: prevent bundling, resolve at runtime
+    deps: { neverBundle: ["vite", "vitest"] },
+    plugins: jsPlugins,
+    onSuccess: (config) => {
+      copyErdViewerAssets(config.outDir);
+    },
   },
-});
+  {
+    ...sharedOptions,
+    name: "dts",
+    dts: {
+      emitDtsOnly: true,
+    },
+    unbundle: true,
+    root: "src",
+    banner: {
+      dts: runtimeGlobalsBanner,
+    },
+    onSuccess: (config) => {
+      stripBannerExceptConfigureEntry(config.outDir);
+    },
+  },
+]);
