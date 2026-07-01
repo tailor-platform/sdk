@@ -306,8 +306,9 @@ export async function planApplication(
   } else if (application.config.auth) {
     // Prefer peer plans for same-run multi-config deploys; otherwise read remote state.
     authNamespace = application.config.auth.name;
-    authIdpConfigName = context.externalAuthIdpConfigNames?.get(authNamespace);
-    if (!authIdpConfigName) {
+    if (context.externalAuthIdpConfigNames?.has(authNamespace)) {
+      authIdpConfigName = context.externalAuthIdpConfigNames.get(authNamespace);
+    } else {
       const idpConfigs = await fetchAll(async (pageToken, maxPageSize) => {
         try {
           const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
@@ -340,9 +341,9 @@ export async function planApplication(
     appName: application.name,
     appId: application.id,
   });
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites =
+    context.expectedLocalStaticWebsiteNames ??
+    new Set(application.staticWebsiteServices.map((website) => website.name));
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
     workspaceId,

@@ -160,6 +160,8 @@ describe("planExecutor", () => {
 
     return {
       name: appName,
+      config: {},
+      subgraphs: idpServices.map((idp) => ({ Type: "idp", Name: idp.name })),
       env: {},
       executorService: createMockExecutorService(executors),
       tailorDBServices,
@@ -751,6 +753,36 @@ describe("planExecutor", () => {
       expect((typedConfig.value.condition as { expr: string }).expr).not.toContain("args.typeName");
     });
 
+    test("recordCreated resolves same-run peer TailorDB namespaces", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-peer-record-created",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "tailordb",
+          events: ["tailordb.type_record.created"],
+          typeName: "User",
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        tailorDBTypeNamespaces: new Map([["User", "shared-db"]]),
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("tailordb");
+      expect(typedConfig.value.namespaceName).toBe("shared-db");
+      expect(typedConfig.value.typeName).toBe("User");
+    });
+
     test("resolverExecuted emits pipeline typed config", async () => {
       const client = createMockClient([]);
       const executor: Executor = {
@@ -783,6 +815,35 @@ describe("planExecutor", () => {
       expect(typedConfig.value.condition).toBeUndefined();
     });
 
+    test("resolverExecuted resolves same-run peer resolver namespaces", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-peer-resolver-exec",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "resolverExecuted",
+          resolverName: "myResolver",
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        resolverNamespaces: new Map([["myResolver", "shared-pipeline"]]),
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("pipeline");
+      expect(typedConfig.value.namespaceName).toBe("shared-pipeline");
+      expect(typedConfig.value.resolverName).toBe("myResolver");
+    });
+
     test("idpUserCreated emits idp typed config", async () => {
       const client = createMockClient([]);
       const executor: Executor = {
@@ -808,6 +869,31 @@ describe("planExecutor", () => {
       expect(typedConfig.case).toBe("idp");
       expect(typedConfig.value.eventTypes).toEqual(["idp.user.created"]);
       expect(typedConfig.value.namespaceName).toBe("my-idp");
+    });
+
+    test("idpUserCreated resolves specified same-run peer IdPs", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-peer-idp-user-created",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "peer-idp" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        idpNames: new Set(["peer-idp"]),
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("idp");
+      expect(typedConfig.value.namespaceName).toBe("peer-idp");
     });
 
     test("authAccessTokenIssued emits auth typed config", async () => {

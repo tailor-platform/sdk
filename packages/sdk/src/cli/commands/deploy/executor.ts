@@ -122,7 +122,7 @@ export async function planExecutor(context: PlanContext) {
       appName: application.name,
       appId: application.id,
     });
-    const desiredExecutor = protoExecutor(application, executor);
+    const desiredExecutor = protoExecutor(context, executor);
     if (existing) {
       const owned = trackDesiredResourceOwnership({
         labels: existing.allLabels,
@@ -320,71 +320,124 @@ function areExecutorsEqual(
   );
 }
 
-function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
+function resolveTailorDBNamespace(
+  application: Readonly<Application>,
+  typeName: string,
+  sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
+): string {
   for (const service of application.tailorDBServices) {
     if (Object.hasOwn(service.types, typeName)) {
       return service.namespace;
     }
   }
+  if (sameRunNamespaces?.has(typeName)) {
+    const sameRunNamespace = sameRunNamespaces.get(typeName);
+    if (!sameRunNamespace) {
+      throw new Error(
+        `TailorDB type "${typeName}" is defined in multiple namespaces in this deploy run. ` +
+          `Move the trigger to the application that owns the type or use unique type names.`,
+      );
+    }
+    return sameRunNamespace;
+  }
+  const sameRunAvailableNamespaces = sameRunNamespaces
+    ? [...new Set([...sameRunNamespaces.values()].filter((value) => value !== undefined))]
+    : [];
+  const availableNamespaces = [
+    ...application.tailorDBServices.map((s) => s.namespace),
+    ...sameRunAvailableNamespaces,
+  ];
   throw new Error(
-    `TailorDB type "${typeName}" not found in any namespace. Available namespaces: ${application.tailorDBServices.map((s) => s.namespace).join(", ")}`,
+    `TailorDB type "${typeName}" not found in any namespace. Available namespaces: ${availableNamespaces.join(", ")}`,
   );
 }
 
 function resolveResolverNamespace(
   application: Readonly<Application>,
   resolverName: string,
+  sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
 ): string {
   for (const service of application.resolverServices) {
     if (Object.values(service.resolvers).some((r) => r.name === resolverName)) {
       return service.namespace;
     }
   }
+  if (sameRunNamespaces?.has(resolverName)) {
+    const sameRunNamespace = sameRunNamespaces.get(resolverName);
+    if (!sameRunNamespace) {
+      throw new Error(
+        `Resolver "${resolverName}" is defined in multiple namespaces in this deploy run. ` +
+          `Move the trigger to the application that owns the resolver or use unique resolver names.`,
+      );
+    }
+    return sameRunNamespace;
+  }
+  const sameRunAvailableNamespaces = sameRunNamespaces
+    ? [...new Set([...sameRunNamespaces.values()].filter((value) => value !== undefined))]
+    : [];
+  const availableNamespaces = [
+    ...application.resolverServices.map((s) => s.namespace),
+    ...sameRunAvailableNamespaces,
+  ];
   throw new Error(
-    `Resolver "${resolverName}" not found in any namespace. Available namespaces: ${application.resolverServices.map((s) => s.namespace).join(", ")}`,
+    `Resolver "${resolverName}" not found in any namespace. Available namespaces: ${availableNamespaces.join(", ")}`,
   );
+}
+
+function collectApplicationIdpNames(application: Readonly<Application>): ReadonlySet<string> {
+  const names = new Set(application.idpServices.map((idp) => idp.name));
+  for (const subgraph of application.subgraphs) {
+    if (subgraph.Type === "idp") {
+      names.add(subgraph.Name);
+    }
+  }
+  return names;
 }
 
 function resolveIdpNamespace(
   application: Readonly<Application>,
   executorName: string,
   idpName: string | undefined,
+  sameRunIdpNames?: ReadonlySet<string>,
 ): string {
-  if (application.idpServices.length === 0) {
-    throw new Error(`Executor "${executorName}" uses an idpUser trigger but no IdP is configured.`);
-  }
+  const localIdpNames = collectApplicationIdpNames(application);
   if (idpName !== undefined) {
-    const found = application.idpServices.find((idp) => idp.name === idpName);
-    if (!found) {
-      const available = application.idpServices.map((idp) => idp.name).join(", ");
+    const candidateNames = sameRunIdpNames ?? localIdpNames;
+    if (!candidateNames.has(idpName)) {
+      const available = [...candidateNames].join(", ");
       throw new Error(
         `Executor "${executorName}" specifies IdP "${idpName}" in its idpUser trigger, ` +
           `but no IdP with that name is configured. Available IdPs: ${available}`,
       );
     }
-    return found.name;
+    return idpName;
   }
-  if (application.idpServices.length > 1) {
-    const available = application.idpServices.map((idp) => idp.name).join(", ");
+  if (localIdpNames.size === 0) {
+    throw new Error(`Executor "${executorName}" uses an idpUser trigger but no IdP is configured.`);
+  }
+  if (localIdpNames.size > 1) {
+    const available = [...localIdpNames].join(", ");
     throw new Error(
       `Executor "${executorName}" uses an idpUser trigger but the project defines multiple IdPs ` +
         `(${available}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
     );
   }
-  return assertDefined(application.idpServices[0], "idp service missing").name;
+  return assertDefined([...localIdpNames][0], "idp service missing");
 }
 
 function resolveAuthNamespace(application: Readonly<Application>): string {
-  if (!application.authService) {
+  const authNamespace = application.authService?.config.name ?? application.config.auth?.name;
+  if (!authNamespace) {
     throw new Error("No Auth service configured");
   }
-  return application.authService.config.name;
+  return authNamespace;
 }
 
 function protoExecutor(
-  application: Readonly<Application>,
+  context: PlanContext,
   executor: Executor,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
+  const { application } = context;
   const appName = application.name;
   const env = application.env;
   const trigger = executor.trigger;
@@ -418,7 +471,11 @@ function protoExecutor(
         case: "tailordb",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveTailorDBNamespace(application, trigger.typeName),
+          namespaceName: resolveTailorDBNamespace(
+            application,
+            trigger.typeName,
+            context.tailorDBTypeNamespaces,
+          ),
           typeName: trigger.typeName,
           ...(trigger.condition
             ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
@@ -432,7 +489,11 @@ function protoExecutor(
         case: "pipeline",
         value: {
           eventTypes: ["pipeline.resolver.executed"],
-          namespaceName: resolveResolverNamespace(application, trigger.resolverName),
+          namespaceName: resolveResolverNamespace(
+            application,
+            trigger.resolverName,
+            context.resolverNamespaces,
+          ),
           resolverName: trigger.resolverName,
           ...(trigger.condition
             ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
@@ -470,7 +531,12 @@ function protoExecutor(
         case: "idp",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveIdpNamespace(application, executor.name, trigger.idp),
+          namespaceName: resolveIdpNamespace(
+            application,
+            executor.name,
+            trigger.idp,
+            context.idpNames,
+          ),
         },
       });
       break;

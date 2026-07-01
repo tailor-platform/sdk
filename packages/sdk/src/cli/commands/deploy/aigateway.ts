@@ -140,9 +140,9 @@ export async function planAIGateway(context: PlanContext) {
   });
 
   const aiGatewayServices = forRemoval ? [] : application.aiGatewayServices;
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites =
+    context.expectedLocalStaticWebsiteNames ??
+    new Set(application.staticWebsiteServices.map((website) => website.name));
   for (const gatewayService of aiGatewayServices) {
     const config = gatewayService;
     const name = gatewayService.name;

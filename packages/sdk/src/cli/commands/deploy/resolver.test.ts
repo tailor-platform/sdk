@@ -156,6 +156,41 @@ describe("planPipeline (resolver service level)", () => {
     });
   });
 
+  test("enables publishExecutionEvents when a peer executor targets the resolver", async () => {
+    const client = createMockClient([]);
+    const resolverService = {
+      namespace: "shared-pipeline",
+      config: {},
+      resolvers: {
+        myResolver: {
+          name: "myResolver",
+          operation: "query",
+          body: () => "hello",
+          output: { type: "string", metadata: {}, fields: {} },
+        },
+      },
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ResolverService;
+    const application = createMockApplication([resolverService]);
+
+    const ctx: PlanContext = {
+      client,
+      workspaceId,
+      application,
+      forRemoval: false,
+      config: mockConfig,
+      executorUsedResolvers: new Set(["myResolver"]),
+    };
+
+    const result = await planPipeline(ctx);
+
+    const resolverCreate = result.changeSet.resolver.creates[0];
+    expect(resolverCreate).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const proto = (resolverCreate as any).request.pipelineResolver;
+    expect(proto.publishExecutionEvents).toBe(true);
+  });
+
   describe("delete scenarios (service level)", () => {
     test("service is deleted when removed from config", async () => {
       const client = createMockClient([

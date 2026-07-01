@@ -255,6 +255,48 @@ describe("planTailorDB (service level)", () => {
   });
 
   describe("nested field manifest mapping", () => {
+    test("enables publishRecordEvents when a peer executor targets the type", async () => {
+      const tailorDBService = createMockTailorDBService("shared-db");
+      const userType: TailorDBType = {
+        name: "User",
+        pluralForm: "Users",
+        description: "User type",
+        fields: {
+          name: {
+            name: "name",
+            config: {
+              type: "string",
+            },
+          },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [userType.name]: userType },
+      });
+
+      const client = createMockClient([]);
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        executorUsedTailorDBTypes: new Set(["User"]),
+      };
+
+      const result = await planTailorDB(ctx);
+
+      const createdType = result.changeSet.type.creates[0]!.request.tailordbType;
+      expect(createdType?.schema?.settings?.publishRecordEvents).toBe(true);
+    });
+
     test("includes validate and hooks for nested fields", async () => {
       const client = createMockClient([]);
       const tailorDBService = createMockTailorDBService("test-tailordb");

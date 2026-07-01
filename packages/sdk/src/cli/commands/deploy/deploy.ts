@@ -76,6 +76,22 @@ export interface DeployOptions {
 }
 
 /**
+ * Collect IdP names declared by the application, including external IdP
+ * subgraphs.
+ * @param application - Loaded application
+ * @returns IdP names visible from the application config
+ */
+function collectApplicationIdpNames(application: Readonly<Application>): ReadonlySet<string> {
+  const names = new Set(application.idpServices.map((idp) => idp.name));
+  for (const subgraph of application.subgraphs) {
+    if (subgraph.Type === "idp") {
+      names.add(subgraph.Name);
+    }
+  }
+  return names;
+}
+
+/**
  * Resolve the set of IdP names that have at least one executor subscribed to
  * their user events. When an executor's idpUser trigger omits the `idp` option
  * and exactly one IdP is configured, that IdP is implicitly the target.
@@ -86,19 +102,189 @@ export interface DeployOptions {
  */
 function collectIdpUserTriggerTargets(application: Readonly<Application>): ReadonlySet<string> {
   const targets = new Set<string>();
-  const idps = application.idpServices;
+  const idps = collectApplicationIdpNames(application);
   for (const executor of Object.values(application.executorService?.executors ?? {})) {
     if (executor.trigger.kind !== "idpUser") {
       continue;
     }
     if (executor.trigger.idp != null) {
       targets.add(executor.trigger.idp);
-    } else if (idps.length === 1) {
+    } else if (idps.size === 1) {
       const [idp] = idps;
-      if (idp) targets.add(idp.name);
+      if (idp) targets.add(idp);
     }
   }
   return targets;
+}
+
+function collectDeployIdpUserTriggerTargets(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): ReadonlySet<string> {
+  const triggerTargets = new Set<string>();
+  for (const target of targets) {
+    for (const idpName of collectIdpUserTriggerTargets(target.application)) {
+      triggerTargets.add(idpName);
+    }
+  }
+  return triggerTargets;
+}
+
+function findTailorDBNamespace(
+  application: Readonly<Application>,
+  typeName: string,
+): string | undefined {
+  for (const service of application.tailorDBServices) {
+    if (Object.hasOwn(service.types, typeName)) {
+      return service.namespace;
+    }
+  }
+  return undefined;
+}
+
+function findResolverNamespace(
+  application: Readonly<Application>,
+  resolverName: string,
+): string | undefined {
+  for (const service of application.resolverServices) {
+    if (Object.values(service.resolvers).some((resolver) => resolver.name === resolverName)) {
+      return service.namespace;
+    }
+  }
+  return undefined;
+}
+
+function resolveSameRunNamespace(
+  namespaces: ReadonlyMap<string, string | undefined>,
+  key: string,
+  resourceLabel: string,
+): string | undefined {
+  if (!namespaces.has(key)) {
+    return undefined;
+  }
+  const namespace = namespaces.get(key);
+  if (!namespace) {
+    throw new Error(
+      `${resourceLabel} "${key}" is defined in multiple namespaces in this deploy run. ` +
+        `Move the trigger to the application that owns it or use unique names.`,
+    );
+  }
+  return namespace;
+}
+
+function collectExecutorUsedTailorDBTypes(
+  owner: BuiltDeploymentTarget,
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+  tailorDBTypeNamespaces: ReadonlyMap<string, string | undefined>,
+): ReadonlySet<string> {
+  const usedTypes = new Set<string>();
+  const ownerNamespaces = new Set(
+    owner.application.tailorDBServices.map((service) => service.namespace),
+  );
+  for (const target of targets) {
+    for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
+      if (executor.trigger.kind === "tailordb") {
+        const namespace =
+          findTailorDBNamespace(target.application, executor.trigger.typeName) ??
+          resolveSameRunNamespace(
+            tailorDBTypeNamespaces,
+            executor.trigger.typeName,
+            "TailorDB type",
+          );
+        if (namespace && ownerNamespaces.has(namespace)) {
+          usedTypes.add(executor.trigger.typeName);
+        }
+      }
+    }
+  }
+  return usedTypes;
+}
+
+function collectExecutorUsedResolvers(
+  owner: BuiltDeploymentTarget,
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+  resolverNamespaces: ReadonlyMap<string, string | undefined>,
+): ReadonlySet<string> {
+  const usedResolvers = new Set<string>();
+  const ownerNamespaces = new Set(
+    owner.application.resolverServices.map((service) => service.namespace),
+  );
+  for (const target of targets) {
+    for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
+      if (executor.trigger.kind === "resolverExecuted") {
+        const namespace =
+          findResolverNamespace(target.application, executor.trigger.resolverName) ??
+          resolveSameRunNamespace(resolverNamespaces, executor.trigger.resolverName, "Resolver");
+        if (namespace && ownerNamespaces.has(namespace)) {
+          usedResolvers.add(executor.trigger.resolverName);
+        }
+      }
+    }
+  }
+  return usedResolvers;
+}
+
+function collectExpectedLocalStaticWebsiteNames(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): ReadonlySet<string> {
+  const websiteNames = new Set<string>();
+  for (const target of targets) {
+    for (const website of target.application.staticWebsiteServices) {
+      websiteNames.add(website.name);
+    }
+  }
+  return websiteNames;
+}
+
+function addPossiblyAmbiguousNamespace(
+  namespaces: Map<string, string | undefined>,
+  key: string,
+  namespace: string,
+): void {
+  if (namespaces.has(key)) {
+    if (namespaces.get(key) !== namespace) {
+      namespaces.set(key, undefined);
+    }
+    return;
+  }
+  namespaces.set(key, namespace);
+}
+
+function collectTailorDBTypeNamespaces(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): ReadonlyMap<string, string | undefined> {
+  const namespaces = new Map<string, string | undefined>();
+  for (const target of targets) {
+    for (const service of target.application.tailorDBServices) {
+      for (const typeName of Object.keys(service.types)) {
+        addPossiblyAmbiguousNamespace(namespaces, typeName, service.namespace);
+      }
+    }
+  }
+  return namespaces;
+}
+
+function collectResolverNamespaces(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): ReadonlyMap<string, string | undefined> {
+  const namespaces = new Map<string, string | undefined>();
+  for (const target of targets) {
+    for (const service of target.application.resolverServices) {
+      for (const resolver of Object.values(service.resolvers)) {
+        addPossiblyAmbiguousNamespace(namespaces, resolver.name, service.namespace);
+      }
+    }
+  }
+  return namespaces;
+}
+
+function collectIdpNames(targets: ReadonlyArray<BuiltDeploymentTarget>): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const target of targets) {
+    for (const name of collectApplicationIdpNames(target.application)) {
+      names.add(name);
+    }
+  }
+  return names;
 }
 
 async function shouldForceApplyAll(
@@ -694,13 +880,12 @@ function collectPlannedExternalTailorDBServices(
 
 function collectExternalAuthIdpConfigNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
-): ReadonlyMap<string, string> {
-  const idpConfigNames = new Map<string, string>();
+): ReadonlyMap<string, string | undefined> {
+  const idpConfigNames = new Map<string, string | undefined>();
   for (const target of targets) {
     const authService = target.application.authService;
-    const idProviderName = authService?.config.idProvider?.name;
-    if (authService && idProviderName) {
-      idpConfigNames.set(authService.config.name, idProviderName);
+    if (authService) {
+      idpConfigNames.set(authService.config.name, authService.config.idProvider?.name);
     }
   }
   return idpConfigNames;
@@ -734,7 +919,8 @@ async function planDeploymentTarget(
   );
 
   return withSpan("plan", async () => {
-    const idpUserTriggerTargets = collectIdpUserTriggerTargets(application);
+    const tailorDBTypeNamespaces = collectTailorDBTypeNamespaces(targets);
+    const resolverNamespaces = collectResolverNamespaces(targets);
     const ctx: PlanContext = {
       client,
       workspaceId,
@@ -743,8 +929,18 @@ async function planDeploymentTarget(
       config,
       noSchemaCheck,
       forceApplyAll,
-      idpUserTriggerTargets,
+      idpUserTriggerTargets: collectDeployIdpUserTriggerTargets(targets),
+      executorUsedTailorDBTypes: collectExecutorUsedTailorDBTypes(
+        target,
+        targets,
+        tailorDBTypeNamespaces,
+      ),
+      executorUsedResolvers: collectExecutorUsedResolvers(target, targets, resolverNamespaces),
+      expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
       externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
+      tailorDBTypeNamespaces,
+      resolverNamespaces,
+      idpNames: collectIdpNames(targets),
     };
     const functionRegistry = await withSpan("plan.functionRegistry", () =>
       planFunctionRegistry(client, workspaceId, application.name, application.id, functionEntries),

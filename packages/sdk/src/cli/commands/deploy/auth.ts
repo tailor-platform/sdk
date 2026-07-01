@@ -328,9 +328,9 @@ export async function planAuth(context: PlanContext) {
     forceApplyAll,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites =
+    context.expectedLocalStaticWebsiteNames ??
+    new Set(application.staticWebsiteServices.map((website) => website.name));
   const [
     idpConfigChangeSet,
     userProfileConfigChangeSet,

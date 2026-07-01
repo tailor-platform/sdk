@@ -19,6 +19,18 @@ export interface PlanContext {
    * no idpUser triggers are defined.
    */
   idpUserTriggerTargets?: ReadonlySet<string>;
+  /** Type names that have at least one executor with a TailorDB record trigger. */
+  executorUsedTailorDBTypes?: ReadonlySet<string>;
+  /** Resolver names that have at least one executor with a resolverExecuted trigger. */
+  executorUsedResolvers?: ReadonlySet<string>;
+  /** Static website names planned by any config in the same deploy run. */
+  expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
   /** Planned external Auth IDP config names keyed by Auth namespace. */
-  externalAuthIdpConfigNames?: ReadonlyMap<string, string>;
+  externalAuthIdpConfigNames?: ReadonlyMap<string, string | undefined>;
+  /** TailorDB namespaces keyed by type name for same-run external trigger resolution. */
+  tailorDBTypeNamespaces?: ReadonlyMap<string, string | undefined>;
+  /** Pipeline namespaces keyed by resolver name for same-run external trigger resolution. */
+  resolverNamespaces?: ReadonlyMap<string, string | undefined>;
+  /** IdP names known to the current deploy run. */
+  idpNames?: ReadonlySet<string>;
 }

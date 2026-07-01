@@ -213,9 +213,9 @@ export async function planIdP(context: PlanContext) {
     idpUserTriggerTargets,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites =
+    context.expectedLocalStaticWebsiteNames ??
+    new Set(application.staticWebsiteServices.map((website) => website.name));
   const {
     changeSet: serviceChangeSet,
     conflicts,
