@@ -1190,6 +1190,20 @@ fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
       );
     });
 
+    test("transforms only the outer call when a known trigger is nested inside another", () => {
+      const source = `
+await myWorkflow.trigger(fetchCustomer.trigger({ customerId: "123" }));
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain(
+        'await tailor.workflow.triggerWorkflow("my-workflow", fetchCustomer.trigger({ customerId: "123" }));',
+      );
+    });
+
     test("wraps job.trigger() nested inside an unknown .trigger() argument", () => {
       const source = `
 unknown.trigger(fetchCustomer.trigger({ customerId: "123" }));

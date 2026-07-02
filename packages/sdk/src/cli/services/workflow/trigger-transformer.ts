@@ -364,8 +364,20 @@ export function transformFunctionTriggers(
   const workflowNames = new Set(localWorkflowNameMap.keys());
   const jobNames = new Set(jobNameMap.keys());
 
-  // Detect trigger calls only for known workflows and jobs
-  const triggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
+  // Detect trigger calls only for known workflows and jobs.
+  // When trigger calls nest, keep only the outermost one: the outer
+  // replacement text is built from the original source, so applying an inner
+  // replacement as well would corrupt the output.
+  const allTriggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
+  const triggerCalls = allTriggerCalls.filter(
+    (call) =>
+      !allTriggerCalls.some(
+        (other) =>
+          other !== call &&
+          other.callRange.start <= call.callRange.start &&
+          call.callRange.end <= other.callRange.end,
+      ),
+  );
 
   const replacements: Replacement[] = [];
   // Whether any workflow trigger authInvoker was wrapped with the runtime
