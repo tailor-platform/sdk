@@ -178,62 +178,6 @@ function expressionContainsPositionalArg(node, positionalArgVariables = new Set(
   }
 }
 
-function expressionContainsIdentifier(node, names) {
-  if (!node) return false;
-  if (node.type === "Identifier") return names.has(node.name);
-
-  switch (node.type) {
-    case "CallExpression":
-    case "NewExpression":
-      return (
-        expressionContainsIdentifier(node.callee, names) ||
-        node.arguments.some((argNode) => expressionContainsIdentifier(argNode, names))
-      );
-    case "MemberExpression":
-      return (
-        expressionContainsIdentifier(node.object, names) ||
-        (node.computed && expressionContainsIdentifier(node.property, names))
-      );
-    case "ObjectExpression":
-      return node.properties.some((prop) => {
-        if (prop.type === "Property") return expressionContainsIdentifier(prop.value, names);
-        if (prop.type === "SpreadElement")
-          return expressionContainsIdentifier(prop.argument, names);
-        return false;
-      });
-    case "ArrayExpression":
-      return node.elements.some((element) => expressionContainsIdentifier(element, names));
-    case "ConditionalExpression":
-      return (
-        expressionContainsIdentifier(node.test, names) ||
-        expressionContainsIdentifier(node.consequent, names) ||
-        expressionContainsIdentifier(node.alternate, names)
-      );
-    case "LogicalExpression":
-    case "BinaryExpression":
-    case "AssignmentExpression":
-      return (
-        expressionContainsIdentifier(node.left, names) ||
-        expressionContainsIdentifier(node.right, names)
-      );
-    case "ChainExpression":
-    case "TSAsExpression":
-    case "TSSatisfiesExpression":
-    case "TSNonNullExpression":
-      return expressionContainsIdentifier(node.expression, names);
-    default:
-      return false;
-  }
-}
-
-function isArgsModule(source) {
-  return typeof source === "string" && /(^|\/)args$/.test(source);
-}
-
-function isArgsBindingName(name) {
-  return /Args?$/.test(name);
-}
-
 export default {
   meta: { name: "local" },
   rules: {
@@ -276,13 +220,10 @@ export default {
         messages: {
           hybrid:
             "Move the positional argument to a leaf subcommand. Commands with subcommands should not also define command-level positional args and a run handler.",
-          opaqueImportedArgs:
-            "Inline imported command-level args or move them to a leaf subcommand so this rule can verify there are no positional arguments.",
         },
         schema: [],
       },
       create(context) {
-        const importedArgVariables = new Set();
         const positionalArgVariables = new Set();
 
         function hasCommandLevelPositionalArgs(argsNode) {
@@ -290,24 +231,12 @@ export default {
         }
 
         return {
-          ImportDeclaration(node) {
-            if (!isArgsModule(node.source.value)) return;
-            for (const specifier of node.specifiers) {
-              if (
-                specifier.type === "ImportNamespaceSpecifier" ||
-                isArgsBindingName(specifier.local.name)
-              ) {
-                importedArgVariables.add(specifier.local.name);
-              }
-            }
-          },
           VariableDeclarator(node) {
-            if (node.id.type !== "Identifier") return;
-            if (expressionContainsPositionalArg(node.init, positionalArgVariables)) {
+            if (
+              node.id.type === "Identifier" &&
+              expressionContainsPositionalArg(node.init, positionalArgVariables)
+            ) {
               positionalArgVariables.add(node.id.name);
-            }
-            if (expressionContainsIdentifier(node.init, importedArgVariables)) {
-              importedArgVariables.add(node.id.name);
             }
           },
           CallExpression(node) {
@@ -320,17 +249,11 @@ export default {
             const subCommands = objectProperty(commandOptions, "subCommands");
             const run = objectProperty(commandOptions, "run");
             const args = objectProperty(commandOptions, "args");
-            const hasPositionalArgs = args && hasCommandLevelPositionalArgs(args.value);
-            const hasOpaqueImportedArgs =
-              args && expressionContainsIdentifier(args.value, importedArgVariables);
-            if (!subCommands || !run || !args || (!hasPositionalArgs && !hasOpaqueImportedArgs)) {
+            if (!subCommands || !run || !args || !hasCommandLevelPositionalArgs(args.value)) {
               return;
             }
 
-            context.report({
-              node: args,
-              messageId: hasPositionalArgs ? "hybrid" : "opaqueImportedArgs",
-            });
+            context.report({ node: args, messageId: "hybrid" });
           },
         };
       },
