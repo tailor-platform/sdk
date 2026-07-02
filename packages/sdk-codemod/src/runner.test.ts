@@ -1196,6 +1196,17 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "cjs-require.js"),
+        [
+          'const { auth } = require("../tailor.config");',
+          'const cfg = require("../tailor.config");',
+          "",
+          'exports.token = auth.getConnectionToken("google");',
+          'exports.other = cfg.auth.getConnectionToken("github");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "namespace-computed.ts"),
         [
           'import * as cfg from "../tailor.config";',
@@ -1203,6 +1214,24 @@ describe("runCodemods", () => {
           "export async function run() {",
           '  return cfg.auth["getConnectionToken"]("google");',
           "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "wrapped-destructure.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export const { getConnectionToken } = (auth);",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "namespace-destructure.ts"),
+        [
+          'import * as cfg from "../tailor.config";',
+          "",
+          "export const { getConnectionToken } = cfg.auth;",
           "",
         ].join("\n"),
       );
@@ -1237,17 +1266,30 @@ describe("runCodemods", () => {
           codemodId: "v2/auth-connection-token-helper",
           prompt: codemod.prompt,
           files: [
+            "cjs-require.js",
             "collision.ts",
             "computed.ts",
             "destructure.ts",
             "import-equals-collision.ts",
             "namespace-computed.ts",
+            "namespace-destructure.ts",
             "namespace-import.ts",
             "non-call.ts",
             "type-collision.ts",
             "wrapped-collision.ts",
+            "wrapped-destructure.ts",
           ],
           findings: [
+            expect.objectContaining({
+              file: "cjs-require.js",
+              line: 4,
+              excerpt: 'exports.token = auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "cjs-require.js",
+              line: 5,
+              excerpt: 'exports.other = cfg.auth.getConnectionToken("github");',
+            }),
             expect.objectContaining({
               file: "collision.ts",
               line: 6,
@@ -1278,6 +1320,11 @@ describe("runCodemods", () => {
               excerpt: 'return cfg.auth["getConnectionToken"]("google");',
             }),
             expect.objectContaining({
+              file: "namespace-destructure.ts",
+              line: 3,
+              excerpt: "export const { getConnectionToken } = cfg.auth;",
+            }),
+            expect.objectContaining({
               file: "namespace-import.ts",
               line: 4,
               excerpt: 'return cfg.auth.getConnectionToken("google");',
@@ -1295,6 +1342,11 @@ describe("runCodemods", () => {
               file: "wrapped-collision.ts",
               line: 5,
               excerpt: 'return (auth as any).getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "wrapped-destructure.ts",
+              line: 3,
+              excerpt: "export const { getConnectionToken } = (auth);",
             }),
           ],
         },
