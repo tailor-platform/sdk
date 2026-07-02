@@ -611,7 +611,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.date().parse({ value: "2025-02-30", data, user });
+        const result = t.date().parse({ value: "2025-02-30", data, invoker });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           'Expected to match "yyyy-MM-dd" format: received 2025-02-30',
