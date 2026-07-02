@@ -973,7 +973,7 @@ function date<const Opt extends FieldOptions>(options?: Opt) {
 
 /**
  * Create a datetime field (date and time).
- * Format: ISO 8601 "yyyy-MM-ddTHH:mm:ssZ"
+ * Format: ISO 8601 "yyyy-MM-ddTHH:mm:ssZ" or "yyyy-MM-ddTHH:mm:ss+09:00"
  * @param options - Field configuration options
  * @returns A datetime field
  * @example db.datetime()
