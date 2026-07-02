@@ -1068,6 +1068,21 @@ const customerPromise = fetchCustomer.trigger({ customerId: "123" });
       expect(result).not.toMatch(/\bawait\b/);
     });
 
+    test("throws instead of corrupting output when trigger calls are nested", () => {
+      const source = `
+const result = await jobA.trigger(jobB.trigger({ id: 1 }));
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([
+        ["jobA", "job-a"],
+        ["jobB", "job-b"],
+      ]);
+
+      expect(() => transformFunctionTriggers(source, workflowNameMap, jobNameMap)).toThrow(
+        /overlapping replacement ranges/,
+      );
+    });
+
     test("wraps job.trigger() inside Promise.all array elements", () => {
       const source = `
 const [customer, notification] = await Promise.all([
