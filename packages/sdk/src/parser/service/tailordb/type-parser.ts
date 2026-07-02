@@ -106,6 +106,22 @@ function parseTailorDBType(
     if (relationInfo) {
       parsedField.relation = { ...relationInfo };
 
+      const existingForward = forwardRelationships[relationInfo.forwardName];
+      if (existingForward) {
+        throw new Error(
+          `Forward relation name "${relationInfo.forwardName}" on type "${type.name}" is duplicated ` +
+            `between fields "${existingForward.targetField}" and "${fieldName}". ` +
+            `Use the "as" option in .relation({ toward: { as: ... } }) to specify a unique name.`,
+        );
+      }
+      if (Object.hasOwn(fields, relationInfo.forwardName)) {
+        throw new Error(
+          `Forward relation name "${relationInfo.forwardName}" from field "${fieldName}" on type "${type.name}" ` +
+            `conflicts with existing field "${relationInfo.forwardName}". ` +
+            `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`,
+        );
+      }
+
       const targetType = rawTypes[relationInfo.targetType];
       forwardRelationships[relationInfo.forwardName] = {
         name: relationInfo.forwardName,

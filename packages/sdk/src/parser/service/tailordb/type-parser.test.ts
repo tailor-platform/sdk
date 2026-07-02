@@ -304,6 +304,86 @@ describe("parseTypes", () => {
     });
   });
 
+  describe("forwardRelationships", () => {
+    test("should throw error when forward relation names are duplicated", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // Two fields referencing the same type without explicit forward names ("as")
+      // Both will generate "user" as the forward name
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "authoredPosts",
+        }),
+        reviewerID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "reviewedPosts",
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "user".*duplicated.*authorID.*reviewerID/s);
+    });
+
+    test("should not throw error when forward names are explicitly set to be unique", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user, as: "author" },
+          backward: "authoredPosts",
+        }),
+        reviewerID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user, as: "reviewer" },
+          backward: "reviewedPosts",
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
+
+      expect(result.Post!.forwardRelationships).toHaveProperty("author");
+      expect(result.Post!.forwardRelationships).toHaveProperty("reviewer");
+      expect(result.Post!.forwardRelationships.author).toMatchObject({
+        name: "author",
+        targetType: "User",
+        targetField: "authorID",
+      });
+      expect(result.Post!.forwardRelationships.reviewer).toMatchObject({
+        name: "reviewer",
+        targetType: "User",
+        targetField: "reviewerID",
+      });
+    });
+
+    test("should throw error when forward name conflicts with existing field", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // Post has a field named "user"
+      const post = db.type("Post", {
+        user: db.string(),
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
+    });
+  });
+
   describe("validateRelationType", () => {
     test("should throw error when relation type is missing", () => {
       const user = db.type("User", {
