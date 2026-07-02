@@ -10,88 +10,39 @@ import { detectDefaultImports } from "./workflow-detector";
 import type {
   Program,
   CallExpression,
-  ObjectExpression,
-  ObjectProperty,
   StaticMemberExpression,
   IdentifierReference,
   ImportDeclaration,
   ImportDefaultSpecifier,
 } from "@oxc-project/types";
 
-interface AuthInvokerInfo {
-  isShorthand: boolean;
-  valueText: string;
-}
-
 interface ExtendedTriggerCall {
   kind: "job" | "workflow";
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
-  // For workflow triggers, extracted authInvoker info from config
-  authInvoker?: AuthInvokerInfo;
+  // For workflow triggers, source text of the options argument if present
+  optionsText?: string;
 }
 
 /**
  * Name of the injected runtime normalizer helper. Chosen to be unique enough
  * to avoid collisions with user code.
  */
-const NORMALIZER_IDENTIFIER = "__tailor_normalizeAuthInvoker";
+const NORMALIZER_IDENTIFIER = "__tailor_normalizeTriggerOptions";
 
 /**
  * Build the source text of the injected normalizer helper.
  *
- * Accepts either a plain string (machine user name) or the object form
- * `{ namespace, machineUserName }`, and always returns the object form.
- * The auth namespace is baked in at bundle time.
+ * Expands a plain-string `authInvoker` (machine user name) in the trigger
+ * options to the object form `{ namespace, machineUserName }`; any other
+ * options value passes through unchanged. The auth namespace is baked in at
+ * bundle time.
  * @param authNamespace - Auth service namespace to embed
  * @returns Source line defining the helper
  */
 function buildNormalizerHelperSource(authNamespace: string): string {
-  return `const ${NORMALIZER_IDENTIFIER} = (v) => typeof v === "string" ? { namespace: ${JSON.stringify(authNamespace)}, machineUserName: v } : v;\n`;
-}
-
-/**
- * Extract authInvoker info from a config object expression
- * Returns the authInvoker value text and whether it's a shorthand property
- * @param configArg - Config argument node
- * @param sourceText - Source code text
- * @returns Extracted authInvoker info, if any
- */
-function extractAuthInvokerInfo(
-  configArg: unknown,
-  sourceText: string,
-): AuthInvokerInfo | undefined {
-  if (!configArg || typeof configArg !== "object") return undefined;
-
-  const arg = configArg as { type?: string };
-  if (arg.type !== "ObjectExpression") return undefined;
-
-  const objExpr = configArg as ObjectExpression;
-
-  // Find authInvoker property
-  for (const prop of objExpr.properties) {
-    if (prop.type !== "Property") continue;
-
-    const objProp = prop as ObjectProperty;
-    const keyName =
-      objProp.key.type === "Identifier"
-        ? objProp.key.name
-        : objProp.key.type === "Literal"
-          ? (objProp.key as { value?: string }).value
-          : null;
-
-    if (keyName === "authInvoker") {
-      if (objProp.shorthand) {
-        return { isShorthand: true, valueText: "authInvoker" };
-      }
-      // Extract value text directly from source
-      const valueText = sourceText.slice(objProp.value.start, objProp.value.end);
-      return { isShorthand: false, valueText };
-    }
-  }
-
-  return undefined;
+  return `const ${NORMALIZER_IDENTIFIER} = (o) => o && typeof o.authInvoker === "string" ? { ...o, authInvoker: { namespace: ${JSON.stringify(authNamespace)}, machineUserName: o.authInvoker } } : o;\n`;
 }
 
 /**
@@ -318,18 +269,26 @@ function detectExtendedTriggerCalls(
               }
             }
 
-            if (isWorkflow && argCount >= 2) {
-              const secondArg = callExpr.arguments[1];
-              const authInvoker = extractAuthInvokerInfo(secondArg, sourceText);
-              if (authInvoker) {
-                calls.push({
-                  kind: "workflow",
-                  identifierName,
-                  callRange: { start: callExpr.start, end: callExpr.end },
-                  argsText,
-                  authInvoker,
-                });
+            if (isWorkflow) {
+              let optionsText: string | undefined;
+              if (argCount >= 2) {
+                const secondArg = callExpr.arguments[1];
+                // callee may be a ComputedMemberExpression at runtime
+                // oxlint-disable-next-line typescript/no-unnecessary-condition
+                if (secondArg && "start" in secondArg && "end" in secondArg) {
+                  optionsText = sourceText.slice(
+                    secondArg.start as number,
+                    secondArg.end as number,
+                  );
+                }
               }
+              calls.push({
+                kind: "workflow",
+                identifierName,
+                callRange: { start: callExpr.start, end: callExpr.end },
+                argsText,
+                optionsText,
+              });
             } else if (isJob) {
               calls.push({
                 kind: "job",
@@ -425,28 +384,28 @@ export function transformFunctionTriggers(
   const transformedCallsPerIdentifier = new Map<string, number>();
 
   for (const call of triggerCalls) {
-    if (call.kind === "workflow" && call.authInvoker) {
+    if (call.kind === "workflow") {
       // Workflow trigger - get workflow name from map
       const workflowName = localWorkflowNameMap.get(call.identifierName);
       if (workflowName) {
-        // Resolve the source expression for authInvoker.
-        const rawExpr = call.authInvoker.isShorthand ? "authInvoker" : call.authInvoker.valueText;
-        // Wrap with the runtime normalizer so any form (string literal,
-        // variable reference, function call, or `{ namespace, machineUserName }`
-        // object) becomes the object form the platform RPC expects. The
-        // normalizer is injected once at the top of the file.
+        // Wrap the options with the runtime normalizer so a string-form
+        // authInvoker in any options shape (object literal, variable
+        // reference, spread) becomes the object form the platform RPC
+        // expects. The normalizer is injected once at the top of the file.
         // When no auth service is configured we can't expand a string, so
         // we pass through unchanged (platform will reject a string with a
         // clear error).
-        let authInvokerExpr: string;
-        if (authNamespace) {
-          authInvokerExpr = `${NORMALIZER_IDENTIFIER}(${rawExpr})`;
-          needsNormalizerHelper = true;
-        } else {
-          authInvokerExpr = rawExpr;
+        let optionsPart = "";
+        if (call.optionsText !== undefined) {
+          if (authNamespace) {
+            optionsPart = `, ${NORMALIZER_IDENTIFIER}(${call.optionsText})`;
+            needsNormalizerHelper = true;
+          } else {
+            optionsPart = `, ${call.optionsText}`;
+          }
         }
         // Transform to tailor.workflow.triggerWorkflow
-        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
+        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}${optionsPart})`;
         replacements.push({
           start: call.callRange.start,
           end: call.callRange.end,
@@ -457,7 +416,7 @@ export function transformFunctionTriggers(
           (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
         );
       }
-    } else if (call.kind === "job") {
+    } else {
       const jobName = jobNameMap.get(call.identifierName);
       if (jobName) {
         const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))()`;

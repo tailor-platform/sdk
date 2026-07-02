@@ -113,6 +113,79 @@ export default createWorkflow({
       }
     });
 
+    test("transforms workflow.trigger() without an options argument", async () => {
+      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
+
+      const simpleFile = path.join(tmpDir, "simple.ts");
+      fs.writeFileSync(
+        simpleFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step1 = createWorkflowJob({
+  name: "step1",
+  body: (args: { input: number }) => {
+    return { result: args.input + 1 };
+  },
+});
+
+export default createWorkflow({
+  name: "simple-workflow",
+  mainJob: step1,
+});
+`,
+      );
+
+      const callerFile = path.join(tmpDir, "caller.ts");
+      fs.writeFileSync(
+        callerFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import simpleWorkflow from "./simple";
+
+export const callerJob = createWorkflowJob({
+  name: "caller-job",
+  body: async () => {
+    const executionId = await simpleWorkflow.trigger({ input: 0 });
+    return { executionId };
+  },
+});
+
+export default createWorkflow({
+  name: "caller-workflow",
+  mainJob: callerJob,
+});
+`,
+      );
+
+      const allJobs = [
+        { name: "step1", exportName: "step1", sourceFile: simpleFile },
+        { name: "caller-job", exportName: "callerJob", sourceFile: callerFile },
+      ];
+      const mainJobNames = ["caller-job"];
+
+      const workflowFileMap = new Map<string, string>([
+        [normalizeFilePath(simpleFile), "simple-workflow"],
+      ]);
+      const triggerContext = {
+        workflowNameMap: new Map<string, string>(),
+        jobNameMap: new Map<string, string>([
+          ["step1", "step1"],
+          ["callerJob", "caller-job"],
+        ]),
+        workflowFileMap,
+        authNamespace: "default",
+      };
+
+      const result = await bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext);
+
+      expect(result.bundledCode.has("caller-job")).toBe(true);
+      const callerCode = result.bundledCode.get("caller-job")!;
+
+      expect(callerCode).toContain("triggerWorkflow");
+      expect(callerCode).not.toContain("simpleWorkflow.trigger");
+    });
+
     test("transforms workflow.trigger() in .mts dependency files", async () => {
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
 
