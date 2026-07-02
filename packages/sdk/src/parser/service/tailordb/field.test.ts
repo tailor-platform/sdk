@@ -1,6 +1,8 @@
 import { parseSync } from "oxc-parser";
 import { describe, expect, test } from "vitest";
-import { stringifyFunction } from "./field";
+import { db } from "#/configure/services/tailordb/schema";
+import { toSchemaOutputs } from "#/utils/test/internal";
+import { parseFieldConfig, stringifyFunction } from "./field";
 
 // Mirrors how consumers embed the result, e.g. `(${normalized})({ value, data, user })`.
 const expectValidIife = (normalized: string, args: string) => {
@@ -115,5 +117,27 @@ describe("stringifyFunction", () => {
     const result = stringifyFunction(create);
     expect(result).toBe("async (x) => x + 1");
     expectValidIife(result, "1");
+  });
+});
+
+describe("parseFieldConfig validator expressions", () => {
+  test("normalizes a method-shorthand validator whose body contains an arrow function", () => {
+    // Method shorthand syntax, obtained the same way a user's helper object would produce it.
+    const validators = {
+      isValid({ value }: { value: string }) {
+        return [value].map((v) => v.includes("@"))[0] ?? false;
+      },
+    };
+    const type = db.type("User", {
+      email: db.string().validate(validators.isValid),
+    });
+
+    const schema = toSchemaOutputs({ User: type });
+    const field = parseFieldConfig(schema.User!.fields.email!);
+    const expr = field.validate?.[0]?.script.expr;
+    expect(expr).toBeDefined();
+
+    const result = parseSync("test.ts", expr!, { sourceType: "module" });
+    expect(result.errors).toEqual([]);
   });
 });

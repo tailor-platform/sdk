@@ -71,12 +71,12 @@ export const stringifyFunction = (fn: Function): string => {
 };
 
 /**
- * Convert a hook function to a script expression.
- * @param fn - Hook function
- * @returns JavaScript expression calling the hook
+ * Convert a hook or validator function to a script expression.
+ * @param fn - Hook or validator function
+ * @returns JavaScript expression calling the function
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-const convertHookToExpr = (fn: Function): string => {
+const convertToScriptExpr = (fn: Function): string => {
   const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
   if (precompiledExpr) {
     return precompiledExpr;
@@ -123,9 +123,7 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr:
-            getPrecompiledScriptExpr(fn) ??
-            `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+          expr: convertToScriptExpr(fn),
         },
         errorMessage: message,
       };
@@ -134,12 +132,12 @@ export function parseFieldConfig(
       ? {
           create: metadata.hooks.create
             ? {
-                expr: convertHookToExpr(metadata.hooks.create),
+                expr: convertToScriptExpr(metadata.hooks.create),
               }
             : undefined,
           update: metadata.hooks.update
             ? {
-                expr: convertHookToExpr(metadata.hooks.update),
+                expr: convertToScriptExpr(metadata.hooks.update),
               }
             : undefined,
         }
