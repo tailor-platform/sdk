@@ -442,6 +442,75 @@ describe("parseTypes", () => {
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
       ).toThrow(/Forward relation name "avatar".*conflicts with files field/s);
     });
+
+    test("should throw error when forward name conflicts with backward name", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "authoredPosts",
+        }),
+      });
+
+      const comment = db.type("Comment", {
+        postID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: post, as: "post" },
+          backward: "user",
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post, Comment: comment }), "test-namespace"),
+      ).toThrow(/Relation name "user" on type "Post".*forward.*backward/s);
+    });
+
+    test("should include source file information in forward conflict error message", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "authoredPosts",
+        }),
+        reviewerID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "reviewedPosts",
+        }),
+      });
+
+      const typeSourceInfo = {
+        Post: {
+          filePath: "/path/to/post.ts",
+          exportName: "post",
+        },
+      };
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace", typeSourceInfo),
+      ).toThrow(/Forward relation name "user".*\/path\/to\/post\.ts/s);
+    });
+
+    test("should throw error when self relation forward name is empty", () => {
+      const node = db.type("Node", {
+        ID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: "self" },
+        }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Node: node }), "test-namespace")).toThrow(
+        /Forward relation name for field "ID" on type "Node" cannot be empty/s,
+      );
+    });
   });
 
   describe("validateRelationType", () => {
