@@ -1,3 +1,4 @@
+import { parseSync } from "oxc-parser";
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
@@ -12,24 +13,57 @@ import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailor
 export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes }`;
 
 /**
+ * Parse `wrapped` and return the first property of the top-level parenthesized
+ * object expression, or `undefined` if it does not parse as one.
+ * @param wrapped - Source wrapped as `({ ... })`
+ * @returns The first object property, or `undefined`
+ */
+const firstObjectProperty = (wrapped: string) => {
+  const parseResult = parseSync("stringify-function.ts", wrapped, { sourceType: "module" });
+  if (parseResult.errors.length > 0) {
+    return undefined;
+  }
+  const expressionStatement = parseResult.program.body[0];
+  const objectExpression =
+    expressionStatement?.type === "ExpressionStatement" &&
+    expressionStatement.expression.type === "ParenthesizedExpression"
+      ? expressionStatement.expression.expression
+      : undefined;
+  return objectExpression?.type === "ObjectExpression" ? objectExpression.properties[0] : undefined;
+};
+
+/**
  * Convert a function to a string representation.
  * Handles method shorthand syntax (e.g., `create() { ... }`) by converting it to
- * a function expression (e.g., `function create() { ... }`).
+ * a function expression (e.g., `function create() { ... }`), including `async`
+ * and generator variants and shorthand bodies that themselves contain arrow
+ * functions.
  * @param fn - Function to stringify
  * @returns Stringified function source
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export const stringifyFunction = (fn: Function): string => {
   const src = fn.toString().trim();
-  // Method shorthand pattern: methodName(...) { ... }
-  // Needs to be converted to: function methodName(...) { ... }
+  // `src` is already a valid function/arrow expression (e.g. `function () {}`,
+  // `() => {}`) if it parses as an object property value as-is; leave it untouched.
+  if (firstObjectProperty(`({m: ${src}})`)) {
+    return src;
+  }
+  // Otherwise, method shorthand (e.g. `create() {}`, `async create() {}`) is
+  // only valid inside an object literal, so parse it as an object property to
+  // detect and convert it via the AST rather than guessing from source text.
+  const wrapped = `({${src}})`;
+  const property = firstObjectProperty(wrapped);
+
   if (
-    /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(src) &&
-    !src.startsWith("function") &&
-    !src.startsWith("(") &&
-    !src.includes("=>")
+    property?.type === "Property" &&
+    property.method &&
+    property.key.type === "Identifier" &&
+    property.value.type === "FunctionExpression"
   ) {
-    return `function ${src}`;
+    const { async, generator } = property.value;
+    const body = wrapped.slice(property.value.start, property.value.end);
+    return `${async ? "async " : ""}function${generator ? "*" : ""} ${property.key.name}${body}`;
   }
   return src;
 };
