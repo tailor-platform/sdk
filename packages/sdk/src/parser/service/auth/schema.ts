@@ -4,6 +4,7 @@ import { TailorFieldSchema } from "#/parser/service/field/schema";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { ValueOperand } from "#/configure/services/auth/types";
+import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 
 export const AuthInvokerObjectSchema = z.strictObject({
   namespace: z.string().describe("Auth namespace"),
@@ -199,7 +200,10 @@ export const TenantProviderSchema = z.strictObject({
 
 const UserProfileSchema = z.strictObject({
   namespace: z.string().optional().describe("TailorDB namespace where the user type is defined"),
-  type: z.preprocess(stripTailorDBTypeBuilderHelpers, TailorDBTypeSchema),
+  type: z
+    .custom<TailorDBInstance>()
+    .transform(stripTailorDBTypeBuilderHelpers)
+    .pipe(TailorDBTypeSchema),
   usernameField: z.string(),
   attributes: z.record(z.string(), z.literal(true)).optional(),
   attributeList: z.array(z.string()).optional(),

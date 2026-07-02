@@ -425,7 +425,914 @@ export type AuthConfigInput =
       publishSessionEvents?: boolean | undefined;
       userProfile?:
         | {
-            type: unknown;
+            type: {
+              readonly name: string;
+              readonly fields: any;
+              readonly _output: {};
+              readonly metadata: {
+                name: string;
+                description?: string | undefined;
+                settings?:
+                  | {
+                      pluralForm?: string | undefined;
+                      aggregation?: boolean | undefined;
+                      bulkUpsert?: boolean | undefined;
+                      gqlOperations?:
+                        | "query"
+                        | {
+                            create?: boolean | undefined | undefined;
+                            update?: boolean | undefined | undefined;
+                            delete?: boolean | undefined | undefined;
+                            read?: boolean | undefined | undefined;
+                          }
+                        | undefined;
+                      publishEvents?: boolean | undefined;
+                    }
+                  | undefined;
+                permissions: {
+                  record?:
+                    | {
+                        create: readonly (
+                          | readonly [
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                            ]
+                          | readonly [
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              boolean,
+                            ]
+                          | readonly (
+                              | boolean
+                              | readonly [
+                                  (
+                                    | string
+                                    | boolean
+                                    | string[]
+                                    | boolean[]
+                                    | {
+                                        user: string;
+                                      }
+                                    | {
+                                        record: string;
+                                      }
+                                    | {
+                                        oldRecord: string;
+                                      }
+                                    | {
+                                        newRecord: string;
+                                      }
+                                  ),
+                                  "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                  (
+                                    | string
+                                    | boolean
+                                    | string[]
+                                    | boolean[]
+                                    | {
+                                        user: string;
+                                      }
+                                    | {
+                                        record: string;
+                                      }
+                                    | {
+                                        oldRecord: string;
+                                      }
+                                    | {
+                                        newRecord: string;
+                                      }
+                                  ),
+                                ]
+                            )[]
+                          | {
+                              conditions:
+                                | readonly [
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                    "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                  ]
+                                | readonly (readonly [
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                    "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                  ])[];
+                              description?: string | undefined | undefined;
+                              permit?: boolean | undefined | undefined;
+                            }
+                        )[];
+                        read: readonly (
+                          | readonly [
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                            ]
+                          | readonly [
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              boolean,
+                            ]
+                          | readonly (
+                              | boolean
+                              | readonly [
+                                  (
+                                    | string
+                                    | boolean
+                                    | string[]
+                                    | boolean[]
+                                    | {
+                                        user: string;
+                                      }
+                                    | {
+                                        record: string;
+                                      }
+                                    | {
+                                        oldRecord: string;
+                                      }
+                                    | {
+                                        newRecord: string;
+                                      }
+                                  ),
+                                  "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                  (
+                                    | string
+                                    | boolean
+                                    | string[]
+                                    | boolean[]
+                                    | {
+                                        user: string;
+                                      }
+                                    | {
+                                        record: string;
+                                      }
+                                    | {
+                                        oldRecord: string;
+                                      }
+                                    | {
+                                        newRecord: string;
+                                      }
+                                  ),
+                                ]
+                            )[]
+                          | {
+                              conditions:
+                                | readonly [
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                    "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                  ]
+                                | readonly (readonly [
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                    "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                  ])[];
+                              description?: string | undefined | undefined;
+                              permit?: boolean | undefined | undefined;
+                            }
+                        )[];
+                        update: readonly (
+                          | readonly [
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                            ]
+                          | readonly [
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              boolean,
+                            ]
+                          | readonly (
+                              | boolean
+                              | readonly [
+                                  (
+                                    | string
+                                    | boolean
+                                    | string[]
+                                    | boolean[]
+                                    | {
+                                        user: string;
+                                      }
+                                    | {
+                                        record: string;
+                                      }
+                                    | {
+                                        oldRecord: string;
+                                      }
+                                    | {
+                                        newRecord: string;
+                                      }
+                                  ),
+                                  "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                  (
+                                    | string
+                                    | boolean
+                                    | string[]
+                                    | boolean[]
+                                    | {
+                                        user: string;
+                                      }
+                                    | {
+                                        record: string;
+                                      }
+                                    | {
+                                        oldRecord: string;
+                                      }
+                                    | {
+                                        newRecord: string;
+                                      }
+                                  ),
+                                ]
+                            )[]
+                          | {
+                              conditions:
+                                | readonly [
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                    "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                  ]
+                                | readonly (readonly [
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                    "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                  ])[];
+                              description?: string | undefined | undefined;
+                              permit?: boolean | undefined | undefined;
+                            }
+                        )[];
+                        delete: readonly (
+                          | readonly [
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                            ]
+                          | readonly [
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                              (
+                                | string
+                                | boolean
+                                | string[]
+                                | boolean[]
+                                | {
+                                    user: string;
+                                  }
+                                | {
+                                    record: string;
+                                  }
+                                | {
+                                    oldRecord: string;
+                                  }
+                                | {
+                                    newRecord: string;
+                                  }
+                              ),
+                              boolean,
+                            ]
+                          | readonly (
+                              | boolean
+                              | readonly [
+                                  (
+                                    | string
+                                    | boolean
+                                    | string[]
+                                    | boolean[]
+                                    | {
+                                        user: string;
+                                      }
+                                    | {
+                                        record: string;
+                                      }
+                                    | {
+                                        oldRecord: string;
+                                      }
+                                    | {
+                                        newRecord: string;
+                                      }
+                                  ),
+                                  "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                  (
+                                    | string
+                                    | boolean
+                                    | string[]
+                                    | boolean[]
+                                    | {
+                                        user: string;
+                                      }
+                                    | {
+                                        record: string;
+                                      }
+                                    | {
+                                        oldRecord: string;
+                                      }
+                                    | {
+                                        newRecord: string;
+                                      }
+                                  ),
+                                ]
+                            )[]
+                          | {
+                              conditions:
+                                | readonly [
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                    "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                  ]
+                                | readonly (readonly [
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                    "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                                    (
+                                      | string
+                                      | boolean
+                                      | string[]
+                                      | boolean[]
+                                      | {
+                                          user: string;
+                                        }
+                                      | {
+                                          record: string;
+                                        }
+                                      | {
+                                          oldRecord: string;
+                                        }
+                                      | {
+                                          newRecord: string;
+                                        }
+                                    ),
+                                  ])[];
+                              description?: string | undefined | undefined;
+                              permit?: boolean | undefined | undefined;
+                            }
+                        )[];
+                      }
+                    | undefined;
+                  gql?:
+                    | readonly {
+                        conditions: readonly (readonly [
+                          (
+                            | string
+                            | boolean
+                            | string[]
+                            | boolean[]
+                            | {
+                                user: string;
+                              }
+                          ),
+                          "in" | "=" | "!=" | "not in" | "hasAny" | "not hasAny",
+                          (
+                            | string
+                            | boolean
+                            | string[]
+                            | boolean[]
+                            | {
+                                user: string;
+                              }
+                          ),
+                        ])[];
+                        actions:
+                          | "all"
+                          | readonly (
+                              | "bulkUpsert"
+                              | "create"
+                              | "update"
+                              | "delete"
+                              | "read"
+                              | "aggregate"
+                            )[];
+                        permit?: boolean | undefined | undefined;
+                        description?: string | undefined | undefined;
+                      }[]
+                    | undefined;
+                };
+                files: {
+                  [x: string]: string;
+                };
+                indexes?:
+                  | {
+                      [x: string]: {
+                        fields: string[];
+                        unique?: boolean | undefined;
+                      };
+                    }
+                  | undefined;
+              };
+              readonly plugins: {
+                pluginId: string;
+                config: unknown;
+              }[];
+            };
             usernameField: string;
             namespace?: string | undefined;
             attributes?:
