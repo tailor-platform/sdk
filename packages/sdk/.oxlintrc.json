@@ -88,6 +88,7 @@
     "typescript/no-require-imports": "error",
     "typescript/no-unnecessary-type-constraint": "error",
     "typescript/no-unsafe-function-type": "error",
+    "local/no-cli-hybrid-command": "error",
     "local/no-deprecated-type-matcher": "error",
     "local/require-param-strict": "error"
   },
@@ -419,6 +420,12 @@
       "files": ["**/*.js", "**/*.mjs"],
       "env": {
         "node": true
+      }
+    },
+    {
+      "files": ["src/cli/commands/api/index.ts"],
+      "rules": {
+        "local/no-cli-hybrid-command": "off"
       }
     },
     {

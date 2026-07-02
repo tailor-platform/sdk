@@ -78,6 +78,98 @@ function functionParamSlots(node) {
   return node.params.map((p) => ({ astNode: p, names: collect(p) }));
 }
 
+const ARG_CALLEE_NAMES = new Set(["arg"]);
+const COMMAND_DEFINITION_NAMES = new Set(["defineCommand", "defineAppCommand"]);
+
+function staticPropertyName(prop) {
+  if (prop.type !== "Property" || prop.computed) return null;
+  if (prop.key.type === "Identifier") return prop.key.name;
+  if (prop.key.type === "Literal" && typeof prop.key.value === "string") return prop.key.value;
+  return null;
+}
+
+function objectProperty(node, name) {
+  if (node.type !== "ObjectExpression") return null;
+  for (const prop of node.properties) {
+    if (staticPropertyName(prop) === name) return prop;
+  }
+  return null;
+}
+
+function isCalleeNamed(callee, names) {
+  if (callee.type === "Identifier") return names.has(callee.name);
+  if (
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    callee.property.type === "Identifier"
+  ) {
+    return names.has(callee.property.name);
+  }
+  return false;
+}
+
+function isTrueLiteral(node) {
+  return node.type === "Literal" && node.value === true;
+}
+
+function isArgCallWithPositional(node) {
+  if (node.type !== "CallExpression" || !isCalleeNamed(node.callee, ARG_CALLEE_NAMES)) {
+    return false;
+  }
+  const options = node.arguments[1];
+  if (!options || options.type !== "ObjectExpression") return false;
+  const positional = objectProperty(options, "positional");
+  return Boolean(positional && isTrueLiteral(positional.value));
+}
+
+function expressionContainsPositionalArg(node, positionalArgVariables = new Set()) {
+  if (!node) return false;
+  if (node.type === "Identifier") return positionalArgVariables.has(node.name);
+  if (isArgCallWithPositional(node)) return true;
+
+  switch (node.type) {
+    case "CallExpression":
+    case "NewExpression":
+      return node.arguments.some((argNode) =>
+        expressionContainsPositionalArg(argNode, positionalArgVariables),
+      );
+    case "ObjectExpression":
+      return node.properties.some((prop) => {
+        if (prop.type === "Property") {
+          return expressionContainsPositionalArg(prop.value, positionalArgVariables);
+        }
+        if (prop.type === "SpreadElement") {
+          return expressionContainsPositionalArg(prop.argument, positionalArgVariables);
+        }
+        return false;
+      });
+    case "ArrayExpression":
+      return node.elements.some((element) =>
+        expressionContainsPositionalArg(element, positionalArgVariables),
+      );
+    case "ConditionalExpression":
+      return (
+        expressionContainsPositionalArg(node.test, positionalArgVariables) ||
+        expressionContainsPositionalArg(node.consequent, positionalArgVariables) ||
+        expressionContainsPositionalArg(node.alternate, positionalArgVariables)
+      );
+    case "LogicalExpression":
+    case "BinaryExpression":
+    case "AssignmentExpression":
+      return (
+        expressionContainsPositionalArg(node.left, positionalArgVariables) ||
+        expressionContainsPositionalArg(node.right, positionalArgVariables)
+      );
+    case "ChainExpression":
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "TSNonNullExpression":
+      return expressionContainsPositionalArg(node.expression, positionalArgVariables);
+    default:
+      return false;
+  }
+}
+
 export default {
   meta: { name: "local" },
   rules: {
@@ -105,6 +197,55 @@ export default {
             ) {
               context.report({ node: callee.property, messageId: "banned" });
             }
+          },
+        };
+      },
+    },
+
+    "no-cli-hybrid-command": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow CLI commands that combine subCommands with command-level positional arguments and run handlers.",
+        },
+        messages: {
+          hybrid:
+            "Move the positional argument to a leaf subcommand. Commands with subcommands should not also define command-level positional args and a run handler.",
+        },
+        schema: [],
+      },
+      create(context) {
+        const positionalArgVariables = new Set();
+
+        function hasCommandLevelPositionalArgs(argsNode) {
+          return expressionContainsPositionalArg(argsNode, positionalArgVariables);
+        }
+
+        return {
+          VariableDeclarator(node) {
+            if (
+              node.id.type === "Identifier" &&
+              expressionContainsPositionalArg(node.init, positionalArgVariables)
+            ) {
+              positionalArgVariables.add(node.id.name);
+            }
+          },
+          CallExpression(node) {
+            if (!isCalleeNamed(node.callee, COMMAND_DEFINITION_NAMES)) {
+              return;
+            }
+            const commandOptions = node.arguments[0];
+            if (!commandOptions || commandOptions.type !== "ObjectExpression") return;
+
+            const subCommands = objectProperty(commandOptions, "subCommands");
+            const run = objectProperty(commandOptions, "run");
+            const args = objectProperty(commandOptions, "args");
+            if (!subCommands || !run || !args || !hasCommandLevelPositionalArgs(args.value)) {
+              return;
+            }
+
+            context.report({ node: args, messageId: "hybrid" });
           },
         };
       },
