@@ -412,7 +412,6 @@
             ]
           }
         ],
-        "local/no-cli-hybrid-command": "error",
         "no-console": "error"
       }
     },
@@ -420,12 +419,6 @@
       "files": ["**/*.js", "**/*.mjs"],
       "env": {
         "node": true
-      }
-    },
-    {
-      "files": ["src/cli/commands/api/index.ts"],
-      "rules": {
-        "local/no-cli-hybrid-command": "off"
       }
     },
     {
