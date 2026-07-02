@@ -1131,6 +1131,62 @@ describe("profile readonly field", () => {
   });
 });
 
+describe("initial platform config", () => {
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  const legacyHomeDir = path.join(xdgTempDir, "legacy-home");
+  const legacyConfigPath = path.join(legacyHomeDir, ".tailorctl", "config");
+
+  beforeEach(() => {
+    vi.resetModules();
+    resetKeyringState();
+    vi.stubEnv("HOME", legacyHomeDir);
+    fs.rmSync(configPath, { force: true });
+    fs.rmSync(legacyHomeDir, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("creates an empty latest-version config when the platform config is missing", async () => {
+    const config = await readPlatformConfig();
+
+    expect(config).toEqual({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+    expect(parseYAML(fs.readFileSync(configPath, "utf-8"))).toEqual(config);
+  });
+
+  test("ignores legacy tailorctl config when the platform config is missing", async () => {
+    fs.mkdirSync(path.dirname(legacyConfigPath), { recursive: true });
+    fs.writeFileSync(
+      legacyConfigPath,
+      [
+        "[global]",
+        'context = "default"',
+        "",
+        "[default]",
+        'username = "user@example.com"',
+        'workspaceid = "12345678-1234-4abc-8def-123456789012"',
+        'controlplaneaccesstoken = "legacy-access-token"',
+        'controlplanerefreshtoken = "legacy-refresh-token"',
+        'controlplanetokenexpiresat = "2099-01-01T00:00:00.000Z"',
+        "",
+      ].join("\n"),
+    );
+
+    const config = await readPlatformConfig();
+
+    expect(config.users).toEqual({});
+    expect(config.profiles).toEqual({});
+    expect(config.current_user).toBeNull();
+  });
+});
+
 describe("saveUserTokens", () => {
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
   const originalEnv = process.env;
